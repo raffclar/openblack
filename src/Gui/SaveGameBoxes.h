@@ -36,6 +36,9 @@ class TextDatabase;
 /// box of 400 by 300 that holds it, dimmed to a quarter. Both fade in over half a second. The Y key answers Yes and
 /// the N key answers No. An answer takes the question away at once.
 ///
+/// A message stands in the same white box in front of the same dimmed box, with one OK button under it. OK, Return or
+/// Escape takes it away at once.
+///
 /// The name box is a framed box of 500 by 250: "Save Game Message:" across its top, the name's box under it with the
 /// focus, then OK and Cancel. The name's box takes 32 characters. Return in the name's box gives the focus to OK, and
 /// Return on OK saves. Escape is Cancel. The box fades in over half a second and out over a fifth.
@@ -49,6 +52,8 @@ public:
 		/// The player gave a name and pressed OK
 		Named,
 		Cancelled,
+		/// The player took a message away
+		Ok,
 	};
 
 	static constexpr DialogRect k_HoldingBox {.min = {200, 150}, .max = {600, 450}};
@@ -57,6 +62,8 @@ public:
 	static constexpr glm::ivec2 k_YesPosition {200, 338};
 	static constexpr glm::ivec2 k_NoPosition {568, 338};
 	static constexpr int k_ArrowSize = 32;
+	/// A message's OK button
+	static constexpr DialogRect k_MessageOk {.min = {325, 338}, .max = {475, 370}};
 	static constexpr DialogRect k_NameBox {.min = {150, 175}, .max = {650, 425}};
 	static constexpr DialogRect k_NamePrompt {.min = {175, 200}, .max = {625, 250}};
 	static constexpr DialogRect k_Name {.min = {175, 275}, .max = {625, 325}};
@@ -70,11 +77,13 @@ public:
 
 	/// Asks a question with a Yes and a No
 	void Ask(std::u16string question);
+	/// Shows a message with an OK
+	void Tell(std::u16string message);
 	/// Asks for a name, the name's box holding the text given
 	void AskName(std::u16string_view name);
 	/// A box is up and takes the input
 	[[nodiscard]] bool IsActive() const noexcept { return _question.has_value() || _nameActive; }
-	/// The question being asked, empty while there is none
+	/// The question being asked or the message shown, empty while there is none
 	[[nodiscard]] std::u16string_view GetQuestion() const noexcept;
 	[[nodiscard]] bool IsAskingName() const noexcept { return _nameActive; }
 
@@ -101,7 +110,11 @@ private:
 		std::u16string text;
 		Dialog answers;
 		StaticText* textControl {nullptr};
+		/// A message with an OK, not a question
+		bool message {false};
 	};
+	/// Puts up the question's or the message's box with its text, fading in
+	Question& Show(std::u16string text);
 	void Answered(Answer answer);
 	void SubmitName();
 	void CancelName();

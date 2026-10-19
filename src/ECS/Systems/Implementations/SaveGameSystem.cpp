@@ -20,11 +20,13 @@
 #include <exception>
 #include <filesystem>
 #include <format>
+#include <iterator>
 #include <memory>
 #include <optional>
 #include <ranges>
 #include <span>
 #include <string>
+#include <tuple>
 #include <unordered_map>
 #include <vector>
 
@@ -87,6 +89,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/SavingBox.h"
 #include "Gui/TextDatabase.h"
+#include "LandChange.h"
 #include "Locator.h"
 
 #ifdef _WIN32
@@ -843,24 +846,38 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	const auto worldStarted = std::chrono::steady_clock::now();
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
-	// The writer makes the last blocks and puts the blocks together into the file on its own thread
-	written = QueueFile(slotFolder, gamesave::WorldFileName(slot),
-	                    [world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole]() {
-		                    for (const auto& pending : *whole)
-		                    {
-			                    world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
-		                    }
-		                    whole->clear();
-		                    return gamesave::Write(*world);
-	                    }) &&
-	          written;
-
-	// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
-	// records of its creatures and their leashes as openblack has them now
-	if (_vanilla.has_value() && _vanilla->land == land)
+	// The world files go to their temporary files first. When the first temporary file does not open, the game writes
+	// no world file and tells the player nothing.
+	const auto made = Locator::profileFolderSystem::value().MakeFolder(slotFolder);
+	const auto worldPath = made.has_value() ? std::optional(*made / gamesave::WorldFileName(slot)) : std::nullopt;
+	const bool opened = worldPath.has_value() && Locator::filesystem::has_value() &&
+	                    Locator::filesystem::value().WriteFile(ecs::save_files::TemporaryPath(*worldPath), {}) !=
+	                        filesystem::FileSystemInterface::WriteResult::NotOpened;
+	if (opened)
 	{
-		written = WriteVanilla(slot, slotFolder, saved, savedEntities) && written;
+		// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
+		// records of its creatures and their leashes as openblack has them now
+		auto vanilla = _vanilla.has_value() && _vanilla->land == land ? VanillaFiles(slot, *made, saved, savedEntities)
+		                                                              : std::vector<ecs::save_files::SaveFile> {};
+		// The writer makes the last blocks and puts the blocks together into the file on its own thread
+		QueueWorldFiles([path = *worldPath, world = std::make_shared<gamesave::WorldFile>(std::move(world)), whole,
+		                 vanilla = std::make_shared<std::vector<ecs::save_files::SaveFile>>(std::move(vanilla))]() {
+			for (const auto& pending : *whole)
+			{
+				world->chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+			}
+			whole->clear();
+			std::vector<ecs::save_files::SaveFile> files {{.path = path, .bytes = gamesave::Write(*world)}};
+			std::ranges::move(*vanilla, std::back_inserter(files));
+			return files;
+		});
 	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The temporary world file of slot {} did not open; the game wrote no world file", slot);
+	}
+	written = opened && written;
+
 	// The slot's pictures come from the temporary picture file, as the screen was when the game last took a picture
 	if (putPicture)
 	{
@@ -874,12 +891,13 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	                   "Saved the game into slot {} with {} creatures in {:.1f} ms on the game's thread (creatures {:.1f}, "
 	                   "world {:.1f}){}",
 	                   slot, creatures.size(), ms(started, ended), ms(started, creaturesDone), ms(worldStarted, ended),
-	                   written ? "" : ", but a folder could not be made");
+	                   written ? "" : ", but not every file could be given to the writer");
 	return written;
 }
 
-bool SaveGameSystem::WriteVanilla(uint32_t slot, const std::filesystem::path& slotFolder,
-                                  std::span<const gamesave::SavedCreature> saved, std::span<const entt::entity> entities)
+std::vector<ecs::save_files::SaveFile> SaveGameSystem::VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
+                                                                    std::span<const gamesave::SavedCreature> saved,
+                                                                    std::span<const entt::entity> entities)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& origin = *_vanilla;
@@ -956,19 +974,49 @@ bool SaveGameSystem::WriteVanilla(uint32_t slot, const std::filesystem::path& sl
 	}
 	// A complete save has no attempt to load it yet
 	std::fill_n(bytes.begin(), std::min<size_t>(bytes.size(), sizeof(uint32_t)), uint8_t {0});
-	bool written = QueueFile(slotFolder, gamesave::VanillaWorldFileName(slot), [kept = std::move(bytes)]() { return kept; });
+	std::vector<ecs::save_files::SaveFile> files {
+	    {.path = slotFolder / gamesave::VanillaWorldFileName(slot), .bytes = std::move(bytes)}};
 	// The game loads the script machine from the file beside the world file. openblack does not write it yet, so the
 	// save keeps the file of the game's save as it was. The file of the game's save can be a file that the writer
 	// writes now.
 	FlushWrites();
 	if (auto script = ReadFile(origin.folder / gamesave::VanillaScriptFileName(origin.slot)); script.has_value())
 	{
-		written =
-		    QueueFile(slotFolder, gamesave::VanillaScriptFileName(slot), [kept = std::move(*script)]() { return kept; }) &&
-		    written;
+		files.push_back({.path = slotFolder / gamesave::VanillaScriptFileName(slot), .bytes = std::move(*script)});
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Wrote {} records into the game's file of slot {}", edits.size(), slot);
-	return written;
+	return files;
+}
+
+void SaveGameSystem::QueueWorldFiles(std::function<std::vector<ecs::save_files::SaveFile>()> files)
+{
+	if (!Locator::filesystem::has_value())
+	{
+		return;
+	}
+	auto* fileSystem = &Locator::filesystem::value();
+	Writer().Queue("world files", [fileSystem, files = std::move(files), problems = _writeProblems]() {
+		const auto group = files();
+		const auto result = ecs::save_files::WriteThroughTemporaries(*fileSystem, group);
+		if (result == ecs::save_files::SaveWrite::Failed)
+		{
+			problems->fetch_add(1);
+		}
+		return result == ecs::save_files::SaveWrite::Written;
+	});
+}
+
+void SaveGameSystem::ReportWriteProblems()
+{
+	// The game tells the player once for each save, in a box with an OK
+	for (auto count = _writeProblems->exchange(0); count > 0; --count)
+	{
+		SPDLOG_LOGGER_WARN(Log(), "A save did not write its world files completely; the old files stay");
+		if (_reportProblem)
+		{
+			_reportProblem();
+		}
+	}
 }
 
 bool SaveGameSystem::Load(uint32_t slot)
@@ -983,7 +1031,8 @@ bool SaveGameSystem::Load(uint32_t slot)
 	ShowSaveBox(slot, true);
 	const auto land = LandNumber();
 	const auto root = Locator::profileFolderSystem::value().GetFolder();
-	const auto slotFolder = *root / *player / gamesave::SlotFolder(slot, land);
+	// The previous land's save is in the folder of the land before, the next land's in the folder of the land after
+	const auto slotFolder = *root / *player / gamesave::LoadSlotFolder(slot, land);
 	const auto mindFolder = *root / *player / gamesave::MindFolder(slot, land);
 	const auto vanillaBytes = ReadFile(slotFolder / gamesave::VanillaWorldFileName(slot));
 	const auto bytes = ReadFile(slotFolder / gamesave::WorldFileName(slot));
@@ -992,18 +1041,46 @@ bool SaveGameSystem::Load(uint32_t slot)
 		// A slot of the game itself: its world file in the game's layout
 		return vanillaBytes.has_value() && LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
 	}
+	const auto worldPath = slotFolder / gamesave::WorldFileName(slot);
 	const auto world = gamesave::ReadWorldFile(*bytes);
 	if (!world.has_value())
 	{
+		// The game would read the file as far as it goes. openblack does not read a file that it cannot read, and does
+		// what the game does with a load that it refuses.
 		SPDLOG_LOGGER_WARN(Log(), "Slot {} has no world file that the game can read", slot);
+		StartLandAgain();
 		return false;
+	}
+	// A file that stopped the game two times as it loaded does not load again. Each load first adds one to the file's
+	// count, and puts it back to none when it has read the world.
+	const bool counts = world->version >= gamesave::k_AttemptsVersion;
+	if (counts && !gamesave::MayLoad(world->attempts))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "Slot {} stopped the game {} times as it loaded; the game does not load it again", slot,
+		                   world->attempts);
+		StartLandAgain();
+		return false;
+	}
+	auto& files = Locator::filesystem::value();
+	if (counts)
+	{
+		std::ignore = files.WriteAt(worldPath, gamesave::k_AttemptsOffset, gamesave::AttemptsBytes(world->attempts + 1));
 	}
 	const auto gameChunk = std::ranges::find(world->chunks, gamesave::k_GameTag, &gamesave::Chunk::tag);
 	const auto game = gameChunk != world->chunks.end() ? gamesave::ReadGameChunk(gameChunk->bytes) : std::nullopt;
 	// A save of the whole world loads its own land, whatever land is open
 	if (game.has_value() && ecs::world_save::HasWholeWorld(*world))
 	{
-		return LoadWholeWorld(slot, *world, *game);
+		if (!LoadWholeWorld(slot, *world, *game))
+		{
+			StartLandAgain();
+			return false;
+		}
+		if (counts)
+		{
+			std::ignore = files.WriteAt(worldPath, gamesave::k_AttemptsOffset, gamesave::AttemptsBytes(0));
+		}
+		return true;
 	}
 	if (!game.has_value() || game->land != land)
 	{
@@ -1054,6 +1131,10 @@ bool SaveGameSystem::Load(uint32_t slot)
 		}
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded {} creatures from slot {}", restored, slot);
+	if (counts)
+	{
+		std::ignore = files.WriteAt(worldPath, gamesave::k_AttemptsOffset, gamesave::AttemptsBytes(0));
+	}
 	if (restored > 0)
 	{
 		// The next autosave and the next quick load come only after their full gap from the turn of the load
@@ -1063,6 +1144,19 @@ bool SaveGameSystem::Load(uint32_t slot)
 		_lastQuickSaveTurn = game->lastQuickSaveTurn;
 	}
 	return restored > 0;
+}
+
+void SaveGameSystem::StartLandAgain() const
+{
+	auto* instance = Game::Instance();
+	if (instance == nullptr || instance->GetLandPath().empty())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_WARN(Log(), "The load did not happen; the land {} starts again as a new game",
+	                   instance->GetLandPath().generic_string());
+	const auto land = instance->GetLandPath();
+	std::ignore = instance->LoadMapWithFreshScripts(land, land_change::Kind::NewGame);
 }
 
 const entt::meta_ctx& SaveGameSystem::Reflection()

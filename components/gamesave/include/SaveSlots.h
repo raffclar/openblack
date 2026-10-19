@@ -62,6 +62,13 @@ inline constexpr std::string_view k_InfoFileName = "SaveGame.inf";
 
 /// The folder of the slot's world file, relative to the player's folder
 [[nodiscard]] std::filesystem::path SlotFolder(uint32_t slot, uint32_t land);
+/// The folder that a load of the slot reads its world file from, relative to the player's folder. A save of the previous
+/// land or the next land goes into the folder of the land it saves, so on a land the previous land's save is in the
+/// folder of the land before, and the next land's save in the folder of the land after.
+[[nodiscard]] std::filesystem::path LoadSlotFolder(uint32_t slot, uint32_t land);
+/// The slot that the game saves the land that is open into before a load of the slot from the save game room: the next
+/// land's slot before a load of the previous land, the previous land's slot before a load of the next land
+[[nodiscard]] std::optional<uint32_t> SaveBeforeRoomLoad(uint32_t slot);
 /// The folder of the slot's mind files, relative to the player's folder
 [[nodiscard]] std::filesystem::path MindFolder(uint32_t slot, uint32_t land);
 /// The mind file of the creature at that place in the game's list of creatures

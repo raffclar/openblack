@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <optional>
@@ -32,6 +33,17 @@ namespace openblack::ecs::script_highlights
 [[nodiscard]] constexpr bool IsTipSign(HighlightInfo kind)
 {
 	return kind == HighlightInfo::DidYouKnowSign;
+}
+
+/// The challenges of leaving a land through its vortex, one for each of the first four lands
+inline constexpr std::array<uint32_t, 4> k_LeaveThroughVortexChallenges {56, 59, 60, 61};
+
+/// A scroll of a challenge of leaving the land through its vortex, clicked when a script asks, saves the game into the
+/// previous land's slot first. A sign never does.
+[[nodiscard]] constexpr bool SavesPreviousLandOnClick(HighlightInfo kind, uint32_t scriptId)
+{
+	return !IsTipSign(kind) &&
+	       std::ranges::find(k_LeaveThroughVortexChallenges, scriptId) != k_LeaveThroughVortexChallenges.end();
 }
 
 /// The sounds of the game's own bank a highlight plays: a scroll as it starts, a sign as the player taps it

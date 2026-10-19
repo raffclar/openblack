@@ -73,4 +73,9 @@ bool PlaysFinishedMusic(const FinishedTemple& temple)
 	return temple.localPlayers && !temple.scriptCutScene && !temple.scriptMusic && temple.landNumber != k_SilentFinishLand;
 }
 
+bool SavesOnFinish(const FinishedTemple& temple)
+{
+	return temple.localPlayers && !temple.scriptCutScene && !temple.skirmish;
+}
+
 } // namespace openblack::building_construction

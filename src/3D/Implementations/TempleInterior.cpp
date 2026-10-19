@@ -21,6 +21,7 @@
 
 #include <PackFile.h>
 #include <SDL_keyboard.h>
+#include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -510,7 +511,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	}
 	const auto question = *_saveGameQuestion;
 	_saveGameQuestion.reset();
-	if (*answer == Answer::No || *answer == Answer::Cancelled)
+	// A message's OK answers no question
+	if (*answer == Answer::No || *answer == Answer::Cancelled || *answer == Answer::Ok)
 	{
 		return;
 	}
@@ -525,8 +527,13 @@ void TempleInterior::UpdateSaveGameRoom()
 		SaveIntoSlot(question.slot, boxes.GetName());
 		return;
 	case Click::AskLoad:
-		// TODO(raffclar): the game starts again from the save. The save keeps only the creatures yet, so the land that is
-		// open takes the save's creatures.
+		// Before a load of the previous land or the next land, the game saves the land that is open into the other of the
+		// two slots, so that the player can come back to it
+		if (const auto before = gamesave::SaveBeforeRoomLoad(question.slot);
+		    before.has_value() && Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().InstantSave(*before);
+		}
 		if (Locator::playerProfileSystem::has_value())
 		{
 			Locator::playerProfileSystem::value().CountLoad();

@@ -634,3 +634,18 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
 	EXPECT_FALSE(world->registry.Valid(first));
 }
+
+TEST(ScriptHighlights, AScrollOfLeavingThroughTheVortexSavesThePreviousLand)
+{
+	using openblack::HighlightInfo;
+	using openblack::ecs::script_highlights::SavesPreviousLandOnClick;
+	// The challenges of leaving lands 1 to 4 through their vortices
+	for (const uint32_t challenge : {56u, 59u, 60u, 61u})
+	{
+		EXPECT_TRUE(SavesPreviousLandOnClick(HighlightInfo::Gold, challenge)) << challenge;
+		EXPECT_TRUE(SavesPreviousLandOnClick(HighlightInfo::Scroll, challenge)) << challenge;
+		EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::DidYouKnowSign, challenge)) << challenge;
+	}
+	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Gold, 57));
+	EXPECT_FALSE(SavesPreviousLandOnClick(HighlightInfo::Silver, 0));
+}

@@ -46,6 +46,10 @@ public:
 	void ThrowOutOfVortex(entt::entity object, float angle, float scale) override;
 	void StruckBy(entt::entity vortex, entt::entity hitter, const components::DrawnIntoVortex::Flight& flight) override;
 	[[nodiscard]] bool IsThrownOutByAVortex(entt::entity thing) const override;
+	/// A save keeps a copy of the crossing file while a vortex writes or reads it, and the vortex that writes it
+	void SaveState(reflection::BinaryWriter& out) const override;
+	/// A load puts the copy back in place of the crossing file, and the vortex that wrote it writes on after its lines
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// A vortex's effects start where it is made
