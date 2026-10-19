@@ -78,7 +78,7 @@ namespace
 /// How much the creature wants to take an action: its priority and its novelty
 float Wanted(const ActionCandidate& action)
 {
-	return ActionPriority(action.opinion) + Novelty(action.turnsSinceDone, action.servesFirstDesire);
+	return ActionPriority(action.opinion, action.leftArea) + Novelty(action.turnsSinceDone, action.servesFirstDesire);
 }
 
 /// An action that the plan tried and could not use is not tried again, in any place of the list
@@ -189,7 +189,7 @@ std::optional<Plan> PlanActionThenPart(const DesirePlanning& planning)
 		for (size_t i = 0; i < planning.actions.size(); ++i)
 		{
 			const auto& action = planning.actions[i];
-			if (action.disabled || tried.at(i))
+			if (action.disabled || action.leftArea || tried.at(i))
 			{
 				continue;
 			}
@@ -234,7 +234,7 @@ std::optional<Plan> PlanPartThenAction(const DesirePlanning& planning)
 	for (size_t i = 0; i < planning.actions.size(); ++i)
 	{
 		const auto& action = planning.actions[i];
-		if (action.disabled)
+		if (action.disabled || action.leftArea)
 		{
 			continue;
 		}
