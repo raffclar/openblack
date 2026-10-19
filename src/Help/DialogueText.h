@@ -152,6 +152,8 @@ public:
 	/// The box hides its texts. Then it adds each kept text again, the oldest first and without its number. The
 	/// reading time of the newest text starts again.
 	void ShowAgain();
+	/// A saved game loads: the box is empty. The texts and their waits stay, for ShowAgain to show them again.
+	void EmptyBox() { _display.Reset(true); }
 	/// The player clicked (or holds the keypad's Enter): it may end the wait for a click or cut the text short
 	void ProcessClick(bool click, bool skipKey);
 

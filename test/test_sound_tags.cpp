@@ -475,3 +475,32 @@ TEST_F(SoundTags, AMovedSoundKeepsItsOffset)
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	EXPECT_EQ(Audio().emitters.begin()->second.position, glm::vec3(25.0f, 4.0f, 0.0f));
 }
+
+// A saved game loads: the sounds of points and the sounds attached to objects do not come back, and an object's own
+// sound starts again on the next turn
+TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto lantern = CreateObjectAt({20.0f, 0.0f, 0.0f});
+	registry.Assign<ecs::components::SoundTag>(lantern, ecs::components::SoundTag {
+	                                                        .sound = k_Sound,
+	                                                        .offset = glm::vec3(0.0f),
+	                                                        .active = true,
+	                                                    });
+	const auto box = CreateObjectAt({30.0f, 0.0f, 0.0f});
+	const auto attached = _tags.AttachObjectSound(box, k_Sound, false);
+	const auto point = _tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	ASSERT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
+	const auto before = Audio().emitters.size();
+
+	_tags.ForgetSavedSounds();
+	EXPECT_FALSE(registry.Valid(attached));
+	EXPECT_FALSE(registry.Valid(point));
+	EXPECT_TRUE(registry.Valid(box));
+	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter == entt::null);
+
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(Audio().emitters.size(), before + 1);
+	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
+}

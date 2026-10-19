@@ -19,12 +19,14 @@
 #include <glm/fwd.hpp>
 #include <glm/vec2.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/TownHomes.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
 {
-class TownSystemInterface
+/// A save keeps which effect shows the symbols of belief of each village centre
+class TownSystemInterface: public SavedStateInterface
 {
 public:
 	/// The functional building of a town that suits a villager best, scoring above a least score; none if none does

@@ -38,6 +38,9 @@ public:
 	/// sounds stay. A looping sound that plays continues to the end of its loop where it is, and does not start
 	/// again. A sound that plays one time continues to its end.
 	virtual void DetachObjectSound(entt::entity entity, entt::id_type sound) = 0;
+	/// A saved game has loaded. The sounds of points and the sounds attached to objects do not come back, and their
+	/// tags go. An object's own tag stays, with no sound playing, so that the next game turn starts its sound again.
+	virtual void ForgetSavedSounds() {}
 };
 
 } // namespace openblack::ecs::systems

@@ -350,6 +350,27 @@ void AudioManager::StopEmitter(entt::entity emitter)
 	_audioPlayer->StopSource(component.sourceId);
 }
 
+void AudioManager::ForgetSavedEmitters()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> saved;
+	registry.Each<AudioEmitter>([&saved](entt::entity entity, const AudioEmitter&) { saved.push_back(entity); });
+	for (const auto emitter : saved)
+	{
+		// The source that the save names is not this run's, so it is not stopped. A voice that a sound of this run kept
+		// under the same entity is free again.
+		if (const auto slot = VoiceOf(emitter))
+		{
+			ReleaseVoice(*slot);
+		}
+		registry.Destroy(emitter);
+	}
+	if (!saved.empty())
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "{} sounds of the saved game do not come back", saved.size());
+	}
+}
+
 void AudioManager::DestroyEmitter(entt::entity emitter)
 {
 	auto& registry = Locator::entitiesRegistry::value();

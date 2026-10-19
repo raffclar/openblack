@@ -21,6 +21,8 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Systems/SavedStateInterface.h"
+
 namespace openblack::audio
 {
 
@@ -129,7 +131,7 @@ enum class MusicType : int32_t
 /// remembers where it got to, so the land's music carries on in time when it changes and picks up where it left off when
 /// it comes back.
 // TODO(raffclar): the game also plays creature fight and chant music before the creature dance music
-class GameMusic
+class GameMusic final: public ecs::systems::SavedStateInterface
 {
 public:
 	/// Music a script has attached to an object: heard from the object while the camera is near it
@@ -198,7 +200,7 @@ public:
 
 	GameMusic() = default;
 	/// Stops the music, which would otherwise call back into it when it ends
-	~GameMusic();
+	~GameMusic() override;
 	GameMusic(const GameMusic&) = delete;
 	GameMusic& operator=(const GameMusic&) = delete;
 
@@ -206,6 +208,13 @@ public:
 	void ProcessTurn(const TurnInputs& inputs);
 	/// Forgets what was playing, when a land is loaded
 	void Reset();
+	/// A save keeps the music that scripts attached to objects, the music a script started and whether it played, the
+	/// town whose music played, whether the land's music is on, and the line and word that the sung music got to. It
+	/// does not keep the music that plays, nor where each music group got to.
+	void SaveState(ecs::reflection::BinaryWriter& out) const override;
+	/// A load gives back what SaveState keeps, after Reset. No music plays until the next game turn picks it. Script
+	/// music that played at the save does not start again until a script stops it or starts other music.
+	bool LoadState(ecs::reflection::BinaryReader& in) override;
 	/// Registers every music bank with the audio once, as the game does when its audio starts, so that starting a
 	/// piece later reads none of them
 	static void RegisterBanks();

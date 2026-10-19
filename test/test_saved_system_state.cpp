@@ -24,6 +24,7 @@
 
 #include "3D/CameraTrack.h"
 #include "3D/WaterRings.h"
+#include "Audio/GameMusic.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -49,6 +50,7 @@
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
+#include "ECS/Systems/Implementations/TownSystem.h"
 #include "ECS/Systems/Implementations/WaterRingSystem.h"
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/SavedStateInterface.h"
@@ -332,4 +334,37 @@ TEST(SavedSystemState, TheDropsTheDustAndTheMotesComeBack)
 	saved.UpdateFrame(0.1f, true);
 	loaded.UpdateFrame(0.1f, true);
 	EXPECT_EQ(StateOf(loaded), StateOf(saved));
+}
+
+TEST(SavedSystemState, TheMusicThatTheScriptsChoseComesBack)
+{
+	audio::GameMusic saved;
+	saved.AttachMusic(7, audio::MusicType::CelticChantVox);
+	saved.AttachMusic(9, audio::MusicType::ScriptPiperTune);
+	saved.StartScriptMusic(audio::MusicType::NorseChant);
+	saved.SetAlignmentMusicEnabled(false);
+	saved.OnScriptMusicCue("L3");
+	saved.OnScriptMusicCue("W");
+	audio::GameMusic loaded;
+	LoadInto(loaded, StateOf(saved));
+	// The most recently attached stays first
+	ASSERT_EQ(loaded.GetAttachedMusic().size(), 2u);
+	EXPECT_EQ(loaded.GetAttachedMusic()[0].thing, 9u);
+	EXPECT_EQ(loaded.GetAttachedMusic()[1].type, audio::MusicType::CelticChantVox);
+	EXPECT_EQ(loaded.GetScriptType(), audio::MusicType::NorseChant);
+	EXPECT_FALSE(loaded.IsAlignmentMusicEnabled());
+	EXPECT_EQ(loaded.GetMusicLyrics().line, 3);
+	EXPECT_EQ(loaded.GetMusicLyrics().word, 2);
+	// No music plays after the load until a game turn picks it
+	EXPECT_EQ(loaded.GetPlaying(), audio::MusicType::None);
+}
+
+TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)
+{
+	const std::unordered_map<entt::entity, uint32_t> symbols {{static_cast<entt::entity>(5), 9u},
+	                                                          {static_cast<entt::entity>(12), 31u}};
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, symbols);
+	TownSystem towns;
+	LoadInto(towns, out.Bytes());
 }
