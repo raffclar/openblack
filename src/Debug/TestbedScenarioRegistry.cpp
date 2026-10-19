@@ -7995,6 +7995,25 @@ void AddMind(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
 	});
 
+	// Both kinds of land vortex, open at a save: after the load each looks as it did before the save
+	all.push_back({
+	    .id = "saves.vortex_drawn_after_load",
+	    .name = "Save and load: two open vortices",
+	    .facet = Facet::Story,
+	    .description = "A vortex that leads away from the land opens on the left. A vortex that leads into the land "
+	                   "opens on the right. 6 seconds after the start the game saves into slot 0. 4 seconds after the "
+	                   "save the game loads slot 0.",
+	    .expected = "Before and after the load, each vortex shows its swirl in the hole in the land, with the stars "
+	                "that turn over it. The land under each vortex stays level. After the load nothing of the land "
+	                "or the sea shows in the holes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -30.0f}, {60.0f, 30.0f}}},
+	    .vortices = {{.type = VortexType::In, .offset = {-35.0f, 0.0f}, .delaySeconds = 0.5f},
+	                 {.type = VortexType::Out, .offset = {35.0f, 0.0f}, .delaySeconds = 0.5f}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 6.0f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "frontend.continue_with_menu",
 	    .name = "Start-up: continue from the save on exit",
