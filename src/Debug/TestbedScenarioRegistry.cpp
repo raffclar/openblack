@@ -4332,6 +4332,31 @@ void AddObjects(std::vector<Scenario>& all)
 		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
 		    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "StealObjectAndTakeToCitadel"}},
 		});
+		// The six practice globes of the guide's food lesson, made on the land in one place by the script
+		std::vector<DispenserSetup> lessonGlobes(6,
+		                                         {.type = MagicType::Food, .offset = {0.0f, -k_Reach}, .bubbleHeight = 0.0f});
+		auto lessonTiger = Content(CreatureType::Tiger, {0.0f, 0.0f});
+		lessonTiger.pauseMind = false;
+		lessonTiger.phase = 9;
+		all.push_back({
+		    .id = "story.food_lesson_globes",
+		    .name = "The globes of the guide's food lesson near the creature",
+		    .facet = Facet::Story,
+		    .description =
+		        "A grown tiger of the player's, at the stage of growing up that the guide's second food lesson "
+		        "gives it, stands near six food globes on the land, as the lesson's script makes them. Its "
+		        "temple stands far to the west, and the globes are out of the influence of the player. Its "
+		        "body wants nothing, and its mind runs. Tap the globes one at a time, and tap one while the hand still holds "
+		        "food.",
+		    .expected = "The globes stay where they are until the player takes them: the creature leaves them alone. A "
+		                "tap takes a globe only when the hand holds nothing: while the hand holds a miracle, the globe "
+		                "stays.",
+		    .environment = {.dispenserGrid = false},
+		    .framing = {.shot = Shot::Placed, .eye = {12.0f, 14.0f, -32.0f}, .look = {0.0f, 1.0f, -k_Reach}},
+		    .creatures = {lessonTiger},
+		    .temples = {{.offset = k_ToyTemple, .angle = k_ToyTempleTurn}},
+		    .dispensers = lessonGlobes,
+		});
 		all.push_back({
 		    .id = "objects.bring_villager_home",
 		    .name = "Bringing a villager home",
