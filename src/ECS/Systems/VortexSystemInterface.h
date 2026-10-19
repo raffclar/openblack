@@ -21,6 +21,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Vortex.h"
+#include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
 
 namespace openblack::particles
@@ -34,7 +35,7 @@ namespace openblack::ecs::systems
 /// The swirling vortices between the lands. Scripts open one where a land is left (it fades in), where the next land
 /// is arrived at and at the volcano's crater (those start open), and later fade them out. While a land vortex opens it
 /// levels the ground under it for good.
-class VortexSystemInterface
+class VortexSystemInterface: public SavedStateInterface
 {
 public:
 	/// What the land shows of an open vortex, on the one land block under its middle: a hole, through which the swirl

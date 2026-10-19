@@ -30,7 +30,13 @@ namespace openblack::gamesave
 {
 
 inline constexpr std::array<char, 4> k_WorldMagic {'O', 'B', 'S', 'V'};
-inline constexpr uint32_t k_WorldVersion = 3;
+inline constexpr uint32_t k_WorldVersion = 4;
+/// The first version whose files keep the count of the loads that did not end
+inline constexpr uint32_t k_AttemptsVersion = 4;
+/// Where the count of the loads that did not end is in a file, from its start
+inline constexpr size_t k_AttemptsOffset = 8;
+/// A file whose loads did not end this many times does not load again: the game stopped two times as it loaded it
+inline constexpr uint32_t k_MostAttempts = 2;
 
 using Tag = std::array<char, 4>;
 inline constexpr Tag k_GameTag {'G', 'A', 'M', 'E'};
@@ -64,6 +70,9 @@ struct Chunk
 struct WorldFile
 {
 	uint32_t version {k_WorldVersion};
+	/// The loads of the file that started and did not end. A complete save has none. Each load adds one to the file
+	/// before it reads the world, and puts it back to none when it has read the world.
+	uint32_t attempts {0};
 	std::vector<Chunk> chunks;
 
 	bool operator==(const WorldFile&) const = default;
@@ -72,6 +81,16 @@ struct WorldFile
 [[nodiscard]] std::vector<uint8_t> Write(const WorldFile& file);
 /// Reads the file, or nothing when it is not a world file or a block goes past the end
 [[nodiscard]] std::optional<WorldFile> ReadWorldFile(std::span<const uint8_t> bytes);
+/// The count of the loads that did not end, from the bytes of a file; none when the bytes are not a world file. A file of
+/// a version before the count has none.
+[[nodiscard]] std::optional<uint32_t> ReadAttempts(std::span<const uint8_t> bytes);
+/// Whether a load of a file may start with the count of its loads that did not end
+[[nodiscard]] constexpr bool MayLoad(uint32_t attempts)
+{
+	return attempts < k_MostAttempts;
+}
+/// The bytes to write at the count's place in a file
+[[nodiscard]] std::array<uint8_t, sizeof(uint32_t)> AttemptsBytes(uint32_t attempts);
 /// The bytes of the first block with the tag, or none
 [[nodiscard]] std::optional<std::span<const uint8_t>> FindChunk(const WorldFile& file, const Tag& tag);
 

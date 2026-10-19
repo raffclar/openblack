@@ -7812,6 +7812,30 @@ void AddMind(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
 	});
 
+	// A save while a vortex out of the land writes the crossing file: the load puts the file back as it was at the save
+	all.push_back({
+	    .id = "saves.vortex_crossing_back",
+	    .name = "Save and load: a vortex that leads away",
+	    .facet = Facet::Story,
+	    .description = "A vortex that leads away from the land opens among six oaks. It takes the oaks one by one and "
+	                   "writes each into the crossing file. 4 seconds after the start the game saves into slot 0. 6 "
+	                   "seconds after the save the game loads slot 0.",
+	    .expected = "At the save the vortex has taken the six oaks. After the load the vortex is open at the same "
+	                "place, and the crossing file (vortex.txt in the player's saved games) holds the six lines that "
+	                "it held at the save. An oak moved into the vortex after the load adds its line after them.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -30.0f}, {30.0f, 30.0f}}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {6.0f, 0.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-8.0f, 3.0f}},
+	                {.type = TreeInfo::Oak, .offset = {2.0f, -11.0f}},
+	                {.type = TreeInfo::Oak, .offset = {14.0f, 9.0f}},
+	                {.type = TreeInfo::Oak, .offset = {-15.0f, -12.0f}},
+	                {.type = TreeInfo::Oak, .offset = {20.0f, -18.0f}}},
+	    .vortices = {{.type = VortexType::In, .offset = {0.0f, 0.0f}, .delaySeconds = 0.5f}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 4.0f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "mind.hand_free_pick_up",
 	    .name = "Put down a thing before a pick-up",

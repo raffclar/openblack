@@ -21,6 +21,32 @@ std::filesystem::path openblack::gamesave::SlotFolder(uint32_t slot, uint32_t la
 	return HasLandFolder(slot) ? folder / std::to_string(land) : folder;
 }
 
+std::filesystem::path openblack::gamesave::LoadSlotFolder(uint32_t slot, uint32_t land)
+{
+	if (slot == k_PreviousLandSlot)
+	{
+		return SlotFolder(slot, land - 1);
+	}
+	if (slot == k_NextLandSlot)
+	{
+		return SlotFolder(slot, land + 1);
+	}
+	return SlotFolder(slot, land);
+}
+
+std::optional<uint32_t> openblack::gamesave::SaveBeforeRoomLoad(uint32_t slot)
+{
+	if (slot == k_PreviousLandSlot)
+	{
+		return k_NextLandSlot;
+	}
+	if (slot == k_NextLandSlot)
+	{
+		return k_PreviousLandSlot;
+	}
+	return std::nullopt;
+}
+
 std::filesystem::path openblack::gamesave::MindFolder(uint32_t slot, uint32_t land)
 {
 	auto folder = std::filesystem::path(k_SavedGamesFolder) / std::to_string(slot);

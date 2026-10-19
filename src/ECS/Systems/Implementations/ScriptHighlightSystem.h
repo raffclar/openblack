@@ -50,6 +50,9 @@ public:
 	void Reset() override;
 	[[nodiscard]] const script_highlights::Pulse& GetPulse() const override { return _pulse; }
 	[[nodiscard]] const script_highlights::TipsRead& GetTipsRead() const override { return _tipsRead; }
+	/// A save keeps the tips that the player has read, in each category in the order read
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// The model it shows: its kind's active one once started, else its normal one

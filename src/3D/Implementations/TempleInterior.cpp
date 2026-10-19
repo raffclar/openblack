@@ -21,6 +21,7 @@
 
 #include <PackFile.h>
 #include <SDL_keyboard.h>
+#include <SaveSlots.h>
 #include <fmt/format.h>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -510,7 +511,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	}
 	const auto question = *_saveGameQuestion;
 	_saveGameQuestion.reset();
-	if (*answer == Answer::No || *answer == Answer::Cancelled)
+	// A message's OK answers no question
+	if (*answer == Answer::No || *answer == Answer::Cancelled || *answer == Answer::Ok)
 	{
 		return;
 	}
@@ -525,8 +527,13 @@ void TempleInterior::UpdateSaveGameRoom()
 		SaveIntoSlot(question.slot, boxes.GetName());
 		return;
 	case Click::AskLoad:
-		// TODO(raffclar): the game starts again from the save. The save keeps only the creatures yet, so the land that is
-		// open takes the save's creatures.
+		// Before a load of the previous land or the next land, the game saves the land that is open into the other of the
+		// two slots, so that the player can come back to it
+		if (const auto before = gamesave::SaveBeforeRoomLoad(question.slot);
+		    before.has_value() && Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().InstantSave(*before);
+		}
 		if (Locator::playerProfileSystem::has_value())
 		{
 			Locator::playerProfileSystem::value().CountLoad();
@@ -1886,6 +1893,12 @@ void TempleInterior::SaveState(ecs::reflection::BinaryWriter& out) const
 		Save(out, _heldDialogue->text.waitClick);
 		Save(out, _heldDialogue->text.noClick);
 	}
+	// Then whether the rooms are open, and what the map in the main room's pool shows
+	Save(out, _roomsOpened);
+	for (size_t i = 0; i < TempleToggles::k_Count; ++i)
+	{
+		Save(out, _toggles.IsShown(static_cast<TempleToggles::Display>(i)));
+	}
 }
 
 bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
@@ -1901,11 +1914,31 @@ bool TempleInterior::LoadState(ecs::reflection::BinaryReader& in)
 		Load(in, dialogue.text.waitClick);
 		Load(in, dialogue.text.noClick);
 	}
+	bool roomsOpened = _roomsOpened;
+	std::array<bool, TempleToggles::k_Count> shown {};
+	for (size_t i = 0; i < shown.size(); ++i)
+	{
+		shown.at(i) = _toggles.IsShown(static_cast<TempleToggles::Display>(i));
+	}
+	// A save made before the rooms were kept has none of these
+	if (in.Remaining() > 0)
+	{
+		Load(in, roomsOpened);
+		for (auto& each : shown)
+		{
+			Load(in, each);
+		}
+	}
 	if (in.Failed())
 	{
 		return false;
 	}
 	_heldDialogue = held ? std::optional(dialogue) : std::nullopt;
+	_roomsOpened = roomsOpened;
+	for (size_t i = 0; i < shown.size(); ++i)
+	{
+		_toggles.SetShown(static_cast<TempleToggles::Display>(i), shown.at(i));
+	}
 	return true;
 }
 

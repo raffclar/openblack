@@ -1460,3 +1460,5 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_saved_sounds test_saved_sounds.cpp)
 target_link_libraries(test_saved_sounds PRIVATE pack lnd)
+openblack_setup_and_add_test(test_safe_save_files test_safe_save_files.cpp)
+openblack_setup_and_add_test(test_save_problem_box gui/test_save_problem_box.cpp)

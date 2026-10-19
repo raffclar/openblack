@@ -29,7 +29,9 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
+#include "ECS/Systems/Implementations/CameraHelpSystem.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
+#include "ECS/Systems/Implementations/CameraZoneSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureHelpSystem.h"
@@ -367,4 +369,47 @@ TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)
 	reflection::Save(out, symbols);
 	TownSystem towns;
 	LoadInto(towns, out.Bytes());
+}
+
+TEST(SavedSystemState, WhatTheCameraLetsThePlayerDoComesBack)
+{
+	CameraHelpSystem saved;
+	saved.Get().features = 0x15;
+	saved.Get().autoPitch = 0.25f;
+	saved.Get().autoPitchHeight = 80.0f;
+	saved.Get().handReach = 123.0f;
+	CameraHelpSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_EQ(loaded.Get().features, 0x15u);
+	EXPECT_FLOAT_EQ(loaded.Get().autoPitch, 0.25f);
+	EXPECT_FLOAT_EQ(loaded.Get().autoPitchHeight, 80.0f);
+	// The game keeps no more of it
+	EXPECT_FLOAT_EQ(loaded.Get().handReach, camera_help::CameraHelp {}.handReach);
+}
+
+TEST(SavedSystemState, TheCameraZonesComeBack)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::string("land1.exc"));
+	reflection::Save(out, false);
+	reflection::Save(out, true);
+	reflection::Save(out, true);
+	reflection::Save(out, false);
+	reflection::Save(out, 700.0f);
+	reflection::Save(out, 200.0f);
+	reflection::Save(out, std::vector<glm::vec3> {{1.0f, 0.0f, 2.0f}, {3.0f, 0.0f, 4.0f}, {5.0f, 0.0f, 1.0f}});
+	reflection::Save(out, size_t {1});
+	reflection::Save(out, glm::vec3 {10.0f, 2.0f, 20.0f});
+	reflection::Save(out, 30.0f);
+	reflection::Save(out, 40.0f);
+	reflection::Save(out, camera_zones::Exclusion::Kind::Cylinder);
+	CameraZoneSystem zones;
+	LoadInto(zones, out.Bytes());
+	EXPECT_EQ(zones.GetFileName(), "land1.exc");
+	EXPECT_FALSE(zones.GetZones().exclusionsOn);
+	EXPECT_TRUE(zones.GetZones().fenceOn);
+	EXPECT_FLOAT_EQ(zones.GetZones().maxAltitude, 700.0f);
+	ASSERT_EQ(zones.GetZones().fence.size(), 3u);
+	ASSERT_EQ(zones.GetZones().exclusions.size(), 1u);
+	EXPECT_EQ(zones.GetZones().exclusions.front().kind, camera_zones::Exclusion::Kind::Cylinder);
 }

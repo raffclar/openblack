@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "Camera/CameraZones.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::particles
 {
@@ -28,7 +29,7 @@ namespace openblack::ecs::systems
 
 /// The camera zones of the land being played: the fence the world camera is kept inside, its height limits and the
 /// places it is kept out of, as the land's scripts last set them. A new land starts with none.
-class CameraZoneSystemInterface
+class CameraZoneSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CameraZoneSystemInterface() = default;

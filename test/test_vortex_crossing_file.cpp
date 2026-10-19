@@ -120,3 +120,27 @@ TEST_F(VortexCrossingFile, TheFileClosesWhenTheLandClearsItsThings)
 	EXPECT_FALSE(file.IsOpen());
 	EXPECT_EQ(Contents(), "tree\n");
 }
+
+TEST_F(VortexCrossingFile, ALoadWritesOnAfterTheSavedLines)
+{
+	vortex::CrossingFile file;
+	ASSERT_TRUE(file.Start(entt::entity {1}, _path));
+	file.Write("tree\n");
+	ASSERT_TRUE(file.MarkWritten(entt::entity {7}));
+	// The load clears the land, puts the saved copy back and opens the file again for the same vortex
+	file.Close();
+	ASSERT_TRUE(file.Resume(entt::entity {1}, _path));
+	EXPECT_EQ(file.Owner(), entt::entity {1});
+	file.Write("pot\n");
+	EXPECT_EQ(Contents(), "tree\npot\n");
+	// The things written before the load are not known
+	EXPECT_TRUE(file.MarkWritten(entt::entity {7}));
+}
+
+TEST_F(VortexCrossingFile, NoFileToOpenAgainLeavesItClosed)
+{
+	vortex::CrossingFile file;
+	EXPECT_FALSE(file.Resume(entt::entity {1}, _folder / "none.txt"));
+	EXPECT_FALSE(file.IsOpen());
+	EXPECT_FALSE(std::filesystem::exists(_folder / "none.txt"));
+}

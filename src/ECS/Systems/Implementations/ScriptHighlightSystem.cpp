@@ -12,6 +12,8 @@
 #include "ScriptHighlightSystem.h"
 
 #include <algorithm>
+#include <array>
+#include <vector>
 
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -22,6 +24,7 @@
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "GameScriptHighlightWorld.h"
 #include "Resources/ResourcesInterface.h"
@@ -482,4 +485,35 @@ void ScriptHighlightSystem::RemoveLoneGlows()
 void ScriptHighlightSystem::Reset()
 {
 	_pulse = {};
+}
+
+void ScriptHighlightSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	for (uint32_t category = 0; category < script_highlights::TipsRead::k_Categories; ++category)
+	{
+		const auto texts = _tipsRead.In(category);
+		reflection::Save(out, std::vector<uint32_t>(texts.begin(), texts.end()));
+	}
+}
+
+bool ScriptHighlightSystem::LoadState(reflection::BinaryReader& in)
+{
+	std::array<std::vector<uint32_t>, script_highlights::TipsRead::k_Categories> categories;
+	for (auto& texts : categories)
+	{
+		reflection::Load(in, texts);
+	}
+	if (in.Failed())
+	{
+		return false;
+	}
+	_tipsRead.Clear();
+	for (uint32_t category = 0; category < categories.size(); ++category)
+	{
+		for (const auto text : categories.at(category))
+		{
+			_tipsRead.Add(text, category);
+		}
+	}
+	return true;
 }

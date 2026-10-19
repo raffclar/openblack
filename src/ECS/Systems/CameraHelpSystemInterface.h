@@ -10,13 +10,14 @@
 #pragma once
 
 #include "Camera/CameraHelp.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
 
 /// What the world's camera lets the player do, as the land's scripts allow it, kept across camera models and reset as
 /// a new land opens
-class CameraHelpSystemInterface
+class CameraHelpSystemInterface: public SavedStateInterface
 {
 public:
 	virtual ~CameraHelpSystemInterface() = default;
