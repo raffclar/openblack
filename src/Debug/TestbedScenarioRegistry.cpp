@@ -3609,6 +3609,72 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.controls_rebind",
+	    .name = "The Controls page asks for a new key",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Controls page. The page picks the Help row and double "
+	                   "clicks it. Press a key, or click a mouse button away from the box's buttons, then click OK. Load "
+	                   "Defaults asks first, then puts every binding back.",
+	    .expected = "The box reads \"Define a key for  Help:\" between a Cancel and an OK arrow. A key shows under the "
+	                "words, with Ctrl, Shift or Alt before it. Escape, Tab, P, F1, F2 and the Enter key of the number pad "
+	                "show nothing. OK binds the input, and the action that had it before loses it. The keys have the "
+	                "names that the system gives them, such as Ctrl and Space.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenControlsBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.dialog_keys",
+	    .name = "Tab, the arrows and Return in the menu",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Options page. Each second Tab moves the focus to the next "
+	                   "control, nine times. Then the right arrow moves the music slider, Shift and Tab moves the focus "
+	                   "back, and Escape goes back to the main menu.",
+	    .expected = "The control with the focus has white words in place of grey ones. The arrows of the detail "
+	                "selector, which have no words, light up while they have the focus. After the controls, the focus "
+	                "goes to the five tabs and shows nothing there. The right arrow moves the knob a tenth to the right.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 27}},
+	});
+
+	all.push_back({
+	    .id = "interface.read_speed_slider",
+	    .name = "The help text speed slider of a game with no sound",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Advanced page as if the game had no sound. A second later "
+	                   "Tab moves the focus ten times, to the slider under the three selectors. Then the right arrow "
+	                   "moves the slider twice.",
+	    .expected = "A \"Help Text Speed\" slider shows at the middle of the page, under the Tooltips selector and over "
+	                "the check boxes. Its knob starts at the middle and moves a tenth to the right for each arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 3, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F}},
+	});
+
+	all.push_back({
 	    .id = "interface.speed_text",
 	    .name = "The words of the game's speed",
 	    .facet = Facet::Interface,
@@ -9848,7 +9914,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
+	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
@@ -9881,7 +9948,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 168> k_Names {
+	constexpr std::array<std::string_view, 171> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10016,6 +10083,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "check the profile folder",
 	    "give the player a picture of their own",
 	    "open the tattoo editor from the menu",
+	    "open the box of the controls page",
+	    "open a page of the menu",
+	    "press a key in the menu",
 	    "play custom music",
 	    "show the custom music controls",
 	    "script reaction",

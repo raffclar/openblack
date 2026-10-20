@@ -55,6 +55,7 @@ public:
 	bool DeleteProfile(std::u16string_view name) final;
 	void EditCurrentProfile(std::u16string_view creatureName, int symbol) final;
 	void SetCurrentSettings(const player_profiles::Settings& settings) final;
+	void SetCurrentKeys(const std::map<uint32_t, player_profiles::KeptKey>& keys) final;
 	void SetCurrentAlignment(double alignment) final;
 	void StartPlaying(int64_t now) final;
 	void StopPlaying(int64_t now) final;

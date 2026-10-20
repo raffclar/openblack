@@ -47,12 +47,14 @@ public:
 	[[nodiscard]] bool GetUnbindableRepeat(UnbindableActionMap action) const final;
 	[[nodiscard]] glm::uvec2 GetMousePosition() const final;
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const final;
+	[[nodiscard]] glm::ivec2 GetMousePushDelta() const final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 
 	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
 	void ResetKeyBindings() final;
+	void SetKeyBindings(const KeyBindingTable& bindings) final;
 	void QueuePress(BindableActionMap action) final;
 	[[nodiscard]] bool TakeDoubleClick() final;
 	[[nodiscard]] bool HasQueuedPresses() const final;
@@ -118,6 +120,8 @@ private:
 	glm::uvec2 _mousePosition;
 	/// The mouse's own movement this frame, without the cursor's jumps when the game puts it somewhere
 	MouseMotion _mouseMotion;
+	/// The mouse's own movement this frame, which the screen's sides do not stop
+	glm::ivec2 _pushMotion {0, 0};
 	float _mouseWheelDelta = 0.0f;
 	/// Holds the cursor while the mouse turns the camera
 	CursorFreeze _cursorFreeze;
