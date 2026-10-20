@@ -2499,6 +2499,21 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+/// A thing that a script makes goes into the map cells immediately, as the game puts each new thing in the map when it
+/// makes it. A script can then make a villager and release it in the same turn: the villager stands in the map and
+/// starts its usual tasks again. A thing in a hand or in flight does not go into the cells.
+static void FileInMapAtOnce(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object) || !Locator::entitiesMap::has_value() ||
+	    registry.AllOf<ecs::components::MapCellResident>(object) ||
+	    registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+	{
+		return;
+	}
+	Locator::entitiesMap::value().Refile(object);
+}
+
 /// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
 /// then holds; none for any other type, or when nothing could be made
 void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, float yAngleRadians, float scale)
@@ -2519,6 +2534,7 @@ void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, f
 	{
 		ScriptMessage("Thing not created");
 	}
+	FileInMapAtOnce(object);
 	RegisterCreated(object);
 	PushObject(object);
 }
