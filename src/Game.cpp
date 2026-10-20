@@ -3830,6 +3830,17 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
+	// In the temple, without the interface or with a box on the screen, the camera does not read its keys
+	const bool interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	if (!game_frame::CameraReadsKeys({
+	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	        .interfaceActive = interfaceActive,
+	        .boxShows = FrontEndBoxShows(),
+	    }))
+	{
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
 	auto& actions = Locator::gameActionSystem::value();

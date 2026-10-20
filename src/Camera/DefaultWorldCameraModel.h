@@ -95,8 +95,10 @@ private:
 	[[nodiscard]] Mode HandleDrag(bool held);
 	/// The help's profile counts the camera controls used
 	static void SendHelpEvents(camera_help::events::EventSet events);
-	/// Push scrolling for the frame: the speed moves and turns the camera, fades, then takes the frame's push
+	/// Push scrolling before the step of the camera: the speed moves and turns the camera, then fades
 	void HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping);
+	/// Push scrolling with the keys, after the step of the camera: the cursor past a side adds to the speed
+	void PushWithKeys();
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
 	/// Ctrl and Shift held: the clear view starts its orbit, follows the thing under the hand, and eases the camera
@@ -182,7 +184,8 @@ private:
 	// State of input Action
 	glm::vec3 _rotateAroundDelta = glm::vec3(0.0f, 0.0f, 0.0f);
 	glm::vec2 _keyBoardMoveDelta = glm::vec2(0.0f, 0.0f);
-	/// The steps of the keys of the last frame. The mouse of this frame adds to them before the step of the camera.
+	/// The steps of the keys of the last frame. The mouse of this frame adds to them before the step of the camera. The
+	/// step uses them one time: in a frame that does not read the keys, the next step gets no key steps.
 	struct KeySteps
 	{
 		glm::vec3 rotateAround {0.0f};
@@ -274,6 +277,11 @@ private:
 	camera_push_scroll::MillisecondClock _pushClock;
 	glm::vec3 _pushMove {0.0f};
 	float _pushTurn {0.0f};
+	/// What the push with the keys reads from the step: the seconds of the push's clock, whether push scrolling is on
+	/// in full screen, and whether the hand grips the land
+	float _pushSeconds {0.0f};
+	bool _pushCanAdd {false};
+	bool _pushGripping {false};
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 

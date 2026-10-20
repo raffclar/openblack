@@ -142,3 +142,11 @@ TEST(GameFrameOrder, TheKeysOfTheCameraActAfterTheCameraMoves)
 	// So the steps of this frame's keys move the camera in the next frame, after the next frame's turns
 	EXPECT_EQ(recorder.Steps().back(), Step::ProfileAlignment);
 }
+
+TEST(GameFrameOrder, TheCameraReadsItsKeysOnlyOutsideTheTempleWithTheInterfaceAndNoBox)
+{
+	EXPECT_TRUE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = true, .interfaceActive = true, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = false, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = true}));
+}

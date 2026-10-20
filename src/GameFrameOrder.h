@@ -140,6 +140,24 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
 	return true;
 }
 
+/// What the player can do with the camera keys in this frame
+struct CameraKeyState
+{
+	/// The player is in the temple
+	bool inTemple;
+	/// The interface takes the player's input, which a script can stop
+	bool interfaceActive;
+	/// A box of the menu or another dialog is on the screen
+	bool boxShows;
+};
+
+/// True when the camera reads its keys after its step. In the temple, without the interface or with a box on the screen,
+/// the camera does not read its keys and does not push. Its next step then gets no key steps.
+[[nodiscard]] constexpr bool CameraReadsKeys(const CameraKeyState& state)
+{
+	return !state.inTemple && state.interfaceActive && !state.boxShows;
+}
+
 /// Does each step of the frame, in the order of the frame. A step that returns false stops the frame.
 template <typename Do>
 bool PlayFrame(Do&& step)
