@@ -48,6 +48,8 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
+	/// The player's camera reads its keys, for the next frame
+	void HandleKeys(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return _view.origin; }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _view.focus; }
