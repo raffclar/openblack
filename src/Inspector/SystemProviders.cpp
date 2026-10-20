@@ -24,6 +24,8 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Abode.h"
@@ -619,7 +621,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	provider->Add(
 	    Query("learnt",
 	          "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on "
-	          "and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+	          "and of what the desire is about that has examples, the examples (kind of thing, attributes, feedback) and the "
+	          "tree as text; and the actions that a stroke or a slap can teach about now (contexts, the oldest first)",
 	          {id}),
 	    [sources](const QueryContext& context) {
 		    const auto* registry = Registry(sources.world);
@@ -674,15 +677,37 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 					                        {"attributes", std::move(attributes)},
 					                        {"feedback", episode.feedback}});
 				    }
-				    trees.push_back({{"tree", k == 0 ? "act on" : "use"},
-				                     {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
-				                     {"examples", std::move(examples)},
-				                     {"lines", creature_tree::Describe(learnt.trees[k][d])}});
+				    // The trees go by kind: the first is of what the desire is about, the second of what to act on
+				    trees.push_back(
+				        {{"tree", k == static_cast<size_t>(creature_mind_model::TreeKind::ActOn) ? "act on" : "activity"},
+				         {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
+				         {"examples", std::move(examples)},
+				         {"lines", creature_tree::Describe(learnt.trees[k][d])}});
 			    }
+		    }
+		    // The actions that the next stroke or slap can teach about, the oldest first, with the share of the lesson that
+		    // each would get now
+		    auto contexts = Json::array();
+		    for (const auto& remembered : learnt.contexts)
+		    {
+			    contexts.push_back({{"action", remembered.action},
+			                        {"name", tables != nullptr && remembered.action < tables->actions.size()
+			                                     ? tables->actions[remembered.action].name
+			                                     : std::string()},
+			                        {"desire", creature_desires::Name(remembered.desire)},
+			                        {"object", remembered.object.has_value() ? Json(*remembered.object) : Json(nullptr)},
+			                        {"running", remembered.running},
+			                        {"done", remembered.done},
+			                        {"seen", remembered.seen},
+			                        {"ordered", remembered.ordered},
+			                        {"seconds_since", remembered.secondsSince},
+			                        {"window_seconds", remembered.windowSeconds},
+			                        {"priority", creature_learning::LearningPriority(remembered)}});
 		    }
 		    return QueryResult::Value({{"id", ToId(entity)},
 		                               {"opinions", std::move(opinions)},
 		                               {"opinions_size", learnt.opinions.size()},
+		                               {"contexts", std::move(contexts)},
 		                               {"trees", std::move(trees)}});
 	    });
 	provider->Add(

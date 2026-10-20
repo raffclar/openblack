@@ -425,7 +425,7 @@
   "query": "creature.known"
  },
  {
-  "description": "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+  "description": "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on and of what the desire is about that has examples, the examples (kind of thing, attributes, feedback) and the tree as text; and the actions that a stroke or a slap can teach about now (contexts, the oldest first)",
   "kind": "object",
   "parameters": [
    {
