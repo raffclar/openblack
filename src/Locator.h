@@ -216,7 +216,8 @@ class ScriptHighlightSystemInterface;
 class InspectorSystemInterface;
 } // namespace ecs::systems
 
-void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags);
+void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags,
+                      bool background = false);
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
 /// The game's services, the players' profiles kept as the store says
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
