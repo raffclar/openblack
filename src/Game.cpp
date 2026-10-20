@@ -1800,334 +1800,521 @@ bool Game::GameLogicLoop() noexcept
 	{
 		return false;
 	}
-	clock.StartTurn();
-	// The villagers are drawn gliding through the turn from where they stand as it begins
-	Locator::livingActionSystem::value().StartTurnPlaces();
-	// The influence asked during the turn is measured from where the hands were at it
-	Locator::influenceSystem::value().SetInGameTurn(true);
-	// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
-	Locator::handSystem::value().ProcessTurn();
-	ProcessHandToolTipTurn();
-	ProcessTurnCheering();
-
-	// What moved since the last turn goes into its new map cell
-	Locator::entitiesMap::value().Sync();
-
-	// A script's two-thing camera lets go of a thing that has gone
-	if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
-	    scriptCamera != nullptr)
-	{
-		scriptCamera->LetGoOfGoneThings();
-	}
-	// The players take their turns, each its temple and then its towns
-	ProcessPlayerTurns();
-	// In the turn of the players, each computer mind that a land script switched on starts on the land
-	if (Locator::computerPlayerSystem::has_value())
-	{
-		Locator::computerPlayerSystem::value().ProcessTurn();
-	}
-	// The sharks' turns start where they are, then the things the scripts walk along tracks go on, before the living
-	Locator::sharkSystem::value().ProcessTurn();
-	// The dances go on after the players and before the things walking tracks and the living
-	Locator::danceSystem::value().ProcessTurn();
-	Locator::walkPathSystem::value().ProcessTurn();
-
-	auto& profiler = Locator::profiler::value();
-
-	{
-		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
-		Locator::pathfindingSystem::value().Update();
-	}
-	// A town totem that arrives at its share rings the village bell
-	Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
-	Locator::chimneySmokeSystem::value().ProcessTurn();
-	// How far the players' influence reaches, and its border
-	Locator::influenceSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The players' statistics take in their towns, influence and creature as the turn goes
-	player_statistics::ProcessTurn(Locator::time::value().GetTurn());
-	player_statistics::ProcessGlobalTurn(Locator::time::value().GetTurn(), _statisticsFrameRate.Rate());
-	// The players' hearts beat on, quicker the more their people are in danger
-	if (Locator::heartbeatSystem::has_value())
-	{
-		Locator::heartbeatSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	}
-	// The crops in the fields grow
-	Locator::fieldSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The fish come back to the fish farms
-	Locator::fishFarmSystem::value().ProcessTurn(Locator::time::value().GetTurn());
-	// The forests' growing trees grow, faster in the rain, and the forests spread
-	Locator::forestSystem::value().GrowForests();
-	{
-		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
-		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
-		Locator::creaturePhysiologySystem::value().ProcessTurn();
-	}
-	// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
-	Locator::creaturePenSystem::value().ProcessTurn();
-	// The creatures' bodies follow their fatness, and their marks heal
-	Locator::creatureAnimationSystem::value().ProcessTurn();
-	Locator::creatureSkinSystem::value().ProcessTurn();
-	{
-		// A taut leash pulls its creature to the hand before the creature's mind thinks
-		auto creatureLeash = profiler.BeginScoped(Profiler::Stage::CreatureLeashUpdate);
-		Locator::leashSystem::value().ProcessTurn();
-	}
-	{
-		// The creatures want things, and decide what to do while idle
-		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
-		Locator::creatureMindSystem::value().ProcessTurn();
-	}
-	{
-		// They weigh their desires against what they could do about them, and change what they do for a pressing plan
-		auto creaturePlanner = profiler.BeginScoped(Profiler::Stage::CreaturePlannerUpdate);
-		Locator::creatureMindSystem::value().PlanTurn();
-	}
-	{
-		// They learn from what the leash shows them, and copy the player
-		auto creatureLearning = profiler.BeginScoped(Profiler::Stage::CreatureLearningUpdate);
-		Locator::creatureMindSystem::value().LearnTurn();
-	}
-	{
-		// They plan their routes and walk, run and turn
-		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
-		Locator::creatureLocomotionSystem::value().ProcessTurn();
-	}
-	{
-		// They walk up to the things they act on, and what they carry makes them stronger
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().ProcessTurn();
-	}
-	{
-		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
-		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().ProcessTurn();
-		// Creatures fizz on out of sight or back in, after they have acted
-		Locator::creatureFizzSystem::value().ProcessTurn();
-	}
-	// The advisor tells of the player's creature: the messages waiting their turn, and what the help watches of it
-	if (Locator::creatureHelpSystem::has_value())
-	{
-		Locator::creatureHelpSystem::value().ProcessTurn();
-	}
-	// At the end of their turns the creatures take their poses, and each frame draws their bodies between the last two
-	{
-		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
-		Locator::creatureAnimationSystem::value().PoseTurns();
-	}
-	{
-		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
-		Locator::livingActionSystem::value().Update();
-	}
-	// The living that walked this turn go into their new map cells before anything searches them
-	Locator::entitiesMap::value().Sync();
-	// The game burns its fires here, after the living and before the scripts and the miracles: a fire either of those
-	// lights this turn waits for the next before it burns
-	if (Locator::fireSystem::has_value())
-	{
-		Locator::fireSystem::value().MarkBurnPoint();
-	}
-
-	auto& lhvm = Locator::vm::value();
-	lhvm.LookIn(lhvm::ScriptType::All);
-	// Every object the scripts no longer hold in a variable lets go of its place in their table, after their turn
-	Locator::scriptObjects::value().ReleaseUnreferenced();
-	// The scripts' fade moves on with their turn
-	Locator::cinematicDirectorSystem::value().ProcessTurn();
-	// The advisors follow what they point at and look at
-	Locator::advisorSystem::value().ProcessTurn();
-
-	// The fireflies come out at nightfall and go home at dawn, by the time of day the turn began at
-	if (Locator::fireflySystem::has_value())
-	{
-		Locator::fireflySystem::value().ProcessTurn();
-	}
-
-	// The time of day moves on
-	Locator::skySystem::value().ProcessTurn();
-
-	// The weather moves on, then the ambience follows the weather at the camera
-	const auto cameraPosition = Locator::camera::value().GetOrigin();
-	ecs::components::WeatherInfo weather {};
-	if (Locator::weatherSystem::has_value())
-	{
-		auto& weatherSystem = Locator::weatherSystem::value();
-		weatherSystem.Update(clock.GetTurn());
-		// The storms that snow lay it on the land, and it melts
-		Locator::snowSystem::value().ProcessTurn(weatherSystem.GetActiveStorms());
-		weather = weatherSystem.GetWeatherSmooth(cameraPosition);
-	}
-
-	// The objects' looping sounds start again where they have stopped, within reach of where they are heard from
-	Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
-	// The worship sites charge their icons and store what their dancers chant, before the miracles draw their upkeep
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().ProcessChants();
-	}
-	{
-		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
-		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
-		Locator::magicSystem::value().ProcessTurn();
-	}
-	{
-		// The flocks fly and the wolves run and hunt
-		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
-		Locator::animalSystem::value().ProcessTurn();
-	}
-	{
-		// The shields' objects: the spiritual shields' marks and the physical shields' domes, and the people sheltering
-		auto shields = profiler.BeginScoped(Profiler::Stage::MagicShieldsUpdate);
-		Locator::magicShieldSystem::value().ProcessTurn();
-	}
-	{
-		// The forest miracles' forests grow or wither
-		auto forests = profiler.BeginScoped(Profiler::Stage::ForestsUpdate);
-		Locator::forestSystem::value().ProcessTurn();
-	}
-	{
-		// What is hot burns, cools and spreads, and the villagers near it react
-		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
-		Locator::fireSystem::value().ProcessTurn();
-	}
-	{
-		// What the miracles and other happenings made the living react to: belief for the villagers' towns, and the
-		// creatures impressed
-		auto reactions = profiler.BeginScoped(Profiler::Stage::ReactionsUpdate);
-		Locator::reactionSystem::value().ProcessTurn();
-	}
-	{
-		// The teleport stones: the passers-by turn aside into them and jump between them
-		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
-		Locator::teleportSystem::value().ProcessTurn();
-	}
-	// A creature loaded from what a last land kept sparkles into sight
-	Locator::creatureCarryOverSystem::value().ProcessTurn();
-	// The game can take a picture of the player's creature for its web page
-	if (Locator::creatureWebPageSystem::has_value())
-	{
-		Locator::creatureWebPageSystem::value().ProcessTurn();
-	}
-	{
-		// The particle effects not owned by a miracle step, and the spot visuals count down
-		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
-		Locator::particleSystem::value().ProcessTurn();
-	}
-	{
-		// What a tornado carried and flung is let go once its particle has gone
-		auto tornado = profiler.BeginScoped(Profiler::Stage::TornadoUpdate);
-		Locator::tornadoSystem::value().ProcessTurn();
-	}
-	// A reward chest that thumped down goes into the map's cells
-	if (Locator::rewardSystem::has_value())
-	{
-		Locator::rewardSystem::value().ProcessTurn();
-	}
-	// The scrolls and signs the scripts put up pulse, find what they stand on, and the signs whose tips were read start
-	if (Locator::scriptHighlightSystem::has_value())
-	{
-		Locator::scriptHighlightSystem::value().ProcessTurn();
-	}
-	// The advisors banter when the player has had no help for a while
-	if (Locator::helpMessageSystem::has_value())
-	{
-		Locator::helpMessageSystem::value().ProcessTurn();
-	}
-	// The advisors' guidance: a new land's first stamps, and a look at the moon at night
-	if (Locator::guidanceSystem::has_value())
-	{
-		Locator::guidanceSystem::value().ProcessTurn();
-	}
-	// The help's count of what the player has done moves on a turn, and its tip bubble stays while its sign shows
-	if (Locator::helpProfileSystem::has_value())
-	{
-		Locator::helpProfileSystem::value().ProcessTurn(FrontEndBoxShows(), HelpWorldCameraView());
-	}
-	if (Locator::tipBubbleSystem::has_value())
-	{
-		Locator::tipBubbleSystem::value().ProcessTurn();
-	}
-	// The footpaths being found between things take a few more steps, and those found are laid
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessTurn();
-	}
-	// Then the physics, after the living, the fires, the reactions, the miracles and the particles have had their turn,
-	// so a body any of them sets moving this turn flies this turn: what was thrown, dropped, knocked or pushed flies,
-	// collides and comes to rest
-	if (Locator::dynamicsSystem::has_value())
-	{
-		auto physics = profiler.BeginScoped(Profiler::Stage::PhysicsUpdate);
-		Locator::dynamicsSystem::value().ProcessTurn();
-	}
-	// The pieces broken off buildings count down their time, and go when it runs out
-	if (Locator::buildingDamageSystem::has_value())
-	{
-		Locator::buildingDamageSystem::value().ProcessTurn();
-	}
-	// What the hand holds stays where the hand is for the game, and is let go once it is gone
-	if (Locator::handGrabSystem::has_value())
-	{
-		Locator::handGrabSystem::value().ProcessTurn();
-	}
-	// At the end of the turn the vortices between the lands open, close and level the ground under them
-	if (Locator::vortexSystem::has_value())
-	{
-		Locator::vortexSystem::value().ProcessTurn();
-	}
-	// Once the whole turn is over, the local player whose temple is being destroyed has lost
-	if (Locator::templeDestructionSystem::has_value())
-	{
-		Locator::templeDestructionSystem::value().EndTurn();
-	}
-	// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
-	Locator::pathfindingSystem::value().ProcessLookahead();
-
-	// Each turn ends with the camera taking the alignment of the player of most influence at its eye
-	Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
-	// The temples' outsides follow their players' alignments
-	Locator::templeExteriorSystem::value().UpdateTurn();
-	// And their worship sites wear their looks
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().UpdateTurn();
-	}
-
-	if (_atmosAudio)
-	{
-		_atmosAudio->SetAlignment(Locator::alignmentSystem::value().GetCameraAlignment());
-		_atmosAudio->EndTurn({
-		    .camera = cameraPosition,
-		    .weather =
-		        {
-		            .rain = weather.rain,
-		            .snow = weather.snow,
-		            .windX = weather.windX,
-		            .windZ = weather.windZ,
-		        },
-		    .paused = false,
-		    .turn = clock.GetTurn(),
-		    .inCitadel = false,
-		    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
-		});
-	}
-
-	ProcessMusicTurn(cameraPosition, false);
-	// The music moods look at the custom music that plays
-	if (Locator::musicMoodSystem::has_value())
-	{
-		Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
-	}
-	Locator::influenceSystem::value().SetInGameTurn(false);
-	// At the end of the turn the game autosaves when an autosave is due
-	if (Locator::saveGameSystem::has_value())
-	{
-		Locator::saveGameSystem::value().EndTurn();
-	}
+	// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+	game_turn::PlayTurn([this](game_turn::Step step) { PlayTurnStep(step); });
 
 	_lastGameLoopTime = currentTime;
 	_turnDeltaTime = delta;
 
 	return false;
+}
+
+void Game::PlayTurnStep(game_turn::Step step)
+{
+	using game_turn::Step;
+	auto& clock = Locator::time::value();
+	// A script can move the camera in its turn, so the steps after the scripts hear and measure from where it is now
+	const auto cameraPosition = Locator::camera::value().GetOrigin();
+	auto& profiler = Locator::profiler::value();
+	const auto turn = clock.GetTurn();
+
+	switch (step)
+	{
+	case Step::HandStillness:
+		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
+		Locator::handSystem::value().ProcessTurn();
+		break;
+	case Step::TurnCheering:
+		ProcessTurnCheering();
+		break;
+	case Step::Clock:
+		clock.StartTurn();
+		break;
+	case Step::TurnStartPlaces:
+		// The villagers are drawn gliding through the turn from where they stand as it begins
+		Locator::livingActionSystem::value().StartTurnPlaces();
+		break;
+	case Step::InfluenceTurnStart:
+		// The influence asked during the turn is measured from where the hands were at it
+		Locator::influenceSystem::value().SetInGameTurn(true);
+		break;
+	case Step::MapCells:
+		// What moved since the last turn goes into its new map cell
+		Locator::entitiesMap::value().Sync();
+		break;
+	case Step::Sharks:
+		// Each shark's turn starts where it is
+		Locator::sharkSystem::value().ProcessTurn();
+		break;
+	case Step::Storms:
+		if (Locator::weatherSystem::has_value())
+		{
+			Locator::weatherSystem::value().ProcessStorms(turn);
+		}
+		break;
+	case Step::Snow:
+		// The storms that snow lay it on the land, and it melts
+		if (Locator::weatherSystem::has_value())
+		{
+			Locator::snowSystem::value().ProcessTurn(Locator::weatherSystem::value().GetActiveStorms());
+		}
+		break;
+	case Step::Players:
+		// The players take their turns, each its temple and then its towns
+		ProcessPlayerTurns();
+		break;
+	case Step::ComputerPlayers:
+		// In the turn of the players, each computer mind that a land script switched on starts on the land
+		if (Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Influence:
+		// How far the players' influence reaches, and its border
+		Locator::influenceSystem::value().ProcessTurn(turn);
+		break;
+	case Step::PlayerStatistics:
+		// The players' statistics take in their towns, influence and creature as the turn goes
+		player_statistics::ProcessTurn(turn);
+		break;
+	case Step::Heartbeats:
+		// The players' hearts beat on, quicker the more their people are in danger
+		if (Locator::heartbeatSystem::has_value())
+		{
+			Locator::heartbeatSystem::value().ProcessTurn(turn);
+		}
+		break;
+	case Step::VillageTotems:
+		// A town totem that arrives at its share rings the village bell
+		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
+		break;
+	case Step::ChimneySmoke:
+		Locator::chimneySmokeSystem::value().ProcessTurn();
+		break;
+	case Step::Dances:
+		Locator::danceSystem::value().ProcessTurn();
+		break;
+	case Step::Fields:
+		// The crops in the fields grow
+		Locator::fieldSystem::value().ProcessTurn(turn);
+		break;
+	case Step::FishFarms:
+		// The fish come back to the fish farms
+		Locator::fishFarmSystem::value().ProcessTurn(turn);
+		break;
+	case Step::WalkPaths:
+		// The things that the scripts walk along tracks move on
+		Locator::walkPathSystem::value().ProcessTurn();
+		break;
+	case Step::Footpaths:
+		// The footpaths that the game finds between things take a few more steps, and it lays those that it found
+		if (Locator::footpathSystem::has_value())
+		{
+			Locator::footpathSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::ForestGrowth:
+		// The forests' growing trees grow, faster in the rain, and the forests spread
+		Locator::forestSystem::value().GrowForests();
+		break;
+	case Step::Pathfinding:
+	{
+		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
+		Locator::pathfindingSystem::value().Update();
+		break;
+	}
+	case Step::CreaturePhysiology:
+	{
+		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
+		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
+		Locator::creaturePhysiologySystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreaturePens:
+		// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
+		Locator::creaturePenSystem::value().ProcessTurn();
+		break;
+	case Step::CreatureBodies:
+		// The creatures' bodies follow their fatness
+		Locator::creatureAnimationSystem::value().ProcessTurn();
+		break;
+	case Step::CreatureSkin:
+		// The creatures' marks heal
+		Locator::creatureSkinSystem::value().ProcessTurn();
+		break;
+	case Step::Leashes:
+	{
+		// A taut leash pulls its creature to the hand before the creature's mind thinks
+		auto creatureLeash = profiler.BeginScoped(Profiler::Stage::CreatureLeashUpdate);
+		Locator::leashSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureMinds:
+	{
+		// The creatures want things, and decide what to do while idle
+		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
+		Locator::creatureMindSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreaturePlans:
+	{
+		// They weigh their desires against what they could do about them, and change what they do for a pressing plan
+		auto creaturePlanner = profiler.BeginScoped(Profiler::Stage::CreaturePlannerUpdate);
+		Locator::creatureMindSystem::value().PlanTurn();
+		break;
+	}
+	case Step::CreatureLearning:
+	{
+		// They learn from what the leash shows them, and copy the player
+		auto creatureLearning = profiler.BeginScoped(Profiler::Stage::CreatureLearningUpdate);
+		Locator::creatureMindSystem::value().LearnTurn();
+		break;
+	}
+	case Step::CreatureLocomotion:
+	{
+		// They plan their routes and walk, run and turn
+		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
+		Locator::creatureLocomotionSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureObjectActions:
+	{
+		// They walk up to the things they act on, and what they carry makes them stronger
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureFights:
+	{
+		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureFizz:
+	{
+		// Creatures fizz on out of sight or back in, after they have acted
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFizzSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureHelp:
+		// The advisor tells of the player's creature: the messages that wait, and what the help watches of it
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::CreaturePoses:
+	{
+		// At the end of their turns the creatures take their poses, and each frame draws their bodies between the last two
+		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
+		Locator::creatureAnimationSystem::value().PoseTurns();
+		break;
+	}
+	case Step::Villagers:
+	{
+		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
+		Locator::livingActionSystem::value().Update();
+		break;
+	}
+	case Step::MapCellsAfterLiving:
+		// The living that walked this turn go into their new map cells before anything searches them
+		Locator::entitiesMap::value().Sync();
+		break;
+	case Step::Animals:
+	{
+		// The flocks fly and the wolves run and hunt, in the turn of the living
+		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
+		Locator::animalSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::CreatureWebPage:
+		// The game can take a picture of the player's creature for its web page
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::CreatureCarryOver:
+		// A creature loaded from what a last land kept sparkles into sight
+		Locator::creatureCarryOverSystem::value().ProcessTurn();
+		break;
+	case Step::Fires:
+		// The game burns its fires here, after the living and before the miracles and the scripts. A fire that a later
+		// step lights in this turn waits for the next turn before it burns.
+		if (Locator::fireSystem::has_value())
+		{
+			auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
+			Locator::fireSystem::value().MarkBurnPoint();
+			// What is hot burns, cools and spreads, and the villagers near it react
+			Locator::fireSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Reactions:
+	{
+		// What the miracles and other events made the living react to: belief for the villagers' towns, and the
+		// creatures that the events impressed
+		auto reactions = profiler.BeginScoped(Profiler::Stage::ReactionsUpdate);
+		Locator::reactionSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::Teleports:
+	{
+		// The teleport stones: the passers-by turn aside into them and jump between them
+		auto teleport = profiler.BeginScoped(Profiler::Stage::TeleportUpdate);
+		Locator::teleportSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::WorshipChants:
+		// The worship sites charge their icons and keep what their dancers chant, before the miracles pay their upkeep
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().ProcessChants();
+		}
+		break;
+	case Step::Miracles:
+	{
+		// The dispensers, then each miracle's upkeep, its own particle effect and what that effect tells it
+		auto magic = profiler.BeginScoped(Profiler::Stage::MagicUpdate);
+		Locator::magicSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::Shields:
+	{
+		// The shields' objects: the spiritual shields' marks, the physical shields' domes, and the people who shelter
+		auto shields = profiler.BeginScoped(Profiler::Stage::MagicShieldsUpdate);
+		Locator::magicShieldSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::MiracleForests:
+	{
+		// The forest miracles' forests grow or wither
+		auto forests = profiler.BeginScoped(Profiler::Stage::ForestsUpdate);
+		Locator::forestSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::Particles:
+	{
+		// The particle effects that no miracle owns take a step, and the spot visuals count down
+		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
+		Locator::particleSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::Tornadoes:
+	{
+		// A tornado lets go of what it carried and threw once its particle has gone
+		auto tornado = profiler.BeginScoped(Profiler::Stage::TornadoUpdate);
+		Locator::tornadoSystem::value().ProcessTurn();
+		break;
+	}
+	case Step::Fireflies:
+		// The fireflies come out at nightfall and go home at dawn, by the time of day at the start of the turn
+		if (Locator::fireflySystem::has_value())
+		{
+			Locator::fireflySystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Physics:
+		// Then the physics, after the living, the fires, the reactions, the miracles and the particles. A body that any
+		// of them sets in motion in this turn flies in this turn: it flies, collides and comes to rest.
+		if (Locator::dynamicsSystem::has_value())
+		{
+			auto physics = profiler.BeginScoped(Profiler::Stage::PhysicsUpdate);
+			Locator::dynamicsSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Vortices:
+		// The vortices between the lands open, close and make the ground level under them
+		if (Locator::vortexSystem::has_value())
+		{
+			Locator::vortexSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Scripts:
+		// The scripts see the world after its turn
+		Locator::vm::value().LookIn(lhvm::ScriptType::All);
+		break;
+	case Step::ScriptObjects:
+		// Every object that the scripts do not hold in a variable now lets go of its place in their table
+		Locator::scriptObjects::value().ReleaseUnreferenced();
+		break;
+	case Step::ScriptFade:
+		// The scripts' fade moves on with their turn
+		Locator::cinematicDirectorSystem::value().ProcessTurn();
+		break;
+	case Step::Advisors:
+		// The advisors follow what they point at and look at
+		Locator::advisorSystem::value().ProcessTurn();
+		break;
+	case Step::HandToolTips:
+		ProcessHandToolTipTurn();
+		break;
+	case Step::Banter:
+		// The advisors banter when the player has had no help for a while
+		if (Locator::helpMessageSystem::has_value())
+		{
+			Locator::helpMessageSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::HelpProfile:
+		// The help's count of what the player did moves on a turn
+		if (Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().ProcessTurn(FrontEndBoxShows(), HelpWorldCameraView());
+		}
+		break;
+	case Step::TipBubble:
+		// The help's tip bubble stays while its sign shows
+		if (Locator::tipBubbleSystem::has_value())
+		{
+			Locator::tipBubbleSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::TimeOfDay:
+		// The time of day moves on
+		Locator::skySystem::value().ProcessTurn();
+		break;
+	case Step::WeatherThings:
+		// The weather things follow their storms, which the wind blows along if it can
+		if (Locator::weatherSystem::has_value())
+		{
+			Locator::weatherSystem::value().ProcessWeatherThings();
+		}
+		break;
+	case Step::ScriptHighlights:
+		// The scrolls and signs of the scripts pulse and find what they stand on. The signs whose tips the player read
+		// start.
+		if (Locator::scriptHighlightSystem::has_value())
+		{
+			Locator::scriptHighlightSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Climates:
+		if (Locator::weatherSystem::has_value())
+		{
+			Locator::weatherSystem::value().ProcessClimates(turn);
+		}
+		break;
+	case Step::HeldThing:
+		// What the hand holds stays where the hand is for the game, and the hand lets go of it once it is gone
+		if (Locator::handGrabSystem::has_value())
+		{
+			Locator::handGrabSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Rewards:
+		// A reward chest that fell to the ground goes into the map's cells
+		if (Locator::rewardSystem::has_value())
+		{
+			Locator::rewardSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::Guidance:
+		// The advisors' guidance: a new land's first stamps, and a look at the moon at night
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::CameraChecks:
+		// A script's two-thing camera lets go of a thing that has gone
+		if (auto* scriptCamera = Locator::scriptControlSystem::value().GetScriptCamera(Locator::camera::value());
+		    scriptCamera != nullptr)
+		{
+			scriptCamera->LetGoOfGoneThings();
+		}
+		break;
+	case Step::BuildingPieces:
+		// The pieces broken off buildings count down their time, and go when it runs out
+		if (Locator::buildingDamageSystem::has_value())
+		{
+			Locator::buildingDamageSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::MusicMoods:
+		// The music moods look at the custom music that plays
+		if (Locator::musicMoodSystem::has_value())
+		{
+			Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
+		}
+		break;
+	case Step::Alignment:
+		// The camera takes the alignment of the player of most influence at its eye
+		Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
+		break;
+	case Step::TempleLooks:
+		// The temples' outsides follow their players' alignments
+		Locator::templeExteriorSystem::value().UpdateTurn();
+		break;
+	case Step::WorshipSiteLooks:
+		// And their worship sites wear their looks
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().UpdateTurn();
+		}
+		break;
+	case Step::SoundTags:
+		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from
+		Locator::soundTagSystem::value().ProcessTurn(Locator::audio::value().GetListener().origin);
+		break;
+	case Step::Ambience:
+		// The ambience follows the weather at the camera
+		if (_atmosAudio)
+		{
+			ecs::components::WeatherInfo weather {};
+			if (Locator::weatherSystem::has_value())
+			{
+				weather = Locator::weatherSystem::value().GetWeatherSmooth(cameraPosition);
+			}
+			_atmosAudio->SetAlignment(Locator::alignmentSystem::value().GetCameraAlignment());
+			_atmosAudio->EndTurn({
+			    .camera = cameraPosition,
+			    .weather =
+			        {
+			            .rain = weather.rain,
+			            .snow = weather.snow,
+			            .windX = weather.windX,
+			            .windZ = weather.windZ,
+			        },
+			    .paused = false,
+			    .turn = clock.GetTurn(),
+			    .inCitadel = false,
+			    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
+			});
+		}
+		break;
+	case Step::Music:
+		ProcessMusicTurn(cameraPosition, false);
+		break;
+	case Step::Autosave:
+		// At the end of the turn the game autosaves when an autosave is due
+		if (Locator::saveGameSystem::has_value())
+		{
+			Locator::saveGameSystem::value().EndTurn();
+		}
+		break;
+	case Step::GameOver:
+		// Once the whole turn is over, the local player whose temple the enemy destroys has lost
+		if (Locator::templeDestructionSystem::has_value())
+		{
+			Locator::templeDestructionSystem::value().EndTurn();
+		}
+		break;
+	case Step::GlobalStatistics:
+		player_statistics::ProcessGlobalTurn(turn, _statisticsFrameRate.Rate());
+		break;
+	case Step::WalkerLookahead:
+		// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
+		Locator::pathfindingSystem::value().ProcessLookahead();
+		break;
+	case Step::InfluenceTurnEnd:
+		Locator::influenceSystem::value().SetInGameTurn(false);
+		break;
+	case Step::_Count:
+		break;
+	}
 }
 
 void Game::UpdatePauseText()
