@@ -27,6 +27,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Map.h"
 #include "ECS/ScriptFlockRules.h"
+#include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 
@@ -181,8 +182,43 @@ void AnimalSystem::SetGrazerSpeed(Animal& animal, uint16_t speed)
 	}
 }
 
-bool AnimalSystem::GroundMoveTo(Animal& animal)
+bool AnimalSystem::GroundMoveTo(entt::entity entity, Animal& animal)
 {
+	auto& registry = EntityRegistry();
+	if (animal.walksRound && registry.AllOf<WallHug, TurningWalker, Transform>(entity) &&
+	    Locator::pathfindingSystem::has_value())
+	{
+		// The walk starts from where the animal is, to its goal now, at its speed now
+		auto& walk = registry.Get<WallHug>(entity);
+		auto& turning = registry.Get<TurningWalker>(entity);
+		turning.speed = animal.move.speed;
+		turning.turnAngle = TurnAngleOf(animal);
+		walk.goal = Metres(animal.move.goal);
+		walk.position = animal.move.position;
+		walk.placedAt = Metres(animal.move.position);
+		auto& transform = registry.Get<Transform>(entity);
+		transform.position.x = walk.placedAt.x;
+		transform.position.z = walk.placedAt.y;
+		const bool arrived = Locator::pathfindingSystem::value().WalkOne(entity);
+		const auto& walked = registry.Get<const WallHug>(entity);
+		animal.move.position = walked.position;
+		animal.move.step = walked.step;
+		animal.move.angle = walked.gameAngle;
+		animal.height = 0.0f;
+		SyncWorld(animal);
+		if (arrived)
+		{
+			EndWalkRound(entity);
+			animal.walksRound = false;
+		}
+		return arrived;
+	}
+	// A walk round that a straight move took the place of goes
+	if (registry.AllOf<TurningWalker>(entity))
+	{
+		EndWalkRound(entity);
+		animal.walksRound = false;
+	}
 	const auto result = animals::StepMove(animal.move, TurnAngleOf(animal));
 	animal.height = 0.0f;
 	SyncWorld(animal);
@@ -582,7 +618,7 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 		GrazerWander(entity, animal, grazer);
 		break;
 	case AnimalState::MoveToPos:
-		if (GroundMoveTo(animal))
+		if (GroundMoveTo(entity, animal))
 		{
 			SetTopState(animal, animal.finalState);
 		}
