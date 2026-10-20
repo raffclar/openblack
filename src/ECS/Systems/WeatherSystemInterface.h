@@ -134,8 +134,12 @@ public:
 	/// weather thing. A storm that has ended takes no notice.
 	virtual bool SetWeatherThingSpeed(entt::entity thing, float speed) = 0;
 
-	/// One game turn
-	virtual void Update(uint32_t turn) = 0;
+	/// At the start of a game turn: the storms move on, then every cell of the atmosphere is stale
+	virtual void ProcessStorms(uint32_t turn) = 0;
+	/// Later in the turn, after the time of day: the weather things follow their storms
+	virtual void ProcessWeatherThings() = 0;
+	/// Later in the turn, after the weather things: every climate takes its turn, and a new day can change the season
+	virtual void ProcessClimates(uint32_t turn) = 0;
 	/// The storms alive after the last turn, newest first
 	[[nodiscard]] virtual std::span<const components::Storm> GetActiveStorms() const = 0;
 

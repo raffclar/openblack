@@ -13,7 +13,10 @@
 
 #include <functional>
 #include <optional>
+#include <random>
 #include <set>
+#include <span>
+#include <string>
 #include <vector>
 
 #include <WorldFile.h>
@@ -21,6 +24,7 @@
 #include <entt/meta/context.hpp>
 
 #include "3D/TempleInteriorInterface.h"
+#include "Common/GameRandom.h"
 #include "ECS/Reflection/WorldArchive.h"
 
 /// The whole world of a saved game in openblack's own layout (deviation 83): the entities and their components, the
@@ -43,6 +47,28 @@ struct PendingChunk
 	gamesave::Tag tag {};
 	std::function<std::vector<uint8_t>()> bytes;
 };
+
+/// The game clock and the places of the streams of random numbers, as a save keeps them
+struct ClockState
+{
+	/// The speed of the clock, whether the player paused it, and the time after the last turn
+	float speed = 1.0f;
+	bool paused = false;
+	int32_t remainderMs = 0;
+	/// The two seeds of the game, the stream that the particle effects draw from, and the seed of the C library
+	GameRandomSeeds seeds;
+	ParticleRandomStream particles = ParticleRandomStream::None;
+	std::optional<uint32_t> crtSeed;
+	/// The seed of the run, each stream of the run, and the general stream of the game's thread
+	uint32_t runSeed = 0;
+	std::vector<std::mt19937> streams;
+	std::optional<std::mt19937> general;
+};
+
+/// The bytes of the block of the clock
+[[nodiscard]] std::vector<uint8_t> WriteClock(const ClockState& state);
+/// The clock that the bytes keep. Nothing when the bytes do not read. A save of an older build has no general stream.
+[[nodiscard]] std::optional<ClockState> ReadClock(std::span<const uint8_t> bytes);
 
 /// The blocks of the whole world, from the services of the game
 [[nodiscard]] std::vector<PendingChunk> SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary);

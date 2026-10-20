@@ -106,6 +106,9 @@ private:
 	KeyBindingTable _bindings {k_DefaultKeyBindings};
 	/// The keys down, as pressed, so their letting go can be made up when it goes elsewhere
 	std::bitset<SDL_NUM_SCANCODES> _heldKeys;
+	/// The keys that went down in this frame. A key that goes down and up in one frame shows as pressed for the frame,
+	/// and its release waits for the next frame.
+	std::bitset<SDL_NUM_SCANCODES> _keysDownThisFrame;
 	/// The keys a script or the inspector holds down, which the keyboard doesn't
 	std::bitset<SDL_NUM_SCANCODES> _scriptedKeys;
 	std::vector<BindableActionMap> _queuedPresses;

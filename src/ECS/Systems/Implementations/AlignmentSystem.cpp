@@ -145,15 +145,15 @@ void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 	SetPlayerAlignment(player, alignment::AddedAlignment(GetPlayerAlignment(player), change));
 }
 
-void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
+void AlignmentSystem::UpdatePlayersTurn(const glm::vec3& eye)
 {
-	// What the players' and the creatures' deeds changed comes through: each turn the change waiting, held to a whole one,
-	// moves the alignment by that share of the owner's change a turn, and the rest is gone
+	// What the players' deeds changed comes through: each turn the change that waits, held to a whole one, moves the
+	// alignment by that share of the owner's change a turn, and the rest is gone
 	if (Locator::infoConstants::has_value())
 	{
 		const auto& info = Locator::infoConstants::value();
 		const float change = info.player.maxAlignmentChangePerGameTurn;
-		// The advisors of the player at this machine watch which way its alignment is drifting, by the change waiting
+		// The advisors of the player at this machine watch which way its alignment moves, by the change that waits
 		// before it is held to a whole one
 		if (Locator::guidanceSystem::has_value() && Locator::playerSystem::has_value())
 		{
@@ -163,18 +163,6 @@ void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
 		auto& registry = Locator::entitiesRegistry::value();
 		registry.Each<Alignment>([change](entt::entity, Alignment& alignment) {
 			alignment.value = magic::StepPendingAlignment(alignment.value, alignment.pending, change);
-		});
-		registry.Each<Creature>([&info, &registry](entt::entity entity, Creature& creature) {
-			const auto row = creature::InfoRow(creature.species);
-			if (row < info.creature.size())
-			{
-				// The plan that the creature does adds its change before the turn moves the alignment
-				const auto& species = info.creature.at(row);
-				creature.pendingAlignment += creature_deed_alignment::TurnChange(
-				    DeedOf(registry, entity, info), species.alignmentChangeScale, creature.alignment);
-				creature.alignment = magic::StepPendingAlignment(creature.alignment, creature.pendingAlignment,
-				                                                 info.creature.at(row).alignmentChangePerTurn);
-			}
 		});
 	}
 
@@ -197,6 +185,28 @@ void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
 		}
 	}
 	_camera = alignment::LandAlignment(alignment::MostInfluentialAlignment(std::span(players).first(count)));
+}
+
+void AlignmentSystem::UpdateCreaturesTurn()
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<Creature>([&info, &registry](entt::entity entity, Creature& creature) {
+		const auto row = creature::InfoRow(creature.species);
+		if (row < info.creature.size())
+		{
+			// The plan that the creature does adds its change before the turn moves the alignment
+			const auto& species = info.creature.at(row);
+			creature.pendingAlignment += creature_deed_alignment::TurnChange(DeedOf(registry, entity, info),
+			                                                                 species.alignmentChangeScale, creature.alignment);
+			creature.alignment = magic::StepPendingAlignment(creature.alignment, creature.pendingAlignment,
+			                                                 info.creature.at(row).alignmentChangePerTurn);
+		}
+	});
 }
 
 void AlignmentSystem::Update(std::chrono::duration<float, std::milli> gameTime)

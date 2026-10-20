@@ -213,7 +213,40 @@ TEST(GameActionMap, ChordReplacesThePlainKey)
 	EXPECT_TRUE(Pressed(map, BindableActionMap::QUICK_SAVE));
 	EXPECT_FALSE(map.Get(BindableActionMap::SHOW_VILLAGER_DETAILS));
 	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_S, KMOD_LCTRL));
+	// The press stays for the frame in which the key went down, and the next frame lets go of it
+	EXPECT_TRUE(map.Get(BindableActionMap::QUICK_SAVE));
+	map.Frame();
 	EXPECT_FALSE(map.Get(BindableActionMap::QUICK_SAVE));
+}
+
+// The game keeps each key press until its frame reads it. A key that goes down and up within one frame shows as pressed
+// for that frame, and as let go in the next frame.
+TEST(GameActionMap, AKeyPressedAndLetGoInOneFrameIsNotLost)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_F5));
+	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_F5));
+	EXPECT_TRUE(Pressed(map, BindableActionMap::ZOOM_TO_CREATURE_ROOM));
+	map.Frame();
+	EXPECT_FALSE(map.Get(BindableActionMap::ZOOM_TO_CREATURE_ROOM));
+	EXPECT_TRUE(map.GetChanged(BindableActionMap::ZOOM_TO_CREATURE_ROOM));
+	map.Frame();
+	EXPECT_FALSE(map.GetChanged(BindableActionMap::ZOOM_TO_CREATURE_ROOM));
+}
+
+// A key that goes down, up and down again in one frame stays held
+TEST(GameActionMap, AKeyPressedAgainInTheSameFrameStaysHeld)
+{
+	GameActionMap map;
+	map.Frame();
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_LEFT));
+	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_LEFT));
+	map.ProcessEvent(KeyEvent(SDL_KEYDOWN, SDL_SCANCODE_LEFT));
+	map.Frame();
+	EXPECT_TRUE(map.Get(BindableActionMap::MOVE_LEFT));
+	map.ProcessEvent(KeyEvent(SDL_KEYUP, SDL_SCANCODE_LEFT));
+	EXPECT_FALSE(map.Get(BindableActionMap::MOVE_LEFT));
 }
 
 TEST(GameActionMap, RebindingMovesTheAction)

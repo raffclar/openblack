@@ -114,129 +114,75 @@ std::string GeneratorText(const std::mt19937& generator)
 	return text.str();
 }
 
-/// The block of the game clock and the random numbers: the speed of the clock, whether the player paused it and the time
-/// past the last turn, the two
-/// seeds of the game, the stream that particle effects draw from, the seed of the C library's generator, the seed of the run
-/// and the state of each stream of the run
+/// The block of the game clock and the random numbers, from the services of the game
 world_save::PendingChunk ClockChunk()
 {
 	// The generators are copied now. Their text, which takes long to make, is made on the thread of the writer.
-	std::vector<std::mt19937> generators;
-	uint32_t runSeed = 0;
+	world_save::ClockState state;
 	if (Locator::rng::has_value())
 	{
 		auto& rng = Locator::rng::value();
-		runSeed = rng.GetRunSeed();
+		state.runSeed = rng.GetRunSeed();
 		for (size_t stream = 0; stream < static_cast<size_t>(RandomStream::Count); ++stream)
 		{
-			generators.push_back(rng.Stream(static_cast<RandomStream>(stream)));
+			state.streams.push_back(rng.Stream(static_cast<RandomStream>(stream)));
 		}
 		// Last, the general stream of the game's thread, which the weather and other systems draw from
-		generators.push_back(rng.GeneralStream());
+		state.general = rng.GeneralStream();
 	}
-	const entt::meta_ctx context;
-	reflection::BinaryWriter out(context);
-	reflection::Save(out, Locator::time::has_value() ? Locator::time::value().GetSpeed() : 1.0f);
-	reflection::Save(out, Locator::time::has_value() && Locator::time::value().IsPaused());
-	reflection::Save(out, Locator::time::has_value() ? Locator::time::value().GetTurnRemainderMs() : 0);
+	if (Locator::time::has_value())
+	{
+		const auto& time = Locator::time::value();
+		state.speed = time.GetSpeed();
+		state.paused = time.IsPaused();
+		state.remainderMs = time.GetTurnRemainderMs();
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
-		const auto seeds = random.GetSeeds();
-		reflection::Save(out, seeds.synced);
-		reflection::Save(out, seeds.local);
-		reflection::Save(out, random.GetParticleStream());
-		reflection::Save(out, random.GetCrtSeed());
+		state.seeds = random.GetSeeds();
+		state.particles = random.GetParticleStream();
+		state.crtSeed = random.GetCrtSeed();
 	}
-	else
-	{
-		reflection::Save(out, game_random::k_InitialSeed);
-		reflection::Save(out, game_random::k_InitialSeed);
-		reflection::Save(out, ParticleRandomStream::None);
-		reflection::Save(out, std::optional<uint32_t> {});
-	}
-	reflection::Save(out, runSeed);
-	auto head = std::make_shared<std::vector<uint8_t>>(std::move(out.Bytes()));
-	auto copies = std::make_shared<const std::vector<std::mt19937>>(std::move(generators));
-	return {.tag = gamesave::k_ClockTag, .bytes = [head, copies]() {
-		        const entt::meta_ctx later;
-		        reflection::BinaryWriter rest(later);
-		        rest.Write(*head);
-		        std::vector<std::string> streams;
-		        std::string general;
-		        if (!copies->empty())
-		        {
-			        std::transform(copies->begin(), copies->end() - 1, std::back_inserter(streams), GeneratorText);
-			        general = GeneratorText(copies->back());
-		        }
-		        reflection::Save(rest, streams);
-		        reflection::Save(rest, general);
-		        return std::move(rest.Bytes());
-	        }};
+	auto saved = std::make_shared<const world_save::ClockState>(std::move(state));
+	return {.tag = gamesave::k_ClockTag, .bytes = [saved]() { return world_save::WriteClock(*saved); }};
 }
 
 bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 {
-	const entt::meta_ctx context;
-	const reflection::EntityRemap identity;
-	reflection::BinaryReader in(context, bytes, identity);
-	float speed = 1.0f;
-	bool paused = false;
-	int32_t remainderMs = 0;
-	GameRandomSeeds seeds;
-	auto particles = ParticleRandomStream::None;
-	std::optional<uint32_t> crtSeed;
-	uint32_t runSeed = 0;
-	std::vector<std::string> streams;
-	reflection::Load(in, speed);
-	reflection::Load(in, paused);
-	reflection::Load(in, remainderMs);
-	reflection::Load(in, seeds.synced);
-	reflection::Load(in, seeds.local);
-	reflection::Load(in, particles);
-	reflection::Load(in, crtSeed);
-	reflection::Load(in, runSeed);
-	reflection::Load(in, streams);
-	// A save of an older build has no general stream
-	std::string general;
-	if (in.Remaining() > 0)
-	{
-		reflection::Load(in, general);
-	}
-	if (in.Failed())
+	const auto state = world_save::ReadClock(bytes);
+	if (!state.has_value())
 	{
 		return false;
 	}
 	if (Locator::time::has_value())
 	{
 		auto& time = Locator::time::value();
-		time.SetSpeed(speed);
-		time.ResumeAtTurn(turn, remainderMs);
-		time.SetPaused(paused);
+		time.SetSpeed(state->speed);
+		time.ResumeAtTurn(turn, state->remainderMs);
+		time.SetPaused(state->paused);
 	}
 	if (Locator::gameRandom::has_value())
 	{
-		Locator::gameRandom::value().SetSeeds(seeds);
-		Locator::gameRandom::value().SetParticleStream(particles);
-		if (crtSeed.has_value())
+		Locator::gameRandom::value().SetSeeds(state->seeds);
+		Locator::gameRandom::value().SetParticleStream(state->particles);
+		if (state->crtSeed.has_value())
 		{
-			Locator::gameRandom::value().CrtSrand(*crtSeed);
+			Locator::gameRandom::value().CrtSrand(*state->crtSeed);
 		}
 	}
-	if (Locator::rng::has_value() && streams.size() == static_cast<size_t>(RandomStream::Count))
+	if (Locator::rng::has_value() && state->streams.size() == static_cast<size_t>(RandomStream::Count))
 	{
 		auto& rng = Locator::rng::value();
-		rng.SetRunSeed(runSeed);
-		for (size_t stream = 0; stream < streams.size(); ++stream)
+		rng.SetRunSeed(state->runSeed);
+		for (size_t stream = 0; stream < state->streams.size(); ++stream)
 		{
-			std::istringstream text(streams[stream]);
-			text >> rng.Stream(static_cast<RandomStream>(stream));
+			rng.Stream(static_cast<RandomStream>(stream)) = state->streams[stream];
 		}
 		// The new run seed starts the general stream again first; then it takes the saved state
-		if (!general.empty())
+		if (state->general.has_value())
 		{
-			std::istringstream text(general);
-			text >> rng.GeneralStream();
+			rng.GeneralStream() = *state->general;
 		}
 	}
 	return true;
@@ -565,6 +511,64 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	LogNames("fields that did not read", result->report.damagedFields);
 	LogNames("components that the load could not add", result->report.refusedComponents);
 	return result->report;
+}
+
+std::vector<uint8_t> world_save::WriteClock(const ClockState& state)
+{
+	const entt::meta_ctx context;
+	reflection::BinaryWriter out(context);
+	reflection::Save(out, state.speed);
+	reflection::Save(out, state.paused);
+	reflection::Save(out, state.remainderMs);
+	reflection::Save(out, state.seeds.synced);
+	reflection::Save(out, state.seeds.local);
+	reflection::Save(out, state.particles);
+	reflection::Save(out, state.crtSeed);
+	reflection::Save(out, state.runSeed);
+	std::vector<std::string> streams;
+	std::ranges::transform(state.streams, std::back_inserter(streams), GeneratorText);
+	reflection::Save(out, streams);
+	reflection::Save(out, state.general.has_value() ? GeneratorText(*state.general) : std::string {});
+	return std::move(out.Bytes());
+}
+
+std::optional<world_save::ClockState> world_save::ReadClock(std::span<const uint8_t> bytes)
+{
+	const entt::meta_ctx context;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, bytes, identity);
+	ClockState state;
+	std::vector<std::string> streams;
+	reflection::Load(in, state.speed);
+	reflection::Load(in, state.paused);
+	reflection::Load(in, state.remainderMs);
+	reflection::Load(in, state.seeds.synced);
+	reflection::Load(in, state.seeds.local);
+	reflection::Load(in, state.particles);
+	reflection::Load(in, state.crtSeed);
+	reflection::Load(in, state.runSeed);
+	reflection::Load(in, streams);
+	// A save of an older build has no general stream
+	std::string general;
+	if (in.Remaining() > 0)
+	{
+		reflection::Load(in, general);
+	}
+	if (in.Failed())
+	{
+		return std::nullopt;
+	}
+	for (const auto& text : streams)
+	{
+		std::istringstream read(text);
+		read >> state.streams.emplace_back();
+	}
+	if (!general.empty())
+	{
+		std::istringstream read(general);
+		read >> state.general.emplace();
+	}
+	return state;
 }
 
 OutsideCamera world_save::CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current)
