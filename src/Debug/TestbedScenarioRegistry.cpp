@@ -9747,7 +9747,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || IsPointerCommand(kind);
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9775,7 +9775,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 167> k_Names {
+	constexpr std::array<std::string_view, 168> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9943,6 +9943,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "pause the game",
 	    "set the game's speed",
 	    "force an action",
+	    "remove the teleport stone",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
