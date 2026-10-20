@@ -4599,6 +4599,12 @@ bool Game::Run() noexcept
 	{
 		ShowMenuOnStart();
 	}
+	// Just before its first frame, the game puts the turn timer back to the start of the current turn. Thus the time of
+	// the load, the logo and the menu is not game time. A game that continued from a save keeps the time of the save.
+	if (!continued)
+	{
+		Locator::time::value().ResetTimerToTurn();
+	}
 	_frameCount = 0;
 	auto lastTime = std::chrono::high_resolution_clock::now();
 	auto& profiler = Locator::profiler::value();
