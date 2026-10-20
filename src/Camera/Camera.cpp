@@ -406,6 +406,11 @@ void Camera::HandleActions(std::chrono::microseconds dt)
 	_model->HandleActions(dt);
 }
 
+void Camera::HandleKeys(std::chrono::microseconds dt)
+{
+	_model->HandleKeys(dt);
+}
+
 void Camera::SetKeyboardMoveSpeed(float speed)
 {
 	_keyboardMoveSpeed = ClampKeyboardMoveSpeed(speed);

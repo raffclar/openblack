@@ -154,6 +154,14 @@ void FightCameraModel::HandleActions(std::chrono::microseconds dt)
 	_input.screenWidth = Locator::windowing::has_value() ? static_cast<float>(Locator::windowing::value().GetSize().x) : 1.0f;
 }
 
+void FightCameraModel::HandleKeys(std::chrono::microseconds dt)
+{
+	if (_playerModel != nullptr)
+	{
+		_playerModel->HandleKeys(dt);
+	}
+}
+
 void FightCameraModel::SetFlight([[maybe_unused]] glm::vec3 origin, [[maybe_unused]] glm::vec3 focus,
                                  [[maybe_unused]] float rise)
 {

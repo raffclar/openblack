@@ -1610,3 +1610,6 @@ openblack_setup_and_add_test(
 )
 target_link_libraries(test_lhvm_instructions PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_abode_door test_abode_door.cpp)
+openblack_setup_and_add_test(test_game_frame_order test_game_frame_order.cpp)
+openblack_setup_and_add_test(test_camera_keys_frame camera/test_camera_keys_frame.cpp)
+openblack_setup_and_add_test(test_clear_view_hand camera/test_clear_view_hand.cpp)

@@ -41,8 +41,11 @@ public:
 	[[nodiscard]] bool StoppedAtFence() const { return _stoppedAtFence; }
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
-	/// Reads the keys: the cursor keys with Shift or Ctrl, the wheel, and Ctrl and Shift together for a clear view
-	void HandleActions(std::chrono::microseconds dt) override;
+	/// The mouse does not move this camera
+	void HandleActions(std::chrono::microseconds /*dt*/) override {}
+	/// Reads the keys after the step of the camera: the cursor keys with Shift or Ctrl, the wheel, and Ctrl and Shift
+	/// together for a clear view. They move the camera in the next frame.
+	void HandleKeys(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return creature_follow::Origin(_focus, _view); }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _focus; }

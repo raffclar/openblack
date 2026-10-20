@@ -124,6 +124,7 @@ protected:
 		{
 			_camera.HandleActions(k_Frame);
 			_camera.Update(k_Frame);
+			_camera.HandleKeys(k_Frame);
 			_camera.KeepDrawnView();
 			if (_action->held)
 			{
@@ -138,6 +139,7 @@ protected:
 		_picking->eyes.clear();
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 		return _picking->eyes;
 	}
 
