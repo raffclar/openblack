@@ -13,6 +13,8 @@
 
 #include <utility>
 
+#include <spdlog/spdlog.h>
+
 #include "Audio/AudioManagerInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -57,6 +59,9 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
 	};
 	_voices.Add(voice, *sample, emitter, playback, audio.IsDeviceLost());
+	// Each spoken line goes into the log, so that you can examine a run that has no sound
+	SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Help text {} is said: bank {} sample {}, voice {}, {} ms", text,
+	                   static_cast<int>(sample->bank), sample->sample, static_cast<int>(voice), playback.lengthMs);
 }
 
 bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
