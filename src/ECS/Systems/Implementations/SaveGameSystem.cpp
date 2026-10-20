@@ -846,6 +846,7 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	const auto worldStarted = std::chrono::steady_clock::now();
 	auto whole =
 	    std::make_shared<std::vector<ecs::world_save::PendingChunk>>(ecs::world_save::SaveWorld(Reflection(), summary));
+	const auto worldBlocksDone = std::chrono::steady_clock::now();
 	// The world files go to their temporary files first. When the first temporary file does not open, the game writes
 	// no world file and tells the player nothing.
 	const auto made = Locator::profileFolderSystem::value().MakeFolder(slotFolder);
@@ -853,6 +854,7 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	const bool opened = worldPath.has_value() && Locator::filesystem::has_value() &&
 	                    Locator::filesystem::value().WriteFile(ecs::save_files::TemporaryPath(*worldPath), {}) !=
 	                        filesystem::FileSystemInterface::WriteResult::NotOpened;
+	const auto worldFileOpened = std::chrono::steady_clock::now();
 	if (opened)
 	{
 		// A game that came from a file of the game also goes back into that file's layout: the file as it was, with the
@@ -889,8 +891,9 @@ bool SaveGameSystem::SaveSlot(uint32_t slot, std::u16string_view name, bool putP
 	const auto ended = std::chrono::steady_clock::now();
 	SPDLOG_LOGGER_INFO(Log(),
 	                   "Saved the game into slot {} with {} creatures in {:.1f} ms on the game's thread (creatures {:.1f}, "
-	                   "world {:.1f}){}",
+	                   "world {:.1f}: blocks {:.1f}, temporary file {:.1f}, rest {:.1f}){}",
 	                   slot, creatures.size(), ms(started, ended), ms(started, creaturesDone), ms(worldStarted, ended),
+	                   ms(worldStarted, worldBlocksDone), ms(worldBlocksDone, worldFileOpened), ms(worldFileOpened, ended),
 	                   written ? "" : ", but not every file could be given to the writer");
 	return written;
 }
