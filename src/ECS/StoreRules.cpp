@@ -41,6 +41,28 @@ uint32_t store_rules::DeadTreeWood(float scale, uint32_t woodValue, float multip
 	return Truncated(static_cast<float>(woodValue) * multiplier * scale);
 }
 
+uint32_t store_rules::RockWood(float scale, uint32_t woodValue)
+{
+	return Truncated(scale * static_cast<float>(woodValue));
+}
+
+float store_rules::ScaleAfterAddingWood(uint32_t held, uint32_t added, uint32_t woodValue, float largestScale)
+{
+	const float scale = static_cast<float>(held + added) / static_cast<float>(woodValue);
+	return scale < largestScale ? scale : largestScale;
+}
+
+store_rules::RockWoodTake store_rules::TakeFromRock(uint32_t held, uint32_t wanted, uint32_t woodValue, float life, float scale)
+{
+	if (held <= wanted)
+	{
+		return {.taken = held, .scale = std::nullopt, .life = life};
+	}
+	const float newScale = static_cast<float>(held - wanted) / static_cast<float>(woodValue);
+	const float scaledLife = life * newScale;
+	return {.taken = wanted, .scale = newScale, .life = scaledLife / scale};
+}
+
 uint32_t store_rules::FenceWood(float life, uint32_t woodValue, float scale)
 {
 	return Truncated(life * static_cast<float>(woodValue) * scale * scale * scale);

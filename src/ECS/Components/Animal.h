@@ -126,6 +126,9 @@ struct Animal
 	uint32_t turnsInState {0};
 	/// Its move across the land: where it is and is going, in map units, which way it faces and how fast it goes
 	animals::Move move;
+	/// Whether its move goes round what is in its way, as when it goes to food or runs from a thing it reacts to. Its
+	/// other moves go straight through.
+	bool walksRound {false};
 	/// How high above the land at its goal it wants to be, and how high above the land under it it is
 	float goalHeight {0.0f};
 	float height {0.0f};

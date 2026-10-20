@@ -11,6 +11,8 @@
 
 #include <algorithm>
 
+#include "Common/X87.h"
+
 using namespace openblack;
 using namespace openblack::magic::town_belief;
 
@@ -68,10 +70,9 @@ void magic::town_belief::LoseBeliefToDesires(Belief& town, PlayerNames owner, st
 		const auto& row = table[d];
 		if (desire[d] > levels.at(d))
 		{
-			// The difference and its product are rounded to a float once, at the end
-			const auto loss =
-			    static_cast<float>((static_cast<double>(desire[d]) - levels.at(d)) * static_cast<double>(row.toBelief));
-			town.belief.at(o) -= loss;
+			// The difference and then the product are each rounded to a float
+			const float loss = x87::Mul(x87::Sub(desire[d], levels.at(d)), row.toBelief);
+			town.belief.at(o) = x87::Sub(town.belief.at(o), loss);
 		}
 		if (levels.at(d) > leastLevel)
 		{

@@ -142,7 +142,7 @@ float AlignmentSystem::GetPendingAlignment(PlayerNames player) const
 
 void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 {
-	SetPlayerAlignment(player, GetPlayerAlignment(player) + change);
+	SetPlayerAlignment(player, alignment::AddedAlignment(GetPlayerAlignment(player), change));
 }
 
 void AlignmentSystem::UpdateTurn(const glm::vec3& eye)
