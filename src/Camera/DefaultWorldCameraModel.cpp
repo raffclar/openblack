@@ -784,6 +784,7 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 
 void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart)
 {
+	_clearViewHand.reset();
 	if (_clearViewHeld)
 	{
 		if (_clearViewStarts)
@@ -813,6 +814,11 @@ void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm:
 			_clearCentre.y = Locator::terrainSystem::value().GetAltitude(zoom_to::MapCoordOf(_clearCentre.x),
 			                                                             zoom_to::MapCoordOf(_clearCentre.z));
 		}
+		// The hand goes to the thing that the camera follows, on the land under it
+		if (_clearObject.has_value())
+		{
+			_clearViewHand = _clearCentre;
+		}
 	}
 	// The camera eases between where it was and the orbit
 	const float share = _clearView.GetValue();
@@ -824,28 +830,15 @@ void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm:
 	}
 }
 
-void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
+void DefaultWorldCameraModel::HandleKeys(std::chrono::microseconds dt)
 {
-	_rotateAroundDelta = glm::vec3();
-	_keyBoardMoveDelta = glm::vec2();
-	_dragTurn = 0.0f;
-	_dragTilt = 0.0f;
-
 	const auto& actionSystem = Locator::gameActionSystem::value();
 	// Moving over the land can be sped up or slowed down; turning, tilting and zooming keep the game's speed
 	const auto moveSpeed =
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
-
-	// What the scripts let the player do, less double clicking while watching a fight
-	const auto help =
-	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
 	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
-	_features = onFight ? camera_help::DuringFight(help.features) : help.features;
-	const bool aroundMouse = (_features & camera_help::feature::k_RotateAroundMouse) != 0;
-	const bool rotateAroundMouse = aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
-
-	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
-
+	// The keys start the steps again. The camera takes them in its next frame.
+	KeySteps steps;
 	// The keys step by the whole milliseconds of the frame. Opposite keys cancel.
 	{
 		using input::BindableActionMap;
@@ -863,14 +856,35 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		    .fight = onFight,
 		};
 		const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
-		const auto steps = camera_keys::Step(held, camera_keys::FrameSeconds(static_cast<int32_t>(milliseconds)));
-		_rotateAroundDelta.y += steps.turn;
-		_rotateAroundDelta.x += steps.tilt;
-		_rotateAroundDelta.z += steps.zoom;
+		const auto step = camera_keys::Step(held, camera_keys::FrameSeconds(static_cast<int32_t>(milliseconds)));
+		steps.rotateAround.y += step.turn;
+		steps.rotateAround.x += step.tilt;
+		steps.rotateAround.z += step.zoom;
 		// Only the movement over the land uses the speed setting
-		_keyBoardMoveDelta.x += ScaleKeyboardMove(steps.forwards, moveSpeed);
-		_keyBoardMoveDelta.y += ScaleKeyboardMove(steps.strafe, moveSpeed);
+		steps.move.x += ScaleKeyboardMove(step.forwards, moveSpeed);
+		steps.move.y += ScaleKeyboardMove(step.strafe, moveSpeed);
 	}
+	_keySteps = steps;
+}
+
+void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
+{
+	// The steps of the keys of the last frame, to which the mouse of this frame adds
+	_rotateAroundDelta = _keySteps.rotateAround;
+	_keyBoardMoveDelta = _keySteps.move;
+	_dragTurn = 0.0f;
+	_dragTilt = 0.0f;
+
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	// What the scripts let the player do, less double clicking while watching a fight
+	const auto help =
+	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
+	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
+	_features = onFight ? camera_help::DuringFight(help.features) : help.features;
+	const bool aroundMouse = (_features & camera_help::feature::k_RotateAroundMouse) != 0;
+	const bool rotateAroundMouse = aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+
+	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
 
 	// Ctrl and Shift together ease the clear view in over half a second, and out again. It starts when its ease is not
 	// yet in.

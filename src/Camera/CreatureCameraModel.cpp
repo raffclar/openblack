@@ -77,7 +77,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureCameraModel::U
 	};
 }
 
-void CreatureCameraModel::HandleActions(std::chrono::microseconds dt)
+void CreatureCameraModel::HandleKeys(std::chrono::microseconds dt)
 {
 	using input::BindableActionMap;
 	if (!Locator::gameActionSystem::has_value())

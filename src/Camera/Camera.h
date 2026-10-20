@@ -138,6 +138,8 @@ public:
 
 	void Update(std::chrono::microseconds dt);
 	void HandleActions(std::chrono::microseconds dt);
+	/// The keys of the current camera, after its step in this frame. They move the camera in the next frame.
+	void HandleKeys(std::chrono::microseconds dt);
 	/// Keeps the view after the step of the camera in this frame. The rays of the camera to the land on the next frame
 	/// start from this view. A command that puts the camera after the step does not change this view.
 	void KeepDrawnView();

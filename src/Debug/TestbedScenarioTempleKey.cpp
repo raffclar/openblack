@@ -62,7 +62,8 @@ void testbed_scenarios::AddTempleKeyScenarios(std::vector<Scenario>& all)
 	                   "them.",
 	    .expected = "Over half a second the camera comes in to the point under the hand: 15 metres from it (50 when the "
 	                "camera was more than 300 metres from what it looked at, 10 when it was nearer than 50), from the "
-	                "same heading, and more steeply down. Over a thing, the view follows the thing. The wheel does not "
+	                "same heading, and more steeply down. Over a thing, the view follows the thing, and the hand stays "
+	                "on the land at the thing. The wheel does not "
 	                "zoom. When you release a key, the camera eases back to where it was in half a second.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Testbed},

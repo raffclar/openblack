@@ -141,6 +141,7 @@ protected:
 		_mouse->NextFrame(movement);
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 	}
 
 	Camera _camera;
