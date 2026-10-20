@@ -25,6 +25,7 @@
 #include "3D/ModelSurface.h"
 #include "Common/GameRandom.h"
 #include "Common/ModelInverseSquareRoot.h"
+#include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -526,4 +527,33 @@ TEST_F(TempleDestructionSystemTest, OnlyTheEndOfTheLocalPlayersDestructionLetsTh
 	EXPECT_FALSE(_world->registry.Valid(local));
 	EXPECT_FALSE(_world->registry.Valid(other));
 	EXPECT_EQ(_world->heartbeatHoldsEnded, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
+}
+
+TEST_F(TempleDestructionSystemTest, TheHeartsMaterialsChangeForGoodOnceItIsALittleFaded)
+{
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	_system->Start(temple);
+	// At 100 ms a turn the heart fades from turn 140. Its drawn alpha comes to 240 or less on turn 143.
+	for (int i = 0; i < 142; ++i)
+	{
+		Turn();
+	}
+	EXPECT_FALSE(_world->registry.AllOf<ChangedMaterials>(temple));
+	Turn();
+	ASSERT_TRUE(_world->registry.AllOf<ChangedMaterials>(temple));
+	const auto& properties = _world->registry.Get<const ChangedMaterials>(temple).properties;
+	EXPECT_FALSE(properties.additive);
+	EXPECT_FALSE(properties.writesDepth);
+	EXPECT_FALSE(properties.bothSides);
+	EXPECT_TRUE(properties.textureAlpha);
+}
+
+TEST_F(TempleDestructionSystemTest, AWholeHeartKeepsItsMaterials)
+{
+	const auto temple = MakeTemple(PlayerNames::PLAYER_TWO);
+	for (int i = 0; i < 200; ++i)
+	{
+		Turn();
+	}
+	EXPECT_FALSE(_world->registry.AllOf<ChangedMaterials>(temple));
 }

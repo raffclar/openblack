@@ -28,6 +28,7 @@
 #include "HandReflection.h"
 #include "InstanceDesc.h"
 #include "InterfaceCreatures.h"
+#include "RenderModes.h"
 #include "RenderPass.h"
 #include "ScreenshotCapture.h"
 
@@ -86,6 +87,9 @@ public:
 		std::optional<float> additiveShare;
 		/// Every primitive is blended over what is behind it by each instance's own alpha, whatever its material says
 		bool instanceAlpha {false};
+		/// Every primitive is drawn as its material is after the game changes the material to these properties. The
+		/// instance's alpha then multiplies the alpha of the texture before the alpha test, as in the game's materials.
+		std::optional<graphics::render_modes::Properties> changedMaterials;
 		/// Every primitive drops its fragments at or under this alpha, of 1, whatever its material says, when given
 		std::optional<float> alphaThreshold;
 		/// Every primitive drops its fragments under its material's alpha threshold, even where its material doesn't

@@ -1531,3 +1531,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_moving_shadow_casters test_moving_shadow_casters.cpp
 )
+openblack_setup_and_add_test(test_temple_heart_look test_temple_heart_look.cpp)
