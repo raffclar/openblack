@@ -147,6 +147,32 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	{
 		_effects.erase(FindRunning(_gestureChain));
 	}
+	StepSelectionEffect(gameSeconds, hand);
+}
+
+void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& hand)
+{
+	// The effect of a selection runs all the time at the hand. It shows while the leash picker is open, with the
+	// strength of the size of the hand.
+	if (!IsRunning(_selectionEffect))
+	{
+		_selectionEffect = Start(ParticleType::SpellSelection, glm::vec3(0.0f), 1.0f, false);
+		SetPlayer(_selectionEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+		if (const auto it = FindRunning(_selectionEffect); it != _effects.end())
+		{
+			it->everyFrame = true;
+		}
+	}
+	const auto it = FindRunning(_selectionEffect);
+	if (it == _effects.end())
+	{
+		return;
+	}
+	it->effect->SetProcessInfo({.handPosition = hand.position, .power = hand.size, .enabled = hand.selecting});
+	if (StepEffect(*it->effect, gameSeconds))
+	{
+		_effects.erase(FindRunning(_selectionEffect));
+	}
 }
 
 void ParticleSystem::ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime)

@@ -125,7 +125,10 @@ std::vector<Request> gesture::Requests(const HandContext& context)
 		{
 			if (miracle.gesture != GestureType::None)
 			{
-				requests.push_back({.gesture = miracle.gesture, .purpose = Purpose::FightMiracle, .magic = miracle.magic});
+				requests.push_back({.gesture = miracle.gesture,
+				                    .purpose = Purpose::FightMiracle,
+				                    .magic = miracle.magic,
+				                    .seed = miracle.seed});
 			}
 		}
 		return requests;
@@ -238,6 +241,15 @@ std::optional<uint32_t> gesture::HelpEventOf(const Request& request, const HandC
 	default:
 		return std::nullopt;
 	}
+}
+
+bool gesture::ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand)
+{
+	if (!seed.has_value())
+	{
+		return false;
+	}
+	return (seed->ready && !seed->cast && seed->canPowerUp) || seed->sizingGesture == GestureType::Circle || seedTurnedOnLand;
 }
 
 bool gesture::CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture)

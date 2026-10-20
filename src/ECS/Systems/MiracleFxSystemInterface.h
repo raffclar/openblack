@@ -55,6 +55,9 @@ public:
 	virtual void SeedLeftHand() = 0;
 	/// The miracle was shaken off the hand: a band flies off it to the camera
 	virtual void SeedShakenOff() = 0;
+	/// A scribble shakes the hand: the shake sound plays and a band flies off the hand to the camera, with or without a
+	/// miracle in the hand
+	virtual void HandShaken() {}
 	/// Everything shown goes, for a new land
 	virtual void Reset() = 0;
 
