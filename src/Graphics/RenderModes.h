@@ -98,4 +98,68 @@ inline constexpr std::array<ModeDesc, k_ModeCount> k_Modes = {{
 	return (cullByte & 1U) != 0;
 }
 
+/// What the game can change of the materials of a model while it runs
+struct Properties
+{
+	/// The texture is added to what is behind it
+	bool additive {false};
+	bool writesDepth {true};
+	bool bothSides {false};
+	/// The material uses the alpha of its texture
+	bool textureAlpha {true};
+};
+
+/// The mode of a material after the game changes its properties
+[[nodiscard]] constexpr Mode Changed(Mode mode, const Properties& properties)
+{
+	if (mode == Mode::AlphaTextured)
+	{
+		mode = Mode::AlphaTexturedAlphaNz;
+	}
+	if (!properties.textureAlpha)
+	{
+		mode = Mode::TexturedAlpha;
+	}
+	if (properties.additive)
+	{
+		mode = Mode::AlphaTexturedAlphaAdditiveNz;
+	}
+	if (properties.writesDepth)
+	{
+		switch (mode)
+		{
+		case Mode::AlphaTexturedAlphaNz:
+			return Mode::AlphaTexturedAlpha;
+		case Mode::AlphaTexturedAlphaAdditiveNz:
+			return Mode::AlphaTexturedAlphaAdditive;
+		case Mode::TexturedAlphaNz:
+			return Mode::TexturedAlpha;
+		case Mode::TexturedChromaAlphaNz:
+			return Mode::TexturedChroma;
+		default:
+			return mode;
+		}
+	}
+	switch (mode)
+	{
+	case Mode::AlphaTexturedAlpha:
+		return Mode::AlphaTexturedAlphaNz;
+	case Mode::AlphaTexturedAlphaAdditive:
+		return Mode::AlphaTexturedAlphaAdditiveNz;
+	case Mode::TexturedAlpha:
+	case Mode::Textured:
+		return Mode::TexturedAlphaNz;
+	case Mode::TexturedChroma:
+		return Mode::TexturedChromaAlphaNz;
+	default:
+		return mode;
+	}
+}
+
+/// The cull byte of a material after the game changes its properties: only its first bit changes
+[[nodiscard]] constexpr uint8_t ChangedCull(uint8_t cullByte, const Properties& properties)
+{
+	return properties.bothSides ? static_cast<uint8_t>(cullByte | 1U) : static_cast<uint8_t>(cullByte & ~1U);
+}
+
 } // namespace openblack::graphics::render_modes

@@ -39,6 +39,7 @@
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/CarriedByTornado.h"
+#include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -59,9 +60,11 @@
 #include "ECS/Components/NeverFades.h"
 #include "ECS/Components/ObjectGlow.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/RisingSoul.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
@@ -82,6 +85,7 @@
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VegetationInterface.h"
@@ -97,6 +101,7 @@
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ObjectTint.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/TempleHeartLook.h"
 #include "Graphics/Texture2D.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -106,6 +111,7 @@
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/AppleBarrelRules.h"
+#include "Temple/TempleDestruction.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -239,6 +245,9 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool villagers;
 		/// Every instance is a thing of the explorers' boat film
 		bool film;
+		/// Every instance is drawn with the first environment map
+		bool environmentMapped;
+		std::optional<graphics::render_modes::Properties> changedMaterials;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
@@ -256,13 +265,17 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true,
-		                                                                     .film = true}));
+		                                                                     .film = true,
+		                                                                     .environmentMapped = true,
+		                                                                     .changedMaterials = std::nullopt}));
 		count.first->second.count++;
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
 		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
 		count.first->second.film &= registry.AllOf<BoatFilmPart>(entity);
+		// The game draws every scroll and sign that a script puts in the world with its first environment map
+		count.first->second.environmentMapped &= registry.AllOf<ScriptHighlight>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -280,6 +293,14 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
+		}
+		// Its model's materials changed while the game ran, which it is drawn by, blended by its alpha after the opaque
+		// things
+		if (const auto* changed = registry.TryGet<const ChangedMaterials>(entity))
+		{
+			count.first->second.translucent = true;
+			count.first->second.instanceAlpha = true;
+			count.first->second.changedMaterials = changed->properties;
 		}
 		instanceCount++;
 	};
@@ -375,6 +396,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.shineColour = desc.shineColour;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
+		drawDesc->second.environmentMapped = desc.environmentMapped;
+		drawDesc->second.changedMaterials = desc.changedMaterials;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
 		                                              .count = desc.count,
@@ -400,6 +423,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = villagers;
 		drawDesc->second.unlit = desc.has_value() && desc->unlit;
 		drawDesc->second.instanceAlpha = true;
+		drawDesc->second.environmentMapped = desc.has_value() && desc->environmentMapped;
 		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
 		drawDesc->second.hiddenFromReflection = villagers || (desc.has_value() && desc->film);
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
@@ -851,6 +875,43 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    {
 					    added = graphics::object_tint::SumAdded(added, *heat);
 				    }
+			    }
+		    }
+		    // The heart of a temple is lit through white. In its destruction it glows in its player's colour, then fades
+		    // out, and it is not drawn just before the temple goes.
+		    if (const auto* temple = registry.TryGet<const Temple>(entity); temple != nullptr)
+		    {
+			    namespace heart_look = graphics::temple_heart_look;
+			    if (look.y == 0.0f)
+			    {
+				    look.y = static_cast<float>(heart_look::k_Colour);
+			    }
+			    // The glow that the heart takes is the one set the frame before
+			    auto& glow = _heartGlows[entity];
+			    if (!temple->destroying)
+			    {
+				    glow = 0;
+			    }
+			    added = graphics::object_tint::SumAdded(added, glow);
+			    if (heart_look::Glows(temple->destroying, temple->destructionClock))
+			    {
+				    const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+				    const float pulse = Locator::heartbeatSystem::has_value()
+				                            ? Locator::heartbeatSystem::value().Pulse(temple->owner, turnFraction)
+				                            : 0.0f;
+				    const auto colour = Player::k_Colours.at(static_cast<size_t>(temple->owner));
+				    glow = heart_look::Glow(colour, heart_look::GlowStrength(temple->destructionClock, pulse));
+			    }
+			    if (registry.AllOf<ChangedMaterials>(entity))
+			    {
+				    const auto alpha = heart_look::DrawnAlpha(temple_destruction::HeartAlpha(temple->destructionClock));
+				    look.z = -(1.0f - static_cast<float>(alpha) / 255.0f);
+				    look.w = static_cast<float>(heart_look::FadedSnowLevel(static_cast<int32_t>(look.w), alpha));
+			    }
+			    if (!heart_look::Drawn(temple->destroying, temple->destructionClock))
+			    {
+				    look.z = 1.0f;
+				    modelMatrix = glm::mat4(0.0f);
 			    }
 		    }
 		    if (abode == nullptr)

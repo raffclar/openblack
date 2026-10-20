@@ -58,6 +58,40 @@ L3DSubMesh::L3DSubMesh(L3DMesh& mesh) noexcept
 
 L3DSubMesh::~L3DSubMesh() noexcept = default;
 
+L3DSubMesh::Primitive::BlendMode L3DSubMesh::BlendOf(const render_modes::ModeDesc& mode) noexcept
+{
+	using render_modes::Blend;
+	switch (mode.blend)
+	{
+	case Blend::Standard:
+		return Primitive::BlendMode::Standard;
+	case Blend::Additive:
+		return Primitive::BlendMode::Additive;
+	case Blend::JustZ:
+		return Primitive::BlendMode::JustZ;
+	case Blend::Disabled:
+		break;
+	}
+	return Primitive::BlendMode::Disabled;
+}
+
+L3DSubMesh::Primitive L3DSubMesh::Changed(const Primitive& primitive, const render_modes::Properties& properties) noexcept
+{
+	const auto mode = render_modes::Changed(
+	    static_cast<render_modes::Mode>(std::min(primitive.materialType, render_modes::k_ModeCount - 1)), properties);
+	const auto& desc = render_modes::Desc(mode);
+	auto changed = primitive;
+	changed.depthWrite = desc.zWrite;
+	changed.alphaTest = desc.alphaTest;
+	changed.blend = BlendOf(desc);
+	changed.modulateAlpha = desc.alphaModulate;
+	changed.thresholdAlpha = desc.alphaTest;
+	changed.materialType = static_cast<uint32_t>(mode);
+	changed.materialFlags = render_modes::ChangedCull(primitive.materialFlags, properties);
+	changed.twoSided = render_modes::DrawsBothSides(changed.materialFlags);
+	return changed;
+}
+
 std::optional<float> L3DSubMesh::Pick(glm::vec3 origin, glm::vec3 direction) const
 {
 	if (_pickTriangles.empty())
@@ -226,21 +260,7 @@ bool L3DSubMesh::Load(const l3d::L3DFile& l3d, uint32_t meshIndex) noexcept
 		}
 
 		const auto& mode = graphics::render_modes::Desc(static_cast<graphics::render_modes::Mode>(primitive.material.type));
-		const auto blend = [&mode] {
-			using graphics::render_modes::Blend;
-			switch (mode.blend)
-			{
-			case Blend::Standard:
-				return Primitive::BlendMode::Standard;
-			case Blend::Additive:
-				return Primitive::BlendMode::Additive;
-			case Blend::JustZ:
-				return Primitive::BlendMode::JustZ;
-			case Blend::Disabled:
-				break;
-			}
-			return Primitive::BlendMode::Disabled;
-		}();
+		const auto blend = BlendOf(mode);
 
 		// TODO(bwrsandman): Interpret cull mode, color byte ordering and render mode, then store in primitive
 		_primitives.emplace_back(Primitive {

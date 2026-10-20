@@ -226,6 +226,11 @@ void openblack::particles::RegisterConditions(ParticleClassRegistry& registry)
 		                          const float ground = effect.Services().world.LandHeight({p.x, p.z});
 		                          return p.y - ground < object.Float("CutOffHeight", 0.0f);
 	                          });
+	// A villager is in the map cell that the atom is in
+	registry.AddAtomCondition("EventConditionAtomNearVillagers",
+	                          [](const Effect& effect, const psys::ParticleObject&, const Atom& atom) {
+		                          return effect.Services().world.VillagerInCell(effect.GlobalPosition(atom));
+	                          });
 	registry.AddAtomCondition("EC_AtomAlphaAbove", [](const Effect&, const psys::ParticleObject& object, const Atom& atom) {
 		return static_cast<int>(atom.rgba[3]) > object.Int("AlphaValue", 0);
 	});
