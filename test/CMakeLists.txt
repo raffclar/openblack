@@ -1517,5 +1517,6 @@ set_tests_properties(
 
 openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)
 openblack_setup_and_add_test(test_save_slot_writes test_save_slot_writes.cpp)
+openblack_setup_and_add_test(test_creature_teleport test_creature_teleport.cpp)
 openblack_setup_and_add_test(test_game_turn_order test_game_turn_order.cpp)
 openblack_setup_and_add_test(test_world_save_clock test_world_save_clock.cpp)

@@ -21,10 +21,14 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Audio/Sound.h"
+#include "Creature/CreatureTeleportAgendas.h"
+#include "Creature/LeashRules.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/Feature.h"
@@ -34,6 +38,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Mobile.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/TeleportStone.h"
@@ -45,6 +50,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -65,10 +71,6 @@ namespace teleport = openblack::magic::teleport;
 
 namespace
 {
-/// A creature walks to its stone and jumps once this close
-constexpr float k_CreatureArriveDistance = teleport::k_CreatureArriveDistance;
-/// A walk's destination this close to a stone was the walk to it
-constexpr float k_SameStone = 0.01f;
 /// A game turn's milliseconds
 constexpr float k_TurnMilliseconds =
     std::chrono::duration<float, std::milli>(ecs::systems::TimeSystemInterface::k_TurnDuration).count();
@@ -144,6 +146,45 @@ std::optional<glm::vec3> CreatureWalkingTo(entt::entity creature)
 		return std::nullopt;
 	}
 	return OnLand(*locomotion->destination);
+}
+
+/// Whether a stone still controls a creature: the rest of the creature's agenda has a step of the teleport
+bool UnderStoneControl(const ecs::Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || mind->idle.step >= mind->idle.agenda.size())
+	{
+		return false;
+	}
+	using Kind = creature_mind::Step::Kind;
+	return std::ranges::any_of(mind->idle.agenda.begin() + static_cast<std::ptrdiff_t>(mind->idle.step),
+	                           mind->idle.agenda.end(), [](const creature_mind::Step& step) {
+		                           return step.kind == Kind::Teleport || step.kind == Kind::Transported ||
+		                                  step.kind == Kind::StopTeleportControl;
+	                           });
+}
+
+/// Where a creature walks after the jump, as its map position in metres. The area that holds the creature refuses a
+/// walk out of the area: then there is no walk. The plan after the jump is not the walk to the stone, so the area does
+/// not let the walk through as it does the walk to the stone.
+std::optional<glm::vec2> WalkAfterJump(const ecs::Registry& registry, entt::entity creature, glm::vec3 destination)
+{
+	const glm::vec2 point {map_coords::Quantise(destination.x), map_coords::Quantise(destination.z)};
+	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
+	if (leashes == nullptr)
+	{
+		return point;
+	}
+	const bool leashed = leashes->worn.has_value();
+	const creature_leash::AgendaArea area {
+	    .radius = leashes->confinementRadius,
+	    .leashed = leashed,
+	    .leashWorks = !leashed || leashes->worn->works,
+	    .centre = {leashes->confinementCentre.x, leashes->confinementCentre.z},
+	    .walkingBack = leashes->returnTo.has_value(),
+	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
+	};
+	return creature_leash::RefusesWalk(area, point) ? std::nullopt : std::optional(point);
 }
 
 /// A villager whose stone went stops reacting to it, taking up again what it was doing
@@ -346,6 +387,22 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 	registry.AssignOrReplace<TeleportTraveller>(living, traveller);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: #{} turns aside into the stone at ({}, {})",
 	                    static_cast<uint32_t>(living), destination.x, destination.z);
+	// A creature must go to the stone, curious, with a plan of its mind. That plan stops the reaction that it had.
+	if (!isVillager)
+	{
+		const bool planned =
+		    Locator::creatureMindSystem::has_value() &&
+		    Locator::creatureMindSystem::value().ForceActivity(living, {.desire = creature_desires::Desire::Curiosity,
+		                                                                .action = creature_mind::k_GoToTeleportAction,
+		                                                                .actionObject = stone,
+		                                                                .comeAcross = true});
+		if (!planned)
+		{
+			std::erase_if(component.travellers, [living](const auto& entry) { return entry.living == living; });
+			registry.Remove<TeleportTraveller>(living);
+			return;
+		}
+	}
 	// It holds the stone's reaction while it is on its way, however it came to turn aside
 	if (!registry.AllOf<LivingReaction>(living))
 	{
@@ -357,7 +414,6 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 		reacting.reaction = component.reaction;
 		reacting.type = Reaction::ReactToTeleport;
 	}
-	const auto stonePosition = registry.Get<const Transform>(stone).position;
 	if (isVillager)
 	{
 		// It walks to the stone, or runs when it was already going faster than its walk
@@ -377,12 +433,6 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 		Locator::livingActionSystem::value().VillagerSetState(
 		    action, LivingAction::Index::Top,
 		    quickly ? VillagerStates::GoTowardsTeleportReactionQuickly : VillagerStates::GoTowardsTeleportReaction, false);
-	}
-	else if (Locator::creatureLocomotionSystem::has_value())
-	{
-		Locator::creatureLocomotionSystem::value().MoveTo(living, {stonePosition.x, stonePosition.z},
-		                                                  CreatureLocomotionSystemInterface::Pace::Walk, 0.0f,
-		                                                  k_CreatureArriveDistance);
 	}
 }
 
@@ -445,18 +495,29 @@ bool TeleportSystem::DoTeleport(entt::entity stone, entt::entity living, bool fo
 	}
 	if (registry.AllOf<Creature>(living))
 	{
-		// A creature is carried: it fades out where it stands, comes out with a sound and fades back in
+		// A creature is carried: it fades out where it stands, comes out with a sound and fades back in. A plan that it
+		// must do takes it through that, then on to where it was going. That plan stops what it did.
 		if (auto* traveller = registry.TryGet<TeleportTraveller>(living))
 		{
 			traveller->arrival = arrival;
 			traveller->arrivalOnMap = teleport::CreatureArrival(arrivalOnMap);
 			traveller->transported = true;
 			traveller->fadingIn = false;
-			traveller->transportTurns = teleport::CreatureFadeTurns(k_TurnMilliseconds);
-		}
-		if (Locator::creatureLocomotionSystem::has_value())
-		{
-			Locator::creatureLocomotionSystem::value().Stop(living);
+			traveller->transportTurns = 0;
+			const auto walk = WalkAfterJump(registry, living, destination);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: creature {} then walks to ({}, {}): {}",
+			                    entt::to_integral(living), destination.x, destination.z,
+			                    walk.has_value() ? "yes" : "its area refuses the walk");
+			if (Locator::creatureMindSystem::has_value())
+			{
+				static_cast<void>(
+				    Locator::creatureMindSystem::value().ForcePlan(living, {.desire = creature_desires::Desire::ObeyPlayer,
+				                                                            .action = creature_mind::k_AfterTeleportAction,
+				                                                            .object = living,
+				                                                            .agenda = creature_mind::AfterTeleport(walk),
+				                                                            .activity = creature_mind::Activity::Told,
+				                                                            .ordered = true}));
+			}
 		}
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: carrying creature {} m closer from ({}, {}) to ({}, {})",
 		                    jump->saving, departure.x, departure.z, arrival.x, arrival.z);
@@ -592,7 +653,7 @@ void TeleportSystem::ProcessTurn()
 	}
 	RemoveOrphans();
 	PruneTravellers();
-	MoveCreatures();
+	DropCreatures();
 }
 
 void TeleportSystem::RemoveOrphans()
@@ -671,131 +732,120 @@ bool TeleportSystem::ShouldReact(entt::entity stone, entt::entity living) const
 	return teleport::ShouldReact(registry.Get<const Transform>(living).position, *destination, network, 0);
 }
 
-void TeleportSystem::MoveCreatures()
+void TeleportSystem::DropCreatures()
 {
-	if (!Locator::creatureLocomotionSystem::has_value())
-	{
-		return;
-	}
 	auto& registry = EntityRegistry();
-	auto& locomotion = Locator::creatureLocomotionSystem::value();
-	std::vector<entt::entity> done;
-	std::vector<entt::entity> arrived;
-	std::vector<entt::entity> carried;
-	registry.Each<const Creature, const TeleportTraveller, const Transform>(
-	    [&](entt::entity creature, const Creature&, const TeleportTraveller& traveller, const Transform& transform) {
-		    if (traveller.transported)
+	std::vector<entt::entity> dropped;
+	registry.Each<const Creature, const TeleportTraveller>(
+	    [&](entt::entity creature, const Creature&, const TeleportTraveller&) {
+		    if (!UnderStoneControl(registry, creature))
 		    {
-			    carried.push_back(creature);
-			    return;
-		    }
-		    if (traveller.jumped)
-		    {
-			    // On its way after the jump, it doesn't turn aside again until it gets there
-			    if (!locomotion.IsMoving(creature))
-			    {
-				    done.push_back(creature);
-			    }
-			    return;
-		    }
-		    if (!registry.Valid(traveller.stone) || !registry.AllOf<Transform>(traveller.stone))
-		    {
-			    done.push_back(creature);
-			    return;
-		    }
-		    const auto stone = registry.Get<const Transform>(traveller.stone).position;
-		    if (Across(transform.position, stone) <= k_CreatureArriveDistance)
-		    {
-			    arrived.push_back(creature);
-		    }
-		    else if (!locomotion.IsMoving(creature))
-		    {
-			    // Its walk to the stone ended there, or something else took it off its way
-			    const auto* moving = registry.TryGet<const CreatureLocomotion>(creature);
-			    const bool reached = moving != nullptr && !moving->failed &&
-			                         (!moving->destination.has_value() ||
-			                          glm::distance(*moving->destination, glm::vec2(stone.x, stone.z)) < k_SameStone);
-			    (reached ? arrived : done).push_back(creature);
+			    dropped.push_back(creature);
 		    }
 	    });
-	for (const auto creature : done)
+	for (const auto creature : dropped)
 	{
-		registry.Remove<TeleportTraveller>(creature);
-		// Through, or taken off its way, it no longer reacts to the stone
-		if (auto* reacting = registry.TryGet<LivingReaction>(creature))
-		{
-			reacting->reaction = 0;
-			reacting->type = Reaction::None;
-		}
-	}
-	for (const auto creature : arrived)
-	{
-		auto& traveller = registry.Get<TeleportTraveller>(creature);
-		if (!DoTeleport(traveller.stone, creature, false))
-		{
-			registry.Remove<TeleportTraveller>(creature);
-		}
-	}
-	for (const auto creature : carried)
-	{
-		Carry(creature);
+		StopControl(creature);
 	}
 }
 
-void TeleportSystem::Carry(entt::entity creature)
+bool TeleportSystem::StartCarry(entt::entity creature)
+{
+	auto* traveller = EntityRegistry().TryGet<TeleportTraveller>(creature);
+	if (traveller == nullptr || !traveller->transported)
+	{
+		return false;
+	}
+	// The fade out lasts this many turns, counted from the next turn
+	traveller->fadingIn = false;
+	traveller->transportTurns = teleport::CreatureFadeTurns(k_TurnMilliseconds);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: the stone starts to carry creature {} for {} turns",
+	                    entt::to_integral(creature), traveller->transportTurns);
+	return true;
+}
+
+bool TeleportSystem::CarryTurn(entt::entity creature)
 {
 	auto& registry = EntityRegistry();
-	auto& traveller = registry.Get<TeleportTraveller>(creature);
+	auto* traveller = registry.TryGet<TeleportTraveller>(creature);
+	if (traveller == nullptr || !traveller->transported)
+	{
+		return true;
+	}
 	auto* spells = registry.TryGet<CreatureSpells>(creature);
 	const auto turns = teleport::CreatureFadeTurns(k_TurnMilliseconds);
-	Locator::creatureLocomotionSystem::value().Stop(creature);
-	--traveller.transportTurns;
-	if (!traveller.fadingIn)
+	--traveller->transportTurns;
+	if (!traveller->fadingIn)
 	{
-		if (traveller.transportTurns > 0)
+		if (traveller->transportTurns > 0)
 		{
 			if (spells != nullptr)
 			{
-				spells->fizz = teleport::CreatureFadeOut(traveller.transportTurns, turns);
+				spells->fizz = teleport::CreatureFadeOut(traveller->transportTurns, turns);
 			}
-			return;
+			return false;
 		}
 		// Faded out, it comes out of the far stone with the sound of arriving, still faded
 		if (Locator::soundTagSystem::has_value())
 		{
 			Locator::soundTagSystem::value().CreatePointSound(
-			    static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseArrive), traveller.arrival, false);
+			    static_cast<entt::id_type>(audio::SoundId::G_SpellTeleportEnergiseArrive), traveller->arrival, false);
 		}
-		const auto at = OnLand(map_coords::ToMetres(traveller.arrivalOnMap));
-		ecs::thing_map_place::Put(registry, creature, traveller.arrivalOnMap, at.y);
+		const auto at = OnLand(map_coords::ToMetres(traveller->arrivalOnMap));
+		ecs::thing_map_place::Put(registry, creature, traveller->arrivalOnMap, at.y);
 		if (auto* moving = registry.TryGet<CreatureLocomotion>(creature))
 		{
 			moving->fromPosition = at;
 			moving->toPosition = at;
 		}
 		registry.SetDirty();
-		traveller.fadingIn = true;
-		traveller.transportTurns = turns;
-		return;
+		traveller->fadingIn = true;
+		traveller->transportTurns = turns;
+		return false;
 	}
-	if (traveller.transportTurns > 0)
+	if (traveller->transportTurns > 0)
 	{
 		if (spells != nullptr)
 		{
-			spells->fizz = teleport::CreatureFadeIn(traveller.transportTurns, turns);
+			spells->fizz = teleport::CreatureFadeIn(traveller->transportTurns, turns);
 		}
-		return;
+		return false;
 	}
-	// Back in sight, on to where it was going
+	// Back in sight: its plan takes it on to where it was going
 	if (spells != nullptr)
 	{
 		spells->fizz = 0.0f;
 	}
-	traveller.transported = false;
-	traveller.jumped = true;
-	Locator::creatureLocomotionSystem::value().MoveTo(creature, {traveller.destination.x, traveller.destination.z},
-	                                                  CreatureLocomotionSystemInterface::Pace::Walk, 0.0f,
-	                                                  teleport::k_CreatureArriveDistance);
+	traveller->transported = false;
+	traveller->jumped = true;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: creature {} is back in sight", entt::to_integral(creature));
+	return true;
+}
+
+void TeleportSystem::StopControl(entt::entity creature)
+{
+	auto& registry = EntityRegistry();
+	const auto* traveller = registry.TryGet<const TeleportTraveller>(creature);
+	if (traveller == nullptr)
+	{
+		return;
+	}
+	if (registry.Valid(traveller->stone))
+	{
+		if (auto* stone = registry.TryGet<TeleportStone>(traveller->stone))
+		{
+			std::erase_if(stone->travellers, [creature](const auto& entry) { return entry.living == creature; });
+		}
+	}
+	registry.Remove<TeleportTraveller>(creature);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: the stone no longer controls creature {}", entt::to_integral(creature));
+	// It no longer reacts to the stone
+	if (auto* reacting = registry.TryGet<LivingReaction>(creature);
+	    reacting != nullptr && reacting->type == Reaction::ReactToTeleport)
+	{
+		reacting->reaction = 0;
+		reacting->type = Reaction::None;
+	}
 }
 
 void TeleportSystem::Reset()

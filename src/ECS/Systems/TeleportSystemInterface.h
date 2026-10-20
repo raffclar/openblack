@@ -51,6 +51,13 @@ public:
 	/// The jump from a stone to the player's stone that leaves the traveller closest to where it was going; forced, it
 	/// takes any other stone. Whether it jumped.
 	virtual bool DoTeleport(entt::entity stone, entt::entity living, bool forced) = 0;
+	/// A creature that jumped starts its fade out: the stone carries it from the next turn. Whether the stone carries it.
+	virtual bool StartCarry(entt::entity creature) = 0;
+	/// One turn of a creature that the stone carries: it fades out, comes out of the far stone, then fades back in.
+	/// Whether it is back in sight, or the stone does not carry it.
+	virtual bool CarryTurn(entt::entity creature) = 0;
+	/// The stone no longer controls the creature: the creature is not a traveller of a stone, and does not react to it
+	virtual void StopControl(entt::entity creature) = 0;
 	/// A villager dropped by a player's hand onto a stone of theirs jumps at once, if there is another stone: it decides
 	/// what to do as it lands and jumps to the stone nearest where that takes it. Whether it jumped.
 	virtual bool DropOnStone(entt::entity villager, entt::entity stone, PlayerNames dropper) = 0;
@@ -65,8 +72,8 @@ public:
 	/// way to the site again. Whether it did.
 	virtual bool RouteWorshipper(entt::entity villager, glm::vec3 site) = 0;
 
-	/// Once a game turn: stones of miracles that have gone go, the travellers that gave up are dropped, the passers-by
-	/// decide whether to turn aside, and those that reached a stone jump
+	/// Once a game turn: stones of miracles that have gone go, and the travellers that gave up are dropped. A creature
+	/// is dropped when its plan has no step of the teleport left.
 	virtual void ProcessTurn() = 0;
 	/// A new land: no stones
 	virtual void Reset() = 0;
