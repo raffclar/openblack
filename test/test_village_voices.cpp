@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #include "Help/VillageVoices.h"
@@ -102,4 +105,70 @@ TEST(VillageVoices, ATownAnswersAGiftByItsDesire)
 	EXPECT_EQ(GiftAnswer(Gift::Wood, 0.1f, 1), std::optional(216u));
 	EXPECT_EQ(GiftAnswer(Gift::Rain, 0.9f, 0), std::optional(212u));
 	EXPECT_FALSE(GiftAnswer(Gift::Wood, 0.25f, 0).has_value());
+}
+
+TEST(VillageVoices, ATownDesirePicksItsVoiceByItsValue)
+{
+	// Food: the first voice from 0.85, the second from 0.65, the third from 0.45
+	EXPECT_EQ(DesireVoice(0, 0.9f, 0.0f), 144u);
+	EXPECT_EQ(DesireVoice(0, 0.9f, 0.1f), 145u);
+	EXPECT_EQ(DesireVoice(0, 0.5f, 0.0f), 146u);
+	EXPECT_EQ(DesireVoice(0, 0.4f, 0.0f), 0u);
+	// The build row has the same voice three times, and a desire without voices gives none
+	EXPECT_EQ(DesireVoice(5, 0.5f, 0.0f), 140u);
+	EXPECT_EQ(DesireVoice(2, 1.0f, 0.0f), 0u);
+	EXPECT_EQ(DesireVoice(k_WorshippersRow, 1.0f, 0.0f), 19u);
+	EXPECT_EQ(DesireVoice(k_WorshipFoodRow, 1.0f, 0.0f), 23u);
+	EXPECT_EQ(DesireVoice(19, 1.0f, 0.0f), 0u);
+	EXPECT_FLOAT_EQ(DesireVoiceDrawLimit(0.9f), 0.3f);
+}
+
+TEST(VillageVoices, TheTimeSinceTheFirstLookAtAThing)
+{
+	std::vector<ecs::components::GuidanceHeard::SeenThing> seen;
+	const auto town = static_cast<entt::entity>(4);
+	const auto site = static_cast<entt::entity>(9);
+	EXPECT_EQ(TurnsSinceSeen(seen, town, 100), 0u);
+	EXPECT_EQ(TurnsSinceSeen(seen, town, 160), 60u);
+	// A new thing goes to the front of the list
+	EXPECT_EQ(TurnsSinceSeen(seen, site, 170), 0u);
+	ASSERT_EQ(seen.size(), 2u);
+	EXPECT_EQ(seen.front().thing, site);
+	EXPECT_EQ(TurnsSinceSeen(seen, town, 700), 600u);
+	// After more than 600 turns the time starts again
+	EXPECT_EQ(TurnsSinceSeen(seen, town, 701), 0u);
+}
+
+TEST(VillageVoices, AWorshipSiteVoiceReplacesTheTownVoice)
+{
+	// The worshippers voice wins when it has a score, even a smaller one
+	const auto both = WorshipSiteVoice({.voice = 23, .score = 0.8f}, {.voice = 19, .score = 0.4f});
+	ASSERT_TRUE(both.has_value());
+	EXPECT_EQ(both->voice, 19u);
+	const auto food = WorshipSiteVoice({.voice = 24, .score = 0.8f}, {.voice = 0, .score = 0.0f});
+	ASSERT_TRUE(food.has_value());
+	EXPECT_EQ(food->voice, 24u);
+	EXPECT_FALSE(WorshipSiteVoice({.voice = 0, .score = 0.0f}, {.voice = 0, .score = 0.0f}).has_value());
+}
+
+TEST(VillageVoices, TheReachOfADesireVoice)
+{
+	EXPECT_FLOAT_EQ(DesireVoiceReachDrawLimit(1.2f), 0.6f);
+	EXPECT_FLOAT_EQ(DesireVoiceReach(1.0f, 0.25f), 150.0f);
+	// A score near the most and no draw carry the voice 400 metres
+	EXPECT_FLOAT_EQ(DesireVoiceReach(2.0f, 0.0f), 400.0f);
+}
+
+TEST(VillageVoices, TheScoreOfADesireVoice)
+{
+	// The full score: a strong desire at the camera, a long time since the last voice, a thing new to the voices
+	EXPECT_FLOAT_EQ(DesireVoiceScore({.turnsSinceHeard = 50, .turnsSinceSeen = 0, .distance = 0.0f, .desire = 1.0f}), 2.0f);
+	// A thing looked at for 300 turns or more, or a thing at 200 metres, gives no score
+	EXPECT_FLOAT_EQ(DesireVoiceScore({.turnsSinceHeard = 50, .turnsSinceSeen = 300, .distance = 0.0f, .desire = 1.0f}), 0.0f);
+	EXPECT_FLOAT_EQ(DesireVoiceScore({.turnsSinceHeard = 50, .turnsSinceSeen = 0, .distance = 200.0f, .desire = 1.0f}), 0.0f);
+	// Half the time since the last voice halves the score, and the same voice again takes an eighth more of it
+	EXPECT_FLOAT_EQ(DesireVoiceScore({.turnsSinceHeard = 25, .turnsSinceSeen = 0, .distance = 0.0f, .desire = 1.0f}), 1.0f);
+	EXPECT_FLOAT_EQ(
+	    DesireVoiceScore({.turnsSinceHeard = 25, .turnsSinceSeen = 0, .distance = 0.0f, .desire = 1.0f, .sameAsLast = true}),
+	    0.125f);
 }

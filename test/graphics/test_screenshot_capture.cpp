@@ -29,6 +29,8 @@ using openblack::graphics::ScreenshotRoute;
 using openblack::graphics::ScreenView;
 using openblack::graphics::UncapturedScreenshotPath;
 using openblack::graphics::WriteScreenshotPng;
+using openblack::windowing::BackgroundDisplayMode;
+using openblack::windowing::DisplayMode;
 using openblack::windowing::WindowMinimised;
 
 namespace
@@ -146,4 +148,13 @@ TEST(ScreenshotCapture, AForgottenPictureIsNotMade)
 	const std::vector<uint8_t> frame(4, 0);
 	EXPECT_FALSE(pictures.Make(name, {.width = 1, .height = 1, .pitch = 4, .yflip = false, .bgra = frame}));
 	EXPECT_FALSE(pictures.Take(name).has_value());
+}
+
+// A background window stays in a window, whatever display mode is asked for
+TEST(ScreenshotCapture, ABackgroundWindowStaysInAWindow)
+{
+	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Fullscreen, true), DisplayMode::Windowed);
+	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Borderless, true), DisplayMode::Windowed);
+	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Fullscreen, false), DisplayMode::Fullscreen);
+	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Windowed, false), DisplayMode::Windowed);
 }

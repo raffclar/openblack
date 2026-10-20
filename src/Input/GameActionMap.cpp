@@ -34,6 +34,23 @@ using namespace openblack::input;
 namespace
 {
 
+// A background run (a tool or an agent) never holds or moves the user's mouse
+bool IsBackground()
+{
+	using openblack::Locator;
+	return Locator::config::has_value() && Locator::config::value().background;
+}
+
+void WarpMouse(int x, int y)
+{
+	using openblack::Locator;
+	if (IsBackground() || !Locator::windowing::has_value())
+	{
+		return;
+	}
+	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), x, y);
+}
+
 glm::ivec2 WindowSize()
 {
 	using openblack::Locator;
@@ -89,6 +106,14 @@ void GameActionMap::SetKeyBinding(BindableActionMap action, std::optional<KeyCho
 void GameActionMap::ResetKeyBindings()
 {
 	_bindings = k_DefaultKeyBindings;
+	ApplyMouseBindings();
+}
+
+void GameActionMap::SetKeyBindings(const KeyBindingTable& bindings)
+{
+	// Every action lets go, so that no action stays held by an input that is no longer its own
+	_bindableMap = BindableActionMap::NONE;
+	_bindings = bindings;
 	ApplyMouseBindings();
 }
 
@@ -377,7 +402,7 @@ void GameActionMap::StartScaledPointer(glm::ivec2 at)
 	// The movements are the mouse's own, without the system's pointer speed and acceleration (the user's choice), before
 	// the screen's scale
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
-	if (SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
+	if (IsBackground() || SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
 	{
 		return;
 	}
@@ -394,8 +419,11 @@ void GameActionMap::StopScaledPointer()
 		return;
 	}
 	const auto at = _scaledPointer.Position();
-	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), at.x, at.y);
-	SDL_SetRelativeMouseMode(SDL_FALSE);
+	WarpMouse(at.x, at.y);
+	if (!IsBackground())
+	{
+		SDL_SetRelativeMouseMode(SDL_FALSE);
+	}
 }
 
 void GameActionMap::PointPlayerEvent(SDL_Event& event)
@@ -420,6 +448,8 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	}
 	if (event.type == SDL_MOUSEMOTION)
 	{
+		// The mouse's own movement, before the pointer's speed and the screen's sides
+		_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
 		const auto before = _scaledPointer.Position();
 		const auto after = _scaledPointer.Move({event.motion.xrel, event.motion.yrel}, GetPointerScale(),
 		                                       Locator::windowing::value().GetSize());
@@ -514,14 +544,14 @@ void GameActionMap::WarpPlayerCursor(glm::ivec2 position)
 	if (_pointerScaled)
 	{
 		_scaledPointer.Place(position);
-		SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
+		WarpMouse(position.x, position.y);
 		return;
 	}
 	// The window reports the jump as the pointer moving, with the next events; it isn't the mouse moving. While a hand
 	// demonstration keeps the player's mouse out, those events never arrive
 	glm::ivec2 before {0, 0};
 	SDL_GetMouseState(&before.x, &before.y);
-	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), position.x, position.y);
+	WarpMouse(position.x, position.y);
 	glm::ivec2 after {0, 0};
 	SDL_GetMouseState(&after.x, &after.y);
 	if (!_playerMouseBlocked)
@@ -562,6 +592,11 @@ bool GameActionMap::IsCursorFrozen() const
 glm::ivec2 GameActionMap::GetMouseDelta() const
 {
 	return _mouseMotion.Delta();
+}
+
+glm::ivec2 GameActionMap::GetMousePushDelta() const
+{
+	return _pushMotion;
 }
 
 float GameActionMap::GetMouseWheelDelta() const
@@ -648,7 +683,10 @@ void GameActionMap::Frame()
 			// The pointer is held in the window while the mouse's movement still comes through, as the mouse's own
 			// movement without the system's acceleration
 			SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
-			SDL_SetRelativeMouseMode(SDL_TRUE);
+			if (!IsBackground())
+			{
+				SDL_SetRelativeMouseMode(SDL_TRUE);
+			}
 		}
 		if (cursor.warpTo.has_value() && _scriptedPointer.has_value())
 		{
@@ -657,7 +695,7 @@ void GameActionMap::Frame()
 		else if (cursor.warpTo.has_value())
 		{
 			// The window keeps the mouse if it had it before the turn
-			if (!_pointerScaled)
+			if (!_pointerScaled && !IsBackground())
 			{
 				SDL_SetRelativeMouseMode(SDL_FALSE);
 			}
@@ -671,6 +709,7 @@ void GameActionMap::Frame()
 		}
 	}
 	_mouseMotion.NewFrame();
+	_pushMotion = glm::ivec2(0);
 	_mouseWheelDelta = 0.0f;
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
@@ -809,6 +848,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
 		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
+		// While the window has the mouse, its own movement was taken as the event came in
+		if (!_pointerScaled)
+		{
+			_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
+		}
 	}
 }
 

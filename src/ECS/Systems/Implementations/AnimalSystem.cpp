@@ -64,6 +64,7 @@
 #include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -465,6 +466,7 @@ void AnimalSystem::SetupMoveTo(Animal& animal, glm::vec2 goal, float goalHeight,
 
 void AnimalSystem::SetupMoveToFixed(Animal& animal, glm::ivec2 goal, float goalHeight, AnimalState finalState)
 {
+	animal.walksRound = false;
 	animal.goalHeight = goalHeight;
 	Banked(animal, animals::SetUpMove(animal.move, goal, TurnAngleOf(animal)));
 	animal.finalState = finalState;
@@ -495,6 +497,49 @@ void AnimalSystem::Banked(Animal& animal, const animals::Turn& turn)
 		             k_WolfMostBank);
 	}
 	animal.bank.SetTarget(turn.direction < 0 ? -tilt : tilt, 0.0f, timeToBank);
+}
+
+void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::vec2 goal, AnimalState finalState)
+{
+	auto& registry = EntityRegistry();
+	// A bird flies over what is in its way
+	if (IsBird(animal.type) || !Locator::pathfindingSystem::has_value() || !registry.AllOf<Transform>(entity))
+	{
+		SetupMoveToFixed(animal, Fixed(goal), 0.0f, finalState);
+		return;
+	}
+	animal.goalHeight = 0.0f;
+	animal.move.goal = Fixed(goal);
+	// The walk goes from where it is, facing as it faces, at its speed, and turns as its kind turns
+	auto& walk = registry.AssignOrReplace<WallHug>(entity);
+	walk.goal = goal;
+	walk.position = animal.move.position;
+	walk.placedAt = Metres(animal.move.position);
+	walk.gameAngle = animal.move.angle;
+	walk.speed = 0.0f;
+	registry.AssignOrReplace<TurningWalker>(entity,
+	                                        TurningWalker {.turnAngle = TurnAngleOf(animal), .speed = animal.move.speed});
+	auto& transform = registry.Get<Transform>(entity);
+	transform.position.x = walk.placedAt.x;
+	transform.position.z = walk.placedAt.y;
+	Locator::pathfindingSystem::value().SetupWalkRound(entity, animal.move.goal);
+	const auto& set = registry.Get<const WallHug>(entity);
+	animal.move.angle = set.gameAngle;
+	animal.move.step = set.step;
+	animal.move.stage =
+	    registry.AllOf<MoveStateArrivedTag>(entity) ? animals::MoveStage::AtGoal : animals::MoveStage::StepThrough;
+	animal.walksRound = true;
+	animal.finalState = finalState;
+	// It takes its kind's move state, and that state's clip
+	SetTopState(animal, AnimalState::MoveToPos);
+	SyncWorld(animal);
+}
+
+void AnimalSystem::EndWalkRound(entt::entity entity)
+{
+	EntityRegistry()
+	    .Remove<WallHug, TurningWalker, WallHugObjectReference, WallHugLookahead, MoveStateLinearTag, MoveStateOrbitTag,
+	            MoveStateExitCircleTag, MoveStateStepThroughTag, MoveStateFinalStepTag, MoveStateArrivedTag>(entity);
 }
 
 bool AnimalSystem::MoveTo3D(Animal& animal)
@@ -2019,7 +2064,7 @@ bool AnimalSystem::LookOrGoToFood(entt::entity entity, Animal& animal)
 		const auto here = Metres(animal.move.position);
 		const float angle = gutils::Get3DAngleFromXZ(at, here);
 		const float gap = object_measures::TwoDRadius(registry, food) + object_measures::TwoDRadius(registry, entity);
-		SetupMoveTo(animal, villager_routine::Polar(at, angle, gap), 0.0f, AnimalState::ArrivesAtFood);
+		SetupMoveRoundTo(entity, animal, villager_routine::Polar(at, angle, gap), AnimalState::ArrivesAtFood);
 		return true;
 	}
 	case AnimalState::ArrivesAtFood:
@@ -2031,7 +2076,7 @@ bool AnimalSystem::LookOrGoToFood(entt::entity entity, Animal& animal)
 		{
 			return false;
 		}
-		if (MoveTo3D(animal))
+		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveTo3D(animal))
 		{
 			SetTopState(animal, animal.finalState);
 		}
@@ -2111,7 +2156,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 	// Running to where it flees, it gets there first
 	if (running)
 	{
-		if (MoveTo3D(animal))
+		if (animal.walksRound ? GroundMoveTo(entity, animal) : MoveTo3D(animal))
 		{
 			SetState(animal, animal.finalState);
 		}
@@ -2167,7 +2212,7 @@ bool AnimalSystem::Flee(entt::entity entity, Animal& animal)
 			const auto& row = Locator::infoConstants::value().villagerStateTable.at(
 			    static_cast<size_t>(VillagerStates::FleeingFromObjectReaction));
 			animal.move.speed = SpeedStateOf(InfoOf(animal.type), std::min<size_t>(row.speedIndex, 5));
-			SetupMoveTo(animal, Xz(to), 0.0f, AnimalState::FleeingAndLookingAtObject);
+			SetupMoveRoundTo(entity, animal, Xz(to), AnimalState::FleeingAndLookingAtObject);
 			// A grazer runs in its moving clip at its fleeing speed; the other animals have no clip of their own for
 			// moving and keep the one they had
 			if (!animals::grazers::IsGrazer(animal.type))

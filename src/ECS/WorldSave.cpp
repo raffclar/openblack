@@ -52,6 +52,7 @@
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
@@ -324,7 +325,7 @@ systems::SavedStateInterface* FindGameMusic()
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 38> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindSystem<Locator::particleSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
@@ -363,6 +364,7 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 38> k_SavedSyste
     {"cameraZones", &FindSystem<Locator::cameraZoneSystem>},
     {"cameraHelp", &FindSystem<Locator::cameraHelpSystem>},
     {"scriptHighlights", &FindSystem<Locator::scriptHighlightSystem>},
+    {"cameraBookmarks", &FindSystem<Locator::cameraBookmarkSystem>},
 }};
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)

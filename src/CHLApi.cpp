@@ -120,6 +120,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
@@ -567,7 +568,6 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 		return entt::null;
 	}
 	const auto made = script::create_rules::ScriptVillagerOf(child, infos.at(subtype).grownUpAge);
-	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
 	const auto villager =
 	    VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), made.age,
 	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
@@ -8287,7 +8287,8 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 {
-	// Whether the player's hand is locked onto the thing: held to a creature with the button, or gripping a totem
+	// Whether the player's hand is locked onto the thing: held to a creature with the button, gripping a totem, or
+	// scooping from a field, a fish farm or a pile
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
@@ -8299,7 +8300,9 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
-	Pushb(heldCreature || grippedTotem);
+	const bool scooped =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	Pushb(heldCreature || grippedTotem || scooped);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
@@ -8339,14 +8342,17 @@ void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
 {
-	// The game asks for a town here, but then clears what a villager keeps of a script's wander or animation, on any
-	// thing it gets (vanilla bugs 298). openblack keeps none of that apart from the villager's state, so nothing is
-	// cleared. A creature's mind is never touched.
+	// The game asks for a town here, but then clears what a villager keeps in mind of its script's work, on any thing it
+	// gets (vanilla bugs 154). A town keeps nothing of that kind. A creature's mind is never touched.
 	const auto thing = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (thing == entt::null || !registry.Valid(thing) || !registry.AllOf<ecs::components::Town>(thing))
 	{
 		ScriptMessage("Thing not valid");
+	}
+	if (thing != entt::null && registry.Valid(thing))
+	{
+		registry.Remove<ecs::components::ScriptRemind>(thing);
 	}
 }
 

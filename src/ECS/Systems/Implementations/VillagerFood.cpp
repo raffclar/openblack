@@ -309,11 +309,18 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 	{
 		in.homeFood = stores.GetResource(abode, ResourceType::Food);
 	}
+	std::optional<glm::vec2> dropOff;
 	if (const auto pit = WorkingStoragePit(person); pit.has_value())
 	{
 		in.pitFood = stores.GetResource(*pit, ResourceType::Food);
 	}
-	// TODO(villager-hunger-health): without a working pit the town's own place for food
+	else if (!(in.homeFood.has_value() && in.required <= *in.homeFood) && in.required != 0)
+	{
+		// Without a working pit its town leaves food at its temporary pile, which is made if missing
+		dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Food);
+		in.dropOffElsewhere =
+		    gutils::GetDistanceInMetres(*dropOff, glm::xz(Entities().Get<const Transform>(villager).position)) > 0.0f;
+	}
 	switch (rules::PlanMeal(in))
 	{
 	case rules::MealPlan::None:
@@ -331,7 +338,8 @@ bool villager_food::ChangeStateToFindFoodToEat(LivingAction& action)
 		SetTopState(action, VillagerStates::GotoStoragePitForFood);
 		return true;
 	case rules::MealPlan::GoToDropOff:
-		return false;
+		villager_home::SetupMoveTo(action, *dropOff, VillagerStates::ArrivesAtStoragePitForFood);
+		return true;
 	}
 	return false;
 }
@@ -404,8 +412,9 @@ uint32_t villager_food::GotoStoragePitForFood(LivingAction& action)
 		                                         VillagerStates::ArrivesAtStoragePitForFood);
 		return 1;
 	}
-	// TODO(villager-hunger-health): without a working pit it walks to its town's own place for food
-	SetTopState(action, VillagerStates::DecideWhatToDo);
+	// Without a working pit it walks to its town's temporary pile of food
+	villager_home::SetupMoveTo(action, villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Food),
+	                           VillagerStates::ArrivesAtStoragePitForFood);
 	return 1;
 }
 
@@ -568,13 +577,13 @@ uint32_t villager_food::ArrivesAtFoodReaction(LivingAction& action)
 			return 1;
 		}
 		const auto town = TownOf(person);
-		const auto pit = WorkingStoragePit(person);
-		// TODO(villager-hunger-health): with no working pit, the town's own place for food is where it would carry it
-		if (!IsWorkingDisciple(villager) && town != entt::null && pit.has_value() && Locator::townDesireSystem::has_value())
+		if (!IsWorkingDisciple(villager))
 		{
-			const float distance =
-			    gutils::GetDistanceInMetres(glm::xz(Position(villager)), villager_home::ArrivePosition(*pit));
-			if (rules::CarriesFoodToStore(Locator::townDesireSystem::value().FoodShortage(town), person.foodHeld,
+			// Where its town leaves food: its working pit's door, or its temporary pile, made if missing
+			const auto dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Food);
+			const float distance = gutils::GetDistanceInMetres(glm::xz(Position(villager)), dropOff);
+			if (town != entt::null && Locator::townDesireSystem::has_value() &&
+			    rules::CarriesFoodToStore(Locator::townDesireSystem::value().FoodShortage(town), person.foodHeld,
 			                              info.maxFoodCarried, gutils::GetDistanceModifier(distance, info.maxDistCarryFoodPit)))
 			{
 				return villager_build::GotoStoragePitForDropOff(action);

@@ -23,6 +23,13 @@
 namespace openblack::ecs::components
 {
 
+/// The ground a town covers, in map units: the least and the greatest corner of the box (x and z)
+struct TownArea
+{
+	glm::ivec2 min {0, 0};
+	glm::ivec2 max {0, 0};
+};
+
 struct Town
 {
 	uint32_t id;
@@ -74,6 +81,13 @@ struct Town
 	std::vector<entt::entity> planned;
 	/// The game turn one of its villagers last asked it to start a planned building: it is asked at most once a turn
 	std::optional<uint32_t> askedToBuildTurn;
+	/// The turns left before the town becomes empty, counted down from the time its last person left; 0 when no
+	/// countdown runs
+	uint32_t emptyTownTimer {0};
+	/// The temporary piles of food and wood it keeps while it has no storage pit that works, none until one is wanted
+	std::array<entt::entity, 2> temporaryStores {entt::null, entt::null};
+	/// The ground it covers, made again when a building joins or leaves it or one of its fields goes
+	TownArea area;
 };
 
 } // namespace openblack::ecs::components

@@ -15,15 +15,6 @@
 using namespace openblack;
 using namespace openblack::ecs;
 
-TEST(ScenicForest, ATownsCentreIsTheMiddleOfTheGroundItsBuildingsCover)
-{
-	scenic_forest::TownArea area;
-	area.Add({100.0f, 200.0f}, 5.0f);
-	area.Add({140.0f, 210.0f}, 10.0f);
-	EXPECT_FLOAT_EQ(area.Centre().x, 122.5f);
-	EXPECT_FLOAT_EQ(area.Centre().y, 207.5f);
-}
-
 TEST(ScenicForest, TheWalkStopsAtTheFirstStepBeyondTheReach)
 {
 	const auto centre = map_coords::FromMetres({1000.0f, 1000.0f});

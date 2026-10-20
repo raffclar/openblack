@@ -291,9 +291,10 @@ using openblack::resources::Resources;
 using openblack::windowing::DisplayMode;
 using openblack::windowing::Sdl2WindowingSystem;
 
-void openblack::InitializeWindow(const std::string& title, int width, int height, DisplayMode displayMode, uint32_t extraFlags)
+void openblack::InitializeWindow(const std::string& title, int width, int height, DisplayMode displayMode, uint32_t extraFlags,
+                                 bool background)
 {
-	Locator::windowing::emplace<Sdl2WindowingSystem>(title, width, height, displayMode, extraFlags);
+	Locator::windowing::emplace<Sdl2WindowingSystem>(title, width, height, displayMode, extraFlags, background);
 }
 
 bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept

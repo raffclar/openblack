@@ -23,6 +23,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "Common/MachineClock.h"
+#include "DialogKeyRules.h"
 #include "GameFont.h"
 
 using namespace openblack::gui;
@@ -160,25 +161,27 @@ bool BigButton::HitTest(glm::ivec2 point) const
 	return visible && (rect.Contains(point) || (!label.empty() && GetLabelRect().Contains(point)));
 }
 
-void BigButton::Draw(const DialogPainter& painter, bool hovered, bool /*focused*/, bool pressed) const
+void BigButton::Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const
 {
 	if (!visible)
 	{
 		return;
 	}
+	// A big button without a label also lights up while it has the focus. A check box lights up only under the pointer.
+	const bool lit = hovered || (focused && label.empty() && _focusLights);
 	switch (_look)
 	{
 	case Look::Square:
-		painter.DrawSquare(rect.min, rect.Width(), _checked, hovered, pressed && hovered);
+		painter.DrawSquare(rect.min, rect.Width(), _checked, lit, pressed && hovered);
 		break;
 	case Look::LeftArrow:
 	case Look::RightArrow:
 		painter.DrawArrow(rect.min, rect.Width(),
-		                  _look == Look::LeftArrow ? DialogPainter::Arrow::Left : DialogPainter::Arrow::Right, hovered,
+		                  _look == Look::LeftArrow ? DialogPainter::Arrow::Left : DialogPainter::Arrow::Right, lit,
 		                  pressed && hovered);
 		break;
 	case Look::Rotation:
-		painter.DrawRotation(rect.min, rect.Width(), hovered);
+		painter.DrawRotation(rect.min, rect.Width(), lit);
 		break;
 	}
 	DrawLabel(painter, hovered);
@@ -222,6 +225,7 @@ CheckBox::CheckBox(const GameFont& font, glm::ivec2 position, int size, std::u16
     , _radio(radio)
 {
 	_checked = checked;
+	_focusLights = false;
 	// A check box's label beside it stands four pixels further off than a big button's
 	_labelGap = 4;
 }
@@ -258,6 +262,36 @@ Slider::Slider(DialogRect rect, std::u16string label, float value)
 void Slider::SetValue(float value) noexcept
 {
 	_value = std::clamp(value, 0.0f, 1.0f);
+}
+
+bool Slider::KeyDown(int key)
+{
+	dialog_keys::SliderKey moved {};
+	switch (key)
+	{
+	case SDLK_HOME:
+		moved = dialog_keys::SliderKey::Home;
+		break;
+	case SDLK_END:
+		moved = dialog_keys::SliderKey::End;
+		break;
+	case SDLK_LEFT:
+		moved = dialog_keys::SliderKey::Left;
+		break;
+	case SDLK_RIGHT:
+		moved = dialog_keys::SliderKey::Right;
+		break;
+	default:
+		return false;
+	}
+	_value = dialog_keys::MoveSlider(_value, moved);
+	_downValue = _value;
+	// The slider tells of its value for each of these keys, also when the value stays the same
+	if (onChange)
+	{
+		onChange(_value);
+	}
+	return true;
 }
 
 int Slider::GetKnobLeft(float value) const
@@ -370,6 +404,35 @@ std::optional<size_t> List::ItemAt(int y) const
 		top += _heights[i];
 	}
 	return std::nullopt;
+}
+
+bool List::KeyDown(int key)
+{
+	if (!_showSelection)
+	{
+		return false;
+	}
+	dialog_keys::ListKey moved {};
+	switch (key)
+	{
+	case SDLK_HOME:
+		moved = dialog_keys::ListKey::Home;
+		break;
+	case SDLK_END:
+		moved = dialog_keys::ListKey::End;
+		break;
+	case SDLK_UP:
+		moved = dialog_keys::ListKey::Up;
+		break;
+	case SDLK_DOWN:
+		moved = dialog_keys::ListKey::Down;
+		break;
+	default:
+		return false;
+	}
+	_selection = dialog_keys::MoveList(_selection, _items.size(), moved);
+	ScrollToSelection();
+	return true;
 }
 
 void List::ScrollTo(float scroll)

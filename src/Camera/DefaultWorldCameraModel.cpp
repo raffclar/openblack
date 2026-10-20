@@ -43,6 +43,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "EngineConfig.h"
 #include "FightView.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
@@ -143,6 +144,9 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 		const auto windowSize = Locator::windowing::value().GetSize();
 		eulerAngles.x += _rotateAroundDelta.y * glm::pi<float>() / windowSize.x;
 	}
+
+	// Push scrolling turns the camera by its own turn
+	eulerAngles.x += _pushTurn;
 
 	// Update the camera's pitch if there's significant vertical movement.
 	if (glm::abs(_rotateAroundDelta.x) > glm::epsilon<float>())
@@ -654,6 +658,11 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	UpdateCameraInterpolationValues(camera);
 	const auto originAtFrameStart = _targetOrigin;
+	// Push scrolling moves the camera over the land after the start of the frame is kept, so that a camera that keeps
+	// to its place goes back over it
+	_targetOrigin += _pushMove;
+	_targetFocus += _pushMove;
+	_focusAtClick += _pushMove;
 	UpdateRaycastHitPoints(camera);
 	UpdateFocusDistance();
 
@@ -969,6 +978,12 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_rotateAroundDelta.x = 0.0f;
 	}
+	// Push scrolling acts only while no button, key or the camera tilting itself holds the camera
+	{
+		const auto& asked = _helpControls;
+		const bool anythingAsked = asked.turn != 0.0f || asked.tilt != 0.0f || asked.zoom != 0.0f || asked.move != glm::vec2();
+		HandlePushScroll(dt, !gripping && !rotateAroundMouse && !twoButtons && !anythingAsked && !autoTilting, gripping);
+	}
 	// The hints follow the cursor while no button holds the camera and the player isn't turning, moving or zooming it;
 	// the camera tilting itself doesn't stop them
 	const bool playerMovesCamera = _rotateAroundDelta != glm::vec3() || _keyBoardMoveDelta != glm::vec2();
@@ -1000,7 +1015,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_mode = HandleDrag(true);
 	}
-	else if (_keyBoardMoveDelta != glm::vec2() || _rotateAroundDelta != glm::vec3())
+	else if (_keyBoardMoveDelta != glm::vec2() || _rotateAroundDelta != glm::vec3() || _pushTurn != 0.0f)
 	{
 		_mode = Mode::Polar;
 	}
@@ -1069,6 +1084,62 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
 	}
 	UpdateIconFrame(onFight);
+}
+
+void DefaultWorldCameraModel::HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping)
+{
+	namespace push = camera_push_scroll;
+	_pushMove = glm::vec3(0.0f);
+	_pushTurn = 0.0f;
+	const float seconds = push::Seconds(_pushClock.Step(dt));
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::gameActionSystem::value();
+	const auto& windowing = Locator::windowing::value();
+	const auto screenSize = windowing.GetSize();
+	const bool windowed =
+	    windowing.IsWindowed() && !(Locator::config::has_value() && Locator::config::value().testbedPushScrollInWindow);
+	const auto cursor = glm::ivec2(actions.GetMousePosition());
+	push::Track(_pushPointer, push::PushScreenPosition(cursor, screenSize), actions.GetMousePushDelta(),
+	            push::Inside(cursor, screenSize), windowed);
+
+	const bool allowed =
+	    Locator::config::has_value() && Locator::config::value().pushScrolling && (_features & push::k_FeaturePushScroll) != 0;
+	if (!allowed)
+	{
+		_pushSpeed = glm::vec3(0.0f);
+		return;
+	}
+	// The speed moves and turns the camera while nothing else holds it
+	if (buttonsFree)
+	{
+		const auto euler = EulerFromPoints(_targetOrigin, _focusAtClick);
+		const auto strafe = push::StrafeStep(_pushSpeed, seconds, euler.x, euler.y, _features);
+		_pushMove = strafe.move;
+		_pushTurn = strafe.turn;
+		if (strafe.moved)
+		{
+			_helpEvents.Add(help::profile::k_CameraDrag);
+		}
+		if (strafe.turnCounted)
+		{
+			_helpEvents.Add(help::profile::k_CameraTurn);
+			_helpEvents.Add(strafe.turnedPositive ? help::profile::k_CameraTurnPositive : help::profile::k_CameraTurnNegative);
+			_turnedThisFrame = strafe.turn;
+		}
+	}
+	push::Fade(_pushSpeed, seconds, _pushPointer.insideX && _pushPointer.insideY);
+
+	// The frame's push, as the game reads its keys after its camera moved: only in full screen, with the land not gripped
+	// and the player having the interface
+	const bool interface =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	if (!gripping && !windowed && interface)
+	{
+		push::Push(_pushSpeed, _pushPointer, push::Speed(_currentOrigin.y, _currentFocus.y), seconds);
+	}
 }
 
 void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)

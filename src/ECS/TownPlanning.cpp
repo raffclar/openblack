@@ -209,39 +209,9 @@ std::vector<planned_building::OtherTown> OtherTowns(entt::entity town)
 			continue;
 		}
 		planned_building::OtherTown other {.cell = glm::ivec2(CellOfMetres(at->position.x), CellOfMetres(at->position.z))};
-		// The box about its buildings and fields, each widened by its radius
-		auto min = glm::vec2(std::numeric_limits<float>::max());
-		auto max = glm::vec2(0.0f);
-		bool any = false;
-		const auto widen = [&](entt::entity thing) {
-			const auto* placed = registry.TryGet<const Transform>(thing);
-			if (placed == nullptr)
-			{
-				return;
-			}
-			const float radius = world_objects::SizeOf(thing).radius;
-			min = glm::min(min, glm::xz(placed->position) - radius);
-			max = glm::max(max, glm::xz(placed->position) + radius);
-			any = true;
-		};
-		for (const auto abode : data.abodes)
-		{
-			if (registry.Valid(abode))
-			{
-				widen(abode);
-			}
-		}
-		registry.Each<const Field>([&](entt::entity field, const Field& each) {
-			if (each.town == static_cast<int>(data.id))
-			{
-				widen(field);
-			}
-		});
-		if (any)
-		{
-			other.areaMin = glm::ivec2(CellOfMetres(min.x), CellOfMetres(min.y));
-			other.areaMax = glm::ivec2(CellOfMetres(max.x), CellOfMetres(max.y));
-		}
+		// The cells of the ground that it keeps as covered: the box about its buildings and fields
+		other.areaMin = glm::ivec2(map_coords::CellOf(data.area.min.x), map_coords::CellOf(data.area.min.y));
+		other.areaMax = glm::ivec2(map_coords::CellOf(data.area.max.x), map_coords::CellOf(data.area.max.y));
 		others.push_back(other);
 	}
 	return others;

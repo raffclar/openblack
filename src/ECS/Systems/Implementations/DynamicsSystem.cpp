@@ -1532,6 +1532,7 @@ void DynamicsSystem::UpdateFrame(float turnFraction)
 {
 	auto& registry = Entities();
 	bool drawn = false;
+	_drawnBodies.clear();
 	for (const auto& entry : _entries)
 	{
 		if (!IsAvailable(entry->entity) || !registry.AllOf<Transform>(entry->entity))
@@ -1562,6 +1563,7 @@ void DynamicsSystem::UpdateFrame(float turnFraction)
 		}
 		const auto pose = body.DrawPose(turnFraction, entry->animated);
 		registry.AssignOrReplace<PhysicsDrawPose>(entry->entity, PhysicsDrawPose {.axes = pose.axes, .origin = pose.origin});
+		_drawnBodies.push_back(entry->entity);
 		drawn = true;
 	}
 	if (drawn)

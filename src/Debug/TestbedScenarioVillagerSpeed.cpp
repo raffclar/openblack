@@ -116,4 +116,60 @@ void testbed_scenarios::AddVillagerSpeedScenarios(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-20.0f, -15.0f}, .life = 0.1f},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, -15.0f}}},
 	});
+
+	// Villagers walking on the bank south of the testbed's lake, which climbs from the shallows to the plane
+	constexpr float k_BankFoot = 146.0f;
+	constexpr float k_BankTop = 112.0f;
+	constexpr float k_BankMiddle = 130.0f;
+	constexpr float k_LeanRepeat = 25.0f;
+	all.push_back({
+	    .id = "villagers.slope_lean",
+	    .name = "Villagers leaning to the slope of the land",
+	    .facet = Facet::Movement,
+	    .description = "Three grown men on the bank south of the testbed's lake, where the land climbs from the shallows "
+	                   "to the plane. Two walk up and down the bank, 34 m, and back every 25 seconds; the third walks "
+	                   "along the bank, across the slope, 40 m, and back every 25 seconds. Between walks each stands still.",
+	    .expected = "On the bank each man's model leans to the slope of the land under him: the front and back of his "
+	                "feet and body lift or drop with the land, as an animal's do, and his body stays upright. The men "
+	                "that walk up and down lean forward and back; the man that walks across leans to his side. On the "
+	                "flat land above the bank they stand straight. Before the change they stood straight everywhere.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {45.0f, 5.0f, 126.0f}, .look = {0.0f, 1.0f, 130.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-8.0f, k_BankTop},
+	                 .walkTo = glm::vec2 {-8.0f, k_BankFoot},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {4.0f, k_BankFoot},
+	                 .walkTo = glm::vec2 {4.0f, k_BankTop},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-20.0f, k_BankMiddle},
+	                 .yawDegrees = 90.0f,
+	                 .walkTo = glm::vec2 {20.0f, k_BankMiddle},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript}},
+	});
+
+	// A villager that a script holds still goes back to its place after the hand takes it away
+	all.push_back({
+	    .id = "villagers.script_remind",
+	    .name = "A scripted villager goes back to its place",
+	    .facet = Facet::Movement,
+	    .description = "A grown man that a script holds still stands 7 metres to the left of the middle of the screen. "
+	                   "After 2 seconds the hand takes him, and 3 seconds later puts him down at the middle of the screen.",
+	    .expected = "When he is down, he gets up and walks back to the place where the script held him, then stands "
+	                "there again. Before the change he stood still where the hand put him down.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {-7.0f, 7.0f, -12.0f}, .look = {-7.0f, 0.0f, 0.0f}},
+	    .objects =
+	        {{.type = VillagerInfo::CelticFarmerMale, .offset = {-14.0f, 0.0f}, .inScript = true, .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 3.0f}},
+	});
 }

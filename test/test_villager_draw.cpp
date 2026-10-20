@@ -14,6 +14,8 @@
 #include <numbers>
 
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/matrix.hpp>
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
 #include "ECS/Components/VillagerPose.h"
@@ -228,4 +230,43 @@ TEST(VillagerDraw, APoseWithoutADrawingIsDrawnWhereItStands)
 	pose.drawnHeading = 1.0f;
 	EXPECT_EQ(components::DrawnPosition(standsAt, &pose), *pose.drawnAt);
 	EXPECT_EQ(components::DrawnRotation(rotation, &pose), villager_draw::RotationOf(1.0f));
+}
+
+TEST(VillagerDraw, ALeanLiftsTheEndsOfTheAxes)
+{
+	const float heading = 0.7f;
+	const auto leaned = villager_draw::SlopeLeanedRotation(heading, heading, glm::vec2(0.2f, -0.1f));
+	const auto turned = villager_draw::RotationOf(heading);
+	// Each axis keeps its direction across the land and lifts by its part of the up axis
+	const auto x = leaned * glm::vec3(1.0f, 0.0f, 0.0f);
+	const auto z = leaned * glm::vec3(0.0f, 0.0f, 1.0f);
+	EXPECT_NEAR(x.x, turned[0].x, 1e-6f);
+	EXPECT_NEAR(x.z, turned[0].z, 1e-6f);
+	EXPECT_NEAR(x.y, 0.2f, 1e-6f);
+	EXPECT_NEAR(z.y, -0.1f, 1e-6f);
+	// The up axis stays up
+	const auto up = leaned * glm::vec3(0.0f, 1.0f, 0.0f);
+	EXPECT_NEAR(up.y, 1.0f, 1e-6f);
+}
+
+TEST(VillagerDraw, AHighDetailBodyTurnsBeforeTheLean)
+{
+	const float eased = 0.3f;
+	const float drawn = 1.1f;
+	const glm::vec2 lift(0.25f, 0.1f);
+	const auto leaned = villager_draw::SlopeLeanedRotation(eased, drawn, lift);
+	// With no lean it is the drawn heading's turn
+	const auto flat = villager_draw::SlopeLeanedRotation(eased, drawn, glm::vec2(0.0f));
+	const auto turned = villager_draw::RotationOf(drawn);
+	for (int column = 0; column < 3; ++column)
+	{
+		for (int row = 0; row < 3; ++row)
+		{
+			EXPECT_NEAR(flat[column][row], turned[column][row], 1e-6f);
+		}
+	}
+	// The lean stays on the eased heading's axes: the eased x axis's end lifts by the x part
+	const auto easedX = villager_draw::RotationOf(eased)[0];
+	const auto lifted = leaned * (glm::transpose(turned) * easedX);
+	EXPECT_NEAR(lifted.y, 0.25f, 1e-5f);
 }

@@ -166,6 +166,9 @@ float CallDesireFunction(components::TownDesire& desire, const DesireContext& c,
 void ProcessDesire(components::TownDesire& desire, const DesireContext& c, size_t d);
 /// Whether a script may boost a desire by that much: a desire the towns have, by at most 1 either way
 [[nodiscard]] bool ValidScriptBoost(int32_t desire, float boost);
+/// The desire that a land script names, the case of the letters not counted, none for a name that is not a desire. The
+/// names are the game's own, with its spelling ("Suppy_Workshop").
+[[nodiscard]] std::optional<size_t> DesireByName(std::string_view name);
 /// The game's C runtime quicksort, most first, which is not stable
 void MsvcQsort(std::array<components::DesireSort, k_Count>& entries);
 void SortDesires(components::TownDesire& desire);

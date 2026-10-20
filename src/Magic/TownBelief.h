@@ -116,4 +116,9 @@ void SetRelativeToOwner(Belief& town, PlayerNames owner, PlayerNames player, flo
 /// for any other, the player the town believes in most is halved and the taker believes that most plus the amount.
 void TakeTown(Belief& town, PlayerNames player, float amount, std::span<const PlayerNames> playersInGame);
 
+/// A town that stayed empty starts over: it believes in nobody, has nothing pending, its caps go back to the default
+/// and its desire levels to the desire table, and then it believes in every player what it keeps for the neutral
+/// player, within the cap. Its recent tallies stay.
+void ResetForEmptyTown(Belief& town, std::span<const DesireDecay, k_DesireCount> table);
+
 } // namespace openblack::magic::town_belief

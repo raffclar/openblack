@@ -18,6 +18,7 @@
 
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/CameraEdits.h"
 #include "3D/CameraTrack.h"
@@ -32,6 +33,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/ScriptAnimation.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
@@ -142,9 +144,8 @@ void villager_script::SetScriptState(entt::entity villager, VillagerStates state
 	{
 		walker_placement::Stop(Entities(), villager);
 	}
-	// TODO(opening): a state whose entry sets the villager off somewhere else first (a script's remembered walk) is not
-	// gone into directly; none of the states the scripts put villagers in has one yet
-	living.VillagerSetState(action, LivingAction::Index::Top, state, true);
+	// Only the new state's entry has its say: it can refuse, or send the villager back to the script's work first
+	living.VillagerEnterState(action, state);
 	// Its clip starts from the beginning, and the new state has no turns to wait before it acts
 	villager_animate::SetAnim(villager, villager_animate::StateClip(villager), true);
 	action.turnsSinceStateChange = 0;
@@ -284,6 +285,64 @@ void villager_script::Face(entt::entity villager, glm::vec2 point)
 	SetYAngle(villager, std::atan2(offset.y, offset.x));
 }
 
+namespace
+{
+ScriptRemind& RemindOf(entt::entity villager)
+{
+	auto& registry = Entities();
+	if (auto* remind = registry.TryGet<ScriptRemind>(villager); remind != nullptr)
+	{
+		return *remind;
+	}
+	return registry.Assign<ScriptRemind>(villager);
+}
+
+/// The villager keeps in mind the goal of its walk (or where it stands) and what its script gave it
+void KeepInMind(entt::entity villager, ScriptRemind& remind)
+{
+	auto& registry = Entities();
+	const auto* wallHug = registry.TryGet<const WallHug>(villager);
+	const auto* transform = registry.TryGet<const Transform>(villager);
+	const auto goal = wallHug != nullptr ? wallHug->goal : glm::vec2(0.0f);
+	const auto standing = transform != nullptr ? glm::xz(transform->position) : glm::vec2(0.0f);
+	remind.goal = rules::KeptGoal(goal, standing, remind.returnTo);
+	const auto* arguments = registry.TryGet<const ScriptStateArguments>(villager);
+	remind.arguments = arguments != nullptr ? *arguments : ScriptStateArguments {};
+	const auto* animation = registry.TryGet<const ScriptAnimation>(villager);
+	remind.animation = animation != nullptr ? std::optional(*animation) : std::nullopt;
+}
+
+/// The villager takes back the goal and the script's values it kept in mind
+void BringBackToMind(entt::entity villager, const ScriptRemind& remind)
+{
+	auto& registry = Entities();
+	if (auto* wallHug = registry.TryGet<WallHug>(villager); wallHug != nullptr)
+	{
+		wallHug->goal = remind.goal;
+	}
+	registry.AssignOrReplace<ScriptStateArguments>(villager, remind.arguments);
+	if (remind.animation.has_value())
+	{
+		registry.AssignOrReplace<ScriptAnimation>(villager, *remind.animation);
+	}
+	else
+	{
+		registry.Remove<ScriptAnimation>(villager);
+	}
+}
+
+/// The point of its track that a villager's walk has got to, put on the land's grid
+std::optional<glm::vec2> TrackPointOf(entt::entity villager)
+{
+	auto* path = Entities().TryGet<WalkPath>(villager);
+	if (path == nullptr || !path->living)
+	{
+		return std::nullopt;
+	}
+	return map_coords::ToMetres(map_coords::FromMetres(camera_track::LivingWalkPoint(path->walk, *path->track)));
+}
+} // namespace
+
 void villager_script::OverrideAnimation(entt::entity villager, int32_t clip)
 {
 	// A clip the game doesn't have plays its first
@@ -293,8 +352,11 @@ void villager_script::OverrideAnimation(entt::entity villager, int32_t clip)
 	{
 		villager_animate::SetAnim(villager, played, true);
 	}
-	// TODO(opening): remembered for the villager to play again when it comes back to the script after being taken
-	// away from it
+	// It keeps the clip in mind, to play it again when it comes back to the script's clip after something takes it away
+	auto& remind = RemindOf(villager);
+	KeepInMind(villager, remind);
+	remind.returnTo = VillagerStates::InvalidState;
+	remind.clip = clip;
 }
 
 std::optional<float> villager_script::YAngle(entt::entity villager)
@@ -394,7 +456,6 @@ uint32_t villager_script::MoveAlongPath(LivingAction& action)
 
 uint32_t villager_script::InScript(LivingAction& /*action*/)
 {
-	// TODO(opening): remembering what the script had it doing, to go back to it after being picked up or reacting
 	return 1;
 }
 
@@ -440,9 +501,106 @@ uint32_t villager_script::ScriptWanderAroundPosition(LivingAction& action)
 	return 1;
 }
 
+uint32_t villager_script::ScriptGoAndMoveAlongPath(LivingAction& action)
+{
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	const auto* path = registry.TryGet<const WalkPath>(villager);
+	const auto* wallHug = registry.TryGet<const WallHug>(villager);
+	if (path == nullptr || !path->living || wallHug == nullptr)
+	{
+		return 1;
+	}
+	// At the point: it walks on along the track from the share of the way it had walked, then waits for the script
+	if (villager_home::AreWeThere(villager, wallHug->goal))
+	{
+		const auto number = path->number;
+		const auto forward = path->walk.forward;
+		const auto from = camera_track::Percentage(path->walk, *path->track);
+		const auto to = path->walk.to;
+		StartPathWalk(villager, number, forward, from, to);
+		return 1;
+	}
+	if (const auto point = TrackPointOf(villager); point.has_value())
+	{
+		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath);
+	}
+	return 1;
+}
+
+ecs::VillagerStateEntry villager_script::EnterInScript(LivingAction& action, VillagerStates from, VillagerStates into)
+{
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	auto* remind = registry.TryGet<ScriptRemind>(villager);
+	if (remind == nullptr || !rules::GoesBackToKeptWork(from, into, remind->returnTo))
+	{
+		return true;
+	}
+	remind->returnTo = VillagerStates::InvalidState;
+	const auto kept = *remind;
+	BringBackToMind(villager, kept);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("ai"), "Villager #{}: goes back to its script's work, state {}, place ({}, {})",
+	                    static_cast<uint32_t>(villager), static_cast<int>(into), kept.goal.x, kept.goal.y);
+	// It walks back to its kept place, or to the point of its track that it had got to; the walk takes it on into the
+	// state
+	if (const auto point = TrackPointOf(villager); point.has_value())
+	{
+		villager_home::SetupMoveTo(action, *point, VillagerStates::ScriptGoAndMoveAlongPath);
+	}
+	else
+	{
+		villager_home::SetupMoveTo(action, kept.goal, into);
+	}
+	return ecs::VillagerStateEntry::Outcome::SentOn;
+}
+
+ecs::VillagerStateEntry villager_script::EnterPlayAnim(LivingAction& action, VillagerStates from, VillagerStates into)
+{
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	auto* remind = registry.TryGet<ScriptRemind>(villager);
+	if (remind == nullptr || !rules::GoesBackToKeptWork(from, into, remind->returnTo))
+	{
+		return true;
+	}
+	BringBackToMind(villager, *remind);
+	remind->returnTo = VillagerStates::InvalidState;
+	// Away from its kept place: it walks back there first, and the walk takes it on into the state
+	if (const auto goal = remind->goal; rules::HasKeptGoal(goal) && !villager_home::AreWeThere(villager, goal))
+	{
+		villager_home::SetupMoveTo(action, goal, into);
+		return ecs::VillagerStateEntry::Outcome::SentOn;
+	}
+	// There: the clip a script forced starts again, unless it plays already
+	const auto clip = rules::KeptClipToPlay(remind->clip, static_cast<int32_t>(AnimId::_count));
+	if (villager_animate::CurrentClip(villager) != static_cast<AnimId>(clip))
+	{
+		villager_animate::SetAnim(villager, clip, true);
+	}
+	return true;
+}
+
+void villager_script::ForgetScriptWork(entt::entity villager)
+{
+	Entities().Remove<ScriptRemind>(villager);
+}
+
 bool villager_script::ExitInScript(LivingAction& action, VillagerStates next)
 {
+	auto& registry = Entities();
+	const auto villager = registry.ToEntity(action);
+	// It stops going round anything it was going round
+	registry.Remove<WallHugObjectReference, WallHugLookahead>(villager);
 	const auto& info = StateInfo(next);
+	if (info.isScriptState != 0)
+	{
+		return false;
+	}
+	// It leaves the script's hands: it keeps in mind the state it worked towards and its place
+	auto& remind = RemindOf(villager);
+	remind.returnTo = FinalStateOf(action);
+	KeepInMind(villager, remind);
 	const rules::StateRules nextRules {.isScriptState = info.isScriptState != 0,
 	                                   .isScriptInterruptable = info.isScriptInterruptableState != 0};
 	return !rules::ScriptLetsGo(FinalStateOf(action), next, nextRules);

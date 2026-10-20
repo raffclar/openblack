@@ -40,6 +40,12 @@ TEST(AbodeKnock, AMiracleDispenserTakesAKnockButDoesNotKnockBack)
 	EXPECT_FALSE(KnocksBack(AbodeType::SpellDispenser));
 }
 
+TEST(AbodeKnock, AFieldTakesAKnockButDoesNotKnockBack)
+{
+	EXPECT_TRUE(IsTappable(AbodeType::Field, 1.0f));
+	EXPECT_FALSE(KnocksBack(AbodeType::Field));
+}
+
 TEST(AbodeKnock, TheNineSoundsComeInTurn)
 {
 	EXPECT_EQ(NextKnockSound(0), 1u);
@@ -108,4 +114,22 @@ TEST(AbodeKnock, ShrunkMarkersKeepASmallestSize)
 {
 	EXPECT_FLOAT_EQ(Readout(1, 0, 0.0f)[0].size, k_SmallestMarker);
 	EXPECT_TRUE(Readout(0, 0, 1.0f).empty());
+}
+
+TEST(AbodeKnock, DamageBelowFullLifeBringsPeopleOut)
+{
+	EXPECT_TRUE(HurtBringsPeopleOut(0.999f));
+	EXPECT_TRUE(HurtBringsPeopleOut(0.0f));
+	EXPECT_FALSE(HurtBringsPeopleOut(1.0f));
+}
+
+TEST(AbodeKnock, OnlyAPitOrCentreThatStopsWorkingCallsAnEmergency)
+{
+	// It must go from above the level to the level or below
+	EXPECT_TRUE(HurtCallsEmergency(AbodeType::StoragePit, 0.6f, 0.5f, 0.5f));
+	EXPECT_TRUE(HurtCallsEmergency(AbodeType::TownCentre, 1.0f, 0.1f, 0.5f));
+	EXPECT_FALSE(HurtCallsEmergency(AbodeType::StoragePit, 0.5f, 0.4f, 0.5f));
+	EXPECT_FALSE(HurtCallsEmergency(AbodeType::StoragePit, 0.9f, 0.6f, 0.5f));
+	// Other buildings never call one
+	EXPECT_FALSE(HurtCallsEmergency(AbodeType::Graveyard, 1.0f, 0.1f, 0.5f));
 }

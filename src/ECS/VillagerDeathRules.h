@@ -77,6 +77,36 @@ enum class DeathVoice : uint8_t
 	return ownerIsHere && guidance.ownerHears ? DeathVoice::OwnerLine : DeathVoice::Nobody;
 }
 
+/// What the advisors say of a death to the town, after the town counts it
+enum class TownLossRemark : uint8_t
+{
+	None,
+	/// A villager of the player here died of chanting
+	WorshippersDying,
+	/// Another player took a villager of the player here, from a town with enough adults
+	LosingVillagers,
+	/// A town of the player here has few adults left
+	LowOnPeople,
+};
+
+/// The advisors' remark of a death to its town. A death of chanting warns of the worshippers that die. Else a town with
+/// more adults than the warning number warns of losses that another player caused, for the causes that warn of losses.
+/// A town with fewer adults warns that it is low on people, whatever the cause.
+[[nodiscard]] constexpr TownLossRemark TownLoss(DeathReason reason, uint32_t adults, uint32_t warnBelow, bool killerIsOwner,
+                                                bool ownerIsHere)
+{
+	if (reason == DeathReason::Chant)
+	{
+		return ownerIsHere ? TownLossRemark::WorshippersDying : TownLossRemark::None;
+	}
+	if (adults > warnBelow)
+	{
+		return GuidanceOf(reason).warnsOfLosses && !killerIsOwner && ownerIsHere ? TownLossRemark::LosingVillagers
+		                                                                         : TownLossRemark::None;
+	}
+	return ownerIsHere ? TownLossRemark::LowOnPeople : TownLossRemark::None;
+}
+
 /// The guidance's lines of a death in the village: five samples of its bank, one picked at random
 inline constexpr uint32_t k_DeathLineFirstSample = 1;
 inline constexpr uint32_t k_DeathLineCount = 5;

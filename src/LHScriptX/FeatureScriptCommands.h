@@ -120,7 +120,7 @@ public:
 	static void CreateOneShotSpell(glm::vec3 position, const std::string&);
 	static void CreateOneShotSpellPu(glm::vec3 position, const std::string&);
 	static void CreateFireFly(glm::vec3 position);
-	static void TownDesireBoost(int32_t townId, const std::string&, float);
+	static void TownDesireBoost(int32_t townId, const std::string& desire, float boost);
 	static void CreateAnimatedStatic(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale);
 	static void FireFlySpellRewardProb(const std::string& spell, float probability);
 	static void CreateNewTownField(int32_t townId, glm::vec3 position, FieldTypeInfo type, float rotation);

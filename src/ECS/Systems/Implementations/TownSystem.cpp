@@ -12,7 +12,9 @@
 #include "TownSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <limits>
+#include <numeric>
 #include <optional>
 #include <tuple>
 #include <utility>
@@ -22,20 +24,29 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/AbodeNeglectRules.h"
+#include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/MagicPile.h"
+#include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
@@ -48,6 +59,8 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -57,9 +70,15 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TemporaryStoreRules.h"
+#include "ECS/TownAggression.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownCentreParts.h"
+#include "ECS/TownDesireAlignment.h"
+#include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownTurnOrder.h"
@@ -67,6 +86,9 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/AreaEffect.h"
+#include "Magic/ResourcePiles.h"
+#include "Magic/TownBelief.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -88,6 +110,7 @@ TownSystem::TownSystem()
 	_connections.push_back(_registry->OnDestroy<Abode>().connect<&TownSystem::OnAbodeGone>(*this));
 	// A miracle dispenser is one of its town's buildings too
 	_connections.push_back(_registry->OnDestroy<SpellDispenser>().connect<&TownSystem::OnAbodeGone>(*this));
+	_connections.push_back(_registry->OnDestroy<Field>().connect<&TownSystem::OnFieldGone>(*this));
 	_connections.push_back(_registry->OnDestroy<Villager>().connect<&TownSystem::OnVillagerGone>(*this));
 }
 
@@ -103,16 +126,101 @@ TownSystem::~TownSystem()
 	}
 }
 
+void TownSystem::OnFieldGone(entt::registry& registry, entt::entity field)
+{
+	const auto& data = registry.get<const Field>(field);
+	const auto& towns = _registry->Context().towns;
+	if (const auto town = towns.find(static_cast<uint32_t>(data.town)); town != towns.end() && registry.valid(town->second))
+	{
+		StructuresChanged(town->second, field);
+	}
+}
+
+void TownSystem::StructuresChanged(entt::entity town)
+{
+	StructuresChanged(town, entt::null);
+}
+
+void TownSystem::StructuresChanged(entt::entity townEntity, entt::entity leaving)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(townEntity) || !registry.AllOf<Town>(townEntity))
+	{
+		return;
+	}
+	auto area = town_area::Emptied();
+	const auto widen = [&registry, &area](entt::entity thing) {
+		if (const auto* at = registry.TryGet<const Transform>(thing); at != nullptr)
+		{
+			town_area::Widen(area, map_coords::FromMetres(glm::xz(at->position)), world_objects::SizeOf(thing).radius);
+		}
+	};
+	// Its buildings, the newest first, then its fields
+	auto& town = registry.Get<Town>(townEntity);
+	for (const auto abode : town.abodes)
+	{
+		if (registry.Valid(abode))
+		{
+			widen(abode);
+		}
+	}
+	registry.Each<const Field>([&](entt::entity field, const Field& data) {
+		if (field != leaving && data.town == static_cast<int>(town.id))
+		{
+			widen(field);
+		}
+	});
+	town.area = area;
+}
+
 void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 {
+	std::vector<entt::entity> left;
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
-		std::erase(town.abodes, abode);
+		if (std::erase(town.abodes, abode) != 0)
+		{
+			left.push_back(entity);
+		}
+	}
+	// Each town that the building left makes its ground again
+	for (const auto town : left)
+	{
+		StructuresChanged(town);
+	}
+	// A storage pit that goes makes its town let go of any temporary piles it keeps
+	const auto* data = registry.try_get<const Abode>(abode);
+	if (data == nullptr || !registry.all_of<StoragePit>(abode))
+	{
+		return;
+	}
+	const auto& towns = _registry->Context().towns;
+	const auto town = towns.find(data->townId);
+	if (town == towns.end() || !registry.valid(town->second))
+	{
+		return;
+	}
+	const auto* component = registry.try_get<const Town>(town->second);
+	if (component != nullptr && std::ranges::any_of(component->temporaryStores, [&registry](entt::entity pile) {
+		    return pile != entt::null && registry.valid(pile);
+	    }))
+	{
+		SetStoragePit(town->second);
 	}
 }
 
 void TownSystem::OnVillagerGone(entt::registry& registry, entt::entity villager)
 {
+	// One taken from the world while still in a town leaves it, which can leave the town with nobody
+	if (const auto* gone = registry.try_get<const Villager>(villager);
+	    gone != nullptr && gone->town != entt::null && registry.valid(gone->town))
+	{
+		if (auto* town = registry.try_get<Town>(gone->town))
+		{
+			const auto others = PopulationOf(gone->town) - 1;
+			town->emptyTownTimer = town_empty::AfterLeaving(town->emptyTownTimer, others);
+		}
+	}
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
 		std::erase(town.homelessVillagers, villager);
@@ -313,6 +421,7 @@ void TownSystem::RemoveDeadVillager(entt::entity villager)
 	// A death changes what its town wants
 	MarkDesiresChanged(town);
 	town_homes::RemoveDeadVillager(registry, villager);
+	StartEmptyTownTimerIfEmpty(town);
 }
 
 void TownSystem::RemoveVillager(entt::entity villager)
@@ -325,10 +434,159 @@ void TownSystem::RemoveVillager(entt::entity villager)
 	}
 	// Worship first, while its town is still known
 	ecs::villager_worship::LeaveTown(villager);
+	const auto town = person->town;
 	town_homes::RemoveVillagerFromTown(registry, GameHomes(), villager);
-	// TODO(town-script-natives): when nobody is left the game starts the town's empty-town countdown, which openblack
-	// doesn't keep
+	StartEmptyTownTimerIfEmpty(town);
 	registry.Get<Villager>(villager).mother = entt::null;
+}
+
+uint32_t TownSystem::PopulationOf(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	uint32_t people = 0;
+	registry.Each<const Villager>([&people, town](const Villager& villager) {
+		if (villager.town == town)
+		{
+			++people;
+		}
+	});
+	return people;
+}
+
+void TownSystem::StartEmptyTownTimerIfEmpty(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr)
+	{
+		// The last person to leave starts the countdown to an empty town
+		component->emptyTownTimer = town_empty::AfterLeaving(component->emptyTownTimer, PopulationOf(town));
+	}
+}
+
+std::optional<TownSystemInterface::TemporaryStore> TownSystem::TemporaryStorePile(entt::entity town, glm::vec2 from,
+                                                                                  ResourceType type)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto slot = temporary_store::SlotOf(type);
+	if (!slot.has_value() || town == entt::null || !registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return std::nullopt;
+	}
+	auto pile = registry.Get<const Town>(town).temporaryStores.at(*slot);
+	if (pile == entt::null || !registry.Valid(pile))
+	{
+		// A new empty pile near the gathering place, the wood a little to one side, at a place clear of fixed things
+		auto coords = map_coords::FromMetres(GetCongregationPos(town));
+		coords += gutils::GetPosFromAngle(0.0f, temporary_store::OffsetOf(type));
+		const auto wanted = map_coords::ToMetres(coords);
+		const auto place = FindClearArea(wanted, temporary_store::k_ClearSearch, temporary_store::k_ClearStep,
+		                                 temporary_store::k_ClearRadius, ClearAreaFilter::AnyFixed, entt::null)
+		                       .value_or(wanted);
+		const float height = Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(place) : 0.0f;
+		pile = archetypes::PotArchetype::CreateEmpty({place.x, height, place.y}, 0.0f, temporary_store::PileOf(type));
+		if (pile == entt::null)
+		{
+			return std::nullopt;
+		}
+		// A miracle's pile of the neutral player, drawn at a miracle pile's size
+		registry.Get<Transform>(pile).scale =
+		    glm::vec3(type == ResourceType::Food ? magic::piles::k_MagicFoodScale : magic::piles::k_MagicWoodScale);
+		registry.Assign<MagicPile>(pile, type, PlayerNames::NEUTRAL);
+		registry.Get<Town>(town).temporaryStores.at(*slot) = pile;
+	}
+	return TemporaryStore {.pile = pile, .edge = construction::NearestEdgeToPos(pile, from)};
+}
+
+void TownSystem::SetStoragePit(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* component = town != entt::null && registry.Valid(town) ? registry.TryGet<Town>(town) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
+	{
+		const auto pile = std::exchange(component->temporaryStores.at(slot), entt::null);
+		const auto* pot = pile != entt::null && registry.Valid(pile) ? registry.TryGet<const Pot>(pile) : nullptr;
+		switch (temporary_store::OnNewStoragePit(pot != nullptr, pot != nullptr ? pot->amount : 0))
+		{
+		case temporary_store::NewPitStep::None:
+			break;
+		case temporary_store::NewPitStep::Remove:
+			world_objects::Remove(pile);
+			break;
+		case temporary_store::NewPitStep::Release:
+		{
+			// It calls those about to come for it, as a pile of the neutral player
+			const auto reaction = Locator::infoConstants::value().pot.at(static_cast<size_t>(pot->type)).associatedReaction;
+			if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+			{
+				Locator::reactionSystem::value().Create({.initiator = pile,
+				                                         .type = reaction,
+				                                         .player = PlayerNames::NEUTRAL,
+				                                         .position = registry.Get<const Transform>(pile).position});
+			}
+			break;
+		}
+		}
+		component = registry.TryGet<Town>(town);
+		if (component == nullptr)
+		{
+			return;
+		}
+	}
+}
+
+void TownSystem::TemporaryStoresTurn(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto pit = construction::StoragePitOf(town);
+	const bool pitWorks = pit.has_value() && villager_home::IsFunctional(*pit);
+	for (size_t slot = 0; slot < temporary_store::k_Kinds; ++slot)
+	{
+		const auto pile = registry.Get<const Town>(town).temporaryStores.at(slot);
+		if (pile == entt::null)
+		{
+			continue;
+		}
+		const auto* pot = registry.Valid(pile) ? registry.TryGet<const Pot>(pile) : nullptr;
+		switch (temporary_store::AtTownTurn(pot != nullptr, pot != nullptr ? pot->amount : 0, pitWorks))
+		{
+		case temporary_store::TurnStep::Keep:
+			continue;
+		case temporary_store::TurnStep::Remove:
+			world_objects::Remove(pile);
+			break;
+		case temporary_store::TurnStep::Forget:
+			break;
+		}
+		registry.Get<Town>(town).temporaryStores.at(slot) = entt::null;
+	}
+}
+
+void TownSystem::SetTownEmpty(entt::entity town)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (auto* impression = registry.TryGet<TownImpression>(town))
+	{
+		// It starts over in belief: it believes in every player what it keeps for the neutral player, and nothing bores
+		// it
+		const auto& desires = Locator::infoConstants::value().townDesire;
+		std::array<magic::town_belief::DesireDecay, magic::town_belief::k_DesireCount> table {};
+		std::ranges::transform(desires, table.begin(), [](const GTownDesireInfo& row) {
+			return magic::town_belief::DesireDecay {.toBelief = row.desireToBeliefScale,
+			                                        .levelAfterGain = row.desireAffectsBeliefAfter,
+			                                        .levelFall = row.desireToBeliefThresholdDecay};
+		});
+		magic::town_belief::ResetForEmptyTown(impression->belief, table);
+		impression->boredom.clear();
+	}
+	// A town of a player goes back to the neutral player
+	if (registry.Get<const Town>(town).owner != PlayerNames::NEUTRAL)
+	{
+		ClaimTown(town, PlayerNames::NEUTRAL);
+	}
 }
 
 std::vector<entt::entity> TownSystem::ChildrenOf(entt::entity town, entt::entity mother) const
@@ -345,6 +603,10 @@ bool Blocks(const Registry& registry, entt::entity thing, TownSystemInterface::C
 	{
 		return true;
 	}
+	if (filter == TownSystemInterface::ClearAreaFilter::AnyFixed)
+	{
+		return registry.AllOf<Fixed>(thing);
+	}
 	// Of the things that stay put, all but trees
 	return registry.AllOf<Fixed>(thing) && !registry.AllOf<Tree>(thing);
 }
@@ -356,6 +618,8 @@ constexpr float k_CongregationClear = 10.0f;
 /// Failing that it is near a building, this far and up to as far again
 constexpr float k_CongregationNearLeast = 10.0f;
 constexpr float k_CongregationNearRange = 10.0f;
+/// With fewer buildings than this, the gathering place counts the town's planned buildings too
+constexpr size_t k_CongregationLeastBuildings = 3;
 /// A new building this close to the gathering place, past its own size, moves it
 constexpr float k_CongregationBuildingGap = 7.5f;
 } // namespace
@@ -422,7 +686,6 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 	}
 	const auto& infos = Locator::infoConstants::value().abode;
 	// The town's buildings other than fields, in the order the town keeps them
-	// TODO(villagers): a town with fewer than three counts its planned buildings too; openblack has none yet
 	std::vector<glm::vec2> buildings;
 	for (const auto abode : town.abodes)
 	{
@@ -433,6 +696,17 @@ glm::vec2 TownSystem::GetCongregationPos(entt::entity townEntity)
 			continue;
 		}
 		buildings.emplace_back(transform->position.x, transform->position.z);
+	}
+	// A town with fewer than three counts its planned buildings too
+	if (buildings.size() < k_CongregationLeastBuildings)
+	{
+		for (const auto planned : town.planned)
+		{
+			if (const auto* transform = registry.Valid(planned) ? registry.TryGet<const Transform>(planned) : nullptr)
+			{
+				buildings.emplace_back(transform->position.x, transform->position.z);
+			}
+		}
 	}
 	std::optional<glm::vec2> found;
 	const auto& townTransform = registry.Get<const Transform>(townEntity);
@@ -569,6 +843,91 @@ void TownSystem::ProcessTurn()
 	}
 }
 
+namespace
+{
+/// The adults and children that the town counted for its desires this turn
+uint32_t CountedPeopleOf(const ecs::Registry& registry, entt::entity town)
+{
+	const auto* stats = registry.TryGet<const TownStats>(town);
+	return stats != nullptr ? stats->adults + stats->children : 0;
+}
+
+/// The town's wants that stay over their levels move its player's alignment, by the share of all the players' people
+/// that live in it, as the players' turn has counted them so far
+void MoveAlignmentByWants(entt::entity townEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wants = registry.TryGet<TownDesire>(townEntity);
+	if (wants == nullptr || !registry.AllOf<Town>(townEntity) || !Locator::alignmentSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	std::array<town_desire_alignment::DesireRule, k_TownDesireCount> rules {};
+	for (size_t d = 0; d < rules.size(); ++d)
+	{
+		const auto& row = info.townDesire.at(d);
+		rules.at(d) = {.affectsAfter = row.desireAffectsAlignmentAfter,
+		               .importance = row.howImportantDesireIsToAlignment,
+		               .maxTurns = row.maxTimeForAlignmentChange};
+	}
+	const auto& counted = registry.Context().peopleCountedInTurn;
+	const auto all = std::accumulate(counted.begin(), counted.end(), uint32_t {0});
+	const auto change = town_desire_alignment::Change(
+	    wants->turnsOverAlignmentLevel, {.boostA = wants->boostA, .desire = wants->desire, .boost = wants->boost}, rules,
+	    {.town = CountedPeopleOf(registry, townEntity), .all = all}, info.town.maxAlignmentChangePerGameTurnForDesires);
+	auto& alignment = Locator::alignmentSystem::value();
+	const auto owner = registry.Get<const Town>(townEntity).owner;
+	const float damped = magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(owner));
+	if (damped != 0.0f)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: its wants move player {} by {} (of {} people)",
+		                    registry.Get<const Town>(townEntity).id, static_cast<int>(owner), damped, all);
+	}
+	alignment.AddPendingAlignment(owner, damped);
+}
+} // namespace
+
+void TownSystem::ProcessPlayerTowns(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& counted = registry.Context().peopleCountedInTurn.at(static_cast<size_t>(player));
+	counted = 0;
+	for (const auto town : TownsInGainedOrder(player))
+	{
+		if (!registry.Valid(town))
+		{
+			continue;
+		}
+		if (Locator::influenceSystem::has_value())
+		{
+			Locator::influenceSystem::value().ProcessTownInfluence(town);
+		}
+		ProcessTownBuildings(town);
+		if (Locator::townDesireSystem::has_value())
+		{
+			Locator::townDesireSystem::value().ProcessTown(town);
+		}
+		if (Locator::artefactSystem::has_value())
+		{
+			Locator::artefactSystem::value().ProcessTown(town);
+		}
+		ProcessTownTurn(town);
+		if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+		{
+			continue;
+		}
+		// Its people count for the player whose turn it is, even when another player took it in its turn
+		counted += CountedPeopleOf(registry, town);
+		// A town taken in its own turn goes to the end of its new player's towns: the old player's towns that come after
+		// it take no turn this game turn, and a new player whose turn is still to come gives it a second turn
+		if (registry.Get<const Town>(town).owner != player)
+		{
+			break;
+		}
+	}
+}
+
 std::vector<entt::entity> TownSystem::TownsInGainedOrder(PlayerNames player) const
 {
 	return town_turns::TownsInGainedOrder(Locator::entitiesRegistry::value(), player);
@@ -622,6 +981,11 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	{
 		return;
 	}
+	// The attacks on it fade, and are summed for its next turn's desires
+	if (auto* attacks = registry.TryGet<TownAggression>(townEntity))
+	{
+		town_aggression::ProcessTurn(attacks->record, registry.Get<const Town>(townEntity).owner);
+	}
 	// It puts up at most one of its buildings, or a finished one that went, for mending
 	town_planning::MendBest(townEntity);
 	const bool inEmergency = IsInStateOfEmergency(townEntity);
@@ -667,18 +1031,46 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	}
 	// Then it judges the creatures it watches
 	ecs::villager_creature::TownTurn(townEntity, turn);
+	// It forgets its temporary piles that have gone, and removes the empty ones once its storage pit works
+	if (registry.Valid(townEntity))
+	{
+		TemporaryStoresTurn(townEntity);
+	}
 	// The missionaries preaching in it follow their villagers, or stop
 	villager_disciple_work::ProcessMissionaries(townEntity);
 	if (!registry.Valid(townEntity))
 	{
 		return;
 	}
+	// Its turn of belief: the player it believes in most takes it at once
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().BelieveInTown(townEntity);
+	}
+	// Its wants that stay unmet move its player's alignment
+	MoveAlignmentByWants(townEntity);
 	// A mark of changed wants that has been up a whole turn comes down
 	auto& marked = registry.Get<Town>(townEntity);
 	disciple_work::EndTownTurn(marked.desiresChanged, marked.desiresChangedLastTurn);
+	// A town that its last person left becomes empty after its countdown, unless people came back first
+	if (marked.emptyTownTimer != 0 &&
+	    town_empty::Turn(marked.emptyTownTimer, marked.emptyTownTimer > 1 ? PopulationOf(townEntity) : 0))
+	{
+		SetTownEmpty(townEntity);
+	}
+	if (!registry.Valid(townEntity))
+	{
+		return;
+	}
+	// A change of its influence marks the borders to be drawn again
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().MarkTownInfluence(townEntity);
+	}
+	auto& shuffled = registry.Get<Town>(townEntity);
 	// Now and then it evens out its homes, moving a man for a woman between two, or one villager
 	const auto every = Locator::infoConstants::value().town.shuffleVillagersEvery;
-	if (town_homes::EvenOutDue(marked.id, turn, every))
+	if (town_homes::EvenOutDue(shuffled.id, turn, every))
 	{
 		town_homes::EvenOutHomes(registry, GameHomes(), townEntity);
 	}
