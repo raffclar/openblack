@@ -119,6 +119,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/MovingShadowCasters.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -3155,6 +3156,39 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    }
 	    },
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
+	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
+	// The model gives each foot as a point on a bone, in the space of that bone.
+	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	{
+		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
+		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
+		{
+			continue;
+		}
+		const auto drawnMesh = meshes.Handle(meshId);
+		const auto& frames = drawnMesh->GetBoneFrames();
+		const auto count = ground_blobs::AnimalFootCount(frames.size());
+		const auto bones = ecs::posed_model::BonesOf(desc.entities, entity, *drawnMesh);
+		if (count == 0 || std::any_of(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(count),
+		                              [&bones](const auto& frame) { return frame.bone >= bones.size(); }))
+		{
+			continue;
+		}
+		std::array<glm::vec3, ground_blobs::k_MostAnimalFeet> feet {};
+		for (size_t i = 0; i < count; ++i)
+		{
+			auto& foot = feet.at(i);
+			foot = glm::vec3(model * bones[frames[i].bone] * frames[i].frame * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			foot.y = island.GetHeightAt(glm::vec2(foot.x, foot.z)) + ground_blobs::k_Lift;
+		}
+		const auto normal = island.GetNormalAt(glm::vec2(model[3].x, model[3].z));
+		const auto fall = ground_blobs::Fall(normal, transform->scale.x);
+		const auto quads = ground_blobs::AnimalFeet(std::span<const glm::vec3>(feet).first(count), fall);
+		for (size_t i = 0; i < count; ++i)
+		{
+			addQuad(quads.at(i));
+		}
+	}
 	for (const auto& far : farVillagers)
 	{
 		auto foot = far.position;
