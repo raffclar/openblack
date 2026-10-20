@@ -24,6 +24,7 @@
 
 #include "AxisAlignedBoundingBox.h"
 
+#include "../Graphics/RenderModes.h"
 #include "../Graphics/RenderPass.h"
 
 namespace bgfx
@@ -70,6 +71,12 @@ class L3DSubMesh
 		/// is solid on the vertices of that group and clear on all others.
 		uint16_t secondGroupBone {k_NoBone};
 	};
+
+public:
+	/// A primitive drawn as its material is after the game changes the material's properties
+	[[nodiscard]] static Primitive Changed(const Primitive& primitive, const render_modes::Properties& properties) noexcept;
+	/// How a primitive drawn in a mode blends
+	[[nodiscard]] static Primitive::BlendMode BlendOf(const render_modes::ModeDesc& mode) noexcept;
 
 public:
 	explicit L3DSubMesh(graphics::L3DMesh& mesh) noexcept;

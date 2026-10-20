@@ -95,6 +95,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChallengePicture.h"
 #include "ECS/Components/ChallengeRecord.h"
+#include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
@@ -280,6 +281,7 @@
 #include "Fire/FireModel.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/Moon.h"
+#include "Graphics/RenderModes.h"
 #include "Graphics/Sun.h"
 #include "Hand/HandGrabRules.h"
 #include "Magic/DispenserRules.h"
@@ -594,6 +596,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ChallengeRecord::quest>("quest")
 	    .Field<&components::ChallengeRecord::startedTurn>("startedTurn")
 	    .Field<&components::ChallengeRecord::doneTurn>("doneTurn");
+	Reflect<components::ChangedMaterials>(context).Field<&components::ChangedMaterials::properties>("properties");
 	Reflect<components::ChimneySmoke>(context)
 	    .Field<&components::ChimneySmoke::chimney>("chimney")
 	    .Field<&components::ChimneySmoke::rgb>("rgb")
@@ -3420,6 +3423,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
 	    .Field<&openblack::graphics::moon::Placement::alpha>("alpha");
+	Reflect<openblack::graphics::render_modes::Properties>(context, ValueOnly {})
+	    .Field<&openblack::graphics::render_modes::Properties::additive>("additive")
+	    .Field<&openblack::graphics::render_modes::Properties::writesDepth>("writesDepth")
+	    .Field<&openblack::graphics::render_modes::Properties::bothSides>("bothSides")
+	    .Field<&openblack::graphics::render_modes::Properties::textureAlpha>("textureAlpha");
 	Reflect<openblack::graphics::sun::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::sun::Placement::position>("position")
 	    .Field<&openblack::graphics::sun::Placement::alpha>("alpha");
