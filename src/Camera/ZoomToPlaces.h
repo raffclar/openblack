@@ -51,6 +51,22 @@ inline constexpr float k_TapRise = 0.0f;
 /// The land's altitude at a map position (16.16 fixed point)
 using Altitude = std::function<float(int32_t mapX, int32_t mapZ)>;
 
+/// The camera that has the view when the player presses the temple key or the realm key
+enum class Holder : uint8_t
+{
+	World,
+	CreatureFollow,
+	MiraclePath,
+	Fight,
+	/// A script that holds the camera
+	Script,
+};
+/// Whether the keys can take the camera from its holder: every camera lets it go except a script's
+[[nodiscard]] constexpr bool KeysTakeCamera(Holder holder)
+{
+	return holder != Holder::Script;
+}
+
 /// A metre value as a map position the way the keys make it: times 65536, times a tenth, truncated
 [[nodiscard]] int32_t MapCoordOf(float metres);
 /// The point that the camera looks at over a place: the land's altitude there, a little higher
