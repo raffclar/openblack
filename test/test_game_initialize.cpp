@@ -22,6 +22,7 @@ TEST(GameInitialize, initializeOnly)
 	    .numFramesToSimulate = 0,
 	    .logFile = "stdout",
 	    .startLevel = "Land1.txt",
+	    .background = true,
 	};
 	std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
 	const openblack::test::TestTempFolder profileFolder;
@@ -41,6 +42,7 @@ TEST(GameInitialize, run0Frames)
 	    .numFramesToSimulate = 0,
 	    .logFile = "stdout",
 	    .startLevel = "Land1.txt",
+	    .background = true,
 	};
 	std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
 	const openblack::test::TestTempFolder profileFolder;
