@@ -11,6 +11,8 @@
 
 #include <optional>
 
+#include "WindowingInterface.h"
+
 namespace openblack::windowing
 {
 
@@ -20,6 +22,12 @@ namespace openblack::windowing
 [[nodiscard]] constexpr bool WindowMinimised(bool flaggedMinimised, std::optional<bool> systemMinimised) noexcept
 {
 	return flaggedMinimised || systemMinimised.value_or(false);
+}
+
+/// The display mode a window really opens in. A background window stays in a window, so that it never covers the desktop.
+[[nodiscard]] constexpr DisplayMode BackgroundDisplayMode(DisplayMode requested, bool background) noexcept
+{
+	return background ? DisplayMode::Windowed : requested;
 }
 
 } // namespace openblack::windowing

@@ -37,7 +37,8 @@ class Sdl2WindowingSystem final: public WindowingInterface
 	};
 
 public:
-	Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode displayMode, uint32_t extraFlags);
+	Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode displayMode, uint32_t extraFlags,
+	                    bool background = false);
 
 	[[nodiscard]] void* GetHandle() const final;
 	[[nodiscard]] NativeHandles GetNativeHandles() const final;
