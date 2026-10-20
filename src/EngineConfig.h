@@ -96,6 +96,8 @@ struct EngineConfig
 	bool vsync {false};
 	/// Tools: the window is open but the renderer draws nothing (the no-renderer backend)
 	bool noDraw {false};
+	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
+	bool background {false};
 	bool running {false};
 	/// Tools: the sounds make no noise and last their length by the game's machine clock, so that a run with a fixed
 	/// frame time goes the same way at any speed
