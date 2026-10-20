@@ -23,9 +23,9 @@ namespace openblack::ecs::thing_map_place
 {
 
 /// Where a thing is, as a map position with altitude 0. A thing that moves in map units has its place in map units: a
-/// flock, an animal, a firefly, and a walker where its walk holds it. Their metres are not used, because they are where
-/// the thing is drawn, or because metres cannot keep every map position far from the corner of the map. A thing that the
-/// game put at an exact map position keeps that position while it stays there. Any other thing is where it stands. A
+/// flock, an animal that no hand holds, a firefly, and a walker where its walk holds it. Their metres are not used, because
+/// they are where the thing is drawn, or because metres cannot keep every map position far from the corner of the map. A thing
+/// that the game put at an exact map position keeps that position while it stays there. Any other thing is where it stands. A
 /// thing with no place is at the corner of the map.
 [[nodiscard]] map_coords::MapCoords Of(const Registry& registry, entt::entity thing);
 

@@ -24,6 +24,8 @@
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
+#include "Creature/CreatureLearning.h"
+#include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreaturePlanner.h"
 #include "ECS/Components/Abode.h"
@@ -409,6 +411,29 @@ Json openblack::inspector::DesireItems(const creature_desires::Desires& desires,
 	return items;
 }
 
+Json openblack::inspector::DesireSources(const creature_desires::Desires& desires, std::string_view name)
+{
+	Json sources = Json::array();
+	for (size_t i = 0; i < desires.desires.size(); ++i)
+	{
+		if (creature_desires::Name(static_cast<creature_desires::Desire>(i)) != name)
+		{
+			continue;
+		}
+		for (const auto& source : desires.desires.at(i).sources)
+		{
+			sources.push_back({
+			    {"type", source.type},
+			    {"value", source.value},
+			    {"threshold", source.threshold},
+			    {"multiplier", source.multiplier},
+			    {"drive", source.drive},
+			});
+		}
+	}
+	return sources;
+}
+
 Json openblack::inspector::PlanJson(const CreatureMindState& mind, const creature_mind_tables::Tables* tables)
 {
 	Json steps = Json::array();
@@ -460,30 +485,40 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
-	provider->Add(Query("desires", "A creature's strongest desires, strongest first",
-	                    {id, Parameter("top", "integer", "How many desires (5 by default)", false)}),
-	              [sources](const QueryContext& context) {
-		              const auto* registry = Registry(sources.world);
-		              if (registry == nullptr)
-		              {
-			              return QueryResult::Error(std::string(k_NoRegistry));
-		              }
-		              const auto creature = CreatureParam(*registry, context.params);
-		              if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
-		              {
-			              return QueryResult::Error(*problem);
-		              }
-		              const auto entity = std::get<entt::entity>(creature);
-		              const auto& mind = registry->Get<const CreatureMindState>(entity);
-		              if (!mind.desires.has_value())
-		              {
-			              return QueryResult::Error("its desires aren't set up yet: its mind hasn't thought");
-		              }
-		              const auto top =
-		                  static_cast<size_t>(std::max(1.0, NumberMember(context.params, "top").value_or(k_DefaultTopDesires)));
-		              return QueryResult::Value(
-		                  {{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", DesireItems(*mind.desires, top)}});
-	              });
+	provider->Add(
+	    Query("desires", "A creature's strongest desires, strongest first",
+	          {id, Parameter("top", "integer", "How many desires (5 by default)", false),
+	           Parameter("sources", "boolean",
+	                     "Also write out each desire's sources: kind, value, threshold, multiplier and drive", false)}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    if (!mind.desires.has_value())
+		    {
+			    return QueryResult::Error("its desires aren't set up yet: its mind hasn't thought");
+		    }
+		    const auto top =
+		        static_cast<size_t>(std::max(1.0, NumberMember(context.params, "top").value_or(k_DefaultTopDesires)));
+		    auto items = DesireItems(*mind.desires, top);
+		    if (BoolMember(context.params, "sources").value_or(false))
+		    {
+			    for (auto& item : items)
+			    {
+				    item["sources"] = DesireSources(*mind.desires, item["desire"].get<std::string>());
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", std::move(items)}});
+	    });
 	provider->Add(Query("reactions",
 	                    "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a "
 	                    "script or a swap of minds tells it to: it reacts to nothing near it and catches nothing",
@@ -586,7 +621,8 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	provider->Add(
 	    Query("learnt",
 	          "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on "
-	          "and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+	          "and of what the desire is about that has examples, the examples (kind of thing, attributes, feedback) and the "
+	          "tree as text; and the actions that a stroke or a slap can teach about now (contexts, the oldest first)",
 	          {id}),
 	    [sources](const QueryContext& context) {
 		    const auto* registry = Registry(sources.world);
@@ -641,15 +677,37 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 					                        {"attributes", std::move(attributes)},
 					                        {"feedback", episode.feedback}});
 				    }
-				    trees.push_back({{"tree", k == 0 ? "act on" : "use"},
-				                     {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
-				                     {"examples", std::move(examples)},
-				                     {"lines", creature_tree::Describe(learnt.trees[k][d])}});
+				    // The trees go by kind: the first is of what the desire is about, the second of what to act on
+				    trees.push_back(
+				        {{"tree", k == static_cast<size_t>(creature_mind_model::TreeKind::ActOn) ? "act on" : "activity"},
+				         {"desire", creature_desires::Name(static_cast<creature_desires::Desire>(d))},
+				         {"examples", std::move(examples)},
+				         {"lines", creature_tree::Describe(learnt.trees[k][d])}});
 			    }
+		    }
+		    // The actions that the next stroke or slap can teach about, the oldest first, with the share of the lesson that
+		    // each would get now
+		    auto contexts = Json::array();
+		    for (const auto& remembered : learnt.contexts)
+		    {
+			    contexts.push_back({{"action", remembered.action},
+			                        {"name", tables != nullptr && remembered.action < tables->actions.size()
+			                                     ? tables->actions[remembered.action].name
+			                                     : std::string()},
+			                        {"desire", creature_desires::Name(remembered.desire)},
+			                        {"object", remembered.object.has_value() ? Json(*remembered.object) : Json(nullptr)},
+			                        {"running", remembered.running},
+			                        {"done", remembered.done},
+			                        {"seen", remembered.seen},
+			                        {"ordered", remembered.ordered},
+			                        {"seconds_since", remembered.secondsSince},
+			                        {"window_seconds", remembered.windowSeconds},
+			                        {"priority", creature_learning::LearningPriority(remembered)}});
 		    }
 		    return QueryResult::Value({{"id", ToId(entity)},
 		                               {"opinions", std::move(opinions)},
 		                               {"opinions_size", learnt.opinions.size()},
+		                               {"contexts", std::move(contexts)},
 		                               {"trees", std::move(trees)}});
 	    });
 	provider->Add(

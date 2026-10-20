@@ -372,6 +372,11 @@
     "description": "How many desires (5 by default)",
     "name": "top",
     "type": "integer"
+   },
+   {
+    "description": "Also write out each desire's sources: kind, value, threshold, multiplier and drive",
+    "name": "sources",
+    "type": "boolean"
    }
   ],
   "query": "creature.desires"
@@ -420,7 +425,7 @@
   "query": "creature.known"
  },
  {
-  "description": "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on and what to use that has examples, the examples (kind of thing, attributes, feedback) and the tree as text",
+  "description": "What a creature has learnt: each action's opinion that is not 0, and for each desire's tree of what to act on and of what the desire is about that has examples, the examples (kind of thing, attributes, feedback) and the tree as text; and the actions that a stroke or a slap can teach about now (contexts, the oldest first)",
   "kind": "object",
   "parameters": [
    {
@@ -2315,7 +2320,7 @@
   "writes": true
  },
  {
-  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen",
+  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first lets go of a creature that sim.feedback holds",
   "kind": "object",
   "parameters": [
    {
@@ -2334,7 +2339,7 @@
   "writes": true
  },
  {
-  "description": "Lets go of every button and hands the mouse back to the player; forgets input still to come",
+  "description": "Lets go of every button and of a creature that sim.feedback holds, and hands the mouse back to the player; forgets input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.release",
@@ -2462,7 +2467,7 @@
   "writes": true
  },
  {
-  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
+  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. The right button let go, input.release or input.gesture also lets go. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
   "kind": "object",
   "parameters": [
    {

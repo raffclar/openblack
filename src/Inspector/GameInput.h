@@ -44,6 +44,8 @@ public:
 private:
 	/// Gives the mouse back once the inspector holds nothing
 	void Release();
+	/// Lets go of a creature that the hand holds because a command (a stroke or a slap) started the hold
+	static void LetGoOfCommandHold();
 
 	/// The keys the inspector holds down, by scancode, for their modifiers and for letting go of them all
 	std::vector<int> _heldKeys;
