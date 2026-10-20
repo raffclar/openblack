@@ -16,9 +16,9 @@
 #include <span>
 
 /// The order of the steps of one frame. The game does its frame in a fixed order of stages: the input, the turns, the
-/// camera, the hand, the draw and then the keys of the camera. What one stage changes, the next stages see in the same
-/// frame. Each step of openblack's frame has the stage of the game that it does. A step whose stage is not known keeps
-/// its place between its neighbours. The order keeps no game state, so that the game and the tests use it both.
+/// camera, the poses of the creatures, the hand, the draw and then the keys of the camera. What one stage changes, the next
+/// stages see in the same frame. Each step of openblack's frame has the stage of the game that it does. A step whose stage is
+/// not known keeps its place between its neighbours. The order keeps no game state, so that the game and the tests use it both.
 namespace openblack::game_frame
 {
 
@@ -35,11 +35,13 @@ enum class Stage : uint8_t
 	Turns,
 	/// The game time of the frame, which is zero while the game is paused
 	FrameTime,
-	/// The camera moves, with the movement of the mouse in this frame
+	/// The camera moves, with the movement of the mouse in this frame, and shakes
 	Camera,
+	/// The draw starts. The creatures get their poses between their last two turns, before the hand moves.
+	CreaturePoses,
 	/// The hand goes to the point under the cursor, as the camera now sees it
 	PreDraw,
-	/// The world is drawn
+	/// The world is drawn. The effects move on as the draw shows them, after the hand moved.
 	Draw,
 	/// The keys of the camera. Their steps move the camera in the next frame.
 	CameraKeys,
@@ -52,7 +54,6 @@ enum class Step : uint8_t
 {
 	FrameClock,
 	Input,
-	ScreenMarks,
 	DebugGui,
 	Interface,
 	GripEffect,
@@ -64,11 +65,14 @@ enum class Step : uint8_t
 	CameraPaths,
 	CameraControllers,
 	Camera,
+	CameraShake,
 	Temple,
 	Bookmarks,
 	HighDetail,
-	FrameEffects,
+	CreaturePoses,
 	Hand,
+	FrameEffects,
+	ScreenMarks,
 	Entities,
 	Audio,
 	CameraKeys,
@@ -91,8 +95,6 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::FrameClock, .stage = std::nullopt},
     // The keys, the mouse buttons and the pointer
     {.step = Step::Input, .stage = Stage::Input},
-    // The numbers and the marks that rise over things, by the real time
-    {.step = Step::ScreenMarks, .stage = std::nullopt},
     {.step = Step::DebugGui, .stage = std::nullopt},
     {.step = Step::Interface, .stage = Stage::FrameUpdates},
     {.step = Step::GripEffect, .stage = std::nullopt},
@@ -106,14 +108,20 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::CameraPaths, .stage = Stage::Camera},
     {.step = Step::CameraControllers, .stage = Stage::Camera},
     {.step = Step::Camera, .stage = Stage::Camera},
+    // The camera shakes near a blast, before the hand looks through it
+    {.step = Step::CameraShake, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
     // The markers of the bookmarks throb by the game time of this frame
     {.step = Step::Bookmarks, .stage = std::nullopt},
     {.step = Step::HighDetail, .stage = std::nullopt},
-    // The effects of the frame. Each has its own place in the game, which is not known for all of them.
-    {.step = Step::FrameEffects, .stage = std::nullopt},
+    // The creatures' fights, walks, animations, hair and the sounds of their animations
+    {.step = Step::CreaturePoses, .stage = Stage::CreaturePoses},
     {.step = Step::Hand, .stage = Stage::PreDraw},
+    // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
+    {.step = Step::FrameEffects, .stage = Stage::Draw},
+    // The numbers and the marks that rise over things, by the game time of the frame
+    {.step = Step::ScreenMarks, .stage = Stage::Draw},
     {.step = Step::Entities, .stage = Stage::Draw},
     {.step = Step::Audio, .stage = std::nullopt},
     // The keys of the camera act after the camera moved, so their steps move the camera in the next frame

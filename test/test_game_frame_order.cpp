@@ -150,3 +150,28 @@ TEST(GameFrameOrder, TheCameraReadsItsKeysOnlyOutsideTheTempleWithTheInterfaceAn
 	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = false, .boxShows = false}));
 	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = true}));
 }
+
+TEST(GameFrameOrder, TheCameraShakesBeforeTheHandLooksThroughIt)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::CameraShake));
+	EXPECT_TRUE(recorder.Before(Step::CameraShake, Step::Hand));
+}
+
+TEST(GameFrameOrder, TheCreaturesGetTheirPosesBeforeTheHandAndTheEffectsMoveAfterIt)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::CreaturePoses));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePoses, Step::Hand));
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::FrameEffects));
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::ScreenMarks));
+	// The draw shows what the effects did in this frame
+	EXPECT_TRUE(recorder.Before(Step::FrameEffects, Step::Entities));
+	EXPECT_TRUE(recorder.Before(Step::ScreenMarks, Step::Entities));
+}
+
+TEST(GameFrameOrder, TheScreenMarksRiseByTheGameTimeOfTheFrame)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::FrameTime, Step::ScreenMarks));
+}
