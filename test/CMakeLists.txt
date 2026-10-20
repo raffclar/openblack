@@ -1528,3 +1528,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_click_distance camera/test_click_distance.cpp)
 openblack_setup_and_add_test(test_camera_keys camera/test_camera_keys.cpp)
+openblack_setup_and_add_test(test_clear_view camera/test_clear_view.cpp)

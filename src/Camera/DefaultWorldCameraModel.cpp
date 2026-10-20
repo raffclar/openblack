@@ -34,6 +34,7 @@
 #include "CameraKeys.h"
 #include "CameraLimits.h"
 #include "CameraZones.h"
+#include "ClearView.h"
 #include "ClickDistance.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
@@ -50,6 +51,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
+#include "ZoomToPlaces.h"
 
 using namespace openblack;
 using namespace std::chrono_literals;
@@ -654,6 +656,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	UpdateCameraInterpolationValues(camera);
 	const auto originAtFrameStart = _targetOrigin;
+	const auto focusAtFrameStart = _targetFocus;
 	UpdateRaycastHitPoints(camera);
 	UpdateFocusDistance();
 
@@ -729,6 +732,8 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_focusAtClick = _targetFocus;
 	}
 
+	UpdateClearView(originAtFrameStart, focusAtFrameStart);
+
 	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, camera);
 
 	// The self-tilting camera eases over a second while it keeps to its place, or is tilted, unless a flight's first frame
@@ -766,6 +771,48 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 		         std::chrono::duration_cast<std::chrono::microseconds>(k_MinimalCameraAnimationDuration * 0.9f)}};
 	}
 	return std::nullopt;
+}
+
+void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart)
+{
+	if (_clearViewHeld)
+	{
+		if (_clearViewStarts)
+		{
+			// The orbit starts from the camera, round the hand, or round the thing under the hand
+			_clearOrbit = clear_view::Start(originAtFrameStart, focusAtFrameStart);
+			_clearCentre = _handPosition.value_or(focusAtFrameStart);
+			_clearObject =
+			    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		}
+		if (_clearObject.has_value())
+		{
+			const auto* transform = Locator::entitiesRegistry::has_value()
+			                            ? Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(*_clearObject)
+			                            : nullptr;
+			if (transform != nullptr)
+			{
+				_clearCentre = transform->position;
+			}
+			else
+			{
+				_clearObject.reset();
+			}
+		}
+		if (Locator::terrainSystem::has_value())
+		{
+			_clearCentre.y = Locator::terrainSystem::value().GetAltitude(zoom_to::MapCoordOf(_clearCentre.x),
+			                                                             zoom_to::MapCoordOf(_clearCentre.z));
+		}
+	}
+	// The camera eases between where it was and the orbit
+	const float share = _clearView.GetValue();
+	if (_clearOrbit.has_value() && share > clear_view::k_Starts)
+	{
+		const auto view = clear_view::Eased(*_clearOrbit, _clearCentre, share);
+		_targetOrigin = view.origin;
+		_targetFocus = view.focus;
+	}
 }
 
 void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
@@ -816,12 +863,23 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		_keyBoardMoveDelta.y += ScaleKeyboardMove(steps.strafe, moveSpeed);
 	}
 
+	// Ctrl and Shift together ease the clear view in over half a second, and out again. It starts when its ease is not
+	// yet in.
+	_clearViewHeld =
+	    actionSystem.Get(input::BindableActionMap::ZOOM_ON) && actionSystem.Get(input::BindableActionMap::ROTATE_ON);
+	_clearViewStarts = _clearViewHeld && _clearView.GetValue() < clear_view::k_Starts;
+	_clearView.SetDestination(_clearViewHeld ? 1.0f : 0.0f, k_ClearViewSeconds);
+	_clearView.Update(std::chrono::duration<float>(dt).count());
+	// The wheel and the zoom keys do nothing while the clear view is in
+	const bool wheelZooms = _clearView.GetValue() < clear_view::k_Starts;
+
 	// A wheel step is a fixed distance, whatever the frame time
-	if (const auto wheelNotches = actionSystem.GetMouseWheelDelta(); wheelNotches != 0.0f)
+	const auto wheelNotches = actionSystem.GetMouseWheelDelta();
+	if (wheelZooms && wheelNotches != 0.0f)
 	{
 		_rotateAroundDelta.z -= wheelNotches * k_WheelZoomPerNotch;
 	}
-	else if (actionSystem.GetAny(input::BindableActionMap::ZOOM_IN, input::BindableActionMap::ZOOM_OUT))
+	else if (wheelZooms && actionSystem.GetAny(input::BindableActionMap::ZOOM_IN, input::BindableActionMap::ZOOM_OUT))
 	{
 		_rotateAroundDelta.z +=
 		    actionSystem.Get(input::BindableActionMap::ZOOM_IN) ? -k_WheelZoomPerNotch : k_WheelZoomPerNotch;
@@ -846,13 +904,6 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		const auto mouseDelta = static_cast<glm::vec2>(actionSystem.GetMouseDelta());
 		_rotateAroundDelta += glm::vec3(glm::yx(mouseDelta * k_RotateOnSpeedMultiplier), 0.0f);
 	}
-
-	// Ctrl and Shift together ease the clear view in over half a second, and out again
-	_clearView.SetDestination(
-	    actionSystem.Get(input::BindableActionMap::ZOOM_ON) && actionSystem.Get(input::BindableActionMap::ROTATE_ON) ? 1.0f
-	                                                                                                                 : 0.0f,
-	    k_ClearViewSeconds);
-	_clearView.Update(std::chrono::duration<float>(dt).count());
 
 	const auto handPositions = actionSystem.GetHandPositions();
 	_handPosition = handPositions[0].or_else([handPositions] { return handPositions[1]; });
