@@ -9,10 +9,14 @@
 
 #include "DefaultWorldCameraModel.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numeric>
 #include <ranges>
+#include <span>
 #include <tuple>
 
 #include <glm/gtc/constants.hpp>
@@ -27,8 +31,11 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
+#include "CameraKeys.h"
 #include "CameraLimits.h"
 #include "CameraZones.h"
+#include "ClearView.h"
+#include "ClickDistance.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -44,6 +51,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Windowing/WindowingInterface.h"
+#include "ZoomToPlaces.h"
 
 using namespace openblack;
 using namespace std::chrono_literals;
@@ -58,7 +66,6 @@ constexpr auto k_StepScaleHeightFactor = 3.0f;
 constexpr auto k_StepScaleMin = 60.0f;
 constexpr auto k_ZoomScaleMax = 2000.0f;
 constexpr auto k_ZoomScaleMaxBelowFocus = 4.0f * k_StepScaleMin;
-constexpr auto k_InteractionSpeedMultiplier = 400.0f;
 // Vanilla black and white uses a pretty bad PI/2 approximation
 constexpr auto k_CameraModelHalfPi = 1.53938043f;
 constexpr auto k_RotateOnSpeedMultiplier = glm::vec2(1.9f, -1.7f);
@@ -174,25 +181,19 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 	_averageIslandDistance = glm::max(_averageIslandDistance, camera_limits::k_ClosestZoom);
 }
 
-float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const
+float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera, glm::vec3 origin) const
 {
-	std::vector<float> inverseHitDistances;
-	inverseHitDistances.reserve(0x10);
-
-	for (int i = 0; i < 0x10; ++i)
+	std::array<float, click_distance::k_Rays> hits {};
+	size_t hitCount = 0;
+	for (int32_t ray = 0; ray < click_distance::k_Rays; ++ray)
 	{
-		const glm::vec2 coord = glm::vec2(0.5f, i / 16.0f);
-
+		const auto coord = click_distance::RayCoord(ray);
 		if (const auto hit = camera.RaycastScreenCoordToLand(coord, true, Camera::Interpolation::Drawn))
 		{
-			inverseHitDistances.push_back(1.0f / glm::length(hit->position - _targetOrigin));
+			hits.at(hitCount++) = click_distance::HitDistance(origin, hit->position);
 		}
 	}
-
-	// Default distance of 50 if no hits happen, therefore divide by size + 1
-	const auto average = std::accumulate(inverseHitDistances.cbegin(), inverseHitDistances.cend(), 1.0f / 50.0f) /
-	                     (inverseHitDistances.size() + 1);
-	return 1.0f / average;
+	return click_distance::MeanDistance(std::span(hits).first(hitCount));
 }
 
 void DefaultWorldCameraModel::ComputeDistanceFromBoundY()
@@ -217,7 +218,7 @@ camera_zones::Zones DefaultWorldCameraModel::CurrentZones()
 
 DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener,
                                                                           std::chrono::microseconds dt, float zoomDelta,
-                                                                          glm::vec3 eulerAngles, const Camera& camera)
+                                                                          const Camera& camera)
 {
 	if (!Locator::terrainSystem::has_value())
 	{
@@ -327,13 +328,18 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	{
 		_originFocusDistanceAtInteractionStart =
 		    glm::max(glm::distance(_targetOrigin, _targetFocus), camera_limits::k_ClosestZoom);
-		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, eulerAngles, camera);
+		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, camera);
 	}
 	return moved;
 }
 
-void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles,
-                                                                    const Camera& camera)
+float DefaultWorldCameraModel::RefreshClickDistance(const Camera& camera)
+{
+	UpdateFocusPointInteractionParameters(camera.GetOrigin(), camera.GetFocus(), camera);
+	return _averageIslandDistance;
+}
+
+void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, const Camera& camera)
 {
 	_focusAtClick = _targetFocus;
 	_screenSpaceMouseRaycastHitAtClick =
@@ -355,24 +361,9 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 		_alignmentAtInteractionStart = _landGrip->plane.distance;
 		_originFocusDistanceAtInteractionStart = glm::distance(_landGrip->origin, _landGrip->focus);
 	}
-	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera);
-	{
-		const auto diff = _targetOrigin - _targetFocus;
-		// If the camera is directly above the focus point, set pitch to 90 degrees.
-		if (glm::all(glm::lessThan(glm::abs(glm::xz(diff)), glm::vec2(0.1f, 0.1f))))
-		{
-			eulerAngles = glm::vec3(0.0f, glm::half_pi<float>(), 0.0f);
-		}
-		// Otherwise, calculate yaw and pitch based on the direction to the focus point.
-		else
-		{
-			eulerAngles =
-			    glm::vec3(glm::pi<float>() - glm::atan(diff.x, -diff.z), glm::atan(diff.y, glm::length(glm::xz(diff))), 0.0f);
-		}
-	}
-	const auto extra =
-	    (_focusDistance - _averageIslandDistance) * glm::clamp(eulerAngles.y / (6.0f * glm::pi<float>()), 0.0f, 1.0f);
-	_averageIslandDistance += extra;
+	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera, origin);
+	// The steeper the camera looks down, the more the distance moves towards the focus distance
+	_averageIslandDistance = click_distance::TowardsFocus(_averageIslandDistance, _focusDistance, origin, focus);
 }
 
 void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent)
@@ -665,6 +656,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	UpdateCameraInterpolationValues(camera);
 	const auto originAtFrameStart = _targetOrigin;
+	const auto focusAtFrameStart = _targetFocus;
 	UpdateRaycastHitPoints(camera);
 	UpdateFocusDistance();
 
@@ -691,7 +683,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	if (_mode != _modePrev && _mode != Mode::FlyingToPoint && _modePrev != Mode::FlyingToPoint)
 	{
 		UpdateFocusPointInteractionParameters(camera.GetOrigin(Camera::Interpolation::Target),
-		                                      camera.GetFocus(Camera::Interpolation::Target), eulerAngles, camera);
+		                                      camera.GetFocus(Camera::Interpolation::Target), camera);
 		// The camera turns and tilts about the point it now looks at, not the one it looked at before the change
 		eulerAngles = EulerFromPoints(_targetOrigin, _focusAtClick);
 	}
@@ -740,7 +732,9 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_focusAtClick = _targetFocus;
 	}
 
-	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, eulerAngles, camera);
+	UpdateClearView(originAtFrameStart, focusAtFrameStart);
+
+	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, camera);
 
 	// The self-tilting camera eases over a second while it keeps to its place, or is tilted, unless a flight's first frame
 	// was pushed
@@ -779,69 +773,81 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 	return std::nullopt;
 }
 
+void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart)
+{
+	if (_clearViewHeld)
+	{
+		if (_clearViewStarts)
+		{
+			// The orbit starts from the camera, round the hand, or round the thing under the hand
+			_clearOrbit = clear_view::Start(originAtFrameStart, focusAtFrameStart);
+			_clearCentre = _handPosition.value_or(focusAtFrameStart);
+			_clearObject =
+			    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		}
+		if (_clearObject.has_value())
+		{
+			const auto* transform = Locator::entitiesRegistry::has_value()
+			                            ? Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(*_clearObject)
+			                            : nullptr;
+			if (transform != nullptr)
+			{
+				_clearCentre = transform->position;
+			}
+			else
+			{
+				_clearObject.reset();
+			}
+		}
+		if (Locator::terrainSystem::has_value())
+		{
+			_clearCentre.y = Locator::terrainSystem::value().GetAltitude(zoom_to::MapCoordOf(_clearCentre.x),
+			                                                             zoom_to::MapCoordOf(_clearCentre.z));
+		}
+	}
+	// The camera eases between where it was and the orbit
+	const float share = _clearView.GetValue();
+	if (_clearOrbit.has_value() && share > clear_view::k_Starts)
+	{
+		const auto view = clear_view::Eased(*_clearOrbit, _clearCentre, share);
+		_targetOrigin = view.origin;
+		_targetFocus = view.focus;
+	}
+}
+
 void DefaultWorldCameraModel::HandleKeys(std::chrono::microseconds dt)
 {
-	// The keys start the steps again. The camera takes them in its next frame.
-	KeySteps steps;
-
-	// Compute delta position (dp) based on the elapsed time and speed.
-	const auto dp = k_InteractionSpeedMultiplier * std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
 	const auto& actionSystem = Locator::gameActionSystem::value();
 	// Moving over the land can be sped up or slowed down; turning, tilting and zooming keep the game's speed
 	const auto moveSpeed =
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
-	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
-
-	if (actionSystem.GetAny(input::BindableActionMap::ROTATE_LEFT, input::BindableActionMap::ROTATE_RIGHT))
+	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
+	// The keys start the steps again. The camera takes them in its next frame.
+	KeySteps steps;
+	// The keys step by the whole milliseconds of the frame. Opposite keys cancel.
 	{
-		const float distance = (actionSystem.Get(input::BindableActionMap::ROTATE_LEFT) ? -1.0f : 1.0f) * dp;
-		steps.rotateAround.y += distance;
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::TILT_UP, input::BindableActionMap::TILT_DOWN))
-	{
-		const float distance = (actionSystem.Get(input::BindableActionMap::TILT_DOWN) ? -1.0f : 1.0f) * dp;
-		steps.rotateAround.x += distance;
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS))
-	{
-		const float direction = actionSystem.Get(input::BindableActionMap::MOVE_FORWARDS) ? -1.0f : 1.0f;
-		const float distance = direction * dp;
-		// If ZOOM_ON is active, apply the movement as a zoom action.
-		if (actionSystem.Get(input::BindableActionMap::ZOOM_ON))
-		{
-			steps.rotateAround.z += distance;
-		}
-		// If ROTATE_ON is active, apply the movement as a tilt action.
-		// TODO(#710): fight will always be rotating
-		else if (actionSystem.Get(input::BindableActionMap::ROTATE_ON))
-		{
-			steps.rotateAround.x += distance;
-		}
-		// Otherwise, apply the movement normally.
-		else
-		{
-			steps.move.x += direction * moveDp;
-		}
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::MOVE_RIGHT, input::BindableActionMap::MOVE_LEFT))
-	{
-		const float direction = actionSystem.Get(input::BindableActionMap::MOVE_RIGHT) ? -1.0f : 1.0f;
-		const float distance = direction * dp;
-		// If ZOOM_ON is active, apply the movement as a zoom action.
-		// If ROTATE_ON is active, apply the movement as a tilt action.
-		// TODO(#710): fight will always be rotating
-		if (actionSystem.GetAny(input::BindableActionMap::ZOOM_ON, input::BindableActionMap::ROTATE_ON))
-		{
-			steps.rotateAround.y += distance;
-		}
-		// Otherwise, apply the movement normally.
-		else
-		{
-			steps.move.y -= direction * moveDp;
-		}
+		using input::BindableActionMap;
+		const camera_keys::Held held {
+		    .turnLeft = actionSystem.Get(BindableActionMap::ROTATE_LEFT),
+		    .turnRight = actionSystem.Get(BindableActionMap::ROTATE_RIGHT),
+		    .tiltUp = actionSystem.Get(BindableActionMap::TILT_UP),
+		    .tiltDown = actionSystem.Get(BindableActionMap::TILT_DOWN),
+		    .forwards = actionSystem.Get(BindableActionMap::MOVE_FORWARDS),
+		    .backwards = actionSystem.Get(BindableActionMap::MOVE_BACKWARDS),
+		    .left = actionSystem.Get(BindableActionMap::MOVE_LEFT),
+		    .right = actionSystem.Get(BindableActionMap::MOVE_RIGHT),
+		    .zoom = actionSystem.Get(BindableActionMap::ZOOM_ON),
+		    .rotate = actionSystem.Get(BindableActionMap::ROTATE_ON),
+		    .fight = onFight,
+		};
+		const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+		const auto step = camera_keys::Step(held, camera_keys::FrameSeconds(static_cast<int32_t>(milliseconds)));
+		steps.rotateAround.y += step.turn;
+		steps.rotateAround.x += step.tilt;
+		steps.rotateAround.z += step.zoom;
+		// Only the movement over the land uses the speed setting
+		steps.move.x += ScaleKeyboardMove(step.forwards, moveSpeed);
+		steps.move.y += ScaleKeyboardMove(step.strafe, moveSpeed);
 	}
 	_keySteps = steps;
 }
@@ -865,12 +871,23 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 
 	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
 
+	// Ctrl and Shift together ease the clear view in over half a second, and out again. It starts when its ease is not
+	// yet in.
+	_clearViewHeld =
+	    actionSystem.Get(input::BindableActionMap::ZOOM_ON) && actionSystem.Get(input::BindableActionMap::ROTATE_ON);
+	_clearViewStarts = _clearViewHeld && _clearView.GetValue() < clear_view::k_Starts;
+	_clearView.SetDestination(_clearViewHeld ? 1.0f : 0.0f, k_ClearViewSeconds);
+	_clearView.Update(std::chrono::duration<float>(dt).count());
+	// The wheel and the zoom keys do nothing while the clear view is in
+	const bool wheelZooms = _clearView.GetValue() < clear_view::k_Starts;
+
 	// A wheel step is a fixed distance, whatever the frame time
-	if (const auto wheelNotches = actionSystem.GetMouseWheelDelta(); wheelNotches != 0.0f)
+	const auto wheelNotches = actionSystem.GetMouseWheelDelta();
+	if (wheelZooms && wheelNotches != 0.0f)
 	{
 		_rotateAroundDelta.z -= wheelNotches * k_WheelZoomPerNotch;
 	}
-	else if (actionSystem.GetAny(input::BindableActionMap::ZOOM_IN, input::BindableActionMap::ZOOM_OUT))
+	else if (wheelZooms && actionSystem.GetAny(input::BindableActionMap::ZOOM_IN, input::BindableActionMap::ZOOM_OUT))
 	{
 		_rotateAroundDelta.z +=
 		    actionSystem.Get(input::BindableActionMap::ZOOM_IN) ? -k_WheelZoomPerNotch : k_WheelZoomPerNotch;
@@ -895,13 +912,6 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		const auto mouseDelta = static_cast<glm::vec2>(actionSystem.GetMouseDelta());
 		_rotateAroundDelta += glm::vec3(glm::yx(mouseDelta * k_RotateOnSpeedMultiplier), 0.0f);
 	}
-
-	// Ctrl and Shift together ease the clear view in over half a second, and out again
-	_clearView.SetDestination(
-	    actionSystem.Get(input::BindableActionMap::ZOOM_ON) && actionSystem.Get(input::BindableActionMap::ROTATE_ON) ? 1.0f
-	                                                                                                                 : 0.0f,
-	    k_ClearViewSeconds);
-	_clearView.Update(std::chrono::duration<float>(dt).count());
 
 	const auto handPositions = actionSystem.GetHandPositions();
 	_handPosition = handPositions[0].or_else([handPositions] { return handPositions[1]; });
@@ -1311,12 +1321,6 @@ glm::vec3 DefaultWorldCameraModel::GetTargetOrigin() const
 glm::vec3 DefaultWorldCameraModel::GetTargetFocus() const
 {
 	return _targetFocus;
-}
-
-std::chrono::seconds DefaultWorldCameraModel::GetIdleTime() const
-{
-	SPDLOG_LOGGER_WARN(spdlog::get("game"), "TODO: Idle Time not implemented");
-	return {};
 }
 
 glm::vec3 DefaultWorldCameraModel::GetTargetForwardVector() const

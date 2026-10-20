@@ -13,12 +13,14 @@
 
 #include <optional>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
 #include "CameraHelpEvents.h"
 #include "CameraLimits.h"
 #include "CameraModel.h"
 #include "CameraPan.h"
+#include "ClearView.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
 
@@ -56,6 +58,9 @@ public:
 	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
+	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
+	/// The single tap of the temple key looks that far ahead. Returns the distance.
+	float RefreshClickDistance(const Camera& camera);
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] Asked GetAsked() const final
@@ -71,7 +76,6 @@ public:
 	}
 	/// One of the four wooshes of a flight
 	static void Woosh();
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
 
 private:
@@ -85,6 +89,8 @@ private:
 	static void SendHelpEvents(camera_help::events::EventSet events);
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
+	/// Ctrl and Shift held: the clear view starts its orbit, follows the thing under the hand, and eases the camera
+	void UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart);
 	/// The part of the screen the edge controls are laid out on: a 4:3 screen's worth, measured by the cinema bars'
 	/// picture while they are in
 	[[nodiscard]] static camera_drag::EdgeArea EdgeArea(glm::ivec2 screenSize);
@@ -99,7 +105,7 @@ private:
 	bool FlyTo(camera_fly::Reason reason);
 
 	/// Updates the model's focus point parameters after a change in position or focus point of view
-	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles, const Camera& camera);
+	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, const Camera& camera);
 	/// Modifies the given Euler angles based on the rotate Around and keyboard Move Deltas for rotation and zoom.
 	/// @param eulerAngles A reference representing Euler angles (yaw, pitch, roll) to be adjusted. Roll is always 0.
 	void TiltZoom(glm::vec3& eulerAngles, float scalingFactor, float zoomDelta);
@@ -113,7 +119,8 @@ private:
 	/// average.
 	///
 	/// @return The harmonic mean of the distances from the origin to each hit point.
-	[[nodiscard]] float GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const;
+	/// A distance of 50 counts as one more hit.
+	[[nodiscard]] float GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera, glm::vec3 origin) const;
 
 	void ComputeDistanceFromBoundY();
 	/// The zones the land's scripts have set, or none
@@ -131,7 +138,7 @@ private:
 		[[nodiscard]] bool Any() const { return pushed || focusMoved; }
 	};
 	LimitsMoved ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener, std::chrono::microseconds dt, float zoomDelta,
-	                        glm::vec3 eulerAngles, const Camera& camera);
+	                        const Camera& camera);
 	/// Puts the camera back inside the zones' fence; whether it was outside
 	bool KeepInsideFence(const camera_zones::Zones& zones, glm::vec3 originAtFrameStart, glm::vec3 listener);
 	/// Whether the player is using any of the camera's controls this frame
@@ -235,6 +242,14 @@ private:
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;
+	/// Ctrl and Shift are held, and the clear view starts in this frame (its ease was not yet in)
+	bool _clearViewHeld {false};
+	bool _clearViewStarts {false};
+	/// The orbit that the clear view eases to, the point on the land that it looks at, and the thing under the hand
+	/// that the point follows
+	std::optional<clear_view::Orbit> _clearOrbit;
+	glm::vec3 _clearCentre {0.0f};
+	std::optional<entt::entity> _clearObject;
 	/// The player's camera controls this frame, and the help events they make while the controls are handled
 	camera_help::events::ControlsFrame _helpControls;
 	camera_help::events::EventSet _helpEvents;

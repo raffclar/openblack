@@ -351,7 +351,6 @@ public:
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const override;
 
 private:
 	using Zoomers = std::array<camera::Zoomer, 3>;

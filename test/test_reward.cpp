@@ -56,8 +56,8 @@ TEST(Reward, ItsThumpShakesTheCameraNearTheWorldsOrigin)
 	std::vector<camera_shake::Shake> shakes {{.position = glm::vec3(0.0f),
 	                                          .radius = reward::k_ShakeRadius,
 	                                          .strength = reward::k_ShakeStrength,
-	                                          .milliseconds = 400.0f,
-	                                          .millisecondsLeft = 400.0f,
+	                                          .milliseconds = reward::k_ShakeMilliseconds,
+	                                          .millisecondsLeft = reward::k_ShakeMilliseconds,
 	                                          .verticalOnly = false}};
 	EXPECT_FLOAT_EQ(camera_shake::Amplitude(shakes, {100.0f, 0.0f, 100.0f}), 1.0f);
 	EXPECT_FLOAT_EQ(camera_shake::Amplitude(shakes, {2560.0f, 0.0f, 2560.0f}), 0.0f);

@@ -321,7 +321,7 @@ void RewardSystem::Update(float milliseconds)
 		if (Locator::explosionSystem::has_value())
 		{
 			Locator::explosionSystem::value().AddShake(k_ShakeCentre, reward::k_ShakeRadius, reward::k_ShakeStrength,
-			                                           reward::k_ShakeSeconds, false);
+			                                           reward::k_ShakeMilliseconds, false);
 		}
 	});
 	if (lidMoved)

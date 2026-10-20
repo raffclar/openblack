@@ -99,8 +99,8 @@ public:
 	virtual void AddRubbleMark(glm::vec3 centre) = 0;
 	/// A ring on the water growing to a size
 	virtual void AddWaterRing(glm::vec3 centre, float size) = 0;
-	/// The camera shakes while within a radius of a point, from a strength down to none over the seconds
-	virtual void ShakeCamera(glm::vec3 position, float radius, float strength, float seconds) = 0;
+	/// The camera shakes while it is in a radius of a point. The strength decreases to zero over the whole milliseconds
+	virtual void ShakeCamera(glm::vec3 position, float radius, float strength, int32_t milliseconds) = 0;
 	[[nodiscard]] virtual bool IsDryLand(glm::vec3 point) const = 0;
 };
 

@@ -47,7 +47,7 @@ public:
 	void DestroyByBeam(entt::entity object) override;
 	void AddRubbleMark(glm::vec3 centre) override;
 	void AddWaterRing(glm::vec3 centre, float size) override;
-	void ShakeCamera(glm::vec3 position, float radius, float strength, float seconds) override;
+	void ShakeCamera(glm::vec3 position, float radius, float strength, int32_t milliseconds) override;
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 
 	/// A new land: nothing waits to break

@@ -1521,3 +1521,15 @@ openblack_setup_and_add_test(test_creature_teleport test_creature_teleport.cpp)
 openblack_setup_and_add_test(test_game_turn_order test_game_turn_order.cpp)
 openblack_setup_and_add_test(test_world_save_clock test_world_save_clock.cpp)
 openblack_setup_and_add_test(test_game_frame_order test_game_frame_order.cpp)
+openblack_setup_and_add_test(test_zoom_to_places camera/test_zoom_to_places.cpp)
+openblack_setup_and_add_test(
+  test_oracle_zoom_to_places oracle/test_oracle_zoom_to_places.cpp
+)
+set_tests_properties(
+  test_oracle_zoom_to_places
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_click_distance camera/test_click_distance.cpp)
+openblack_setup_and_add_test(test_camera_keys camera/test_camera_keys.cpp)
+openblack_setup_and_add_test(test_clear_view camera/test_clear_view.cpp)

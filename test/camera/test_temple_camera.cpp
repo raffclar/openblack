@@ -276,3 +276,11 @@ TEST(TemplePress, TheFadeHoldsPressesBackForTheFirstSecond)
 	EXPECT_EQ(temple_press::UnderFade(Button::DoubleClick, 1.2f), Button::DoubleClick);
 	EXPECT_EQ(temple_press::UnderFade(Button::None, 0.0f), Button::None);
 }
+
+TEST(TempleCamera, TheDoorsCloseOnlyAfterTheFirstFourTenthsOfASecondIn)
+{
+	EXPECT_FALSE(TempleCameraModel::IntroClosesDoors(0.0f));
+	EXPECT_FALSE(TempleCameraModel::IntroClosesDoors(0.4f));
+	EXPECT_TRUE(TempleCameraModel::IntroClosesDoors(0.41f));
+	EXPECT_EQ(TempleCameraModel::k_IntroDoorCloseRate, 1.6f);
+}

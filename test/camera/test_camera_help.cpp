@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Camera/CameraHelp.h"
@@ -86,15 +90,14 @@ TEST(CameraHelp, UnknownLevelsChangeNothingButAreKept)
 	EXPECT_EQ(help.features, 0x26u);
 }
 
-TEST(CameraHelp, ANewLandGivesEveryFeatureBackAndTheFirstHeight)
+TEST(CameraHelp, ANewLandGivesEveryFeatureBackAndTheFirstPitchAndHeight)
 {
 	CameraHelp help;
 	ASSERT_TRUE(help.SetInterfaceLevel(1));
 	help.ResetForNewLand();
 	EXPECT_EQ(help.features, 0x1BFu);
 	EXPECT_FLOAT_EQ(help.autoPitchHeight, 75.0f);
-	// The pitch stays as the script left it
-	EXPECT_NEAR(help.autoPitch, 0.448799f, 1e-6f);
+	EXPECT_EQ(help.autoPitch, k_DefaultAutoPitch);
 }
 
 TEST(CameraHelp, WatchingAFightTheCameraCantBeSentToFights)
@@ -155,4 +158,11 @@ TEST(CameraHelp, TheInterfaceLevelsSetTheKeysAndTheHandsReach)
 	ASSERT_TRUE(help.SetInterfaceLevel(0));
 	EXPECT_EQ(help.BlockedActions(), BindableActionMap::NONE);
 	EXPECT_FLOAT_EQ(help.handReach, 1800.0f);
+}
+
+TEST(CameraHelp, TheSelfTiltingCameraStartsAtTheGamesPitchAndHeight)
+{
+	const CameraHelp help;
+	EXPECT_EQ(std::bit_cast<uint32_t>(help.autoPitch), 0x3F060A92u);
+	EXPECT_EQ(help.autoPitchHeight, 75.0f);
 }
