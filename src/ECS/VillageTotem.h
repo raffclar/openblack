@@ -131,6 +131,9 @@ struct Shown
 /// The share as the tooltip and the floating number show it: as a percentage
 [[nodiscard]] float AsPercentage(float share);
 
+/// The share a land script gives a town with its village centre, from the script's thousandths
+[[nodiscard]] float ShareFromScript(int32_t thousandths);
+
 /// The mesh of the icon on a player's totems: their creature's species icon, or the hand when they have no creature
 [[nodiscard]] MeshId IconMesh(std::optional<MeshId> creatureIcon);
 

@@ -75,6 +75,7 @@
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -430,7 +431,7 @@ void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position,
 	const auto& towns = registry.Context().towns;
 	if (const auto town = towns.find(registry.Get<const Abode>(centre).townId); town != towns.end())
 	{
-		Locator::villageTotemSystem::value().SetTownShare(town->second, static_cast<float>(worshipPercentage) * 0.001f);
+		Locator::villageTotemSystem::value().SetTownShare(town->second, ecs::village_totem::ShareFromScript(worshipPercentage));
 	}
 }
 

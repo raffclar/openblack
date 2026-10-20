@@ -409,6 +409,10 @@ TEST(VillageTotemRules, TheSecondTotemShowsTheOtherShareWhileTheyStandApart)
 	// Together, there is no second
 	EXPECT_FALSE(vt::ShownShares(0.4f, 0.4f, true).ghost.has_value());
 	EXPECT_FLOAT_EQ(vt::AsPercentage(0.4f), 40.0f);
+	// A land script gives the share in thousandths, as Land 1 gives 0 for both of its village centres
+	EXPECT_EQ(vt::ShareFromScript(0), 0.0f);
+	EXPECT_EQ(vt::ShareFromScript(1000), 1.0f);
+	EXPECT_EQ(vt::ShareFromScript(250), 250.0f * 0.001f);
 }
 
 TEST(VillageTotemSystem, HeldApartFromItsShareASeeThroughSecondTotemShowsTheTownsShare)
