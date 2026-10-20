@@ -179,3 +179,82 @@ TEST(LHVMSaveState, AProgramWithoutRunningStateWritesNone)
 	ASSERT_TRUE(reopened.IsLoaded());
 	EXPECT_FALSE(reopened.HasStatus());
 }
+
+namespace
+{
+
+uint32_t U32At(const std::string& bytes, size_t offset)
+{
+	uint32_t value = 0;
+	for (size_t i = 0; i < 4; ++i)
+	{
+		value |= static_cast<uint32_t>(static_cast<uint8_t>(bytes.at(offset + i))) << (8 * i);
+	}
+	return value;
+}
+
+/// No program, a main stack of two values and one task whose script the program does not hold
+LHVMFile StateWithoutScripts()
+{
+	VMTask task({}, 9, 1, 0, 0, VMStack(), "", "", ScriptType::Script);
+	task.inExceptionHandler = true;
+	task.sleeping = true;
+	return {LHVMVersion::BlackAndWhite,
+	        {},
+	        {},
+	        {},
+	        {},
+	        {},
+	        StackOf({{3u, DataType::Float}, {8u, DataType::Object}}),
+	        {},
+	        {task},
+	        0,
+	        0,
+	        1,
+	        0,
+	        0};
+}
+
+} // namespace
+
+TEST(LHVMSaveState, EachPlaceOfAStackIsItsTypeThenItsValue)
+{
+	const auto bytes = Bytes(StateWithoutScripts());
+	// The magic, the version and five empty lists of the program come first
+	constexpr size_t k_Stack = 28;
+	EXPECT_EQ(U32At(bytes, k_Stack), 2u);
+	EXPECT_EQ(U32At(bytes, k_Stack + 4), 7u);
+	EXPECT_EQ(U32At(bytes, k_Stack + 8), 5u);
+	EXPECT_EQ(U32At(bytes, k_Stack + 12), static_cast<uint32_t>(DataType::Float));
+	EXPECT_EQ(U32At(bytes, k_Stack + 16), 3u);
+	EXPECT_EQ(U32At(bytes, k_Stack + 20), static_cast<uint32_t>(DataType::Object));
+	EXPECT_EQ(U32At(bytes, k_Stack + 24), 8u);
+}
+
+TEST(LHVMSaveState, ATaskWritesAllBitsSetForEachTrueState)
+{
+	const auto bytes = Bytes(StateWithoutScripts());
+	// After the stack: no global values, one task, no locals and nine numbers of the task
+	constexpr size_t k_States = 28 + 28 + 4 + 4 + 4 + 9 * 4;
+	EXPECT_EQ(U32At(bytes, 28 + 28 + 4), 1u);
+	EXPECT_EQ(static_cast<uint8_t>(bytes.at(k_States)), 0xFFu);
+	EXPECT_EQ(static_cast<uint8_t>(bytes.at(k_States + 1)), 0u);
+	EXPECT_EQ(static_cast<uint8_t>(bytes.at(k_States + 2)), 0u);
+	EXPECT_EQ(static_cast<uint8_t>(bytes.at(k_States + 3)), 0xFFu);
+}
+
+TEST(LHVMSaveState, ATaskWithoutItsScriptLoadsAsNotCompiled)
+{
+	const auto reopened = Reopened(Bytes(StateWithoutScripts()));
+	ASSERT_TRUE(reopened.HasStatus());
+	ASSERT_EQ(reopened.GetTasks().size(), 1u);
+	const auto& task = reopened.GetTasks().front();
+	EXPECT_EQ(task.name, "Not compiled");
+	EXPECT_EQ(task.filename, "Not compiled");
+	EXPECT_TRUE(task.inExceptionHandler);
+	EXPECT_FALSE(task.stop);
+	EXPECT_TRUE(task.sleeping);
+	ASSERT_EQ(reopened.GetStack().count, 2u);
+	EXPECT_EQ(reopened.GetStack().types.at(1), DataType::Object);
+	EXPECT_EQ(reopened.GetStack().values.at(1).uintVal, 8u);
+}

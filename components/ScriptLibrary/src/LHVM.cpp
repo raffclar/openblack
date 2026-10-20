@@ -16,6 +16,7 @@
 
 #include <algorithm>
 #include <fstream>
+#include <limits>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -64,6 +65,28 @@ struct imemstream: virtual membuf, std::istream
 	{
 	}
 };
+
+namespace
+{
+
+/// The game's conversion of a float to an integer: it truncates to 64 bits, and out of range and NaN give the lowest value
+[[nodiscard]] int64_t Ftol(float value)
+{
+	constexpr auto k_Limit = 9.2233720368547758e18f; // 2^63
+	if (!std::isfinite(value) || std::fabs(value) >= k_Limit)
+	{
+		return std::numeric_limits<int64_t>::min();
+	}
+	return static_cast<int64_t>(value);
+}
+
+/// The game's check of a divisor: its compare finds zero, and also NaN, which it cannot order
+[[nodiscard]] bool IsZeroForTheGame(float value)
+{
+	return value == 0.0f || std::isnan(value);
+}
+
+} // namespace
 
 LHVM::LHVM()
 {
@@ -162,6 +185,7 @@ int LHVM::LoadBinary(const LHVMFile& file)
 	}
 
 	_tasks.clear();
+	_stoppedWhileRunning.reset();
 	_heldTasks.clear();
 	_resumeFrom.clear();
 	_breakpoints.clear();
@@ -172,17 +196,10 @@ int LHVM::LoadBinary(const LHVMFile& file)
 	_executedInstructions = 0;
 
 	_auto = file.GetAutostart();
+	// The game starts each one by its place in the list of scripts, of any type
 	for (const auto scriptId : _auto)
 	{
-		if (scriptId > 0 && scriptId <= _scripts.size())
-		{
-			auto& script = _scripts[scriptId - 1];
-			StartScript(script.name, ScriptType::All);
-		}
-		else
-		{
-			SignalError(ErrorCode::ErrScriptIdNotFound, scriptId);
-		}
+		StartScript(scriptId);
 	}
 
 	return EXIT_SUCCESS;
@@ -242,6 +259,7 @@ int LHVM::RestoreState(const LHVMFile& file)
 	_auto = file.GetAutostart();
 
 	_tasks.clear();
+	_stoppedWhileRunning.reset();
 	_heldTasks.clear();
 	_resumeFrom.clear();
 	_breakpoints.clear();
@@ -288,7 +306,7 @@ float LHVM::Popf()
 void LHVM::Push(VMValue value, DataType type)
 {
 	_currentStack->pushCount++;
-	if (_currentStack->count < VMStack::k_Size)
+	if (_currentStack->count < VMStack::k_Capacity)
 	{
 		_currentStack->values.at(_currentStack->count) = value;
 		_currentStack->types.at(_currentStack->count) = type;
@@ -385,57 +403,63 @@ std::vector<uint8_t> LHVM::SaveState() const
 
 void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 {
-	// execute exception handlers first
-	for (auto& [id, task] : _tasks)
+	// First, the exception handlers of each task
+	for (auto iter = _tasks.begin(); iter != _tasks.end(); ++iter)
 	{
-		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
+		auto& [id, task] = *iter;
+		if (!(task.type & allowedScriptTypesMask) || IsParked(id))
 		{
-			_currentStack = &task.stack;
-			if (task.inExceptionHandler)
+			continue;
+		}
+		_currentStack = &task.stack;
+		if (!task.inExceptionHandler && task.waitingTaskId == 0)
+		{
+			task.currentExceptionHandlerIndex = 0;
+			// The conditions that end the task's loops (until) and the handlers of its blocks
+			if (GetExceptionHandlersCount(task) > 0)
 			{
-				CpuLoop(task);
+				task.pevInstructionAddress = task.instructionAddress;
+				task.instructionAddress = GetCurrentExceptionHandlerIp(task, task.currentExceptionHandlerIndex);
+				task.inExceptionHandler = true;
 			}
-			else if (task.waitingTaskId == 0)
+		}
+		if (task.inExceptionHandler)
+		{
+			CpuLoop(task);
+			// The game cannot find the next task after a task that stopped itself. The tasks after it do not get this step.
+			if (EraseTaskStoppedWhileRunning())
 			{
-				task.currentExceptionHandlerIndex = 0;
-				// Checked for this task itself: the conditions that end its loops (until) and the handlers of its blocks
-				if (GetExceptionHandlersCount(task) > 0)
-				{
-					task.pevInstructionAddress = task.instructionAddress;
-					task.instructionAddress = GetCurrentExceptionHandlerIp(task, task.currentExceptionHandlerIndex);
-					task.inExceptionHandler = true;
-					CpuLoop(task);
-				}
+				break;
 			}
 		}
 	}
 
-	// execute normal code
-	for (auto& [id, task] : _tasks)
+	// Then, the normal code of each task
+	for (auto iter = _tasks.begin(); iter != _tasks.end(); ++iter)
 	{
-		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
+		auto& [id, task] = *iter;
+		if ((task.type & allowedScriptTypesMask) && !IsParked(id) && !task.inExceptionHandler)
 		{
 			_currentStack = &task.stack;
-			if (!task.inExceptionHandler)
+			CpuLoop(task);
+			if (EraseTaskStoppedWhileRunning())
 			{
-				CpuLoop(task);
+				break;
 			}
 		}
 	}
 
-	// handle tasks termination
+	// Last, each task counts the turn and a task that waits on a task that ended continues. A task that has stopped
+	// goes, and the count starts again from the first task. Thus the tasks before it count this turn two times.
 	for (auto iter = _tasks.begin(); iter != _tasks.end();)
 	{
-		auto& task = (*iter++).second;
+		auto& [id, task] = *iter;
 		if (task.stop)
 		{
-			StopTask(task.id);
+			StopTask(id);
+			iter = _tasks.begin();
+			continue;
 		}
-	}
-
-	// unlock waiting tasks
-	for (auto& [id, task] : _tasks)
-	{
 		if ((task.type & allowedScriptTypesMask) && !IsParked(id))
 		{
 			task.ticks++;
@@ -445,10 +469,26 @@ void LHVM::LookIn(const ScriptType allowedScriptTypesMask)
 				task.instructionAddress++;
 			}
 		}
+		++iter;
 	}
 
 	_ticks++;
 	_currentStack = &_mainStack;
+}
+
+bool LHVM::EraseTaskStoppedWhileRunning()
+{
+	if (!_stoppedWhileRunning.has_value())
+	{
+		return false;
+	}
+	const auto taskNumber = *_stoppedWhileRunning;
+	_stoppedWhileRunning.reset();
+	_tasks.erase(taskNumber);
+	_heldTasks.erase(taskNumber);
+	_resumeFrom.erase(taskNumber);
+	_currentStack = &_mainStack;
+	return true;
 }
 
 uint32_t LHVM::StartScript(const std::string& name, const ScriptType allowedScriptTypesMask)
@@ -491,7 +531,7 @@ uint32_t LHVM::StartScript(const VMScript& script)
 		const auto& value = Pop(type);
 
 		stack.pushCount++;
-		if (stack.count < 31)
+		if (stack.count < VMStack::k_Capacity)
 		{
 			stack.values.at(stack.count) = value;
 			stack.types.at(stack.count) = type;
@@ -518,10 +558,15 @@ uint32_t LHVM::StartScript(const VMScript& script)
 
 void LHVM::StopAllTasks()
 {
-	while (!_tasks.empty())
+	std::vector<uint32_t> ids;
+	ids.reserve(_tasks.size());
+	for (const auto& [id, task] : _tasks)
 	{
-		auto iter = _tasks.begin();
-		StopTask((*iter).first);
+		ids.emplace_back(id);
+	}
+	for (const auto id : ids)
+	{
+		StopTask(id);
 	}
 }
 
@@ -544,6 +589,10 @@ void LHVM::StopScripts(std::function<bool(const std::string& name, const std::st
 
 void LHVM::StopTask(uint32_t taskNumber)
 {
+	if (_stoppedWhileRunning == taskNumber)
+	{
+		return;
+	}
 	if (TaskExists(taskNumber))
 	{
 		InvokeStopTaskCallback(taskNumber);
@@ -558,7 +607,13 @@ void LHVM::StopTask(uint32_t taskNumber)
 
 		if (_currentTask == &task)
 		{
+			// The task stops itself through a native function. The game frees it at once but continues its code, which
+			// is not safe to copy. Here the task does no more instructions and goes when its run ends.
 			_currentStack = &_mainStack;
+			task.localVars.clear();
+			task.stop = true;
+			_stoppedWhileRunning = taskNumber;
+			return;
 		}
 
 		_tasks.erase(taskNumber);
@@ -882,7 +937,16 @@ void LHVM::ContinueTask(uint32_t taskNumber)
 
 float LHVM::Fmod(float a, float b)
 {
-	return a - b * static_cast<int64_t>(a / b);
+	// The game truncates both values to integers first and takes the whole multiple of the divisor from the value
+	const auto divisor = static_cast<int32_t>(Ftol(b));
+	if (divisor == 0)
+	{
+		return 0.0f;
+	}
+	const auto dividend = static_cast<int32_t>(Ftol(a));
+	const auto multiple = static_cast<int32_t>(static_cast<uint32_t>((static_cast<int64_t>(dividend) / divisor) * divisor));
+	// The difference is exact as a double, so the conversion rounds it to a float one time, as the game does
+	return static_cast<float>(static_cast<double>(a) - static_cast<double>(multiple));
 }
 
 void LHVM::Opcode00End(VMTask& task, const VMInstruction& /*instruction*/)
@@ -928,25 +992,30 @@ void LHVM::Opcode03Pop(VMTask& task, const VMInstruction& instruction)
 {
 	if (instruction.mode == VMMode::Reference)
 	{
-		auto& var = GetVar(task, instruction.data.uintVal);
-		DataType type;
-		const auto newVal = Pop(type);
-		if (type == DataType::Object)
-		{
-			AddReference(newVal.uintVal);
-		}
-		if (var.type == DataType::Object)
-		{
-			// the object the variable held until now
-			RemoveReference(var.value.uintVal);
-		}
-		var.value = newVal;
-		var.type = type;
+		PopToVariable(task, instruction.data.uintVal);
 	}
 	else // Mode::IMMEDIATE
 	{
 		Pop(); // cannot POP to immediate value, just discard the value
 	}
+}
+
+void LHVM::PopToVariable(VMTask& task, uint32_t id)
+{
+	auto& var = GetVar(task, id);
+	DataType type;
+	const auto newVal = Pop(type);
+	if (type == DataType::Object)
+	{
+		AddReference(newVal.uintVal);
+	}
+	if (var.type == DataType::Object)
+	{
+		// the object the variable held until now
+		RemoveReference(var.value.uintVal);
+	}
+	var.value = newVal;
+	var.type = type;
 }
 
 void LHVM::Opcode04Add(VMTask& /*task*/, const VMInstruction& instruction)
@@ -962,12 +1031,12 @@ void LHVM::Opcode04Add(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Int:
 		a0 = Pop();
 		b0 = Pop();
-		Pushi(a0.intVal + b0.intVal);
+		Push(VMValue(b0.uintVal + a0.uintVal), DataType::Int);
 		break;
 	case DataType::Float:
 		a0 = Pop();
 		b0 = Pop();
-		Pushf(a0.floatVal + b0.floatVal);
+		Pushf(b0.floatVal + a0.floatVal);
 		break;
 	case DataType::Vector:
 		a0 = Pop();
@@ -976,13 +1045,12 @@ void LHVM::Opcode04Add(VMTask& /*task*/, const VMInstruction& instruction)
 		b0 = Pop();
 		b1 = Pop();
 		b2 = Pop();
-		Pushv(a2.floatVal + b2.floatVal);
-		Pushv(a1.floatVal + b1.floatVal);
-		Pushv(a0.floatVal + b0.floatVal);
+		Pushv(b2.floatVal + a2.floatVal);
+		Pushv(b1.floatVal + a1.floatVal);
+		Pushv(b0.floatVal + a0.floatVal);
 		break;
 	default:
-		Pop();
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1047,7 +1115,7 @@ void LHVM::Opcode06Sub(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Int:
 		a0 = Pop();
 		b0 = Pop();
-		Pushi(b0.intVal - a0.intVal);
+		Push(VMValue(b0.uintVal - a0.uintVal), DataType::Int);
 		break;
 	case DataType::Float:
 		a0 = Pop();
@@ -1066,8 +1134,7 @@ void LHVM::Opcode06Sub(VMTask& /*task*/, const VMInstruction& instruction)
 		Pushv(b0.floatVal - a0.floatVal);
 		break;
 	default:
-		Pop();
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1082,7 +1149,7 @@ void LHVM::Opcode07Neg(VMTask& /*task*/, const VMInstruction& instruction)
 	{
 	case DataType::Int:
 		a0 = Pop();
-		Pushi(-a0.intVal);
+		Push(VMValue(0u - a0.uintVal), DataType::Int);
 		break;
 	case DataType::Float:
 		a0 = Pop();
@@ -1097,7 +1164,7 @@ void LHVM::Opcode07Neg(VMTask& /*task*/, const VMInstruction& instruction)
 		Pushv(-a0.floatVal);
 		break;
 	default:
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1114,25 +1181,25 @@ void LHVM::Opcode08Mul(VMTask& /*task*/, const VMInstruction& instruction)
 	case DataType::Int:
 		a0 = Pop();
 		b0 = Pop();
-		Pushi(a0.intVal * b0.intVal);
+		Push(VMValue(b0.uintVal * a0.uintVal), DataType::Int);
 		break;
 	case DataType::Float:
 		a0 = Pop();
 		b0 = Pop();
-		Pushf(a0.floatVal * b0.floatVal);
+		Pushf(b0.floatVal * a0.floatVal);
 		break;
 	case DataType::Vector:
+		// The vector is on top of the number
 		a0 = Pop();
 		a1 = Pop();
 		a2 = Pop();
 		b0 = Pop();
-		Pushv(a2.floatVal * b0.floatVal);
-		Pushv(a1.floatVal * b0.floatVal);
-		Pushv(a0.floatVal * b0.floatVal);
+		Pushv(b0.floatVal * a2.floatVal);
+		Pushv(b0.floatVal * a1.floatVal);
+		Pushv(b0.floatVal * a0.floatVal);
 		break;
 	default:
-		Pop();
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1140,60 +1207,58 @@ void LHVM::Opcode08Mul(VMTask& /*task*/, const VMInstruction& instruction)
 
 void LHVM::Opcode09Div(VMTask& /*task*/, const VMInstruction& instruction)
 {
-	VMValue a0;
-	VMValue b0;
-	VMValue b1;
-	VMValue b2;
+	// When the divisor is zero, the game puts a zero on the stack and keeps the dividend under it
 	switch (instruction.type)
 	{
 	case DataType::Int:
-		a0 = Pop();
-		b0 = Pop();
-		if (a0.intVal != 0)
-		{
-			Pushi(b0.intVal / a0.intVal);
-		}
-		else
+	{
+		// The game divides integers as unsigned values
+		const auto divisor = Pop().uintVal;
+		if (divisor == 0)
 		{
 			Pushi(0);
 			SignalError(ErrorCode::ErrDivByZero);
+			break;
 		}
+		const auto dividend = Pop().uintVal;
+		Push(VMValue(dividend / divisor), DataType::Int);
 		break;
+	}
 	case DataType::Float:
-		a0 = Pop();
-		b0 = Pop();
-		if (a0.floatVal != 0.0f)
-		{
-			Pushf(b0.floatVal / a0.floatVal);
-		}
-		else
+	{
+		const auto divisor = Popf();
+		if (IsZeroForTheGame(divisor))
 		{
 			Pushf(0.0f);
 			SignalError(ErrorCode::ErrDivByZero);
+			break;
 		}
+		const auto dividend = Popf();
+		Pushf(dividend / divisor);
 		break;
+	}
 	case DataType::Vector:
-		a0 = Pop();
-		b0 = Pop();
-		b1 = Pop();
-		b2 = Pop();
-		if (a0.floatVal != 0.0f)
-		{
-			Pushv(b2.floatVal / a0.floatVal);
-			Pushv(b1.floatVal / a0.floatVal);
-			Pushv(b0.floatVal / a0.floatVal);
-		}
-		else
+	{
+		// The number is on top of the vector. The game takes all four values off before it does the check.
+		const auto divisor = Popf();
+		const auto b0 = Popf();
+		const auto b1 = Popf();
+		const auto b2 = Popf();
+		if (IsZeroForTheGame(divisor))
 		{
 			Pushv(0.0f);
 			Pushv(0.0f);
 			Pushv(0.0f);
 			SignalError(ErrorCode::ErrDivByZero);
+			break;
 		}
+		Pushv(b2 / divisor);
+		Pushv(b1 / divisor);
+		Pushv(b0 / divisor);
 		break;
+	}
 	default:
-		Pop();
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1201,60 +1266,44 @@ void LHVM::Opcode09Div(VMTask& /*task*/, const VMInstruction& instruction)
 
 void LHVM::Opcode10Mod(VMTask& /*task*/, const VMInstruction& instruction)
 {
-	VMValue a0;
-	VMValue b0;
-	VMValue b1;
-	VMValue b2;
+	// When the divisor is zero, the game puts a zero on the stack and keeps the dividend under it
 	switch (instruction.type)
 	{
 	case DataType::Int:
-		a0 = Pop();
-		b0 = Pop();
-		if (a0.intVal != 0)
-		{
-			Pushi(b0.intVal % a0.intVal);
-		}
-		else
+	{
+		// The game divides integers as unsigned values
+		const auto divisor = Pop().uintVal;
+		if (divisor == 0)
 		{
 			Pushi(0);
 			SignalError(ErrorCode::ErrDivByZero);
+			break;
 		}
+		const auto dividend = Pop().uintVal;
+		Push(VMValue(dividend % divisor), DataType::Int);
 		break;
+	}
 	case DataType::Float:
-		a0 = Pop();
-		b0 = Pop();
-		if (a0.floatVal != 0.0f)
-		{
-			Pushf(Fmod(b0.floatVal, a0.floatVal));
-		}
-		else
+	{
+		const auto divisor = Popf();
+		if (IsZeroForTheGame(divisor))
 		{
 			Pushf(0.0f);
 			SignalError(ErrorCode::ErrDivByZero);
+			break;
 		}
+		const auto dividend = Popf();
+		Pushf(Fmod(dividend, divisor));
 		break;
+	}
 	case DataType::Vector:
-		a0 = Pop();
-		b0 = Pop();
-		b1 = Pop();
-		b2 = Pop();
-		if (a0.floatVal != 0.0f)
-		{
-			Pushv(Fmod(b2.floatVal, a0.floatVal));
-			Pushv(Fmod(b1.floatVal, a0.floatVal));
-			Pushv(Fmod(b0.floatVal, a0.floatVal));
-		}
-		else
-		{
-			Pushv(0.0f);
-			Pushv(0.0f);
-			Pushv(0.0f);
-			SignalError(ErrorCode::ErrDivByZero);
-		}
+		// The game takes nothing off the stack and puts a zero vector on it
+		Pushv(0.0f);
+		Pushv(0.0f);
+		Pushv(0.0f);
 		break;
 	default:
-		Pop();
-		Pop();
+		// The game takes nothing off the stack and puts a zero on it
 		Pushf(0.0f);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1283,41 +1332,22 @@ void LHVM::Opcode13Or(VMTask& /*task*/, const VMInstruction& /*instruction*/)
 void LHVM::Opcode14Eq(VMTask& /*task*/, const VMInstruction& instruction)
 {
 	VMValue a0;
-	VMValue a1;
-	VMValue a2;
 	VMValue b0;
-	VMValue b1;
-	VMValue b2;
 	switch (instruction.type)
 	{
 	case DataType::Int:
 	case DataType::Boolean:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal == b0.intVal);
+		Pushb(a0.uintVal == b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
 		Pushb(a0.floatVal == b0.floatVal);
 		break;
-	case DataType::Vector:
-		b0 = Pop();
-		b1 = Pop();
-		b2 = Pop();
-		a0 = Pop();
-		a1 = Pop();
-		a2 = Pop();
-		Pushb(a0.floatVal == b0.floatVal && a1.floatVal == b1.floatVal && a2.floatVal == b2.floatVal);
-		break;
-	case DataType::Object:
-		b0 = Pop();
-		a0 = Pop();
-		Pushb(a0.uintVal == b0.uintVal);
-		break;
 	default:
-		Pop();
-		Pop();
+		// The game compares only numbers and truth values. For another type it takes nothing off the stack and puts false.
 		Pushb(false);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
@@ -1326,42 +1356,23 @@ void LHVM::Opcode14Eq(VMTask& /*task*/, const VMInstruction& instruction)
 void LHVM::Opcode15Neq(VMTask& /*task*/, const VMInstruction& instruction)
 {
 	VMValue a0;
-	VMValue a1;
-	VMValue a2;
 	VMValue b0;
-	VMValue b1;
-	VMValue b2;
 	switch (instruction.type)
 	{
 	case DataType::Int:
 	case DataType::Boolean:
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal != b0.intVal);
+		Pushb(a0.uintVal != b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
 		a0 = Pop();
 		Pushb(a0.floatVal != b0.floatVal);
 		break;
-	case DataType::Vector:
-		b0 = Pop();
-		b1 = Pop();
-		b2 = Pop();
-		a0 = Pop();
-		a1 = Pop();
-		a2 = Pop();
-		Pushb(a0.floatVal != b0.floatVal || a1.floatVal != b1.floatVal || a2.floatVal != b2.floatVal);
-		break;
-	case DataType::Object:
-		b0 = Pop();
-		a0 = Pop();
-		Pushb(a0.uintVal != b0.uintVal);
-		break;
 	default:
-		Pop();
-		Pop();
-		Pushb(false);
+		// The game compares only numbers and truth values. For another type it takes nothing off the stack and puts true.
+		Pushb(true);
 		SignalError(ErrorCode::ErrInvalidType);
 	}
 }
@@ -1373,9 +1384,10 @@ void LHVM::Opcode16Geq(VMTask& /*task*/, const VMInstruction& instruction)
 	switch (instruction.type)
 	{
 	case DataType::Int:
+		// The game compares integers as unsigned values
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal >= b0.intVal);
+		Pushb(a0.uintVal >= b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
@@ -1395,9 +1407,10 @@ void LHVM::Opcode17Leq(VMTask& /*task*/, const VMInstruction& instruction)
 	switch (instruction.type)
 	{
 	case DataType::Int:
+		// The game compares integers as unsigned values
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal <= b0.intVal);
+		Pushb(a0.uintVal <= b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
@@ -1417,9 +1430,10 @@ void LHVM::Opcode18Gt(VMTask& /*task*/, const VMInstruction& instruction)
 	switch (instruction.type)
 	{
 	case DataType::Int:
+		// The game compares integers as unsigned values
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal > b0.intVal);
+		Pushb(a0.uintVal > b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
@@ -1439,9 +1453,10 @@ void LHVM::Opcode19Lt(VMTask& /*task*/, const VMInstruction& instruction)
 	switch (instruction.type)
 	{
 	case DataType::Int:
+		// The game compares integers as unsigned values
 		b0 = Pop();
 		a0 = Pop();
-		Pushb(a0.intVal < b0.intVal);
+		Pushb(a0.uintVal < b0.uintVal);
 		break;
 	case DataType::Float:
 		b0 = Pop();
@@ -1469,16 +1484,18 @@ void LHVM::Opcode20Jmp(VMTask& task, const VMInstruction& instruction)
 
 void LHVM::Opcode21Sleep(VMTask& task, const VMInstruction& /*instruction*/)
 {
-	const auto seconds = Pop().floatVal;
-	if (static_cast<uint32_t>(seconds * 10.0f) < task.ticks)
-	{
-		task.sleeping = false;
-		Pushb(true);
-	}
-	else
+	// The time in tenths of a second, truncated through a 64-bit integer. The low 32 bits are an unsigned count.
+	const auto seconds = Popf();
+	const auto tenths = static_cast<uint32_t>(Ftol(seconds * 10.0f));
+	if (task.ticks <= tenths)
 	{
 		task.sleeping = true;
 		Pushb(false);
+	}
+	else
+	{
+		task.sleeping = false;
+		Pushb(true);
 	}
 }
 
@@ -1494,13 +1511,12 @@ void LHVM::Opcode23Cast(VMTask& task, const VMInstruction& instruction)
 {
 	if (instruction.mode == VMMode::Zero)
 	{
-		auto& var = GetVar(task, instruction.data.uintVal);
-		if (var.type == DataType::Object)
+		// The game clears a variable only for a float. It puts a zero on the stack and takes it off into the variable.
+		if (instruction.type == DataType::Float)
 		{
-			RemoveReference(var.value.uintVal);
+			Pushf(0.0f);
+			PopToVariable(task, instruction.data.uintVal);
 		}
-		var.value.floatVal = 0.0f;
-		var.type = DataType::Float;
 	}
 	else // Mode::CAST
 	{
@@ -1508,15 +1524,10 @@ void LHVM::Opcode23Cast(VMTask& task, const VMInstruction& instruction)
 		switch (instruction.type)
 		{
 		case DataType::Int:
-		{
 			// The bits read as a float, truncated through a 64-bit integer and its low 32 bits kept: out of range and NaN
 			// give 0
-			const auto f = Pop().floatVal;
-			constexpr auto k_Limit = 9.2233720368547758e18f; // 2^63
-			const auto truncated = std::isfinite(f) && std::fabs(f) < k_Limit ? static_cast<int64_t>(f) : 0;
-			Push(VMValue(static_cast<int32_t>(static_cast<uint32_t>(truncated))), DataType::Int);
+			Push(VMValue(static_cast<int32_t>(Ftol(Pop().floatVal))), DataType::Int);
 			break;
-		}
 		case DataType::Float:
 			// The bits read as an unsigned 32-bit integer
 			Push(VMValue(static_cast<float>(Pop().uintVal)), DataType::Float);
@@ -1583,9 +1594,10 @@ void LHVM::Opcode27IterExcept(VMTask& task, const VMInstruction& /*instruction*/
 
 void LHVM::Opcode28BrkExcept(VMTask& task, const VMInstruction& /*instruction*/)
 {
-	if (_currentTask != nullptr)
+	// The handler that runs and each handler of a block inside it go. The handlers of the blocks around it stay.
+	for (uint32_t i = 0; i <= task.currentExceptionHandlerIndex && !task.exceptionHandlerIps.empty(); ++i)
 	{
-		_currentTask->exceptionHandlerIps.clear();
+		task.exceptionHandlerIps.pop_back();
 	}
 
 	task.pevInstructionAddress = 0;
@@ -1605,60 +1617,75 @@ void LHVM::Opcode29Swap(VMTask& /*task*/, const VMInstruction& instruction)
 		Push(v1, t1);
 		return;
 	}
-	const auto offset = static_cast<size_t>(instruction.data.intVal);
-	if (offset == 0 || offset >= VMStack::k_Size - 1)
+	const auto count = instruction.data.uintVal;
+	if (count == 0)
 	{
 		SignalError(ErrorCode::ErrInvalidOperand);
 		return;
 	}
-	DataType copyType = DataType::Float;
-	VMValue copyVal(0.0f);
-	std::array<DataType, VMStack::k_Size> tmpTypes;
-	std::array<VMValue, VMStack::k_Size> tmpVals;
-	if (instruction.mode == VMMode::CopyFrom) // push a copy of the Nth value from top of the stack
+	// The game keeps at most 31 of the values that it takes off. For the others, it puts back zeros of the last type.
+	std::array<VMValue, VMStack::k_Capacity> kept {};
+	std::array<DataType, VMStack::k_Capacity> keptTypes {};
+	size_t keptCount = 0;
+	auto lastType = DataType::None;
+	const auto keep = [&](VMValue value, DataType type) {
+		if (keptCount < kept.size())
+		{
+			kept.at(keptCount) = value;
+			keptTypes.at(keptCount) = type;
+			++keptCount;
+		}
+	};
+	const auto putBack = [&]() {
+		if (keptCount == 0)
+		{
+			Push(VMValue(0u), lastType);
+			return;
+		}
+		--keptCount;
+		lastType = keptTypes.at(keptCount);
+		Push(kept.at(keptCount), lastType);
+	};
+	VMValue chosen;
+	auto chosenType = DataType::None;
+	if (instruction.mode == VMMode::CopyFrom)
 	{
-		for (size_t i = 0; i < offset; i++)
+		// The value N places down moves to the top, and the values above it move down one place
+		for (uint32_t i = 0; i < count; ++i)
 		{
-			DataType ti;
-			const VMValue vi = Pop(ti);
-			if (i == offset - 1)
+			const auto value = Pop(lastType);
+			if (i == count - 1)
 			{
-				copyType = ti;
-				copyVal = vi;
+				chosen = value;
+				chosenType = lastType;
 			}
-			if (i < tmpTypes.size())
+			else
 			{
-				tmpTypes.at(i) = ti;
-				tmpVals.at(i) = vi;
+				keep(value, lastType);
 			}
 		}
-		for (int i = static_cast<int>(std::min(offset, VMStack::k_Size)) - 1; i >= 0; i--)
+		for (uint32_t i = 0; i + 1 < count; ++i)
 		{
-			Push(tmpVals.at(i), tmpTypes.at(i));
+			putBack();
 		}
-		Push(copyVal, copyType);
+		Push(chosen, chosenType);
 	}
-	else // Mode::CopyTo insert a copy of the topmost value on the stack N places below
+	else // Mode::CopyTo: a copy of the topmost value goes N places down
 	{
-		for (int i = 0; i < offset; i++)
+		for (uint32_t i = 0; i < count; ++i)
 		{
-			DataType ti;
-			const VMValue vi = Pop(ti);
+			const auto value = Pop(lastType);
 			if (i == 0)
 			{
-				copyType = ti;
-				copyVal = vi;
+				chosen = value;
+				chosenType = lastType;
 			}
-			if (i < tmpTypes.size())
-			{
-				tmpTypes.at(i) = ti;
-				tmpVals.at(i) = vi;
-			}
+			keep(value, lastType);
 		}
-		Push(copyVal, copyType);
-		for (int i = static_cast<int>(std::min(offset, VMStack::k_Size)) - 1; i >= 0; i--)
+		Push(chosen, chosenType);
+		for (uint32_t i = 0; i < count; ++i)
 		{
-			Push(tmpVals.at(i), tmpTypes.at(i));
+			putBack();
 		}
 	}
 }

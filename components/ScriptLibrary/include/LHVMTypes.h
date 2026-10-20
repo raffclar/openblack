@@ -97,6 +97,8 @@ class VMStack
 {
 public:
 	static constexpr const size_t k_Size = 32;
+	/// The game puts at most 31 values on a stack. A push to a full stack has no effect.
+	static constexpr const size_t k_Capacity = 31;
 
 	VMStack() = default;
 
