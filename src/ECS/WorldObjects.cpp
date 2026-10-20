@@ -151,6 +151,12 @@ void BuildingHurt(entt::entity abode, float before, float after)
 	const float stops = info->thresholdForStopBeingFunctional;
 	const bool causesEmergency = info->abodeType == AbodeType::StoragePit || info->abodeType == AbodeType::TownCentre;
 	// TODO(villagers): a building that stops working is also marked so for its owner (the building phase)
+	// A storage pit that stops working lets the people near it take from its piles
+	if (before > stops && after <= stops && info->abodeType == AbodeType::StoragePit &&
+	    Locator::resourceStoreSystem::has_value())
+	{
+		Locator::resourceStoreSystem::value().StoreStopsWorking(abode);
+	}
 	if (before > stops && after <= stops && causesEmergency && Locator::townSystem::has_value())
 	{
 		const auto& towns = registry.Context().towns;
@@ -944,6 +950,13 @@ float world_objects::IncreaseLife(entt::entity object, float amount)
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
 	life.life = std::min(life.life + amount, 1.0f);
+	// A storage pit that starts to work again stops its piles calling people
+	if (const auto* info = registry.AllOf<Abode>(object) ? world_objects::AbodeInfoOf(object) : nullptr;
+	    info != nullptr && info->abodeType == AbodeType::StoragePit && before <= info->thresholdForStopBeingFunctional &&
+	    life.life > info->thresholdForStopBeingFunctional && Locator::resourceStoreSystem::has_value())
+	{
+		Locator::resourceStoreSystem::value().StoreWorksAgain(object);
+	}
 	return life.life;
 }
 
