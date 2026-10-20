@@ -32,6 +32,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
 #include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -951,7 +952,8 @@ std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::
 	}
 	const auto& type = info->fieldType.at(static_cast<size_t>(data->type));
 	return FieldFacts {.food = data->crop.food > 0.0f ? static_cast<uint32_t>(data->crop.food) : 0u,
-	                   .ripe = data->crop.age >= type.ageRecolt};
+	                   .ripe = data->crop.age >= type.ageRecolt,
+	                   .lockable = data->crop.age > 0.0f && data->crop.food > 1.0f};
 }
 
 void GameHandGrabWorld::NoteTakenAt(glm::vec3 point)
@@ -1210,7 +1212,7 @@ std::optional<hand_grab::HandGrabWorldInterface::BodyFacts> GameHandGrabWorld::B
 	{
 		return std::nullopt;
 	}
-	return BodyFacts {.mass = entry->body->Mass(), .speed = glm::length(entry->body->velocity)};
+	return BodyFacts {.mass = entry->body->Mass(), .speed = x87::LengthZyx(entry->body->velocity)};
 }
 
 void GameHandGrabWorld::TwistBody(entt::entity object, glm::vec3 torque)

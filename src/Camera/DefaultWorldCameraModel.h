@@ -67,6 +67,10 @@ public:
 		        .dragTurn = _dragTurn,
 		        .dragTilt = _dragTilt};
 	}
+	/// Whether the player moved the camera in the last frame: a control of the camera, or a drag of the mouse of more
+	/// than two pixels while the land is gripped or the camera turns round the hand. Such a move stops a follow of a
+	/// bookmark.
+	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
 	/// One of the four wooshes of a flight
 	static void Woosh();
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;

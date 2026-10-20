@@ -1518,3 +1518,20 @@ set_tests_properties(
 openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)
 openblack_setup_and_add_test(test_save_slot_writes test_save_slot_writes.cpp)
 openblack_setup_and_add_test(test_creature_teleport test_creature_teleport.cpp)
+openblack_setup_and_add_test(
+  test_camera_bookmarks camera/test_camera_bookmarks.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_marker_pulse oracle/test_oracle_marker_pulse.cpp
+)
+set_tests_properties(
+  test_oracle_marker_pulse
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_hand_cycle_choice hand/test_hand_cycle_choice.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_knock hand/test_hand_knock.cpp
+)

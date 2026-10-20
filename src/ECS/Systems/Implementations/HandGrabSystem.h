@@ -57,6 +57,7 @@ public:
 	void Reset() override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
+	[[nodiscard]] std::optional<entt::entity> GetLockedOn() const override;
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;

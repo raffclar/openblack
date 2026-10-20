@@ -2838,7 +2838,7 @@ void Runner::Give(const Command& command)
 		const glm::vec3 origin = focus + glm::vec3(0.0f, 50.0f, -80.0f);
 		if (Locator::cameraBookmarkSystem::has_value())
 		{
-			Locator::cameraBookmarkSystem::value().SetBookmark(static_cast<uint8_t>(command.value), focus, origin);
+			Locator::cameraBookmarkSystem::value().SetBookmark(static_cast<size_t>(command.value), focus, std::nullopt, origin);
 		}
 		Locator::camera::value().GetModel().SetFlight(origin, focus, camera_fly::k_BookmarkRise);
 		Log(fmt::format("{:.1f}s: the camera flies to bookmark {} at ({:.0f}, {:.0f}, {:.0f})", _seconds, command.value + 1,
@@ -3224,6 +3224,21 @@ void Runner::Give(const Command& command)
 		else
 		{
 			result = "no web page system";
+		}
+		break;
+	case Kind::BookmarkCreature:
+		// The player keeps the creature in a bookmark, the hand over it, and the camera follows the bookmark
+		if (Locator::cameraBookmarkSystem::has_value() && Locator::camera::has_value())
+		{
+			auto& bookmarks = Locator::cameraBookmarkSystem::value();
+			const auto& camera = Locator::camera::value();
+			bookmarks.SetBookmark(command.value, camera.GetFocus(), *entity, camera.GetOrigin());
+			bookmarks.ToggleFollow(command.value);
+			result = fmt::format("bookmark {} on the creature, followed", command.value + 1);
+		}
+		else
+		{
+			result = "no bookmarks";
 		}
 		break;
 	case Kind::HandGive:

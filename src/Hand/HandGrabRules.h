@@ -364,4 +364,18 @@ struct ScoopFacts
 /// What a scoop takes, no more than the source has nor than the handful has room for
 [[nodiscard]] uint32_t ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t held, const ScoopFacts& facts);
 
+/// What the player sees and hears when the hand grips the land or the sea
+enum class GripFeedback : uint8_t
+{
+	/// A puff of dust and one of the land grab sounds
+	Dust,
+	/// A ring on the water and the next water sound
+	Splash,
+	/// Nothing: a grip of the land while a script has the cinema bars in
+	None,
+};
+/// The feedback of a grip. The cinema bars stop the dust and the sound of a grip of the land, but not the splash of a
+/// grip of the sea.
+[[nodiscard]] GripFeedback GripFeedbackOf(bool onLand, bool cinemaBars);
+
 } // namespace openblack::hand_grab

@@ -371,9 +371,12 @@ bool hand_grab::PotPours(glm::vec3 velocity)
 
 glm::vec3 hand_grab::ReleaseSpinTorque(float mass, float speed, glm::vec3 handMoved)
 {
-	// A twist about the level axis across the hand's motion since it let go, its turning sense as the bodies count it
-	const float strength = k_ReleaseSpinFactor * mass * speed;
-	return {strength * handMoved.z, 0.0f, -strength * handMoved.x};
+	// A twist about the level axis across the hand's motion since it let go. Our bodies add a turn with the opposite
+	// sign to the original game, thus each sign changes. Keep the order of the products: the factor times the mass
+	// times the motion, then the speed.
+	const float acrossX = k_ReleaseSpinFactor * (mass * handMoved.x);
+	const float acrossZ = k_ReleaseSpinFactor * (mass * handMoved.z);
+	return {speed * acrossZ, 0.0f, -(acrossX * speed)};
 }
 
 bool hand_grab::LandsOnRelease(const Landing& landing)
@@ -452,4 +455,13 @@ uint32_t hand_grab::ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t hel
 		taken = std::min(taken, room);
 	}
 	return taken;
+}
+
+hand_grab::GripFeedback hand_grab::GripFeedbackOf(bool onLand, bool cinemaBars)
+{
+	if (!onLand)
+	{
+		return GripFeedback::Splash;
+	}
+	return cinemaBars ? GripFeedback::None : GripFeedback::Dust;
 }

@@ -532,7 +532,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 
 bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const FieldFacts& facts)
 {
-	if (!HandInInfluence())
+	if (!facts.lockable || !HandInInfluence())
 	{
 		return false;
 	}
@@ -1504,6 +1504,17 @@ std::optional<entt::entity> HandGrabSystem::GetHeld() const
 		return std::nullopt;
 	}
 	return grab->object;
+}
+
+std::optional<entt::entity> HandGrabSystem::GetLockedOn() const
+{
+	const auto* grab = Grab();
+	if (grab == nullptr || grab->scoopSource == entt::null ||
+	    (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	{
+		return std::nullopt;
+	}
+	return grab->scoopSource;
 }
 
 bool HandGrabSystem::IsBusy() const
