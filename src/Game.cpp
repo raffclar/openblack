@@ -6549,6 +6549,8 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	{
 		auto frame = *cues.icons;
 		frame.handInInfluence = HandInInfluence();
+		// A box of the menu on the screen stops the camera input, so no icon shows
+		frame.inputOff = FrontEndBoxShows();
 		frame.tickMs = machine_clock::Ticks();
 		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
 		_triconAngle = icons.rotateAngle;
