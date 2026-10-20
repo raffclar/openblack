@@ -171,6 +171,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
@@ -1429,6 +1430,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
 	    .Field<&components::VirtualInfluence::hum>("hum");
+	Reflect<components::InterfaceLimits>(context)
+	    .Field<&components::InterfaceLimits::onlyHighlights>("onlyHighlights")
+	    .Field<&components::InterfaceLimits::noHolding>("noHolding");
 	Reflect<components::IntroHand>(context)
 	    .Field<&components::IntroHand::clip>("clip")
 	    .Field<&components::IntroHand::time>("time")
