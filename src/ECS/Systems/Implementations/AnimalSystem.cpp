@@ -716,6 +716,13 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 	case AnimalState::FollowFlock:
 		FollowFlock(entity, animal);
 		break;
+	case AnimalState::WaitForClip:
+		// Its clip played to the end, it goes on to what comes next, as every living thing does
+		if (animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+		{
+			SetTopState(animal, animal.afterClip);
+		}
+		break;
 	case AnimalState::InteractDecideWhatToDo:
 		// Up again after a landing, it joins a flock near it if it can, then it starts on a leg of its own
 		if (EntityRegistry().AllOf<Flock>(animal.flock))
