@@ -144,6 +144,31 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.predators_creche",
+	    .name = "Hunters frighten a village with a crèche",
+	    .facet = Facet::Miracles,
+	    .description = "As the hunters frightening a village, but the village has one crèche and no huts: four villagers "
+	                   "of the player's town stand beside the crèche and two cows south of them.",
+	    .expected = "A frightened villager that heads off to hide goes to the crèche. It goes to the middle of the "
+	                "crèche, not to its door, and goes inside there. When it comes out to look about, it steps out from "
+	                "the middle. The children of a town still go to the crèche's door.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-45.0f, 0.0f}, {45.0f, 110.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticCreche, .offset = {0.0f, 78.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-12.0f, 69.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {12.0f, 69.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-6.0f, 66.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {6.0f, 66.0f}, .joinTown = true},
+	                {.type = AnimalInfo::Cow, .offset = {-18.0f, 48.0f}},
+	                {.type = AnimalInfo::Cow, .offset = {20.0f, 52.0f}}},
+	    .miracles = {{.type = MagicType::FlockGround,
+	                  .point = k_Spot,
+	                  .handOffset = k_HandBehind,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "animals.wolf_pounce_downed",
 	    .name = "A wolf brings a villager down",
 	    .facet = Facet::Miracles,
