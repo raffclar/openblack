@@ -2551,9 +2551,30 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
+bool Game::DoesFrameGraphics() const
+{
+	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
+	if (!minimised)
+	{
+		return true;
+	}
+	// The pictures that the debug inspector, a challenge, the creature's page or a saved game wait for
+	const bool pictureWanted =
+	    (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount) ||
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	return game_frame::DoesGraphics(minimised, pictureWanted);
+}
+
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 {
 	using game_frame::Step;
+	// While the window is minimised the turns and the keys continue, but the camera, the hand and the world's draw stop
+	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
+	{
+		return true;
+	}
 	switch (step)
 	{
 	case Step::FrameClock:
@@ -5019,7 +5040,8 @@ bool Game::Run() noexcept
 		PlaceScreenLabels();
 		PlaceLearningTexts();
 		// In the fast simulation mode the game draws only some frames, or none
-		const bool drawsFrame = sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount);
+		const bool drawsFrame =
+		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount) && DoesFrameGraphics();
 		if (drawsFrame && _interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();

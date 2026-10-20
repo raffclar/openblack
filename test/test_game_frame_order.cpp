@@ -142,3 +142,26 @@ TEST(GameFrameOrder, TheKeysOfTheCameraActAfterTheCameraMoves)
 	// So the steps of this frame's keys move the camera in the next frame, after the next frame's turns
 	EXPECT_EQ(recorder.Steps().back(), Step::ProfileAlignment);
 }
+
+// While the window is minimised the game does not move the camera, put the hand under the cursor or draw the world
+TEST(GameFrameOrder, TheGraphicsAreTheCameraThePreDrawAndTheDraw)
+{
+	for (const auto step : {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple,
+	                        Step::Hand, Step::Entities})
+	{
+		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
+	}
+	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::Turns, Step::FrameTime, Step::CameraKeys,
+	                        Step::ProfileAlignment, Step::Audio})
+	{
+		EXPECT_FALSE(IsGraphics(step)) << static_cast<int>(step);
+	}
+}
+
+// A minimised window skips the graphics, except in a frame that a picture is necessary from
+TEST(GameFrameOrder, AMinimisedWindowSkipsTheGraphicsUnlessAPictureIsWanted)
+{
+	EXPECT_TRUE(DoesGraphics(false, false));
+	EXPECT_FALSE(DoesGraphics(true, false));
+	EXPECT_TRUE(DoesGraphics(true, true));
+}

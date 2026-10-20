@@ -140,6 +140,27 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
 	return true;
 }
 
+/// Whether a step is part of the frame's graphics: it moves the camera, puts the hand under the cursor or draws the
+/// world. The game does none of these steps while its window is minimised. The turns, the keys and the other steps
+/// continue.
+[[nodiscard]] constexpr bool IsGraphics(Step step)
+{
+	for (const auto& place : k_Frame)
+	{
+		if (place.step == step)
+		{
+			return place.stage == Stage::Camera || place.stage == Stage::PreDraw || place.stage == Stage::Draw;
+		}
+	}
+	return false;
+}
+
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+{
+	return !minimised || pictureWanted;
+}
+
 /// Does each step of the frame, in the order of the frame. A step that returns false stops the frame.
 template <typename Do>
 bool PlayFrame(Do&& step)
