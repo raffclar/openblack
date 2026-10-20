@@ -841,6 +841,8 @@ void world_objects::Remove(entt::entity object)
 			villager_home::HomeDeleted(villager);
 		}
 	}
+	// A building that goes closes each of its sites first, so that the builders stop their work and step away from it
+	construction::CloseSite(object);
 	registry.Destroy(object);
 	registry.SetDirty();
 }
