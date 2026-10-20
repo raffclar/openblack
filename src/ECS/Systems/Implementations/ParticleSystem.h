@@ -75,6 +75,7 @@ public:
 	bool MoveRainStorm(uint32_t storm, glm::vec3 centre) override;
 	[[nodiscard]] bool IsDryLand(glm::vec3 point) const override;
 	void RemoveRainStorm(uint32_t storm) override;
+	[[nodiscard]] bool VillagerInCell(glm::vec3 point) const override;
 	[[nodiscard]] std::vector<particles::StrikeCandidate> StrikeCandidates(glm::vec3 centre, size_t cells) const override;
 	[[nodiscard]] bool LandBlocks(glm::vec3 from, glm::vec3 to) const override;
 	void QueueArcs(entt::entity object) override;

@@ -102,6 +102,19 @@ void GameParticleWorld::ProcessGlows()
 	}
 }
 
+bool GameParticleWorld::VillagerInCell(glm::vec3 point) const
+{
+	const auto cell = map_coords::CellOf(point);
+	if (!map_coords::InBounds(cell) || !Locator::entitiesRegistry::has_value() || !Locator::entitiesMap::has_value())
+	{
+		return false;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto inCell = Locator::entitiesMap::value().GetAllInCell(cell);
+	return std::ranges::any_of(
+	    inCell, [&registry](entt::entity entity) { return registry.Valid(entity) && registry.AllOf<Villager>(entity); });
+}
+
 std::vector<particles::StrikeCandidate> GameParticleWorld::StrikeCandidates(glm::vec3 centre, size_t cells) const
 {
 	std::vector<particles::StrikeCandidate> candidates;
