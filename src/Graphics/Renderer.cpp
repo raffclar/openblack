@@ -7712,6 +7712,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		if (desc.drawEntities)
 		{
 			DrawLightBeams(desc);
+			DrawTempleExitGlow(desc);
+			DrawTempleCreedShells(desc);
 			DrawMistDomes(desc);
 			DrawTempleText(desc);
 		}

@@ -1622,3 +1622,5 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_temple_exit_glow graphics/test_temple_exit_glow.cpp)
+openblack_setup_and_add_test(test_temple_room_meshes temple/test_temple_room_meshes.cpp)

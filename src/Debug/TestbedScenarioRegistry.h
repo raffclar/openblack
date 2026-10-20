@@ -758,7 +758,8 @@ struct Command
 		/// Needs no creature
 		RecordChallenge,
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
-		/// creature
+		/// creature. In the temple, the value of no room (TempleRoom::Unknown) walks the camera out through the main
+		/// room's way out
 		EnterTemple,
 		/// The explorers' boat film plays as a script's PLAY_JC_SPECIAL 6 plays it on Land 1, moved to the testbed: its
 		/// dry dock at the point (from the middle of the map) on the land there, and its sailing starting in the lake's

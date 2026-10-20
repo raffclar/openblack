@@ -115,3 +115,27 @@ TEST(TempleHeartLook, TheHeartIsNotDrawnJustBeforeTheTempleGoes)
 	EXPECT_FALSE(Drawn(true, 21.9f));
 	EXPECT_EQ(k_Colour, 0xFFFFFFu);
 }
+
+// The creed's shell covers the heart from 14 seconds into its destruction to its end
+TEST(TempleHeartLook, TheShellShowsFromFourteenSeconds)
+{
+	EXPECT_FALSE(openblack::graphics::temple_heart_look::ShellShown(false, 15.0f));
+	EXPECT_FALSE(openblack::graphics::temple_heart_look::ShellShown(true, 13.9f));
+	EXPECT_TRUE(openblack::graphics::temple_heart_look::ShellShown(true, 14.0f));
+	EXPECT_TRUE(openblack::graphics::temple_heart_look::ShellShown(true, 21.9f));
+}
+
+// The shell keeps a size of 0.3 and a reach of 5 until 20 seconds, then grows to 0.6 and 10 at 22 seconds
+TEST(TempleHeartLook, TheShellGrowsAtTheEnd)
+{
+	namespace look = openblack::graphics::temple_heart_look;
+	EXPECT_FLOAT_EQ(look::ShellScale(15.0f), 0.3f);
+	EXPECT_FLOAT_EQ(look::ShellReach(15.0f), 5.0f);
+	EXPECT_FLOAT_EQ(look::ShellScale(21.0f), 0.45f);
+	EXPECT_FLOAT_EQ(look::ShellReach(21.0f), 7.5f);
+	EXPECT_FLOAT_EQ(look::ShellScale(22.0f), 0.6f);
+	EXPECT_FLOAT_EQ(look::ShellReach(30.0f), 10.0f);
+	// Before the first second the tables start from nothing
+	EXPECT_FLOAT_EQ(look::ShellReach(0.5f), 2.5f);
+	EXPECT_FLOAT_EQ(look::ShellScale(0.0f), 0.0f);
+}

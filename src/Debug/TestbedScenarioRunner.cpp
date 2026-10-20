@@ -2778,7 +2778,12 @@ void Runner::Give(const Command& command)
 		if (Locator::temple::has_value())
 		{
 			auto& temple = Locator::temple::value();
-			if (temple.Active())
+			// In the temple, no room is a walk through the main room's way out
+			if (temple.Active() && room == TempleRoom::Unknown)
+			{
+				temple.EnterRoom(room);
+			}
+			else if (temple.Active())
 			{
 				temple.GoToRoom(room);
 			}

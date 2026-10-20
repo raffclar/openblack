@@ -1341,6 +1341,11 @@ void TempleInterior::ApplyLens() const
 	                                      lens.has_value() ? lens->nearClip : config.cameraNearClip);
 }
 
+std::optional<float> TempleInterior::GetWayOutSeconds() const
+{
+	return _cameraModel != nullptr ? _cameraModel->GetWayOutSeconds() : std::nullopt;
+}
+
 bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 {
 	if (room == _currentRoom || room == _transitionRoom)
