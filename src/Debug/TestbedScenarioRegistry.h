@@ -1235,6 +1235,8 @@ void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The labels over the villagers' heads: the names display as it grows in and out
 void AddVillagerLabelScenarios(std::vector<Scenario>& all);
+/// The temple key and the realm key of the world camera
+void AddTempleKeyScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window

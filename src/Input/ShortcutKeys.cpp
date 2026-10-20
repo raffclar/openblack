@@ -10,7 +10,6 @@
 #include "ShortcutKeys.h"
 
 #include <algorithm>
-#include <chrono>
 #include <optional>
 #include <stdexcept>
 
@@ -21,7 +20,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
-#include "Camera/DoubleClickFlight.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -31,6 +30,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -45,12 +45,6 @@ namespace openblack::input
 {
 namespace
 {
-/// The ground under a point
-[[nodiscard]] glm::vec3 GroundUnder(const LandIslandInterface& land, glm::vec3 point)
-{
-	return {point.x, land.GetHeightAt({point.x, point.z}), point.z};
-}
-
 /// Where the player's temple stands, if they have one
 [[nodiscard]] std::optional<glm::vec3> PlayerTemplePosition()
 {
@@ -198,15 +192,19 @@ void ShortcutKeys::Update()
 	{
 		return;
 	}
+	// The keys fly the world camera: the creature's follow camera first gives the camera back
+	if (Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
+	{
+		Locator::creatureModeSystem::value().Leave();
+	}
 	auto& camera = Locator::camera::value();
 	const auto& land = Locator::terrainSystem::value();
-	glm::vec3 realmGround;
+	glm::vec2 islandCentre;
 	try
 	{
-		// Over the middle of the island's land
-		const auto extent = land.GetExtent();
-		realmGround = GroundUnder(
-		    land, glm::vec3((extent.minimum.x + extent.maximum.x) * 0.5f, 0.0f, (extent.minimum.y + extent.maximum.y) * 0.5f));
+		// Half way between the first and the last block of land
+		const auto blocks = land.GetIndexExtent();
+		islandCentre = zoom_to::IslandCentre(blocks.minimum, blocks.maximum);
 	}
 	catch (const std::runtime_error&)
 	{
@@ -214,28 +212,36 @@ void ShortcutKeys::Update()
 		return;
 	}
 	const zoom_to::CameraView current {.origin = camera.GetOrigin(), .focus = camera.GetFocus()};
-	std::optional<zoom_to::CameraView> flight;
-	// The help's profile counts every flight to the temple or over the realm, but not a single tap's view
-	bool flyingToPlace = true;
+	const auto now = machine_clock::Ticks();
+	zoom_to::Press press;
 	if (temple)
 	{
-		const auto now = std::chrono::milliseconds(machine_clock::Ticks());
-		flyingToPlace = _zoomTo.IsDoubleTap(now);
+		// The world camera finds how far ahead the land is for a single tap. Another camera, such as the fight view,
+		// gives no single tap view.
+		std::optional<float> clickDistance;
+		auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel());
+		if (world != nullptr && _zoomTo.IsSingleTap(now))
+		{
+			clickDistance = world->RefreshClickDistance(camera);
+		}
 		const auto templePosition = PlayerTemplePosition();
-		flight = _zoomTo.PressTemple(
-		    now, current, GroundUnder(land, current.focus),
-		    templePosition.has_value() ? std::optional(GroundUnder(land, *templePosition)) : std::nullopt, realmGround);
+		press = zoom_to::TempleKey(now, current,
+		                           templePosition.has_value() ? std::optional(glm::vec2(templePosition->x, templePosition->z))
+		                                                      : std::nullopt,
+		                           islandCentre, clickDistance);
 	}
 	else
 	{
-		flight = _zoomTo.PressRealm(current, realmGround);
+		press = zoom_to::RealmKey(now, current, islandCentre);
 	}
-	if (flight.has_value())
+	const auto flight = _zoomTo.Act(press, [&land](int32_t mapX, int32_t mapZ) { return land.GetAltitude(mapX, mapZ); });
+	if (!flight.has_value())
 	{
-		camera.GetModel().SetFlight(flight->origin, flight->focus,
-		                            flyingToPlace ? camera_fly::k_ZoomToRise : camera_fly::k_SingleTapRise);
+		return;
 	}
-	if (flyingToPlace && Locator::helpProfileSystem::has_value())
+	camera.GetModel().SetFlight(flight->view.origin, flight->view.focus, flight->rise);
+	// The help's profile counts every flight to the temple or over the realm, and back, but not a single tap's view
+	if (flight->toPlace && Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().Trigger(help::profile::k_CameraFlyToTemple);
 	}

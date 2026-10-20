@@ -193,11 +193,11 @@ TEST(CameraHelpEvents, ADoubleClickCountsTheObjectFirstThenTheLand)
 
 TEST(CameraHelpEvents, TheTempleKeysSecondTapWithinHalfASecondIsADoubleTap)
 {
-	using namespace std::chrono_literals;
 	openblack::zoom_to::ZoomToPlaces zoomTo;
-	EXPECT_FALSE(zoomTo.IsDoubleTap(1000ms));
+	EXPECT_TRUE(zoomTo.IsSingleTap(1000));
 	const openblack::zoom_to::CameraView view {.origin = {0.0f, 100.0f, -100.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	std::ignore = zoomTo.PressTemple(1000ms, view, {}, std::nullopt, {});
-	EXPECT_TRUE(zoomTo.IsDoubleTap(1500ms));
-	EXPECT_FALSE(zoomTo.IsDoubleTap(1501ms));
+	const auto press = openblack::zoom_to::TempleKey(1000, view, std::nullopt, {}, std::nullopt);
+	std::ignore = zoomTo.Act(press, [](int32_t, int32_t) { return 0.0f; });
+	EXPECT_FALSE(zoomTo.IsSingleTap(1500));
+	EXPECT_TRUE(zoomTo.IsSingleTap(1501));
 }

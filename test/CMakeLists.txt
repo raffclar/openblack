@@ -1573,3 +1573,13 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_hand_knock hand/test_hand_knock.cpp
 )
+openblack_setup_and_add_test(test_zoom_to_places camera/test_zoom_to_places.cpp)
+openblack_setup_and_add_test(
+  test_oracle_zoom_to_places oracle/test_oracle_zoom_to_places.cpp
+)
+set_tests_properties(
+  test_oracle_zoom_to_places
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_click_distance camera/test_click_distance.cpp)
