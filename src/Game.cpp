@@ -2447,11 +2447,116 @@ void Game::ProcessTempleAudioTurn()
 
 bool Game::Update() noexcept
 {
+	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
+	FrameState frame;
+	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) { return PlayFrameStep(step, frame); }))
+	{
+		return false;
+	}
+	if (sim_run::Finished(Locator::simulation::value().GetSettings(), Locator::time::value().GetTurn()))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
+		return false;
+	}
+	const auto& config = Locator::config::value();
+	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
+}
+
+bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
+{
+	using game_frame::Step;
+	switch (step)
+	{
+	case Step::FrameClock:
+		StartFrame(frame);
+		break;
+	case Step::Input:
+		UpdateInput();
+		break;
+	case Step::ScreenMarks:
+		// The numbers floating up from things rise and fade
+		UpdateFloatingNumbers(std::chrono::duration<float>(frame.deltaTime).count());
+		// The marks over creatures that learn rise, blink and fade
+		UpdateLearningMarks(std::chrono::duration<float, std::milli>(frame.deltaTime).count());
+		break;
+	case Step::DebugGui:
+		return UpdateDebugGui();
+	case Step::Interface:
+		UpdateInterfaceFrame(frame.deltaTime);
+		break;
+	case Step::GripEffect:
+		GripLandscapeEffect::Update(std::chrono::duration_cast<std::chrono::duration<float>>(frame.deltaTime).count());
+		break;
+	case Step::Turns:
+		return PlayTurns();
+	case Step::FrameTime:
+		// The frame's game time: none while paused, quicker or slower with the game speed
+		Locator::time::value().UpdateFrame();
+		break;
+	case Step::Video:
+		// A full-screen video decodes the frames due by the real clock, fades, and ends
+		Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
+		break;
+	case Step::PauseText:
+		// The words of the pause and the speed, after the frame's keys, turns and video
+		UpdatePauseText();
+		break;
+	case Step::CameraMouse:
+		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
+		if (!Locator::cameraPathSystem::value().HoldsCamera())
+		{
+			Locator::camera::value().HandleActions(frame.deltaTime);
+		}
+		break;
+	case Step::CameraPaths:
+		Locator::cameraPathSystem::value().Update(frame.deltaTime);
+		break;
+	case Step::CameraControllers:
+		UpdateCameraControllers(frame.deltaTime);
+		break;
+	case Step::Camera:
+		UpdateCamera();
+		break;
+	case Step::Temple:
+		UpdateTemple(frame.deltaTime);
+		break;
+	case Step::Bookmarks:
+		Locator::cameraBookmarkSystem::value().Update(frame.deltaTime);
+		break;
+	case Step::HighDetail:
+		// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
+		Locator::highDetailSystem::value().Update();
+		break;
+	case Step::FrameEffects:
+		UpdateFrameEffects();
+		break;
+	case Step::Hand:
+		UpdateHandFrame(frame.deltaTime);
+		break;
+	case Step::Entities:
+		UpdateEntitiesFrame(frame.deltaTime);
+		break;
+	case Step::Audio:
+		Locator::audio::value().Update();
+		break;
+	case Step::CameraKeys:
+		UpdateCameraKeys(frame.deltaTime);
+		break;
+	case Step::ProfileAlignment:
+		KeepAlignmentInProfile();
+		break;
+	case Step::_Count:
+		break;
+	}
+	return true;
+}
+
+void Game::StartFrame(FrameState& frame)
+{
 	auto& profiler = Locator::profiler::value();
 
 	profiler.Frame();
 
-	auto& camera = Locator::camera::value();
 	auto& config = Locator::config::value();
 
 	auto previous = profiler.GetEntries().at(profiler.GetEntryIndex(-1)).frameStart;
@@ -2461,7 +2566,7 @@ bool Game::Update() noexcept
 	{
 		current = previous;
 	}
-	auto deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
+	frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
 
 	Locator::debugGui::value().SetScale(config.guiScale);
 	Locator::time::value().Update();
@@ -2474,12 +2579,17 @@ bool Game::Update() noexcept
 	// Stepped deterministically, a frame takes the fixed time the clock gives it, whatever the wall clock says
 	if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value())
 	{
-		deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
+		frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(*fixed);
 	}
 
 	// The physics world isn't stepped: the game's objects don't move as rigid bodies, and the world only answers the
 	// rays cast for the hand, the camera and the like. Stepping it let the features fall and lose their turn.
+}
 
+void Game::UpdateInput()
+{
+	auto& profiler = Locator::profiler::value();
+	auto& camera = Locator::camera::value();
 	// Input events
 	{
 		auto sdlInput = profiler.BeginScoped(Profiler::Stage::SdlInput);
@@ -2520,19 +2630,6 @@ bool Game::Update() noexcept
 		{
 			_mousePosition = glm::ivec2(actions.GetMousePosition());
 		}
-		// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
-		// which hand it straight back; meanwhile the player's other camera controls do nothing
-		auto& cameraPaths = Locator::cameraPathSystem::value();
-		cameraPaths.HandlePlayerControl(
-		    {.movementKey = actions.GetAny(input::BindableActionMap::MOVE_LEFT, input::BindableActionMap::MOVE_RIGHT,
-		                                   input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS),
-		     .frameMilliseconds =
-		         static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(deltaTime).count()),
-		     .grippingLand = _handGripping && !_handRotating});
-		if (!cameraPaths.HoldsCamera())
-		{
-			camera.HandleActions(deltaTime);
-		}
 		if (const auto warp = actions.GetCursorWarp(); warp.has_value())
 		{
 			_mousePosition = *warp;
@@ -2546,12 +2643,12 @@ bool Game::Update() noexcept
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
 	}
-	Locator::cameraPathSystem::value().Update(deltaTime);
-	// The numbers floating up from things rise and fade
-	UpdateFloatingNumbers(std::chrono::duration<float>(deltaTime).count());
-	// The marks over creatures that learn rise, blink and fade
-	UpdateLearningMarks(std::chrono::duration<float, std::milli>(deltaTime).count());
+}
 
+bool Game::UpdateDebugGui()
+{
+	auto& profiler = Locator::profiler::value();
+	const auto& config = Locator::config::value();
 	if (!config.running || _quitRequested)
 	{
 		return false;
@@ -2570,6 +2667,12 @@ bool Game::Update() noexcept
 			return false; // Quit event
 		}
 	}
+	return true;
+}
+
+void Game::UpdateCameraControllers(std::chrono::microseconds deltaTime)
+{
+	auto& profiler = Locator::profiler::value();
 	// The in-game editor keeps its camera on what it has picked
 	if (Locator::editorSystem::has_value())
 	{
@@ -2592,7 +2695,11 @@ bool Game::Update() noexcept
 	{
 		Locator::tattooEditorSystem::value().Update(std::chrono::duration<float, std::milli>(deltaTime).count());
 	}
+}
 
+void Game::UpdateCamera()
+{
+	auto& camera = Locator::camera::value();
 	// While a miracle's camera path has the camera, the player's camera doesn't move it
 	// A hand demonstration has the camera exactly where its recording had it, and the camera's own moves wait
 	const auto demoCamera = Locator::handDemoSystem::has_value() ? Locator::handDemoSystem::value().GetCamera() : std::nullopt;
@@ -2630,6 +2737,10 @@ bool Game::Update() noexcept
 	// The camera keeps this view for its rays to the land on the next frame. A command of this frame that puts the camera
 	// does not change the view of these rays.
 	camera.KeepDrawnView();
+}
+
+void Game::UpdateTemple(std::chrono::microseconds deltaTime)
+{
 	// The temple's camera may have taken the player out of the temple
 	if (Locator::temple::has_value())
 	{
@@ -2642,9 +2753,10 @@ bool Game::Update() noexcept
 			RequestQuit();
 		}
 	}
-	Locator::cameraBookmarkSystem::value().Update(deltaTime);
-	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
-	Locator::highDetailSystem::value().Update();
+}
+
+void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
+{
 	if (_interface)
 	{
 		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
@@ -2663,8 +2775,11 @@ bool Game::Update() noexcept
 		}
 		StartNextGameWhenSaved();
 	}
-	GripLandscapeEffect::Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+}
 
+bool Game::PlayTurns()
+{
+	auto& profiler = Locator::profiler::value();
 	// Update Game Logic in Registry
 	{
 		auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
@@ -2681,16 +2796,14 @@ bool Game::Update() noexcept
 			    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - logicStart).count());
 		}
 	}
+	return true;
+}
 
-	KeepAlignmentInProfile();
-
-	// The frame's game time: none while paused, quicker or slower with the game speed
+void Game::UpdateFrameEffects()
+{
+	auto& profiler = Locator::profiler::value();
+	auto& camera = Locator::camera::value();
 	auto& clock = Locator::time::value();
-	clock.UpdateFrame();
-	// A full-screen video decodes the frames due by the real clock, fades, and ends
-	Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
-	// The words of the pause and the speed, after the frame's keys, turns and video
-	UpdatePauseText();
 	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	Locator::alignmentSystem::value().Update(gameTime);
 	{
@@ -2915,7 +3028,15 @@ bool Game::Update() noexcept
 	{
 		_interface->GetMenu().Close();
 	}
+}
 
+void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
+{
+	auto& profiler = Locator::profiler::value();
+	auto& camera = Locator::camera::value();
+	const auto& config = Locator::config::value();
+	auto& clock = Locator::time::value();
+	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
 	// Update Uniforms
 	{
 		auto profilerScopedUpdateUniforms = profiler.BeginScoped(Profiler::Stage::UpdateUniforms);
@@ -3588,7 +3709,16 @@ bool Game::Update() noexcept
 		}
 
 		ShowInspectorOverride(false);
+	}
+}
 
+void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
+{
+	auto& profiler = Locator::profiler::value();
+	auto& config = Locator::config::value();
+	auto& clock = Locator::time::value();
+	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
+	{
 		// Update Entities
 		{
 			auto updateEntities = profiler.BeginScoped(Profiler::Stage::UpdateEntities);
@@ -3653,20 +3783,28 @@ bool Game::Update() noexcept
 				updateDrawnScenery();
 			}
 		}
-	} // Update Uniforms
-
-	// Update Audio
-	{
-		auto updateAudio = profiler.BeginScoped(Profiler::Stage::UpdateAudio);
-		Locator::audio::value().Update();
-	} // Update Audio
-
-	if (sim_run::Finished(Locator::simulation::value().GetSettings(), Locator::time::value().GetTurn()))
-	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
-		return false;
 	}
-	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
+}
+
+void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
+{
+	auto& camera = Locator::camera::value();
+	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
+	auto& actions = Locator::gameActionSystem::value();
+	// A miracle's camera path keeps the camera until the player moves it with the movement keys or grips the land,
+	// which hand it straight back; meanwhile the player's other camera controls do nothing
+	auto& cameraPaths = Locator::cameraPathSystem::value();
+	const bool pathHeld = cameraPaths.HoldsCamera();
+	cameraPaths.HandlePlayerControl(
+	    {.movementKey = actions.GetAny(input::BindableActionMap::MOVE_LEFT, input::BindableActionMap::MOVE_RIGHT,
+	                                   input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS),
+	     .frameMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(deltaTime).count()),
+	     .grippingLand = _handGripping && !_handRotating});
+	// The camera that the path gives back reads the keys from the next frame
+	if (!pathHeld)
+	{
+		camera.HandleKeys(deltaTime);
+	}
 }
 
 bool Game::Initialize() noexcept

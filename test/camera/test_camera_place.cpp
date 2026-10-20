@@ -99,6 +99,7 @@ protected:
 		{
 			_camera.HandleActions(k_Frame);
 			_camera.Update(k_Frame);
+			_camera.HandleKeys(k_Frame);
 		}
 	}
 
@@ -110,6 +111,7 @@ protected:
 		{
 			_camera.HandleActions(k_Frame);
 			_camera.Update(k_Frame);
+			_camera.HandleKeys(k_Frame);
 			const auto origin = _camera.GetOrigin();
 			ASSERT_LT(glm::distance(origin, k_PlacedOrigin), 1e-3f) << "frame " << frame;
 			// What it looks at may slide along its line of sight onto the land ahead, but it looks the same way
@@ -171,6 +173,7 @@ TEST_F(CameraPlace, ADoubleTapThatWaitsFliesFromThePlace)
 	_camera.HandleActions(k_Frame);
 	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
 	_camera.Update(k_Frame);
+	_camera.HandleKeys(k_Frame);
 	EXPECT_GT(glm::distance(_camera.GetOrigin(Camera::Interpolation::Target), k_PlacedOrigin), 1.0f);
 }
 

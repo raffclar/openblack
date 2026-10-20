@@ -180,25 +180,27 @@ void TestDefaultCameraModel::SetModel(DefaultWorldCameraModel& m, const json& js
 	}
 	m._screenSpaceMouseRaycastHitAtClick = expected["lastGrabMouseHitPoint"].get<glm::vec3>();
 
-	glm::xz(m._rotateAroundDelta) = glm::xz(json["RotateAroundDelta"].get<glm::vec3>());
-	m._keyBoardMoveDelta = json["KeyboardMoveDelta"].get<glm::vec2>();
+	// The recorded steps are what the keys left after the frame. The next frame's step of the camera reads them.
+	glm::xz(m._keySteps.rotateAround) = glm::xz(json["RotateAroundDelta"].get<glm::vec3>());
+	m._keySteps.move = json["KeyboardMoveDelta"].get<glm::vec2>();
 
+	// The recorded hand status is the mode of the last step of the camera. The next frame compares its mode with it.
 	const auto handStatus = expected["handStatus"].get<std::string>();
 	if (handStatus == "CAMERA_MODE_HAND_STATUS_NORMAL")
 	{
-		m._modePrev = DefaultWorldCameraModel::Mode::Cartesian;
+		m._mode = DefaultWorldCameraModel::Mode::Cartesian;
 	}
 	else if (handStatus == "CAMERA_MODE_HAND_STATUS_ZOOMING")
 	{
-		m._modePrev = DefaultWorldCameraModel::Mode::Polar;
+		m._mode = DefaultWorldCameraModel::Mode::Polar;
 	}
 	else if (handStatus == "CAMERA_MODE_HAND_STATUS_GRABBING_LAND")
 	{
-		m._modePrev = DefaultWorldCameraModel::Mode::DraggingLandscape;
+		m._mode = DefaultWorldCameraModel::Mode::DraggingLandscape;
 	}
 	else if (handStatus == "CAMERA_MODE_HAND_STATUS_TILT_ON")
 	{
-		m._modePrev = DefaultWorldCameraModel::Mode::ArcBall;
+		m._mode = DefaultWorldCameraModel::Mode::ArcBall;
 	}
 	else
 	{
@@ -262,19 +264,19 @@ void TestDefaultCameraModel::ValidateModel(const DefaultWorldCameraModel& m, con
 		const auto handStatus = expected["handStatus"].get<std::string>();
 		if (handStatus == "CAMERA_MODE_HAND_STATUS_NORMAL")
 		{
-			ASSERT_EQ(m._modePrev, DefaultWorldCameraModel::Mode::Cartesian) << "at start of frame " << frameNumber;
+			ASSERT_EQ(m._mode, DefaultWorldCameraModel::Mode::Cartesian) << "at start of frame " << frameNumber;
 		}
 		else if (handStatus == "CAMERA_MODE_HAND_STATUS_ZOOMING")
 		{
-			ASSERT_EQ(m._modePrev, DefaultWorldCameraModel::Mode::Polar) << "at start of frame " << frameNumber;
+			ASSERT_EQ(m._mode, DefaultWorldCameraModel::Mode::Polar) << "at start of frame " << frameNumber;
 		}
 		else if (handStatus == "CAMERA_MODE_HAND_STATUS_GRABBING_LAND")
 		{
-			ASSERT_EQ(m._modePrev, DefaultWorldCameraModel::Mode::DraggingLandscape) << "at start of frame " << frameNumber;
+			ASSERT_EQ(m._mode, DefaultWorldCameraModel::Mode::DraggingLandscape) << "at start of frame " << frameNumber;
 		}
 		else if (handStatus == "CAMERA_MODE_HAND_STATUS_TILT_ON")
 		{
-			ASSERT_EQ(m._modePrev, DefaultWorldCameraModel::Mode::ArcBall) << "at start of frame " << frameNumber;
+			ASSERT_EQ(m._mode, DefaultWorldCameraModel::Mode::ArcBall) << "at start of frame " << frameNumber;
 		}
 		else
 		{
@@ -379,11 +381,15 @@ TEST_P(TestDefaultCameraModel, ValidateRecordedData)
 		}
 
 		GetParam().pickingSystem->frameNumber = i;
-		GetParam().actionInterface->frameNumber = i;
-
 		const auto deltaTimePrev = std::chrono::milliseconds(framePrev["g_delta_time"].get<int>());
-		const auto updateInfo = _model->Update(deltaTimePrev, *_camera);
+		// The game's frame: the mouse, the step of the camera, then the keys for the next frame. The game moves the
+		// camera with the mouse of the same frame, and with the keys of the frame before. The mocks give the input of
+		// frame i for the camera of frame i + 1, so the mouse reads the mock of the frame before.
+		GetParam().actionInterface->frameNumber = i > 0 ? i - 1 : 0;
 		_model->HandleActions(deltaTimePrev);
+		GetParam().actionInterface->frameNumber = i;
+		const auto updateInfo = _model->Update(deltaTimePrev, *_camera);
+		_model->HandleKeys(deltaTimePrev);
 
 		if (updateInfo)
 		{

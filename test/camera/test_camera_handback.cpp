@@ -151,6 +151,7 @@ TEST_P(CameraHandback, ThePlayersCameraLooksTheWayTheScriptLeftIt)
 	{
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 		const auto now = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
 		EXPECT_GT(glm::dot(now, heading), std::cos(glm::radians(20.0f))) << "frame " << frame;
 	}
@@ -242,6 +243,7 @@ TEST_P(MovingAfterHandback, TheKeysMoveTheCameraWithoutTurningIt)
 	{
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 	}
 	Locator::gameActionSystem::reset<MockAction>(new HoldingAction(GetParam()));
 	const auto origin = model.GetTargetOrigin();
@@ -251,6 +253,7 @@ TEST_P(MovingAfterHandback, TheKeysMoveTheCameraWithoutTurningIt)
 	{
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 		const auto now = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
 		EXPECT_GT(glm::dot(now, heading), std::cos(glm::radians(2.0f))) << "frame " << frame;
 	}
@@ -366,6 +369,7 @@ TEST_F(DragOffTheLand, DraggingOnPastTheLandDoesNotTurnTheCamera)
 		{
 			_camera.HandleActions(k_Frame);
 			_camera.Update(k_Frame);
+			_camera.HandleKeys(k_Frame);
 			if (_action->held && _action->cursor.y > 10)
 			{
 				_action->cursor.y -= 6;
@@ -417,6 +421,7 @@ TEST_F(DragOffTheLand, HoldingTheButtonOverTheSkyDoesNotTurnTheCamera)
 	{
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 	}
 	const auto heading = Heading(model.GetTargetOrigin(), model.GetTargetFocus());
 	_picking->overSky = true;
@@ -426,6 +431,7 @@ TEST_F(DragOffTheLand, HoldingTheButtonOverTheSkyDoesNotTurnTheCamera)
 	{
 		_camera.HandleActions(k_Frame);
 		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
 		if (_action->cursor.y > 10)
 		{
 			_action->cursor.y -= 6;

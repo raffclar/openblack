@@ -46,6 +46,8 @@ public:
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) final;
 	void HandleActions(std::chrono::microseconds dt) final;
+	/// The keys turn, tilt, zoom and move the camera by the time of this frame. The next frame's step uses them.
+	void HandleKeys(std::chrono::microseconds dt) final;
 	/// Flies to a place, as a bookmark or a key does. The flight ends at the fence when the place is outside it, and
 	/// wooshes only when it starts more than 150 from its end. Its half way point rises by the rise times the distance
 	/// across.
@@ -163,6 +165,13 @@ private:
 	// State of input Action
 	glm::vec3 _rotateAroundDelta = glm::vec3(0.0f, 0.0f, 0.0f);
 	glm::vec2 _keyBoardMoveDelta = glm::vec2(0.0f, 0.0f);
+	/// The steps of the keys of the last frame. The mouse of this frame adds to them before the step of the camera.
+	struct KeySteps
+	{
+		glm::vec3 rotateAround {0.0f};
+		glm::vec2 move {0.0f};
+	};
+	KeySteps _keySteps;
 	std::optional<glm::vec3> _handPosition;
 
 	float _focusDistance = 0.0f;

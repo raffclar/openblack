@@ -779,12 +779,10 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 	return std::nullopt;
 }
 
-void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
+void DefaultWorldCameraModel::HandleKeys(std::chrono::microseconds dt)
 {
-	_rotateAroundDelta = glm::vec3();
-	_keyBoardMoveDelta = glm::vec2();
-	_dragTurn = 0.0f;
-	_dragTilt = 0.0f;
+	// The keys start the steps again. The camera takes them in its next frame.
+	KeySteps steps;
 
 	// Compute delta position (dp) based on the elapsed time and speed.
 	const auto dp = k_InteractionSpeedMultiplier * std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
@@ -794,26 +792,16 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
 	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
 
-	// What the scripts let the player do, less double clicking while watching a fight
-	const auto help =
-	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
-	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
-	_features = onFight ? camera_help::DuringFight(help.features) : help.features;
-	const bool aroundMouse = (_features & camera_help::feature::k_RotateAroundMouse) != 0;
-	const bool rotateAroundMouse = aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
-
-	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
-
 	if (actionSystem.GetAny(input::BindableActionMap::ROTATE_LEFT, input::BindableActionMap::ROTATE_RIGHT))
 	{
 		const float distance = (actionSystem.Get(input::BindableActionMap::ROTATE_LEFT) ? -1.0f : 1.0f) * dp;
-		_rotateAroundDelta.y += distance;
+		steps.rotateAround.y += distance;
 	}
 
 	if (actionSystem.GetAny(input::BindableActionMap::TILT_UP, input::BindableActionMap::TILT_DOWN))
 	{
 		const float distance = (actionSystem.Get(input::BindableActionMap::TILT_DOWN) ? -1.0f : 1.0f) * dp;
-		_rotateAroundDelta.x += distance;
+		steps.rotateAround.x += distance;
 	}
 
 	if (actionSystem.GetAny(input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS))
@@ -823,18 +811,18 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		// If ZOOM_ON is active, apply the movement as a zoom action.
 		if (actionSystem.Get(input::BindableActionMap::ZOOM_ON))
 		{
-			_rotateAroundDelta.z += distance;
+			steps.rotateAround.z += distance;
 		}
 		// If ROTATE_ON is active, apply the movement as a tilt action.
 		// TODO(#710): fight will always be rotating
 		else if (actionSystem.Get(input::BindableActionMap::ROTATE_ON))
 		{
-			_rotateAroundDelta.x += distance;
+			steps.rotateAround.x += distance;
 		}
 		// Otherwise, apply the movement normally.
 		else
 		{
-			_keyBoardMoveDelta.x += direction * moveDp;
+			steps.move.x += direction * moveDp;
 		}
 	}
 
@@ -847,14 +835,35 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		// TODO(#710): fight will always be rotating
 		if (actionSystem.GetAny(input::BindableActionMap::ZOOM_ON, input::BindableActionMap::ROTATE_ON))
 		{
-			_rotateAroundDelta.y += distance;
+			steps.rotateAround.y += distance;
 		}
 		// Otherwise, apply the movement normally.
 		else
 		{
-			_keyBoardMoveDelta.y -= direction * moveDp;
+			steps.move.y -= direction * moveDp;
 		}
 	}
+	_keySteps = steps;
+}
+
+void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
+{
+	// The steps of the keys of the last frame, to which the mouse of this frame adds
+	_rotateAroundDelta = _keySteps.rotateAround;
+	_keyBoardMoveDelta = _keySteps.move;
+	_dragTurn = 0.0f;
+	_dragTilt = 0.0f;
+
+	const auto& actionSystem = Locator::gameActionSystem::value();
+	// What the scripts let the player do, less double clicking while watching a fight
+	const auto help =
+	    Locator::cameraHelpSystem::has_value() ? Locator::cameraHelpSystem::value().Get() : camera_help::CameraHelp {};
+	const bool onFight = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsCameraOnFight();
+	_features = onFight ? camera_help::DuringFight(help.features) : help.features;
+	const bool aroundMouse = (_features & camera_help::feature::k_RotateAroundMouse) != 0;
+	const bool rotateAroundMouse = aroundMouse && actionSystem.Get(input::BindableActionMap::ROTATE_AROUND_MOUSE_ON);
+
+	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
 
 	// A wheel step is a fixed distance, whatever the frame time
 	if (const auto wheelNotches = actionSystem.GetMouseWheelDelta(); wheelNotches != 0.0f)

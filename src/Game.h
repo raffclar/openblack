@@ -36,6 +36,7 @@
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
+#include "GameFrameOrder.h"
 #include "GameSession.h"
 #include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
@@ -241,6 +242,38 @@ public:
 	bool GameLogicLoop() noexcept;
 	/// One step of the game turn
 	void PlayTurnStep(game_turn::Step step);
+	/// What the steps of one frame share
+	struct FrameState
+	{
+		/// The real time of the frame, or the fixed time of a frame that the inspector steps
+		std::chrono::microseconds deltaTime {0};
+	};
+	/// One step of the frame. It returns false when the game must stop.
+	bool PlayFrameStep(game_frame::Step step, FrameState& frame);
+	/// The clock of the frame, the debug inspector and the time that the frame takes
+	void StartFrame(FrameState& frame);
+	/// The keys, the mouse buttons and the pointer of the frame
+	void UpdateInput();
+	/// The debug windows. It returns false when the game must stop.
+	bool UpdateDebugGui();
+	/// The editor's camera, the creature's camera and the creature's cave
+	void UpdateCameraControllers(std::chrono::microseconds deltaTime);
+	/// The step of the camera after the turns, and the views that put it
+	void UpdateCamera();
+	/// The temple, whose camera can take the player out of it
+	void UpdateTemple(std::chrono::microseconds deltaTime);
+	/// The menus and the dialogs of the interface take the input of the frame
+	void UpdateInterfaceFrame(std::chrono::microseconds deltaTime);
+	/// The turn of the game when one is due. It returns false when the game must stop.
+	bool PlayTurns();
+	/// The effects of the frame, by the frame's game time
+	void UpdateFrameEffects();
+	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
+	void UpdateHandFrame(std::chrono::microseconds deltaTime);
+	/// The things in view are made ready for the draw of this frame
+	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
+	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
+	void UpdateCameraKeys(std::chrono::microseconds deltaTime);
 	/// The game's music, for a turn of the world or of the temple
 	void ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel);
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
