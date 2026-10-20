@@ -113,6 +113,13 @@ struct FirstStartFacts
 	return start == Start::Continue && exitSaveLoaded;
 }
 
+/// A close of the window ends the game at the end of a frame. While a script's cut scene runs, the game continues, and
+/// the game ends at the end of the first frame after the cut scene. The game keeps the close until then.
+[[nodiscard]] constexpr bool CloseEndsGame(bool closeAsked, bool scriptCutScene) noexcept
+{
+	return closeAsked && !scriptCutScene;
+}
+
 /// The profile that the save on exit goes to, as a game ends
 enum class ExitSave
 {

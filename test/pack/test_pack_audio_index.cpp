@@ -20,6 +20,8 @@
 #include <PackFile.h>
 #include <gtest/gtest.h>
 
+#include "../TestTempFolder.h"
+
 using openblack::pack::AudioBankSampleHeader;
 using openblack::pack::PackFile;
 using openblack::pack::PackResult;
@@ -80,7 +82,8 @@ std::vector<uint8_t> SoundPack(const std::vector<Sample>& samples, const std::ve
 
 std::filesystem::path WriteTemp(const std::string& name, const std::vector<uint8_t>& bytes)
 {
-	const auto path = std::filesystem::temp_directory_path() / name;
+	const auto path = openblack::test::UniqueTempPath(name);
+	std::filesystem::create_directories(path.parent_path());
 	std::ofstream stream(path, std::ios::binary);
 	stream.write(reinterpret_cast<const char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
 	return path;

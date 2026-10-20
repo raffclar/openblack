@@ -388,3 +388,37 @@ TEST(GameClock, ASavedGameResumesPausedAsItWasSaved)
 	EXPECT_TRUE(clock.Frame());
 	EXPECT_EQ(clock.time.GetTurn(), 21u);
 }
+
+TEST(GameClock, TheTimeBeforeTheFirstFrameIsNotGameTime)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	// The rest of the load and the logo take 1.5 s before the first frame. Then the timer goes back to turn 0.
+	clock.now += 1500;
+	clock.time.ResetTimerToTurn();
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	// No turn hurries to catch up the time of the load: the next turn comes 100 ms later
+	clock.now += 99;
+	EXPECT_FALSE(clock.Frame());
+	clock.now += 1;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+}
+
+TEST(GameClock, ATimerPutBackUnderAPauseStaysStopped)
+{
+	Clock clock;
+	clock.time.StartGameClock(true);
+	clock.now += 1500;
+	clock.time.ResetTimerToTurn();
+	clock.now += 5000;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 0);
+	// Under the pause, the timer did not count the 5 s
+	clock.time.SetPaused(false);
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	clock.now += 99;
+	EXPECT_FALSE(clock.Frame());
+}
