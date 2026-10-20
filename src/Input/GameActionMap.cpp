@@ -92,6 +92,14 @@ void GameActionMap::ResetKeyBindings()
 	ApplyMouseBindings();
 }
 
+void GameActionMap::SetKeyBindings(const KeyBindingTable& bindings)
+{
+	// Every action lets go, so that no action stays held by an input that is no longer its own
+	_bindableMap = BindableActionMap::NONE;
+	_bindings = bindings;
+	ApplyMouseBindings();
+}
+
 void GameActionMap::QueuePress(BindableActionMap action)
 {
 	_queuedPresses.emplace_back(action);
@@ -420,6 +428,8 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	}
 	if (event.type == SDL_MOUSEMOTION)
 	{
+		// The mouse's own movement, before the pointer's speed and the screen's sides
+		_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
 		const auto before = _scaledPointer.Position();
 		const auto after = _scaledPointer.Move({event.motion.xrel, event.motion.yrel}, GetPointerScale(),
 		                                       Locator::windowing::value().GetSize());
@@ -564,6 +574,11 @@ glm::ivec2 GameActionMap::GetMouseDelta() const
 	return _mouseMotion.Delta();
 }
 
+glm::ivec2 GameActionMap::GetMousePushDelta() const
+{
+	return _pushMotion;
+}
+
 float GameActionMap::GetMouseWheelDelta() const
 {
 	return _mouseWheelDelta;
@@ -671,6 +686,7 @@ void GameActionMap::Frame()
 		}
 	}
 	_mouseMotion.NewFrame();
+	_pushMotion = glm::ivec2(0);
 	_mouseWheelDelta = 0.0f;
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
@@ -809,6 +825,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
 		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
+		// While the window has the mouse, its own movement was taken as the event came in
+		if (!_pointerScaled)
+		{
+			_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
+		}
 	}
 }
 

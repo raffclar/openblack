@@ -284,6 +284,7 @@
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/KeyRebinding.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
@@ -4014,6 +4015,7 @@ bool Game::Initialize() noexcept
 		const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
 		_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
 		ApplyPlayerSettings(kept);
+		LoadProfileKeys();
 		RefreshPlayersPage();
 		if (!_interface)
 		{
@@ -4021,6 +4023,8 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// The slider of the help's text speed shows only when the game has no sound
+			_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
 			// Each save and each load shows its box first
 			if (Locator::saveGameSystem::has_value())
 			{
@@ -5551,6 +5555,24 @@ void Game::HandleInterfaceAction()
 		SaveHelpRecord();
 	}
 
+	// A binding changed on the Controls page takes effect at once
+	auto& menu = _interface->GetMenu();
+	if (menu.TakeControlsChanged() && Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(menu.GetControlBindings());
+	}
+	// The menu reads the bindings from the profile as it opens. Back from the Controls page, and the menu as it
+	// closes, keep the bindings with the profile.
+	if (menu.IsOpen() && !_menuWasOpen)
+	{
+		LoadProfileKeys();
+	}
+	if (menu.TakeControlsToKeep() || (!menu.IsOpen() && _menuWasOpen))
+	{
+		KeepProfileKeys();
+	}
+	_menuWasOpen = menu.IsOpen();
+
 	// The menu pauses the game while it is open
 	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
 	{
@@ -5617,7 +5639,6 @@ void Game::HandleInterfaceAction()
 		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
-	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
@@ -5725,7 +5746,40 @@ void Game::PlayerProfileChanged()
 	// The page shows the profile's creature's name, symbol and options, which take effect
 	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
 	ApplyPlayerSettings(profile->settings);
+	// The bindings of the new player come from their profile
+	LoadProfileKeys();
 	NameCreatureAfterProfile();
+}
+
+void Game::LoadProfileKeys()
+{
+	// A profile that keeps no bindings has the game's defaults
+	input::KeyBindingTable bindings = input::k_DefaultKeyBindings;
+	if (Locator::playerProfileSystem::has_value())
+	{
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			bindings = input::rebinding::FromKept(profile->keys);
+		}
+	}
+	if (Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(bindings);
+	}
+	if (_interface)
+	{
+		_interface->GetMenu().SetControls(bindings);
+	}
+}
+
+void Game::KeepProfileKeys()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	Locator::playerProfileSystem::value().SetCurrentKeys(input::rebinding::ToKept(bindings));
 }
 
 void Game::ReadTattooPictures()
@@ -5993,6 +6047,7 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	Locator::config::value().rightHandedHand = !settings.leftHanded;
+	Locator::config::value().pushScrolling = settings.pushScrolling;
 	if (Locator::creatureHelpSystem::has_value())
 	{
 		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
