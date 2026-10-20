@@ -657,4 +657,21 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .townBeliefInPlayer = k_TownBelief,
 	    .worshipShare = 1.0f,
 	});
+	// The advisors speak of a death that the player causes, but not on the first land of the story
+	all.push_back({
+	    .id = "audio.killing_people_remark",
+	    .name = "The advisors speak of a villager that the player kills",
+	    .facet = Facet::Audio,
+	    .description = "A villager stands on the bank south of the testbed's lake. The hand takes it and throws it into the "
+	                   "lake. The scenario counts as the second land, because the first land keeps the remark quiet. The "
+	                   "guidance waits end first.",
+	    .expected = "The villager drowns on screen after about a minute, and the advisors say one of their remarks about "
+	                "killing people. The log gives the remark and its text.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-20.0f, 125.0f), glm::vec2(20.0f, 175.0f)}, .distance = 0.6f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 135.0f}}},
+	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 8.0f, 16.0f}}},
+	});
 }
