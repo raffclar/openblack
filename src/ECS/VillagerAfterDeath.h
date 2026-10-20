@@ -34,6 +34,9 @@ void Hear(entt::entity villager, DeathReason reason, std::optional<PlayerNames> 
 void MoveOwnersAlignment(entt::entity villager, DeathReason reason);
 /// The villager's town counts the death: when, put down to whom and of what
 void CountInTown(entt::entity town, std::optional<PlayerNames> killer, DeathReason reason);
+/// After its town counts the death, the advisors of the player here may warn of it: of worshippers that die, of people
+/// that another player takes, or of a town with few adults left
+void WarnOfTownLoss(entt::entity villager, entt::entity town, DeathReason reason, std::optional<PlayerNames> killer);
 /// How many of a town's people have died of chanting at worship
 [[nodiscard]] uint32_t DeathsOf(entt::entity town, DeathReason reason);
 /// The villager leaves its town's worship site's worshippers

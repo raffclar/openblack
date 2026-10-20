@@ -41,6 +41,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -104,6 +105,21 @@ bool ComputerNight()
 	localtime_r(&now, &local);
 #endif
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
+}
+
+/// The advisors warn of a loss only near the point under the cursor
+constexpr float k_WarnReach = 300.0f;
+
+/// Whether a thing stands nearer to the point under the cursor than the reach of a warning
+bool NearPointUnderCursor(entt::entity thing)
+{
+	if (!Locator::pickingSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return false;
+	}
+	const auto point = Locator::pickingSystem::value().GetPick().point;
+	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
+	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
 }
 
 /// Play a voice of the guidance sound bank at a thing on the land. The player hears it at full volume to a third of its
@@ -416,6 +432,46 @@ void GuidanceSystem::SayOneOff(guidance::OneOff oneOff)
 		{
 			again->oneOffSaid.at(static_cast<size_t>(oneOff)) = true;
 		}
+	}
+}
+
+void GuidanceSystem::KilledVillager(entt::entity villager)
+{
+	if (!RemarkNow(guidance::Kind::KillingPeople))
+	{
+		return;
+	}
+	const auto view = ecs::thing_on_screen::ScreenView();
+	if (view.has_value() && Locator::entitiesRegistry::value().Valid(villager) &&
+	    ecs::thing_on_screen::OnScreen(*view, villager))
+	{
+		SayRemark(guidance::Kind::KillingPeople);
+	}
+}
+
+void GuidanceSystem::WorshipperDied()
+{
+	RemarkIfNow(guidance::Kind::WorshippersDying);
+}
+
+void GuidanceSystem::LosingVillager(entt::entity villager)
+{
+	if (RemarkNow(guidance::Kind::LosingVillagers) && NearPointUnderCursor(villager))
+	{
+		SayRemark(guidance::Kind::LosingVillagers);
+	}
+}
+
+void GuidanceSystem::LowOnPeople(entt::entity town)
+{
+	if (!RemarkNow(guidance::Kind::LowOnPeople) || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto* stats = Locator::entitiesRegistry::value().TryGet<const TownStats>(town);
+	if (stats != nullptr && stats->adults + stats->children != 0 && NearPointUnderCursor(town))
+	{
+		SayRemark(guidance::Kind::LowOnPeople);
 	}
 }
 

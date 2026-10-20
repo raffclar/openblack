@@ -657,6 +657,10 @@ public:
 	void BuildingBroken(entt::entity, std::optional<PlayerNames>, float) override {}
 	void AlignmentTurn(float) override {}
 	void SayOneOff(guidance::OneOff) override {}
+	void KilledVillager(entt::entity) override {}
+	void WorshipperDied() override {}
+	void LosingVillager(entt::entity) override {}
+	void LowOnPeople(entt::entity) override {}
 	void EndWaits() override {}
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return remarks; }
 	[[nodiscard]] int32_t GetMoonWait() const override { return 0; }

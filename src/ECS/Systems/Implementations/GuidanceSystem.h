@@ -38,6 +38,10 @@ public:
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
+	void KilledVillager(entt::entity villager) override;
+	void WorshipperDied() override;
+	void LosingVillager(entt::entity villager) override;
+	void LowOnPeople(entt::entity town) override;
 	void EndWaits() override;
 
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return _remarks; }

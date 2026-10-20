@@ -1030,6 +1030,7 @@ void villager_fire::DieByEffect(entt::entity villager, std::optional<DeathCause>
 		villager_after_death::MoveOwnersAlignment(villager, cause->reason);
 		RememberDeath(villager, *cause);
 		villager_after_death::CountInTown(town, cause->killer, cause->reason);
+		villager_after_death::WarnOfTownLoss(villager, town, cause->reason, cause->killer);
 	}
 	// Its town's graveyard counts it among its burials
 	graveyards::TownPersonDied(town);
