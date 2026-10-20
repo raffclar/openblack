@@ -31,6 +31,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera.h"
+#include "CameraKeys.h"
 #include "CameraLimits.h"
 #include "CameraZones.h"
 #include "ClickDistance.h"
@@ -63,7 +64,6 @@ constexpr auto k_StepScaleHeightFactor = 3.0f;
 constexpr auto k_StepScaleMin = 60.0f;
 constexpr auto k_ZoomScaleMax = 2000.0f;
 constexpr auto k_ZoomScaleMaxBelowFocus = 4.0f * k_StepScaleMin;
-constexpr auto k_InteractionSpeedMultiplier = 400.0f;
 // Vanilla black and white uses a pretty bad PI/2 approximation
 constexpr auto k_CameraModelHalfPi = 1.53938043f;
 constexpr auto k_RotateOnSpeedMultiplier = glm::vec2(1.9f, -1.7f);
@@ -775,13 +775,10 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	_dragTurn = 0.0f;
 	_dragTilt = 0.0f;
 
-	// Compute delta position (dp) based on the elapsed time and speed.
-	const auto dp = k_InteractionSpeedMultiplier * std::chrono::duration_cast<std::chrono::duration<float>>(dt).count();
 	const auto& actionSystem = Locator::gameActionSystem::value();
 	// Moving over the land can be sped up or slowed down; turning, tilting and zooming keep the game's speed
 	const auto moveSpeed =
 	    Locator::camera::has_value() ? Locator::camera::value().GetKeyboardMoveSpeed() : k_KeyboardMoveSpeedDefault;
-	const auto moveDp = ScaleKeyboardMove(dp, moveSpeed);
 
 	// What the scripts let the player do, less double clicking while watching a fight
 	const auto help =
@@ -793,56 +790,30 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 
 	// TODO(#709): Set tricons based on ZOOM or TILT if any move is detected
 
-	if (actionSystem.GetAny(input::BindableActionMap::ROTATE_LEFT, input::BindableActionMap::ROTATE_RIGHT))
+	// The keys step by the whole milliseconds of the frame. Opposite keys cancel.
 	{
-		const float distance = (actionSystem.Get(input::BindableActionMap::ROTATE_LEFT) ? -1.0f : 1.0f) * dp;
-		_rotateAroundDelta.y += distance;
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::TILT_UP, input::BindableActionMap::TILT_DOWN))
-	{
-		const float distance = (actionSystem.Get(input::BindableActionMap::TILT_DOWN) ? -1.0f : 1.0f) * dp;
-		_rotateAroundDelta.x += distance;
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::MOVE_FORWARDS, input::BindableActionMap::MOVE_BACKWARDS))
-	{
-		const float direction = actionSystem.Get(input::BindableActionMap::MOVE_FORWARDS) ? -1.0f : 1.0f;
-		const float distance = direction * dp;
-		// If ZOOM_ON is active, apply the movement as a zoom action.
-		if (actionSystem.Get(input::BindableActionMap::ZOOM_ON))
-		{
-			_rotateAroundDelta.z += distance;
-		}
-		// If ROTATE_ON is active, apply the movement as a tilt action.
-		// TODO(#710): fight will always be rotating
-		else if (actionSystem.Get(input::BindableActionMap::ROTATE_ON))
-		{
-			_rotateAroundDelta.x += distance;
-		}
-		// Otherwise, apply the movement normally.
-		else
-		{
-			_keyBoardMoveDelta.x += direction * moveDp;
-		}
-	}
-
-	if (actionSystem.GetAny(input::BindableActionMap::MOVE_RIGHT, input::BindableActionMap::MOVE_LEFT))
-	{
-		const float direction = actionSystem.Get(input::BindableActionMap::MOVE_RIGHT) ? -1.0f : 1.0f;
-		const float distance = direction * dp;
-		// If ZOOM_ON is active, apply the movement as a zoom action.
-		// If ROTATE_ON is active, apply the movement as a tilt action.
-		// TODO(#710): fight will always be rotating
-		if (actionSystem.GetAny(input::BindableActionMap::ZOOM_ON, input::BindableActionMap::ROTATE_ON))
-		{
-			_rotateAroundDelta.y += distance;
-		}
-		// Otherwise, apply the movement normally.
-		else
-		{
-			_keyBoardMoveDelta.y -= direction * moveDp;
-		}
+		using input::BindableActionMap;
+		const camera_keys::Held held {
+		    .turnLeft = actionSystem.Get(BindableActionMap::ROTATE_LEFT),
+		    .turnRight = actionSystem.Get(BindableActionMap::ROTATE_RIGHT),
+		    .tiltUp = actionSystem.Get(BindableActionMap::TILT_UP),
+		    .tiltDown = actionSystem.Get(BindableActionMap::TILT_DOWN),
+		    .forwards = actionSystem.Get(BindableActionMap::MOVE_FORWARDS),
+		    .backwards = actionSystem.Get(BindableActionMap::MOVE_BACKWARDS),
+		    .left = actionSystem.Get(BindableActionMap::MOVE_LEFT),
+		    .right = actionSystem.Get(BindableActionMap::MOVE_RIGHT),
+		    .zoom = actionSystem.Get(BindableActionMap::ZOOM_ON),
+		    .rotate = actionSystem.Get(BindableActionMap::ROTATE_ON),
+		    .fight = onFight,
+		};
+		const auto milliseconds = std::chrono::duration_cast<std::chrono::milliseconds>(dt).count();
+		const auto steps = camera_keys::Step(held, camera_keys::FrameSeconds(static_cast<int32_t>(milliseconds)));
+		_rotateAroundDelta.y += steps.turn;
+		_rotateAroundDelta.x += steps.tilt;
+		_rotateAroundDelta.z += steps.zoom;
+		// Only the movement over the land uses the speed setting
+		_keyBoardMoveDelta.x += ScaleKeyboardMove(steps.forwards, moveSpeed);
+		_keyBoardMoveDelta.y += ScaleKeyboardMove(steps.strafe, moveSpeed);
 	}
 
 	// A wheel step is a fixed distance, whatever the frame time

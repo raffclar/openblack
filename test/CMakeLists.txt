@@ -1527,3 +1527,4 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_click_distance camera/test_click_distance.cpp)
+openblack_setup_and_add_test(test_camera_keys camera/test_camera_keys.cpp)
