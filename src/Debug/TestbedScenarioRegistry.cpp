@@ -4837,6 +4837,28 @@ void AddObjects(std::vector<Scenario>& all)
 	    .hand = offering,
 	});
 
+	all.push_back({
+	    .id = "creature.give_animal_kept_at_home",
+	    .name = "Giving an animal from afar to a creature kept at home",
+	    .facet = Facet::Objects,
+	    .description = "A hungry tiger is kept within ten metres of its home, as in the first land's lessons. The player's "
+	                   "hand takes a pig from forty metres away and gives it to the tiger.",
+	    .expected = "The tiger takes the pig from the hand and eats it at once. It does not look the pig over first: the pig "
+	                "in the hand is where the hand holds it, not where the hand took it.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.05f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -40.0f}, .living = true}},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 10.0f},
+	                 {.kind = Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Kind::HandGive, .creature = 0, .delaySeconds = 1.5f}},
+	    .hand = offering,
+	});
+
 	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	curious.hold = false;
 	curious.pauseMind = false;
