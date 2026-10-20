@@ -32,6 +32,7 @@
 #include <SDL_mouse.h>
 #include <bgfx/bgfx.h>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/trigonometric.hpp>
 #include <imgui.h>
@@ -1917,6 +1918,27 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::world_objects::Remove(*object);
 		return "removed";
 	}
+	case Kind::RemoveTeleportStone:
+	{
+		if (!Locator::teleportSystem::has_value())
+		{
+			return "no teleport";
+		}
+		auto& teleport = Locator::teleportSystem::value();
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto at = MapPoint(_middle, command.point);
+		const auto stones = teleport.GetStones(PlayerNames::PLAYER_ONE);
+		const auto nearest = std::ranges::min_element(stones, {}, [&registry, &at](entt::entity stone) {
+			const auto& position = registry.Get<const ecs::components::Transform>(stone).position;
+			return glm::distance(glm::vec2(position.x, position.z), at);
+		});
+		if (nearest == stones.end())
+		{
+			return "no stone";
+		}
+		teleport.RemoveStone(*nearest);
+		return "removed";
+	}
 	case Kind::HandGripTotem:
 	{
 		const auto centre = ObjectAt(command.object);
@@ -2561,7 +2583,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed)
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3229,6 +3251,7 @@ void Runner::Give(const Command& command)
 	case Kind::FinishBuilding:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
+	case Kind::RemoveTeleportStone:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
