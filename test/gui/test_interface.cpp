@@ -270,6 +270,7 @@ TextDatabase MenuTexts()
 	    {u"HELP_TEXT_DIALOG_AERYOUSUREDELETE", u"Delete player %s?"},
 	    {u"HELP_TEXT_DIALOG_ADDITION_20", u"New game?"},
 	    {u"HELP_TEXT_DIALOG_KEYREMINDER", u"Define a key for "},
+	    {u"HELP_TEXT_DIALOG_VIDEOCHANGE", u"Next time."},
 	    {u"HELP_TEXT_DIALOG_LOADDEFAULTS", u"Load Defaults"},
 	    {u"HELP_TEXT_REQUESTER_BOXES_03", u"Cancel"},
 	    {u"HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON", u"RMB "},
@@ -555,8 +556,9 @@ TEST(GameMenu, SelectorsAndCheckBoxesChangeTheSettings)
 	Click(f.menu, {297, 462});
 	EXPECT_FALSE(f.menu.GetSettings().autoSave);
 
-	// Advanced: the left handed hand at 185, 450 and the help level
+	// Advanced: the left handed hand at 185, 450 and the help level. The changed detail is told first.
 	Click(f.menu, TabCentre(3));
+	Click(f.menu, {400, 354});
 	Click(f.menu, {197, 462});
 	EXPECT_TRUE(f.menu.GetSettings().leftHandedHand);
 	EXPECT_EQ(f.menu.GetSettings().helpLevel, 3);
@@ -1094,4 +1096,47 @@ TEST(GameMenu, BackFromTheControlsKeepsTheBindings)
 	Click(f.menu, k_Back);
 	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 	EXPECT_TRUE(f.menu.TakeControlsToKeep());
+}
+
+TEST(GameMenu, AChangedDetailIsToldAsTheOptionsPageCloses)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Options);
+	// Back with the detail as it was goes straight back
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+
+	f.menu.ShowPage(Page::Options);
+	// The detail's button steps the detail on
+	Click(f.menu, {400, 365});
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Next time.");
+	EXPECT_EQ(f.menu.GetPage(), Page::Options);
+	// OK goes back, as Back does
+	Click(f.menu, {400, 354});
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+
+	// Told once for each change: the page shown again with the new detail goes straight back
+	f.menu.ShowPage(Page::Options);
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+}
+
+TEST(GameMenu, AChangedDetailIsToldBeforeATabOrEscape)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Options);
+	Click(f.menu, {400, 365});
+	// The Players tab: told first, then OK picks the tab
+	Click(f.menu, TabCentre(2));
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Next time.");
+	Click(f.menu, {400, 354});
+	EXPECT_EQ(f.menu.GetPage(), Page::Players);
+
+	f.menu.ShowPage(Page::Options);
+	Click(f.menu, {400, 365});
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Next time.");
+	Click(f.menu, {400, 354});
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
 }

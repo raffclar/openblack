@@ -235,6 +235,7 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _newGameQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_20"))
     , _quitQuestion(texts.Get("HELP_TEXT_DIALOG_QUIT_QUESTION"))
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
+    , _videoChange(texts.Get("HELP_TEXT_DIALOG_VIDEOCHANGE"))
     , _settings(std::move(settings))
     , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
     , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
@@ -250,6 +251,7 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
 	read(_storyLabels, k_StoryTexts);
 	read(_toolTipLabels, k_ToolTipTexts);
 	_settings.detail = std::clamp(_settings.detail, 0, static_cast<int>(_detailLabels.size()) - 1);
+	_detailTold = _settings.detail;
 	_settings.helpLevel = std::clamp(_settings.helpLevel, 0, static_cast<int>(_helpLabels.size()) - 1);
 	_settings.storyText = std::clamp(_settings.storyText, 0, static_cast<int>(_storyLabels.size()) - 1);
 	_settings.toolTips = std::clamp(_settings.toolTips, 0, static_cast<int>(_toolTipLabels.size()) - 1);
@@ -351,8 +353,8 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	page.Add<StaticText>(DialogRect {.min = {50, 280}, .max = {750, 320}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_VIDEOCONTROL")), Layout::Centre);
 	// The detail: the button and the right arrow step it on, the left arrow back
-	// The game reads the detail once, when it starts (HELP_TEXT_DIALOG_VIDEOCHANGE): a change here takes effect the next
-	// time it starts.
+	// The game reads the detail once, when it starts: a change here takes effect the next time it starts. The player is
+	// told so (HELP_TEXT_DIALOG_VIDEOCHANGE) as they leave the page by Back, a tab or Escape.
 	// TODO(raffclar): openblack keeps no settings between runs yet, so the choice is lost when the game closes; start the
 	// game with --detail-level to pick one.
 	auto& detail = page.Add<Button>(
@@ -386,7 +388,12 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 
 	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
 	                    Look::LeftArrow)
-	    .onClick = [this] { Back(); };
+	    .onClick = [this] {
+		if (!TellDetailChange([this] { Back(); }))
+		{
+			Back();
+		}
+	};
 	// Inside the temple there is no Quit arrow: the player leaves the options by Back or the World Room tab
 	_optionsQuit = &page.Add<BigButton>(_font, glm::ivec2(730, 530), k_BackSize,
 	                                    std::u16string(texts.Get("HELP_TEXT_DIALOG_QUIT")), LabelSide::Left, Look::RightArrow);
@@ -634,6 +641,11 @@ void GameMenu::PickTab(Page page)
 		Ask(_restartQuestion, Action::Restart);
 		return;
 	}
+	// Away from the Options page after a change of the detail, the player is told first; OK then picks the tab
+	if (_page == Page::Options && page != Page::Options && TellDetailChange([this, page] { PickTab(page); }))
+	{
+		return;
+	}
 	if (page == Page::Main)
 	{
 		Back();
@@ -642,6 +654,18 @@ void GameMenu::PickTab(Page page)
 	{
 		ShowPage(page);
 	}
+}
+
+bool GameMenu::TellDetailChange(std::function<void()> then)
+{
+	if (_page != Page::Options || _settings.detail == _detailTold)
+	{
+		return false;
+	}
+	// The player is told once for each change
+	_detailTold = _settings.detail;
+	TellThen(_videoChange, std::move(then));
+	return true;
 }
 
 const std::u16string& GameMenu::GetQuestionText() const
@@ -910,6 +934,25 @@ void GameMenu::Tell(std::u16string text, Action ok)
 	CurrentDialog().Reset();
 }
 
+void GameMenu::TellThen(std::u16string text, std::function<void()> then)
+{
+	// A message with an OK button, as Tell shows it, which does what it is given
+	auto answers = std::make_unique<Dialog>();
+	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	okButton.onClick = [this, then = std::move(then)] {
+		then();
+		Settle(Action::None);
+	};
+	_question = Question {.text = std::move(text),
+	                      .answers = std::move(answers),
+	                      .fade = Zoomer(),
+	                      .words = &words,
+	                      .buttons = {&okButton, nullptr}};
+	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
+	CurrentDialog().Reset();
+}
+
 void GameMenu::Confirm(std::u16string text, std::function<void()> ok)
 {
 	// A question with a Cancel at the left and an OK at the right, in the same box as a question with a Yes and a No
@@ -979,6 +1022,11 @@ void GameMenu::ShowPage(Page page)
 		_mustRestart = false;
 		_previousProfile = _originalName;
 		UpdatePlayersPage();
+	}
+	if (page == Page::Options && _page != Page::Options)
+	{
+		// Shown afresh, the page tells of a change of the detail made from now on
+		_detailTold = _settings.detail;
 	}
 	if (page == Page::Controls && _page != Page::Controls)
 	{
@@ -1167,6 +1215,11 @@ GameMenu::Action GameMenu::Escape()
 		{
 			return Action::None;
 		}
+	}
+	// Escape away from the Options page after a change of the detail tells the player first; OK then goes back
+	if (TellDetailChange([this] { Back(); }))
+	{
+		return Action::None;
 	}
 	if (_page != Page::Main && !_insideTemple)
 	{

@@ -265,6 +265,11 @@ private:
 	void Ask(std::u16string text, Action yes);
 	/// A message with an OK, which settles on the action
 	void Tell(std::u16string text, Action ok);
+	/// A message with an OK, which does what it is given
+	void TellThen(std::u16string text, std::function<void()> then);
+	/// Tells the player that a changed detail takes effect the next time the game starts, once for each change, as they
+	/// leave the Options page. OK then does what it is given. Whether the player is told.
+	bool TellDetailChange(std::function<void()> then);
 	/// A question with a Cancel and an OK, which does what it is given
 	void Confirm(std::u16string text, std::function<void()> ok);
 	void Settle(Action action);
@@ -305,11 +310,15 @@ private:
 	/// HELP_TEXT_DIALOG_QUIT_QUESTION, asked by the first page, and HELP_TEXT_DIALOG_AREYOUSUREQUIT by the options
 	std::u16string _quitQuestion;
 	std::u16string _quitGameQuestion;
+	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
+	std::u16string _videoChange;
 	std::array<std::u16string, 5> _detailLabels;
 	std::array<std::u16string, 5> _helpLabels;
 	std::array<std::u16string, 3> _storyLabels;
 	std::array<std::u16string, 4> _toolTipLabels;
 	MenuSettings _settings;
+	/// The detail as the Options page last showed it or told of it
+	int _detailTold {0};
 	std::array<std::unique_ptr<Dialog>, static_cast<size_t>(Page::_Count)> _pages;
 	/// The Game Statistics box, its own page's dialog
 	std::unique_ptr<StatisticsBox> _statistics;
