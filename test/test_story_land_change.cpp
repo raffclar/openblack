@@ -20,6 +20,7 @@
 #include <gtest/gtest.h>
 
 #include "CHLApi.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -128,4 +129,14 @@ TEST_F(StoryLandChange, ThePlayersAlignmentGoesOnToTheNextLand)
 		    players += player.name == PlayerNames::PLAYER_ONE ? 1 : 0;
 	    });
 	EXPECT_EQ(players, 1);
+}
+
+TEST_F(StoryLandChange, EachLoadOfALandStartsTheRandomNumbersAgain)
+{
+	// The game clears both random seeds as it loads a map, so a land always draws the same numbers as it loads
+	auto& random = Locator::gameRandom::value();
+	const auto afterLoad = random.GetSeeds();
+	random.SetSeeds({.synced = 12345, .local = 678});
+	ASSERT_TRUE(_game->LoadMap(Locator::filesystem::value().FindPath(std::string(k_NextLand))));
+	EXPECT_EQ(random.GetSeeds(), afterLoad);
 }
