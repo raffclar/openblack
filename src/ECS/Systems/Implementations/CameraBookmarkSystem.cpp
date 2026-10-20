@@ -68,6 +68,14 @@ void CameraBookmarkSystem::FindAfterLoad()
 			_bookmarks.at(bookmark.number) = entity;
 		}
 	});
+	// A saved world from before the seven slots can lack a slot: the slot gets a new bookmark, not set
+	for (uint8_t number = 0; number < _bookmarks.size(); ++number)
+	{
+		if (_bookmarks.at(number) == entt::null)
+		{
+			_bookmarks.at(number) = archetypes::CameraBookmarkArchetype::Create(number);
+		}
+	}
 	_back.reset();
 	_followed.reset();
 }
