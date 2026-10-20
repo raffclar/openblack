@@ -62,6 +62,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/RisingSoul.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Stream.h"
@@ -239,6 +240,8 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		bool villagers;
 		/// Every instance is a thing of the explorers' boat film
 		bool film;
+		/// Every instance is drawn with the first environment map
+		bool environmentMapped;
 	};
 	std::unordered_map<entt::id_type, MeshInstances> meshIds;
 	std::unordered_map<entt::id_type, uint32_t> fadingCounts;
@@ -256,13 +259,16 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		                                                                     .additiveShare = std::nullopt,
 		                                                                     .instanceAlpha = false,
 		                                                                     .villagers = true,
-		                                                                     .film = true}));
+		                                                                     .film = true,
+		                                                                     .environmentMapped = true}));
 		count.first->second.count++;
 		count.first->second.unlit |= registry.AnyOf<Unlit>(entity);
 		// The creatures and the animals are each posed as they are
 		count.first->second.perEntity |= registry.AnyOf<CreatureMorph, AnimalPose, VillagerPose, AnimatedStaticPose>(entity);
 		count.first->second.villagers &= registry.AllOf<VillagerPose>(entity) && !morphWithTerrain;
 		count.first->second.film &= registry.AllOf<BoatFilmPart>(entity);
+		// The game draws every scroll and sign that a script puts in the world with its first environment map
+		count.first->second.environmentMapped &= registry.AllOf<ScriptHighlight>(entity);
 		if (const auto* translucent = registry.TryGet<const Translucent>(entity))
 		{
 			count.first->second.translucent = true;
@@ -375,6 +381,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.shineColour = desc.shineColour;
 		drawDesc->second.additiveShare = desc.additiveShare;
 		drawDesc->second.instanceAlpha = desc.instanceAlpha;
+		drawDesc->second.environmentMapped = desc.environmentMapped;
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);
 		_instanceSlots.emplace(meshId, InstanceSlots {.offset = offset,
 		                                              .count = desc.count,
@@ -400,6 +407,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		drawDesc->second.bonePalette = villagers;
 		drawDesc->second.unlit = desc.has_value() && desc->unlit;
 		drawDesc->second.instanceAlpha = true;
+		drawDesc->second.environmentMapped = desc.has_value() && desc->environmentMapped;
 		// The sea doesn't reflect villagers, nor the explorers' boat film, which it mirrors in a look of its own
 		drawDesc->second.hiddenFromReflection = villagers || (desc.has_value() && desc->film);
 		drawDesc->second.partsByLevel = PartsDifferByLevel(meshId);

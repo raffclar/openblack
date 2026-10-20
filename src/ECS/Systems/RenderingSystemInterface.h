@@ -99,6 +99,9 @@ struct RenderContext
 		std::optional<glm::vec2> templeGrey;
 		/// How far the instances' textures have slid across them
 		glm::vec2 uvOffset {0.0f};
+		/// The instances are drawn with the first environment map, which each primitive takes as its material says: the
+		/// scripts' scrolls and signs
+		bool environmentMapped {false};
 		/// Textures some of the submeshes are drawn with in place of their skins, by submesh: the temple's scrolls
 		std::vector<std::pair<uint32_t, graphics::TextureHandle>> subMeshTextures;
 		/// Colours added to some of the submeshes, by submesh: the temple's controls glowing under the cursor

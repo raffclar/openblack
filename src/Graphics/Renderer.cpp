@@ -6017,6 +6017,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
 	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
+	const auto* objectShaderEnvironmentStaticInstanced = _shaderManager->GetShader("ObjectEnvironmentStaticInstanced");
+	const auto& sceneTextures = Locator::resources::value().GetTextures();
+	const auto firstEnvironmentMap = entt::hashed_string("raw/envmap").value();
+	const auto* environmentMap =
+	    sceneTextures.Contains(firstEnvironmentMap) ? &*sceneTextures.Handle(firstEnvironmentMap) : nullptr;
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
 	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
 	// Each mesh is drawn with the shader declaring the fewest bones that hold its skeleton
@@ -6526,6 +6531,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.snow = false;
 					submitDesc.groundShadows = false;
 				}
+				// The scripts' scrolls and signs take the first environment map, each primitive as its material says. The
+				// sea mirrors them without it.
+				const bool environmentMapped =
+				    placers.environmentMapped && environmentMap != nullptr && desc.viewId != RenderPass::Reflection &&
+				    desc.viewId != RenderPass::ReflectionTranslucent && desc.viewId != RenderPass::ReflectionMirrored &&
+				    !flatReflection.has_value() && submitDesc.program == objectShaderStaticInstanced;
+				submitDesc.environment = environmentMapped ? environmentMap : nullptr;
+				if (environmentMapped)
+				{
+					submitDesc.program = objectShaderEnvironmentStaticInstanced;
+				}
 				if (heldReflection.has_value())
 				{
 					submitDesc.shadeAt = glm::vec4(heldReflection->point, hand_reflection::k_HeldShade);
@@ -6540,6 +6556,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				submitDesc.environment = nullptr;
 				submitDesc.landLightAndHaze = true;
 				submitDesc.shadeAt = glm::vec4(0.0f);
 				submitDesc.heldMirror.reset();
