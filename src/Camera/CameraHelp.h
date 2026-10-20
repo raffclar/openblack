@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 
 #include "CameraDrag.h"
@@ -39,7 +40,7 @@ constexpr uint32_t k_AutoPitch = 0x40;
 } // namespace feature
 
 /// The pitch the camera tilts itself to, and its height over the land, until a script sets them
-constexpr float k_DefaultAutoPitch = 0.523599f;
+constexpr float k_DefaultAutoPitch = std::bit_cast<float>(0x3F060A92u);
 constexpr float k_DefaultAutoPitchHeight = 75.0f;
 /// How far from the camera the hand reaches, until a script's interface level sets it nearer
 constexpr float k_DefaultHandReach = 1800.0f;

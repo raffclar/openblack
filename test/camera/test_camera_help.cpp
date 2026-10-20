@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+
 #include <gtest/gtest.h>
 
 #include "Camera/CameraHelp.h"
@@ -155,4 +159,11 @@ TEST(CameraHelp, TheInterfaceLevelsSetTheKeysAndTheHandsReach)
 	ASSERT_TRUE(help.SetInterfaceLevel(0));
 	EXPECT_EQ(help.BlockedActions(), BindableActionMap::NONE);
 	EXPECT_FLOAT_EQ(help.handReach, 1800.0f);
+}
+
+TEST(CameraHelp, TheSelfTiltingCameraStartsAtTheGamesPitchAndHeight)
+{
+	const CameraHelp help;
+	EXPECT_EQ(std::bit_cast<uint32_t>(help.autoPitch), 0x3F060A92u);
+	EXPECT_EQ(help.autoPitchHeight, 75.0f);
 }
