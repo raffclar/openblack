@@ -4171,6 +4171,38 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.script_takes_rock_wood",
+	    .name = "A script takes wood from a rock and gives wood to it",
+	    .facet = Facet::Objects,
+	    .description = "A rock of scale 1 holds 200 wood. After one second, REMOVE_RESOURCE takes 100 wood from it. After "
+	                   "three seconds, ADD_RESOURCE gives it 300 wood. After five seconds, REMOVE_RESOURCE takes 1000 "
+	                   "wood from it.",
+	    .expected = "The rock becomes half its size and its life becomes half. Then it becomes twice its first size, or "
+	                "its largest size if that is smaller. Then the rock gives all its wood and goes from the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 10.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 100.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "ADD_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 300.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1000.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
+	});
+
+	all.push_back({
 	    .id = "objects.smash_stone",
 	    .name = "Smashing a stone in half",
 	    .facet = Facet::Objects,

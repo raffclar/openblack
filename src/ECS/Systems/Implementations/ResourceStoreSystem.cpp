@@ -64,6 +64,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
+#include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsClasses.h"
 #include "ECS/Registry.h"
 #include "ECS/StoreRules.h"
@@ -922,6 +923,30 @@ TownResourceTally* TallyOf(entt::entity town)
 	auto& registry = Entities();
 	return town != entt::null && registry.Valid(town) ? registry.TryGet<TownResourceTally>(town) : nullptr;
 }
+
+/// The table row of a rock, or of a bonfire, which keeps its wood as a rock does
+const GMobileStaticInfo* RockRow(entt::entity object)
+{
+	const auto* still = Entities().TryGet<const MobileStatic>(object);
+	if (still == nullptr || !Locator::infoConstants::has_value() || !ecs::object_physics::IsRock(object))
+	{
+		return nullptr;
+	}
+	return &Locator::infoConstants::value().mobileStatic.at(static_cast<size_t>(still->type));
+}
+
+float ScaleOf(entt::entity object)
+{
+	const auto* transform = Entities().TryGet<const Transform>(object);
+	return transform != nullptr ? transform->scale.x : 1.0f;
+}
+
+void SetScale(entt::entity object, float scale)
+{
+	auto& registry = Entities();
+	registry.Get<Transform>(object).scale = glm::vec3(scale);
+	registry.SetDirty();
+}
 } // namespace
 
 uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type) const
@@ -958,6 +983,11 @@ uint32_t ResourceStoreSystem::GetResource(entt::entity object, ResourceType type
 	if (registry.AllOf<Temple>(object))
 	{
 		return 0;
+	}
+	// A rock holds wood by its size. No store takes a rock as wood.
+	if (const auto* row = RockRow(object))
+	{
+		return type == ResourceType::Wood ? ecs::store_rules::RockWood(ScaleOf(object), row->woodValue) : 0u;
 	}
 	const auto resource = ResourceOf(object);
 	return resource.type == type ? resource.amount : 0u;
@@ -1028,6 +1058,29 @@ uint32_t ResourceStoreSystem::AddResource(entt::entity object, ResourceType type
 		}
 		return AddToPile(object, type, amount, false);
 	}
+	// A rock or a dead tree that gets wood becomes larger to hold it, up to the largest scale of its table. It gives
+	// back the wood it holds now minus the wood it held before. A dead tree uses the wood value of the dead tree row,
+	// not the wood value of its tree.
+	if (type == ResourceType::Wood && Locator::infoConstants::has_value())
+	{
+		const auto& info = Locator::infoConstants::value();
+		if (const auto* row = RockRow(object))
+		{
+			const auto held = ecs::store_rules::RockWood(ScaleOf(object), row->woodValue);
+			const float scale = ecs::store_rules::ScaleAfterAddingWood(held, amount, row->woodValue, row->maxScale);
+			SetScale(object, scale);
+			return ecs::store_rules::RockWood(scale, row->woodValue) - held;
+		}
+		if (const auto* dead = registry.TryGet<const DeadTree>(object))
+		{
+			const auto treeWood = info.tree.at(static_cast<size_t>(dead->type)).woodValue;
+			const auto& row = info.mobileStatic.at(static_cast<size_t>(MobileStaticInfo::DeadTree));
+			const auto held = ecs::store_rules::DeadTreeWood(ScaleOf(object), treeWood, dead->woodMultiplier);
+			const float scale = ecs::store_rules::ScaleAfterAddingWood(held, amount, row.woodValue, row.maxScale);
+			SetScale(object, scale);
+			return ecs::store_rules::DeadTreeWood(scale, treeWood, dead->woodMultiplier) - held;
+		}
+	}
 	return 0;
 }
 
@@ -1094,14 +1147,11 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 	}
 	if (auto* dead = registry.TryGet<DeadTree>(object))
 	{
-		// A fallen trunk gives its wood: used up it goes, else it shrinks to what is left
-		if (type != ResourceType::Wood)
-		{
-			return 0;
-		}
+		// A fallen trunk gives its wood: used up it goes, else it shrinks to what is left. Asked for anything else, it
+		// holds none, so it goes and gives nothing.
 		const auto woodValue = Locator::infoConstants::value().tree.at(static_cast<size_t>(dead->type)).woodValue;
-		const auto take = ecs::villager_work::TakeFromFallenTree(GetResource(object, ResourceType::Wood), amount, woodValue,
-		                                                         dead->woodMultiplier);
+		const auto take =
+		    ecs::villager_work::TakeFromFallenTree(GetResource(object, type), amount, woodValue, dead->woodMultiplier);
 		if (!take.scale.has_value())
 		{
 			ecs::world_objects::Remove(object);
@@ -1118,7 +1168,23 @@ uint32_t ResourceStoreSystem::RemoveResource(entt::entity object, ResourceType t
 		           ? Locator::forestSystem::value().TakeBigForestWood(object, amount)
 		           : 0u;
 	}
-	// TODO(temple-builders): rocks and fish farms give up what they hold; not yet
+	// A rock gives wood as a fallen trunk does, and its life goes down with its scale. Asked for anything else, it holds
+	// none, so it goes and gives nothing.
+	if (const auto* row = RockRow(object))
+	{
+		const auto take = ecs::store_rules::TakeFromRock(GetResource(object, type), amount, row->woodValue,
+		                                                 ecs::world_objects::LifeOf(object), ScaleOf(object));
+		if (!take.scale.has_value())
+		{
+			ecs::world_objects::Remove(object);
+			registry.SetLayoutDirty();
+			return take.taken;
+		}
+		ecs::world_objects::SetLife(object, take.life);
+		SetScale(object, *take.scale);
+		return take.taken;
+	}
+	// TODO(temple-builders): fish farms give up what they hold; not yet
 	return 0;
 }
 
