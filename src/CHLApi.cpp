@@ -120,6 +120,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
@@ -8314,14 +8315,17 @@ void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
 {
-	// The game asks for a town here, but then clears what a villager keeps of a script's wander or animation, on any
-	// thing it gets (vanilla bugs 298). openblack keeps none of that apart from the villager's state, so nothing is
-	// cleared. A creature's mind is never touched.
+	// The game asks for a town here, but then clears what a villager keeps in mind of its script's work, on any thing it
+	// gets (vanilla bugs 154). A town keeps nothing of that kind. A creature's mind is never touched.
 	const auto thing = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (thing == entt::null || !registry.Valid(thing) || !registry.AllOf<ecs::components::Town>(thing))
 	{
 		ScriptMessage("Thing not valid");
+	}
+	if (thing != entt::null && registry.Valid(thing))
+	{
+		registry.Remove<ecs::components::ScriptRemind>(thing);
 	}
 }
 

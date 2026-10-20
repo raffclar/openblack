@@ -208,6 +208,7 @@
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/ScriptTimer.h"
@@ -1693,6 +1694,12 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites")
 	    .Field<&components::ScriptHighlight::onScreen>("onScreen");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
+	Reflect<components::ScriptRemind>(context)
+	    .Field<&components::ScriptRemind::returnTo>("returnTo")
+	    .Field<&components::ScriptRemind::goal>("goal")
+	    .Field<&components::ScriptRemind::arguments>("arguments")
+	    .Field<&components::ScriptRemind::animation>("animation")
+	    .Field<&components::ScriptRemind::clip>("clip");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptStateArguments>(context)
 	    .Field<&components::ScriptStateArguments::place>("place")

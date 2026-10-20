@@ -155,4 +155,21 @@ void testbed_scenarios::AddVillagerSpeedScenarios(std::vector<Scenario>& all)
 	                 .walkRepeatSeconds = k_LeanRepeat,
 	                 .walkFinal = VillagerStates::InScript}},
 	});
+
+	// A villager that a script holds still goes back to its place after the hand takes it away
+	all.push_back({
+	    .id = "villagers.script_remind",
+	    .name = "A scripted villager goes back to its place",
+	    .facet = Facet::Movement,
+	    .description = "A grown man that a script holds still stands 14 metres to the left of the middle of the screen. "
+	                   "After 2 seconds the hand takes him, and 3 seconds later puts him down at the middle of the screen.",
+	    .expected = "When he is down, he gets up and walks back to the place where the script held him, then stands "
+	                "there again. Before the change he stood still where the hand put him down.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 18.0f, -26.0f}, .look = {-6.0f, 0.0f, 0.0f}},
+	    .objects =
+	        {{.type = VillagerInfo::CelticFarmerMale, .offset = {-14.0f, 0.0f}, .inScript = true, .scriptControlled = true}},
+	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 3.0f}},
+	});
 }
