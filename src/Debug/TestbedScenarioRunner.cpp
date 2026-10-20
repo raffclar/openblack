@@ -29,6 +29,7 @@
 #include <LHVM.h>
 #include <MindFile.h>
 #include <SDL_events.h>
+#include <SDL_keycode.h>
 #include <SDL_mouse.h>
 #include <bgfx/bgfx.h>
 #include <fmt/format.h>
@@ -257,6 +258,20 @@ using openblack::ecs::components::Transform;
 
 namespace
 {
+/// The type a script sees for a value the testbed gives it
+lhvm::DataType ScriptDataTypeOf(ScriptArgument::Kind kind)
+{
+	switch (kind)
+	{
+	case ScriptArgument::Kind::Number:
+		return lhvm::DataType::Float;
+	case ScriptArgument::Kind::Integer:
+		return lhvm::DataType::Int;
+	default:
+		return lhvm::DataType::Object;
+	}
+}
+
 using Kind = Command::Kind;
 using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
 
@@ -648,6 +663,69 @@ std::string OpenTattooMenu()
 	Locator::tattooMenuSystem::value().Open();
 	return Locator::tattooMenuSystem::value().IsOpen() ? "the tattoo editor shows its creature over the menu"
 	                                                   : "failed: the editor did not open";
+}
+
+/// The game's menu opens on its Controls page, picks a row and double clicks it, as the player does to bind it anew
+std::string OpenControlsBox(size_t row)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr)
+	{
+		return "failed: no menu";
+	}
+	auto& interface = *game->GetInterface();
+	interface.OpenMenu();
+	auto& menu = interface.GetMenu();
+	menu.ShowPage(gui::GameMenu::Page::Controls);
+	const auto& list = menu.GetControls();
+	for (int y = list.rect.min.y; y < list.rect.max.y; ++y)
+	{
+		if (list.ItemAt(y) == row)
+		{
+			const glm::ivec2 point {list.rect.Centre().x, y + 4};
+			menu.MouseDown(point);
+			menu.MouseUp(point);
+			menu.DoubleClick(point);
+			break;
+		}
+	}
+	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
+}
+
+/// The game's menu opens on a page. Without sound, the menu shows what a game with no sound shows.
+std::string OpenMenuPage(size_t page, bool noSound)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr || page >= static_cast<size_t>(gui::GameMenu::Page::_Count))
+	{
+		return "failed: no menu";
+	}
+	auto& interface = *game->GetInterface();
+	interface.OpenMenu();
+	auto& menu = interface.GetMenu();
+	if (noSound)
+	{
+		menu.SetSoundInstalled(false);
+	}
+	menu.ShowPage(static_cast<gui::GameMenu::Page>(page));
+	return fmt::format("the menu shows page {}{}", page, noSound ? " as with no sound" : "");
+}
+
+/// A key pressed in the game's menu, as the keyboard gives it
+std::string PressMenuKey(size_t key, bool shift)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMenu().IsOpen())
+	{
+		return "failed: the menu is not open";
+	}
+	auto& menu = game->GetInterface()->GetMenu();
+	const auto action = static_cast<int>(key) == SDLK_ESCAPE ? menu.Escape() : menu.KeyDown(static_cast<int>(key), shift);
+	if (action == gui::GameMenu::Action::Continue)
+	{
+		menu.Close();
+	}
+	return fmt::format("key {}{} pressed", key, shift ? " with Shift" : "");
 }
 
 /// The game writes the help record of the player to their folder in the profile folder, then reads it again
@@ -1118,6 +1196,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 				    prayer.infinite = false;
 			    }
 		    });
+	}
+	if (environment.pushScrolling && Locator::config::has_value())
+	{
+		Locator::config::value().pushScrolling = true;
+		Locator::config::value().testbedPushScrollInWindow = true;
 	}
 	if (environment.drawFootpaths && Locator::config::has_value())
 	{
@@ -2117,6 +2200,8 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	{
 	case ScriptArgument::Kind::Number:
 		return lhvm::VMValue(argument.number);
+	case ScriptArgument::Kind::Integer:
+		return lhvm::VMValue(static_cast<int32_t>(argument.number));
 	case ScriptArgument::Kind::Marker:
 	{
 		const auto& land = Locator::terrainSystem::value();
@@ -2180,7 +2265,7 @@ std::string Runner::CallNative(const Command& command)
 		{
 			return "an argument names nothing of the scenario's";
 		}
-		const auto type = argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
+		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
@@ -2204,9 +2289,7 @@ std::string Runner::RunScript(const Command& command)
 		return fmt::format("no script {}", command.script);
 	}
 	const auto value = [this](const ScriptArgument& argument) { return ScriptValueOf(argument); };
-	const auto type = [](const ScriptArgument& argument) {
-		return argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
-	};
+	const auto type = [](const ScriptArgument& argument) { return ScriptDataTypeOf(argument.kind); };
 	const auto& globals = vm.GetVariables();
 	for (const auto& [name, argument] : command.scriptGlobals)
 	{
@@ -2620,6 +2703,21 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::OpenTattooMenu)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
+		return;
+	}
+	if (command.kind == Kind::OpenControlsBox)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
+		return;
+	}
+	if (command.kind == Kind::OpenMenuPage)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
+		return;
+	}
+	if (command.kind == Kind::PressMenuKey)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), PressMenuKey(command.value, command.ctrl)));
 		return;
 	}
 	if (command.kind == Kind::ShowCustomMusicControls)
@@ -3282,6 +3380,9 @@ void Runner::Give(const Command& command)
 	case Kind::ProfileFolderCheck:
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
+	case Kind::OpenControlsBox:
+	case Kind::OpenMenuPage:
+	case Kind::PressMenuKey:
 	case Kind::PlayCustomMusic:
 	case Kind::ShowCustomMusicControls:
 	case Kind::SaveGame:
@@ -3839,6 +3940,7 @@ void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 positio
 		if (registry.Valid(dispenser.town))
 		{
 			std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
+			Locator::townSystem::value().StructuresChanged(dispenser.town);
 		}
 		dispenser.town = entt::null;
 	}

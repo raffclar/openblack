@@ -53,6 +53,26 @@ Command Wheel(size_t notches, bool towards, float delay)
 void testbed_scenarios::AddHandNavigationScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "hand.push_scroll",
+	    .name = "Push scrolling past the screen's sides",
+	    .facet = Facet::Hand,
+	    .description = "Push scrolling is on, and works in the testbed's window as in full screen. The pointer goes to the "
+	                   "left side, half way down, and the mouse moves on left by most of the screen over a second and a "
+	                   "half; then it rests. Then the same past the right side near the top, and past the bottom on the "
+	                   "right. Then the pointer comes back to the middle, and it all starts again.",
+	    .expected = "Once the mouse has gone on past the side by an eighth of the screen's width, the camera moves to the "
+	                "left and keeps moving while the push goes on; held at the side it slows down over some seconds, and "
+	                "turns a little. Past the right side near the top it moves right and turns more, as the pointer is far "
+	                "from the middle. Past the bottom it moves back and turns by how far right the pointer is.",
+	    .environment = {.pushScrolling = true},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {PointerTo({0.02f, 0.5f}, 1.0f), Sweep({-0.6f, 0.0f}, 1.5f, 0.5f), PointerTo({0.98f, 0.1f}, 5.0f),
+	                 Sweep({0.6f, 0.0f}, 1.5f, 0.5f), PointerTo({0.8f, 0.98f}, 5.0f), Sweep({0.0f, 0.6f}, 1.5f, 0.5f),
+	                 PointerTo({0.5f, 0.5f}, 5.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "hand.rotate_release",
 	    .name = "Turn the camera with the middle button and let go",
 	    .facet = Facet::Hand,

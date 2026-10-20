@@ -416,6 +416,9 @@ TEST(DanceMoves, ADancersClipFollowsItsGroupsMove)
 	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 11, .walkClip = 7}, never), 7);
 	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 1, .rate = 0.0f, .walkClip = 7}, never),
 	          static_cast<int32_t>(AnimId::PStand));
+	// Stepping sideways only while it moves, else standing
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 9, .female = true, .moving = true}, never), 0xF2);
+	EXPECT_EQ(moves::DanceClip({.inGroup = true, .action = 9, .moving = false}, never), static_cast<int32_t>(AnimId::PStand));
 }
 
 TEST(Dances, AKeyFramesMoveSetsItsGroupGoingAndItsDancersClipsAgain)

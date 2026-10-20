@@ -80,4 +80,19 @@ struct Marker
 /// The markers over a house with `places` places and `adults` adults living there, at a scale
 [[nodiscard]] std::vector<Marker> Readout(uint32_t places, uint32_t adults, float scale);
 
+/// Damage to a building brings everyone inside out, as a knock does, when the building has less than its full life
+/// after it
+[[nodiscard]] constexpr bool HurtBringsPeopleOut(float lifeAfter)
+{
+	return lifeAfter < 1.0f;
+}
+
+/// Damage calls an emergency in the building's town when it takes the life of the town's storage pit or village
+/// centre from above the level where the building stops working to that level or below
+[[nodiscard]] constexpr bool HurtCallsEmergency(AbodeType type, float lifeBefore, float lifeAfter, float stopsWorkingAt)
+{
+	const bool causesEmergency = type == AbodeType::StoragePit || type == AbodeType::TownCentre;
+	return causesEmergency && lifeBefore > stopsWorkingAt && lifeAfter <= stopsWorkingAt;
+}
+
 } // namespace openblack::ecs::abode_knock

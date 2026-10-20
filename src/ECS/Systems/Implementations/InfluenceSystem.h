@@ -33,6 +33,8 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ProcessTurn(uint32_t turn) override;
+	void ProcessTownInfluence(entt::entity town) override;
+	void MarkTownInfluence(entt::entity town) override;
 	void BordersChanged() override { _bordersDirty = true; }
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void ShowHandInfluence(std::chrono::duration<float, std::milli> gameTime) override;
@@ -54,7 +56,6 @@ public:
 private:
 	static constexpr size_t k_Players = 8;
 
-	void ProcessTowns();
 	void ProcessCitadels();
 	void DrawBorders();
 	/// A reach that has moved since its border was drawn wants the border drawn again

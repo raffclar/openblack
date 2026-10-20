@@ -272,11 +272,6 @@ void TownDesireSystem::ProcessTown(entt::entity entity)
 	    .farmerMaxWood = farmer.maxWoodCarried,
 	};
 	town_desire::Process(desire, context);
-	// Then the attacks on it fade and are summed for its next turn's desires
-	if (auto* aggression = registry.TryGet<TownAggression>(entity))
-	{
-		town_aggression::ProcessTurn(aggression->record, town.owner);
-	}
 }
 
 uint32_t TownDesireSystem::OfferVillager(entt::entity town, bool child, float trigger,

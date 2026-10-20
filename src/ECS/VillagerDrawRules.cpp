@@ -15,7 +15,9 @@
 
 #include <glm/common.hpp>
 #include <glm/gtx/euler_angles.hpp>
+#include <glm/matrix.hpp>
 
+#include "Animals/AnimalRules.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -122,6 +124,12 @@ std::optional<float> villager_draw::HeadingOf(const glm::mat3& rotation)
 glm::mat3 villager_draw::RotationOf(float heading)
 {
 	return glm::mat3(glm::eulerAngleY(-heading - k_ModelOffset));
+}
+
+glm::mat3 villager_draw::SlopeLeanedRotation(float easedHeading, float drawnHeading, glm::vec2 lift)
+{
+	const auto eased = RotationOf(easedHeading);
+	return eased * animals::SlopeLean(lift.x, lift.y) * glm::transpose(eased) * RotationOf(drawnHeading);
 }
 
 void villager_draw::StepClipBlend(ClipBlendTrack& track, AnimId clip, uint32_t place, uint32_t gameMilliseconds)

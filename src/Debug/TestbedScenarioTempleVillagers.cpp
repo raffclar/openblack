@@ -609,4 +609,69 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	                  .repeatSeconds = 8.0f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+
+	// The town desire voices are quiet on the first land of the story, so these scenarios count as the second land
+	all.push_back({
+	    .id = "audio.town_desire_voice",
+	    .name = "The people of a town call out what their town wants",
+	    .facet = Facet::Audio,
+	    .description = "The Celtic town of the temple scenarios with an empty storage pit north of it, and no temple. The "
+	                   "scenario counts as the second land, because the first land keeps these voices quiet. The guidance "
+	                   "waits end first. The audio log gives each voice, its score and its reach.",
+	    .expected = "Every few seconds a villager voice of the guidance bank calls from the town centre for what the town "
+	                "wants most: food, as its pit is empty. The voices come at least five seconds apart, and the same "
+	                "voice comes less often.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f), k_Centre + glm::vec2(25.0f, 50.0f)},
+	                .distance = 0.6f},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = AbodeInfo::CelticStoragePit,
+		                           .offset = k_Centre + glm::vec2(0.0f, 40.0f),
+		                           .storedFood = 0,
+		                           .storedWood = 0});
+		        return objects;
+	        }(),
+	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
+	all.push_back({
+	    .id = "audio.worship_site_voice",
+	    .name = "The people at a worship site call out for food",
+	    .facet = Facet::Audio,
+	    .description = "The same town and temple as the temple villager scenarios, the whole town sent to worship, with "
+	                   "nothing in the pot of the site. The scenario counts as the second land. The guidance waits end "
+	                   "first. The audio log gives each voice, its score and its reach.",
+	    .expected = "When the villagers dance at the site, a voice of the guidance bank calls for food for the "
+	                "worshippers, from the temple. The town voices stop while the site voice plays, because the site "
+	                "voice takes the place of the town voice.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2(30.0f), k_Centre + glm::vec2(20.0f)},
+	                .distance = 0.6f},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 1.0f,
+	});
+	// The advisors speak of a death that the player causes, but not on the first land of the story
+	all.push_back({
+	    .id = "audio.killing_people_remark",
+	    .name = "The advisors speak of a villager that the player kills",
+	    .facet = Facet::Audio,
+	    .description = "A villager stands on the bank south of the testbed's lake. The hand takes it and throws it into the "
+	                   "lake. The scenario counts as the second land, because the first land keeps the remark quiet. The "
+	                   "guidance waits end first.",
+	    .expected = "The villager drowns on screen after about a minute, and the advisors say one of their remarks about "
+	                "killing people. The log gives the remark and its text.",
+	    .environment = {.dispenserGrid = false, .landNumber = 2},
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-20.0f, 125.0f), glm::vec2(20.0f, 175.0f)}, .distance = 0.6f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, 135.0f}}},
+	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+	                 {.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 2.0f, .velocity = {0.0f, 8.0f, 16.0f}}},
+	});
 }

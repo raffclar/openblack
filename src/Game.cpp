@@ -286,6 +286,7 @@
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/KeyRebinding.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
@@ -620,6 +621,7 @@ Game::Game(Arguments&& args) noexcept
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
+	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
@@ -942,6 +944,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			return false;
 		case SDLK_f:
+			if (Locator::config::value().background)
+			{
+				break;
+			}
 			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
 		case SDLK_p:
@@ -3497,7 +3503,8 @@ bool Game::Initialize() noexcept
 		{
 			extraFlags |= SDL_WINDOW_METAL;
 		}
-		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags);
+		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags,
+		                            config.background);
 	}
 
 	using filesystem::Path;
@@ -4021,6 +4028,7 @@ bool Game::Initialize() noexcept
 		const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
 		_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
 		ApplyPlayerSettings(kept);
+		LoadProfileKeys();
 		RefreshPlayersPage();
 		if (!_interface)
 		{
@@ -4028,6 +4036,8 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// The slider of the help's text speed shows only when the game has no sound
+			_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
 			// Each save and each load shows its box first
 			if (Locator::saveGameSystem::has_value())
 			{
@@ -5558,6 +5568,24 @@ void Game::HandleInterfaceAction()
 		SaveHelpRecord();
 	}
 
+	// A binding changed on the Controls page takes effect at once
+	auto& menu = _interface->GetMenu();
+	if (menu.TakeControlsChanged() && Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(menu.GetControlBindings());
+	}
+	// The menu reads the bindings from the profile as it opens. Back from the Controls page, and the menu as it
+	// closes, keep the bindings with the profile.
+	if (menu.IsOpen() && !_menuWasOpen)
+	{
+		LoadProfileKeys();
+	}
+	if (menu.TakeControlsToKeep() || (!menu.IsOpen() && _menuWasOpen))
+	{
+		KeepProfileKeys();
+	}
+	_menuWasOpen = menu.IsOpen();
+
 	// The menu pauses the game while it is open
 	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
 	{
@@ -5624,7 +5652,6 @@ void Game::HandleInterfaceAction()
 		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
-	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
@@ -5732,7 +5759,40 @@ void Game::PlayerProfileChanged()
 	// The page shows the profile's creature's name, symbol and options, which take effect
 	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
 	ApplyPlayerSettings(profile->settings);
+	// The bindings of the new player come from their profile
+	LoadProfileKeys();
 	NameCreatureAfterProfile();
+}
+
+void Game::LoadProfileKeys()
+{
+	// A profile that keeps no bindings has the game's defaults
+	input::KeyBindingTable bindings = input::k_DefaultKeyBindings;
+	if (Locator::playerProfileSystem::has_value())
+	{
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			bindings = input::rebinding::FromKept(profile->keys);
+		}
+	}
+	if (Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(bindings);
+	}
+	if (_interface)
+	{
+		_interface->GetMenu().SetControls(bindings);
+	}
+}
+
+void Game::KeepProfileKeys()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	Locator::playerProfileSystem::value().SetCurrentKeys(input::rebinding::ToKept(bindings));
 }
 
 void Game::ReadTattooPictures()
@@ -6000,6 +6060,7 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	Locator::config::value().rightHandedHand = !settings.leftHanded;
+	Locator::config::value().pushScrolling = settings.pushScrolling;
 	if (Locator::creatureHelpSystem::has_value())
 	{
 		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
@@ -6731,8 +6792,7 @@ void Game::ProcessPlayerTurns()
 {
 	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
 	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
-	// the player gained them: the town passes over its buildings, works out what it wants, looks after its artefacts,
-	// and goes on with the rest of its turn. So the game's random numbers are drawn in the same order as the game draws
+	// the player gained them, takes its turn. So the game's random numbers are drawn in the same order as the game draws
 	// them.
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -6746,13 +6806,7 @@ void Game::ProcessPlayerTurns()
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
-		for (const auto town : towns.TownsInGainedOrder(player))
-		{
-			towns.ProcessTownBuildings(town);
-			Locator::townDesireSystem::value().ProcessTown(town);
-			Locator::artefactSystem::value().ProcessTown(town);
-			towns.ProcessTownTurn(town);
-		}
+		towns.ProcessPlayerTowns(player);
 	}
 }
 

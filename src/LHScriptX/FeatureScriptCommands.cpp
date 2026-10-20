@@ -68,9 +68,11 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -1093,10 +1095,18 @@ void FeatureScriptCommands::CreateFireFly(glm::vec3 position)
 	}
 }
 
-void FeatureScriptCommands::TownDesireBoost([[maybe_unused]] int32_t townId, const std::string&, float)
+void FeatureScriptCommands::TownDesireBoost(int32_t townId, const std::string& desire, float boost)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The town of that number wants the named desire that much more, or less. Its order of desires stays as it is until
+	// its next turn. A town or a desire that is not there does nothing.
+	const auto& towns = Locator::entitiesRegistry::value().Context().towns;
+	const auto town = townId < 0 ? towns.end() : towns.find(static_cast<uint32_t>(townId));
+	const auto index = ecs::town_desire::DesireByName(desire);
+	if (town == towns.end() || !index.has_value() || !Locator::townDesireSystem::has_value())
+	{
+		return;
+	}
+	Locator::townDesireSystem::value().SetBoost(town->second, static_cast<TownDesireInfo>(*index), boost, false);
 }
 
 void FeatureScriptCommands::CreateAnimatedStatic(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale)

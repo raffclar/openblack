@@ -242,6 +242,10 @@ int32_t villager_dance::DanceClip(entt::entity villager, int32_t walkClip)
 		parentAction = static_cast<moves::Action>(dance.groups.all[*group.parent].move.action);
 	}
 	const auto* person = registry.TryGet<const Villager>(villager);
+	const auto* pose = registry.TryGet<const VillagerPose>(villager);
+	const auto* transform = registry.TryGet<const Transform>(villager);
+	const bool moving = pose != nullptr && transform != nullptr && pose->turnStart.has_value() &&
+	                    glm::xz(*pose->turnStart) != glm::xz(transform->position);
 	return moves::DanceClip(
 	    {
 	        .inGroup = true,
@@ -251,6 +255,7 @@ int32_t villager_dance::DanceClip(entt::entity villager, int32_t walkClip)
 	        .parentAction = parentAction,
 	        .rate = dance.rate,
 	        .female = person != nullptr && person->sex == Villager::Sex::FEMALE,
+	        .moving = moving,
 	        .walkClip = walkClip,
 	    },
 	    [](uint32_t limit) { return Locator::gameRandom::value().GameRand(limit); });

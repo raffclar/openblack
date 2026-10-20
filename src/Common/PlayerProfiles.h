@@ -64,6 +64,17 @@ struct Statistics
 	return secondsKept - static_cast<uint32_t>(gameStarted) + static_cast<uint32_t>(now);
 }
 
+/// A binding of the Controls page as the profile keeps it, by the numbers of the game: the key, the modifier key held
+/// with it (0 for none) and the mouse input (0 for none)
+struct KeptKey
+{
+	uint32_t primary {0};
+	uint32_t primaryModifier {0};
+	uint32_t mouseButton {0};
+
+	bool operator==(const KeptKey&) const = default;
+};
+
 struct Profile
 {
 	/// The name the player typed, as UTF-8
@@ -84,6 +95,9 @@ struct Profile
 	/// For each land, how many times the game autosaved on it: the autosaves of a land go in turn into the three
 	/// autosave slots
 	std::map<uint32_t, uint32_t> landAutosaves;
+	/// The bindings of the Controls page, by the place of each action in the list. Empty until the player leaves the
+	/// page or closes the menu.
+	std::map<uint32_t, KeptKey> keys;
 
 	bool operator==(const Profile&) const = default;
 };

@@ -10,8 +10,16 @@
 #include "Dialog.h"
 
 #include <algorithm>
+#include <memory>
+#include <span>
 #include <string_view>
 #include <utility>
+#include <vector>
+
+#include <SDL_keycode.h>
+#include <spdlog/spdlog.h>
+
+#include "DialogKeyRules.h"
 
 using namespace openblack::gui;
 
@@ -61,6 +69,7 @@ private:
 Dialog::Dialog(std::vector<Tab> tabs, size_t selectedTab)
     : _box(k_Box)
     , _tabCount(k_TabCount)
+    , _tabsLast(true)
 {
 	tabs.resize(k_TabCount);
 	for (size_t i = 0; i < k_TabCount; ++i)
@@ -236,9 +245,76 @@ bool Dialog::TextInput(std::u16string_view text)
 	return _focused != nullptr && _focused->TextInput(text);
 }
 
-bool Dialog::KeyDown(int key)
+bool Dialog::KeyDown(int key, bool shift)
 {
-	return _focused != nullptr && _focused->KeyDown(key);
+	if (key == SDLK_TAB)
+	{
+		MoveFocus(shift);
+		return true;
+	}
+	if (_focused == nullptr)
+	{
+		return false;
+	}
+	if (_focused->KeyDown(key))
+	{
+		return true;
+	}
+	if ((key == SDLK_RETURN || key == SDLK_KP_ENTER) && _focused->PassesFocusOnReturn())
+	{
+		_focused->Activate(_pointer);
+		MoveFocus(false);
+		return true;
+	}
+	return false;
+}
+
+void Dialog::MoveFocus(bool backwards)
+{
+	// The controls in the order of Tab
+	std::vector<Control*> order;
+	order.reserve(_controls.size());
+	const auto tabs = std::min(_tabCount, _controls.size());
+	const auto addRange = [this, &order](size_t first, size_t last) {
+		for (auto i = first; i < last; ++i)
+		{
+			order.push_back(_controls[i].get());
+		}
+	};
+	if (_tabsLast)
+	{
+		addRange(tabs, _controls.size());
+		addRange(0, tabs);
+	}
+	else
+	{
+		addRange(0, _controls.size());
+	}
+	if (order.empty())
+	{
+		return;
+	}
+	const auto canFocus = std::make_unique<bool[]>(order.size());
+	std::optional<size_t> focus;
+	for (size_t i = 0; i < order.size(); ++i)
+	{
+		canFocus[i] = order[i]->visible && order[i]->IsTabStop();
+		if (order[i] == _focused)
+		{
+			focus = i;
+		}
+	}
+	const auto next = dialog_keys::NextFocus(std::span<const bool>(canFocus.get(), order.size()), focus, backwards);
+	if (!next.has_value())
+	{
+		// The game looks for a control to focus without end here, and stops responding
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->warn("Tab found no control that can take the focus");
+		}
+		return;
+	}
+	SetFocus(order[*next]);
 }
 
 void Dialog::Update(float deltaSeconds)

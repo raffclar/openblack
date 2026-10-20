@@ -127,6 +127,8 @@ struct ClipView
 	/// The dance's rate
 	float rate {0.0f};
 	bool female {false};
+	/// Whether it stands somewhere other than where it stood when this turn began
+	bool moving {false};
 	/// The clip it plays walking
 	int32_t walkClip {0};
 };

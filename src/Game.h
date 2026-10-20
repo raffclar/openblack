@@ -162,6 +162,8 @@ struct Arguments
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
 	bool noDraw {false};
+	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
+	bool background {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
@@ -607,6 +609,10 @@ private:
 	void CloseMenuForNewLand();
 	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
 	void ApplyPlayerSettings(const player_profiles::Settings& settings);
+	/// The game and the Controls page take the bindings of the profile played
+	void LoadProfileKeys();
+	/// The profile played keeps the game's bindings
+	void KeepProfileKeys();
 	/// The Players page lists the profiles, the one played picked
 	void RefreshPlayersPage();
 	/// Another profile is played: the menu and the options follow it
@@ -706,6 +712,8 @@ private:
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;
+	/// Whether the menu was open in the last frame
+	bool _menuWasOpen {false};
 	/// The menu asked for this game to end and the next one to start: a new game, or a continue as the profile played
 	std::optional<game_session::End> _gameEndAsked;
 	/// The game ends and waits for the picture of its save on exit before the next game starts

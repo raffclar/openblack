@@ -51,6 +51,10 @@ public:
 	[[nodiscard]] virtual bool HitTest(glm::ivec2 point) const { return visible && rect.Contains(point); }
 	/// Static text takes no part in the mouse or the keyboard
 	[[nodiscard]] virtual bool IsInteractive() const { return true; }
+	/// Whether Tab can give the control the focus. Every control can, but for static text.
+	[[nodiscard]] virtual bool IsTabStop() const { return true; }
+	/// Whether Return, while the control has the focus, clicks it and gives the focus to the next control
+	[[nodiscard]] virtual bool PassesFocusOnReturn() const { return false; }
 	/// Drawn after the others, over them
 	[[nodiscard]] virtual bool IsOnTop() const { return false; }
 	/// What the control is called on the screen, its label, for tools pressing it by name; none for one without
@@ -107,6 +111,7 @@ public:
 	void Draw(const DialogPainter& painter, bool hovered, bool focused, bool pressed) const override;
 	/// Static text takes the mouse only when asked to: a click on it then clicks, but does nothing
 	[[nodiscard]] bool IsInteractive() const override { return takesClicks; }
+	[[nodiscard]] bool IsTabStop() const override { return false; }
 
 	std::u16string text;
 	Layout layout;
@@ -170,6 +175,8 @@ protected:
 	/// How much further from the button a label beside it is
 	int _labelGap {0};
 	bool _checked {false};
+	/// Whether the button lights up while it has the focus, when it has no label
+	bool _focusLights {true};
 };
 
 /// A check box: a square ticked when checked, labelled below unless asked otherwise. A radio button only ever ticks.
@@ -206,6 +213,8 @@ public:
 	[[nodiscard]] std::string_view GetKind() const override { return "slider"; }
 	void MouseDown(glm::ivec2 point) override;
 	void Drag(glm::ivec2 point) override;
+	/// Home, End and the left and right arrows move the knob, and the slider tells of its value
+	bool KeyDown(int key) override;
 
 	[[nodiscard]] float GetValue() const noexcept { return _value; }
 	void SetValue(float value) noexcept;
@@ -243,6 +252,9 @@ public:
 	void MouseDown(glm::ivec2 point) override;
 	void Drag(glm::ivec2 point) override;
 	void Wheel(int steps) override;
+	/// In a list that shows its selection, Home, End and the up and down arrows pick another item and scroll to it. The
+	/// item picked so does not act as a click on it does.
+	bool KeyDown(int key) override;
 
 	void SetItems(std::vector<Item> items);
 	void SetMouseCell(size_t index, int cell)
@@ -316,6 +328,7 @@ public:
 	bool TextInput(std::u16string_view text) override;
 	bool KeyDown(int key) override;
 	void SetFocus(bool focused) override;
+	[[nodiscard]] bool PassesFocusOnReturn() const override { return true; }
 
 	[[nodiscard]] const std::u16string& GetText() const noexcept { return _state.text; }
 	/// Puts the text in, the caret after it and nothing selected

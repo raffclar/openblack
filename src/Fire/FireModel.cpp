@@ -228,3 +228,8 @@ TurnOutcome fire::Step(State& state, const Material& material, const Surrounding
 	}
 	return outcome;
 }
+
+bool fire::SpreadsFrom(bool held, float holderInfluence)
+{
+	return !held || holderInfluence > 0.0f;
+}
