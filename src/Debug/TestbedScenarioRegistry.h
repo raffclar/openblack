@@ -912,6 +912,9 @@ struct Command
 		/// A plan is forced on the creature, as an order from its player: the action by its name (action), done to the
 		/// creature itself. The action's own agenda starts.
 		ForceAction,
+		/// The player's teleport stone nearest to the point goes at once, with its pool, as when its miracle ends. Needs
+		/// no creature.
+		RemoveTeleportStone,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
