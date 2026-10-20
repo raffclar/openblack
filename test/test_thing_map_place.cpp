@@ -22,8 +22,10 @@
 #include "3D/MapCoords.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
@@ -111,6 +113,25 @@ TEST(ThingMapPlace, AnAnimalIsWhereItsTurnPutItNotWhereItIsDrawn)
 	Stand(registry, sheep, {100.0f, 0.0f, 200.0f});
 	registry.Assign<Animal>(sheep).move.position = {k_FarX, k_FarZ};
 	EXPECT_EQ(ecs::thing_map_place::Of(registry, sheep), (MapCoords {.x = k_FarX, .z = k_FarZ}));
+}
+
+TEST(ThingMapPlace, AnAnimalInAHandIsWhereTheHandHoldsIt)
+{
+	ecs::Registry registry;
+	const auto pig = registry.Create();
+	Stand(registry, pig, {1896.0f, 32.0f, 2517.0f});
+	// Its last turn put it far away, in the field where the hand took it
+	registry.Assign<Animal>(pig).move.position = {k_FarX, k_FarZ};
+	const MapCoords held {.x = map_coords::ToFixed(1896.0f), .z = map_coords::ToFixed(2517.0f)};
+	registry.Assign<InHand>(pig);
+	EXPECT_EQ(ecs::thing_map_place::Of(registry, pig), held);
+	// The creature takes it from the god's hand
+	registry.Remove<InHand>(pig);
+	registry.Assign<HeldByCreature>(pig);
+	EXPECT_EQ(ecs::thing_map_place::Of(registry, pig), held);
+	// Let go, it is where its turn puts it again
+	registry.Remove<HeldByCreature>(pig);
+	EXPECT_EQ(ecs::thing_map_place::Of(registry, pig), (MapCoords {.x = k_FarX, .z = k_FarZ}));
 }
 
 TEST(ThingMapPlace, AFlockAndAFireflyKeepTheirOwnPlaces)

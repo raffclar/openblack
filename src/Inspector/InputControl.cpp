@@ -409,10 +409,13 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	           Optional("button", "string", "left, middle, right, or none (the default)"),
 	           Optional("frames", "integer", "Frames for each point (1 by default)"),
 	           timing}),
-	    Write("gesture", "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen",
+	    Write("gesture",
+	          "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first "
+	          "lets go of a creature that sim.feedback holds",
 	          {{.name = "name", .type = "string", .description = "The gesture's name, from input.names", .required = true},
 	           Optional("hold_action", "boolean", "The Action button held throughout, as a circle readying a miracle")}),
-	    Write("release", "Lets go of every button and hands the mouse back to the player; forgets input still to come"),
+	    Write("release", "Lets go of every button and of a creature that sim.feedback holds, and hands the mouse back to the "
+	                     "player; forgets input still to come"),
 	    Write("lock",
 	          "Keeps the player's own mouse and keyboard out of the game, the debug windows and the camera: always "
 	          "(the default), or with mode auto only while an inspector client is connected, as the game starts. "
