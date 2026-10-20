@@ -1198,8 +1198,9 @@ void LivingActionSystem::Update()
 
 	registry.Each<LivingAction>([](LivingAction& action) { ++action.turnsSinceStateChange; });
 
-	// What a hand holds, or what flies in the physics, does nothing of its own. Each villager in turn looks at whether
-	// its states still hold, then, unless a clip into or out of a state holds it, looks at its needs and acts.
+	// What flies in the physics does nothing of its own. Each villager in turn looks at whether its states still hold,
+	// then, unless a clip into or out of a state holds it, looks at its needs and acts. A villager in a hand does all of
+	// this too: its life goes down by what its hand state costs, and its hand state then does its part.
 	registry.Each<Villager, LivingAction>(
 	    [this, &registry](entt::entity entity, Villager& villager, LivingAction& action) {
 		    // Magic food wears off
@@ -1223,14 +1224,7 @@ void LivingActionSystem::Update()
 		    villager_checks::CheckEveryTime(action);
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
-	    entt::exclude<InHand, InPhysics>);
-	// A villager in the hand has only its hand state to do: taking up the work of what it is held near
-	registry.Each<Villager, LivingAction, InHand>([this](Villager&, LivingAction& action, InHand&) {
-		if (VillagerGetState(action, LivingAction::Index::Top) == VillagerStates::InHand)
-		{
-			VillagerCallState(action, LivingAction::Index::Top);
-		}
-	});
+	    entt::exclude<InPhysics>);
 	// TODO(#476): same calls but for other types of living
 }
 
