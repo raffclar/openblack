@@ -150,4 +150,12 @@ inline constexpr float k_MagicWoodScale = 0.7f;
 /// store's piles, a handful and a pile a creature takes from do not.
 [[nodiscard]] bool ReactsWhenMade(PotType type, Reaction reaction, bool makerAsks);
 
+/// Whether a pile goes when a person or the hand takes from it. A pile on its own goes when it holds nothing.
+/// A pile that a store or a building site keeps stays.
+[[nodiscard]] bool GoesWhenEmptied(uint32_t left, bool kept);
+
+/// Whether a pile of a store calls the people near it when the store stops working. The pile must hold something, and
+/// its kind must have a reaction.
+[[nodiscard]] bool CallsWhenStoreStops(uint32_t amount, Reaction reaction);
+
 } // namespace openblack::magic::piles

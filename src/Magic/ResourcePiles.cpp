@@ -225,3 +225,13 @@ bool magic::piles::ReactsWhenMade(PotType type, Reaction reaction, bool makerAsk
 {
 	return makerAsks && type != PotType::Pot && reaction != Reaction::None;
 }
+
+bool magic::piles::GoesWhenEmptied(uint32_t left, bool kept)
+{
+	return left == 0 && !kept;
+}
+
+bool magic::piles::CallsWhenStoreStops(uint32_t amount, Reaction reaction)
+{
+	return amount != 0 && reaction != Reaction::None;
+}
