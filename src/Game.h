@@ -37,11 +37,13 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameSession.h"
+#include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandKnock.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -240,6 +242,8 @@ public:
 
 	bool ProcessEvents(const SDL_Event& event) noexcept;
 	bool GameLogicLoop() noexcept;
+	/// One step of the game turn
+	void PlayTurnStep(game_turn::Step step);
 	/// The game's music, for a turn of the world or of the temple
 	void ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel);
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
@@ -498,14 +502,8 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
-	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
-	/// Holding something puts it off, and it starts over once the hand lets go.
-	struct HandKnock
-	{
-		glm::vec3 point;
-		std::chrono::microseconds time {0};
-	};
-	std::optional<HandKnock> _handKnock;
+	/// The hand's tap after it knocked on a house
+	hand_knock::Tap _handKnock;
 	/// Where the pointer was last put on the hand while it holds a town's totem
 	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
@@ -614,6 +612,10 @@ private:
 	void CloseMenuForNewLand();
 	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
 	void ApplyPlayerSettings(const player_profiles::Settings& settings);
+	/// The game and the Controls page take the bindings of the profile played
+	void LoadProfileKeys();
+	/// The profile played keeps the game's bindings
+	void KeepProfileKeys();
 	/// The Players page lists the profiles, the one played picked
 	void RefreshPlayersPage();
 	/// Another profile is played: the menu and the options follow it
@@ -656,6 +658,9 @@ private:
 	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
+	/// Whether the keys of the camera's bookmarks work: not while a script has the cinema bars in, and only while the
+	/// script's interface level gives the player the keys of the camera and of its places
+	[[nodiscard]] static bool BookmarkKeysAllowed();
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
 	/// tattoo editor
 	[[nodiscard]] bool FrontEndBoxShows() const;
@@ -710,6 +715,8 @@ private:
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;
+	/// Whether the menu was open in the last frame
+	bool _menuWasOpen {false};
 	/// The menu asked for this game to end and the next one to start: a new game, or a continue as the profile played
 	std::optional<game_session::End> _gameEndAsked;
 	/// The game ends and waits for the picture of its save on exit before the next game starts

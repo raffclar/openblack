@@ -71,6 +71,9 @@ struct RegistryContext
 	uint64_t creaturesMade {0};
 	/// The order towns are gained by their players in, the next to be given
 	uint32_t nextTownGained {0};
+	/// The people of each player's towns as the players' turn counts them, by player number, the neutral player last:
+	/// none at the start of a player's turn, and each town adds its people after its own turn
+	std::array<uint32_t, 8> peopleCountedInTurn {};
 	/// Where creatures may go on the land, worked out once the land is there and first asked for
 	std::optional<land_avoid::Map> landAvoid;
 	/// How far the bones of each species reach from its middle. The first request measures it from the model, and later

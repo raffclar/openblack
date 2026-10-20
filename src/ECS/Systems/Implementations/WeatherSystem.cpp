@@ -555,7 +555,7 @@ void WeatherSystem::AddLandStorm(int32_t climateIndex, const script_weather::Lan
 	                    climateIndex, land.position.x, land.position.z, land.outerRadius, land.age, land.lastsFor);
 }
 
-void WeatherSystem::Update(uint32_t turn)
+void WeatherSystem::ProcessStorms(uint32_t turn)
 {
 	_turn = turn;
 
@@ -578,10 +578,11 @@ void WeatherSystem::Update(uint32_t turn)
 		}
 		_stamp = 1;
 	}
+}
 
-	// The weather things follow their storms, which the wind blows along if it may, before the climates' turn
-	ProcessWeatherThings();
-
+void WeatherSystem::ProcessClimates(uint32_t turn)
+{
+	_turn = turn;
 	// Every climate, with the season changing on a new day
 	GetGlobalClimate();
 	const auto day = Ftol(GetDayOfMonth(turn));

@@ -118,6 +118,8 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/MovingShadowCasters.h"
+#include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -173,6 +175,7 @@
 #include "Graphics/SeaReflection.h"
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
+#include "Graphics/ShadowTexture.h"
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
@@ -3153,6 +3156,39 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		    }
 	    },
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
+	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
+	// The model gives each foot as a point on a bone, in the space of that bone.
+	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	{
+		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
+		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
+		{
+			continue;
+		}
+		const auto drawnMesh = meshes.Handle(meshId);
+		const auto& frames = drawnMesh->GetBoneFrames();
+		const auto count = ground_blobs::AnimalFootCount(frames.size());
+		const auto bones = ecs::posed_model::BonesOf(desc.entities, entity, *drawnMesh);
+		if (count == 0 || std::any_of(frames.begin(), frames.begin() + static_cast<std::ptrdiff_t>(count),
+		                              [&bones](const auto& frame) { return frame.bone >= bones.size(); }))
+		{
+			continue;
+		}
+		std::array<glm::vec3, ground_blobs::k_MostAnimalFeet> feet {};
+		for (size_t i = 0; i < count; ++i)
+		{
+			auto& foot = feet.at(i);
+			foot = glm::vec3(model * bones[frames[i].bone] * frames[i].frame * glm::vec4(0.0f, 0.0f, 0.0f, 1.0f));
+			foot.y = island.GetHeightAt(glm::vec2(foot.x, foot.z)) + ground_blobs::k_Lift;
+		}
+		const auto normal = island.GetNormalAt(glm::vec2(model[3].x, model[3].z));
+		const auto fall = ground_blobs::Fall(normal, transform->scale.x);
+		const auto quads = ground_blobs::AnimalFeet(std::span<const glm::vec3>(feet).first(count), fall);
+		for (size_t i = 0; i < count; ++i)
+		{
+			addQuad(quads.at(i));
+		}
+	}
 	for (const auto& far : farVillagers)
 	{
 		auto foot = far.position;
@@ -5140,6 +5176,95 @@ void Renderer::AddGroundShadowBody(const GroundShadowBody& body) const
 	}
 }
 
+std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+Renderer::GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha) const
+{
+	_groundShadowSamples.clear();
+	for (const auto& flat : _groundShadowFlattened)
+	{
+		_groundShadowSamples.push_back(GroundShadow::Sample(flat, footprint));
+	}
+	_groundShadowCoverage = {};
+	for (const auto& part : _groundShadowParts)
+	{
+		const auto& geometry = part.subMesh->GetBodyGeometry();
+		for (const auto& primitive : part.subMesh->GetPrimitives())
+		{
+			const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
+			for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
+			{
+				const std::array<size_t, 3> corners {part.first + geometry.indices[i], part.first + geometry.indices[i + 1],
+				                                     part.first + geometry.indices[i + 2]};
+				if (std::ranges::any_of(corners, [this](size_t corner) { return corner >= _groundShadowSamples.size(); }))
+				{
+					continue;
+				}
+				GroundShadow::Cover(
+				    _groundShadowCoverage,
+				    {_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]], _groundShadowSamples[corners[2]]},
+				    primitive.twoSided, part.secondRowsOnly);
+			}
+		}
+	}
+	return GroundShadow::Levels(_groundShadowCoverage, alpha);
+}
+
+std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+Renderer::ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint,
+                              const GroundShadow::Cast& cast, uint8_t alpha) const
+{
+	// Each triangle of the nearest detail, without the parts that bones move, through the alpha of its texture: the
+	// model's own skin, or a texture of the pack that its models share. A triangle without a mask casts nothing.
+	const auto& textures = Locator::resources::value().GetTextures();
+	shadow_texture::Canvas canvas;
+	for (const auto& subMesh : body.mesh->GetSubMeshes())
+	{
+		const auto flags = subMesh->GetFlags();
+		if ((flags.lodMask & 1U) == 0 || flags.hasBones != 0U)
+		{
+			continue;
+		}
+		const auto& geometry = subMesh->GetBodyGeometry();
+		for (const auto& primitive : subMesh->GetPrimitives())
+		{
+			const auto* mask = body.mesh->GetSkinAlpha(primitive.skinID);
+			if (mask == nullptr)
+			{
+				if (const auto* shared = textures.Find(primitive.skinID); shared != nullptr)
+				{
+					mask = shared->GetAlphaMask();
+				}
+			}
+			if (mask == nullptr)
+			{
+				continue;
+			}
+			const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
+			for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
+			{
+				std::array<shadow_texture::Corner, 3> corners {};
+				bool valid = true;
+				for (size_t k = 0; k < corners.size(); ++k)
+				{
+					const auto vertex = geometry.indices[i + k];
+					if (vertex >= geometry.positions.size() || vertex >= geometry.uvs.size())
+					{
+						valid = false;
+						break;
+					}
+					corners.at(k) =
+					    shadow_texture::CornerOf(geometry.positions[vertex], geometry.uvs[vertex], body.model, footprint, cast);
+				}
+				if (valid)
+				{
+					shadow_texture::Fill(canvas, *mask, corners);
+				}
+			}
+		}
+	}
+	return shadow_texture::Levels(canvas, alpha);
+}
+
 void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 {
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::GroundShadowPass);
@@ -5168,8 +5293,14 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		GroundShadow::Cast cast;
 		uint8_t alpha;
 		bool onObjects;
+		/// It is filled through its textures' alpha and softened, as the shadow of a moving tree is
+		bool throughAlpha {false};
+		/// The thing that the physics moves, whose shadow stays as it is while the thing is under the sea
+		entt::entity kept {entt::null};
 	};
 	std::vector<Caster> casters;
+	// The things under the sea, whose shadows stay as they were when they went under
+	std::vector<entt::entity> underSea;
 	// Kept for the bodies that are blended, in place: made room for first
 	std::vector<L3DMeshSubmitDesc::MorphTargets> morphs;
 	morphs.reserve(renderCtx.entityDraws.size() + 1);
@@ -5359,6 +5490,73 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			castFromSun(draw, true);
 		}
+
+		// The things that the physics moves, cast from a light straight above where each is drawn, onto the land only
+		drawDesc.entities.Each<const ecs::components::Mesh, const ecs::components::PhysicsDrawPose>(
+		    [&](entt::entity entity, const ecs::components::Mesh& mesh, const ecs::components::PhysicsDrawPose& drawn) {
+			    const auto kind = ecs::MovingShadowOf(drawDesc.entities, entity);
+			    if (kind == ecs::MovingShadow::None || !meshManager.Contains(mesh.id))
+			    {
+				    return;
+			    }
+			    if (drawn.underSea)
+			    {
+				    underSea.push_back(entity);
+				    return;
+			    }
+			    const auto* body = &*meshManager.Handle(mesh.id);
+			    // An animated thing casts in the pose of its clip, and casts nothing while it has no clip
+			    const auto& rest = body->GetBoneMatrices();
+			    std::span<const glm::mat4> pose = rest;
+			    if (const auto* villagerPose = drawDesc.entities.TryGet<const ecs::components::VillagerPose>(entity))
+			    {
+				    if (villagerPose->clip == AnimId::Invalid)
+				    {
+					    return;
+				    }
+				    if (!rest.empty() && villagerPose->clipBones.size() == rest.size())
+				    {
+					    pose = villagerPose->clipBones;
+				    }
+				    else if (villagerPose->bones.size() == rest.size())
+				    {
+					    pose = villagerPose->bones;
+				    }
+			    }
+			    else if (const auto* animalPose = drawDesc.entities.TryGet<const ecs::components::AnimalPose>(entity))
+			    {
+				    if (animalPose->bones.empty())
+				    {
+					    return;
+				    }
+				    if (animalPose->bones.size() == rest.size())
+				    {
+					    pose = animalPose->bones;
+				    }
+			    }
+			    const auto model = glm::translate(glm::mat4(1.0f), drawn.origin) * glm::mat4(drawn.axes);
+			    const auto ground = land.GetHeightAt(glm::vec2(drawn.origin.x, drawn.origin.z));
+			    const auto radius =
+			        openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
+			    const auto alpha =
+			        GroundShadow::Alpha(glm::distance(camera, glm::vec3(drawn.origin.x, ground, drawn.origin.z)), radius);
+			    if (alpha == 0)
+			    {
+				    return;
+			    }
+			    Caster caster {
+			        .bodies = {},
+			        .bodyCount = 1,
+			        .standsAt = drawn.origin,
+			        .cast = {.light = shadow_texture::LightAbove(drawn.origin), .level = drawn.origin.y, .ground = ground},
+			        .alpha = alpha,
+			        .onObjects = false,
+			        .throughAlpha = kind == ecs::MovingShadow::Texture,
+			        .kept = entity,
+			    };
+			    caster.bodies.at(0) = {.mesh = body, .model = model, .pose = pose, .morph = nullptr, .secondRowsOnly = false};
+			    casters.push_back(caster);
+		    });
 	}
 
 	// Each shadow's texture counted from its bodies' triangles, as the game counts them, and handed over with where it
@@ -5366,6 +5564,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	std::ranges::stable_partition(casters, &Caster::onObjects);
 	std::vector<GroundShadow::Footprint> footprints;
 	footprints.reserve(casters.size());
+	decltype(_keptGroundShadows) kept;
 	for (const auto& caster : casters)
 	{
 		_groundShadowPoints.clear();
@@ -5380,35 +5579,10 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			continue;
 		}
-		_groundShadowSamples.clear();
-		for (const auto& flat : _groundShadowFlattened)
-		{
-			_groundShadowSamples.push_back(GroundShadow::Sample(flat, *footprint));
-		}
-		_groundShadowCoverage = {};
-		for (const auto& part : _groundShadowParts)
-		{
-			const auto& geometry = part.subMesh->GetBodyGeometry();
-			for (const auto& primitive : part.subMesh->GetPrimitives())
-			{
-				const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, geometry.indices.size());
-				for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
-				{
-					const std::array<size_t, 3> corners {part.first + geometry.indices[i], part.first + geometry.indices[i + 1],
-					                                     part.first + geometry.indices[i + 2]};
-					if (std::ranges::any_of(corners, [this](size_t corner) { return corner >= _groundShadowSamples.size(); }))
-					{
-						continue;
-					}
-					GroundShadow::Cover(
-					    _groundShadowCoverage,
-					    {_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]], _groundShadowSamples[corners[2]]},
-					    primitive.twoSided, part.secondRowsOnly);
-				}
-			}
-		}
-		const auto levels = GroundShadow::Levels(_groundShadowCoverage, caster.alpha);
-
+		const auto levels = caster.throughAlpha
+		                        ? ShadowTextureLevels(caster.bodies.at(0), *footprint, caster.cast, caster.alpha)
+		                        : GroundShadowLevels(*footprint, caster.alpha);
+		const auto first = _groundShadowTexels.size();
 		const auto way = GroundShadow::LightWay(caster.standsAt, caster.cast.light);
 		_groundShadowTexels.push_back(GroundShadow::Receiver(*footprint, caster.cast));
 		_groundShadowTexels.emplace_back(way, footprint->nearest, 0.0f);
@@ -5425,7 +5599,28 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		{
 			++_groundShadowsOnObjects;
 		}
+		if (caster.kept != entt::null)
+		{
+			kept[caster.kept] = {.texels =
+			                         std::vector<glm::vec4>(_groundShadowTexels.begin() + static_cast<std::ptrdiff_t>(first),
+			                                                _groundShadowTexels.end()),
+			                     .footprint = *footprint};
+		}
 	}
+	// A thing under the sea keeps the shadow that it had when it went under, as long as it stays in the physics
+	for (const auto entity : underSea)
+	{
+		const auto found = _keptGroundShadows.find(entity);
+		if (found == _keptGroundShadows.end())
+		{
+			continue;
+		}
+		_groundShadowTexels.insert(_groundShadowTexels.end(), found->second.texels.begin(), found->second.texels.end());
+		footprints.push_back(found->second.footprint);
+		++_groundShadowCount;
+		kept.insert(*found);
+	}
+	_keptGroundShadows = std::move(kept);
 
 	// Each land block's list of the shadows reaching it, after the shadows themselves
 	if (Locator::terrainSystem::has_value())

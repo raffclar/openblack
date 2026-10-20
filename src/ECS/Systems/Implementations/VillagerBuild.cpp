@@ -42,6 +42,7 @@
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/VillagerCarry.h"
@@ -99,6 +100,12 @@ void SetTopState(LivingAction& action, VillagerStates state)
 VillagerStates TopState(const LivingAction& action)
 {
 	return Locator::livingActionSystem::value().VillagerGetState(action, LivingAction::Index::Top);
+}
+
+/// The state the villager works towards
+VillagerStates FinalState(const LivingAction& action)
+{
+	return Locator::livingActionSystem::value().VillagerGetFinalState(action);
 }
 
 const GVillagerInfo& InfoOf(const Villager& villager)
@@ -183,16 +190,15 @@ bool IsFunctional(std::optional<entt::entity> pit)
 	return pit.has_value() && villager_home::IsFunctional(*pit);
 }
 
-/// Where the villager leaves wood: its working storage pit
-std::optional<glm::vec2> DropOffPosition(const Villager& villager)
+/// The town's temporary pile of a resource and its edge nearest a point, made if missing
+std::optional<systems::TownSystemInterface::TemporaryStore> TemporaryStoreOf(entt::entity town, glm::vec2 from,
+                                                                             ResourceType type)
 {
-	const auto pit = StoragePitOf(villager);
-	if (IsFunctional(pit))
+	if (town == entt::null || !Locator::townSystem::has_value())
 	{
-		return villager_home::ArrivePosition(*pit);
+		return std::nullopt;
 	}
-	// TODO(temple-builders): without a working storage pit a town keeps a temporary pot of wood; not yet
-	return std::nullopt;
+	return Locator::townSystem::value().TemporaryStorePile(town, from, type);
 }
 
 /// How good or evil the land is where the villager stands: each player's influence there times their alignment
@@ -237,7 +243,7 @@ bool ShouldIGetWood(entt::entity villager, entt::entity building)
 		}
 	}
 	const auto here = PositionOf(villager);
-	const auto dropOff = DropOffPosition(person).value_or(glm::xz(here));
+	const auto dropOff = villager_build::ResourceDropoffPos(villager, ResourceType::Wood);
 	return building_site::ShouldFetchWood({
 	    .woodAtSite = construction::WoodAtSite(town, building),
 	    .workersWood = workersWood,
@@ -318,11 +324,7 @@ uint32_t GotoStoragePitForBuildingMaterials(LivingAction& action, entt::entity b
 	}
 	else
 	{
-		target = DropOffPosition(person);
-	}
-	if (!target.has_value())
-	{
-		return 0;
+		target = villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Wood);
 	}
 	if (!IsWorker(town, building, villager))
 	{
@@ -456,7 +458,33 @@ uint32_t ArrivesAtStoragePitForResource(LivingAction& action, ResourceType type,
 			SetTopState(action, fail);
 			return 0;
 		}
-		// TODO(temple-builders): without a working storage pit the town's temporary pot is used; not yet
+		// Without a storage pit that works it takes from its town's temporary pile, at the edge nearest it, the pile's
+		// size and its own apart
+		const auto villager = EntityOf(action);
+		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
+		{
+			const auto centre = glm::xz(Entities().Get<const Transform>(store->pile).position);
+			const float reach = systems::object_measures::TwoDRadius(Entities(), store->pile) +
+			                    systems::object_measures::TwoDRadius(Entities(), villager);
+			const auto offset = gutils::GetPointFromAngle(gutils::Get3DAngleFromXZ(centre, GroundOf(villager)), reach);
+			const auto edge = centre + glm::vec2(offset.x, offset.z);
+			if (villager_home::AreWeThere(villager, edge))
+			{
+				// As the game does, it picks up all it asked for, whatever the pile had (a quirk of the game)
+				auto& stores = Locator::resourceStoreSystem::value();
+				stores.RemoveResource(store->pile, type, amount);
+				stores.AddResource(villager, type, static_cast<uint32_t>(static_cast<int16_t>(amount)), std::nullopt);
+				if (arrive != VillagerStates::InvalidState)
+				{
+					SetTopState(action, arrive);
+					return 1;
+				}
+				SetTopState(action, fail);
+				return 0;
+			}
+			MoveTo(action, edge, FinalState(action));
+			return k_StillBusy;
+		}
 	}
 	SetTopState(action, fail);
 	return 0;
@@ -843,7 +871,10 @@ uint32_t villager_build::GotoStoragePitForDropOff(LivingAction& action)
 	const auto held = villager_carry::HeldResource(person);
 	if (held == ResourceType::Food || held == ResourceType::Wood)
 	{
-		// TODO(temple-builders): without a working storage pit the load goes to the town's temporary pot; not yet
+		// Without a storage pit that works the load goes to where its town leaves it
+		villager_home::SetupMoveTo(action, villager_build::ResourceDropoffPos(EntityOf(action), held),
+		                           VillagerStates::ArrivesAtStoragePitForDropOff);
+		return 1;
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	return 0;
@@ -887,8 +918,37 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional
 			MoveOnPathsTo(action, *pit, door, VillagerStates::DecideWhatToDo);
 			return 1;
 		}
-		// TODO(temple-builders): without a working storage pit the load goes to the town's temporary pot; not yet
+		// Without a storage pit that works it leaves all its load in its town's temporary pile, at the pile's edge
+		// nearest it. The pile keeps what it can take; the villager has none left.
+		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
+		{
+			if (!villager_home::AreWeThere(villager, store->edge))
+			{
+				villager_home::SetupMoveTo(action, store->edge, FinalState(action));
+				return 1;
+			}
+			Locator::resourceStoreSystem::value().AddResource(store->pile, type,
+			                                                  static_cast<uint32_t>(static_cast<uint16_t>(held)), std::nullopt);
+			const auto dropped = villager_carry::PutDown(person, type, static_cast<uint16_t>(held));
+			if (auto* tally = Entities().TryGet<TownResourceTally>(TownOf(person)))
+			{
+				(type == ResourceType::Food ? tally->foodCarried : tally->woodCarried) -= static_cast<float>(dropped);
+			}
+		}
 	}
 	SetTopState(action, VillagerStates::DecideWhatToDo);
 	return 1;
+}
+
+glm::vec2 villager_build::ResourceDropoffPos(entt::entity villager, ResourceType type)
+{
+	const auto& person = Entities().Get<const Villager>(villager);
+	const auto pit = StoragePitOf(person);
+	if (IsFunctional(pit))
+	{
+		return villager_home::ArrivePosition(*pit);
+	}
+	const auto here = GroundOf(villager);
+	const auto store = TemporaryStoreOf(TownOf(person), here, type);
+	return store.has_value() ? store->edge : here;
 }

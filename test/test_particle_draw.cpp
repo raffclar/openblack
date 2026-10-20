@@ -12,14 +12,17 @@
 #include <array>
 #include <bit>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <EnumHeader.h>
+#include <ParticleFile.h>
 #include <StackedBitmap.h>
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
 #include "Graphics/ZSort.h"
+#include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleCreators.h"
 #include "Particles/ParticleDrawFrame.h"
 #include "Particles/ParticleMaths.h"
@@ -425,6 +428,7 @@ TEST(ParticleDraw, AModelKeptOutOfTheLightsShowsItsTextureInItsAtomsColour)
 {
 	MeshCreator creator;
 	// A plain model in the scene's lights is shaded by them
+	creator.dynamicLighting = true;
 	EXPECT_FALSE(creator.DrawnUnlit());
 	// Kept out of them, as the falling forest seed is, it is drawn unlit and fully opaque whatever its atom's alpha
 	creator.dynamicLighting = false;
@@ -443,4 +447,36 @@ TEST(ParticleDraw, AChakraRisesThenFades)
 	EXPECT_FLOAT_EQ(maths::ChakraFade(2.0f, 0.5f, 1.5f), 0.0f);
 	// Not a number counts as nothing
 	EXPECT_FLOAT_EQ(maths::ChakraFade(0.0f, 0.0f, 0.0f), 0.0f);
+}
+
+TEST(ParticleDraw, OnlyTheAnimatedModelsAreLitWhenTheirFilesDoNotSay)
+{
+	const auto registry = ParticleClassRegistry::WithAllClasses();
+	const auto make = [&registry](std::string_view className) {
+		const psys::ParticleObject object {.className = std::string(className), .name = "Creator", .properties = {}};
+		const auto* factory = registry.FindCreator(className);
+		EXPECT_NE(factory, nullptr);
+		auto creator = (*factory)(object);
+		return *static_cast<const MeshCreator*>(creator.get());
+	};
+	EXPECT_FALSE(make("ParticleMeshCreator").dynamicLighting);
+	EXPECT_FALSE(make("ParticleMeshCreatorAnimTextured").dynamicLighting);
+	EXPECT_TRUE(make("ParticleAnimCreator").dynamicLighting);
+	EXPECT_FALSE(make("ParticleMeshCreator").scriptHighlightPulse);
+}
+
+TEST(ParticleDraw, AModelThatFacesTheCameraBeatsWithTheScrolls)
+{
+	MeshCreator creator;
+	creator.scriptHighlightPulse = true;
+	// Only a model that faces the camera beats
+	EXPECT_EQ(creator.PulsedAlpha(180, 0.4f), 180);
+	creator.faceCamera = true;
+	// The beat times the alpha, cut to a whole number: 0.7 x 255 is 178.5, which gives 178
+	EXPECT_EQ(creator.PulsedAlpha(180, 0.4f), 72);
+	EXPECT_EQ(creator.PulsedAlpha(180, 1.0f), 180);
+	EXPECT_EQ(creator.PulsedAlpha(255, 0.7f), 178);
+	EXPECT_EQ(creator.PulsedAlpha(0, 1.0f), 0);
+	creator.scriptHighlightPulse = false;
+	EXPECT_EQ(creator.PulsedAlpha(180, 0.4f), 180);
 }

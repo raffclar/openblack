@@ -327,16 +327,6 @@ glm::vec3 creature_leash_orders::MarkerOverLand(glm::vec3 point)
 	return point + glm::vec3(0.0f, k_MarkerLift, 0.0f);
 }
 
-glm::vec2 creature_leash_orders::MarkerSize(uint32_t clockMs)
-{
-	constexpr float k_Least = 0.2f;
-	constexpr float k_TurnsPerMs = 0.0005f;
-	const auto swing = [](uint32_t ms) {
-		return std::abs(std::cos(static_cast<float>(ms) * k_TurnsPerMs * 2.0f * std::numbers::pi_v<float>)) + k_Least;
-	};
-	return {swing(clockMs), swing(clockMs + k_PulseLagMs)};
-}
-
 bool creature_leash_orders::MarkerShown(bool inTemple, bool worldHidden)
 {
 	return !inTemple && !worldHidden;

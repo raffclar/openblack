@@ -17,6 +17,7 @@
 #include <glm/vec2.hpp>
 
 #include "3D/AllMeshes.h"
+#include "ECS/VillagerStateEntry.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -76,7 +77,18 @@ uint32_t ScriptPlayAnim(components::LivingAction& action);
 uint32_t ScriptWanderAroundPosition(components::LivingAction& action);
 /// Walking a script's track: on along it, facing the way it goes, and waiting for the script at its end
 uint32_t MoveAlongPath(components::LivingAction& action);
-/// Leaving a script's hands: only for the states a script lets take it away. True refuses.
+/// Walking back to a script's track: on to the point of the track it had got to, then on along the track from there
+uint32_t ScriptGoAndMoveAlongPath(components::LivingAction& action);
+/// Leaving a script's hands: only for the states a script lets take it away. A villager that leaves for a state that is
+/// not the script's keeps its script's work in mind, to go back to it later. True refuses.
 bool ExitInScript(components::LivingAction& action, VillagerStates next);
+/// Coming into a script state: a villager that goes back into the state it kept in mind walks back to its kept place
+/// first, or back to the point of the track it had got to
+ecs::VillagerStateEntry EnterInScript(components::LivingAction& action, VillagerStates from, VillagerStates into);
+/// Coming into the state that plays a script's clip: a villager that goes back into it walks back to its kept place
+/// first, unless it is there; there, it plays the clip a script forced again
+ecs::VillagerStateEntry EnterPlayAnim(components::LivingAction& action, VillagerStates from, VillagerStates into);
+/// A script lets go of what the villager keeps in mind of its work
+void ForgetScriptWork(entt::entity villager);
 
 } // namespace openblack::ecs::villager_script

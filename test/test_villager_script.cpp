@@ -247,3 +247,52 @@ TEST(VillagerScriptRules, AReleasedVillagerInThePhysicsOrAtHomeStays)
 	EXPECT_EQ(rules::ReleaseOutcomeOf({.inPhysics = true, .life = 0.0f, .hasTown = false}), rules::ReleaseOutcome::Stays);
 	EXPECT_EQ(rules::ReleaseOutcomeOf({.atHome = true, .life = 0.5f, .hasTown = true}), rules::ReleaseOutcome::Stays);
 }
+
+TEST(VillagerScriptRules, StatesHeldByAScriptAreGoneIntoTheSameWay)
+{
+	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::InScript, VillagerStates::MoveAlongPath));
+	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptGoAndMoveAlongPath, VillagerStates::InScript));
+	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptPlayAnim, VillagerStates::ScriptPlayAnim));
+	EXPECT_TRUE(rules::EnterTheSameWay(VillagerStates::ScriptWanderAroundPosition, VillagerStates::ScriptWanderAroundPosition));
+	// The wander and the clip have entries of their own
+	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::ScriptWanderAroundPosition, VillagerStates::InScript));
+	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::ScriptPlayAnim, VillagerStates::InScript));
+	EXPECT_FALSE(rules::EnterTheSameWay(VillagerStates::FleeingFromObjectReaction, VillagerStates::InScript));
+}
+
+TEST(VillagerScriptRules, AVillagerGoesBackToItsKeptWorkOnlyInTheKeptState)
+{
+	// Back from a reaction into the kept state
+	EXPECT_TRUE(rules::GoesBackToKeptWork(VillagerStates::FleeingFromObjectReaction, VillagerStates::InScript,
+	                                      VillagerStates::InScript));
+	// Another state than the kept one
+	EXPECT_FALSE(rules::GoesBackToKeptWork(VillagerStates::FleeingFromObjectReaction, VillagerStates::ScriptPlayAnim,
+	                                       VillagerStates::InScript));
+	// Nothing kept
+	EXPECT_FALSE(rules::GoesBackToKeptWork(VillagerStates::FleeingFromObjectReaction, VillagerStates::InScript,
+	                                       VillagerStates::InvalidState));
+	// From a state held by the script the same way: no walk back
+	EXPECT_FALSE(rules::GoesBackToKeptWork(VillagerStates::MoveAlongPath, VillagerStates::InScript, VillagerStates::InScript));
+}
+
+TEST(VillagerScriptRules, WithNoGoalAVillagerKeepsWhereItStandsUnlessItPlaysAClip)
+{
+	const glm::vec2 standing {120.0f, 340.0f};
+	const glm::vec2 goal {80.0f, 90.0f};
+	EXPECT_EQ(rules::KeptGoal(goal, standing, VillagerStates::InScript), goal);
+	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::InScript), standing);
+	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::InvalidState), standing);
+	EXPECT_EQ(rules::KeptGoal({0.0f, 0.0f}, standing, VillagerStates::ScriptPlayAnim), glm::vec2(0.0f));
+	// Less than a map unit from nothing is no goal
+	EXPECT_EQ(rules::KeptGoal({0.0001f, 0.0f}, standing, VillagerStates::InScript), standing);
+	EXPECT_FALSE(rules::HasKeptGoal({0.0001f, 0.0001f}));
+	EXPECT_TRUE(rules::HasKeptGoal({0.0f, 0.001f}));
+}
+
+TEST(VillagerScriptRules, AKeptClipThatIsNotOneOfTheGamesPlaysTheFirstClip)
+{
+	EXPECT_EQ(rules::KeptClipToPlay(53, 441), 53);
+	EXPECT_EQ(rules::KeptClipToPlay(-2, 441), 0);
+	EXPECT_EQ(rules::KeptClipToPlay(441, 441), 0);
+	EXPECT_EQ(rules::KeptClipToPlay(440, 441), 440);
+}

@@ -183,6 +183,12 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	}
 	auto resourceId = resources::HashIdentifier(info.meshId);
 	const auto& mesh = registry.Assign<Mesh>(entity, resourceId, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	// The town makes its ground again with the new building, before the building puts up anything round itself
+	if (const auto town = registry.Context().towns.find(townId);
+	    town != registry.Context().towns.end() && Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().StructuresChanged(town->second);
+	}
 	if (morphsWithTerrain)
 	{
 		registry.Assign<MorphWithTerrain>(entity);

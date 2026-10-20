@@ -66,6 +66,7 @@ public:
 	[[nodiscard]] float ChantsPerDancer(entt::entity site) const override;
 	[[nodiscard]] uint32_t FoodInPot(entt::entity site) const override;
 	[[nodiscard]] int32_t FoodNeededFromTown(entt::entity site) const override;
+	[[nodiscard]] float DesireForFood(entt::entity site) const override;
 	void RemoveFoodOnTheWay(entt::entity site, int32_t amount) override;
 
 private:
@@ -85,6 +86,8 @@ private:
 	/// A site goes, with everything of it, leaving its towns and its place round the temple
 	void Remove(entt::entity site);
 	/// A site's dance, if it has one
+	/// The food that the villagers who dance at the site want for their dinner
+	[[nodiscard]] float DancersFoodNeed(entt::entity site) const;
 	[[nodiscard]] components::Dance* DanceOf(entt::entity site) const;
 	/// A new site is given its dance and its food pot
 	void Init(entt::entity site);

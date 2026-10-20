@@ -34,6 +34,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Camera/CameraBookmarks.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAudio.h"
@@ -77,6 +78,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -1431,7 +1433,7 @@ void LeashSystem::ProcessTurn()
 
 void LeashSystem::Update(float seconds)
 {
-	UpdateMarkers(seconds);
+	UpdateMarkers();
 	UpdatePosts(seconds);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hand = HandPoint();
@@ -2288,11 +2290,12 @@ std::optional<glm::vec3> LeashSystem::OrderTarget(entt::entity creature) const
 	return orders::MarkerOverLand(order.point);
 }
 
-void LeashSystem::UpdateMarkers(float seconds)
+void LeashSystem::UpdateMarkers()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	_markerClockMs = std::fmod(_markerClockMs + (seconds * 1000.0f), static_cast<float>(orders::k_PulsePeriodMs));
-	const auto size = orders::MarkerSize(static_cast<uint32_t>(_markerClockMs));
+	// The ring throbs together with the markers of the camera's bookmarks, on their clock
+	const auto size = Locator::cameraBookmarkSystem::has_value() ? Locator::cameraBookmarkSystem::value().GetMarkerHalfSize()
+	                                                             : camera_bookmarks::MarkerHalfSize(0);
 	// The footprint turns a quarter turn to the left, in the plane that faces the camera
 	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <utility>
+#include <vector>
 
 #include <SDL_events.h>
 #include <SDL_hints.h>
@@ -106,6 +107,14 @@ void GameActionMap::SetKeyBinding(BindableActionMap action, std::optional<KeyCho
 void GameActionMap::ResetKeyBindings()
 {
 	_bindings = k_DefaultKeyBindings;
+	ApplyMouseBindings();
+}
+
+void GameActionMap::SetKeyBindings(const KeyBindingTable& bindings)
+{
+	// Every action lets go, so that no action stays held by an input that is no longer its own
+	_bindableMap = BindableActionMap::NONE;
+	_bindings = bindings;
 	ApplyMouseBindings();
 }
 
@@ -440,6 +449,8 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	}
 	if (event.type == SDL_MOUSEMOTION)
 	{
+		// The mouse's own movement, before the pointer's speed and the screen's sides
+		_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
 		const auto before = _scaledPointer.Position();
 		const auto after = _scaledPointer.Move({event.motion.xrel, event.motion.yrel}, GetPointerScale(),
 		                                       Locator::windowing::value().GetSize());
@@ -584,6 +595,11 @@ glm::ivec2 GameActionMap::GetMouseDelta() const
 	return _mouseMotion.Delta();
 }
 
+glm::ivec2 GameActionMap::GetMousePushDelta() const
+{
+	return _pushMotion;
+}
+
 float GameActionMap::GetMouseWheelDelta() const
 {
 	return _mouseWheelDelta;
@@ -591,6 +607,7 @@ float GameActionMap::GetMouseWheelDelta() const
 
 void GameActionMap::Frame()
 {
+	_keysDownThisFrame.reset();
 	_cursorWarp.reset();
 	if (_pointerScaled && !CanScalePointer())
 	{
@@ -694,6 +711,7 @@ void GameActionMap::Frame()
 		}
 	}
 	_mouseMotion.NewFrame();
+	_pushMotion = glm::ivec2(0);
 	_mouseWheelDelta = 0.0f;
 	_bindableMapPrevious = _bindableMap;
 	_bindableMap =
@@ -711,6 +729,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		const auto key = event.key.keysym.scancode;
 		_heldKeys.set(static_cast<size_t>(key));
+		_keysDownThisFrame.set(static_cast<size_t>(key));
+		// A key that goes down again before its waiting release stays held
+		std::erase_if(_queuedReleases, [key](const SDL_Event& release) {
+			return release.type == SDL_KEYUP && release.key.keysym.scancode == key;
+		});
 		// A binding with a modifier held takes the key from the bindings without one
 		_bindableMap = static_cast<BindableActionMap>(
 		    (static_cast<uint64_t>(_bindableMap) & ~static_cast<uint64_t>(ActionsForKey(_bindings, key))) |
@@ -800,6 +823,13 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		const auto key = event.key.keysym.scancode;
 		_heldKeys.reset(static_cast<size_t>(key));
+		// The game keeps each key press until the frame reads it, so a key that goes down and up in one frame is not lost.
+		// Its actions stay pressed for this frame and the next frame lets go of them.
+		if (_keysDownThisFrame.test(static_cast<size_t>(key)))
+		{
+			_queuedReleases.emplace_back(event);
+			return;
+		}
 		_bindableMap = static_cast<BindableActionMap>(static_cast<uint64_t>(_bindableMap) &
 		                                              ~static_cast<uint64_t>(ActionsForKey(_bindings, key)));
 	}
@@ -832,6 +862,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
 		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
+		// While the window has the mouse, its own movement was taken as the event came in
+		if (!_pointerScaled)
+		{
+			_pushMotion += glm::ivec2(event.motion.xrel, event.motion.yrel);
+		}
 	}
 }
 

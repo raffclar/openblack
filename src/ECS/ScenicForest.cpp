@@ -18,17 +18,6 @@
 using namespace openblack;
 using namespace openblack::ecs;
 
-void scenic_forest::TownArea::Add(glm::vec2 at, float radius)
-{
-	min = glm::min(min, at - radius);
-	max = glm::max(max, at + radius);
-}
-
-glm::vec2 scenic_forest::TownArea::Centre() const
-{
-	return (min + max) * 0.5f;
-}
-
 std::vector<map_coords::MapCoords> scenic_forest::Walk(const map_coords::MapCoords& centre, float reach)
 {
 	std::vector<map_coords::MapCoords> cells;

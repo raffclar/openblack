@@ -104,7 +104,7 @@ private:
 	/// Whether the order the creature took is still being carried out
 	[[nodiscard]] bool OrderInForce(entt::entity creature) const;
 	/// The ring of the player's own creature's order follows its target and throbs
-	void UpdateMarkers(float seconds);
+	void UpdateMarkers();
 	/// The player's worn leash while it is tied to something, or none (which drops any rope the hand held)
 	components::CreatureLeash::Worn* TiedLeash(PlayerNames player);
 	/// The player's tied leash while the hand holds its rope
@@ -135,7 +135,6 @@ private:
 	/// A single or double tap of the Action button with the leash, acting on what is under the cursor
 	void ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap);
 	/// The clock every order's ring throbs by, in milliseconds of game time
-	float _markerClockMs {0.0f};
 };
 
 } // namespace openblack::ecs::systems

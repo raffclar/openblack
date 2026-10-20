@@ -1606,7 +1606,7 @@
   "query": "view.state"
  },
  {
-  "description": "The camera's bookmarks",
+  "description": "The camera's bookmarks: each slot, whether it is set, and whether the camera follows it",
   "kind": "list",
   "parameters": [],
   "query": "view.bookmarks"

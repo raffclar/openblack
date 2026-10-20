@@ -73,6 +73,16 @@ public:
 	virtual void AlignmentTurn(float change) = 0;
 	/// A remark said at most once a land, at its chance
 	virtual void SayOneOff(guidance::OneOff oneOff) = 0;
+	/// The player here killed a villager: the advisors speak of it when the villager is on screen
+	virtual void KilledVillager(entt::entity villager) = 0;
+	/// A villager of the player here died of chanting: the advisors warn of the worshippers that die
+	virtual void WorshipperDied() = 0;
+	/// Another player took a villager of the player here: the advisors warn of the loss when the villager died near the
+	/// point under the cursor
+	virtual void LosingVillager(entt::entity villager) = 0;
+	/// A town of the player here has few adults left: the advisors warn of it when the town has people and is near the
+	/// point under the cursor
+	virtual void LowOnPeople(entt::entity town) = 0;
 	/// For the testbed: every kind counts as heard as long ago as can be
 	virtual void EndWaits() = 0;
 

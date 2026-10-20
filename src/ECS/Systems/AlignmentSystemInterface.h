@@ -96,9 +96,11 @@ public:
 	/// The change still to come
 	[[nodiscard]] virtual float GetPendingAlignment(PlayerNames player) const = 0;
 
-	/// At the end of a game turn the camera takes the alignment of the player of most influence at its eye, the neutral
-	/// player's where no player has any
-	virtual void UpdateTurn(const glm::vec3& eye) = 0;
+	/// At the end of the players' turns: each player's waiting change moves its alignment. Then the camera takes the
+	/// alignment of the player of most influence at its eye, the neutral player's where no player has any.
+	virtual void UpdatePlayersTurn(const glm::vec3& eye) = 0;
+	/// Each game turn: the plan of each creature adds its change, and the waiting change moves its alignment
+	virtual void UpdateCreaturesTurn() = 0;
 	/// The sky turns toward the camera's alignment, by game time, none while paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 

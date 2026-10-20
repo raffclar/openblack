@@ -346,6 +346,8 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
 	void HandleActions(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
+	/// While a script has the camera, no other camera can take over
+	[[nodiscard]] bool CanBeLeft() const override { return false; }
 	/// The camera stops at this position and focus. A thing that it follows or looks at, its track and a two-thing
 	/// camera continue, and move it again on the next frame.
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) override;

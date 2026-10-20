@@ -41,6 +41,7 @@ public:
 	uint32_t VillagerCallState(components::LivingAction& action, components::LivingAction::Index index) const override;
 	bool VillagerCallEntryState(components::LivingAction& action, components::LivingAction::Index index, VillagerStates src,
 	                            VillagerStates dst) const override;
+	bool VillagerEnterState(components::LivingAction& action, VillagerStates state) const override;
 	bool VillagerCallExitState(components::LivingAction& action, components::LivingAction::Index index,
 	                           VillagerStates next) const override;
 	int VillagerCallOutOfAnimation(components::LivingAction& action, components::LivingAction::Index index) const override;

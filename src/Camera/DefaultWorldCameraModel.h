@@ -21,6 +21,7 @@
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
+#include "PushScroll.h"
 
 class TestDefaultCameraModel;
 class TestDefaultCameraModel_single_line_Test;
@@ -54,6 +55,9 @@ public:
 	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
+	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
+	/// The single tap of the temple key looks that far ahead. Returns the distance.
+	float RefreshClickDistance(const Camera& camera);
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] Asked GetAsked() const final
@@ -67,6 +71,10 @@ public:
 		        .dragTurn = _dragTurn,
 		        .dragTilt = _dragTilt};
 	}
+	/// Whether the player moved the camera in the last frame: a control of the camera, or a drag of the mouse of more
+	/// than two pixels while the land is gripped or the camera turns round the hand. Such a move stops a follow of a
+	/// bookmark.
+	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
 	/// One of the four wooshes of a flight
 	static void Woosh();
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
@@ -81,6 +89,8 @@ private:
 	[[nodiscard]] Mode HandleDrag(bool held);
 	/// The help's profile counts the camera controls used
 	static void SendHelpEvents(camera_help::events::EventSet events);
+	/// Push scrolling for the frame: the speed moves and turns the camera, fades, then takes the frame's push
+	void HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping);
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
 	/// The part of the screen the edge controls are laid out on: a 4:3 screen's worth, measured by the cinema bars'
@@ -97,7 +107,7 @@ private:
 	bool FlyTo(camera_fly::Reason reason);
 
 	/// Updates the model's focus point parameters after a change in position or focus point of view
-	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles, const Camera& camera);
+	void UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, const Camera& camera);
 	/// Modifies the given Euler angles based on the rotate Around and keyboard Move Deltas for rotation and zoom.
 	/// @param eulerAngles A reference representing Euler angles (yaw, pitch, roll) to be adjusted. Roll is always 0.
 	void TiltZoom(glm::vec3& eulerAngles, float scalingFactor, float zoomDelta);
@@ -111,7 +121,8 @@ private:
 	/// average.
 	///
 	/// @return The harmonic mean of the distances from the origin to each hit point.
-	[[nodiscard]] float GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const;
+	/// A distance of 50 counts as one more hit.
+	[[nodiscard]] float GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera, glm::vec3 origin) const;
 
 	void ComputeDistanceFromBoundY();
 	/// The zones the land's scripts have set, or none
@@ -129,7 +140,7 @@ private:
 		[[nodiscard]] bool Any() const { return pushed || focusMoved; }
 	};
 	LimitsMoved ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener, std::chrono::microseconds dt, float zoomDelta,
-	                        glm::vec3 eulerAngles, const Camera& camera);
+	                        const Camera& camera);
 	/// Puts the camera back inside the zones' fence; whether it was outside
 	bool KeepInsideFence(const camera_zones::Zones& zones, glm::vec3 originAtFrameStart, glm::vec3 listener);
 	/// Whether the player is using any of the camera's controls this frame
@@ -231,6 +242,13 @@ private:
 	camera_help::events::EventSet _helpEvents;
 	/// What the helper icons by the hand are picked from this frame
 	hand_tricons::WorldCameraFrame _iconFrame;
+	/// Push scrolling: the mouse as the push reads it, the camera's speed across, forwards and round, the push's clock,
+	/// and what the speed moves and turns the camera by this frame
+	camera_push_scroll::Pointer _pushPointer;
+	glm::vec3 _pushSpeed {0.0f};
+	camera_push_scroll::MillisecondClock _pushClock;
+	glm::vec3 _pushMove {0.0f};
+	float _pushTurn {0.0f};
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 

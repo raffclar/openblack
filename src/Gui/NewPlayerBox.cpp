@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <utility>
 
+#include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 
 #include "Controls.h"
@@ -234,7 +235,7 @@ void NewPlayerBox::KeyDown(int key)
 		Cancel();
 		return;
 	}
-	_dialog.KeyDown(key);
+	_dialog.KeyDown(key, (SDL_GetModState() & KMOD_SHIFT) != 0);
 }
 
 void NewPlayerBox::Update(float deltaSeconds)

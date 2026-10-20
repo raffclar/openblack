@@ -8,6 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
+
+#include <bit>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -406,6 +409,15 @@ TEST(HandGrab, ATwistTurnsAboutTheLevelAxisAcrossTheHandsMotion)
 	EXPECT_FLOAT_EQ(forward.x, 3.2f);
 }
 
+TEST(HandGrab, ATwistMakesItsProductsInTheGamesOrder)
+{
+	// The factor times the mass times the motion, then times the speed: another order gives other bits here
+	const auto torque = ReleaseSpinTorque(31.473f, 2.059f, {-4.868f, 0.0f, 3.375f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(torque.x), 0x43AEF7C6u);
+	EXPECT_EQ(torque.y, 0.0f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(torque.z), 0x43FC5E51u);
+}
+
 TEST(HandGrab, APutDownStandsOnlyOnLandWithoutBeingRaised)
 {
 	const Landing gentle {.dryLand = true};
@@ -459,4 +471,12 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 	EXPECT_EQ(ScoopSoundPitch(0.25f), 105u);
 	EXPECT_EQ(ScoopSoundPitch(0.999f), 239u);
 	EXPECT_EQ(ScoopSoundPitch(1.0f), 240u);
+}
+
+TEST(HandGrab, TheCinemaBarsSilenceAGripOfTheLandButNotOfTheSea)
+{
+	EXPECT_EQ(GripFeedbackOf(true, false), GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf(true, true), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf(false, false), GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf(false, true), GripFeedback::Splash);
 }

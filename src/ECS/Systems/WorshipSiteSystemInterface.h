@@ -125,6 +125,8 @@ public:
 	/// The food the site wants its towns to bring: what its dancers want for dinner, less what it has and what is on its
 	/// way
 	[[nodiscard]] virtual int32_t FoodNeededFromTown(entt::entity site) const = 0;
+	/// How much the site wants food, 0 to 1, from the need of its dancers and the food in its pot
+	[[nodiscard]] virtual float DesireForFood(entt::entity site) const = 0;
 	/// Food counted as on its way to the site is no longer, whether or not it came
 	virtual void RemoveFoodOnTheWay(entt::entity site, int32_t amount) = 0;
 };

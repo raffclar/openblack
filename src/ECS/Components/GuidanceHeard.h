@@ -13,6 +13,9 @@
 #include <cstdint>
 
 #include <array>
+#include <vector>
+
+#include <entt/entity/entity.hpp>
 
 namespace openblack::ecs::components
 {
@@ -34,6 +37,16 @@ struct GuidanceHeard
 	float alignmentDrift {0.0f};
 	/// The remarks said at most once a land, already said on this one
 	std::array<bool, k_OneOffs> oneOffSaid {};
+	/// The voice that the town desires played last, 0 for none on this land
+	uint32_t lastDesireVoice {0};
+	/// A thing that a town desire voice looked at, and the turn from which its time counts
+	struct SeenThing
+	{
+		entt::entity thing {entt::null};
+		uint32_t since {0};
+	};
+	/// The things that the town desire voices looked at on this land, the newest first
+	std::vector<SeenThing> seenThings;
 };
 
 } // namespace openblack::ecs::components
