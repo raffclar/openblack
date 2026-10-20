@@ -289,6 +289,7 @@
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyRebinding.h"
+#include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
@@ -3967,6 +3968,11 @@ bool Game::Initialize() noexcept
 			fileSystem.AddAdditionalPath(_startMap.parent_path());
 		}
 	}
+	else if (const auto land = _startMap == k_DefaultStartLevel ? MapScriptLand() : std::nullopt; land)
+	{
+		// With no land asked for, a new game starts on the land that the map script names
+		_startMap = *land;
+	}
 	else
 	{
 		_startMap = fileSystem.GetPath<Path::Scripts>() / _startMap;
@@ -5802,13 +5808,52 @@ bool Game::AskNewGameChoice()
 	return true;
 }
 
+std::optional<std::filesystem::path> Game::MapScriptLand() const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto mapScript = fileSystem.GetPath<filesystem::Path::Scripts>() / lhscriptx::map_script::k_FileName;
+	if (!fileSystem.Exists(mapScript))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the map script {}", mapScript.generic_string());
+		return std::nullopt;
+	}
+	const auto data = fileSystem.ReadAll(mapScript);
+	std::vector<std::string> lands;
+	try
+	{
+		lands = lhscriptx::map_script::FeatureScripts(std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", mapScript.generic_string(), e.what());
+		return std::nullopt;
+	}
+	if (lands.empty())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} names no land script", mapScript.generic_string());
+		return std::nullopt;
+	}
+	const auto land = filesystem::FileSystemInterface::FixPath(lands.front());
+	if (!fileSystem.Exists(land))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the land script {}", lands.front());
+		return std::nullopt;
+	}
+	// The map script writes the path in lower case. Use the name of the file as it is on the disk where the system
+	// can give it.
+	const auto found = fileSystem.FindPath(land);
+	std::error_code error;
+	auto onDisk = std::filesystem::canonical(found, error);
+	return error ? found : onDisk;
+}
+
 bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
 {
 	_newGameStart = start;
 	_startTestbed = false;
-	// A new game always begins on the first land
-	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
-	if (!LoadMapWithFreshScripts(land, land_change::Kind::NewGame))
+	// A new game begins on the land that the map script names
+	const auto land = MapScriptLand();
+	if (!land || !LoadMapWithFreshScripts(*land, land_change::Kind::NewGame))
 	{
 		return false;
 	}

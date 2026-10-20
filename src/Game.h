@@ -314,6 +314,9 @@ public:
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
 	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
 	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
+	/// The land script that a new game starts on: the first LOAD_FEATURE_SCRIPT of the map script in the Scripts folder,
+	/// as the game reads it. Gives nothing when the map script or its land script is not there.
+	[[nodiscard]] std::optional<std::filesystem::path> MapScriptLand() const;
 	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
 	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
 	bool ContinueFromExitSave() noexcept;
