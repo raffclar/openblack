@@ -72,7 +72,6 @@ public:
 	}
 	/// One of the four wooshes of a flight
 	static void Woosh();
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
 
 private:

@@ -1530,11 +1530,6 @@ glm::vec3 TempleCameraModel::GetTargetFocus() const
 	return _target.focus;
 }
 
-std::chrono::seconds TempleCameraModel::GetIdleTime() const
-{
-	return std::chrono::seconds::zero();
-}
-
 std::optional<CameraModel::Lens> TempleCameraModel::GetLens() const
 {
 	// The temple's cameras' lens

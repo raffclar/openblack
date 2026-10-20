@@ -124,7 +124,6 @@ public:
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) final;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] std::optional<Lens> GetLens() const final;
 
 	/// Comes into a room along its path. When blending, the camera eases from where it is onto the path.

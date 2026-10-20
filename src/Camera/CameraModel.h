@@ -87,7 +87,6 @@ public:
 	virtual void PlaceAt(glm::vec3 /*origin*/, glm::vec3 /*focus*/) {}
 	[[nodiscard]] virtual glm::vec3 GetTargetOrigin() const = 0;
 	[[nodiscard]] virtual glm::vec3 GetTargetFocus() const = 0;
-	[[nodiscard]] virtual std::chrono::seconds GetIdleTime() const = 0;
 	[[nodiscard]] virtual std::optional<Lens> GetLens() const { return std::nullopt; }
 	/// Whether where the camera goes is kept within the world's ball round the middle of the map, as for every camera of
 	/// the game

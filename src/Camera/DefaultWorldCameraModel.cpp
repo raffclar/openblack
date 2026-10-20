@@ -1264,12 +1264,6 @@ glm::vec3 DefaultWorldCameraModel::GetTargetFocus() const
 	return _targetFocus;
 }
 
-std::chrono::seconds DefaultWorldCameraModel::GetIdleTime() const
-{
-	SPDLOG_LOGGER_WARN(spdlog::get("game"), "TODO: Idle Time not implemented");
-	return {};
-}
-
 glm::vec3 DefaultWorldCameraModel::GetTargetForwardVector() const
 {
 	return GetTargetFocus() - GetTargetOrigin();
