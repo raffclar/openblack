@@ -58,6 +58,17 @@ inline constexpr std::array<uint16_t, 6> k_Indices = {0, 1, 2, 0, 2, 3};
 /// The two blobs of a pair of feet: each falls by the shadow's fall and leans halfway towards the other foot
 [[nodiscard]] std::array<Quad, 2> Feet(const glm::vec3& first, const glm::vec3& second, const glm::vec3& fall);
 
+/// The most feet that an animal casts blobs from: two pairs
+inline constexpr size_t k_MostAnimalFeet = 4;
+
+/// How many of an animal's points on its bones are feet that cast blobs: the first pair, and the second pair too when
+/// the model has it. A model with fewer than two points casts none.
+[[nodiscard]] size_t AnimalFootCount(size_t points);
+
+/// The blobs of an animal's feet, pair by pair. The first foot of a pair falls by the shadow's fall, and the second
+/// foot leans halfway towards the first foot. `feet` holds 2 or 4 feet; the quads after them are empty.
+[[nodiscard]] std::array<Quad, k_MostAnimalFeet> AnimalFeet(std::span<const glm::vec3> feet, const glm::vec3& fall);
+
 /// The blob of a villager too far away to be drawn, standing at `foot` (on the land, lifted by k_FarLift): both its
 /// feet at its position on land taken as flat, and wider. Its two quads are the same quad, so it is darker.
 [[nodiscard]] std::array<Quad, 2> Far(const glm::vec3& foot, float scale);

@@ -12,6 +12,7 @@
 #include <chrono>
 #include <span>
 
+#include <entt/entity/fwd.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -59,6 +60,10 @@ public:
 	virtual void Reset() = 0;
 	/// Once a game turn: the towns' and citadels' reach, and the border drawn again every ten turns once one has moved
 	virtual void ProcessTurn(uint32_t turn) = 0;
+	/// A town's turn starts: its influence is its base influence and its buildings', times the land's multiplier
+	virtual void ProcessTownInfluence(entt::entity /*town*/) {}
+	/// A town's turn ends: a change of the influence of a player's town marks the borders to be drawn again
+	virtual void MarkTownInfluence(entt::entity /*town*/) {}
 	/// A town has changed hands: the border is drawn again at its next turn for drawing
 	virtual void BordersChanged() = 0;
 	/// Once a frame: the border's texture scrolls with the game time, and while the game runs the hand crossing a border

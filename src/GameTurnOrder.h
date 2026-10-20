@@ -153,6 +153,8 @@ enum class Step : uint8_t
 	TipBubble,
 	TimeOfDay,
 	WeatherThings,
+	/// The camera's bookmarks on things, and the flight to the one that the camera follows
+	CameraBookmarks,
 	ScriptHighlights,
 	Climates,
 	HeldThing,
@@ -257,6 +259,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::TipBubble, .stage = std::nullopt},
     {.step = Step::TimeOfDay, .stage = Stage::TimeOfDay},
     {.step = Step::WeatherThings, .stage = Stage::WeatherThings},
+    {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},

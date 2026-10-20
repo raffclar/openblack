@@ -76,7 +76,14 @@ public:
 	[[nodiscard]] bool IsPointerOverControl() const;
 	void Wheel(glm::ivec2 point, int steps);
 	bool TextInput(std::u16string_view text);
-	bool KeyDown(int key);
+	/// A key pressed while the dialog has the keyboard. Tab, or Shift and Tab, moves the focus to the next or previous
+	/// control (see MoveFocus). Return in an edit box clicks it and moves the focus on. Other keys go to the control that
+	/// has the focus. True when a control took the key.
+	bool KeyDown(int key, bool shift = false);
+	/// Tab moves the focus over the visible controls but for static text, in the order they were made. The tabs of the
+	/// menu's pages come after the other controls, because the game adds them last. Backwards, the focus moves the other
+	/// way.
+	void MoveFocus(bool backwards);
 	/// Every frame: the controls move on, and the one the mouse button is held down on follows the pointer
 	void Update(float deltaSeconds);
 	/// Forgets the pointer, the button and the focus
@@ -110,6 +117,8 @@ private:
 	/// The box behind the controls, none for controls on their own, and its tabs
 	std::optional<DialogRect> _box;
 	size_t _tabCount {0};
+	/// Tab comes to the tabs after the other controls
+	bool _tabsLast {false};
 
 public:
 	/// Drawn before the box, under it

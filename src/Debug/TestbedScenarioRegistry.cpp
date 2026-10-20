@@ -2596,6 +2596,66 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.moving_shadows",
+	    .name = "Shadows of things in flight",
+	    .facet = Facet::Light,
+	    .description = "A dead pine, a pot of food, a rock and a toy ball fly up high from a row on the land, one after "
+	                   "the other, and fly up again every eight seconds.",
+	    .expected = "While each thing flies, a shadow lies on the land straight below it and turns as the thing turns. "
+	                "The dead pine's and the pot's shadows are soft and light, through their textures. The rock's and "
+	                "the ball's shadows are solid and darker. Each shadow goes when its thing comes to rest.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true},
+	                {.type = PotInfo::FoodPot, .offset = {-6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {18.0f, 0.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2(-18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 1,
+	                .from = glm::vec2(-6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.5f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 2,
+	                .from = glm::vec2(6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 3,
+	                .from = glm::vec2(18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.5f,
+	                .repeatSeconds = 8.0f}},
+	});
+
+	// A row of animals that live and walk about, with a villager at the end to compare their blobs with his
+	all.push_back({
+	    .id = "light.animal_blobs",
+	    .name = "Blobs under the feet of animals",
+	    .facet = Facet::Light,
+	    .description = "A cow, a horse, a sheep, a tortoise and a wolf live and walk about in a row at midday. A farmer "
+	                   "stands at the end of the row.",
+	    .expected = "Under each foot of each animal, a short dark blob lies on the land and falls away to the south "
+	                "east. The blobs move with the feet as the animals walk. The farmer has a blob under each foot too.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -6.0f}, {14.0f, 6.0f}}, .distance = 0.5f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {-12.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Horse, .offset = {-6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Sheep, .offset = {0.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Tortoise, .offset = {6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Wolf, .offset = {12.0f, 0.0f}, .living = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {14.0f, 4.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.reflections",
 	    .name = "Reflections in the lake",
 	    .facet = Facet::Light,
@@ -3606,6 +3666,72 @@ void AddAudio(std::vector<Scenario>& all)
 	                "out as they come nearer. The menu (Escape) hides the words at once.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "interface.controls_rebind",
+	    .name = "The Controls page asks for a new key",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Controls page. The page picks the Help row and double "
+	                   "clicks it. Press a key, or click a mouse button away from the box's buttons, then click OK. Load "
+	                   "Defaults asks first, then puts every binding back.",
+	    .expected = "The box reads \"Define a key for  Help:\" between a Cancel and an OK arrow. A key shows under the "
+	                "words, with Ctrl, Shift or Alt before it. Escape, Tab, P, F1, F2 and the Enter key of the number pad "
+	                "show nothing. OK binds the input, and the action that had it before loses it. The keys have the "
+	                "names that the system gives them, such as Ctrl and Space.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenControlsBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.dialog_keys",
+	    .name = "Tab, the arrows and Return in the menu",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Options page. Each second Tab moves the focus to the next "
+	                   "control, nine times. Then the right arrow moves the music slider, Shift and Tab moves the focus "
+	                   "back, and Escape goes back to the main menu.",
+	    .expected = "The control with the focus has white words in place of grey ones. The arrows of the detail "
+	                "selector, which have no words, light up while they have the focus. After the controls, the focus "
+	                "goes to the five tabs and shows nothing there. The right arrow moves the knob a tenth to the right.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 27}},
+	});
+
+	all.push_back({
+	    .id = "interface.read_speed_slider",
+	    .name = "The help text speed slider of a game with no sound",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Advanced page as if the game had no sound. A second later "
+	                   "Tab moves the focus ten times, to the slider under the three selectors. Then the right arrow "
+	                   "moves the slider twice.",
+	    .expected = "A \"Help Text Speed\" slider shows at the middle of the page, under the Tooltips selector and over "
+	                "the check boxes. Its knob starts at the middle and moves a tenth to the right for each arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 3, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F}},
 	});
 
 	all.push_back({
@@ -5588,6 +5714,25 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	});
+
+	// The camera looks down at 45 degrees on a large oak from about 150 m, the pointer on its crown. The oak is heavy, so
+	// the hand must pull it for a time before it comes out.
+	all.push_back({
+	    .id = "hand.tree_tug_heavy",
+	    .name = "Pulling a heavy tree out of the ground",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m away at 45 degrees, the hand grips a very large oak, pulls it slowly up the "
+	                   "screen until it comes out of the ground, then carries it.",
+	    .expected = "The oak leans and stretches towards the pull. When it comes out, the hand and the oak move together "
+	                "to under the pointer. On no frame is the hand drawn away from the oak.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.3f}, .amount = 3.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
 	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
@@ -8797,6 +8942,20 @@ void AddParticles(std::vector<Scenario>& all)
 	                  {.file = "SF_Flash", .offset = {30.0f, 0.0f}, .height = 3.0f, .magnitude = 2.0f, .restartSeconds = 3.0f}},
 	});
 
+	// The beam that marks a place for the player, as the first land marks where its vortex opens
+	all.push_back({
+	    .id = "particles.see_this_beam",
+	    .name = "The beam that marks a place",
+	    .facet = Facet::Particles,
+	    .description = "The yellow beam that a script puts on a place to show it to the player, as the first land shows "
+	                   "where its vortex will open. It starts again every ten seconds.",
+	    .expected = "A yellow cone of light stands on the land and turns to face the camera. Its brightness beats with "
+	                "the scrolls' highlights, about once every 1.3 seconds, from a dim glow to full and back.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -6.0f}, {6.0f, 6.0f}}, .distance = 0.5f},
+	    .particles = {{.file = "SF_SeeThisBeam", .offset = {0.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 10.0f}},
+	});
+
 	all.push_back({
 	    .id = "particles.tumble",
 	    .name = "Tumbling streamers and wood",
@@ -9563,6 +9722,22 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = levels,
 	});
+	// A lesson's interface level limits the Action button, and the normal level removes the limits
+	all.push_back({
+	    .id = "tutorial.interface_level_hand_limits",
+	    .name = "The limits of the Action button at a lesson's interface level",
+	    .facet = Facet::Tutorial,
+	    .description = "The interface level becomes 1, the level of the opening's lesson. After 40 seconds it becomes "
+	                   "the normal level 0. A villager and a scroll stand in front of the camera.",
+	    .expected = "At level 1 the Action button does not pick up the villager, and a press on the land does nothing. "
+	                "A click on the scroll still reaches the scripts. At level 0 the hand picks up the villager again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 6.0f}}},
+	    .highlights = {{.kind = 1, .offset = {4.0f, 6.0f}, .challenge = 0}},
+	    .commands = {{.kind = Kind::SetInterfaceLevel, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::SetInterfaceLevel, .delaySeconds = 40.0f, .value = 0}},
+	});
 	all.push_back({
 	    .id = "tutorial.bookmark_flight",
 	    .name = "A long flight to a bookmark",
@@ -9577,6 +9752,26 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
 	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
+	});
+	all.push_back({
+	    .id = "tutorial.bookmark_markers_follow",
+	    .name = "Bookmark markers and a followed creature",
+	    .facet = Facet::Tutorial,
+	    .description = "Three bookmarks go on the land near the middle of the map, as Ctrl and the keys 1, 2 and 3 do. Then "
+	                   "the player keeps the tiger in bookmark 4, as Ctrl and the key 4 do with the hand over it, and the "
+	                   "camera follows it, as Shift and the key 4 do. The tiger walks away to the north.",
+	    .expected = "Each bookmark shows its yellow number in a ring, two metres above its place. The marker of bookmark 4 "
+	                "stays two metres above the tiger and moves with it. All the markers throb together: the width and "
+	                "the height each swing once a second, the height a fifth of a second behind. The camera flies after "
+	                "the tiger each turn, until the player moves the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f)},
+	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {25.0f, 0.0f}, .value = 0},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {-25.0f, 0.0f}, .value = 1},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {0.0f, 25.0f}, .value = 2},
+	                 {.kind = Kind::BookmarkCreature, .creature = 0, .delaySeconds = 1.0f, .value = 3},
+	                 Go(Kind::WalkTo, 0, {0.0f, 160.0f}, 0.5f, false)},
 	});
 }
 
@@ -9693,6 +9888,7 @@ std::vector<Scenario> Build()
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
+	AddTempleKeyScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
@@ -9709,6 +9905,7 @@ std::vector<Scenario> Build()
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
+	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
 	return all;
@@ -9848,7 +10045,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
+	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
@@ -9881,7 +10079,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 168> k_Names {
+	constexpr std::array<std::string_view, 172> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10016,8 +10214,13 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "check the profile folder",
 	    "give the player a picture of their own",
 	    "open the tattoo editor from the menu",
+	    "open the box of the controls page",
+	    "open a page of the menu",
+	    "press a key in the menu",
 	    "play custom music",
 	    "show the custom music controls",
+	    "save the game",
+	    "load the game",
 	    "script reaction",
 	    "script place",
 	    "stop script",
@@ -10025,8 +10228,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "start script music",
 	    "write the web page",
 	    "fly to a bookmark",
-	    "save the game",
-	    "load the game",
+	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
 	    "give hand glows",
 	    "give a creed power",

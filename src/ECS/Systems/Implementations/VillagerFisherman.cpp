@@ -153,14 +153,10 @@ uint32_t villager_fisherman::CheckSatisfyFoodDesire(LivingAction& action)
 	const std::array<work::FoodJobCandidate, 3> jobs {fishing, farming, herding};
 	const auto& info = InfoOf(person);
 	const auto room = static_cast<int16_t>(info.maxFoodCarried - static_cast<uint32_t>(person.foodHeld));
-	float storeNearness = 0.0f;
-	const auto pit = construction::StoragePitOf(town);
-	if (pit.has_value() && villager_home::IsFunctional(*pit))
-	{
-		storeNearness = gutils::GetDistanceModifier(
-		    gutils::GetDistanceInMetres(villager_home::ArrivePosition(*pit), glm::xz(here)), k_DropOffReach);
-	}
-	// TODO(villager-jobs-1): without a working storage pit the town's temporary pot is where it would carry food
+	// How near is the place where its town leaves food: its working pit's door, or its temporary pile, made if missing
+	const float storeNearness = gutils::GetDistanceModifier(
+	    gutils::GetDistanceInMetres(villager_build::ResourceDropoffPos(EntityOf(action), ResourceType::Food), glm::xz(here)),
+	    k_DropOffReach);
 	const auto choice = work::ChooseFoodJob(jobs, room, static_cast<int32_t>(info.maxFoodCarried), storeNearness);
 	if (choice.dropOff)
 	{

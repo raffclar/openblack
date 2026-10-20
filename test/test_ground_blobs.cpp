@@ -107,3 +107,45 @@ TEST(GroundBlobs, FeetComeFromTheRestingBonesWithoutAPose)
 	const std::vector<glm::mat4> other(2, glm::mat4(1.0f));
 	EXPECT_EQ(ground_blobs::FootBones(other, rest).data(), rest.data());
 }
+
+TEST(GroundBlobs, AnimalsCastFromOneOrTwoPairsOfFeet)
+{
+	EXPECT_EQ(ground_blobs::AnimalFootCount(0), 0u);
+	EXPECT_EQ(ground_blobs::AnimalFootCount(1), 0u);
+	EXPECT_EQ(ground_blobs::AnimalFootCount(2), 2u);
+	// A model with a third point but no fourth casts from its first pair only
+	EXPECT_EQ(ground_blobs::AnimalFootCount(3), 2u);
+	EXPECT_EQ(ground_blobs::AnimalFootCount(4), 4u);
+	EXPECT_EQ(ground_blobs::AnimalFootCount(16), 4u);
+}
+
+TEST(GroundBlobs, AnimalFeetLeanOnlyTheSecondOfEachPair)
+{
+	const std::vector<glm::vec3> feet {{0.0f, 0.0f, 0.0f}, {1.0f, 0.0f, 0.0f}, {0.0f, 0.0f, 3.0f}, {0.0f, 0.0f, 5.0f}};
+	const glm::vec3 fall {0.0f, 0.0f, 2.0f};
+	const auto quads = ground_blobs::AnimalFeet(feet, fall);
+	const auto farEnd = [](const ground_blobs::Quad& quad) { return (quad.corners[2] + quad.corners[3]) * 0.5f; };
+	// The first foot of a pair falls straight; the second leans half the way back to the first
+	ExpectNear(farEnd(quads[0]), feet[0] + fall);
+	ExpectNear(farEnd(quads[1]), feet[1] + fall + glm::vec3(-0.5f, 0.0f, 0.0f));
+	ExpectNear(farEnd(quads[2]), feet[2] + fall);
+	ExpectNear(farEnd(quads[3]), feet[3] + fall + glm::vec3(0.0f, 0.0f, -1.0f));
+	// Each quad is the ordinary blob of its foot and its fall
+	const auto plain = ground_blobs::MakeQuad(feet[2], fall);
+	for (size_t c = 0; c < 4; ++c)
+	{
+		ExpectNear(quads[2].corners.at(c), plain.corners.at(c));
+	}
+}
+
+TEST(GroundBlobs, AnimalWithOnePairLeavesTheOtherQuadsEmpty)
+{
+	const std::vector<glm::vec3> feet {{2.0f, 0.0f, 0.0f}, {3.0f, 0.0f, 0.0f}};
+	const auto quads = ground_blobs::AnimalFeet(feet, {0.0f, 0.0f, 1.0f});
+	for (size_t c = 0; c < 4; ++c)
+	{
+		ExpectNear(quads[2].corners.at(c), glm::vec3(0.0f));
+		ExpectNear(quads[3].corners.at(c), glm::vec3(0.0f));
+	}
+	ExpectNear(quads[0].corners[0], ground_blobs::MakeQuad(feet[0], {0.0f, 0.0f, 1.0f}).corners[0]);
+}

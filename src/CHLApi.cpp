@@ -120,6 +120,7 @@
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptTimer.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/Sky.h"
@@ -261,6 +262,7 @@
 #include "ScriptHeaders/ScriptCreatureRules.h"
 #include "ScriptHeaders/ScriptEnums.h"
 #include "ScriptHeaders/ScriptInfluence.h"
+#include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
@@ -567,7 +569,6 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 		return entt::null;
 	}
 	const auto made = script::create_rules::ScriptVillagerOf(child, infos.at(subtype).grownUpAge);
-	// TODO(opening): the game makes one of its special villagers instead, now and then, when one fits
 	const auto villager =
 	    VillagerArchetype::Create(position, position, static_cast<VillagerInfo>(subtype), made.age,
 	                              made.joinsTown ? VillagerArchetype::Joins::NearestTown : VillagerArchetype::Joins::Nobody);
@@ -2285,21 +2286,30 @@ void SetPosition() // 024 SET_POSITION
 
 	if (objId != 0)
 	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto object = static_cast<entt::entity>(objId);
+		// Any thing that is in the hand or flying stays where it is
+		const bool inHand = registry.Valid(object) && registry.AllOf<ecs::components::InHand>(object);
+		const bool flying = registry.Valid(object) && registry.AllOf<ecs::components::InPhysics>(object);
+		if (inHand)
+		{
+			ScriptMessage("Setting object in hand to a position");
+		}
+		if (flying)
+		{
+			ScriptMessage("Trying to set position - Object is flying");
+		}
+		if (inHand || flying)
+		{
+			return;
+		}
 		// The thing goes to the map position of the point, on the land there
 		const auto& island = Locator::terrainSystem::value();
 		const auto place = map_coords::FromMetres({position.x, position.z});
 		const auto placed = map_coords::ToMetres(place);
 		position = {placed.x, island.GetHeightAt(placed), placed.y};
-		auto& registry = Locator::entitiesRegistry::value();
-		const auto object = static_cast<entt::entity>(objId);
 		if (IsDirectableVillager(object))
 		{
-			// Something held or flying stays where it is
-			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
-			{
-				ScriptMessage("Trying to set position. Object is in the hand or flying");
-				return;
-			}
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
@@ -2314,11 +2324,6 @@ void SetPosition() // 024 SET_POSITION
 		// A creature goes there at once, without a walk. Its walk stops, and the plan continues from the new place.
 		if (registry.AllOf<ecs::components::Creature>(object) && Locator::creatureLocomotionSystem::has_value())
 		{
-			if (registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
-			{
-				ScriptMessage("Trying to set position. Object is in the hand or flying");
-				return;
-			}
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
 			return;
@@ -3832,9 +3837,12 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Unexpected interaction : {}", level);
 		return;
 	}
-	// TODO(raffclar): the level also sets two flags of the player's interface. One makes the tooltip of an object held in
-	// the hand come from another source; openblack has no objects held in the hand yet. The other flag's reader wasn't
-	// found in the game, so what it does isn't known.
+	// The level also limits what the Action button of the player's hand can do
+	if (Locator::playerSystem::has_value())
+	{
+		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
+		                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE), level);
+	}
 }
 
 void Played() // 064 PLAYED
@@ -4932,6 +4940,11 @@ void EndDialogue() // 121 END_DIALOGUE
 	dialogue.SendSpiritsHome(TaskType(task) == lhvm::ScriptType::Help);
 	ReleaseDialogue(task);
 	ApplySwitchChanges(script::switches::DialogueEnded());
+	// The word of the sung line goes back to none
+	if (auto* gameMusic = ScriptGameMusic())
+	{
+		gameMusic->ResetMusicWord();
+	}
 }
 
 void IsDialogueReady() // 122 IS_DIALOGUE_READY
@@ -8287,7 +8300,8 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 {
-	// Whether the player's hand is locked onto the thing: held to a creature with the button, or gripping a totem
+	// Whether the player's hand is locked onto the thing: held to a creature with the button, gripping a totem, or
+	// scooping from a field, a fish farm or a pile
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
@@ -8299,7 +8313,9 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
-	Pushb(heldCreature || grippedTotem);
+	const bool scooped =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	Pushb(heldCreature || grippedTotem || scooped);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME
@@ -8339,14 +8355,17 @@ void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
 {
-	// The game asks for a town here, but then clears what a villager keeps of a script's wander or animation, on any
-	// thing it gets (vanilla bugs 298). openblack keeps none of that apart from the villager's state, so nothing is
-	// cleared. A creature's mind is never touched.
+	// The game asks for a town here, but then clears what a villager keeps in mind of its script's work, on any thing it
+	// gets (vanilla bugs 154). A town keeps nothing of that kind. A creature's mind is never touched.
 	const auto thing = PopObject();
 	auto& registry = Locator::entitiesRegistry::value();
 	if (thing == entt::null || !registry.Valid(thing) || !registry.AllOf<ecs::components::Town>(thing))
 	{
 		ScriptMessage("Thing not valid");
+	}
+	if (thing != entt::null && registry.Valid(thing))
+	{
+		registry.Remove<ecs::components::ScriptRemind>(thing);
 	}
 }
 

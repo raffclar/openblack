@@ -14,6 +14,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cmath>
 #include <cstring>
 
 #include <algorithm>
@@ -41,6 +42,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -50,6 +52,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
+#include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/IndexBuffer.h"
@@ -374,10 +377,20 @@ void Renderer::DrawParticleMesh(const DrawSceneDesc& desc, const particles::draw
 		submitDesc.useMaterialBlending = true;
 		submitDesc.useMaterialCulling = true;
 	}
+	// A model that faces the camera can beat with the scrolls' highlights
+	auto alpha = draw.colour.a;
+	if (creator.faceCamera && creator.scriptHighlightPulse && Locator::scriptHighlightSystem::has_value())
+	{
+		const float turnFraction = Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 0.0f;
+		const float share =
+		    ecs::script_highlights::PulseShare(Locator::scriptHighlightSystem::value().GetPulse(), turnFraction);
+		const auto byte = static_cast<uint8_t>(std::lround(std::clamp(alpha, 0.0f, 1.0f) * 255.0f));
+		alpha = static_cast<float>(creator.PulsedAlpha(byte, share)) / 255.0f;
+	}
 	// Those drawn in their atom's alpha, added to what is behind or kept out of the lights take their atom's colour
 	// unlit; the others are lit
-	submitDesc.tint = glm::vec4(glm::vec3(draw.colour),
-	                            creator.DrawnUnlit() ? std::max(creator.UnlitAlpha(draw.colour.a), 1.0f / 255.0f) : 0.0f);
+	submitDesc.tint =
+	    glm::vec4(glm::vec3(draw.colour), creator.DrawnUnlit() ? std::max(creator.UnlitAlpha(alpha), 1.0f / 255.0f) : 0.0f);
 	DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 }
 

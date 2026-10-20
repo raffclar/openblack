@@ -77,7 +77,8 @@ std::unique_ptr<Creator> MakeMesh(const psys::ParticleObject& object, CreatorRes
 	// The plain kind never draws in its atom's alpha, whatever its file says
 	creator->useGlobalAlpha = creator->type != MeshCreator::Type::Plain && object.Bool("UseGlobalAlpha", animated);
 	creator->landscapeColour = object.Bool("DrawWithLandscapeColor", false);
-	creator->dynamicLighting = object.Bool("UseDynamicLighting", true);
+	creator->dynamicLighting = object.Bool("UseDynamicLighting", animated);
+	creator->scriptHighlightPulse = object.Bool("UseScriptHightlightPulse", false);
 	creator->drawCutByPlane = object.Bool("DrawCutByPlane", false);
 	creator->numFrames = 1;
 	if (creator->type == MeshCreator::Type::AnimTextured)
@@ -165,6 +166,17 @@ std::unique_ptr<Creator> MakeLightMap(const psys::ParticleObject& object, Creato
 	return creator;
 }
 } // namespace
+
+uint8_t MeshCreator::PulsedAlpha(uint8_t atomAlpha, float pulseShare) const
+{
+	if (!faceCamera || !scriptHighlightPulse)
+	{
+		return atomAlpha;
+	}
+	// The game multiplies the alpha by the beat in single precision, then cuts the result towards zero
+	const float pulsed = pulseShare * static_cast<float>(atomAlpha);
+	return static_cast<uint8_t>(std::clamp(std::trunc(pulsed), 0.0f, 255.0f));
+}
 
 glm::vec2 MeshCreator::UvOffset(int frame) const
 {

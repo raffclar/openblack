@@ -172,6 +172,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
@@ -209,6 +210,7 @@
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/ScriptRemind.h"
 #include "ECS/Components/ScriptSpotVisual.h"
 #include "ECS/Components/ScriptStateArguments.h"
 #include "ECS/Components/ScriptTimer.h"
@@ -567,8 +569,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::BuildingPiece::drawMesh>("drawMesh");
 	Reflect<components::CameraBookmark>(context)
 	    .Field<&components::CameraBookmark::number>("number")
-	    .Field<&components::CameraBookmark::animationTime>("animationTime")
-	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
+	    .Field<&components::CameraBookmark::set>("set")
+	    .Field<&components::CameraBookmark::point>("point")
+	    .Field<&components::CameraBookmark::thing>("thing")
+	    .Field<&components::CameraBookmark::cameraOffset>("cameraOffset");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
 	Reflect<components::ChallengePicture>(context)
@@ -1307,7 +1311,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::GuidanceHeard>(context)
 	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")
 	    .Field<&components::GuidanceHeard::alignmentDrift>("alignmentDrift")
-	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid");
+	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid")
+	    .Field<&components::GuidanceHeard::lastDesireVoice>("lastDesireVoice")
+	    .Field<&components::GuidanceHeard::seenThings>("seenThings");
 	Reflect<components::Hand>(context)
 	    .Field<&components::Hand::rightHanded>("rightHanded")
 	    .Field<&components::Hand::renderType>("renderType")
@@ -1432,6 +1438,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
 	    .Field<&components::VirtualInfluence::hum>("hum");
+	Reflect<components::InterfaceLimits>(context)
+	    .Field<&components::InterfaceLimits::onlyHighlights>("onlyHighlights")
+	    .Field<&components::InterfaceLimits::noHolding>("noHolding");
 	Reflect<components::IntroHand>(context)
 	    .Field<&components::IntroHand::clip>("clip")
 	    .Field<&components::IntroHand::time>("time")
@@ -1694,6 +1703,12 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ScriptHighlight::sparkSprites>("sparkSprites")
 	    .Field<&components::ScriptHighlight::onScreen>("onScreen");
 	Reflect<components::ScriptHighlightGlow>(context).Field<&components::ScriptHighlightGlow::highlight>("highlight");
+	Reflect<components::ScriptRemind>(context)
+	    .Field<&components::ScriptRemind::returnTo>("returnTo")
+	    .Field<&components::ScriptRemind::goal>("goal")
+	    .Field<&components::ScriptRemind::arguments>("arguments")
+	    .Field<&components::ScriptRemind::animation>("animation")
+	    .Field<&components::ScriptRemind::clip>("clip");
 	Reflect<components::ScriptSpotVisual>(context).Field<&components::ScriptSpotVisual::effect>("effect");
 	Reflect<components::ScriptStateArguments>(context)
 	    .Field<&components::ScriptStateArguments::place>("place")
@@ -1913,6 +1928,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::TempleExterior::morphed>("morphed")
 	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt")
 	    .Field<&components::TempleExterior::lanternsMade>("lanternsMade");
+	Reflect<components::TownArea>(context).Field<&components::TownArea::min>("min").Field<&components::TownArea::max>("max");
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
@@ -1938,7 +1954,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
 	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn")
 	    .Field<&components::Town::planned>("planned")
-	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn");
+	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn")
+	    .Field<&components::Town::emptyTownTimer>("emptyTownTimer")
+	    .Field<&components::Town::temporaryStores>("temporaryStores")
+	    .Field<&components::Town::area>("area");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
@@ -1997,7 +2016,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::TownDesire::doingNow>("doingNow")
 	    .Field<&components::TownDesire::doingNowCount>("doingNowCount")
 	    .Field<&components::TownDesire::doingNowAtStart>("doingNowAtStart")
-	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart");
+	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart")
+	    .Field<&components::TownDesire::turnsOverAlignmentLevel>("turnsOverAlignmentLevel");
 	Reflect<components::TownDesireFlag>(context)
 	    .Field<&components::TownDesireFlag::town>("town")
 	    .Field<&components::TownDesireFlag::desire>("desire")
@@ -2111,6 +2131,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
 	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
+	    .Field<&components::VillagerPose::slopeLift>("slopeLift")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
 	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
 	Reflect<components::FieldWorkSpot>(context).Field<&components::FieldWorkSpot::position>("position");
@@ -2252,7 +2273,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CitadelWorship::facing>("facing")
 	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
 	    .Field<&components::CitadelWorship::standing>("standing")
-	    .Field<&components::CitadelWorship::sitesMade>("sitesMade");
+	    .Field<&components::CitadelWorship::sitesMade>("sitesMade")
+	    .Field<&components::CitadelWorship::strainSound>("strainSound");
 	Reflect<components::WorshipSite>(context)
 	    .Field<&components::WorshipSite::temple>("temple")
 	    .Field<&components::WorshipSite::player>("player")
@@ -3021,6 +3043,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
 	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
+	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn")
 	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
 	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")
@@ -3162,6 +3185,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
 	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
 	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
+	Reflect<openblack::ecs::components::GuidanceHeard::SeenThing>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::thing>("thing")
+	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::since>("since");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

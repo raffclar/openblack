@@ -73,6 +73,8 @@ public:
 	{
 		BlocksTown,
 		AnyObject,
+		/// Anything fixed, trees too: for a town's temporary pile
+		AnyFixed,
 	};
 	/// Whether nothing of the kind stands within a radius of a point, the things' own sizes counted, the cells about it
 	/// looked at in a spiral; the thing ignored doesn't count
@@ -83,8 +85,22 @@ public:
 	                                                             ClearAreaFilter filter, entt::entity ignore) const = 0;
 	/// Where a town's people gather: worked out once, between its buildings or near one
 	virtual glm::vec2 GetCongregationPos(entt::entity town) = 0;
+	/// A town's temporary pile for a resource, and its edge nearest a point
+	struct TemporaryStore
+	{
+		entt::entity pile;
+		glm::vec2 edge;
+	};
+	/// The temporary pile in which a town with no storage pit that works keeps a resource. A pile that has gone is made
+	/// again, empty, at a clear place near the town's gathering place. None for a resource with no pile.
+	virtual std::optional<TemporaryStore> TemporaryStorePile(entt::entity town, glm::vec2 from, ResourceType type) = 0;
+	/// The town has a new storage pit that works, or has lost its storage pit: it lets go of its temporary piles. An empty
+	/// pile is removed, and a pile that holds something becomes an ordinary pile with its reaction.
+	virtual void SetStoragePit(entt::entity town) = 0;
 	/// A new building standing on a town's gathering place moves it
 	virtual void BuildingCreated(entt::entity town, glm::vec2 position, float radius) = 0;
+	/// A building joined or left a town, or one of its fields went: the town makes the ground it covers again
+	virtual void StructuresChanged(entt::entity town) = 0;
 
 	/// Whether a town is in an emergency: for a while after one was last called
 	[[nodiscard]] virtual bool IsInStateOfEmergency(entt::entity town) const = 0;
@@ -98,10 +114,17 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// The start of a town's turn: every so many turns it passes over its buildings, which age by it
 	virtual void ProcessTownBuildings(entt::entity town) = 0;
-	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, mends a
-	/// building, calls or ends an emergency, judges the creatures it watches, its missionaries follow their villagers,
-	/// its mark of changed wants comes down, and now and then it evens out its homes
+	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, the attacks
+	/// on it fade, it mends a building, calls or ends an emergency, judges the creatures it watches, its missionaries
+	/// follow their villagers, it takes its turn of belief, its wants move its player's alignment, its mark of changed
+	/// wants comes down, a change of its influence marks the borders to be drawn again, and now and then it evens out
+	/// its homes
 	virtual void ProcessTownTurn(entt::entity town) = 0;
+	/// A player's towns take their turns, in the order the player gained them. Each town works out its influence, passes
+	/// over its buildings, works out its desires, looks after its artefacts and goes on with the rest of its turn; then
+	/// its people are counted for its player. A town that another player takes in its own turn ends the turns of its old
+	/// player's towns.
+	virtual void ProcessPlayerTowns(PlayerNames /*player*/) {}
 	/// A player's towns in the order the player gained them, which is the order they take their turns in
 	[[nodiscard]] virtual std::vector<entt::entity> TownsInGainedOrder(PlayerNames player) const = 0;
 	/// A town's wants have changed: a store stocked from empty, a building site added, a death. Its disciples waiting for

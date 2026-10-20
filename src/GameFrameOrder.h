@@ -108,7 +108,8 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::Camera, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
-    {.step = Step::Bookmarks, .stage = Stage::Camera},
+    // The markers of the bookmarks throb by the game time of this frame
+    {.step = Step::Bookmarks, .stage = std::nullopt},
     {.step = Step::HighDetail, .stage = std::nullopt},
     // The effects of the frame. Each has its own place in the game, which is not known for all of them.
     {.step = Step::FrameEffects, .stage = std::nullopt},

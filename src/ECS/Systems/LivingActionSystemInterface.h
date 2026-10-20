@@ -51,6 +51,9 @@ public:
 	                                    VillagerStates src, VillagerStates dst) const = 0;
 	virtual bool VillagerCallExitState(components::LivingAction& action, components::LivingAction::Index index,
 	                                   VillagerStates next) const = 0;
+	/// Goes into a state as a script puts it there: only the state's entry has its say, and it may send the villager on to
+	/// other states itself. False, with nothing changed, when the entry refuses.
+	virtual bool VillagerEnterState(components::LivingAction& action, VillagerStates state) const = 0;
 	virtual int VillagerCallOutOfAnimation(components::LivingAction& action, components::LivingAction::Index index) const = 0;
 	virtual bool VillagerCallValidate(components::LivingAction& action, components::LivingAction::Index index) const = 0;
 	/// Goes into a state on the way to another, as the game sets both at once. Whether it went.

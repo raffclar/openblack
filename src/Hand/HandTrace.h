@@ -53,7 +53,7 @@ struct Frame
 	/// The middle of its fingertips as posed, which is where the hand shows, and that point on the screen
 	glm::vec3 visible {0.0f};
 	std::optional<glm::vec2> screen;
-	/// Its wrist as posed, and that on the screen: a turn of the hand about its fingertips swings the wrist
+	/// Its wrist as drawn, and that on the screen: a turn of the hand about its fingertips swings the wrist
 	glm::vec3 wrist {0.0f};
 	std::optional<glm::vec2> wristScreen;
 	/// What the hand does, for its drawn pose: the value of hand_blend::HandMode

@@ -317,6 +317,8 @@ private:
 	void UpdateMusicControls(bool dialogOpen);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
+	/// What a key or a letter chose in the menu: the game takes it, and Continue closes the menu
+	void TakeMenuAction(GameMenu::Action action);
 	/// Opens the tattoo editor's dialog as the editor opens, and moves it on
 	void UpdateTattooEditor(float deltaSeconds);
 	/// The floating numbers, each ending at its point over its shadow
