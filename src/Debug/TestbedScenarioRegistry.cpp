@@ -9722,6 +9722,22 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = levels,
 	});
+	// A lesson's interface level limits the Action button, and the normal level removes the limits
+	all.push_back({
+	    .id = "tutorial.interface_level_hand_limits",
+	    .name = "The limits of the Action button at a lesson's interface level",
+	    .facet = Facet::Tutorial,
+	    .description = "The interface level becomes 1, the level of the opening's lesson. After 40 seconds it becomes "
+	                   "the normal level 0. A villager and a scroll stand in front of the camera.",
+	    .expected = "At level 1 the Action button does not pick up the villager, and a press on the land does nothing. "
+	                "A click on the scroll still reaches the scripts. At level 0 the hand picks up the villager again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-4.0f, 6.0f}}},
+	    .highlights = {{.kind = 1, .offset = {4.0f, 6.0f}, .challenge = 0}},
+	    .commands = {{.kind = Kind::SetInterfaceLevel, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::SetInterfaceLevel, .delaySeconds = 40.0f, .value = 0}},
+	});
 	all.push_back({
 	    .id = "tutorial.bookmark_flight",
 	    .name = "A long flight to a bookmark",
@@ -9870,6 +9886,7 @@ std::vector<Scenario> Build()
 	AddFishScenarios(all);
 	AddKnockScenarios(all);
 	AddVillagerSpeedScenarios(all);
+	AddVillagerSizeAndReachScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
 	AddTempleKeyScenarios(all);

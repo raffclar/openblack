@@ -1599,3 +1599,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_game_turn_order test_game_turn_order.cpp)
 openblack_setup_and_add_test(test_world_save_clock test_world_save_clock.cpp)
+openblack_setup_and_add_test(test_script_interface_levels test_script_interface_levels.cpp)
