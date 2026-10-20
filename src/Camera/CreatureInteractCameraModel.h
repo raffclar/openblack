@@ -81,7 +81,6 @@ public:
 	[[nodiscard]] bool CanBeLeft() const override { return false; }
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
 
 private:
 	using Zoomers = std::array<camera::Zoomer, 3>;

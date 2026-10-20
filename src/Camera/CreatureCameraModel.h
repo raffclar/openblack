@@ -46,7 +46,6 @@ public:
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return creature_follow::Origin(_focus, _view); }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _focus; }
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
 
 private:
 	creature_follow::View _view;

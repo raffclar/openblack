@@ -21,6 +21,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -29,6 +30,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -192,12 +194,24 @@ void ShortcutKeys::Update()
 	{
 		return;
 	}
-	// The keys fly the world camera: the creature's follow camera first gives the camera back
+	// A script that holds the camera does not let it go: the keys do nothing, and no tap counts
+	auto& camera = Locator::camera::value();
+	if (!zoom_to::KeysTakeCamera(dynamic_cast<const ScriptCameraModel*>(&camera.GetModel()) != nullptr
+	                                 ? zoom_to::Holder::Script
+	                                 : zoom_to::Holder::World))
+	{
+		return;
+	}
+	// The keys fly the world camera: the creature's follow camera and a miracle's camera path first give the camera
+	// back
 	if (Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
 	{
 		Locator::creatureModeSystem::value().Leave();
 	}
-	auto& camera = Locator::camera::value();
+	if (Locator::cameraPathSystem::has_value() && Locator::cameraPathSystem::value().HoldsCamera())
+	{
+		Locator::cameraPathSystem::value().Stop();
+	}
 	const auto& land = Locator::terrainSystem::value();
 	glm::vec2 islandCentre;
 	try

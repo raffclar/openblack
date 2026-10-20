@@ -186,7 +186,7 @@ TEST(SavedSystemState, AFireListWithNoFireComesBack)
 TEST(SavedSystemState, TheShakesOfTheCameraAndTheCreaturesHelpComeBack)
 {
 	ExplosionSystem explosions;
-	explosions.AddShake({1.0f, 2.0f, 3.0f}, 50.0f, 2.0f, 1.0f, false);
+	explosions.AddShake({1.0f, 2.0f, 3.0f}, 50.0f, 2.0f, 1000, false);
 	ExplosionSystem loadedExplosions;
 	LoadInto(loadedExplosions, StateOf(explosions));
 	EXPECT_TRUE(loadedExplosions.IsShaking());

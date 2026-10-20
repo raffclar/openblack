@@ -53,6 +53,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/ScriptSoundEffect.h"
 #include "Audio/Sound.h"
+#include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GUtilsAngle.h"
@@ -6131,9 +6132,8 @@ void ShakeCamera() // 201 SHAKE_CAMERA
 	const auto amplitude = Popf();
 	const auto radius = Popf();
 	const auto position = PopVec();
-	// The shake lasts the seconds given rounded to whole milliseconds, and shakes every way, not only up and down
-	const auto milliseconds = std::round(duration * 1000.0f);
-	Locator::explosionSystem::value().AddShake(position, radius, amplitude, milliseconds / 1000.0f, false);
+	// The shake lasts the seconds rounded to whole milliseconds. It moves the camera along all axes
+	Locator::explosionSystem::value().AddShake(position, radius, amplitude, camera_shake::ScriptMilliseconds(duration), false);
 }
 
 void SetAnimationModify() // 202 SET_ANIMATION_MODIFY
