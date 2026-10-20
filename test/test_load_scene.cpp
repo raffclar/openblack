@@ -19,6 +19,8 @@
 #include <Locator.h>
 #include <gtest/gtest.h>
 
+#include "TestProfileFolder.h"
+
 class LoadScene: public ::testing::Test
 {
 public:
@@ -39,10 +41,12 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
+		args.profileFolder = profileFolder_.Path();
 		game_ = std::make_unique<openblack::Game>(std::move(args));
 		ASSERT_TRUE(game_->Initialize());
 	}
 	void TearDown() override { game_.reset(); }
+	const openblack::test::TestProfileFolder profileFolder_;
 	std::unique_ptr<openblack::Game> game_;
 };
 

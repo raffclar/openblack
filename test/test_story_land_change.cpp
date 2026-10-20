@@ -25,6 +25,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "TestProfileFolder.h"
 
 using namespace openblack;
 using namespace openblack::lhvm;
@@ -74,6 +75,7 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
+		args.profileFolder = _profileFolder.Path();
 		_game = std::make_unique<Game>(std::move(args));
 		ASSERT_TRUE(_game->Initialize());
 		ASSERT_TRUE(_game->LoadMap(Locator::filesystem::value().FindPath(std::string(k_NextLand))));
@@ -89,6 +91,7 @@ protected:
 
 	[[nodiscard]] static int32_t Global(size_t index) { return Locator::vm::value().GetVariables().at(index).value.intVal; }
 
+	const openblack::test::TestProfileFolder _profileFolder;
 	std::unique_ptr<Game> _game;
 };
 

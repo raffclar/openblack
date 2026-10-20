@@ -19,6 +19,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include <gtest/gtest.h>
 
+#include "TestProfileFolder.h"
 #include "third_party/json_helpers.h"
 #include "vector_compare.h"
 
@@ -39,10 +40,12 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
+		args.profileFolder = _profileFolder.Path();
 		_game = std::make_unique<Game>(std::move(args));
 		ASSERT_TRUE(_game->Initialize());
 	}
 	void TearDown() override { _game.reset(); }
+	const openblack::test::TestProfileFolder _profileFolder;
 	std::unique_ptr<Game> _game;
 };
 

@@ -35,6 +35,8 @@
 #include <json_helpers.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
+#include "../TestProfileFolder.h"
+
 using nlohmann::json;
 using namespace openblack;
 
@@ -215,6 +217,7 @@ protected:
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
 		args.logLevels[static_cast<uint8_t>(openblack::LoggingSubsystem::pathfinding)] = spdlog::level::debug;
+		args.profileFolder = _profileFolder.Path();
 		_game = std::make_unique<openblack::Game>(std::move(args));
 		ASSERT_TRUE(_game->Initialize());
 		openblack::lhscriptx::Script script;
@@ -435,6 +438,7 @@ protected:
 	uint32_t _startTurn;
 	uint32_t _lastTurn;
 	std::vector<State> _expectedStates;
+	const openblack::test::TestProfileFolder _profileFolder;
 	std::unique_ptr<openblack::Game> _game;
 	entt::entity _villagerEntt;
 };
@@ -493,6 +497,7 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
+		args.profileFolder = _profileFolder.Path();
 		_game = std::make_unique<openblack::Game>(std::move(args));
 		ASSERT_TRUE(_game->Initialize());
 		std::ifstream ifs(std::filesystem::path(k_ScenarioPath) / mapFile);
@@ -564,6 +569,7 @@ protected:
 	}
 
 	static constexpr std::string_view k_ScenarioPath = TEST_BINARY_DIR "/mobile_wall_hug/scenarios";
+	const openblack::test::TestProfileFolder _profileFolder;
 	std::unique_ptr<openblack::Game> _game;
 	entt::entity _walker;
 };
