@@ -142,3 +142,51 @@ TEST(GameFrameOrder, TheKeysOfTheCameraActAfterTheCameraMoves)
 	// So the steps of this frame's keys move the camera in the next frame, after the next frame's turns
 	EXPECT_EQ(recorder.Steps().back(), Step::ProfileAlignment);
 }
+
+TEST(GameFrameOrder, TheCameraReadsItsKeysOnlyOutsideTheTempleWithTheInterfaceAndNoBox)
+{
+	EXPECT_TRUE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = true, .interfaceActive = true, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = false, .boxShows = false}));
+	EXPECT_FALSE(CameraReadsKeys({.inTemple = false, .interfaceActive = true, .boxShows = true}));
+}
+
+TEST(GameFrameOrder, TheCameraShakesBeforeTheHandLooksThroughIt)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::CameraShake));
+	EXPECT_TRUE(recorder.Before(Step::CameraShake, Step::Hand));
+}
+
+TEST(GameFrameOrder, TheCreaturesGetTheirPosesBeforeTheHandAndTheEffectsMoveAfterIt)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::CreaturePoses));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePoses, Step::Hand));
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::FrameEffects));
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::ScreenMarks));
+	// The draw shows what the effects did in this frame
+	EXPECT_TRUE(recorder.Before(Step::FrameEffects, Step::Entities));
+	EXPECT_TRUE(recorder.Before(Step::ScreenMarks, Step::Entities));
+}
+
+TEST(GameFrameOrder, TheScreenMarksRiseByTheGameTimeOfTheFrame)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::FrameTime, Step::ScreenMarks));
+}
+
+TEST(GameFrameOrder, AFilmShowsItsFramesAfterTheCameraAndBeforeTheCreaturesArePosed)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::Video, Step::PauseText));
+	EXPECT_TRUE(recorder.Before(Step::Video, Step::CreaturePoses));
+}
+
+TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::Bookmarks));
+	EXPECT_TRUE(recorder.Before(Step::Bookmarks, Step::Entities));
+}
