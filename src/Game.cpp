@@ -50,6 +50,7 @@
 #include "3D/FlatLand.h"
 #include "3D/GripLandscapeEffect.h"
 #include "3D/HandAnimation.h"
+#include "3D/HandCycleChoice.h"
 #include "3D/HandMorph.h"
 #include "3D/HandNavigationPose.h"
 #include "3D/HandOrientation.h"
@@ -3218,59 +3219,16 @@ bool Game::Update() noexcept
 			const auto state = _handOnCreature.has_value() ? HandState::Creature
 			                   : _handCameraState          ? HandState::Camera
 			                                               : HandState::Normal;
-			auto cycle = HandCycle::Wiggle;
-			switch (_handPose)
-			{
-			case Pose::Idle:
-				break;
-			case Pose::Grip:
-				cycle = HandCycle::Grip;
-				break;
-			case Pose::Rotate:
-				cycle = HandCycle::Rotate;
-				break;
-			case Pose::Pitch:
-				cycle = HandCycle::Pitch;
-				break;
-			case Pose::Zoom:
-				cycle = HandCycle::Zoom;
-				break;
-			}
-			// Hovering over a thing, a one-shot bubble or a building as much as anything else, the hand feels it, over the
-			// camera hints it offers elsewhere
-			if (!_handCameraState && HandOverThing())
-			{
-				cycle = HandCycle::Stroke;
-			}
-			// Over a miracle's icon it opens to take it
-			if (!_handCameraState && _handOverSpellIcon)
-			{
-				cycle = HandCycle::CanPickUp;
-			}
-			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it. A thing under
-			// the hand that holds the rope gets the feel of the thing.
+			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
 			const auto ropeHand = Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE);
-			const bool feelsThing = ropeHand == leash_snap::Hand::Holding && (HandOverThing() || _handOverSpellIcon);
-			if (!_handCameraState && ropeHand != leash_snap::Hand::Away && !feelsThing)
-			{
-				cycle = HandCycle::HoldFingers;
-			}
-			// On a creature, it strokes it or shows its slap
-			if (_handOnCreature.has_value())
-			{
-				switch (_handOnCreature->cycle)
-				{
-				case creature_feedback::TouchCycle::Wiggle:
-					cycle = HandCycle::Wiggle;
-					break;
-				case creature_feedback::TouchCycle::Tickle:
-					cycle = HandCycle::Tickle;
-					break;
-				case creature_feedback::TouchCycle::Slap:
-					cycle = HandCycle::Slap;
-					break;
-				}
-			}
+			const auto cycle = hand_cycle::Choose({
+			    .pose = _handPose,
+			    .cameraState = _handCameraState,
+			    .overThing = HandOverThing(),
+			    .overSpellIcon = _handOverSpellIcon,
+			    .rope = ropeHand,
+			    .creature = _handOnCreature.has_value() ? std::optional(_handOnCreature->cycle) : std::nullopt,
+			});
 			// Pulling a thing free, the hand takes the pose the thing is held with
 			std::optional<ecs::systems::HandGrabSystemInterface::PullPose> pull;
 			if (!holdingSeed && Locator::handGrabSystem::has_value())
