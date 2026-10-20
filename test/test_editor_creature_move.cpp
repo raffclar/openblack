@@ -14,7 +14,9 @@
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureRoute.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -97,4 +99,29 @@ TEST_F(EditorCreatureMove, MovesACreatureAsTheGameDoesWithoutAWalk)
 	EXPECT_EQ(legs->placed.front().second, to);
 	EXPECT_TRUE(legs->stopped.empty());
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<Transform>(creature).position, to);
+}
+
+TEST_F(EditorCreatureMove, AnAnimalContinuesFromWhereItIsPut)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto sheep = registry.Create();
+	registry.Assign<Transform>(sheep, glm::vec3(10.0f, 2.0f, 20.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& before = registry.Assign<Animal>(sheep);
+	before.position = {10.0f, 2.0f, 20.0f};
+	before.previousPosition = before.position;
+	before.height = 1.5f;
+	before.move.position = {map_coords::ToFixed(10.0f), map_coords::ToFixed(20.0f)};
+	before.move.goal = {map_coords::ToFixed(15.0f), map_coords::ToFixed(25.0f)};
+
+	const glm::vec3 to {40.0f, 3.0f, 60.0f};
+	editor::MoveTo(sheep, to);
+
+	const auto& animal = registry.Get<Animal>(sheep);
+	EXPECT_EQ(animal.position, to);
+	EXPECT_EQ(animal.previousPosition, to);
+	EXPECT_EQ(animal.height, 0.0f);
+	const glm::ivec2 place {map_coords::ToFixed(40.0f), map_coords::ToFixed(60.0f)};
+	EXPECT_EQ(animal.move.position, place);
+	EXPECT_EQ(animal.move.goal, place);
+	EXPECT_EQ(registry.Get<Transform>(sheep).position, to);
 }
