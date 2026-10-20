@@ -1032,6 +1032,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {16.0f, 0.0f}, .living = true}},
 	});
 
+	// A burning barrel west of a cow, and a hut east of the cow: the cow's run from the fire leads it into the hut
+	all.push_back({
+	    .id = "animals.cow_runs_round_a_hut",
+	    .name = "A cow runs round a hut in its way",
+	    .facet = Facet::Animals,
+	    .description = "A barrel burns in open land. A free cow stands 6 metres east of it, and a hut stands 4.5 metres east "
+	                   "of the cow, in the way of its run from the fire.",
+	    .expected = "The cow runs east from the fire. It does not walk through the hut: it goes round the side of the "
+	                "hut, then on to where it runs to. Then it turns to watch the fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -15.0f}, {40.0f, 15.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {0.0f, 0.0f}, .alight = true},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 0.0f}, .living = true},
+	                {.type = AbodeInfo::CelticHut, .offset = {10.5f, 0.0f}}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
@@ -4219,6 +4235,38 @@ void AddObjects(std::vector<Scenario>& all)
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BreakRock"}},
+	});
+
+	all.push_back({
+	    .id = "objects.script_takes_rock_wood",
+	    .name = "A script takes wood from a rock and gives wood to it",
+	    .facet = Facet::Objects,
+	    .description = "A rock of scale 1 holds 200 wood. After one second, REMOVE_RESOURCE takes 100 wood from it. After "
+	                   "three seconds, ADD_RESOURCE gives it 300 wood. After five seconds, REMOVE_RESOURCE takes 1000 "
+	                   "wood from it.",
+	    .expected = "The rock becomes half its size and its life becomes half. Then it becomes twice its first size, or "
+	                "its largest size if that is smaller. Then the rock gives all its wood and goes from the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 10.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 100.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "ADD_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 300.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1000.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
 
 	all.push_back({
@@ -9452,6 +9500,62 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                 .yawDegrees = 45.0f,
 	                 .leanDegrees = {25.0f, -15.0f}}},
 	});
+
+	// Two rows of small pines along the path of a low throw. The camera stands as for the hand's throw.
+	std::vector<ObjectSetup> bendTrees {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}};
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = 6.0f + static_cast<float>(row) * 3.0f;
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, -2.0f}, .scale = 0.5f});
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, 2.0f}, .scale = 0.5f});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_a_thrown_rock",
+	    .name = "Trees bend away from a rock that flies between them",
+	    .facet = Facet::Nature,
+	    .description = "The hand takes a rock and throws it low between two rows of small pines. Then the rock comes to "
+	                   "rest.",
+	    .expected = "While the rock flies, the pines near it lean away from it, more when the rock is near. A pine that "
+	                "the rock passes stands straight again when the rock is out of its reach. When the rock comes to "
+	                "rest among the pines, the pines in its reach stay bent away from it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = bendTrees,
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Makes ready low on the screen and sweeps a little up, so that the throw stays low
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.7f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.15f}, .amount = 0.3f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
+	// Two rows of pines with a lane between them. The player's creature walks along the lane and back.
+	std::vector<ObjectSetup> lanePines;
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = static_cast<float>(row) * 3.0f;
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, -4.5f}});
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, 4.5f}});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_the_creature",
+	    .name = "Trees bend away from the player's creature",
+	    .facet = Facet::Nature,
+	    .description = "The player's tiger walks along a lane between two rows of pines, then walks back.",
+	    .expected = "The pines near the tiger lean away from it, more when the tiger is near, and crash about. When the "
+	                "tiger has gone by, they stand straight again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -12.0f}, {40.0f, 12.0f}}},
+	    .creatures = {CreatureSetup {
+	        .label = "yours", .species = CreatureType::Tiger, .offset = {-10.0f, 0.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .objects = lanePines,
+	    .commands = {{.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .point = {40.0f, 0.0f}},
+	                 {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 8.0f, .point = {-10.0f, 0.0f}}},
+	});
 }
 
 void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
@@ -9730,6 +9834,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
+		case ScriptArgument::Kind::Integer:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:

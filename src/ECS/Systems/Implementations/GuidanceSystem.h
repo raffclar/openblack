@@ -38,6 +38,10 @@ public:
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
+	void KilledVillager(entt::entity villager) override;
+	void WorshipperDied() override;
+	void LosingVillager(entt::entity villager) override;
+	void LowOnPeople(entt::entity town) override;
 	void EndWaits() override;
 
 	[[nodiscard]] const std::vector<Remark>& GetRemarks() const override { return _remarks; }
@@ -50,6 +54,9 @@ private:
 	void SayRemark(guidance::Kind kind);
 	void Say(uint32_t text, guidance::Kind kind);
 	void LookAtMoon();
+	/// Play the town desire voice of this turn, if there is one: the voice of the town or the worship site near the
+	/// camera that wants something most
+	void TownDesireVoices();
 
 	/// The new land's stamps are still to be drawn
 	bool _stampsDue {true};

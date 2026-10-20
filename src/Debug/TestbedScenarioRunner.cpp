@@ -258,6 +258,20 @@ using openblack::ecs::components::Transform;
 
 namespace
 {
+/// The type a script sees for a value the testbed gives it
+lhvm::DataType ScriptDataTypeOf(ScriptArgument::Kind kind)
+{
+	switch (kind)
+	{
+	case ScriptArgument::Kind::Number:
+		return lhvm::DataType::Float;
+	case ScriptArgument::Kind::Integer:
+		return lhvm::DataType::Int;
+	default:
+		return lhvm::DataType::Object;
+	}
+}
+
 using Kind = Command::Kind;
 using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
 
@@ -2186,6 +2200,8 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	{
 	case ScriptArgument::Kind::Number:
 		return lhvm::VMValue(argument.number);
+	case ScriptArgument::Kind::Integer:
+		return lhvm::VMValue(static_cast<int32_t>(argument.number));
 	case ScriptArgument::Kind::Marker:
 	{
 		const auto& land = Locator::terrainSystem::value();
@@ -2249,7 +2265,7 @@ std::string Runner::CallNative(const Command& command)
 		{
 			return "an argument names nothing of the scenario's";
 		}
-		const auto type = argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
+		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
@@ -2273,9 +2289,7 @@ std::string Runner::RunScript(const Command& command)
 		return fmt::format("no script {}", command.script);
 	}
 	const auto value = [this](const ScriptArgument& argument) { return ScriptValueOf(argument); };
-	const auto type = [](const ScriptArgument& argument) {
-		return argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
-	};
+	const auto type = [](const ScriptArgument& argument) { return ScriptDataTypeOf(argument.kind); };
 	const auto& globals = vm.GetVariables();
 	for (const auto& [name, argument] : command.scriptGlobals)
 	{
@@ -3911,6 +3925,7 @@ void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 positio
 		if (registry.Valid(dispenser.town))
 		{
 			std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
+			Locator::townSystem::value().StructuresChanged(dispenser.town);
 		}
 		dispenser.town = entt::null;
 	}

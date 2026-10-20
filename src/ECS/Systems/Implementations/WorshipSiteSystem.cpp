@@ -45,7 +45,9 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorshipSites.h"
 #include "ECS/WorshipperRules.h"
 #include "GameWorshipSiteWorld.h"
@@ -375,6 +377,8 @@ void WorshipSiteSystem::RemakeModelsAfterLoad()
 void WorshipSiteSystem::ProcessChants()
 {
 	auto& registry = _world->Entities();
+	const auto here =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	// Every player in turn, the neutral player last, each site of their temple by its place round it
 	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
 	{
@@ -383,6 +387,7 @@ void WorshipSiteSystem::ProcessChants()
 		{
 			continue;
 		}
+		float mostStrain = 0.0f;
 		for (const auto site : registry.Get<const CitadelWorship>(temple).sites)
 		{
 			if (site == entt::null || !registry.Valid(site))
@@ -410,6 +415,16 @@ void WorshipSiteSystem::ProcessChants()
 			{
 				dance_rules::SetWorshipSpeed(*dance, chants.danceIntensity);
 			}
+			mostStrain = std::max(mostStrain, chants.strain);
+		}
+		// The strain sound of the temple of the player at this machine goes towards the most strain of its sites. It
+		// moves by a thousandth for each millisecond of a game turn.
+		if (static_cast<PlayerNames>(player) == here)
+		{
+			auto& worship = registry.Get<CitadelWorship>(temple);
+			constexpr float k_StrainSoundPerMs = 0.001f;
+			const float step = static_cast<float>(TimeSystemInterface::k_TurnDuration.count()) * k_StrainSoundPerMs;
+			worship.strainSound = ecs::worshipper_rules::EaseStrainSound(worship.strainSound, mostStrain, step);
 		}
 	}
 }
@@ -901,6 +916,17 @@ uint32_t WorshipSiteSystem::FoodInPot(entt::entity site) const
 
 int32_t WorshipSiteSystem::FoodNeededFromTown(entt::entity site) const
 {
+	return ecs::worshipper_rules::FoodNeededFromTown(DancersFoodNeed(site), FoodInPot(site),
+	                                                 _world->Entities().Get<const WorshipSite>(site).foodOnTheWay);
+}
+
+float WorshipSiteSystem::DesireForFood(entt::entity site) const
+{
+	return ecs::worshipper_rules::SiteDesireForFood(DancersFoodNeed(site), FoodInPot(site));
+}
+
+float WorshipSiteSystem::DancersFoodNeed(entt::entity site) const
+{
 	auto& registry = _world->Entities();
 	const auto& component = registry.Get<const WorshipSite>(site);
 	// Each villager dancing wants what its belly lacks of its dinner
@@ -919,8 +945,7 @@ int32_t WorshipSiteSystem::FoodNeededFromTown(entt::entity site) const
 			}
 		}
 	}
-	return ecs::worshipper_rules::FoodNeededFromTown(ecs::worshipper_rules::DancersFoodNeed(bellies, dinners), FoodInPot(site),
-	                                                 component.foodOnTheWay);
+	return ecs::worshipper_rules::DancersFoodNeed(bellies, dinners);
 }
 
 void WorshipSiteSystem::RemoveFoodOnTheWay(entt::entity site, int32_t amount)

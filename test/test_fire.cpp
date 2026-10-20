@@ -79,6 +79,17 @@ TEST(FireModel, BurningAtTwiceItsCombustionHurtsByItsDefence)
 	EXPECT_FLOAT_EQ(BurnDamage(120.0f, Villager()), 0.0f);
 }
 
+TEST(FireModel, FlowersBurnWithNoHurtAndAnAnimalLosesAFiftiethOfItsLifeATurn)
+{
+	// The flowers' rows: combustion 100, heat capacity 50, burn defence 0. They catch and burn but lose no life.
+	const Material flowers {.combustion = 100.0f, .capacity = 50.0f, .defence = 0.0f};
+	EXPECT_FLOAT_EQ(CombustionTemperature(flowers), 100.0f);
+	EXPECT_FLOAT_EQ(BurnDamage(200.0f, flowers), 0.0f);
+	// The ground animals' rows: combustion 140, burn defence 0.2. At full heat an animal burns to death in 50 turns.
+	const Material sheep {.combustion = 140.0f, .capacity = 20.0f, .defence = 0.2f};
+	EXPECT_NEAR(BurnDamage(280.0f, sheep), 0.02f, k_Epsilon);
+}
+
 TEST(FireModel, TheFireIsFiercestAtTwiceItsCombustionAndWeakAsItsObjectBurnsAway)
 {
 	const auto hut = Hut();
@@ -394,4 +405,13 @@ TEST(ViaPoint, AVillagerGoesRoundAFireInItsWayOnTheSideItLeansTo)
 	// A way that clears the circle needs no detour, and a start inside it none either
 	EXPECT_FALSE(openblack::fire::GetViaPoint(at(0.0f, 20.0f), at(40.0f, 20.0f), at(20.0f, 0.0f), 5.0f, 1.0f, 0.0f).detour);
 	EXPECT_TRUE(openblack::fire::GetViaPoint(at(19.0f, 0.0f), at(40.0f, 0.0f), at(20.0f, 0.0f), 5.0f, 1.0f, 0.0f).inside);
+}
+
+TEST(FireModel, AHeldHotThingSpreadsFireOnlyInsideItsHoldersInfluence)
+{
+	// A thing on the land always spreads
+	EXPECT_TRUE(fire::SpreadsFrom(false, 0.0f));
+	// A thing in the hand spreads where its holder has some influence, and not where the holder has none
+	EXPECT_TRUE(fire::SpreadsFrom(true, 0.25f));
+	EXPECT_FALSE(fire::SpreadsFrom(true, 0.0f));
 }

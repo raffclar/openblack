@@ -157,3 +157,17 @@ TEST(VillagerDeath, ASoulIsSeeThroughFadesOverItsLastHalfSecondAndGoesJustBefore
 	EXPECT_TRUE(SoulGone(2891, k_Clip));
 	EXPECT_EQ(SoulAlphaAt(3000, k_Clip), 0);
 }
+
+TEST(VillagerDeath, TheAdvisorsWarnOfALossToTheTown)
+{
+	// A death of chanting warns of the worshippers that die, for the player here only
+	EXPECT_EQ(TownLoss(DeathReason::Chant, 40, 10, true, true), TownLossRemark::WorshippersDying);
+	EXPECT_EQ(TownLoss(DeathReason::Chant, 40, 10, false, false), TownLossRemark::None);
+	// A town with enough adults warns of a loss that another player caused by a miracle
+	EXPECT_EQ(TownLoss(DeathReason::Spell, 40, 10, false, true), TownLossRemark::LosingVillagers);
+	EXPECT_EQ(TownLoss(DeathReason::Spell, 40, 10, true, true), TownLossRemark::None);
+	EXPECT_EQ(TownLoss(DeathReason::Starving, 40, 10, false, true), TownLossRemark::None);
+	// A town with the warning number of adults or fewer warns that it is low on people, whatever the cause
+	EXPECT_EQ(TownLoss(DeathReason::Starving, 10, 10, true, true), TownLossRemark::LowOnPeople);
+	EXPECT_EQ(TownLoss(DeathReason::Spell, 3, 10, false, false), TownLossRemark::None);
+}

@@ -619,6 +619,7 @@ Game::Game(Arguments&& args) noexcept
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
+	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
@@ -941,6 +942,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			return false;
 		case SDLK_f:
+			if (Locator::config::value().background)
+			{
+				break;
+			}
 			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
 		case SDLK_p:
@@ -3491,7 +3496,8 @@ bool Game::Initialize() noexcept
 		{
 			extraFlags |= SDL_WINDOW_METAL;
 		}
-		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags);
+		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags,
+		                            config.background);
 	}
 
 	using filesystem::Path;
@@ -6790,8 +6796,7 @@ void Game::ProcessPlayerTurns()
 {
 	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
 	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
-	// the player gained them: the town passes over its buildings, works out what it wants, looks after its artefacts,
-	// and goes on with the rest of its turn. So the game's random numbers are drawn in the same order as the game draws
+	// the player gained them, takes its turn. So the game's random numbers are drawn in the same order as the game draws
 	// them.
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -6805,13 +6810,7 @@ void Game::ProcessPlayerTurns()
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
-		for (const auto town : towns.TownsInGainedOrder(player))
-		{
-			towns.ProcessTownBuildings(town);
-			Locator::townDesireSystem::value().ProcessTown(town);
-			Locator::artefactSystem::value().ProcessTown(town);
-			towns.ProcessTownTurn(town);
-		}
+		towns.ProcessPlayerTowns(player);
 	}
 }
 

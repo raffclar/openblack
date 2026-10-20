@@ -145,6 +145,9 @@ public:
 	[[nodiscard]] virtual uint32_t CurrentTurn() const { return 0; }
 	/// A new land: none going
 	virtual void Reset() = 0;
+	/// A town's turn of belief, in its own turn: what its people were impressed by is believed, its wants that go unmet
+	/// cost its player belief, and the player it believes in most takes it at once
+	virtual void BelieveInTown(entt::entity /*town*/) {}
 	/// A town is given belief in a player by a thing, as by an artefact its people dance round: the symbol of it rises
 	/// from the thing, and the town's awe may be heard there
 	virtual void GiveTownBelief(entt::entity /*town*/, PlayerNames /*player*/, float /*amount*/, entt::entity /*from*/,
