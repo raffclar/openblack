@@ -2007,7 +2007,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::TownDesire::doingNow>("doingNow")
 	    .Field<&components::TownDesire::doingNowCount>("doingNowCount")
 	    .Field<&components::TownDesire::doingNowAtStart>("doingNowAtStart")
-	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart");
+	    .Field<&components::TownDesire::doingNowCountAtStart>("doingNowCountAtStart")
+	    .Field<&components::TownDesire::turnsOverAlignmentLevel>("turnsOverAlignmentLevel");
 	Reflect<components::TownDesireFlag>(context)
 	    .Field<&components::TownDesireFlag::town>("town")
 	    .Field<&components::TownDesireFlag::desire>("desire")
@@ -3026,6 +3027,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::creaturesMade>("creaturesMade")
 	    .Field<&openblack::ecs::RegistryContext::nextTownGained>("nextTownGained")
+	    .Field<&openblack::ecs::RegistryContext::peopleCountedInTurn>("peopleCountedInTurn")
 	    .Field<&openblack::ecs::RegistryContext::landAvoid>("landAvoid")
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
 	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")

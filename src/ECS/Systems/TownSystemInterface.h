@@ -114,10 +114,17 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// The start of a town's turn: every so many turns it passes over its buildings, which age by it
 	virtual void ProcessTownBuildings(entt::entity town) = 0;
-	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, mends a
-	/// building, calls or ends an emergency, judges the creatures it watches, its missionaries follow their villagers,
-	/// its mark of changed wants comes down, and now and then it evens out its homes
+	/// The rest of a town's turn, after its desires and its artefacts: it sends worshippers every tenth turn, the attacks
+	/// on it fade, it mends a building, calls or ends an emergency, judges the creatures it watches, its missionaries
+	/// follow their villagers, it takes its turn of belief, its wants move its player's alignment, its mark of changed
+	/// wants comes down, a change of its influence marks the borders to be drawn again, and now and then it evens out
+	/// its homes
 	virtual void ProcessTownTurn(entt::entity town) = 0;
+	/// A player's towns take their turns, in the order the player gained them. Each town works out its influence, passes
+	/// over its buildings, works out its desires, looks after its artefacts and goes on with the rest of its turn; then
+	/// its people are counted for its player. A town that another player takes in its own turn ends the turns of its old
+	/// player's towns.
+	virtual void ProcessPlayerTowns(PlayerNames /*player*/) {}
 	/// A player's towns in the order the player gained them, which is the order they take their turns in
 	[[nodiscard]] virtual std::vector<entt::entity> TownsInGainedOrder(PlayerNames player) const = 0;
 	/// A town's wants have changed: a store stocked from empty, a building site added, a death. Its disciples waiting for

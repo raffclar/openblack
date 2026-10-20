@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <limits>
+#include <numeric>
 #include <optional>
 #include <tuple>
 #include <utility>
@@ -58,6 +59,8 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
+#include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -67,11 +70,14 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TemporaryStoreRules.h"
+#include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
 #include "ECS/TownCentreParts.h"
+#include "ECS/TownDesireAlignment.h"
 #include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
@@ -80,6 +86,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
 #include "VillagerBreeding.h"
@@ -836,6 +843,91 @@ void TownSystem::ProcessTurn()
 	}
 }
 
+namespace
+{
+/// The adults and children that the town counted for its desires this turn
+uint32_t CountedPeopleOf(const ecs::Registry& registry, entt::entity town)
+{
+	const auto* stats = registry.TryGet<const TownStats>(town);
+	return stats != nullptr ? stats->adults + stats->children : 0;
+}
+
+/// The town's wants that stay over their levels move its player's alignment, by the share of all the players' people
+/// that live in it, as the players' turn has counted them so far
+void MoveAlignmentByWants(entt::entity townEntity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wants = registry.TryGet<TownDesire>(townEntity);
+	if (wants == nullptr || !registry.AllOf<Town>(townEntity) || !Locator::alignmentSystem::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value();
+	std::array<town_desire_alignment::DesireRule, k_TownDesireCount> rules {};
+	for (size_t d = 0; d < rules.size(); ++d)
+	{
+		const auto& row = info.townDesire.at(d);
+		rules.at(d) = {.affectsAfter = row.desireAffectsAlignmentAfter,
+		               .importance = row.howImportantDesireIsToAlignment,
+		               .maxTurns = row.maxTimeForAlignmentChange};
+	}
+	const auto& counted = registry.Context().peopleCountedInTurn;
+	const auto all = std::accumulate(counted.begin(), counted.end(), uint32_t {0});
+	const auto change = town_desire_alignment::Change(
+	    wants->turnsOverAlignmentLevel, {.boostA = wants->boostA, .desire = wants->desire, .boost = wants->boost}, rules,
+	    {.town = CountedPeopleOf(registry, townEntity), .all = all}, info.town.maxAlignmentChangePerGameTurnForDesires);
+	auto& alignment = Locator::alignmentSystem::value();
+	const auto owner = registry.Get<const Town>(townEntity).owner;
+	const float damped = magic::DampAlignmentChange(change, alignment.GetPlayerAlignment(owner));
+	if (damped != 0.0f)
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Town {}: its wants move player {} by {} (of {} people)",
+		                    registry.Get<const Town>(townEntity).id, static_cast<int>(owner), damped, all);
+	}
+	alignment.AddPendingAlignment(owner, damped);
+}
+} // namespace
+
+void TownSystem::ProcessPlayerTowns(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& counted = registry.Context().peopleCountedInTurn.at(static_cast<size_t>(player));
+	counted = 0;
+	for (const auto town : TownsInGainedOrder(player))
+	{
+		if (!registry.Valid(town))
+		{
+			continue;
+		}
+		if (Locator::influenceSystem::has_value())
+		{
+			Locator::influenceSystem::value().ProcessTownInfluence(town);
+		}
+		ProcessTownBuildings(town);
+		if (Locator::townDesireSystem::has_value())
+		{
+			Locator::townDesireSystem::value().ProcessTown(town);
+		}
+		if (Locator::artefactSystem::has_value())
+		{
+			Locator::artefactSystem::value().ProcessTown(town);
+		}
+		ProcessTownTurn(town);
+		if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+		{
+			continue;
+		}
+		// Its people count for the player whose turn it is, even when another player took it in its turn
+		counted += CountedPeopleOf(registry, town);
+		// A town taken in its own turn goes to the end of its new player's towns: the old player's towns that come after
+		// it take no turn this game turn, and a new player whose turn is still to come gives it a second turn
+		if (registry.Get<const Town>(town).owner != player)
+		{
+			break;
+		}
+	}
+}
+
 std::vector<entt::entity> TownSystem::TownsInGainedOrder(PlayerNames player) const
 {
 	return town_turns::TownsInGainedOrder(Locator::entitiesRegistry::value(), player);
@@ -888,6 +980,11 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	if (!registry.Valid(townEntity))
 	{
 		return;
+	}
+	// The attacks on it fade, and are summed for its next turn's desires
+	if (auto* attacks = registry.TryGet<TownAggression>(townEntity))
+	{
+		town_aggression::ProcessTurn(attacks->record, registry.Get<const Town>(townEntity).owner);
 	}
 	// It puts up at most one of its buildings, or a finished one that went, for mending
 	town_planning::MendBest(townEntity);
@@ -945,6 +1042,13 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	{
 		return;
 	}
+	// Its turn of belief: the player it believes in most takes it at once
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().BelieveInTown(townEntity);
+	}
+	// Its wants that stay unmet move its player's alignment
+	MoveAlignmentByWants(townEntity);
 	// A mark of changed wants that has been up a whole turn comes down
 	auto& marked = registry.Get<Town>(townEntity);
 	disciple_work::EndTownTurn(marked.desiresChanged, marked.desiresChangedLastTurn);
@@ -957,6 +1061,11 @@ void TownSystem::ProcessTownTurn(entt::entity townEntity)
 	if (!registry.Valid(townEntity))
 	{
 		return;
+	}
+	// A change of its influence marks the borders to be drawn again
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().MarkTownInfluence(townEntity);
 	}
 	auto& shuffled = registry.Get<Town>(townEntity);
 	// Now and then it evens out its homes, moving a man for a woman between two, or one villager

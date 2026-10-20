@@ -66,6 +66,7 @@ public:
 	void ProcessTownBuildings(entt::entity town) override;
 	void ProcessTownTurn(entt::entity town) override;
 	[[nodiscard]] std::vector<entt::entity> TownsInGainedOrder(PlayerNames player) const override;
+	void ProcessPlayerTowns(PlayerNames player) override;
 	void MarkDesiresChanged(entt::entity town) override;
 	[[nodiscard]] bool DesiresChanged(entt::entity town) const override;
 	void ClaimTown(entt::entity town, PlayerNames player) override;

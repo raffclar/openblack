@@ -1535,3 +1535,12 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_save_slot_writes test_save_slot_writes.cpp)
+openblack_setup_and_add_test(
+  test_oracle_town_desire_alignment
+  oracle/test_oracle_town_desire_alignment.cpp
+)
+set_tests_properties(
+  test_oracle_town_desire_alignment
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
