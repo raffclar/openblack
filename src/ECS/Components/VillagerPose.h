@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
@@ -49,6 +50,9 @@ struct VillagerPose
 	std::optional<float> easedHeading;
 	/// Drawn in high detail: the heading its body is turned to after that, and its change between clips
 	std::optional<float> detailedHeading;
+	/// How far its drawing lifts the ends of its x and z axes to lean it to the slope of the land; none for one not on
+	/// the land or not drawn by its drawing
+	std::optional<glm::vec2> slopeLift;
 	villager_draw::ClipBlendTrack clipBlend;
 };
 
@@ -67,6 +71,10 @@ struct VillagerPose
 	}
 	if (pose->drawnHeading.has_value())
 	{
+		if (pose->slopeLift.has_value() && pose->easedHeading.has_value())
+		{
+			return villager_draw::SlopeLeanedRotation(*pose->easedHeading, *pose->drawnHeading, *pose->slopeLift);
+		}
 		return villager_draw::RotationOf(*pose->drawnHeading);
 	}
 	return rotation;

@@ -2109,6 +2109,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::VillagerPose::drawnHeading>("drawnHeading")
 	    .Field<&components::VillagerPose::easedHeading>("easedHeading")
 	    .Field<&components::VillagerPose::detailedHeading>("detailedHeading")
+	    .Field<&components::VillagerPose::slopeLift>("slopeLift")
 	    .Field<&components::VillagerPose::clipBlend>("clipBlend");
 	Reflect<components::WorkTarget>(context).Field<&components::WorkTarget::thing>("thing");
 	Reflect<components::FieldWorkSpot>(context).Field<&components::FieldWorkSpot::position>("position");

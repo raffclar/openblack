@@ -116,4 +116,43 @@ void testbed_scenarios::AddVillagerSpeedScenarios(std::vector<Scenario>& all)
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-20.0f, -15.0f}, .life = 0.1f},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {20.0f, -15.0f}}},
 	});
+
+	// Villagers walking on the bank south of the testbed's lake, which climbs from the shallows to the plane
+	constexpr float k_BankFoot = 146.0f;
+	constexpr float k_BankTop = 112.0f;
+	constexpr float k_BankMiddle = 130.0f;
+	constexpr float k_LeanRepeat = 25.0f;
+	all.push_back({
+	    .id = "villagers.slope_lean",
+	    .name = "Villagers leaning to the slope of the land",
+	    .facet = Facet::Movement,
+	    .description = "Three grown men on the bank south of the testbed's lake, where the land climbs from the shallows "
+	                   "to the plane. Two walk up and down the bank, 34 m, and back every 25 seconds; the third walks "
+	                   "along the bank, across the slope, 40 m, and back every 25 seconds. Between walks each stands still.",
+	    .expected = "On the bank each man's model leans to the slope of the land under him: the front and back of his "
+	                "feet and body lift or drop with the land, as an animal's do, and his body stays upright. The men "
+	                "that walk up and down lean forward and back; the man that walks across leans to his side. On the "
+	                "flat land above the bank they stand straight. Before the change they stood straight everywhere.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {45.0f, 5.0f, 126.0f}, .look = {0.0f, 1.0f, 130.0f}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-8.0f, k_BankTop},
+	                 .walkTo = glm::vec2 {-8.0f, k_BankFoot},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {4.0f, k_BankFoot},
+	                 .walkTo = glm::vec2 {4.0f, k_BankTop},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = {-20.0f, k_BankMiddle},
+	                 .yawDegrees = 90.0f,
+	                 .walkTo = glm::vec2 {20.0f, k_BankMiddle},
+	                 .walkAfterSeconds = 2.0f,
+	                 .walkRepeatSeconds = k_LeanRepeat,
+	                 .walkFinal = VillagerStates::InScript}},
+	});
 }

@@ -21,7 +21,9 @@
 
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
+#include "Animals/AnimalRules.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
@@ -59,12 +61,38 @@ constexpr float k_StationaryStride = 0.05f;
 /// the frame is drawn
 constexpr float k_ViewMargin = 2.0f;
 
+/// How far the ends of a villager's x and z axes lift to lean its model to the slope of the land, as the axes of an
+/// animal do. Only a villager at most 0.2 above the land leans. Each axis points along the eased heading and is as long
+/// as the size of the villager. Its lift is the height of the land at its end less the drawn height, between -0.3 and
+/// 0.3.
+std::optional<glm::vec2> SlopeLift(const Transform& transform, const glm::vec3& drawnAt, float easedHeading)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& land = Locator::terrainSystem::value();
+	const float aboveLand = transform.position.y - land.GetHeightAt(glm::xz(transform.position));
+	if (aboveLand > animals::k_HighestToFollowSlope)
+	{
+		return std::nullopt;
+	}
+	const auto turned = ecs::villager_draw::RotationOf(easedHeading);
+	const float scale = transform.scale.x;
+	const auto landAt = [&](const glm::vec3& axis) {
+		return land.GetAltitude(animals::SlopeSampleUnit(drawnAt.x + (axis.x * scale)),
+		                        animals::SlopeSampleUnit(drawnAt.z + (axis.z * scale)));
+	};
+	return glm::vec2(animals::SlopeLift(landAt(turned[0]), drawnAt.y), animals::SlopeLift(landAt(turned[2]), drawnAt.y));
+}
+
 /// Where a villager is drawn this frame and the heading it is drawn with: between its last two turns' places while its
 /// clip carries it along, turning after the way it faces. One in the physics, in the god's hand or in the hand of a
 /// creature is drawn where it is, turned as it is.
 void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform& transform, VillagerPose& pose, bool glides,
                   float turnFraction, uint32_t elapsed)
 {
+	pose.slopeLift.reset();
 	if (registry.AnyOf<InPhysics, InHand, HeldByCreature>(entity))
 	{
 		pose.drawnAt.reset();
@@ -86,6 +114,7 @@ void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform&
 	pose.easedHeading = headings.eased;
 	pose.detailedHeading = headings.detailed;
 	pose.drawnHeading = headings.drawn;
+	pose.slopeLift = SlopeLift(transform, *pose.drawnAt, headings.eased);
 }
 
 /// The pose of a high-detail villager that just changed clip, with the old clip's pose held where it was mixed in
