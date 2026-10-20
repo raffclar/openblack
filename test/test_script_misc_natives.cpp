@@ -12,12 +12,15 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <memory>
 #include <string_view>
 #include <utility>
 #include <vector>
 
 #include <LHVM.h>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/ringbuffer_sink.h>
+#include <spdlog/spdlog.h>
 
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/GameMusic.h"
@@ -113,6 +116,8 @@ protected:
 	chlapi::CHLApi _api;
 };
 
+constexpr uint32_t k_GameThingClicked = 16;
+constexpr uint32_t k_GetProperty = 21;
 constexpr uint32_t k_RestartMusic = 190;
 constexpr uint32_t k_SetAnimationModify = 202;
 constexpr uint32_t k_MusicPlayedOnObject = 191;
@@ -306,4 +311,27 @@ TEST_F(ScriptMiscNatives, OnlyOneSetsRealTimeOnACreature)
 	EXPECT_FALSE(registry.Get<const ecs::components::CreatureAnimation>(villager).realTime);
 	EXPECT_TRUE(Call(k_SetAnimationModify, {Int(1), Object(entt::null)}).empty());
 	EXPECT_EQ(_api.GetStubCalls().Total(), 0u);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(ScriptMiscNatives, AThingThatIsGoneIsNotClickedAndTheLogStaysQuiet)
+{
+	// A script can ask on each turn whether a thing that is gone is clicked. The game answers no and says nothing.
+	const auto sink = std::make_shared<spdlog::sinks::ringbuffer_sink_mt>(8);
+	const auto logger = std::make_shared<spdlog::logger>("scripting", sink);
+	logger->set_level(spdlog::level::info);
+	spdlog::register_logger(logger);
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto gone = registry.Create();
+	registry.Destroy(gone);
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_FALSE(AskBool(k_GameThingClicked, {Object(gone)}));
+	}
+	const auto property = Call(k_GetProperty, {Int(0), Object(gone)});
+	const auto lines = sink->last_raw();
+	spdlog::drop("scripting");
+	EXPECT_TRUE(lines.empty());
+	ASSERT_EQ(property.size(), 1u);
+	EXPECT_EQ(property.front().first.floatVal, 0.0f);
 }
