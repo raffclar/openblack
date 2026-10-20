@@ -4018,6 +4018,8 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// The slider of the help's text speed shows only when the game has no sound
+			_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
 			// Each save and each load shows its box first
 			if (Locator::saveGameSystem::has_value())
 			{

@@ -180,6 +180,9 @@ public:
 	void ShowPlayer(std::u16string_view creatureName, int symbol, const player_profiles::Settings& settings);
 	/// Edit Tattoo shows only while the creature can have its tattoo edited
 	void SetTattooAvailable(bool available);
+	/// The Advanced page shows the slider of the help's text speed only when the game has no sound
+	void SetSoundInstalled(bool installed);
+	[[nodiscard]] const Slider& GetReadSpeedSlider() const noexcept { return *_readSpeed; }
 	/// Another dialog over the menu, as the tattoo editor from the Players page: the menu fades out while it stays
 	/// open, and fades back in as the dialog goes
 	void SetCovered(bool covered);
@@ -372,6 +375,8 @@ private:
 	/// The profile played as the Players page last opened. A deletion does not change it.
 	std::optional<std::u16string> _previousProfile;
 	bool _tattooAvailable {false};
+	bool _soundInstalled {true};
+	Slider* _readSpeed {nullptr};
 	bool _covered {false};
 	std::optional<size_t> _pickedPlayer;
 	std::u16string _playerToDelete;

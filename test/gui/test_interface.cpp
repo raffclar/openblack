@@ -1208,3 +1208,17 @@ TEST(GameMenu, ReturnInTheKeyBoxBindsReturnAndEscapeCancels)
 	EXPECT_TRUE(f.menu.TakeControlsChanged());
 	EXPECT_EQ(f.menu.GetControlBindings().at(0).key, (openblack::input::KeyChord {.key = SDL_SCANCODE_RETURN}));
 }
+
+TEST(GameMenu, TheHelpTextSpeedSliderShowsOnlyWithoutSound)
+{
+	MenuFixture f;
+	EXPECT_FALSE(f.menu.GetReadSpeedSlider().visible);
+	f.menu.SetSoundInstalled(false);
+	f.menu.ShowPage(Page::Advanced);
+	EXPECT_TRUE(f.menu.GetReadSpeedSlider().visible);
+	EXPECT_FLOAT_EQ(f.menu.GetReadSpeedSlider().GetValue(), 0.5f);
+	// The slider follows a click and keeps the speed in the settings
+	Click(f.menu, {540, 380});
+	EXPECT_GT(f.menu.GetSettings().readSpeed, 0.5f);
+	EXPECT_TRUE(f.menu.TakeSettingsChanged());
+}

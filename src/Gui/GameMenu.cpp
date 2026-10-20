@@ -548,6 +548,12 @@ void GameMenu::ShowPlayer(std::u16string_view creatureName, int symbol, const pl
 	_page = page;
 }
 
+void GameMenu::SetSoundInstalled(bool installed)
+{
+	_soundInstalled = installed;
+	_readSpeed->visible = !installed;
+}
+
 void GameMenu::SetCovered(bool covered)
 {
 	if (_covered == covered)
@@ -707,6 +713,16 @@ void GameMenu::BuildAdvanced(const TextDatabase& texts)
 	addSelector(150, _settings.helpLevel, _helpLabels);
 	addSelector(215, _settings.storyText, _storyLabels);
 	addSelector(280, _settings.toolTips, _toolTipLabels);
+
+	// The speed of the help's text, shown only when the game has no sound
+	auto& readSpeed = page.Add<Slider>(DialogRect {.min = {250, 365}, .max = {550, 395}},
+	                                   std::u16string(texts.Get("HELP_TEXT_DIALOG_HELPTEXTSPEED")), _settings.readSpeed);
+	readSpeed.onChange = [this](float value) {
+		_settings.readSpeed = value;
+		SettingsChanged();
+	};
+	readSpeed.visible = !_soundInstalled;
+	_readSpeed = &readSpeed;
 
 	const std::array<std::tuple<int, const char*, bool*>, 3> boxes = {{
 	    {385, "HELP_TEXT_DIALOG_CREATUREHELP", &_settings.creatureHelp},
