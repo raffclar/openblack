@@ -135,6 +135,29 @@ int32_t FoodSpareForWorship(std::optional<uint32_t> pitFood, float foodForDinner
 	return std::max(spare, 0);
 }
 
+float SiteDesireForFood(float dancersNeed, uint32_t inPot)
+{
+	// A ten thousandth on each side of the share
+	constexpr float k_Tiny = 0.0001f;
+	const float share = x87::Div(x87::Add(static_cast<double>(inPot), k_Tiny), dancersNeed + k_Tiny);
+	return 1.0f - (share < 1.0f ? share : 1.0f);
+}
+
+float EaseStrainSound(float level, float mostStrain, float step)
+{
+	if (level == mostStrain)
+	{
+		return level;
+	}
+	if (level < mostStrain)
+	{
+		const float up = level + step;
+		return mostStrain < up ? mostStrain : up;
+	}
+	const float down = level - step;
+	return down < mostStrain ? mostStrain : down;
+}
+
 int32_t FoodForSiteIfEnough(int32_t wanted, int32_t spare)
 {
 	if (wanted != 0 && (spare < wanted || wanted < 0))

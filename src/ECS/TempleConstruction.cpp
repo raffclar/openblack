@@ -40,6 +40,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellDispenser.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -298,6 +299,26 @@ void StartTownCentre(entt::entity building)
 	}
 }
 
+/// A storage pit of a town that starts working makes the town let go of its temporary piles
+void StoragePitStartsWorking(entt::entity building)
+{
+	const auto& registry = Entities();
+	if (!registry.AllOf<StoragePit>(building) || !Locator::townSystem::has_value())
+	{
+		return;
+	}
+	const auto id = TownOf(building);
+	if (!id.has_value())
+	{
+		return;
+	}
+	const auto& towns = registry.Context().towns;
+	if (const auto town = towns.find(static_cast<uint32_t>(*id)); town != towns.end())
+	{
+		Locator::townSystem::value().SetStoragePit(town->second);
+	}
+}
+
 /// A building is finished: no longer under construction, its site gone. A temple's heart is whole again.
 void Finish(entt::entity building)
 {
@@ -325,6 +346,8 @@ void Finish(entt::entity building)
 		graveyards::StartsWorking(building);
 		// A finished crèche starts working
 		creches::StartsWorking(building);
+		// A finished storage pit starts working, and its town lets go of its temporary piles
+		StoragePitStartsWorking(building);
 		// A finished building of a town counts as put up for mending only while it isn't whole. No one is moved in: the
 		// homeless and the crowded find it when they next look for a better home.
 		if (auto* abode = registry.TryGet<Abode>(building); abode != nullptr && TownOf(building).has_value())
@@ -387,6 +410,8 @@ void Repaired(entt::entity building)
 	graveyards::StartsWorking(building);
 	// A repaired crèche takes its town back if the town has none
 	creches::StartsWorking(building);
+	// A repaired storage pit starts working again, and its town lets go of its temporary piles
+	StoragePitStartsWorking(building);
 	// Whole again, the town may put it up for mending the next time it is hurt. No one is moved in: the homeless and
 	// the crowded find it when they next look for a better home.
 	if (auto* abode = registry.TryGet<Abode>(building))

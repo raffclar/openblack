@@ -395,6 +395,8 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
 	// Spread again, those reacting already aren't impressed again
 	_reactions.ProcessTurn();
+	// The town's turn of belief comes in the turn of its player
+	_reactions.BelieveInTown(_town);
 	const auto& town = registry.Get<const TownImpression>(_town).belief;
 	// Believed at the town's turn, no more than its cap
 	EXPECT_FLOAT_EQ(town.belief.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)),

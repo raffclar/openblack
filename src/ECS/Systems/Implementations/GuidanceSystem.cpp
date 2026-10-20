@@ -13,6 +13,10 @@
 
 #include <ctime>
 
+#include <algorithm>
+#include <iterator>
+#include <vector>
+
 #include <PackFile.h>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
@@ -21,21 +25,29 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/HeaderOverrides.h"
 #include "CHLApi.h"
+#include "Camera/Camera.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/BuildingSites.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownAggression.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/ThingOnScreen.h"
+#include "ECS/TownDesire.h"
 #include "Graphics/Moon.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -93,6 +105,64 @@ bool ComputerNight()
 	localtime_r(&now, &local);
 #endif
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
+}
+
+/// The advisors warn of a loss only near the point under the cursor
+constexpr float k_WarnReach = 300.0f;
+
+/// Whether a thing stands nearer to the point under the cursor than the reach of a warning
+bool NearPointUnderCursor(entt::entity thing)
+{
+	if (!Locator::pickingSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return false;
+	}
+	const auto point = Locator::pickingSystem::value().GetPick().point;
+	const auto* at = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
+	return point.has_value() && at != nullptr && gutils::GetDistanceInMetres(at->position, *point) < k_WarnReach;
+}
+
+/// Play a voice of the guidance sound bank at a thing on the land. The player hears it at full volume to a third of its
+/// reach.
+void PlayVoice(uint32_t sample, glm::vec3 position, float reach)
+{
+	if (Locator::terrainSystem::has_value())
+	{
+		position.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(position));
+	}
+	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", sample)),
+	                            {.position = position,
+	                             .pitchPercent = guidance::k_VoicePitch,
+	                             .volume = guidance::k_VoiceVolume,
+	                             .voicePlayType = pack::AudioBankLoop::Once,
+	                             .minDistance = reach * guidance::k_VoiceNearShare,
+	                             .maxDistance = reach,
+	                             .callerWins = audio::k_CallerDistancesWin});
+}
+
+/// The towns of the players (not the neutral player), player by player. The towns of each player come in the order that
+/// the player got them.
+std::vector<entt::entity> PlayersTowns(const ecs::Registry& registry)
+{
+	struct Owned
+	{
+		PlayerNames owner;
+		uint32_t gained;
+		entt::entity town;
+	};
+	std::vector<Owned> owned;
+	registry.Each<const Town>([&owned](entt::entity entity, const Town& town) {
+		if (town.owner < PlayerNames::NEUTRAL)
+		{
+			owned.push_back({.owner = town.owner, .gained = town.gained, .town = entity});
+		}
+	});
+	std::ranges::sort(
+	    owned, [](const Owned& a, const Owned& b) { return a.owner != b.owner ? a.owner < b.owner : a.gained < b.gained; });
+	std::vector<entt::entity> towns;
+	towns.reserve(owned.size());
+	std::ranges::transform(owned, std::back_inserter(towns), &Owned::town);
+	return towns;
 }
 } // namespace
 
@@ -159,10 +229,13 @@ void GuidanceSystem::ProcessTurn()
 			}
 			heard->oneOffSaid = {};
 			heard->alignmentDrift = 0.0f;
+			heard->lastDesireVoice = 0;
+			heard->seenThings.clear();
 			_stampsDue = false;
 		}
 	}
 	LookAtMoon();
+	TownDesireVoices();
 }
 
 bool GuidanceSystem::PlayNow(guidance::Kind kind)
@@ -293,11 +366,6 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 	const auto* aggression = registry.TryGet<const TownAggression>(town);
 	const float reach = guidance::AttackCryReach(aggression != nullptr ? aggression->record.protection : 0.0f);
 	const auto sample = guidance::PickCry(cries, static_cast<uint32_t>(random.LocalRand(static_cast<int32_t>(cries.size()))));
-	glm::vec3 position = at->position;
-	if (Locator::terrainSystem::has_value())
-	{
-		position.y = Locator::terrainSystem::value().GetHeightAt(glm::xz(position));
-	}
 	// The guidance counts the cry as heard even when the bank has no sound for it
 	if (auto* heard = Heard(); heard != nullptr)
 	{
@@ -305,18 +373,10 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Town {} cries out: guidance sample {}, heard to {:.0f} m",
 	                    entt::to_integral(town), sample, reach);
-	if (sample == 0)
+	if (sample != 0)
 	{
-		return;
+		PlayVoice(sample, at->position, reach);
 	}
-	audio::StartGameSoundEffect(resources::HashIdentifier(fmt::format("Guidance.sad/{}", sample)),
-	                            {.position = position,
-	                             .pitchPercent = guidance::k_VoicePitch,
-	                             .volume = guidance::k_VoiceVolume,
-	                             .voicePlayType = pack::AudioBankLoop::Once,
-	                             .minDistance = reach * guidance::k_VoiceNearShare,
-	                             .maxDistance = reach,
-	                             .callerWins = audio::k_CallerDistancesWin});
 }
 
 void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining)
@@ -375,6 +435,46 @@ void GuidanceSystem::SayOneOff(guidance::OneOff oneOff)
 	}
 }
 
+void GuidanceSystem::KilledVillager(entt::entity villager)
+{
+	if (!RemarkNow(guidance::Kind::KillingPeople))
+	{
+		return;
+	}
+	const auto view = ecs::thing_on_screen::ScreenView();
+	if (view.has_value() && Locator::entitiesRegistry::value().Valid(villager) &&
+	    ecs::thing_on_screen::OnScreen(*view, villager))
+	{
+		SayRemark(guidance::Kind::KillingPeople);
+	}
+}
+
+void GuidanceSystem::WorshipperDied()
+{
+	RemarkIfNow(guidance::Kind::WorshippersDying);
+}
+
+void GuidanceSystem::LosingVillager(entt::entity villager)
+{
+	if (RemarkNow(guidance::Kind::LosingVillagers) && NearPointUnderCursor(villager))
+	{
+		SayRemark(guidance::Kind::LosingVillagers);
+	}
+}
+
+void GuidanceSystem::LowOnPeople(entt::entity town)
+{
+	if (!RemarkNow(guidance::Kind::LowOnPeople) || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	const auto* stats = Locator::entitiesRegistry::value().TryGet<const TownStats>(town);
+	if (stats != nullptr && stats->adults + stats->children != 0 && NearPointUnderCursor(town))
+	{
+		SayRemark(guidance::Kind::LowOnPeople);
+	}
+}
+
 void GuidanceSystem::EndWaits()
 {
 	// The first stamps would undo it
@@ -401,4 +501,138 @@ void GuidanceSystem::LookAtMoon()
 		SayOneOff(guidance::OneOff::FullMoon);
 	}
 	_moonWait = look.wait;
+}
+
+void GuidanceSystem::TownDesireVoices()
+{
+	if (Turn() % guidance::k_DesireVoiceTurns != 0 || !Locator::entitiesRegistry::has_value() ||
+	    !Locator::gameRandom::has_value() || !Locator::camera::has_value() || !PlayNow(guidance::Kind::TownDesireSound))
+	{
+		return;
+	}
+	auto* heard = Heard();
+	if (heard == nullptr)
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	auto& random = Locator::gameRandom::value();
+	const auto turn = Turn();
+	const glm::vec3 camera = Locator::camera::value().GetOrigin();
+	const auto since = turn - heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound));
+	const auto score = [&](entt::entity thing, float distance, float desire, uint32_t voice) {
+		return guidance::DesireVoiceScore({.turnsSinceHeard = since,
+		                                   .turnsSinceSeen = guidance::TurnsSinceSeen(heard->seenThings, thing, turn),
+		                                   .distance = distance,
+		                                   .desire = desire,
+		                                   .sameAsLast = voice == heard->lastDesireVoice});
+	};
+	guidance::DesireVoicePick best;
+	entt::entity thing = entt::null;
+
+	// Find the town with people that is nearest to the camera, by its storage pit
+	float nearest = guidance::k_DesireVoiceRange;
+	entt::entity town = entt::null;
+	for (const auto candidate : PlayersTowns(registry))
+	{
+		const auto pit = ecs::construction::StoragePitOf(candidate);
+		const auto* stats = registry.TryGet<const TownStats>(candidate);
+		if (!pit.has_value() || stats == nullptr || stats->adults + stats->children == 0 || !registry.AllOf<Transform>(*pit))
+		{
+			continue;
+		}
+		const float distance = gutils::GetDistanceInMetres(camera, registry.Get<const Transform>(*pit).position);
+		if (distance < nearest)
+		{
+			nearest = distance;
+			town = candidate;
+		}
+	}
+	// Each desire of the town picks a voice and scores it, the strongest desire first
+	if (const auto* desires = town != entt::null ? registry.TryGet<const TownDesire>(town) : nullptr; desires != nullptr)
+	{
+		thing = town;
+		for (const auto& sorted : desires->sortedRaw)
+		{
+			const float raw = ecs::town_desire::GetRawDesire(*desires, sorted.index);
+			const float draw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(sorted.value));
+			const auto voice = guidance::DesireVoice(sorted.index, sorted.value, draw);
+			if (voice == 0)
+			{
+				continue;
+			}
+			if (const float value = score(town, nearest, raw, voice); value > best.score)
+			{
+				best = {.voice = voice, .score = value};
+			}
+		}
+	}
+
+	// Find the worship site of the player at this machine that is nearest to the camera, with people that dance at it
+	const auto temple =
+	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(LocalPlayer()) : entt::null;
+	if (temple != entt::null)
+	{
+		const auto& worship = registry.Get<const CitadelWorship>(temple);
+		float nearestSite = guidance::k_DesireVoiceRange;
+		entt::entity site = entt::null;
+		for (const auto candidate : worship.sites)
+		{
+			if (candidate == entt::null || !registry.Valid(candidate) || !registry.AllOf<Transform>(candidate))
+			{
+				continue;
+			}
+			const auto dance = registry.Get<const WorshipSite>(candidate).dance;
+			const auto* dancing = registry.Valid(dance) ? registry.TryGet<const Dance>(dance) : nullptr;
+			if (dancing == nullptr || dancing->dancers == 0)
+			{
+				continue;
+			}
+			const float distance = gutils::GetDistanceInMetres(camera, registry.Get<const Transform>(candidate).position);
+			if (distance < nearestSite)
+			{
+				nearestSite = distance;
+				site = candidate;
+			}
+		}
+		if (site != entt::null)
+		{
+			// The want of food of the site picks both voices. The food voice scores by this want, and the worshippers
+			// voice scores by the strain of the temple's sites.
+			const float food = Locator::worshipSiteSystem::value().DesireForFood(site);
+			const float strain = worship.strainSound < 1.0f ? worship.strainSound : 1.0f;
+			const float foodDraw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(food));
+			const auto foodVoice = guidance::DesireVoice(guidance::k_WorshipFoodRow, food, foodDraw);
+			const float worshippersDraw = random.LocalFloatRand(guidance::DesireVoiceDrawLimit(food));
+			const auto worshippersVoice = guidance::DesireVoice(guidance::k_WorshippersRow, food, worshippersDraw);
+			const guidance::DesireVoicePick foodPick {
+			    .voice = foodVoice, .score = foodVoice != 0 ? score(site, nearestSite, food, foodVoice) : 0.0f};
+			const guidance::DesireVoicePick worshippersPick {
+			    .voice = worshippersVoice,
+			    .score = worshippersVoice != 0 ? score(site, nearestSite, strain, worshippersVoice) : 0.0f};
+			if (const auto pick = guidance::WorshipSiteVoice(foodPick, worshippersPick); pick.has_value())
+			{
+				best = *pick;
+				// The voice of a worship site plays at the temple
+				thing = temple;
+			}
+		}
+	}
+
+	if (!(best.score > guidance::k_DesireVoiceLeast))
+	{
+		return;
+	}
+	const float draw = random.LocalFloatRand(guidance::DesireVoiceReachDrawLimit(best.score));
+	const auto* at = thing != entt::null ? registry.TryGet<const Transform>(thing) : nullptr;
+	if (at == nullptr)
+	{
+		return;
+	}
+	const float reach = guidance::DesireVoiceReach(best.score, draw);
+	heard->lastTurn.at(static_cast<size_t>(guidance::Kind::TownDesireSound)) = turn;
+	heard->lastDesireVoice = best.voice;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Desire voice at {}: guidance sample {}, score {:.3f}, heard to {:.0f} m",
+	                    entt::to_integral(thing), best.voice, best.score, reach);
+	PlayVoice(best.voice, at->position, reach);
 }

@@ -93,6 +93,8 @@ struct TownDesire
 	std::array<float, k_TownDesireCount> doingNowCount {};
 	std::array<float, k_TownDesireCount> doingNowAtStart {};
 	std::array<float, k_TownDesireCount> doingNowCountAtStart {};
+	/// The turns each want has stayed over the level at which it moves its player's alignment
+	std::array<uint32_t, k_TownDesireCount> turnsOverAlignmentLevel {};
 };
 
 } // namespace openblack::ecs::components

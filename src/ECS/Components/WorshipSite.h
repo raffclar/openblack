@@ -40,6 +40,9 @@ struct CitadelWorship
 	/// How many sites have been made for it: each new site is numbered by it, and the newest go first when the temple
 	/// loses them
 	uint32_t sitesMade {0};
+	/// How loud the strain of its sites sounds, 0 to 1: each turn it goes towards the most strain of its sites. Only the
+	/// temple of the player at this machine changes it.
+	float strainSound {0.0f};
 };
 
 /// A worship site: the place by a player's temple where the people of one of the player's tribes go to worship. It
