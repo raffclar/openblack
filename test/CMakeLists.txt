@@ -1609,3 +1609,4 @@ openblack_setup_and_add_test(
   test_lhvm_instructions lhvm/test_lhvm_instructions.cpp
 )
 target_link_libraries(test_lhvm_instructions PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_abode_door test_abode_door.cpp)

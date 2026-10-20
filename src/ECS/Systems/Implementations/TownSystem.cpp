@@ -73,6 +73,7 @@
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TemporaryStoreRules.h"
 #include "ECS/TownAggression.h"
 #include "ECS/TownAreaRules.h"
@@ -899,6 +900,8 @@ void TownSystem::ProcessPlayerTowns(PlayerNames player)
 		{
 			continue;
 		}
+		// First it removes its building sites that have no use
+		construction::PruneSites(town);
 		if (Locator::influenceSystem::has_value())
 		{
 			Locator::influenceSystem::value().ProcessTownInfluence(town);

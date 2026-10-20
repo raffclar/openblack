@@ -26,6 +26,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ECS/AbodeDoor.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/CarriedByTornado.h"
@@ -829,23 +830,40 @@ bool villager_home::IsFunctional(entt::entity abode)
 	return IsBuilt(abode) && world_objects::LifeOf(abode) > AbodeInfoOf(abode).thresholdForStopBeingFunctional;
 }
 
-glm::vec2 villager_home::ArrivePosition(entt::entity abode)
+glm::vec2 villager_home::DoorPosition(entt::entity abode)
 {
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(abode);
+	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+	const auto door = info != nullptr ? abode_door::DoorOf(info->abodeType) : abode_door::Door::Model;
+	if (door == abode_door::Door::VillageCentre)
+	{
+		return abode_door::VillageCentreDoor(transform.position, transform.rotation, transform.scale);
+	}
 	glm::vec3 point = transform.position;
-	if (const auto* mesh = registry.TryGet<const Mesh>(abode); mesh != nullptr)
+	if (const auto* mesh = registry.TryGet<const Mesh>(abode); door == abode_door::Door::Model && mesh != nullptr)
 	{
 		const auto& meshes = Locator::resources::value().GetMeshes();
 		if (meshes.Contains(mesh->id))
 		{
-			if (const auto& door = meshes.Handle(mesh->id)->GetDoorPos(); door.has_value())
+			if (const auto& modelDoor = meshes.Handle(mesh->id)->GetDoorPos(); modelDoor.has_value())
 			{
-				point = transform.position + transform.rotation * (transform.scale * *door);
+				point = transform.position + transform.rotation * (transform.scale * *modelDoor);
 			}
 		}
 	}
 	return glm::xz(point);
+}
+
+glm::vec2 villager_home::ArrivePosition(entt::entity abode)
+{
+	auto& registry = WorldRegistry();
+	const auto* info = registry.AllOf<Abode>(abode) ? world_objects::AbodeInfoOf(abode) : nullptr;
+	if (info != nullptr && abode_door::ArrivesAtMiddle(info->abodeType))
+	{
+		return glm::xz(registry.Get<const Transform>(abode).position);
+	}
+	return DoorPosition(abode);
 }
 
 void villager_home::LeavingHome(entt::entity villager)

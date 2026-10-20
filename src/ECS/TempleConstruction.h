@@ -70,4 +70,8 @@ void CloseSite(entt::entity building);
 /// a hand or a creature, until another site opens.
 void CloseTownsSite(entt::entity building, entt::entity town);
 
+/// At the start of its turn the town removes each of its sites that has no use: the site's building is built and has
+/// its full life. A building that has gone takes its sites with it.
+void PruneSites(entt::entity town);
+
 } // namespace openblack::ecs::construction

@@ -116,6 +116,33 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .objects = std::move(mending),
 	});
 
+	// A town that mends its hurt village centre: the site's wood pile stands beyond the centre from its door
+	std::vector<ObjectSetup> centreMending {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre, .life = 0.3f},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	};
+	for (size_t i = 0; i < k_MendingCouples; ++i)
+	{
+		const float x = (static_cast<float>(i) - (static_cast<float>(k_MendingCouples) * 0.5f)) * k_VillagerSpacing;
+		centreMending.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true});
+		centreMending.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 17.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "town.centre_mending_pile",
+	    .name = "The wood pile of a village centre that its town mends",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town with a full storage pit and a village centre at three tenths of its life. Four "
+	                   "couples of the town stand between them. Best watched at game speed 4.",
+	    .expected = "The town opens a site to mend its village centre. When the first builder brings wood, the site's "
+	                "one pile comes out beyond the centre, on the side away from its door. The door is a fixed point two "
+	                "metres along the centre's x axis and twelve metres back along its z axis, so the pile stands about "
+	                "sixteen metres from the middle of the centre, give or take an eighth of a turn. The builders build "
+	                "the centre back to its full life.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Centre, {0.0f, 75.0f}}, .distance = 0.6f},
+	    .objects = std::move(centreMending),
+	});
+
 	// A town with one hut that a couple lives in and two empty huts
 	std::vector<ObjectSetup> neglect {
 	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},

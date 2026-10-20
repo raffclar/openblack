@@ -165,6 +165,11 @@ float AsPercentage(float share)
 	return share * 100.0f;
 }
 
+float ShareFromScript(int32_t thousandths)
+{
+	return static_cast<float>(thousandths) * 0.001f;
+}
+
 MeshId IconMesh(std::optional<MeshId> creatureIcon)
 {
 	return creatureIcon.value_or(MeshId::BuildingSpellHand);

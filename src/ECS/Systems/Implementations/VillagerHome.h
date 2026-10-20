@@ -58,7 +58,11 @@ void LeaveHome(entt::entity villager);
 
 /// Whether a building works: built, and not damaged past the share at which it stops working
 [[nodiscard]] bool IsFunctional(entt::entity abode);
-/// Where a villager goes into its abode: the model's door, or the abode itself without one
+/// The building's door: the model's door, or the building itself without one. The village centre has a fixed door
+/// and a field has none.
+[[nodiscard]] glm::vec2 DoorPosition(entt::entity abode);
+/// Where a villager stands when it reaches the building: its door, but the middle of a crèche, wonder, graveyard,
+/// village centre or field
 [[nodiscard]] glm::vec2 ArrivePosition(entt::entity abode);
 
 /// Its home was knocked on or hurt: a villager inside comes out a few steps from the door, yawns and decides afresh,

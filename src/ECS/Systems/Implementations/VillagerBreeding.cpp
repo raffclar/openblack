@@ -298,7 +298,7 @@ bool ChildGotoCreche(LivingAction& action)
 	{
 		return false;
 	}
-	villager_footpath::SetupMoveToOnFootpath(action, creche, villager_home::ArrivePosition(creche),
+	villager_footpath::SetupMoveToOnFootpath(action, creche, villager_home::DoorPosition(creche),
 	                                         VillagerStates::ChildAtCreche);
 	return true;
 }
@@ -309,7 +309,7 @@ void StrollOn(LivingAction& action, entt::entity creche)
 {
 	const auto child = EntityOf(action);
 	auto& person = Entities().Get<Villager>(child);
-	const auto door = villager_home::ArrivePosition(creche);
+	const auto door = villager_home::DoorPosition(creche);
 	const auto* walk = Entities().TryGet<const WallHug>(child);
 	const auto here = walk != nullptr ? walk->position : ecs::wall_hug::ToWhole(PositionOf(child));
 	const auto leg = creche::NextStrollLeg({.path = person.crechePath, .leg = person.crecheLeg}, creches::PathsOf(creche),
