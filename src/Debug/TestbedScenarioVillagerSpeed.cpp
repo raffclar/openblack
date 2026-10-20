@@ -161,12 +161,12 @@ void testbed_scenarios::AddVillagerSpeedScenarios(std::vector<Scenario>& all)
 	    .id = "villagers.script_remind",
 	    .name = "A scripted villager goes back to its place",
 	    .facet = Facet::Movement,
-	    .description = "A grown man that a script holds still stands 14 metres to the left of the middle of the screen. "
+	    .description = "A grown man that a script holds still stands 7 metres to the left of the middle of the screen. "
 	                   "After 2 seconds the hand takes him, and 3 seconds later puts him down at the middle of the screen.",
 	    .expected = "When he is down, he gets up and walks back to the place where the script held him, then stands "
 	                "there again. Before the change he stood still where the hand put him down.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
-	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 18.0f, -26.0f}, .look = {-6.0f, 0.0f, 0.0f}},
+	    .framing = {.shot = Shot::Placed, .eye = {-7.0f, 7.0f, -12.0f}, .look = {-7.0f, 0.0f, 0.0f}},
 	    .objects =
 	        {{.type = VillagerInfo::CelticFarmerMale, .offset = {-14.0f, 0.0f}, .inScript = true, .scriptControlled = true}},
 	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 2.0f, .object = 0},
