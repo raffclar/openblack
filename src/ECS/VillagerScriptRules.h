@@ -152,6 +152,48 @@ constexpr std::array k_ScriptHeldStates = {VillagerStates::InScript, VillagerSta
 	return a == VillagerStates::ScriptPlayAnim && b == VillagerStates::ScriptPlayAnim;
 }
 
+/// Whether a villager goes into two states the same way: both held by a script, both wandering round a script's place,
+/// or both playing a script's clip
+[[nodiscard]] constexpr bool EnterTheSameWay(VillagerStates a, VillagerStates b)
+{
+	const auto held = [](VillagerStates state) {
+		return std::ranges::find(k_ScriptHeldStates, state) != k_ScriptHeldStates.end();
+	};
+	if (held(a) && held(b))
+	{
+		return true;
+	}
+	return a == b && (a == VillagerStates::ScriptWanderAroundPosition || a == VillagerStates::ScriptPlayAnim);
+}
+
+/// Whether a villager that goes into a script state goes back to the work it kept when something took it out of the
+/// script's hands: the state must be the kept one, and the villager must not come from a state it goes into the same
+/// way
+[[nodiscard]] constexpr bool GoesBackToKeptWork(VillagerStates from, VillagerStates into, VillagerStates returnTo)
+{
+	return !EnterTheSameWay(from, into) && returnTo == into;
+}
+
+/// Whether a villager that goes back to its kept work has a goal to walk to: a goal of no distance is no goal
+[[nodiscard]] constexpr bool HasKeptGoal(glm::vec2 goal)
+{
+	return gutils::ConvertMetersToWholeDistance(goal.x) != 0 || gutils::ConvertMetersToWholeDistance(goal.y) != 0;
+}
+
+/// The place a villager keeps when it leaves a script's hands: the goal of its walk, or where it stands when it has no
+/// goal. A villager that goes back to play a clip keeps no goal.
+[[nodiscard]] constexpr glm::vec2 KeptGoal(glm::vec2 goal, glm::vec2 standing, VillagerStates returnTo)
+{
+	return !HasKeptGoal(goal) && returnTo != VillagerStates::ScriptPlayAnim ? standing : goal;
+}
+
+/// The clip a villager plays again when it goes back to play a script's clip: the kept clip, or the first clip when the
+/// kept clip is not one of the game's clips
+[[nodiscard]] constexpr int32_t KeptClipToPlay(int32_t clip, int32_t clipCount)
+{
+	return clip >= 0 && clip < clipCount ? clip : 0;
+}
+
 /// What a state says about a villager a script holds
 struct StateRules
 {

@@ -148,3 +148,23 @@ TEST(WorshipperRules, SiteFood)
 	EXPECT_EQ(rules::FoodForSiteIfEnough(20, 20), 20);
 	EXPECT_EQ(rules::FoodForSiteIfEnough(20, 19), 0);
 }
+
+TEST(WorshipperRules, ASiteWantsFoodForItsDancers)
+{
+	// No need and no food: the site does not want food
+	EXPECT_FLOAT_EQ(rules::SiteDesireForFood(0.0f, 0), 0.0f);
+	EXPECT_NEAR(rules::SiteDesireForFood(10.0f, 0), 1.0f, 1e-4f);
+	EXPECT_NEAR(rules::SiteDesireForFood(10.0f, 5), 0.5f, 1e-4f);
+	// A pot that holds the need or more
+	EXPECT_FLOAT_EQ(rules::SiteDesireForFood(10.0f, 10), 0.0f);
+	EXPECT_FLOAT_EQ(rules::SiteDesireForFood(10.0f, 40), 0.0f);
+}
+
+TEST(WorshipperRules, TheStrainSoundGoesTowardsTheMostStrain)
+{
+	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.0f, 1.0f, 0.1f), 0.1f);
+	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.95f, 1.0f, 0.1f), 1.0f);
+	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.5f, 0.0f, 0.1f), 0.4f);
+	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.05f, 0.0f, 0.1f), 0.0f);
+	EXPECT_FLOAT_EQ(rules::EaseStrainSound(0.3f, 0.3f, 0.1f), 0.3f);
+}

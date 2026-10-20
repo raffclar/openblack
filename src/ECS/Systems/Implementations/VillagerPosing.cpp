@@ -21,7 +21,9 @@
 
 #include "3D/L3DAnim.h"
 #include "3D/L3DMesh.h"
+#include "3D/LandIslandInterface.h"
 #include "Animals/AnimalAnimation.h"
+#include "Animals/AnimalRules.h"
 #include "ECS/ClipSoundPlayer.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/HandGrab.h"
@@ -59,12 +61,38 @@ constexpr float k_StationaryStride = 0.05f;
 /// the frame is drawn
 constexpr float k_ViewMargin = 2.0f;
 
+/// How far the ends of a villager's x and z axes lift to lean its model to the slope of the land, as the axes of an
+/// animal do. Only a villager at most 0.2 above the land leans. Each axis points along the eased heading and is as long
+/// as the size of the villager. Its lift is the height of the land at its end less the drawn height, between -0.3 and
+/// 0.3.
+std::optional<glm::vec2> SlopeLift(const Transform& transform, const glm::vec3& drawnAt, float easedHeading)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& land = Locator::terrainSystem::value();
+	const float aboveLand = transform.position.y - land.GetHeightAt(glm::xz(transform.position));
+	if (aboveLand > animals::k_HighestToFollowSlope)
+	{
+		return std::nullopt;
+	}
+	const auto turned = ecs::villager_draw::RotationOf(easedHeading);
+	const float scale = transform.scale.x;
+	const auto landAt = [&](const glm::vec3& axis) {
+		return land.GetAltitude(animals::SlopeSampleUnit(drawnAt.x + (axis.x * scale)),
+		                        animals::SlopeSampleUnit(drawnAt.z + (axis.z * scale)));
+	};
+	return glm::vec2(animals::SlopeLift(landAt(turned[0]), drawnAt.y), animals::SlopeLift(landAt(turned[2]), drawnAt.y));
+}
+
 /// Where a villager is drawn this frame and the heading it is drawn with: between its last two turns' places while its
 /// clip carries it along, turning after the way it faces. One in the physics, in the god's hand or in the hand of a
 /// creature is drawn where it is, turned as it is.
 void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform& transform, VillagerPose& pose, bool glides,
                   float turnFraction, uint32_t elapsed)
 {
+	pose.slopeLift.reset();
 	if (registry.AnyOf<InPhysics, InHand, HeldByCreature>(entity))
 	{
 		pose.drawnAt.reset();
@@ -208,8 +236,7 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 
 	registry.Each<const Villager, const Mesh, const Transform, VillagerPose>(
 	    [&](entt::entity entity, const Villager& /*unused*/, const Mesh& mesh, const Transform& transform, VillagerPose& pose) {
-		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
-		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
+		    if (!meshes.Contains(mesh.id))
 		    {
 			    pose.bones.clear();
 			    return;
@@ -225,6 +252,17 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 		    const bool seen = registry.AnyOf<InPhysics, InHand>(entity)
 		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
 		                          : graphics::view_frustum::SeesSphere(view, centre, radius);
+		    // Only a villager in view leans to the slope of the land, as the game leans only the villagers it draws
+		    if (seen && pose.drawnAt.has_value() && pose.easedHeading.has_value())
+		    {
+			    pose.slopeLift = SlopeLift(transform, *pose.drawnAt, *pose.easedHeading);
+		    }
+		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
+		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId))
+		    {
+			    pose.bones.clear();
+			    return;
+		    }
 		    if (!seen)
 		    {
 			    return;

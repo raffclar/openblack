@@ -90,6 +90,10 @@ struct Walk
 /// the speed changes it takes 0 instead when the way is no longer than a hundredth of a turn's walk.
 [[nodiscard]] float LivingStep(const edt::EDTTrack& track, int32_t wholeSpeed, bool checked);
 
+/// Where a living's walk has got to, on the land and without being put on the land's grid: where the track's camera
+/// looks when the camera is where the walk has got to. The walk does not go on.
+[[nodiscard]] glm::vec2 LivingWalkPoint(Walk& walk, const edt::EDTTrack& track);
+
 /// A turn of a living's walk: where it goes this turn, without being put on the land's grid, or nothing once it has
 /// gone its share of the way. The step is its own, from its walking speed.
 [[nodiscard]] std::optional<glm::vec2> LivingWalkTurn(Walk& walk, const edt::EDTTrack& track);

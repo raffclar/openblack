@@ -17,6 +17,7 @@
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
@@ -68,6 +69,11 @@ struct DrawnHeadings
 
 /// The model's turn for a heading, the inverse of HeadingOf
 [[nodiscard]] glm::mat3 RotationOf(float heading);
+
+/// The model's turn leaned to the slope of the land. The lean lifts the ends of the model's x and z axes by `lift`, as
+/// parts of its up axis, with the axes turned to the eased heading. A high-detail body turns from the eased heading to
+/// its drawn heading before the lean, so the lean stays on the axes of the eased heading.
+[[nodiscard]] glm::mat3 SlopeLeanedRotation(float easedHeading, float drawnHeading, glm::vec2 lift);
 
 /// The ordinary drawn turn, in radians a millisecond. The game holds the float 0.003 as a double
 inline constexpr double k_TurnPerMillisecond = static_cast<double>(0.003f);

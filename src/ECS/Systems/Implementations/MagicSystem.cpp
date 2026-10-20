@@ -110,6 +110,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -362,6 +363,10 @@ void JoinTown(entt::entity dispenser, entt::entity town)
 	{
 		auto& abodes = registry.Get<Town>(town).abodes;
 		abodes.insert(abodes.begin(), dispenser);
+		if (Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().StructuresChanged(town);
+		}
 	}
 }
 

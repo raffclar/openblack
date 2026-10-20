@@ -14,6 +14,10 @@
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
+
+#include "ECS/Components/GuidanceHeard.h"
+
 namespace openblack::magic
 {
 struct EffectValues;
@@ -80,6 +84,67 @@ enum class Gift : uint8_t
 /// - less than 0.25: a displeased answer for food, and a pleased answer for wood and rain (as in the game).
 /// - else: no answer.
 [[nodiscard]] std::optional<uint32_t> GiftAnswer(Gift gift, float rawDesire, uint32_t draw);
+
+/// The town desire voices: every tenth turn, the people of the town near the camera call out what their town wants most.
+/// The people at a worship site near the camera call out for food or for more worshippers.
+constexpr uint32_t k_DesireVoiceTurns = 10;
+/// The town (its storage pit) or the worship site must be nearer to the camera than this, in metres
+constexpr float k_DesireVoiceRange = 200.0f;
+/// A voice plays only when its score is more than this
+constexpr float k_DesireVoiceLeast = 0.3f;
+/// The rows of voices for a worship site, after the rows of the 17 town desires
+constexpr uint32_t k_WorshipFoodRow = 17;
+constexpr uint32_t k_WorshippersRow = 18;
+
+/// The largest random amount that comes off the value of a desire before its voice is picked: a third of the value
+[[nodiscard]] float DesireVoiceDrawLimit(float value);
+/// The voice of a row of desire voices, for the value of the desire less a random amount (the draw). The difference
+/// picks the voice:
+/// - 0.85 or more: the first voice of the row.
+/// - 0.65 or more: the second voice.
+/// - 0.45 or more: the third voice.
+/// - less: no voice (0). A row without voices also gives 0.
+[[nodiscard]] uint32_t DesireVoice(uint32_t row, float value, float draw);
+
+/// What the score of a desire voice comes from
+struct DesireVoiceScoreInput
+{
+	/// The turns since the player last heard a town desire voice
+	uint32_t turnsSinceHeard {0};
+	/// The turns since the voices first looked at the town or the site (see TurnsSinceSeen)
+	uint32_t turnsSinceSeen {0};
+	/// The distance from the camera to the town's storage pit or to the site, in metres
+	float distance {0.0f};
+	/// How much the town or the site wants it
+	float desire {0.0f};
+	/// The voice is the voice that played last
+	bool sameAsLast {false};
+};
+/// The score of a desire voice, from 0 to 2. A strong desire near the camera gives a high score. A long time since the
+/// last voice also gives a high score. The score goes down while the voices look at the same thing for a long time. The
+/// voice that played last needs a longer time since the last voice.
+[[nodiscard]] float DesireVoiceScore(const DesireVoiceScoreInput& input);
+
+/// The turns since the voices first looked at a thing. The first look adds the thing to the front of the list and gives
+/// 0. The time starts again when more than 600 turns went by.
+[[nodiscard]] uint32_t TurnsSinceSeen(std::vector<ecs::components::GuidanceHeard::SeenThing>& seen, entt::entity thing,
+                                      uint32_t turn);
+
+/// A voice and its score
+struct DesireVoicePick
+{
+	uint32_t voice {0};
+	float score {0.0f};
+};
+/// The voice of a worship site, from the voice for food and the voice for worshippers, if there is one. The food voice
+/// wins only when its score is more than the score of the worshippers voice. But a worshippers voice with a score always
+/// wins, as in the game. The town's voice does not count: the site's voice replaces it.
+[[nodiscard]] std::optional<DesireVoicePick> WorshipSiteVoice(DesireVoicePick food, DesireVoicePick worshippers);
+
+/// The largest random amount that comes off the best score for the distance of the voice: half the score
+[[nodiscard]] float DesireVoiceReachDrawLimit(float best);
+/// The full distance of a desire voice: 200 metres for each point of the best score less a random amount (the draw)
+[[nodiscard]] float DesireVoiceReach(float best, float draw);
 
 /// The volume and the pitch of each guidance voice
 constexpr uint32_t k_VoiceVolume = 127;

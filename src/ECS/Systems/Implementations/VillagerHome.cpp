@@ -53,6 +53,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerRoutine.h"
@@ -706,36 +707,21 @@ std::optional<glm::vec2> GetPosOutsideMyHouse(entt::entity villager)
 	                           FloatRandom());
 }
 
-/// The town a vagrant can join: the nearest within reach, of its own tribe
+/// The town a vagrant can join: the nearest town within reach of any tribe, but only when that town is of its own
+/// tribe. A nearer town of another tribe stops it from joining a farther town of its own tribe.
 entt::entity NearbyTownToJoin(entt::entity villager)
 {
 	auto& registry = WorldRegistry();
 	const auto& transform = registry.Get<const Transform>(villager);
 	const auto& person = registry.Get<const Villager>(villager);
-	// The game looks only at the towns of the villager's tribe as it searches
-	// TODO(villagers): the town's own tribe; openblack's towns don't keep one yet, so its first resident's is used
-	const auto ofItsTribe = [&registry, &person](entt::entity town) {
-		const auto* data = registry.TryGet<const Town>(town);
-		if (data == nullptr)
-		{
-			return false;
-		}
-		for (const auto abode : data->abodes)
-		{
-			if (const auto* building = registry.TryGet<const Abode>(abode); building != nullptr)
-			{
-				for (const auto other : building->inhabitants)
-				{
-					if (const auto* resident = registry.TryGet<const Villager>(other); resident != nullptr)
-					{
-						return resident->tribe == person.tribe;
-					}
-				}
-			}
-		}
-		return false;
-	};
-	return Locator::townSystem::value().NearestTown(glm::xz(transform.position), routine::k_VagrantTownSearch, ofItsTribe);
+	const auto town = Locator::townSystem::value().NearestTown(glm::xz(transform.position), routine::k_VagrantTownSearch,
+	                                                           [](entt::entity) { return true; });
+	if (town == entt::null)
+	{
+		return entt::null;
+	}
+	const auto* tribe = registry.TryGet<const Tribe>(town);
+	return tribe != nullptr && *tribe == person.tribe ? town : entt::null;
 }
 } // namespace
 
@@ -1415,7 +1401,7 @@ uint32_t villager_home::LookForBetterHome(LivingAction& action)
 	return 0;
 }
 
-void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unused]] bool showEffect)
+void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, bool showEffect)
 {
 	auto& registry = WorldRegistry();
 	auto& person = registry.Get<Villager>(villager);
@@ -1431,8 +1417,6 @@ void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unus
 	}
 	// It becomes the same kind of villager of the new tribe, wearing that tribe's models: a child its child model at
 	// every distance, an adult its kind's model for each distance
-	// TODO(villager-life-cycle): a white puff of smoke goes up as it changes when `showEffect` (the game's smoke puff isn't
-	// in openblack yet; the dying villager's skeleton swap needs the same)
 	const auto& info = infos.at(row);
 	person.tribe = tribe;
 	const bool child = person.lifeStage == Villager::LifeStage::Child;
@@ -1448,6 +1432,11 @@ void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, [[maybe_unus
 		          : std::array {high, resources::HashIdentifier(info.stdDetail), resources::HashIdentifier(info.lowDetail)};
 	}
 	registry.SetDirty();
+	// A puff of brown dust goes up as it changes, half the height of its new model out along its facing
+	if (showEffect)
+	{
+		villager_after_death::SmokePuff(villager, dust_puff::Kind::Dust);
+	}
 }
 
 uint32_t villager_home::GoHomeAndChange(LivingAction& action)
@@ -1479,7 +1468,7 @@ bool villager_home::ExitGoHomeAndChange(LivingAction& action, VillagerStates nex
 	const auto villager = EntityOf(action);
 	const auto& table = Locator::infoConstants::value().villagerStateTable;
 	const auto& nextInfo = table.at(static_cast<size_t>(next));
-	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of smoke
+	// Going on to a state of its own (not a walk, nor this state again) it takes on its town's tribe, in a puff of dust
 	// unless it goes indoors
 	if (next != VillagerStates::GoHomeAndChange && nextInfo.isFinalState != 0)
 	{

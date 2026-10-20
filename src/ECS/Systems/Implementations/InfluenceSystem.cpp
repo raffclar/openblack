@@ -278,28 +278,40 @@ void InfluenceSystem::NoteReach(float reach, float drawn)
 	}
 }
 
-void InfluenceSystem::ProcessTowns()
+void InfluenceSystem::ProcessTownInfluence(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::unordered_map<uint32_t, Tribe> tribes;
-	registry.Each<const Town, const Tribe>([&](const Town& town, const Tribe& tribe) { tribes.emplace(town.id, tribe); });
-	std::unordered_map<uint32_t, float> buildings;
-	registry.Each<const Abode>([&](entt::entity entity, const Abode& abode) {
-		if (const auto tribe = tribes.find(abode.townId); tribe != tribes.end())
+	if (!registry.Valid(entity) || !registry.AllOf<Town, Tribe>(entity))
+	{
+		return;
+	}
+	const auto& town = registry.Get<const Town>(entity);
+	const auto tribe = registry.Get<const Tribe>(entity);
+	float buildings = 0.0f;
+	registry.Each<const Abode>([&](entt::entity abode, const Abode& data) {
+		if (data.townId == town.id)
 		{
-			buildings[abode.townId] += AbodeInfluence(entity, abode, tribe->second);
+			buildings += AbodeInfluence(abode, data, tribe);
 		}
 	});
 	const auto& info = Locator::infoConstants::value().town;
 	const auto land = Globals().landNumber;
 	const float base = land != 0 ? ForLand(info.storyInfluence, info.maxForTimeWillWorkUntil, land) : info.influence;
-	const float multiplier = Globals().townInfluenceMultiplier;
-	registry.Each<const Town>([&](entt::entity entity, const Town& town) {
-		auto& influence = registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity)
-		                                                        : registry.Assign<TownInfluence>(entity);
-		influence.radius = (base + buildings[town.id]) * multiplier;
-		NoteReach(influence.radius, influence.drawnRadius);
-	});
+	auto& influence =
+	    registry.AnyOf<TownInfluence>(entity) ? registry.Get<TownInfluence>(entity) : registry.Assign<TownInfluence>(entity);
+	influence.radius = (base + buildings) * Globals().townInfluenceMultiplier;
+}
+
+void InfluenceSystem::MarkTownInfluence(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Town, TownInfluence>(entity) ||
+	    registry.Get<const Town>(entity).owner == PlayerNames::NEUTRAL)
+	{
+		return;
+	}
+	const auto& influence = registry.Get<const TownInfluence>(entity);
+	NoteReach(influence.radius, influence.drawnRadius);
 }
 
 void InfluenceSystem::ProcessCitadels()
@@ -368,7 +380,6 @@ void InfluenceSystem::DrawBorders()
 
 void InfluenceSystem::ProcessTurn(uint32_t turn)
 {
-	ProcessTowns();
 	ProcessCitadels();
 	if (_bordersDirty && turn % k_RedrawTurns == 0)
 	{
