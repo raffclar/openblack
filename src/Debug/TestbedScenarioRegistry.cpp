@@ -9589,6 +9589,7 @@ std::vector<Scenario> Build()
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
+	AddTempleKeyScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
