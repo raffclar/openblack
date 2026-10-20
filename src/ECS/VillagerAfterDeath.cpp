@@ -31,6 +31,7 @@
 #include "ECS/Components/RisingSoul.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDeaths.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
@@ -38,6 +39,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -177,14 +179,47 @@ void villager_after_death::Hear(entt::entity villager, DeathReason reason, std::
 		PlayDeathLine(here);
 		break;
 	case villager_death::DeathVoice::KillerAdvisors:
-		// TODO(advisor-spirits): the advisors speak of the death the player here caused, when the villager is on screen.
-		// Their commentary of the game as it goes isn't made yet; it is kept quiet on the first land anyway.
+		// The advisors speak of the death that the player here caused, when the villager is on screen
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().KilledVillager(villager);
+		}
 		break;
 	case villager_death::DeathVoice::Nobody:
 		break;
 	}
-	// TODO(advisor-spirits): the advisors also warn of worshippers dying of chanting, of losing people to another
-	// player, and of a town left with few people; none of them speaks on the first land
+}
+
+void villager_after_death::WarnOfTownLoss(entt::entity villager, entt::entity town, DeathReason reason,
+                                          std::optional<PlayerNames> killer)
+{
+	auto& registry = Entities();
+	const auto* stats = TownOf(town) != nullptr ? registry.TryGet<const TownStats>(town) : nullptr;
+	if (stats == nullptr || !Locator::playerSystem::has_value() || !Locator::guidanceSystem::has_value() ||
+	    !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto here = Locator::playerSystem::value().GetLocalPlayer();
+	// A villager or a death of nobody's counts as the neutral player's
+	const auto owner = OwnerOf(villager).value_or(PlayerNames::NEUTRAL);
+	const auto by = killer.value_or(PlayerNames::NEUTRAL);
+	const auto warnBelow = Locator::infoConstants::value().town.populationUnderWhichHelpSpritesWarn;
+	auto& guidance = Locator::guidanceSystem::value();
+	switch (villager_death::TownLoss(reason, stats->adults, warnBelow, by == owner, owner == here))
+	{
+	case villager_death::TownLossRemark::WorshippersDying:
+		guidance.WorshipperDied();
+		break;
+	case villager_death::TownLossRemark::LosingVillagers:
+		guidance.LosingVillager(villager);
+		break;
+	case villager_death::TownLossRemark::LowOnPeople:
+		guidance.LowOnPeople(town);
+		break;
+	case villager_death::TownLossRemark::None:
+		break;
+	}
 }
 
 void villager_after_death::MoveOwnersAlignment(entt::entity villager, DeathReason reason)
@@ -258,7 +293,7 @@ void villager_after_death::TellThoseAbout(entt::entity villager)
 	                                         .playerless = true});
 }
 
-void villager_after_death::SmokePuff(entt::entity villager)
+void villager_after_death::SmokePuff(entt::entity villager, dust_puff::Kind kind)
 {
 	auto& registry = Entities();
 	const auto* transform = registry.TryGet<const Transform>(villager);
@@ -275,7 +310,7 @@ void villager_after_death::SmokePuff(entt::entity villager)
 	const auto* wallHug = registry.TryGet<const WallHug>(villager);
 	const float heading = wallHug != nullptr ? wallHug->yAngle : 0.0f;
 	Locator::explosionSystem::value().AddSmoke(animals::DeadBodySmokePlace(transform->position, heading, height),
-	                                           k_BodySmokeSize, dust_puff::Kind::Smoke);
+	                                           k_BodySmokeSize, kind);
 }
 
 void villager_after_death::SoulRises(entt::entity villager)

@@ -19,6 +19,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Animals/FishFarmRules.h"
+#include "ECS/AbodeKnock.h"
 #include "ECS/AbodeSurroundings.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
@@ -80,6 +81,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -132,7 +134,6 @@ const GObjectInfo* Row(const Array& rows, Index index)
 	return i < rows.size() ? &rows[i] : nullptr;
 }
 
-/// The people at home in a building come out and decide again what to do
 /// A building hurt below its full life brings everyone inside out, as a knock does. One that stops working through it
 /// calls an emergency in its town when it is the town's storage pit or village centre.
 void BuildingHurt(entt::entity abode, float before, float after)
@@ -148,16 +149,16 @@ void BuildingHurt(entt::entity abode, float before, float after)
 	{
 		return;
 	}
-	const float stops = info->thresholdForStopBeingFunctional;
-	const bool causesEmergency = info->abodeType == AbodeType::StoragePit || info->abodeType == AbodeType::TownCentre;
 	// TODO(villagers): a building that stops working is also marked so for its owner (the building phase)
+	const float stops = info->thresholdForStopBeingFunctional;
 	// A storage pit that stops working lets the people near it take from its piles
 	if (before > stops && after <= stops && info->abodeType == AbodeType::StoragePit &&
 	    Locator::resourceStoreSystem::has_value())
 	{
 		Locator::resourceStoreSystem::value().StoreStopsWorking(abode);
 	}
-	if (before > stops && after <= stops && causesEmergency && Locator::townSystem::has_value())
+	if (abode_knock::HurtCallsEmergency(info->abodeType, before, after, info->thresholdForStopBeingFunctional) &&
+	    Locator::townSystem::has_value())
 	{
 		const auto& towns = registry.Context().towns;
 		if (const auto town = towns.find(registry.Get<const Abode>(abode).townId);
@@ -310,6 +311,11 @@ const GObjectInfo* world_objects::EffectInfoOf(entt::entity object)
 	{
 		return Row(info.flowers, flowers->type);
 	}
+	// An animal takes heat and catches fire by the row of its kind
+	if (const auto* animal = registry.TryGet<const Animal>(object))
+	{
+		return Row(info.animal, animal->type);
+	}
 	// A worship site has the row of its tribe
 	if (const auto* site = registry.TryGet<const WorshipSite>(object))
 	{
@@ -360,6 +366,11 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	if (registry.AllOf<FishFarm>(object))
 	{
 		return {.radius = fish_farm::k_Radius, .height = 0.0f};
+	}
+	// A town reaches half the longer side of the ground it keeps as covered
+	if (const auto* town = registry.TryGet<const Town>(object); town != nullptr)
+	{
+		return {.radius = town_area::Radius(town->area), .height = 0.0f};
 	}
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);
@@ -619,7 +630,7 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 	auto& life = registry.AllOf<ObjectLife>(object) ? registry.Get<ObjectLife>(object)
 	                                                : registry.Assign<ObjectLife>(object, ObjectLife {.life = before});
 	life.life = std::max(life.life - damage, 0.0f);
-	if (registry.AllOf<Abode>(object) && life.life < 1.0f)
+	if (registry.AllOf<Abode>(object) && abode_knock::HurtBringsPeopleOut(life.life))
 	{
 		// Its people come out of a building left under its full life, however little it lost
 		BuildingHurt(object, before, life.life);

@@ -21,7 +21,10 @@
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "DialogKeyRules.h"
 #include "ECS/StatisticsRules.h"
+#include "Input/KeyBindings.h"
+#include "Input/KeyRebinding.h"
 
 namespace openblack::gui
 {
@@ -92,7 +95,6 @@ public:
 		StartNewGame,
 		/// The player said yes to the game starting again, as the profile now picked
 		Restart,
-		RedefineControl,
 		Quit,
 	};
 
@@ -145,10 +147,15 @@ public:
 	/// What the player chose by letting go of the button, Quit only once they have said yes
 	Action MouseUp(glm::ivec2 point);
 	void Wheel(glm::ivec2 point, int steps);
-	void TextInput(std::u16string_view text);
-	void KeyDown(int key);
-	/// Escape backs out of the question, then out of the options, then continues the game. Inside the temple it
-	/// continues from any page.
+	/// Typing. In a question with a Yes and a No, the first letter of either word answers it.
+	Action TextInput(std::u16string_view text);
+	/// A key pressed while the menu is open. Tab, or Shift and Tab, moves the focus over the page's controls, or over
+	/// the buttons of a question. Return presses the OK of a question that has one. The arrows, Home and End move the
+	/// slider or the list that has the focus. What the player chose, as MouseUp gives it.
+	Action KeyDown(int key, bool shift = false);
+	/// Escape presses the Cancel of a question, else its OK; a question with a Yes and a No ignores it. Then Escape
+	/// backs out of the options, and continues the game from the first page while no control there has the focus.
+	/// Inside the temple it continues from any page.
 	Action Escape();
 
 	/// Whether a control was clicked since last asked, which the game's dialogs answer with the menu button sound
@@ -173,6 +180,9 @@ public:
 	void ShowPlayer(std::u16string_view creatureName, int symbol, const player_profiles::Settings& settings);
 	/// Edit Tattoo shows only while the creature can have its tattoo edited
 	void SetTattooAvailable(bool available);
+	/// The Advanced page shows the slider of the help's text speed only when the game has no sound
+	void SetSoundInstalled(bool installed);
+	[[nodiscard]] const Slider& GetReadSpeedSlider() const noexcept { return *_readSpeed; }
 	/// Another dialog over the menu, as the tattoo editor from the Players page: the menu fades out while it stays
 	/// open, and fades back in as the dialog goes
 	void SetCovered(bool covered);
@@ -204,6 +214,25 @@ public:
 	[[nodiscard]] const std::u16string& GetButtonLabel(size_t index) const { return _buttonLabels.at(index); }
 	/// The lines of the Controls page
 	[[nodiscard]] const List& GetControls() const noexcept { return *_controls; }
+	/// The bindings that the Controls page shows and changes
+	[[nodiscard]] const input::KeyBindingTable& GetControlBindings() const noexcept { return _bindings; }
+	/// The Controls page shows these bindings, as the profile or the game has them
+	void SetControls(const input::KeyBindingTable& bindings);
+	/// Whether the player changed a binding since last asked: the game then uses the page's bindings
+	bool TakeControlsChanged() noexcept { return std::exchange(_controlsChanged, false); }
+	/// Whether the player left the Controls page by Back since last asked: the profile then keeps the bindings
+	bool TakeControlsToKeep() noexcept { return std::exchange(_keepControls, false); }
+	/// A double click of the left button. On the row picked of the Controls page, it opens the box that asks for the
+	/// row's new key or mouse input.
+	void DoubleClick(glm::ivec2 point);
+	/// Whether the box that asks for a new key or mouse input is open
+	[[nodiscard]] bool IsCapturing() const noexcept { return _capture.has_value() && _question.has_value(); }
+	/// A key press while the box asks for a new key: the box shows the key that the press gives, and OK binds it. The
+	/// game keeps some keys for itself, and the box ignores them. Whether the box took the press.
+	bool CaptureKey(SDL_Scancode key, input::rebinding::HeldModifiers held);
+	/// Once a frame while the box asks for a new input: the mouse buttons held, and the pointer. A button held, or the
+	/// wheel turned, with the pointer off the box's buttons, gives the mouse input that OK binds.
+	void PollCapture(bool left, bool right, bool middle, glm::ivec2 point);
 	/// What the player can press by name now: the question's answers while it is asked, else the page's buttons, check
 	/// boxes, sliders and tabs
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
@@ -214,6 +243,18 @@ private:
 		std::u16string text;
 		std::unique_ptr<Dialog> answers;
 		Zoomer fade;
+		/// The text of the box, which can change while the box is open
+		StaticText* words {nullptr};
+		/// The box's buttons, which take their own clicks: Yes and No, OK alone, or Cancel and OK
+		std::array<Control*, 2> buttons {};
+		dialog_keys::Buttons kind {dialog_keys::Buttons::Ok};
+	};
+
+	/// The binding that the box asks a new key or mouse input for: its row, and the key pressed
+	struct Capture
+	{
+		size_t row {0};
+		std::optional<input::KeyChord> key;
 	};
 
 	void BuildMain(const TextDatabase& texts);
@@ -221,13 +262,29 @@ private:
 	void BuildPlayers(const TextDatabase& texts);
 	void BuildAdvanced(const TextDatabase& texts);
 	void BuildControls(const TextDatabase& texts);
+	/// The Controls page's rows from the bindings
+	void RefreshControls();
+	/// The words of the box that asks for a new key or mouse input, with the input given so far
+	[[nodiscard]] std::u16string CaptureText(const std::optional<std::u16string>& input) const;
+	void ShowCapture(const std::u16string& input);
+	/// OK in the box: the row takes the input given
+	void KeepCapture();
 	/// The tabs of the options' pages, with selected open
 	std::vector<Dialog::Tab> OptionsTabs(const TextDatabase& texts, Page selected);
 	/// A question with a Yes, which settles on the action, and a No
 	void Ask(std::u16string text, Action yes);
 	/// A message with an OK, which settles on the action
 	void Tell(std::u16string text, Action ok);
+	/// A message with an OK, which does what it is given
+	void TellThen(std::u16string text, std::function<void()> then);
+	/// Tells the player that a changed detail takes effect the next time the game starts, once for each change, as they
+	/// leave the Options page. OK then does what it is given. Whether the player is told.
+	bool TellDetailChange(std::function<void()> then);
+	/// A question with a Cancel and an OK, which does what it is given
+	void Confirm(std::u16string text, std::function<void()> ok);
 	void Settle(Action action);
+	/// A key or a letter presses a button of the question: what the player chose
+	Action AnswerQuestion(dialog_keys::Answer answer);
 	/// Back from an options page, or their first tab
 	void Back();
 	/// A tab of the options was picked: from the Players page, while leaving it starts the game again, the player is
@@ -252,6 +309,9 @@ private:
 	std::array<std::u16string, k_ButtonCount> _buttonLabels;
 	std::u16string _yes;
 	std::u16string _no;
+	/// The words whose first letters answer a question with a Yes and a No
+	std::u16string _yesKey;
+	std::u16string _noKey;
 	std::u16string _ok;
 	std::u16string _back;
 	std::u16string _restart;
@@ -265,11 +325,15 @@ private:
 	/// HELP_TEXT_DIALOG_QUIT_QUESTION, asked by the first page, and HELP_TEXT_DIALOG_AREYOUSUREQUIT by the options
 	std::u16string _quitQuestion;
 	std::u16string _quitGameQuestion;
+	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
+	std::u16string _videoChange;
 	std::array<std::u16string, 5> _detailLabels;
 	std::array<std::u16string, 5> _helpLabels;
 	std::array<std::u16string, 3> _storyLabels;
 	std::array<std::u16string, 4> _toolTipLabels;
 	MenuSettings _settings;
+	/// The detail as the Options page last showed it or told of it
+	int _detailTold {0};
 	std::array<std::unique_ptr<Dialog>, static_cast<size_t>(Page::_Count)> _pages;
 	/// The Game Statistics box, its own page's dialog
 	std::unique_ptr<StatisticsBox> _statistics;
@@ -281,6 +345,21 @@ private:
 	/// The options page's Quit arrow, hidden inside the temple
 	BigButton* _optionsQuit {nullptr};
 	List* _controls {nullptr};
+	input::KeyBindingTable _bindings {input::k_DefaultKeyBindings};
+	std::array<std::u16string, input::k_KeyBindingCount> _actionNames;
+	/// HELP_TEXT_DIALOG_KEYREMINDER, HELP_TEXT_DIALOG_LOADDEFAULTS and the Cancel of a box
+	std::u16string _keyReminder;
+	std::u16string _loadDefaults;
+	std::u16string _cancel;
+	std::optional<Capture> _capture;
+	/// The last mouse input given in the box, and whether it came after the last key. They stay after a Cancel, so the
+	/// next box starts with them, until the page shows its rows again.
+	input::MouseInput _pendingMouse {input::MouseInput::None};
+	bool _mouseChosen {false};
+	/// Steps of the wheel turned while the box is open and not used yet
+	int _captureWheel {0};
+	bool _controlsChanged {false};
+	bool _keepControls {false};
 	List* _players {nullptr};
 	EditBox* _creatureNameBox {nullptr};
 	SymbolPicture* _symbolPicture {nullptr};
@@ -296,6 +375,8 @@ private:
 	/// The profile played as the Players page last opened. A deletion does not change it.
 	std::optional<std::u16string> _previousProfile;
 	bool _tattooAvailable {false};
+	bool _soundInstalled {true};
+	Slider* _readSpeed {nullptr};
 	bool _covered {false};
 	std::optional<size_t> _pickedPlayer;
 	std::u16string _playerToDelete;

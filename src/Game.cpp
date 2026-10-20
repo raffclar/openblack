@@ -50,6 +50,7 @@
 #include "3D/FlatLand.h"
 #include "3D/GripLandscapeEffect.h"
 #include "3D/HandAnimation.h"
+#include "3D/HandCycleChoice.h"
 #include "3D/HandMorph.h"
 #include "3D/HandNavigationPose.h"
 #include "3D/HandOrientation.h"
@@ -276,6 +277,7 @@
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
@@ -284,6 +286,7 @@
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/KeyRebinding.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
@@ -618,6 +621,7 @@ Game::Game(Arguments&& args) noexcept
 	config.resolution = {args.windowWidth, args.windowHeight};
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
+	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
@@ -940,6 +944,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			return false;
 		case SDLK_f:
+			if (Locator::config::value().background)
+			{
+				break;
+			}
 			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
 		case SDLK_p:
@@ -956,48 +964,79 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_5:
 		case SDLK_6:
 		case SDLK_7:
-		case SDLK_8:
+		{
+			const auto mod = event.key.keysym.mod;
+			const bool shift = (mod & KMOD_SHIFT) != 0;
+			const bool ctrl = (mod & KMOD_CTRL) != 0;
+			const bool alt = (mod & KMOD_ALT) != 0;
 			// Alt and 1 halves the game's speed, to half of normal at the least. Alt and 2 doubles it, to twice
 			// normal at the most. Shift or Ctrl with the key goes before Alt.
-			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) &&
-			    (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL)) == 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) && !shift && !ctrl && alt)
 			{
 				auto& clock = Locator::time::value();
 				clock.SetSpeed(event.key.keysym.sym == SDLK_1 ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
 				                                              : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
 				break;
 			}
-			// The camera's bookmarks aren't for the player while a script has the cinema bars in
-			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
-			    !Locator::cameraBookmarkSystem::value().IsEnabled())
+			if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
 			{
 				break;
 			}
-			if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+			auto& bookmarks = Locator::cameraBookmarkSystem::value();
+			const auto slot = static_cast<size_t>(event.key.keysym.sym - SDLK_1);
+			// Ctrl and Shift clear a set bookmark. Ctrl without Alt keeps the place of the hand, or the thing under the
+			// hand. The key alone jumps to a set bookmark. Shift starts or stops a follow of a set bookmark.
+			if (ctrl && shift)
 			{
-				const auto index = static_cast<uint8_t>(event.key.keysym.sym - SDLK_1);
-				const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
-				if (positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)] ||
-				    positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)])
+				if (bookmarks.IsSet(slot))
 				{
-					const auto handPosition =
-					    positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)].value_or(
-					        positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)].value_or(
-					            glm::zero<glm::vec3>()));
-					Locator::cameraBookmarkSystem::value().SetBookmark(index, handPosition, camera.GetOrigin());
+					bookmarks.ClearBookmark(slot);
 				}
 			}
-			else
+			else if (ctrl && !alt)
 			{
-				const auto& entitiesRegistry = Locator::entitiesRegistry::value();
-				const size_t index = event.key.keysym.sym - SDLK_1;
-				const auto& bookmarkEntities = Locator::cameraBookmarkSystem::value().GetBookmarks();
-				const auto entity = bookmarkEntities.at(index);
-				const auto [transform, bookmark] =
-				    entitiesRegistry.TryGet<ecs::components::Transform, ecs::components::CameraBookmark>(entity);
-				if (transform != nullptr && bookmark != nullptr)
+				const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
+				const auto left = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				const auto right = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+				if (left.has_value() || right.has_value())
 				{
-					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position, camera_fly::k_BookmarkRise);
+					std::optional<entt::entity> thing;
+					if (Locator::pickingSystem::has_value())
+					{
+						thing = Locator::pickingSystem::value().GetPick().object;
+					}
+					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
+					                      camera.GetOrigin());
+				}
+			}
+			else if (shift)
+			{
+				bookmarks.ToggleFollow(slot);
+			}
+			else if (!ctrl && !alt)
+			{
+				bookmarks.JumpTo(slot);
+			}
+			break;
+		}
+		case SDLK_BACKSPACE:
+			// The go-back key flies the camera back to the view before the last jump to a bookmark
+			if (BookmarkKeysAllowed())
+			{
+				Locator::cameraBookmarkSystem::value().JumpBack();
+			}
+			break;
+		case SDLK_TAB:
+			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one
+			if (BookmarkKeysAllowed())
+			{
+				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
+				{
+					Locator::cameraBookmarkSystem::value().JumpToPrevious();
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+				{
+					Locator::cameraBookmarkSystem::value().JumpToNext();
 				}
 			}
 			break;
@@ -1184,6 +1223,20 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
 		_handPointer.Moved();
 	}
+}
+
+bool Game::BookmarkKeysAllowed()
+{
+	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		return false;
+	}
+	if (!Locator::cameraHelpSystem::has_value())
+	{
+		return true;
+	}
+	const auto& help = Locator::cameraHelpSystem::value().Get();
+	return help.cameraKeys && help.placeKeys;
 }
 
 bool Game::HandOverThing() const
@@ -2092,6 +2145,9 @@ bool Game::GameLogicLoop() noexcept
 		Locator::worshipSiteSystem::value().UpdateTurn();
 	}
 
+	// The camera's bookmarks on things move with their things, and the camera flies again to the bookmark that it follows
+	Locator::cameraBookmarkSystem::value().ProcessTurn();
+
 	if (_atmosAudio)
 	{
 		_atmosAudio->SetAlignment(Locator::alignmentSystem::value().GetCameraAlignment());
@@ -2450,7 +2506,13 @@ bool Game::Update() noexcept
 			RequestQuit();
 		}
 	}
-	Locator::cameraBookmarkSystem::value().Update(deltaTime);
+	{
+		// The markers of the bookmarks throb on, only on a frame that draws the land
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool landHidden = Locator::videoSystem::has_value() &&
+		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+		Locator::cameraBookmarkSystem::value().Update(Locator::time::value().GetFrameGameTime(), !inTemple && !landHidden);
+	}
 	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
 	Locator::highDetailSystem::value().Update();
 	if (_interface)
@@ -3164,59 +3226,16 @@ bool Game::Update() noexcept
 			const auto state = _handOnCreature.has_value() ? HandState::Creature
 			                   : _handCameraState          ? HandState::Camera
 			                                               : HandState::Normal;
-			auto cycle = HandCycle::Wiggle;
-			switch (_handPose)
-			{
-			case Pose::Idle:
-				break;
-			case Pose::Grip:
-				cycle = HandCycle::Grip;
-				break;
-			case Pose::Rotate:
-				cycle = HandCycle::Rotate;
-				break;
-			case Pose::Pitch:
-				cycle = HandCycle::Pitch;
-				break;
-			case Pose::Zoom:
-				cycle = HandCycle::Zoom;
-				break;
-			}
-			// Hovering over a thing, a one-shot bubble or a building as much as anything else, the hand feels it, over the
-			// camera hints it offers elsewhere
-			if (!_handCameraState && HandOverThing())
-			{
-				cycle = HandCycle::Stroke;
-			}
-			// Over a miracle's icon it opens to take it
-			if (!_handCameraState && _handOverSpellIcon)
-			{
-				cycle = HandCycle::CanPickUp;
-			}
-			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it. A thing under
-			// the hand that holds the rope gets the feel of the thing.
+			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
 			const auto ropeHand = Locator::leashSystem::value().RopeHand(PlayerNames::PLAYER_ONE);
-			const bool feelsThing = ropeHand == leash_snap::Hand::Holding && (HandOverThing() || _handOverSpellIcon);
-			if (!_handCameraState && ropeHand != leash_snap::Hand::Away && !feelsThing)
-			{
-				cycle = HandCycle::HoldFingers;
-			}
-			// On a creature, it strokes it or shows its slap
-			if (_handOnCreature.has_value())
-			{
-				switch (_handOnCreature->cycle)
-				{
-				case creature_feedback::TouchCycle::Wiggle:
-					cycle = HandCycle::Wiggle;
-					break;
-				case creature_feedback::TouchCycle::Tickle:
-					cycle = HandCycle::Tickle;
-					break;
-				case creature_feedback::TouchCycle::Slap:
-					cycle = HandCycle::Slap;
-					break;
-				}
-			}
+			const auto cycle = hand_cycle::Choose({
+			    .pose = _handPose,
+			    .cameraState = _handCameraState,
+			    .overThing = HandOverThing(),
+			    .overSpellIcon = _handOverSpellIcon,
+			    .rope = ropeHand,
+			    .creature = _handOnCreature.has_value() ? std::optional(_handOnCreature->cycle) : std::nullopt,
+			});
 			// Pulling a thing free, the hand takes the pose the thing is held with
 			std::optional<ecs::systems::HandGrabSystemInterface::PullPose> pull;
 			if (!holdingSeed && Locator::handGrabSystem::has_value())
@@ -3256,15 +3275,9 @@ bool Game::Update() noexcept
 			{
 				// Knocking on a house, the hand plays its tap once through, without leaning
 				const auto* tap = _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::TapHouse));
-				const auto timeMs =
-				    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(_handKnock->time).count());
+				const auto timeMs = _handKnock.Play(deltaTime, tap != nullptr ? tap->duration : 0);
 				_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, _mousePosition);
 				_handAnimation->SettleCursor(_mousePosition);
-				_handKnock->time += deltaTime;
-				if (tap == nullptr || _handKnock->time >= std::chrono::milliseconds(tap->duration))
-				{
-					_handKnock.reset();
-				}
 			}
 			else if (!holdingSeed)
 			{
@@ -3490,7 +3503,8 @@ bool Game::Initialize() noexcept
 		{
 			extraFlags |= SDL_WINDOW_METAL;
 		}
-		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags);
+		openblack::InitializeWindow(k_WindowTitle, config.resolution.x, config.resolution.y, config.displayMode, extraFlags,
+		                            config.background);
 	}
 
 	using filesystem::Path;
@@ -4014,6 +4028,7 @@ bool Game::Initialize() noexcept
 		const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
 		_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
 		ApplyPlayerSettings(kept);
+		LoadProfileKeys();
 		RefreshPlayersPage();
 		if (!_interface)
 		{
@@ -4021,6 +4036,8 @@ bool Game::Initialize() noexcept
 		}
 		else
 		{
+			// The slider of the help's text speed shows only when the game has no sound
+			_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
 			// Each save and each load shows its box first
 			if (Locator::saveGameSystem::has_value())
 			{
@@ -5551,6 +5568,24 @@ void Game::HandleInterfaceAction()
 		SaveHelpRecord();
 	}
 
+	// A binding changed on the Controls page takes effect at once
+	auto& menu = _interface->GetMenu();
+	if (menu.TakeControlsChanged() && Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(menu.GetControlBindings());
+	}
+	// The menu reads the bindings from the profile as it opens. Back from the Controls page, and the menu as it
+	// closes, keep the bindings with the profile.
+	if (menu.IsOpen() && !_menuWasOpen)
+	{
+		LoadProfileKeys();
+	}
+	if (menu.TakeControlsToKeep() || (!menu.IsOpen() && _menuWasOpen))
+	{
+		KeepProfileKeys();
+	}
+	_menuWasOpen = menu.IsOpen();
+
 	// The menu pauses the game while it is open
 	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
 	{
@@ -5617,7 +5652,6 @@ void Game::HandleInterfaceAction()
 		break;
 	case Action::StartSkirmish:
 	case Action::JoinOnline:
-	case Action::RedefineControl:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
@@ -5725,7 +5759,40 @@ void Game::PlayerProfileChanged()
 	// The page shows the profile's creature's name, symbol and options, which take effect
 	_interface->GetMenu().ShowPlayer(gui::ToUtf16(profile->creatureName), profile->symbol, profile->settings);
 	ApplyPlayerSettings(profile->settings);
+	// The bindings of the new player come from their profile
+	LoadProfileKeys();
 	NameCreatureAfterProfile();
+}
+
+void Game::LoadProfileKeys()
+{
+	// A profile that keeps no bindings has the game's defaults
+	input::KeyBindingTable bindings = input::k_DefaultKeyBindings;
+	if (Locator::playerProfileSystem::has_value())
+	{
+		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+		{
+			bindings = input::rebinding::FromKept(profile->keys);
+		}
+	}
+	if (Locator::gameActionSystem::has_value())
+	{
+		Locator::gameActionSystem::value().SetKeyBindings(bindings);
+	}
+	if (_interface)
+	{
+		_interface->GetMenu().SetControls(bindings);
+	}
+}
+
+void Game::KeepProfileKeys()
+{
+	if (!Locator::playerProfileSystem::has_value() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+	Locator::playerProfileSystem::value().SetCurrentKeys(input::rebinding::ToKept(bindings));
 }
 
 void Game::ReadTattooPictures()
@@ -5993,6 +6060,7 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	Locator::config::value().rightHandedHand = !settings.leftHanded;
+	Locator::config::value().pushScrolling = settings.pushScrolling;
 	if (Locator::creatureHelpSystem::has_value())
 	{
 		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
@@ -6308,7 +6376,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// Tapping a house it knocked on, the hand stays where it knocked
 	if (_handKnocking)
 	{
-		_handPosition = _handKnock->point;
+		_handPosition = _handKnock.Point().value_or(_handPosition);
 		_handCrossFade.Update(deltaSeconds);
 		handTransform.position = _handCrossFade.Apply(_handPosition);
 		return;
@@ -6471,14 +6539,7 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
 	if (knocks.TakeHandKnock())
 	{
-		if (_handKnock.has_value())
-		{
-			_handKnock->point = _handPosition;
-		}
-		else
-		{
-			_handKnock = HandKnock {.point = _handPosition};
-		}
+		_handKnock.Knock(_handPosition);
 	}
 	// Holding something comes first; the tap starts over once the hand lets go
 	bool holds = magic::HandHoldPoser::Find().has_value();
@@ -6486,11 +6547,7 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 	{
 		holds = Locator::handGrabSystem::value().GetHeldPose().has_value();
 	}
-	if (holds && _handKnock.has_value())
-	{
-		_handKnock->time = std::chrono::microseconds::zero();
-	}
-	const bool knocking = _handKnock.has_value() && !holds;
+	const bool knocking = _handKnock.Hold(holds);
 	// Starting and ending the tap, the hand fades from where it was drawn
 	if (knocking != _handKnocking)
 	{
@@ -6735,8 +6792,7 @@ void Game::ProcessPlayerTurns()
 {
 	// Each player takes its turn in the order of the players, the neutral player last. First its temple: one whose heart
 	// lost all its life moves on through its destruction, and a hurt heart beams. Then each of its towns, in the order
-	// the player gained them: the town passes over its buildings, works out what it wants, looks after its artefacts,
-	// and goes on with the rest of its turn. So the game's random numbers are drawn in the same order as the game draws
+	// the player gained them, takes its turn. So the game's random numbers are drawn in the same order as the game draws
 	// them.
 	if (Locator::templeDestructionSystem::has_value())
 	{
@@ -6750,13 +6806,7 @@ void Game::ProcessPlayerTurns()
 		{
 			Locator::templeDestructionSystem::value().ProcessPlayerTurn(player);
 		}
-		for (const auto town : towns.TownsInGainedOrder(player))
-		{
-			towns.ProcessTownBuildings(town);
-			Locator::townDesireSystem::value().ProcessTown(town);
-			Locator::artefactSystem::value().ProcessTown(town);
-			towns.ProcessTownTurn(town);
-		}
+		towns.ProcessPlayerTowns(player);
 	}
 }
 
@@ -6794,7 +6844,12 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		const auto model =
 		    glm::translate(glm::mat4(1.0f), hand.position) * glm::mat4(hand.rotation) * glm::scale(glm::mat4(1.0f), hand.scale);
 		frame->visible = glm::vec3(model * glm::vec4(_handAnimation->LeafBoneCentre(), 1.0f));
-		if (const auto& bones = _handAnimation->GetBoneMatrices(); !bones.empty())
+		// The wrist as it is drawn: after the blend of the drawn pose, which the animation's own bones do not have
+		const auto handEntity =
+		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::Hand>(handEntity);
+		const auto& bones = drawn != nullptr ? drawn->boneMatrices : _handAnimation->GetBoneMatrices();
+		if (!bones.empty())
 		{
 			frame->wrist = glm::vec3(model * bones.front()[3]);
 		}
@@ -6874,14 +6929,16 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	if (isLand)
+	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	if (feedback == hand_grab::GripFeedback::None)
+	{
+		return;
+	}
+	if (feedback == hand_grab::GripFeedback::Dust)
 	{
 		// The game throws up a spot visual where the hand grips the land, as it plays the sound
 		GripLandscapeEffect::Spawn(
 		    glm::vec3(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z));
-	}
-	if (isLand)
-	{
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);

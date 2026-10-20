@@ -230,7 +230,7 @@ float camera_track::LivingStep(const edt::EDTTrack& track, int32_t wholeSpeed, b
 	return turns > k_ShortestTurns ? duration / turns : 0.0f;
 }
 
-std::optional<glm::vec2> camera_track::LivingWalkTurn(Walk& walk, const edt::EDTTrack& track)
+glm::vec2 camera_track::LivingWalkPoint(Walk& walk, const edt::EDTTrack& track)
 {
 	const auto duration = track.position.duration;
 	auto sample =
@@ -238,10 +238,16 @@ std::optional<glm::vec2> camera_track::LivingWalkTurn(Walk& walk, const edt::EDT
 	sample = std::clamp(sample, 0, duration);
 	static_cast<void>(walk.runner.Get(track.position, sample));
 	const auto point = Bezier(track.focus, walk.runner.GetSegment(), walk.runner.GetParameter());
+	return {point.x, point.z};
+}
+
+std::optional<glm::vec2> camera_track::LivingWalkTurn(Walk& walk, const edt::EDTTrack& track)
+{
+	const auto point = LivingWalkPoint(walk, track);
 	if (!(Percentage(walk, track) < walk.to))
 	{
 		return std::nullopt;
 	}
-	walk.current = std::min(walk.current + walk.step, static_cast<float>(duration));
-	return glm::vec2(point.x, point.z);
+	walk.current = std::min(walk.current + walk.step, static_cast<float>(track.position.duration));
+	return point;
 }

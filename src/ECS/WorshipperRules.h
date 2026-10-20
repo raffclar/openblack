@@ -119,4 +119,11 @@ enum class GoingBack
 /// The food a town sends its site: what the site wants, but none when the town can't spare it all
 [[nodiscard]] int32_t FoodForSiteIfEnough(int32_t wanted, int32_t spare);
 
+/// How much a worship site wants food, 0 to 1: one less the share of its dancers' need that its pot holds, at most all of
+/// it. A small amount on each side of the share keeps a site with no need and no food at 0.
+[[nodiscard]] float SiteDesireForFood(float dancersNeed, uint32_t inPot);
+
+/// The strain sound level of a temple goes towards the most strain of its sites by at most a step each turn
+[[nodiscard]] float EaseStrainSound(float level, float mostStrain, float step);
+
 } // namespace openblack::ecs::worshipper_rules

@@ -32,6 +32,7 @@
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
+#include "Gui/GameInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -129,17 +130,19 @@ void TestbedScenarios::UpdateAlways() noexcept
 	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
 	// game is stepped, so that their timers keep in line with the game's turns
 	// The game's time stops while the player is in the temple. Scenarios that go into the temple continue on the frame's
-	// real time there, and while the main menu's tattoo editor is open over the paused game.
+	// real time there, and while the game's menu, or the menu's tattoo editor over it, is open over the paused game.
 	float seconds = 0.0f;
 	if (Locator::time::has_value())
 	{
 		const auto& time = Locator::time::value();
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const bool tattooMenu = Locator::tattooMenuSystem::has_value() && Locator::tattooMenuSystem::value().IsOpen();
-		seconds =
-		    std::chrono::duration<float>(inTemple || tattooMenu ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
-		                                                        : time.GetFrameGameTime())
-		        .count();
+		auto* game = Game::Instance();
+		const bool menu = game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen();
+		seconds = std::chrono::duration<float>(inTemple || tattooMenu || menu
+		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
+		                                           : time.GetFrameGameTime())
+		              .count();
 	}
 	RunRequested();
 	_runner.Update(seconds);

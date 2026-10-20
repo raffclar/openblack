@@ -54,6 +54,7 @@
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/VillagerCarry.h"
 #include "ECS/VillagerHeldObject.h"
@@ -339,17 +340,26 @@ struct Store
 	std::optional<glm::vec2> position;
 	uint32_t wood {0};
 };
-Store StoreOf(const Villager& person)
+Store StoreOf(entt::entity villager, const Villager& person)
 {
 	const auto pit = construction::StoragePitOf(TownOf(person));
+	auto& stores = Locator::resourceStoreSystem::value();
 	if (pit.has_value() && villager_home::IsFunctional(*pit))
 	{
-		return {.position = villager_home::ArrivePosition(*pit),
-		        .wood = Locator::resourceStoreSystem::value().GetResource(*pit, ResourceType::Wood)};
+		return {.position = villager_home::ArrivePosition(*pit), .wood = stores.GetResource(*pit, ResourceType::Wood)};
 	}
-	// TODO(villager-jobs-1): without a working storage pit a town keeps a temporary pot of wood by its meeting place;
-	// openblack's towns have none yet, so such a town has no store to weigh
-	return {};
+	// Without a working storage pit the town keeps its wood in a temporary pile by its gathering place, made if missing
+	const auto town = TownOf(person);
+	if (town == entt::null || !Locator::townSystem::has_value())
+	{
+		return {};
+	}
+	const auto store = Locator::townSystem::value().TemporaryStorePile(town, glm::xz(PositionOf(villager)), ResourceType::Wood);
+	if (!store.has_value())
+	{
+		return {};
+	}
+	return {.position = store->edge, .wood = stores.GetResource(store->pile, ResourceType::Wood)};
 }
 } // namespace
 
@@ -360,7 +370,7 @@ villager_forester::WoodPlan villager_forester::DecideHowToGetWood(entt::entity v
 	const auto& info = InfoOf(person);
 	const float reach = static_cast<float>(Locator::infoConstants::value().town.maxDistanceForTownForest);
 	const auto here = PositionOf(villager);
-	const auto store = StoreOf(person);
+	const auto store = StoreOf(villager, person);
 	// The town's own forests first, else any forest with trees near enough
 	std::optional<entt::entity> forest;
 	if (Locator::forestSystem::has_value())

@@ -63,6 +63,7 @@
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
+#include "Input/KeyRebinding.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/ChallengeRoomRules.h"
@@ -101,7 +102,7 @@ std::vector<uint8_t> ReadIfExists(const std::filesystem::path& path)
 /// A key's name as the control pictures show it ("Shift", "Left", "Space")
 openblack::help::control_icons::KeyNameFn ControlKeyName()
 {
-	return [](SDL_Scancode key) { return openblack::gui::ToUtf16(openblack::input::KeyChordName({.key = key})); };
+	return [](SDL_Scancode key) { return openblack::input::rebinding::KeyName(key); };
 }
 
 /// One of the game's fonts, from its glyph metrics and bitmaps. Nothing when they are missing or don't fit together.
@@ -812,6 +813,11 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	case SDL_MOUSEBUTTONDOWN:
 		if (event.button.button == SDL_BUTTON_LEFT)
 		{
+			// A double click goes to the row picked before this press changes the row picked
+			if (event.button.clicks >= 2)
+			{
+				_menu->DoubleClick(_painter.ToDialog({event.button.x, event.button.y}));
+			}
 			_menu->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
 		}
 		return true;
@@ -839,14 +845,37 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 		return true;
 	}
 	case SDL_TEXTINPUT:
-		_menu->TextInput(ToUtf16(event.text.text));
+		TakeMenuAction(_menu->TextInput(ToUtf16(event.text.text)));
 		return true;
 	// Keys let go of still reach the game, so that none stays held down
 	case SDL_KEYDOWN:
-		_menu->KeyDown(event.key.keysym.sym);
+	{
+		const auto mod = event.key.keysym.mod;
+		const input::rebinding::HeldModifiers held {
+		    .shift = (mod & KMOD_SHIFT) != 0, .ctrl = (mod & KMOD_CTRL) != 0, .alt = (mod & KMOD_ALT) != 0};
+		// The box that asks for a key takes it first, then the key can also press the box's OK or Cancel: Return binds
+		// Return and closes the box
+		_menu->CaptureKey(event.key.keysym.scancode, held);
+		TakeMenuAction(_menu->KeyDown(event.key.keysym.sym, held.shift));
 		return true;
+	}
 	default:
 		return false;
+	}
+}
+
+void GameInterface::TakeMenuAction(GameMenu::Action action)
+{
+	// A key or a letter that chose nothing leaves what the mouse chose in this frame
+	if (action == GameMenu::Action::None)
+	{
+		return;
+	}
+	_action = action;
+	if (_action == GameMenu::Action::Continue)
+	{
+		_menu->Close();
+		SDL_StopTextInput();
 	}
 }
 
@@ -902,6 +931,14 @@ GameMenu::Action GameInterface::TakeAction()
 
 void GameInterface::Update(float deltaSeconds)
 {
+	if (_menu->IsCapturing())
+	{
+		// The box that asks for a new input reads the mouse buttons held once a frame
+		glm::ivec2 mouse;
+		const auto buttons = SDL_GetMouseState(&mouse.x, &mouse.y);
+		_menu->PollCapture((buttons & SDL_BUTTON_LMASK) != 0u, (buttons & SDL_BUTTON_RMASK) != 0u,
+		                   (buttons & SDL_BUTTON_MMASK) != 0u, _painter.ToDialog(mouse));
+	}
 	_menu->Update(deltaSeconds);
 	_skipBox->Update(deltaSeconds);
 	_storyHistoryBox->Update(deltaSeconds);

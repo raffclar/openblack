@@ -11,9 +11,12 @@
 
 #include "VillagerAnimate.h"
 
+#include <optional>
+
 #include <glm/vec2.hpp>
 
 #include "3D/LandIslandInterface.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingPhysics.h"
@@ -35,6 +38,7 @@
 #include "VillagerBuild.h"
 #include "VillagerDance.h"
 #include "VillagerFightWatch.h"
+#include "VillagerReactions.h"
 #include "VillagerScript.h"
 
 using namespace openblack;
@@ -138,6 +142,23 @@ AnimId WalkClipOf(entt::entity entity, const Villager& villager)
 	});
 }
 
+/// How far the villager is from the thing it reacts to, in metres on the map; none when it reacts to nothing
+std::optional<float> DistanceToReactionThing(entt::entity entity)
+{
+	auto& registry = Entities();
+	const auto thing = ecs::systems::villager_reactions::ReactingTo(entity);
+	if (!thing.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* transform = registry.TryGet<const Transform>(*thing);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	return gutils::GetDistanceInMetres(registry.Get<const Transform>(entity).position, transform->position);
+}
+
 float WatchedHeightAboveLand(entt::entity entity)
 {
 	auto& registry = Entities();
@@ -217,8 +238,7 @@ int32_t villager_animate::StateClip(entt::entity entity)
 		return animation::LookAtFlyingObjectClip(StateInfo(previous).animation, WatchedHeightAboveLand(entity));
 	}
 	case animation::ClipChoice::InspectCreature:
-		// TODO(villagers): how near the creature it inspects is, once creature reactions are ported
-		return Clip(animation::InspectCreatureClip(IsWomanOrChild(villager), std::nullopt, random));
+		return Clip(animation::InspectCreatureClip(IsWomanOrChild(villager), DistanceToReactionThing(entity), random));
 	case animation::ClipChoice::RespectCreature:
 		return Clip(animation::RespectCreatureClip(random));
 	case animation::ClipChoice::ControlledByCreature:

@@ -13,6 +13,7 @@
 #include <glm/mat3x3.hpp>
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/StreetLantern.h"
@@ -106,6 +107,18 @@ TEST_F(EffectReceivers, ABallTakesEffectsByTheBallsRowAndIsNotCrushed)
 	EXPECT_EQ(ecs::world_objects::EffectInfoOf(ball), &Locator::infoConstants::value().ball);
 	EXPECT_FALSE(ecs::world_objects::CanBeCrushed(ball));
 	EXPECT_EQ(ecs::world_objects::PlayerOf(ball), PlayerNames::NEUTRAL);
+}
+
+TEST_F(EffectReceivers, AnAnimalTakesHeatByTheRowOfItsKind)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto cow = Made();
+	registry.Assign<Animal>(cow).type = AnimalInfo::Cow;
+	const auto sheep = Made();
+	registry.Assign<Animal>(sheep).type = AnimalInfo::Sheep;
+	const auto& info = Locator::infoConstants::value();
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(cow), &info.animal.at(static_cast<size_t>(AnimalInfo::Cow)));
+	EXPECT_EQ(ecs::world_objects::EffectInfoOf(sheep), &info.animal.at(static_cast<size_t>(AnimalInfo::Sheep)));
 }
 
 TEST(StreetLanternRules, NoLanternWithinHalfAMetreOfAStatic)

@@ -14,6 +14,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 #include <unordered_map>
 #include <vector>
@@ -29,6 +30,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Systems/Implementations/AnimalSystem.h"
+#include "ECS/Systems/Implementations/CameraBookmarkSystem.h"
 #include "ECS/Systems/Implementations/CameraHelpSystem.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/CameraZoneSystem.h"
@@ -412,4 +414,27 @@ TEST(SavedSystemState, TheCameraZonesComeBack)
 	ASSERT_EQ(zones.GetZones().fence.size(), 3u);
 	ASSERT_EQ(zones.GetZones().exclusions.size(), 1u);
 	EXPECT_EQ(zones.GetZones().exclusions.front().kind, camera_zones::Exclusion::Kind::Cylinder);
+}
+
+TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::optional(glm::vec3 {100.0f, 5.0f, 200.0f}));
+	reflection::Save(out, std::optional(glm::vec3 {0.0f, 60.0f, -40.0f}));
+	reflection::Save(out, size_t {3});
+	reflection::Save(out, std::optional(size_t {3}));
+	reflection::Save(out, false);
+	CameraBookmarkSystem bookmarks;
+	LoadInto(bookmarks, out.Bytes());
+	EXPECT_EQ(bookmarks.GetFollowed(), std::optional(size_t {3}));
+	EXPECT_FALSE(bookmarks.IsEnabled());
+}
+
+TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
+{
+	CameraBookmarkSystem saved;
+	CameraBookmarkSystem bookmarks;
+	LoadInto(bookmarks, StateOf(saved));
+	EXPECT_FALSE(bookmarks.GetFollowed().has_value());
+	EXPECT_TRUE(bookmarks.IsEnabled());
 }

@@ -1032,6 +1032,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {16.0f, 0.0f}, .living = true}},
 	});
 
+	// A burning barrel west of a cow, and a hut east of the cow: the cow's run from the fire leads it into the hut
+	all.push_back({
+	    .id = "animals.cow_runs_round_a_hut",
+	    .name = "A cow runs round a hut in its way",
+	    .facet = Facet::Animals,
+	    .description = "A barrel burns in open land. A free cow stands 6 metres east of it, and a hut stands 4.5 metres east "
+	                   "of the cow, in the way of its run from the fire.",
+	    .expected = "The cow runs east from the fire. It does not walk through the hut: it goes round the side of the "
+	                "hut, then on to where it runs to. Then it turns to watch the fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -15.0f}, {40.0f, 15.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {0.0f, 0.0f}, .alight = true},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 0.0f}, .living = true},
+	                {.type = AbodeInfo::CelticHut, .offset = {10.5f, 0.0f}}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",
@@ -3653,6 +3669,72 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.controls_rebind",
+	    .name = "The Controls page asks for a new key",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Controls page. The page picks the Help row and double "
+	                   "clicks it. Press a key, or click a mouse button away from the box's buttons, then click OK. Load "
+	                   "Defaults asks first, then puts every binding back.",
+	    .expected = "The box reads \"Define a key for  Help:\" between a Cancel and an OK arrow. A key shows under the "
+	                "words, with Ctrl, Shift or Alt before it. Escape, Tab, P, F1, F2 and the Enter key of the number pad "
+	                "show nothing. OK binds the input, and the action that had it before loses it. The keys have the "
+	                "names that the system gives them, such as Ctrl and Space.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenControlsBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.dialog_keys",
+	    .name = "Tab, the arrows and Return in the menu",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Options page. Each second Tab moves the focus to the next "
+	                   "control, nine times. Then the right arrow moves the music slider, Shift and Tab moves the focus "
+	                   "back, and Escape goes back to the main menu.",
+	    .expected = "The control with the focus has white words in place of grey ones. The arrows of the detail "
+	                "selector, which have no words, light up while they have the focus. After the controls, the focus "
+	                "goes to the five tabs and shows nothing there. The right arrow moves the knob a tenth to the right.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 27}},
+	});
+
+	all.push_back({
+	    .id = "interface.read_speed_slider",
+	    .name = "The help text speed slider of a game with no sound",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Advanced page as if the game had no sound. A second later "
+	                   "Tab moves the focus ten times, to the slider under the three selectors. Then the right arrow "
+	                   "moves the slider twice.",
+	    .expected = "A \"Help Text Speed\" slider shows at the middle of the page, under the Tooltips selector and over "
+	                "the check boxes. Its knob starts at the middle and moves a tenth to the right for each arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenMenuPage, .delaySeconds = 1.0f, .value = 3, .ctrl = true},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 1.0f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.1f, .value = 9},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F},
+	                 {.kind = Kind::PressMenuKey, .delaySeconds = 0.5f, .value = 0x4000004F}},
+	});
+
+	all.push_back({
 	    .id = "interface.speed_text",
 	    .name = "The words of the game's speed",
 	    .facet = Facet::Interface,
@@ -4213,6 +4295,38 @@ void AddObjects(std::vector<Scenario>& all)
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, -k_Reach}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "BreakRock"}},
+	});
+
+	all.push_back({
+	    .id = "objects.script_takes_rock_wood",
+	    .name = "A script takes wood from a rock and gives wood to it",
+	    .facet = Facet::Objects,
+	    .description = "A rock of scale 1 holds 200 wood. After one second, REMOVE_RESOURCE takes 100 wood from it. After "
+	                   "three seconds, ADD_RESOURCE gives it 300 wood. After five seconds, REMOVE_RESOURCE takes 1000 "
+	                   "wood from it.",
+	    .expected = "The rock becomes half its size and its life becomes half. Then it becomes twice its first size, or "
+	                "its largest size if that is smaller. Then the rock gives all its wood and goes from the land.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, {10.0f, 10.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 1.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 100.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "ADD_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 300.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "REMOVE_RESOURCE",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Number, .number = 1000.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}}},
 	});
 
 	all.push_back({
@@ -5600,6 +5714,25 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
 	                 {.kind = Kind::PointerPress, .delaySeconds = 1.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	});
+
+	// The camera looks down at 45 degrees on a large oak from about 150 m, the pointer on its crown. The oak is heavy, so
+	// the hand must pull it for a time before it comes out.
+	all.push_back({
+	    .id = "hand.tree_tug_heavy",
+	    .name = "Pulling a heavy tree out of the ground",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m away at 45 degrees, the hand grips a very large oak, pulls it slowly up the "
+	                   "screen until it comes out of the ground, then carries it.",
+	    .expected = "The oak leans and stretches towards the pull. When it comes out, the hand and the oak move together "
+	                "to under the pointer. On no frame is the hand drawn away from the oak.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.3f}, .amount = 3.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
 	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
@@ -9460,6 +9593,62 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                 .yawDegrees = 45.0f,
 	                 .leanDegrees = {25.0f, -15.0f}}},
 	});
+
+	// Two rows of small pines along the path of a low throw. The camera stands as for the hand's throw.
+	std::vector<ObjectSetup> bendTrees {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}};
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = 6.0f + static_cast<float>(row) * 3.0f;
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, -2.0f}, .scale = 0.5f});
+		bendTrees.push_back({.type = TreeInfo::Pine, .offset = {along, 2.0f}, .scale = 0.5f});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_a_thrown_rock",
+	    .name = "Trees bend away from a rock that flies between them",
+	    .facet = Facet::Nature,
+	    .description = "The hand takes a rock and throws it low between two rows of small pines. Then the rock comes to "
+	                   "rest.",
+	    .expected = "While the rock flies, the pines near it lean away from it, more when the rock is near. A pine that "
+	                "the rock passes stands straight again when the rock is out of its reach. When the rock comes to "
+	                "rest among the pines, the pines in its reach stay bent away from it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = bendTrees,
+	    .commands =
+	        {// Takes the rock under the middle of the screen
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	         // Makes ready low on the screen and sweeps a little up, so that the throw stays low
+	         {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.7f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.15f}, .amount = 0.3f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
+	// Two rows of pines with a lane between them. The player's creature walks along the lane and back.
+	std::vector<ObjectSetup> lanePines;
+	for (int row = 0; row < 10; ++row)
+	{
+		const float along = static_cast<float>(row) * 3.0f;
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, -4.5f}});
+		lanePines.push_back({.type = TreeInfo::Pine, .offset = {along, 4.5f}});
+	}
+	all.push_back({
+	    .id = "nature.trees_bend_round_the_creature",
+	    .name = "Trees bend away from the player's creature",
+	    .facet = Facet::Nature,
+	    .description = "The player's tiger walks along a lane between two rows of pines, then walks back.",
+	    .expected = "The pines near the tiger lean away from it, more when the tiger is near, and crash about. When the "
+	                "tiger has gone by, they stand straight again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -12.0f}, {40.0f, 12.0f}}},
+	    .creatures = {CreatureSetup {
+	        .label = "yours", .species = CreatureType::Tiger, .offset = {-10.0f, 0.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .objects = lanePines,
+	    .commands = {{.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 1.0f, .point = {40.0f, 0.0f}},
+	                 {.kind = Kind::WalkTo, .creature = 0, .delaySeconds = 8.0f, .point = {-10.0f, 0.0f}}},
+	});
 }
 
 void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
@@ -9547,6 +9736,26 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
 	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
+	});
+	all.push_back({
+	    .id = "tutorial.bookmark_markers_follow",
+	    .name = "Bookmark markers and a followed creature",
+	    .facet = Facet::Tutorial,
+	    .description = "Three bookmarks go on the land near the middle of the map, as Ctrl and the keys 1, 2 and 3 do. Then "
+	                   "the player keeps the tiger in bookmark 4, as Ctrl and the key 4 do with the hand over it, and the "
+	                   "camera follows it, as Shift and the key 4 do. The tiger walks away to the north.",
+	    .expected = "Each bookmark shows its yellow number in a ring, two metres above its place. The marker of bookmark 4 "
+	                "stays two metres above the tiger and moves with it. All the markers throb together: the width and "
+	                "the height each swing once a second, the height a fifth of a second behind. The camera flies after "
+	                "the tiger each turn, until the player moves the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f)},
+	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {25.0f, 0.0f}, .value = 0},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {-25.0f, 0.0f}, .value = 1},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {0.0f, 25.0f}, .value = 2},
+	                 {.kind = Kind::BookmarkCreature, .creature = 0, .delaySeconds = 1.0f, .value = 3},
+	                 Go(Kind::WalkTo, 0, {0.0f, 160.0f}, 0.5f, false)},
 	});
 }
 
@@ -9663,6 +9872,7 @@ std::vector<Scenario> Build()
 	AddVillagerSpeedScenarios(all);
 	AddDiscipleScenarios(all);
 	AddVillagerLabelScenarios(all);
+	AddTempleKeyScenarios(all);
 	AddHighlightScenarios(all);
 	AddSkyScenarios(all);
 	AddAdvisorScenarios(all);
@@ -9679,6 +9889,7 @@ std::vector<Scenario> Build()
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
+	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
 	return all;
@@ -9738,6 +9949,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
+		case ScriptArgument::Kind::Integer:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:
@@ -9817,7 +10029,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
+	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
 	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
@@ -9850,7 +10063,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 168> k_Names {
+	constexpr std::array<std::string_view, 172> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9985,8 +10198,13 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "check the profile folder",
 	    "give the player a picture of their own",
 	    "open the tattoo editor from the menu",
+	    "open the box of the controls page",
+	    "open a page of the menu",
+	    "press a key in the menu",
 	    "play custom music",
 	    "show the custom music controls",
+	    "save the game",
+	    "load the game",
 	    "script reaction",
 	    "script place",
 	    "stop script",
@@ -9994,8 +10212,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "start script music",
 	    "write the web page",
 	    "fly to a bookmark",
-	    "save the game",
-	    "load the game",
+	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
 	    "give hand glows",
 	    "give a creed power",

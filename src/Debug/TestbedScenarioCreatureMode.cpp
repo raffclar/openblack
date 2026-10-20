@@ -70,6 +70,22 @@ void AddCreatureMode(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "creature_mode.temple_key_leaves",
+	    .name = "The temple key gives the camera back from Creature Mode",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player's tiger stands still. After a second the scenario presses C. Five seconds later it "
+	                   "presses the temple key (space) once.",
+	    .expected = "The camera flies to the tiger and follows it. The temple key stops Creature Mode, and the world "
+	                "camera flies from where it is to the pleasing view of the land ahead: 50 metres at 30 degrees.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {Key(Kind::CreatureKey, 1.0f),
+	                 Command {.kind = Kind::PressKey,
+	                          .delaySeconds = 5.0f,
+	                          .value = static_cast<size_t>(input::BindableActionMap::ZOOM_TO_TEMPLE)}},
+	});
+
+	all.push_back({
 	    .id = "creature_mode.other_god",
 	    .name = "Double click another god's creature",
 	    .facet = Facet::CreatureMode,

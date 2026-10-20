@@ -35,6 +35,7 @@ constexpr std::string_view k_SettingKey = "setting";
 constexpr std::string_view k_AlignmentKey = "alignment";
 constexpr std::string_view k_StatisticsKey = "statistics";
 constexpr std::string_view k_AutosavesKey = "autosaves";
+constexpr std::string_view k_KeysKey = "keys";
 constexpr char k_Separator = '\t';
 
 char16_t FoldCase(char16_t c)
@@ -231,7 +232,8 @@ const Profile& Add(Profiles& profiles, std::u16string_view name, std::u16string_
 		                             .settings = {},
 		                             .alignment = 0.0,
 		                             .statistics = {},
-		                             .landAutosaves = {}});
+		                             .landAutosaves = {},
+		                             .keys = {}});
 		SortForTheList(profiles);
 		found = Find(profiles, given);
 	}
@@ -303,6 +305,11 @@ std::string Write(const Profiles& profiles)
 		for (const auto& [land, count] : profile.landAutosaves)
 		{
 			text += std::format("{1}{0}{2}{0}{3}{0}{4}\n", k_Separator, k_AutosavesKey, profile.name, land, count);
+		}
+		for (const auto& [row, key] : profile.keys)
+		{
+			text += std::format("{1}{0}{2}{0}{3}{0}{4}{0}{5}{0}{6}\n", k_Separator, k_KeysKey, profile.name, row, key.primary,
+			                    key.primaryModifier, key.mouseButton);
 		}
 	}
 	return text;
@@ -383,6 +390,23 @@ Profiles Read(std::string_view text)
 			}
 			continue;
 		}
+		if (key == k_KeysKey)
+		{
+			const auto owner = NextField(line);
+			const auto profile = std::ranges::find(profiles.profiles, owner, &Profile::name);
+			// A binding is taken only when its row and its three values can all be read
+			uint32_t row = 0;
+			KeptKey kept;
+			const auto rowText = NextField(line);
+			const auto primary = NextField(line);
+			const auto modifier = NextField(line);
+			if (profile != profiles.profiles.end() && ParseNumber(rowText, row) && ParseNumber(primary, kept.primary) &&
+			    ParseNumber(modifier, kept.primaryModifier) && ParseNumber(line, kept.mouseButton))
+			{
+				profile->keys[row] = kept;
+			}
+			continue;
+		}
 		if (key != k_ProfileKey)
 		{
 			continue;
@@ -403,7 +427,8 @@ Profiles Read(std::string_view text)
 		                             .settings = {},
 		                             .alignment = 0.0,
 		                             .statistics = {},
-		                             .landAutosaves = {}});
+		                             .landAutosaves = {},
+		                             .keys = {}});
 	}
 	SortForTheList(profiles);
 	return profiles;

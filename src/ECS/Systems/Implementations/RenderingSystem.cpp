@@ -1463,8 +1463,8 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
 			                           : TreePlace::InTheLand;
 			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
-			                      ? vegetation.GetTreeMatrix(modelMatrix, transform.position, transform.scale.y,
-			                                                 slots->second.height, swayable.swaySlot)
+			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, transform.position, transform.scale.y,
+			                                                 swayable.swaySlot)
 			                      : modelMatrix;
 		    }
 		    _renderContext.drawnObjects.push_back({.entity = entity, .model = drawnMatrix});

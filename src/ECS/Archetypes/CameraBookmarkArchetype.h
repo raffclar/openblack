@@ -9,9 +9,13 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <array>
 
 #include <entt/fwd.hpp>
+
+#include "Camera/CameraBookmarks.h"
 
 namespace openblack::ecs::archetypes
 {
@@ -19,7 +23,10 @@ namespace openblack::ecs::archetypes
 class CameraBookmarkArchetype
 {
 public:
-	static std::array<entt::entity, 8> CreateAll();
+	/// The marker of the bookmark of a slot (0 for the key 1), not set
+	static entt::entity Create(uint8_t number);
+	/// The markers of the bookmarks of the number keys, none of them set
+	static std::array<entt::entity, camera_bookmarks::k_KeySlots> CreateAll();
 };
 
 } // namespace openblack::ecs::archetypes

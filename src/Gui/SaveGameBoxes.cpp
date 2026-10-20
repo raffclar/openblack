@@ -9,13 +9,13 @@
 
 #include "SaveGameBoxes.h"
 
-#include <cwctype>
-
 #include <algorithm>
 
+#include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 
 #include "Controls.h"
+#include "DialogKeyRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "TextDatabase.h"
 
@@ -51,13 +51,6 @@ std::u16string Text(const TextDatabase& texts, std::string_view name)
 bool IsReturn(int key)
 {
 	return key == SDLK_RETURN || key == SDLK_KP_ENTER;
-}
-
-/// Whether a key is the first letter of a word, the case of the letters ignored
-bool IsFirstLetter(int key, std::u16string_view word)
-{
-	return !word.empty() && key > 0 && key < 0x10000 &&
-	       std::towupper(static_cast<wint_t>(key)) == std::towupper(static_cast<wint_t>(word.front()));
 }
 } // namespace
 
@@ -208,18 +201,20 @@ void SaveGameBoxes::TextInput(std::u16string_view text)
 		// The first letters of the words "yes" and "no" answer the question, unless they are the same
 		const auto yes = _texts.Get(k_YesKeyText);
 		const auto no = _texts.Get(k_NoKeyText);
-		if (text.empty() || yes.empty() || no.empty() || yes.front() == no.front())
+		if (text.empty() || yes.empty() || no.empty())
 		{
 			return;
 		}
-		const int key = text.front();
-		if (IsFirstLetter(key, yes))
+		switch (dialog_keys::AnswerTyped(dialog_keys::Buttons::YesNo, text.front(), yes.front(), no.front()))
 		{
+		case dialog_keys::Answer::Yes:
 			Answered(Answer::Yes);
-		}
-		else if (IsFirstLetter(key, no))
-		{
+			break;
+		case dialog_keys::Answer::No:
 			Answered(Answer::No);
+			break;
+		default:
+			break;
 		}
 		return;
 	}
@@ -263,7 +258,7 @@ void SaveGameBoxes::KeyDown(int key)
 		CancelName();
 		return;
 	}
-	_nameDialog.KeyDown(key);
+	_nameDialog.KeyDown(key, (SDL_GetModState() & KMOD_SHIFT) != 0);
 }
 
 void SaveGameBoxes::Update(float deltaSeconds)

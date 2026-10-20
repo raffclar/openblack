@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -323,4 +324,17 @@ TEST(TownDesireScriptBoost, BoostedDesireLeadsOnceSorted)
 	desire.boost.at(D(TownDesireInfo::ToBuild)) = -1.0f;
 	td::SortDesires(desire);
 	EXPECT_EQ(desire.sorted.at(td::k_Count - 1).index, D(TownDesireInfo::ToBuild));
+}
+
+TEST(TownDesire, ALandScriptNamesADesire)
+{
+	// The case of the letters does not count, and the game's own spelling of the workshop desire is kept
+	EXPECT_EQ(td::DesireByName("Food"), std::optional<size_t>(0));
+	EXPECT_EQ(td::DesireByName("PROTECTION"), std::optional<size_t>(3));
+	EXPECT_EQ(td::DesireByName("for_children"), std::optional<size_t>(8));
+	EXPECT_EQ(td::DesireByName("Suppy_Workshop"), std::optional<size_t>(13));
+	EXPECT_EQ(td::DesireByName("Sleep"), std::optional<size_t>(16));
+	EXPECT_FALSE(td::DesireByName("Supply_Workshop").has_value());
+	EXPECT_FALSE(td::DesireByName("Food ").has_value());
+	EXPECT_FALSE(td::DesireByName("").has_value());
 }

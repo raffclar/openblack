@@ -145,6 +145,8 @@ struct Environment
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
 	bool drawFootpaths {false};
+	/// Push scrolling is on, and works in the testbed's window as in full screen
+	bool pushScrolling {false};
 	/// The player's prayer power, for watching a maintained miracle run out of it; the testbed's plenty when not given
 	std::optional<float> prayer;
 	/// The player's alignment, -1 evil to 1 good, as the scenario starts; neutral when not given
@@ -517,6 +519,8 @@ struct ScriptArgument
 		/// A position as three numbers: the point from the middle of the map, at the height above the land. Only a
 		/// native call takes it.
 		Position,
+		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
+		Integer,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};
@@ -811,6 +815,14 @@ struct Command
 		/// Opens the game's menu on its Players page, then the tattoo editor over it, as the page's Edit Tattoo button
 		/// does. Needs no creature
 		OpenTattooMenu,
+		/// Opens the game's menu on its Controls page, picks the row that the value gives and double clicks it, so that the
+		/// box asks for the row's new key or mouse input. Needs no creature
+		OpenControlsBox,
+		/// Opens the game's menu on the page that the value gives (the main menu 0, Options 1, Players 2, Advanced 3,
+		/// Controls 4). With ctrl, the menu acts as if the game had no sound. Needs no creature
+		OpenMenuPage,
+		/// Presses a key in the game's menu: the value is the SDL key code, with Shift when ctrl is set. Needs no creature
+		PressMenuKey,
 		/// The custom music player plays the track of the custom music folder that the value gives, from 0, and the music
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature
@@ -844,6 +856,9 @@ struct Command
 		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
 		/// Needs no creature
 		FlyToBookmark,
+		/// The player keeps the creature in a bookmark (value, 0 to 6), as Ctrl and the number key do with the hand over
+		/// it. Then the camera follows the bookmark, as Shift and the number key do.
+		BookmarkCreature,
 		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
 		/// creature over the film. Needs no creature of its own
 		PlayFallingSpellFilm,
@@ -1220,6 +1235,8 @@ void AddVillagerSpeedScenarios(std::vector<Scenario>& all);
 void AddDiscipleScenarios(std::vector<Scenario>& all);
 /// The labels over the villagers' heads: the names display as it grows in and out
 void AddVillagerLabelScenarios(std::vector<Scenario>& all);
+/// The temple key and the realm key of the world camera
+void AddTempleKeyScenarios(std::vector<Scenario>& all);
 /// The scrolls and signs the land scripts put up
 void AddHighlightScenarios(std::vector<Scenario>& all);
 /// The moon at night, seen to the east, for trying its phases and its path with the moon debug window

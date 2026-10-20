@@ -34,6 +34,7 @@
 #include "ECS/Registry.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerNeeds.h"
+#include "ECS/VillagerStateEntry.h"
 #include "ECS/WorldObjects.h"
 #include "Enums.h"
 #include "InfoConstants.h"
@@ -150,7 +151,7 @@ uint32_t VillagerCreated(LivingAction& action)
 struct VillagerStateTableEntry
 {
 	std::function<uint32_t(LivingAction&)> state = nullptr;
-	std::function<bool(LivingAction&, VillagerStates, VillagerStates)> entryState = nullptr;
+	std::function<ecs::VillagerStateEntry(LivingAction&, VillagerStates, VillagerStates)> entryState = nullptr;
 	std::function<bool(LivingAction&, VillagerStates)> exitState = nullptr;
 	std::function<bool(LivingAction&)> saveState = nullptr;
 	std::function<bool(LivingAction&)> loadState = nullptr;
@@ -158,6 +159,8 @@ struct VillagerStateTableEntry
 	std::function<bool(LivingAction&)> field0x60 = nullptr;
 	std::function<int(LivingAction&)> transitionAnimation = nullptr;
 	std::function<bool(LivingAction&)> validate = nullptr;
+	/// The row is not made yet: a script still puts a villager straight into its state
+	bool todo {false};
 };
 
 static const VillagerStateTableEntry k_TodoEntry = {
@@ -222,6 +225,7 @@ static const VillagerStateTableEntry k_TodoEntry = {
 	                           Locator::livingActionSystem::value().VillagerGetState(action, LivingAction::Index::Top))));
 	    return false;
     },
+    .todo = true,
 };
 
 const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerStates::_COUNT)> k_VillagerStateTable = {
@@ -242,6 +246,7 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* IN_SCRIPT */
     VillagerStateTableEntry {
         .state = &villager_script::InScript,
+        .entryState = &villager_script::EnterInScript,
         .exitState = &villager_script::ExitInScript,
     },
     /* IN_DANCE */
@@ -337,6 +342,8 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* MOVE_ALONG_PATH */
     VillagerStateTableEntry {
         .state = &villager_script::MoveAlongPath,
+        .entryState = &villager_script::EnterInScript,
+        .exitState = &villager_script::ExitInScript,
     },
     /* MOVE_ON_PATH */
     VillagerStateTableEntry {
@@ -925,11 +932,13 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
     /* SCRIPT_WANDER_AROUND_POSITION */
     VillagerStateTableEntry {
         .state = &villager_script::ScriptWanderAroundPosition,
+        .entryState = &villager_script::EnterInScript,
         .exitState = &villager_script::ExitInScript,
     },
     /* SCRIPT_PLAY_ANIM */
     VillagerStateTableEntry {
         .state = &villager_script::ScriptPlayAnim,
+        .entryState = &villager_script::EnterPlayAnim,
         .exitState = &villager_script::ExitInScript,
     },
     /* GO_TOWARDS_TELEPORT_REACTION */
@@ -1155,7 +1164,12 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .state = &villager_home::SitAndChillout,
         .entryState = &villager_home::EnterSitAndChillOut,
     },
-    /* SCRIPT_GO_AND_MOVE_ALONG_PATH */ k_TodoEntry,
+    /* SCRIPT_GO_AND_MOVE_ALONG_PATH */
+    VillagerStateTableEntry {
+        .state = &villager_script::ScriptGoAndMoveAlongPath,
+        .entryState = &villager_script::EnterInScript,
+        .exitState = &villager_script::ExitInScript,
+    },
     /* GO_HOME_FROM_WORSHIP */
     VillagerStateTableEntry {
         .state = &villager_worship::GoHomeFromWorship,
@@ -1198,8 +1212,9 @@ void LivingActionSystem::Update()
 
 	registry.Each<LivingAction>([](LivingAction& action) { ++action.turnsSinceStateChange; });
 
-	// What a hand holds, or what flies in the physics, does nothing of its own. Each villager in turn looks at whether
-	// its states still hold, then, unless a clip into or out of a state holds it, looks at its needs and acts.
+	// What flies in the physics does nothing of its own. Each villager in turn looks at whether its states still hold,
+	// then, unless a clip into or out of a state holds it, looks at its needs and acts. A villager in a hand does all of
+	// this too: its life goes down by what its hand state costs, and its hand state then does its part.
 	registry.Each<Villager, LivingAction>(
 	    [this, &registry](entt::entity entity, Villager& villager, LivingAction& action) {
 		    // Magic food wears off
@@ -1223,14 +1238,7 @@ void LivingActionSystem::Update()
 		    villager_checks::CheckEveryTime(action);
 		    VillagerCallState(action, LivingAction::Index::Top);
 	    },
-	    entt::exclude<InHand, InPhysics>);
-	// A villager in the hand has only its hand state to do: taking up the work of what it is held near
-	registry.Each<Villager, LivingAction, InHand>([this](Villager&, LivingAction& action, InHand&) {
-		if (VillagerGetState(action, LivingAction::Index::Top) == VillagerStates::InHand)
-		{
-			VillagerCallState(action, LivingAction::Index::Top);
-		}
-	});
+	    entt::exclude<InPhysics>);
 	// TODO(#476): same calls but for other types of living
 }
 
@@ -1376,9 +1384,18 @@ bool LivingActionSystem::ExitAllowed(LivingAction& action, VillagerStates next) 
 bool LivingActionSystem::EnterState(LivingAction& action, VillagerStates state, VillagerStates workedTowards) const
 {
 	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(state));
-	if (entry.entryState && !entry.entryState(action, workedTowards, state))
+	if (entry.entryState)
 	{
-		return false;
+		const auto said = entry.entryState(action, workedTowards, state);
+		if (said.Refused())
+		{
+			return false;
+		}
+		// The entry sent the villager on itself: its states are as the entry left them
+		if (said.SentOn())
+		{
+			return true;
+		}
 	}
 	// A new top state lets go of the state the villager was heading for first: whatever it goes on to next is set after
 	// this, as a walk sets where it is heading once it is walking
@@ -1409,11 +1426,15 @@ LivingActionSystem::SetResult LivingActionSystem::ChangeTopState(LivingAction& a
 	if (destination.has_value())
 	{
 		const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(*destination));
-		if (entry.entryState && !entry.entryState(action, previous, *destination))
+		const auto said = entry.entryState ? entry.entryState(action, previous, *destination) : ecs::VillagerStateEntry(true);
+		if (said.Refused())
 		{
 			return SetResult::EntryFailed;
 		}
-		SetStateDirectly(action, LivingAction::Index::Final, *destination);
+		if (!said.SentOn())
+		{
+			SetStateDirectly(action, LivingAction::Index::Final, *destination);
+		}
 	}
 	const auto villager = Locator::entitiesRegistry::value().ToEntity(action);
 	// It goes at the speed of the state it is to end up in: a walk into a state goes at that state's speed
@@ -1493,7 +1514,8 @@ void LivingActionSystem::VillagerPlayAnimThenSetState(LivingAction& action, Vill
 		return;
 	}
 	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(next));
-	if (entry.entryState && !entry.entryState(action, previous, next))
+	const auto said = entry.entryState ? entry.entryState(action, previous, next) : ecs::VillagerStateEntry(true);
+	if (said.Refused() || said.SentOn())
 	{
 		return;
 	}
@@ -1597,7 +1619,26 @@ bool LivingActionSystem::VillagerCallEntryState(LivingAction& action, LivingActi
 	{
 		return false;
 	}
-	return callback(action, src, dst);
+	return !callback(action, src, dst).Refused();
+}
+
+bool LivingActionSystem::VillagerEnterState(LivingAction& action, VillagerStates state) const
+{
+	const auto& entry = k_VillagerStateTable.at(static_cast<size_t>(state));
+	if (!entry.todo && entry.entryState)
+	{
+		const auto said = entry.entryState(action, FinalStateOf(action), state);
+		if (said.Refused())
+		{
+			return false;
+		}
+		if (said.SentOn())
+		{
+			return true;
+		}
+	}
+	VillagerSetState(action, LivingAction::Index::Top, state, true);
+	return true;
 }
 
 bool LivingActionSystem::VillagerCallExitState(LivingAction& action, LivingAction::Index index, VillagerStates next) const

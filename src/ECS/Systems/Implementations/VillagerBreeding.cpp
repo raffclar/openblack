@@ -66,6 +66,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "VillagerAnimate.h"
+#include "VillagerBuild.h"
 #include "VillagerFood.h"
 #include "VillagerFootpath.h"
 #include "VillagerHome.h"
@@ -430,18 +431,6 @@ entt::entity NearestHome(entt::entity town, glm::vec2 point, float reach)
 	return nearest;
 }
 
-/// Where a town's people take food: its working storage pit's door
-std::optional<glm::vec2> FoodDropOff(entt::entity town)
-{
-	const auto pit = ecs::construction::StoragePitOf(town);
-	if (pit.has_value() && villager_home::IsFunctional(*pit))
-	{
-		return villager_home::ArrivePosition(*pit);
-	}
-	// TODO(villager-hunger-health): without a working storage pit a town keeps a temporary pot; not in openblack yet
-	return std::nullopt;
-}
-
 bool TownWantsSleepMost(entt::entity town)
 {
 	return town == entt::null || Locator::townDesireSystem::value().GetMostWanted(town) == TownDesireInfo::ForSleep;
@@ -671,12 +660,8 @@ bool villager_breeding::SetupBreederDisciple(LivingAction& action)
 	}
 	else
 	{
-		const auto store = FoodDropOff(town);
-		if (!store.has_value())
-		{
-			return false;
-		}
-		spot = BreederSpotByStore(*store, GameFloat());
+		// Near where its town leaves food: its working pit's door, or its temporary pile, made if missing
+		spot = BreederSpotByStore(villager_build::ResourceDropoffPos(villager, ResourceType::Food), GameFloat());
 		villager_home::SetupMoveTo(action, spot, VillagerStates::BreederDisciple);
 	}
 	SetLover(villager, entt::null);

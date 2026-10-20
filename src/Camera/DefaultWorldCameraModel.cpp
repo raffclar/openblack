@@ -9,10 +9,14 @@
 
 #include "DefaultWorldCameraModel.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numeric>
 #include <ranges>
+#include <span>
 #include <tuple>
 
 #include <glm/gtc/constants.hpp>
@@ -29,6 +33,7 @@
 #include "Camera.h"
 #include "CameraLimits.h"
 #include "CameraZones.h"
+#include "ClickDistance.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -38,6 +43,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "EngineConfig.h"
 #include "FightView.h"
 #include "Help/HelpProfile.h"
 #include "Help/TurnCheer.h"
@@ -139,6 +145,9 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 		eulerAngles.x += _rotateAroundDelta.y * glm::pi<float>() / windowSize.x;
 	}
 
+	// Push scrolling turns the camera by its own turn
+	eulerAngles.x += _pushTurn;
+
 	// Update the camera's pitch if there's significant vertical movement.
 	if (glm::abs(_rotateAroundDelta.x) > glm::epsilon<float>())
 	{
@@ -174,25 +183,19 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 	_averageIslandDistance = glm::max(_averageIslandDistance, camera_limits::k_ClosestZoom);
 }
 
-float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const
+float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera, glm::vec3 origin) const
 {
-	std::vector<float> inverseHitDistances;
-	inverseHitDistances.reserve(0x10);
-
-	for (int i = 0; i < 0x10; ++i)
+	std::array<float, click_distance::k_Rays> hits {};
+	size_t hitCount = 0;
+	for (int32_t ray = 0; ray < click_distance::k_Rays; ++ray)
 	{
-		const glm::vec2 coord = glm::vec2(0.5f, i / 16.0f);
-
+		const auto coord = click_distance::RayCoord(ray);
 		if (const auto hit = camera.RaycastScreenCoordToLand(coord, true, Camera::Interpolation::Drawn))
 		{
-			inverseHitDistances.push_back(1.0f / glm::length(hit->position - _targetOrigin));
+			hits.at(hitCount++) = click_distance::HitDistance(origin, hit->position);
 		}
 	}
-
-	// Default distance of 50 if no hits happen, therefore divide by size + 1
-	const auto average = std::accumulate(inverseHitDistances.cbegin(), inverseHitDistances.cend(), 1.0f / 50.0f) /
-	                     (inverseHitDistances.size() + 1);
-	return 1.0f / average;
+	return click_distance::MeanDistance(std::span(hits).first(hitCount));
 }
 
 void DefaultWorldCameraModel::ComputeDistanceFromBoundY()
@@ -217,7 +220,7 @@ camera_zones::Zones DefaultWorldCameraModel::CurrentZones()
 
 DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener,
                                                                           std::chrono::microseconds dt, float zoomDelta,
-                                                                          glm::vec3 eulerAngles, const Camera& camera)
+                                                                          const Camera& camera)
 {
 	if (!Locator::terrainSystem::has_value())
 	{
@@ -327,13 +330,18 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	{
 		_originFocusDistanceAtInteractionStart =
 		    glm::max(glm::distance(_targetOrigin, _targetFocus), camera_limits::k_ClosestZoom);
-		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, eulerAngles, camera);
+		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, camera);
 	}
 	return moved;
 }
 
-void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles,
-                                                                    const Camera& camera)
+float DefaultWorldCameraModel::RefreshClickDistance(const Camera& camera)
+{
+	UpdateFocusPointInteractionParameters(camera.GetOrigin(), camera.GetFocus(), camera);
+	return _averageIslandDistance;
+}
+
+void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, const Camera& camera)
 {
 	_focusAtClick = _targetFocus;
 	_screenSpaceMouseRaycastHitAtClick =
@@ -355,24 +363,9 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 		_alignmentAtInteractionStart = _landGrip->plane.distance;
 		_originFocusDistanceAtInteractionStart = glm::distance(_landGrip->origin, _landGrip->focus);
 	}
-	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera);
-	{
-		const auto diff = _targetOrigin - _targetFocus;
-		// If the camera is directly above the focus point, set pitch to 90 degrees.
-		if (glm::all(glm::lessThan(glm::abs(glm::xz(diff)), glm::vec2(0.1f, 0.1f))))
-		{
-			eulerAngles = glm::vec3(0.0f, glm::half_pi<float>(), 0.0f);
-		}
-		// Otherwise, calculate yaw and pitch based on the direction to the focus point.
-		else
-		{
-			eulerAngles =
-			    glm::vec3(glm::pi<float>() - glm::atan(diff.x, -diff.z), glm::atan(diff.y, glm::length(glm::xz(diff))), 0.0f);
-		}
-	}
-	const auto extra =
-	    (_focusDistance - _averageIslandDistance) * glm::clamp(eulerAngles.y / (6.0f * glm::pi<float>()), 0.0f, 1.0f);
-	_averageIslandDistance += extra;
+	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera, origin);
+	// The steeper the camera looks down, the more the distance moves towards the focus distance
+	_averageIslandDistance = click_distance::TowardsFocus(_averageIslandDistance, _focusDistance, origin, focus);
 }
 
 void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent)
@@ -665,6 +658,11 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 
 	UpdateCameraInterpolationValues(camera);
 	const auto originAtFrameStart = _targetOrigin;
+	// Push scrolling moves the camera over the land after the start of the frame is kept, so that a camera that keeps
+	// to its place goes back over it
+	_targetOrigin += _pushMove;
+	_targetFocus += _pushMove;
+	_focusAtClick += _pushMove;
 	UpdateRaycastHitPoints(camera);
 	UpdateFocusDistance();
 
@@ -691,7 +689,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	if (_mode != _modePrev && _mode != Mode::FlyingToPoint && _modePrev != Mode::FlyingToPoint)
 	{
 		UpdateFocusPointInteractionParameters(camera.GetOrigin(Camera::Interpolation::Target),
-		                                      camera.GetFocus(Camera::Interpolation::Target), eulerAngles, camera);
+		                                      camera.GetFocus(Camera::Interpolation::Target), camera);
 		// The camera turns and tilts about the point it now looks at, not the one it looked at before the change
 		eulerAngles = EulerFromPoints(_targetOrigin, _focusAtClick);
 	}
@@ -740,7 +738,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_focusAtClick = _targetFocus;
 	}
 
-	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, eulerAngles, camera);
+	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, camera);
 
 	// The self-tilting camera eases over a second while it keeps to its place, or is tilted, unless a flight's first frame
 	// was pushed
@@ -980,6 +978,12 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_rotateAroundDelta.x = 0.0f;
 	}
+	// Push scrolling acts only while no button, key or the camera tilting itself holds the camera
+	{
+		const auto& asked = _helpControls;
+		const bool anythingAsked = asked.turn != 0.0f || asked.tilt != 0.0f || asked.zoom != 0.0f || asked.move != glm::vec2();
+		HandlePushScroll(dt, !gripping && !rotateAroundMouse && !twoButtons && !anythingAsked && !autoTilting, gripping);
+	}
 	// The hints follow the cursor while no button holds the camera and the player isn't turning, moving or zooming it;
 	// the camera tilting itself doesn't stop them
 	const bool playerMovesCamera = _rotateAroundDelta != glm::vec3() || _keyBoardMoveDelta != glm::vec2();
@@ -1011,7 +1015,7 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	{
 		_mode = HandleDrag(true);
 	}
-	else if (_keyBoardMoveDelta != glm::vec2() || _rotateAroundDelta != glm::vec3())
+	else if (_keyBoardMoveDelta != glm::vec2() || _rotateAroundDelta != glm::vec3() || _pushTurn != 0.0f)
 	{
 		_mode = Mode::Polar;
 	}
@@ -1080,6 +1084,62 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
 	}
 	UpdateIconFrame(onFight);
+}
+
+void DefaultWorldCameraModel::HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping)
+{
+	namespace push = camera_push_scroll;
+	_pushMove = glm::vec3(0.0f);
+	_pushTurn = 0.0f;
+	const float seconds = push::Seconds(_pushClock.Step(dt));
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
+	const auto& actions = Locator::gameActionSystem::value();
+	const auto& windowing = Locator::windowing::value();
+	const auto screenSize = windowing.GetSize();
+	const bool windowed =
+	    windowing.IsWindowed() && !(Locator::config::has_value() && Locator::config::value().testbedPushScrollInWindow);
+	const auto cursor = glm::ivec2(actions.GetMousePosition());
+	push::Track(_pushPointer, push::PushScreenPosition(cursor, screenSize), actions.GetMousePushDelta(),
+	            push::Inside(cursor, screenSize), windowed);
+
+	const bool allowed =
+	    Locator::config::has_value() && Locator::config::value().pushScrolling && (_features & push::k_FeaturePushScroll) != 0;
+	if (!allowed)
+	{
+		_pushSpeed = glm::vec3(0.0f);
+		return;
+	}
+	// The speed moves and turns the camera while nothing else holds it
+	if (buttonsFree)
+	{
+		const auto euler = EulerFromPoints(_targetOrigin, _focusAtClick);
+		const auto strafe = push::StrafeStep(_pushSpeed, seconds, euler.x, euler.y, _features);
+		_pushMove = strafe.move;
+		_pushTurn = strafe.turn;
+		if (strafe.moved)
+		{
+			_helpEvents.Add(help::profile::k_CameraDrag);
+		}
+		if (strafe.turnCounted)
+		{
+			_helpEvents.Add(help::profile::k_CameraTurn);
+			_helpEvents.Add(strafe.turnedPositive ? help::profile::k_CameraTurnPositive : help::profile::k_CameraTurnNegative);
+			_turnedThisFrame = strafe.turn;
+		}
+	}
+	push::Fade(_pushSpeed, seconds, _pushPointer.insideX && _pushPointer.insideY);
+
+	// The frame's push, as the game reads its keys after its camera moved: only in full screen, with the land not gripped
+	// and the player having the interface
+	const bool interface =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	if (!gripping && !windowed && interface)
+	{
+		push::Push(_pushSpeed, _pushPointer, push::Speed(_currentOrigin.y, _currentFocus.y), seconds);
+	}
 }
 
 void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)

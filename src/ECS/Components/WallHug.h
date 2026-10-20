@@ -78,6 +78,17 @@ struct WallHugLookahead
 	bool landingShutIn {false};
 };
 
+/// A walker that walks round what is in its way as an animal does. It takes its walk in its own turn, not with the
+/// other walkers. When it aims at its goal, it turns by at most its kind's turn angle. When it steps straight to its
+/// goal, it aims again each turn.
+struct TurningWalker
+{
+	/// The most it turns towards its goal in one aim, in game angles (2048 to the circle)
+	uint16_t turnAngle {0};
+	/// Its step in a turn, in whole map units
+	uint16_t speed {0};
+};
+
 struct WallHug
 {
 	glm::vec2 goal;

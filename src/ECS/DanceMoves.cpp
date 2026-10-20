@@ -549,10 +549,14 @@ int32_t dance_moves::DanceClip(const ClipView& view, const std::function<uint32_
 	case 6:
 		return k_SidewaysClip + (view.female ? 1 : 0);
 	case 9:
-		// TODO(opening): the game asks the villager something first (and stands it when the answer is no)
+		// A dancer that does not move stands; one that moves steps sideways
+		if (!view.moving)
+		{
+			return k_StandClip;
+		}
 		return k_SidewaysClip + (view.female ? 1 : 0);
 	case 10:
-		// TODO(opening): a number past the table reads on past it in the game
+		// The game reads on past its table for a number past it; the dance files hold none
 		return view.first < k_ClipTable.size() ? k_ClipTable.at(view.first).at(view.female ? 1 : 0) : k_StandClip;
 	case 11:
 	case 12:

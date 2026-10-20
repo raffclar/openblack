@@ -1645,83 +1645,79 @@ void ReactionSystem::ProcessTurn()
 		}
 	}
 	ProcessLiving();
-	BelieveInTowns();
 }
 
-void ReactionSystem::BelieveInTowns()
+void ReactionSystem::BelieveInTown(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	auto* found = registry.Valid(entity) ? registry.TryGet<TownImpression>(entity) : nullptr;
+	if (found == nullptr || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& impression = *found;
 	const auto& info = Locator::infoConstants::value();
 	const float decay = info.player.computerPlayerBeliefChangeDecay;
 	const float lostTownScale = registry.Context().mapScriptGlobals.lostTownScale;
 	const auto desireDecay = DesireDecayTable(info.townDesire);
-	// Towns that change hands this turn, given to their new players once every town has had its turn
-	std::vector<std::pair<entt::entity, PlayerNames>> claimed;
-	registry.Each<TownImpression>([&](entt::entity entity, TownImpression& impression) {
-		// Its boredom with each kind of reaction wears off, as long as it is still bored
-		for (auto& [type, boredom] : impression.boredom)
+	// Its boredom with each kind of reaction wears off, as long as it is still bored
+	for (auto& [type, boredom] : impression.boredom)
+	{
+		if (const auto* reactionInfo = InfoOf(type))
 		{
-			if (const auto* reactionInfo = InfoOf(type))
-			{
-				boredom = magic::BoredomAtTownTurn(boredom, reactionInfo->additionToTownBoredomMultipliers, lostTownScale);
-			}
+			boredom = magic::BoredomAtTownTurn(boredom, reactionInfo->additionToTownBoredomMultipliers, lostTownScale);
 		}
-		const auto gained = magic::town_belief::Turn(impression.belief, decay);
-		const auto* town = registry.TryGet<const Town>(entity);
-		if (town == nullptr)
-		{
-			return;
-		}
-		// The belief gained rises as a symbol from the town centre's foot, in the believer's colour
-		if (!gained.empty() && Locator::particleSystem::has_value())
-		{
-			if (const auto centre = TownCentreOf(registry, town->id); centre.has_value())
-			{
-				for (const auto& [player, amount] : gained)
-				{
-					villager_reactions::ShowTownBelief(*centre, player, amount);
-				}
-			}
-		}
-		// When the town gets belief, its desire levels go back to the table values. A town that wants more than a level
-		// loses belief in its owner. The loss shows no symbol.
-		if (!gained.empty())
-		{
-			magic::town_belief::ResetDesireLevels(impression.belief, desireDecay);
-		}
-		if (const auto* wants = registry.TryGet<const TownDesire>(entity))
-		{
-			magic::town_belief::LoseBeliefToDesires(impression.belief, town->owner, DesireWithBoosts(*wants), desireDecay,
-			                                        info.belief.minimumThreshold);
-		}
-		// The player it believes in most takes it; a player losing it believes less in every town they hold
-		const auto taker =
-		    magic::town_belief::Ownership(impression.belief, town->owner, info.belief.claimedTownBeliefMultiplier);
-		if (!taker.has_value())
-		{
-			return;
-		}
-		const auto loser = town->owner;
-		if (loser != PlayerNames::NEUTRAL)
-		{
-			registry.Each<const Town>([&](entt::entity held, const Town& heldTown) {
-				auto* heldImpression = heldTown.owner == loser ? registry.TryGet<TownImpression>(held) : nullptr;
-				if (heldImpression != nullptr)
-				{
-					magic::town_belief::LostTown(heldImpression->belief, loser, info.belief.lostATownBeliefInPlayerMultiplier,
-					                             lostTownScale);
-				}
-			});
-		}
-		claimed.emplace_back(entity, *taker);
-	});
-	if (!Locator::townSystem::has_value())
+	}
+	const auto gained = magic::town_belief::Turn(impression.belief, decay);
+	const auto* town = registry.TryGet<const Town>(entity);
+	if (town == nullptr)
 	{
 		return;
 	}
-	for (const auto& [town, player] : claimed)
+	// The belief gained rises as a symbol from the town centre's foot, in the believer's colour
+	if (!gained.empty() && Locator::particleSystem::has_value())
 	{
-		Locator::townSystem::value().ClaimTown(town, player);
+		if (const auto centre = TownCentreOf(registry, town->id); centre.has_value())
+		{
+			for (const auto& [player, amount] : gained)
+			{
+				villager_reactions::ShowTownBelief(*centre, player, amount);
+			}
+		}
+	}
+	// When the town gets belief, its desire levels go back to the table values. A town that wants more than a level
+	// loses belief in its owner. The loss shows no symbol.
+	if (!gained.empty())
+	{
+		magic::town_belief::ResetDesireLevels(impression.belief, desireDecay);
+	}
+	if (const auto* wants = registry.TryGet<const TownDesire>(entity))
+	{
+		magic::town_belief::LoseBeliefToDesires(impression.belief, town->owner, DesireWithBoosts(*wants), desireDecay,
+		                                        info.belief.minimumThreshold);
+	}
+	// The player it believes in most takes it; a player losing it believes less in every town they hold
+	const auto taker = magic::town_belief::Ownership(impression.belief, town->owner, info.belief.claimedTownBeliefMultiplier);
+	if (!taker.has_value())
+	{
+		return;
+	}
+	const auto loser = town->owner;
+	if (loser != PlayerNames::NEUTRAL)
+	{
+		registry.Each<const Town>([&](entt::entity held, const Town& heldTown) {
+			auto* heldImpression = heldTown.owner == loser ? registry.TryGet<TownImpression>(held) : nullptr;
+			if (heldImpression != nullptr)
+			{
+				magic::town_belief::LostTown(heldImpression->belief, loser, info.belief.lostATownBeliefInPlayerMultiplier,
+				                             lostTownScale);
+			}
+		});
+	}
+	// The player it believes in most takes it at once, in its own turn
+	if (Locator::townSystem::has_value())
+	{
+		Locator::townSystem::value().ClaimTown(entity, *taker);
 	}
 }
 

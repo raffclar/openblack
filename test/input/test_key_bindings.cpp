@@ -20,7 +20,6 @@
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
 
-#include "Camera/ZoomToPlaces.h"
 #include "Input/GameActionMap.h"
 #include "Input/KeyBindings.h"
 
@@ -258,80 +257,4 @@ TEST(GameActionMap, QueuedChordPressesOnlyTheChordsAction)
 	map.Frame();
 	EXPECT_TRUE(Pressed(map, BindableActionMap::QUICK_SAVE));
 	EXPECT_FALSE(map.Get(BindableActionMap::SHOW_VILLAGER_DETAILS));
-}
-
-namespace
-{
-constexpr float k_Tolerance = 1e-3f;
-
-[[nodiscard]] float PitchOf(const zoom_to::CameraView& view)
-{
-	const auto towards = view.origin - view.focus;
-	return std::asin(towards.y / glm::length(towards));
-}
-} // namespace
-
-TEST(ZoomToPlaces, SingleTapKeepsHeadingAndFocus)
-{
-	zoom_to::ZoomToPlaces zoomTo;
-	const zoom_to::CameraView current {.origin = {0.0f, 200.0f, -300.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	const auto view = zoomTo.PressTemple(std::chrono::milliseconds(10000), current, {0.0f, 0.0f, 0.0f},
-	                                     glm::vec3(1000.0f, 10.0f, 1000.0f), {500.0f, 0.0f, 500.0f});
-	ASSERT_TRUE(view.has_value());
-	EXPECT_NEAR(view->focus.y, zoom_to::k_FocusAboveGround, k_Tolerance);
-	EXPECT_NEAR(glm::distance(view->origin, view->focus), zoom_to::k_TapDistance, k_Tolerance);
-	EXPECT_NEAR(PitchOf(*view), zoom_to::k_TapPitch, k_Tolerance);
-	EXPECT_NEAR(zoom_to::HeadingOf(*view), zoom_to::HeadingOf(current), k_Tolerance);
-	EXPECT_FALSE(zoomTo.IsZoomedTo());
-}
-
-TEST(ZoomToPlaces, DoubleTapFliesToTheTempleAndBack)
-{
-	zoom_to::ZoomToPlaces zoomTo;
-	const zoom_to::CameraView start {.origin = {0.0f, 200.0f, -300.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	const glm::vec3 temple {1000.0f, 10.0f, 1000.0f};
-	const glm::vec3 realm {500.0f, 0.0f, 500.0f};
-	const auto first = zoomTo.PressTemple(std::chrono::milliseconds(10000), start, {}, temple, realm);
-	ASSERT_TRUE(first.has_value());
-	const auto second = zoomTo.PressTemple(std::chrono::milliseconds(10300), *first, {}, temple, realm);
-	ASSERT_TRUE(second.has_value());
-	EXPECT_TRUE(zoomTo.IsZoomedTo());
-	EXPECT_NEAR(second->focus.x, temple.x, k_Tolerance);
-	EXPECT_NEAR(second->focus.y, temple.y + zoom_to::k_FocusAboveGround, k_Tolerance);
-	EXPECT_NEAR(glm::distance(second->origin, second->focus), zoom_to::k_TempleDistance, k_Tolerance);
-	EXPECT_NEAR(PitchOf(*second), zoom_to::k_TemplePitch, k_Tolerance);
-
-	// A tap long after is a single tap again; a double tap while looking at the temple flies back
-	const auto third = zoomTo.PressTemple(std::chrono::milliseconds(20000), *second, temple, temple, realm);
-	ASSERT_TRUE(third.has_value());
-	const auto back = zoomTo.PressTemple(std::chrono::milliseconds(20200), *third, temple, temple, realm);
-	ASSERT_TRUE(back.has_value());
-	EXPECT_NEAR(glm::distance(back->origin, first->origin), 0.0f, k_Tolerance);
-	EXPECT_FALSE(zoomTo.IsZoomedTo());
-}
-
-TEST(ZoomToPlaces, RealmFliesOverTheIslandAndBack)
-{
-	zoom_to::ZoomToPlaces zoomTo;
-	const zoom_to::CameraView start {.origin = {0.0f, 200.0f, -300.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	const glm::vec3 realm {2500.0f, 20.0f, 2600.0f};
-	const auto view = zoomTo.PressRealm(start, realm);
-	ASSERT_TRUE(view.has_value());
-	EXPECT_NEAR(glm::distance(view->origin, view->focus), zoom_to::k_RealmDistance, 0.01f);
-	EXPECT_NEAR(PitchOf(*view), zoom_to::k_RealmPitch, k_Tolerance);
-	const auto back = zoomTo.PressRealm(*view, realm);
-	ASSERT_TRUE(back.has_value());
-	EXPECT_NEAR(glm::distance(back->origin, start.origin), 0.0f, k_Tolerance);
-}
-
-TEST(ZoomToPlaces, DoubleTapWithoutATempleGoesOverTheRealm)
-{
-	zoom_to::ZoomToPlaces zoomTo;
-	const zoom_to::CameraView start {.origin = {0.0f, 200.0f, -300.0f}, .focus = {0.0f, 0.0f, 0.0f}};
-	const glm::vec3 realm {2500.0f, 20.0f, 2600.0f};
-	const auto first = zoomTo.PressTemple(std::chrono::milliseconds(1000), start, {}, std::nullopt, realm);
-	const auto second = zoomTo.PressTemple(std::chrono::milliseconds(1100), *first, {}, std::nullopt, realm);
-	ASSERT_TRUE(second.has_value());
-	EXPECT_NEAR(second->focus.x, realm.x, k_Tolerance);
-	EXPECT_NEAR(glm::distance(second->origin, second->focus), zoom_to::k_RealmDistance, 0.01f);
 }

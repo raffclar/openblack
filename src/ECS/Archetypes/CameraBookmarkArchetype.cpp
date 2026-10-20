@@ -20,7 +20,7 @@ using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-std::array<entt::entity, 8> CameraBookmarkArchetype::CreateAll()
+entt::entity CameraBookmarkArchetype::Create(uint8_t number)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto texture = Locator::resources::value().GetTextures().Handle(entt::hashed_string("raw/misc0a"));
@@ -28,21 +28,22 @@ std::array<entt::entity, 8> CameraBookmarkArchetype::CreateAll()
 	{
 		throw std::runtime_error("Failed to get Camera Bookmark sprite: misc0a");
 	}
-
-	auto result = std::array<entt::entity, 8>();
-
-	registry.Create(result.begin(), result.end());
+	const auto entity = registry.Create();
+	// Each marker shows its number in a ring: the fourth row of the sheet holds the numbers from 1, one in each column
 	const glm::vec2 extent = glm::vec2 {1.0f / 8.0f, 1.0f / 8.0f};
 	const glm::vec4 tint = glm::vec4 {1.0f, 1.0f, 0.0f, 1.0f};
+	const float u = static_cast<float>(number) / 8.0f;
+	registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2 {u, 3.0f / 8.0f}, extent, tint);
+	registry.Assign<CameraBookmark>(entity, CameraBookmark {.number = number});
+	return entity;
+}
 
-	// TODO (#749) use std::views::enumerate
-	for (uint8_t i = 0; auto entity : result)
+std::array<entt::entity, camera_bookmarks::k_KeySlots> CameraBookmarkArchetype::CreateAll()
+{
+	auto result = std::array<entt::entity, camera_bookmarks::k_KeySlots>();
+	for (uint8_t number = 0; number < result.size(); ++number)
 	{
-		const float u = static_cast<float>(i) / static_cast<float>(result.size());
-		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2 {u, 3.0f / 8.0f}, extent, tint);
-		++i;
-		registry.Assign<CameraBookmark>(entity, i, 0.0f);
+		result.at(number) = Create(number);
 	}
-
 	return result;
 }
