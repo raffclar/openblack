@@ -9,10 +9,14 @@
 
 #include "DefaultWorldCameraModel.h"
 
+#include <cmath>
+
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <numeric>
 #include <ranges>
+#include <span>
 #include <tuple>
 
 #include <glm/gtc/constants.hpp>
@@ -29,6 +33,7 @@
 #include "Camera.h"
 #include "CameraLimits.h"
 #include "CameraZones.h"
+#include "ClickDistance.h"
 #include "Common/MachineClock.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -174,25 +179,19 @@ void DefaultWorldCameraModel::TiltZoom(glm::vec3& eulerAngles, float scalingFact
 	_averageIslandDistance = glm::max(_averageIslandDistance, camera_limits::k_ClosestZoom);
 }
 
-float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera) const
+float DefaultWorldCameraModel::GetVerticalLineInverseDistanceWeighingRayCast(const Camera& camera, glm::vec3 origin) const
 {
-	std::vector<float> inverseHitDistances;
-	inverseHitDistances.reserve(0x10);
-
-	for (int i = 0; i < 0x10; ++i)
+	std::array<float, click_distance::k_Rays> hits {};
+	size_t hitCount = 0;
+	for (int32_t ray = 0; ray < click_distance::k_Rays; ++ray)
 	{
-		const glm::vec2 coord = glm::vec2(0.5f, i / 16.0f);
-
+		const auto coord = click_distance::RayCoord(ray);
 		if (const auto hit = camera.RaycastScreenCoordToLand(coord, true, Camera::Interpolation::Drawn))
 		{
-			inverseHitDistances.push_back(1.0f / glm::length(hit->position - _targetOrigin));
+			hits.at(hitCount++) = click_distance::HitDistance(origin, hit->position);
 		}
 	}
-
-	// Default distance of 50 if no hits happen, therefore divide by size + 1
-	const auto average = std::accumulate(inverseHitDistances.cbegin(), inverseHitDistances.cend(), 1.0f / 50.0f) /
-	                     (inverseHitDistances.size() + 1);
-	return 1.0f / average;
+	return click_distance::MeanDistance(std::span(hits).first(hitCount));
 }
 
 void DefaultWorldCameraModel::ComputeDistanceFromBoundY()
@@ -217,7 +216,7 @@ camera_zones::Zones DefaultWorldCameraModel::CurrentZones()
 
 DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::vec3 originAtFrameStart, glm::vec3 listener,
                                                                           std::chrono::microseconds dt, float zoomDelta,
-                                                                          glm::vec3 eulerAngles, const Camera& camera)
+                                                                          const Camera& camera)
 {
 	if (!Locator::terrainSystem::has_value())
 	{
@@ -327,19 +326,18 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	{
 		_originFocusDistanceAtInteractionStart =
 		    glm::max(glm::distance(_targetOrigin, _targetFocus), camera_limits::k_ClosestZoom);
-		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, eulerAngles, camera);
+		UpdateFocusPointInteractionParameters(_targetOrigin, _targetFocus, camera);
 	}
 	return moved;
 }
 
 float DefaultWorldCameraModel::RefreshClickDistance(const Camera& camera)
 {
-	UpdateFocusPointInteractionParameters(camera.GetOrigin(), camera.GetFocus(), glm::vec3(0.0f), camera);
+	UpdateFocusPointInteractionParameters(camera.GetOrigin(), camera.GetFocus(), camera);
 	return _averageIslandDistance;
 }
 
-void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles,
-                                                                    const Camera& camera)
+void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, const Camera& camera)
 {
 	_focusAtClick = _targetFocus;
 	_screenSpaceMouseRaycastHitAtClick =
@@ -361,24 +359,9 @@ void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 or
 		_alignmentAtInteractionStart = _landGrip->plane.distance;
 		_originFocusDistanceAtInteractionStart = glm::distance(_landGrip->origin, _landGrip->focus);
 	}
-	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera);
-	{
-		const auto diff = _targetOrigin - _targetFocus;
-		// If the camera is directly above the focus point, set pitch to 90 degrees.
-		if (glm::all(glm::lessThan(glm::abs(glm::xz(diff)), glm::vec2(0.1f, 0.1f))))
-		{
-			eulerAngles = glm::vec3(0.0f, glm::half_pi<float>(), 0.0f);
-		}
-		// Otherwise, calculate yaw and pitch based on the direction to the focus point.
-		else
-		{
-			eulerAngles =
-			    glm::vec3(glm::pi<float>() - glm::atan(diff.x, -diff.z), glm::atan(diff.y, glm::length(glm::xz(diff))), 0.0f);
-		}
-	}
-	const auto extra =
-	    (_focusDistance - _averageIslandDistance) * glm::clamp(eulerAngles.y / (6.0f * glm::pi<float>()), 0.0f, 1.0f);
-	_averageIslandDistance += extra;
+	_averageIslandDistance = GetVerticalLineInverseDistanceWeighingRayCast(camera, origin);
+	// The steeper the camera looks down, the more the distance moves towards the focus distance
+	_averageIslandDistance = click_distance::TowardsFocus(_averageIslandDistance, _focusDistance, origin, focus);
 }
 
 void DefaultWorldCameraModel::UpdateMode(const Camera& camera, glm::vec3 eulerAngles, float zoomDelta, glm::uvec2 mouseCurrent)
@@ -697,7 +680,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 	if (_mode != _modePrev && _mode != Mode::FlyingToPoint && _modePrev != Mode::FlyingToPoint)
 	{
 		UpdateFocusPointInteractionParameters(camera.GetOrigin(Camera::Interpolation::Target),
-		                                      camera.GetFocus(Camera::Interpolation::Target), eulerAngles, camera);
+		                                      camera.GetFocus(Camera::Interpolation::Target), camera);
 		// The camera turns and tilts about the point it now looks at, not the one it looked at before the change
 		eulerAngles = EulerFromPoints(_targetOrigin, _focusAtClick);
 	}
@@ -746,7 +729,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> DefaultWorldCameraMode
 		_focusAtClick = _targetFocus;
 	}
 
-	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, eulerAngles, camera);
+	const auto moved = ApplyLimits(originAtFrameStart, camera.GetOrigin(), dt, zoomDelta, camera);
 
 	// The self-tilting camera eases over a second while it keeps to its place, or is tilted, unless a flight's first frame
 	// was pushed
