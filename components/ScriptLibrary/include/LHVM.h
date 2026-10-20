@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <optional>
 #include <set>
 #include <span>
 #include <string>
@@ -57,6 +58,8 @@ protected:
 	std::set<uint32_t> _breakpoints;
 	std::map<uint32_t, uint32_t> _heldTasks;
 	std::map<uint32_t, uint32_t> _resumeFrom;
+	/// The task that stopped itself during its run, which goes when the run ends
+	std::optional<uint32_t> _stoppedWhileRunning;
 
 	const std::vector<NativeFunction>* _functions {nullptr};
 	std::function<void(const uint32_t func)> _nativeCallEnterCallback;
@@ -116,6 +119,7 @@ protected:
 	bool TaskExists(uint32_t taskId);
 	uint32_t GetTicksCount();
 	VMVar& GetVar(VMTask& task, uint32_t id);
+	void PopToVariable(VMTask& task, uint32_t id);
 	/// The task's exception handlers, innermost first by index
 	[[nodiscard]] static uint32_t GetExceptionHandlersCount(const VMTask& task);
 	[[nodiscard]] static uint32_t GetCurrentExceptionHandlerIp(const VMTask& task, uint32_t index);
@@ -126,6 +130,7 @@ protected:
 	bool DebuggerStops(VMTask& task);
 	/// Held with no instruction left to run, so its turns pass it by
 	[[nodiscard]] bool IsParked(uint32_t taskNumber) const;
+	bool EraseTaskStoppedWhileRunning();
 
 	static float Fmod(float a, float b);
 

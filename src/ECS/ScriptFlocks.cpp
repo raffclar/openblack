@@ -258,6 +258,13 @@ void script_flocks::MoveTo(Registry& registry, entt::entity flock, const MapCoor
 	registry.Get<Flock>(flock).place = place;
 }
 
+entt::entity script_flocks::MemberToDetach(const Registry& registry, entt::entity flock,
+                                           const std::function<uint32_t(uint32_t)>& random)
+{
+	const auto exclude = Size(registry, flock) > 1 ? Leader(registry, flock) : entt::null;
+	return RandomMember(registry, flock, exclude, random);
+}
+
 entt::entity script_flocks::RandomMember(const Registry& registry, entt::entity flock, entt::entity exclude,
                                          const std::function<uint32_t(uint32_t)>& random)
 {
