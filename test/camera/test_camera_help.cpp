@@ -90,15 +90,14 @@ TEST(CameraHelp, UnknownLevelsChangeNothingButAreKept)
 	EXPECT_EQ(help.features, 0x26u);
 }
 
-TEST(CameraHelp, ANewLandGivesEveryFeatureBackAndTheFirstHeight)
+TEST(CameraHelp, ANewLandGivesEveryFeatureBackAndTheFirstPitchAndHeight)
 {
 	CameraHelp help;
 	ASSERT_TRUE(help.SetInterfaceLevel(1));
 	help.ResetForNewLand();
 	EXPECT_EQ(help.features, 0x1BFu);
 	EXPECT_FLOAT_EQ(help.autoPitchHeight, 75.0f);
-	// The pitch stays as the script left it
-	EXPECT_NEAR(help.autoPitch, 0.448799f, 1e-6f);
+	EXPECT_EQ(help.autoPitch, k_DefaultAutoPitch);
 }
 
 TEST(CameraHelp, WatchingAFightTheCameraCantBeSentToFights)

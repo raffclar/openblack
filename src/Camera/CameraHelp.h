@@ -68,7 +68,7 @@ struct CameraHelp
 	void Enable(uint32_t value, uint32_t mask) { features = (features & ~mask) | value; }
 	/// The camera tilts itself to the pitch and keeps to the height, or stops doing so
 	void SetAutoPitch(float pitch, float height, bool on);
-	/// As a new land opens: every feature, and the height of the self-tilting camera back to its first
+	/// As a new land opens: every feature, and the pitch and the height of the self-tilting camera back to their first
 	void ResetForNewLand();
 	/// The features, keys and the hand's reach as a script's interface level sets them. The level is kept. A level that
 	/// the game does not know changes nothing else.
