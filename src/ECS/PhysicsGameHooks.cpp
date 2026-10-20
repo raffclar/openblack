@@ -70,6 +70,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/TempleHeartPassOn.h"
 #include "ECS/TownHomes.h"
+#include "Help/HelpProfile.h"
 #include "Magic/MagicWorldInterface.h"
 #include "Magic/SpellRules.h"
 #include "Physics/Body.h"
@@ -696,10 +697,20 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 		if (resource.type != ResourceType::None && !registry.AllOf<MobileStatic, Indestructible>(object))
 		{
 			// An animal the store won't take is hurt by the blow as any other
-			if (world.IsStore(hitter, resource.type) &&
-			    (world.TakeObject(hitter, object, impact.player) || !registry.AllOf<Animal>(object)))
+			if (world.IsStore(hitter, resource.type))
 			{
-				return;
+				// A storage pit that takes a thing thrown by this computer's player counts for the player's help
+				const bool helpCounts =
+				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.LocalPlayer();
+				const bool taken = world.TakeObject(hitter, object, impact.player);
+				if (taken && helpCounts)
+				{
+					world.CountHelpEvent(help::profile::k_ThrownIntoStore);
+				}
+				if (taken || !registry.AllOf<Animal>(object))
+				{
+					return;
+				}
 			}
 			if (registry.AllOf<Pot>(object))
 			{

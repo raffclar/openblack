@@ -60,6 +60,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
@@ -1639,6 +1640,15 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		submitAll({tips::OverNothing(camera)});
 	};
+	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
+	const auto leashTip = [pointed]() {
+		const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed);
+		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
+		}
+		return tip;
+	};
 	// While the hand grips the land, it shows "Zoom" when the Action button is held too. In other conditions it shows
 	// what a tap does with the leash, or how the drag moves the camera. The grip starts with a drag of the land and
 	// continues until the Move button is let go. Both buttons together stop the drag but not the grip.
@@ -1665,7 +1675,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			submitAll({zoom});
 			return;
 		}
-		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+		if (const auto tip = leashTip())
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 			return;
@@ -1685,7 +1695,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
-	if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+	if (const auto tip = leashTip())
 	{
 		toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		return;
@@ -2858,6 +2868,15 @@ void Game::UpdateTemple(std::chrono::microseconds deltaTime)
 
 void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 {
+	// The interface reads the places of the pointer that came in, and the help counts each movement of the mouse
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto moves = Locator::gameActionSystem::value().TakeMouseMoves();
+		for (uint32_t i = 0; i < moves && Locator::helpProfileSystem::has_value(); ++i)
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_MouseMoved);
+		}
+	}
 	if (_interface)
 	{
 		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
@@ -5295,6 +5314,8 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	{
 		StartPlayerAtProfileAlignment();
 	}
+	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
+	MakePlayersSymbols();
 	RenderLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -6023,7 +6044,13 @@ void Game::HandleInterfaceAction()
 	case Action::DeletePlayer:
 	{
 		auto& profiles = Locator::playerProfileSystem::value();
-		profiles.DeleteProfile(_interface->GetMenu().GetPlayerToDelete());
+		// The player's folder is emptied first: its saved games, pictures and help record go, but the empty folder stays
+		const auto deleted = _interface->GetMenu().GetPlayerToDelete();
+		if (Locator::profileFolderSystem::has_value())
+		{
+			Locator::profileFolderSystem::value().EmptyPlayerFolder(deleted);
+		}
+		profiles.DeleteProfile(deleted);
 		const auto next = _interface->GetMenu().GetPickedPlayer();
 		const auto& list = profiles.GetProfiles().profiles;
 		if (next.has_value() && *next < list.size())
@@ -6239,6 +6266,68 @@ void Game::ReadTattooPictures()
 		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
 		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
 	}
+}
+
+void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
+{
+	using filesystem::Path;
+	if (!Locator::filesystem::has_value() || !Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto textures = fileSystem.GetPath<Path::Textures>();
+	const auto read = [&fileSystem](const std::filesystem::path& path) -> std::vector<uint8_t> {
+		try
+		{
+			return fileSystem.ReadAll(path);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			return {};
+		}
+	};
+	players_symbols::Sheet players {.colours = read(textures / "PlayersSymbols.raw"),
+	                                .alpha = read(textures / "PlayersSymbolsa.raw")};
+	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
+	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
+	if (!players.Whole() || !designs.Whole())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (profile.has_value() || symbolInPlace.has_value())
+	{
+		const auto symbol = symbolInPlace.value_or(profile.has_value() ? static_cast<uint32_t>(profile->symbol) : 0u);
+		std::optional<std::span<const uint8_t>> ownPicture;
+		std::optional<creature_tattoo::Picture> picture;
+		if (Locator::tattooEditorSystem::has_value() && symbol < creature_tattoo::k_DesignCount)
+		{
+			picture = Locator::tattooEditorSystem::value().GetPictures().at(symbol);
+			if (picture.has_value())
+			{
+				ownPicture = std::span<const uint8_t>(*picture);
+			}
+		}
+		players_symbols::PutProfileSymbol(players, designs, symbol, static_cast<uint32_t>(PlayerNames::PLAYER_ONE), ownPicture);
+	}
+	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
+	auto& textureManager = Locator::resources::value().GetTextures();
+	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+		textureManager.Erase(name);
+		try
+		{
+			textureManager.Load(name, resources::Texture2DLoader::FromBufferTag {}, name, std::move(bytes),
+			                    graphics::texel_depth::Depth::FourBits);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	};
+	replace("raw/PlayersSymbols", std::move(players.colours));
+	replace("raw/PlayersSymbolsa", std::move(players.alpha));
 }
 
 void Game::LoadCreatureSkinArt()

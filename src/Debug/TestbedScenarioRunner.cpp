@@ -1203,6 +1203,13 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::config::value().pushScrolling = true;
 		Locator::config::value().testbedPushScrollInWindow = true;
 	}
+	if (environment.profileSymbol.has_value())
+	{
+		if (auto* game = Game::Instance(); game != nullptr)
+		{
+			game->MakePlayersSymbols(environment.profileSymbol);
+		}
+	}
 	if (environment.drawFootpaths && Locator::config::has_value())
 	{
 		Locator::config::value().drawFootpaths = true;

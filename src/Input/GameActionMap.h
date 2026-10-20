@@ -22,6 +22,7 @@
 
 #include "CursorFreeze.h"
 #include "GameActionMapInterface.h"
+#include "Help/MouseMoves.h"
 #include "MouseMotion.h"
 #include "PointerSpeed.h"
 
@@ -48,6 +49,7 @@ public:
 	[[nodiscard]] glm::uvec2 GetMousePosition() const final;
 	[[nodiscard]] glm::ivec2 GetMouseDelta() const final;
 	[[nodiscard]] glm::ivec2 GetMousePushDelta() const final;
+	[[nodiscard]] uint32_t TakeMouseMoves() final;
 	[[nodiscard]] float GetMouseWheelDelta() const final;
 	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetHandPositions() const final;
 
@@ -125,6 +127,8 @@ private:
 	MouseMotion _mouseMotion;
 	/// The mouse's own movement this frame, which the screen's sides do not stop
 	glm::ivec2 _pushMotion {0, 0};
+	/// The places of the pointer that the help compares to count the movements of the mouse
+	help::MouseMoves _helpMouseMoves;
 	float _mouseWheelDelta = 0.0f;
 	/// Holds the cursor while the mouse turns the camera
 	CursorFreeze _cursorFreeze;

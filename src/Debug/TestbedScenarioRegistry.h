@@ -147,6 +147,8 @@ struct Environment
 	bool drawFootpaths {false};
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
+	/// The symbol that the world shows for the first player in place of the symbol of the player's profile
+	std::optional<uint32_t> profileSymbol;
 	/// The player's prayer power, for watching a maintained miracle run out of it; the testbed's plenty when not given
 	std::optional<float> prayer;
 	/// The player's alignment, -1 evil to 1 good, as the scenario starts; neutral when not given

@@ -236,9 +236,15 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromPackTag, const std:
 Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std::filesystem::path& rawTexturePath,
                                                          graphics::texel_depth::Depth depth) const
 {
+	return (*this)(FromBufferTag {}, ("raw" / rawTexturePath.stem()).string(),
+	               Locator::filesystem::value().ReadAll(rawTexturePath), depth);
+}
+
+Texture2DLoader::result_type Texture2DLoader::operator()(FromBufferTag, const std::string& name, std::vector<uint8_t> data,
+                                                         graphics::texel_depth::Depth depth) const
+{
 	constexpr std::array<uint16_t, 10> k_Sides = {{1024, 512, 256, 128, 64, 40, 32, 14, 12, 6}};
 
-	auto data = Locator::filesystem::value().ReadAll(rawTexturePath);
 	const auto side = std::ranges::find_if(k_Sides, [&data](uint16_t candidate) {
 		const auto pixels = static_cast<size_t>(candidate) * candidate;
 		return data.size() == pixels || data.size() == 3 * pixels;
@@ -249,7 +255,7 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromDiskTag, const std:
 	}
 	const size_t channels = data.size() / (static_cast<size_t>(*side) * *side);
 
-	auto texture = std::make_shared<graphics::Texture2D>(("raw" / rawTexturePath.stem()).string());
+	auto texture = std::make_shared<graphics::Texture2D>(name);
 	if (depth == graphics::texel_depth::Depth::FiveBits)
 	{
 		const auto packed = graphics::texel_depth::PackRgb555(data, channels);

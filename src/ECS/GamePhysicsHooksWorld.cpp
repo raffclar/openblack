@@ -29,6 +29,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -275,6 +276,14 @@ void GamePhysicsHooksWorld::AddToPile(entt::entity pile, ResourceType type, uint
 	if (Locator::resourceStoreSystem::has_value())
 	{
 		Locator::resourceStoreSystem::value().AddToPile(pile, type, amount, poisoned);
+	}
+}
+
+void GamePhysicsHooksWorld::CountHelpEvent(uint32_t event)
+{
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
 	}
 }
 

@@ -9115,6 +9115,21 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.profile_symbol",
+	    .name = "The symbol of the player's profile in the world",
+	    .facet = Facet::Particles,
+	    .description = "The player icon fountain of the first player and of the second player, side by side. The world "
+	                   "shows the tenth symbol for the first player, as when the player's profile has that symbol.",
+	    .expected = "The fountain on the left throws up the tenth symbol of the players' symbols page in the first "
+	                "player's colour. The fountain on the right throws up the second player's symbol as the file of the "
+	                "players' symbols has it.",
+	    .environment = {.profileSymbol = 9u},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 0.0f}, {15.0f, 0.0f}}, .distance = 0.35f},
+	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-10.0f, 0.0f}, .magnitude = 2.0f, .player = 0},
+	                  {.file = "SF_PlayerIconFountain", .offset = {10.0f, 0.0f}, .magnitude = 2.0f, .player = 1}},
+	});
+
+	all.push_back({
 	    .id = "particles.draw_paths",
 	    .name = "Sorted and queued sprites",
 	    .facet = Facet::Particles,
@@ -10084,13 +10099,13 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
-	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
-	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)

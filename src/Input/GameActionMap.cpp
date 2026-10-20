@@ -18,6 +18,7 @@
 #include <SDL_events.h>
 #include <SDL_hints.h>
 #include <SDL_mouse.h>
+#include <SDL_timer.h>
 #include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
@@ -600,6 +601,11 @@ glm::ivec2 GameActionMap::GetMousePushDelta() const
 	return _pushMotion;
 }
 
+uint32_t GameActionMap::TakeMouseMoves()
+{
+	return _helpMouseMoves.TakeMoves();
+}
+
 float GameActionMap::GetMouseWheelDelta() const
 {
 	return _mouseWheelDelta;
@@ -709,6 +715,13 @@ void GameActionMap::Frame()
 		{
 			_cursorPinnedAt = glm::ivec2(_mousePosition);
 		}
+		// A still mouse sends its messages while the window has the keys, the camera does not hold the cursor and no
+		// hand demonstration plays
+		const auto* window =
+		    Locator::windowing::has_value() ? static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()) : nullptr;
+		const bool stillMessages =
+		    window != nullptr && SDL_GetKeyboardFocus() == window && !_cursorFreeze.IsFrozen() && !_playerMouseBlocked;
+		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();
 	_pushMotion = glm::ivec2(0);
@@ -862,6 +875,11 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 	{
 		// Several moves can come in a frame, and the frame's delta is all of them
 		_mouseMotion.Moved({event.motion.xrel, event.motion.yrel});
+		// The help counts the player's own movements of the mouse, not the moves of a hand demonstration
+		if (!_playerMouseBlocked && !_cursorFreeze.IsFrozen())
+		{
+			_helpMouseMoves.Message(event.motion.timestamp, {event.motion.x, event.motion.y});
+		}
 		// While the window has the mouse, its own movement was taken as the event came in
 		if (!_pointerScaled)
 		{

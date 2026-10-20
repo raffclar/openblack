@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <istream>
 #include <map>
@@ -19,6 +20,7 @@
 #include <span>
 #include <stdexcept>
 #include <string>
+#include <system_error>
 #include <utility>
 #include <vector>
 
@@ -176,6 +178,30 @@ TEST(ProfileFolderSystem, TheGameMakesTheFoldersWhenItWritesTheFirstFile)
 
 	EXPECT_EQ(folder.MakeFolder("custom_music"), root / "custom_music");
 	EXPECT_TRUE(files.folders.contains(root / "custom_music"));
+}
+
+TEST(ProfileFolderSystem, DeletingAProfileEmptiesItsFolderButTheFolderStays)
+{
+	FakeFileSystem files;
+	const auto root = std::filesystem::temp_directory_path() / "openblack_tests" / "empty_player_folder" / "Profiles";
+	std::error_code error;
+	std::filesystem::remove_all(root, error);
+	const auto player = root / "_A_n_n";
+	std::filesystem::create_directories(player / "Saved Games" / "Slot 1", error);
+	std::ofstream(player / "helpstats.dat") << "help";
+	std::ofstream(player / "Saved Games" / "Slot 1" / "save.sav") << "save";
+	std::filesystem::create_directories(root / "_M_a_t_t", error);
+	std::ofstream(root / "_M_a_t_t" / "helpstats.dat") << "help";
+
+	ecs::systems::ProfileFolderSystem folder(files, root);
+	EXPECT_TRUE(folder.EmptyPlayerFolder(u"Ann"));
+	EXPECT_TRUE(std::filesystem::is_directory(player));
+	EXPECT_TRUE(std::filesystem::is_empty(player));
+	// The other players' folders stay as they are
+	EXPECT_TRUE(std::filesystem::exists(root / "_M_a_t_t" / "helpstats.dat"));
+	// A player with no folder has nothing to empty
+	EXPECT_FALSE(folder.EmptyPlayerFolder(u"Zoe"));
+	std::filesystem::remove_all(root.parent_path(), error);
 }
 
 TEST(FileSystemInterface, TheGameFolderIsOnlyTheFolderAndTheFoldersInIt)
