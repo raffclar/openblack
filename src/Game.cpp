@@ -60,6 +60,7 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
@@ -5270,6 +5271,8 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	{
 		StartPlayerAtProfileAlignment();
 	}
+	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
+	MakePlayersSymbols();
 	RenderLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -6220,6 +6223,68 @@ void Game::ReadTattooPictures()
 		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
 		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
 	}
+}
+
+void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
+{
+	using filesystem::Path;
+	if (!Locator::filesystem::has_value() || !Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto textures = fileSystem.GetPath<Path::Textures>();
+	const auto read = [&fileSystem](const std::filesystem::path& path) -> std::vector<uint8_t> {
+		try
+		{
+			return fileSystem.ReadAll(path);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			return {};
+		}
+	};
+	players_symbols::Sheet players {.colours = read(textures / "PlayersSymbols.raw"),
+	                                .alpha = read(textures / "PlayersSymbolsa.raw")};
+	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
+	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
+	if (!players.Whole() || !designs.Whole())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (profile.has_value() || symbolInPlace.has_value())
+	{
+		const auto symbol = symbolInPlace.value_or(profile.has_value() ? static_cast<uint32_t>(profile->symbol) : 0u);
+		std::optional<std::span<const uint8_t>> ownPicture;
+		std::optional<creature_tattoo::Picture> picture;
+		if (Locator::tattooEditorSystem::has_value() && symbol < creature_tattoo::k_DesignCount)
+		{
+			picture = Locator::tattooEditorSystem::value().GetPictures().at(symbol);
+			if (picture.has_value())
+			{
+				ownPicture = std::span<const uint8_t>(*picture);
+			}
+		}
+		players_symbols::PutProfileSymbol(players, designs, symbol, static_cast<uint32_t>(PlayerNames::PLAYER_ONE), ownPicture);
+	}
+	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
+	auto& textureManager = Locator::resources::value().GetTextures();
+	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+		textureManager.Erase(name);
+		try
+		{
+			textureManager.Load(name, resources::Texture2DLoader::FromBufferTag {}, name, std::move(bytes),
+			                    graphics::texel_depth::Depth::FourBits);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	};
+	replace("raw/PlayersSymbols", std::move(players.colours));
+	replace("raw/PlayersSymbolsa", std::move(players.alpha));
 }
 
 void Game::LoadCreatureSkinArt()

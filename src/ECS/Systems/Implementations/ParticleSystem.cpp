@@ -139,7 +139,7 @@ constexpr float k_WindByteSpeed = 0.125f;
 constexpr float k_SpeedOfSound = 347.0f;
 
 /// The sheets the players' symbols are drawn with, whatever effect first shows one
-constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "ChooseSymbol"};
+constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "PlayersSymbols"};
 } // namespace
 
 float GameParticleWorld::LandHeight(glm::vec2 xz) const
