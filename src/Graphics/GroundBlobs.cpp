@@ -54,6 +54,28 @@ std::array<Quad, 2> Feet(const glm::vec3& first, const glm::vec3& second, const 
 	return {MakeQuad(first, fall + ((second - first) * 0.5f)), MakeQuad(second, fall + ((first - second) * 0.5f))};
 }
 
+size_t AnimalFootCount(size_t points)
+{
+	if (points >= k_MostAnimalFeet)
+	{
+		return k_MostAnimalFeet;
+	}
+	return points >= 2 ? 2 : 0;
+}
+
+std::array<Quad, k_MostAnimalFeet> AnimalFeet(std::span<const glm::vec3> feet, const glm::vec3& fall)
+{
+	std::array<Quad, k_MostAnimalFeet> quads {};
+	for (size_t pair = 0; pair + 1 < feet.size() && pair + 1 < k_MostAnimalFeet; pair += 2)
+	{
+		const auto& first = feet[pair];
+		const auto& second = feet[pair + 1];
+		quads.at(pair) = MakeQuad(first, fall);
+		quads.at(pair + 1) = MakeQuad(second, fall + ((first - second) * 0.5f));
+	}
+	return quads;
+}
+
 std::array<Quad, 2> Far(const glm::vec3& foot, float scale)
 {
 	const auto quad = MakeQuad(foot, Fall(glm::vec3(0.0f, 1.0f, 0.0f), scale), k_Across * k_FarWidening);

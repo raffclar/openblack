@@ -518,6 +518,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// Set transforms for instanced draw at offsets
 	_renderContext.entityDraws.clear();
 	_renderContext.drawnObjects.clear();
+	_renderContext.animalDraws.clear();
 	_renderContext.highDetailDraws.clear();
 	_renderContext.filmShadowDraws.clear();
 	_renderContext.filmReflections.clear();
@@ -1004,6 +1005,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (look.z != 1.0f || (goingUp && progress->built > 0.0f))
 		    {
 			    _renderContext.drawnObjects.push_back({.entity = entity, .model = modelMatrix});
+			    if (registry.AllOf<Animal>(entity))
+			    {
+				    _renderContext.animalDraws.push_back({.entity = entity, .mesh = drawnMesh, .model = modelMatrix});
+			    }
 		    }
 		    if (openblack::ecs::high_detail_rules::ShadowOf(highDetail != nullptr) ==
 		            openblack::ecs::high_detail_rules::Shadow::Projected &&

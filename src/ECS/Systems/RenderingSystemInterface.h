@@ -215,6 +215,15 @@ struct RenderContext
 		glm::mat4 model;
 	};
 	std::vector<DrawnObject> drawnObjects;
+	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its
+	/// feet onto the land
+	struct AnimalDraw
+	{
+		entt::entity entity;
+		entt::id_type mesh;
+		glm::mat4 model;
+	};
+	std::vector<AnimalDraw> animalDraws;
 	/// The villagers a script draws in high detail this frame, with the model each wears and the matrix it is drawn by:
 	/// each casts a shadow on the land while it is, by the matrix of the villager as it turns before its body's easing
 	struct HighDetailDraw
