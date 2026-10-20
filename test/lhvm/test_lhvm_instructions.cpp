@@ -290,6 +290,49 @@ TEST_F(LhvmInstructions, ABreakOutOfALoopKeepsTheHandlerOfTheBlockAroundIt)
 namespace
 {
 
+/// One script with a frame handler around two loops, one inside the other. The inner loop's handler only moves to
+/// the next handler. The outer loop's "until" condition is true at once.
+LHVMFile TwoLoopsInsideAFrame()
+{
+	std::vector<VMInstruction> code(21, Make(Opcode::Line));
+	code[0] = Make(Opcode::Except, VMValue(uint32_t {9}));                                 // frame handler at 9
+	code[1] = Make(Opcode::Except, VMValue(uint32_t {14}));                                // outer loop handler at 14
+	code[2] = Make(Opcode::Except, VMValue(uint32_t {20}));                                // inner loop handler at 20
+	code[3] = Make(Opcode::Jmp, VMValue(uint32_t {3}));                                    // the inner loop waits
+	code[9] = Make(Opcode::Push, VMValue(k_Hits), DataType::Int, VMMode::Reference);       // frame: hits + 1
+	code[10] = Make(Opcode::Push, VMValue(int32_t {1}));                                   //
+	code[11] = Make(Opcode::Add, VMValue(uint32_t {0}));                                   //
+	code[12] = Make(Opcode::Pop, VMValue(k_Hits), DataType::Int, VMMode::Reference);       //
+	code[13] = Make(Opcode::FailExcept);                                                   //
+	code[14] = Make(Opcode::Push, VMValue(int32_t {1}), DataType::Boolean);                // outer loop: until true
+	code[15] = Make(Opcode::Wait, VMValue(uint32_t {19}), DataType::Int, VMMode::Forward); //
+	code[16] = Make(Opcode::BrkExcept);                                                    //
+	code[17] = Make(Opcode::Jmp, VMValue(uint32_t {17}));                                  // after the loops: wait
+	code[19] = Make(Opcode::FailExcept);                                                   //
+	code[20] = Make(Opcode::FailExcept);                                                   // inner loop: next handler
+	const std::vector<VMScript> scripts {VMScript("Frame", "test.txt", ScriptType::Script, 1, {}, 0, 0, 1)};
+	return {LHVMVersion::BlackAndWhite, {"hits"}, code, {1}, scripts, {}};
+}
+
+} // namespace
+
+TEST_F(LhvmInstructions, ABreakFromAnOuterHandlerRemovesTheHandlersInsideItOnly)
+{
+	ASSERT_EQ(_vm.LoadBinary(TwoLoopsInsideAFrame()), EXIT_SUCCESS);
+	for (int turn = 0; turn < 4; ++turn)
+	{
+		_vm.LookIn(ScriptType::All);
+	}
+	// In the second turn the inner handler moves to the outer handler, which ends both loops. The frame's handler
+	// stays and runs in each turn after it.
+	EXPECT_EQ(_vm.GetVariables().at(k_Hits).value.intVal, 2);
+	ASSERT_EQ(_vm.GetTasks().size(), 1u);
+	EXPECT_EQ(_vm.GetTasks().begin()->second.exceptionHandlerIps.size(), 1u);
+}
+
+namespace
+{
+
 /// Two scripts: the first ends at once, the second waits for ever
 LHVMFile OneEndsOneWaits()
 {
