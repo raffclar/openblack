@@ -224,6 +224,12 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "wait_for_free";
 	case Kind::Communicate:
 		return "communicate";
+	case Kind::Teleport:
+		return "teleport";
+	case Kind::Transported:
+		return "transported";
+	case Kind::StopTeleportControl:
+		return "stop_teleport_control";
 	}
 	return "unknown";
 }

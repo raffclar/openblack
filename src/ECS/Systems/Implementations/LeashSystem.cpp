@@ -383,11 +383,11 @@ bool CarriedByTeleport(entt::entity creature)
 	return traveller != nullptr && traveller->transported;
 }
 
-/// The creature uses a teleport stone: from the start of the jump until it arrives where it was going
+/// A teleport stone controls the creature: from when the creature turns aside into the stone until it arrives where it
+/// was going, or until its plan stops
 bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 {
-	const auto* traveller = registry.TryGet<const TeleportTraveller>(creature);
-	return traveller != nullptr && (traveller->transported || traveller->jumped);
+	return registry.AllOf<TeleportTraveller>(creature);
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
