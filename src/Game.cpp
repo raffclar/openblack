@@ -6732,6 +6732,19 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		return;
 	}
 
+	// In the clear view, the hand stays on the land at the thing that the camera turns round. The camera puts it there
+	// after the turn moved the hand, so this comes first.
+	if (const auto* world = dynamic_cast<const DefaultWorldCameraModel*>(&camera.GetModel()); world != nullptr)
+	{
+		if (const auto hand = world->GetClearViewHand(); hand.has_value())
+		{
+			_handPosition = *hand;
+			_handCrossFade.Update(deltaSeconds);
+			handTransform.position = _handCrossFade.Apply(_handPosition);
+			return;
+		}
+	}
+
 	// Tapping a house it knocked on, the hand stays where it knocked
 	if (_handKnocking)
 	{
