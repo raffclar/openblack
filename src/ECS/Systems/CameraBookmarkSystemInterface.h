@@ -18,13 +18,14 @@
 #include <glm/vec3.hpp>
 
 #include "Camera/CameraBookmarks.h"
+#include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::ecs::systems
 {
 
 /// The camera's bookmarks: the number keys keep places on the land or on things, and the camera jumps back to them. A
 /// marker on the land shows each set bookmark.
-class CameraBookmarkSystemInterface
+class CameraBookmarkSystemInterface: public SavedStateInterface
 {
 public:
 	virtual bool Initialize() = 0;

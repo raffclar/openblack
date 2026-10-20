@@ -47,6 +47,8 @@ public:
 	[[nodiscard]] glm::vec2 GetMarkerHalfSize() const override { return camera_bookmarks::MarkerHalfSize(_pulseClockMs); }
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
+	void SaveState(reflection::BinaryWriter& out) const override;
+	bool LoadState(reflection::BinaryReader& in) override;
 
 private:
 	/// A place that the camera can jump to: a point and the camera's position less the point

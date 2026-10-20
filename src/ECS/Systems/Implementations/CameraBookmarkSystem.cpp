@@ -14,13 +14,17 @@
 #include "3D/PhysicsDrawMatrix.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/CreatureCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/DoubleClickFlight.h"
+#include "Camera/FightCameraModel.h"
 #include "ECS/Archetypes/CameraBookmarkArchetype.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
 
@@ -78,6 +82,42 @@ void CameraBookmarkSystem::FindAfterLoad()
 	}
 	_back.reset();
 	_followed.reset();
+}
+
+void CameraBookmarkSystem::SaveState(reflection::BinaryWriter& out) const
+{
+	const auto backPoint = _back.has_value() ? std::optional(_back->point) : std::nullopt;
+	const auto backOffset = _back.has_value() ? std::optional(_back->cameraOffset) : std::nullopt;
+	reflection::Save(out, backPoint);
+	reflection::Save(out, backOffset);
+	reflection::Save(out, _current);
+	reflection::Save(out, _followed);
+	reflection::Save(out, _enabled);
+}
+
+bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
+{
+	std::optional<glm::vec3> backPoint;
+	std::optional<glm::vec3> backOffset;
+	size_t current = 0;
+	std::optional<size_t> followed;
+	bool enabled = true;
+	reflection::Load(in, backPoint);
+	reflection::Load(in, backOffset);
+	reflection::Load(in, current);
+	reflection::Load(in, followed);
+	reflection::Load(in, enabled);
+	if (in.Failed())
+	{
+		return false;
+	}
+	_back = backPoint.has_value() && backOffset.has_value()
+	            ? std::optional(View {.point = *backPoint, .cameraOffset = *backOffset})
+	            : std::nullopt;
+	_current = current;
+	_followed = followed;
+	_enabled = enabled;
+	return true;
 }
 
 void CameraBookmarkSystem::Update(std::chrono::milliseconds frameGameTime, bool landDrawn)
@@ -225,6 +265,29 @@ void CameraBookmarkSystem::JumpTo(size_t slot)
 		_followed.reset();
 	}
 	auto& camera = Locator::camera::value();
+	// The jump flies the world camera. From the creature's camera the game first changes to the world camera, but not
+	// from a camera that cannot be left: that of the hand on a creature or of a script. The fight view is a part of the
+	// world camera.
+	const auto isWorld = [&camera]() {
+		const auto& model = camera.GetModel();
+		return dynamic_cast<const DefaultWorldCameraModel*>(&model) != nullptr ||
+		       dynamic_cast<const FightCameraModel*>(&model) != nullptr;
+	};
+	if (!isWorld())
+	{
+		if (!camera.GetModel().CanBeLeft())
+		{
+			return;
+		}
+		if (Locator::creatureModeSystem::has_value() && dynamic_cast<const CreatureCameraModel*>(&camera.GetModel()) != nullptr)
+		{
+			Locator::creatureModeSystem::value().Leave();
+		}
+		if (!isWorld())
+		{
+			return;
+		}
+	}
 	camera.GetModel().SetFlight(view->point + view->cameraOffset, view->point, camera_fly::k_BookmarkRise);
 	// The go-back key keeps the view from before the jump: the place of the hand, and the position of the camera from it
 	const auto handPoint = HandPoint(camera);
