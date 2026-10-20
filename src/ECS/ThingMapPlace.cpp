@@ -13,8 +13,10 @@
 
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
@@ -35,7 +37,9 @@ map_coords::MapCoords thing_map_place::Of(const Registry& registry, entt::entity
 	{
 		return {.x = flock->place.x, .z = flock->place.z};
 	}
-	if (const auto* animal = registry.TryGet<const Animal>(thing))
+	// An animal in a hand is where the hand holds it, as all held things are, because its turns stop
+	if (const auto* animal = registry.TryGet<const Animal>(thing);
+	    animal != nullptr && !registry.AnyOf<components::InHand, components::HeldByCreature>(thing))
 	{
 		return {.x = animal->move.position.x, .z = animal->move.position.y};
 	}
