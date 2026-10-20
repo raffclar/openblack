@@ -13,12 +13,14 @@
 
 #include <optional>
 
+#include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 
 #include "CameraHelpEvents.h"
 #include "CameraLimits.h"
 #include "CameraModel.h"
 #include "CameraPan.h"
+#include "ClearView.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
 #include "PushScroll.h"
@@ -77,7 +79,6 @@ public:
 	[[nodiscard]] bool MovedByPlayer() const { return camera_help::events::IsMoving(_helpControls); }
 	/// One of the four wooshes of a flight
 	static void Woosh();
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const final;
 	[[nodiscard]] HandCues GetHandCues() const final;
 
 private:
@@ -93,6 +94,8 @@ private:
 	void HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping);
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
+	/// Ctrl and Shift held: the clear view starts its orbit, follows the thing under the hand, and eases the camera
+	void UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart);
 	/// The part of the screen the edge controls are laid out on: a 4:3 screen's worth, measured by the cinema bars'
 	/// picture while they are in
 	[[nodiscard]] static camera_drag::EdgeArea EdgeArea(glm::ivec2 screenSize);
@@ -237,6 +240,14 @@ private:
 	camera_drag::TwoButtonTurn _twoButtonTurn;
 	/// How far the clear view of Ctrl and Shift held together has come, easing in and out over half a second
 	Zoomer _clearView;
+	/// Ctrl and Shift are held, and the clear view starts in this frame (its ease was not yet in)
+	bool _clearViewHeld {false};
+	bool _clearViewStarts {false};
+	/// The orbit that the clear view eases to, the point on the land that it looks at, and the thing under the hand
+	/// that the point follows
+	std::optional<clear_view::Orbit> _clearOrbit;
+	glm::vec3 _clearCentre {0.0f};
+	std::optional<entt::entity> _clearObject;
 	/// The player's camera controls this frame, and the help events they make while the controls are handled
 	camera_help::events::ControlsFrame _helpControls;
 	camera_help::events::EventSet _helpEvents;

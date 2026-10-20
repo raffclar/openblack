@@ -144,3 +144,12 @@ TEST(ZoomToPlaces, ACameraThatLooksAtItselfHasNoLineOfSight)
 	const CameraView still {.origin = {5.0f, 6.0f, 7.0f}, .focus = {5.0f, 6.0f, 7.0f}};
 	EXPECT_EQ(AlongView(still, 50.0f), still.origin);
 }
+
+TEST(ZoomToPlaces, EveryCameraButAScriptsLetsTheKeysTakeIt)
+{
+	EXPECT_TRUE(KeysTakeCamera(Holder::World));
+	EXPECT_TRUE(KeysTakeCamera(Holder::CreatureFollow));
+	EXPECT_TRUE(KeysTakeCamera(Holder::MiraclePath));
+	EXPECT_TRUE(KeysTakeCamera(Holder::Fight));
+	EXPECT_FALSE(KeysTakeCamera(Holder::Script));
+}

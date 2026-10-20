@@ -13,6 +13,7 @@
 
 #include <ParticleFile.h>
 
+#include "Blast/CameraShake.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleObjectEffects.h"
 #include "ParticleSounds.h"
@@ -92,7 +93,8 @@ public:
 		{
 			if (auto* objects = effect.Services().world.ObjectEffects())
 			{
-				objects->ShakeCamera(effect.GlobalPosition(atom), shakeRadius, k_ShakeStrength, shakeSeconds);
+				objects->ShakeCamera(effect.GlobalPosition(atom), shakeRadius, k_ShakeStrength,
+				                     openblack::camera_shake::EffectMilliseconds(shakeSeconds));
 			}
 		}
 		return true;

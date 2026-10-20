@@ -7,7 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The testbed scenarios for the temple key and the realm key of the world camera
+// The testbed scenarios for the keys of the world camera: the temple key, the realm key and the clear view, and the
+// shake of a script
 
 #include <vector>
 
@@ -51,5 +52,39 @@ void testbed_scenarios::AddTempleKeyScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {press(3.0f, k_Realm), press(6.0f, k_Realm)},
+	});
+	all.push_back({
+	    .id = "hand.clear_view",
+	    .name = "Ctrl and Shift held together ease the camera to a close view round the hand",
+	    .facet = Facet::Hand,
+	    .description = "The camera looks at the testbed, with a temple 120 metres to the south. Put the hand "
+	                   "on the land or on the temple. Then hold Ctrl and Shift together for a few seconds, and release "
+	                   "them.",
+	    .expected = "Over half a second the camera comes in to the point under the hand: 15 metres from it (50 when the "
+	                "camera was more than 300 metres from what it looked at, 10 when it was nearer than 50), from the "
+	                "same heading, and more steeply down. Over a thing, the view follows the thing. The wheel does not "
+	                "zoom. When you release a key, the camera eases back to where it was in half a second.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .temples = {{.offset = glm::vec2 {0.0f, -120.0f}}},
+	});
+	all.push_back({
+	    .id = "hand.script_shake",
+	    .name = "A script shakes the camera for three seconds",
+	    .facet = Facet::Hand,
+	    .description = "After 2 seconds the scenario runs SHAKE_CAMERA at the middle of the testbed with a radius of "
+	                   "2000 metres, a strength of 2 and a time of 3 seconds.",
+	    .expected = "The eye and the focus of the camera move by a new random distance each frame, along all three axes. "
+	                "The shake is strongest at the start and decreases steadily to nothing after 3 seconds. It also "
+	                "decreases while the game is paused.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 2.0f,
+	                  .script = "SHAKE_CAMERA",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Position, .point = {0.0f, 0.0f}},
+	                                      {.number = 2000.0f},
+	                                      {.number = 2.0f},
+	                                      {.number = 3.0f}}}},
 	});
 }

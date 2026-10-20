@@ -98,8 +98,9 @@ struct WorldCameraFrame
 	uint32_t features {0};
 	/// The hand is in its player's influence
 	bool handInInfluence {true};
-	/// The camera takes nothing from the player, or waits for every input to be let go
+	/// The camera takes nothing from the player: a box of the menu is on the screen
 	bool inputOff {false};
+	/// The camera waits until the player releases every input
 	bool blocked {false};
 	/// The cursor from the middle of the edge controls' area, as camera_drag::AreaCursor
 	glm::vec2 cursor {0.0f};
