@@ -220,3 +220,23 @@ TEST(ResourcePiles, OnlyAPileWithAReactionSetsItUpWhenItsMakerAsks)
 	EXPECT_FALSE(ReactsWhenMade(openblack::PotType::Pot, openblack::Reaction::ReactToFood, true));
 	EXPECT_FALSE(ReactsWhenMade(openblack::PotType::PileFood, openblack::Reaction::None, true));
 }
+
+TEST(ResourcePiles, OnlyALonePileGoesWhenItIsEmptied)
+{
+	using openblack::magic::piles::GoesWhenEmptied;
+	EXPECT_TRUE(GoesWhenEmptied(0, false));
+	// A pile with something left stays
+	EXPECT_FALSE(GoesWhenEmptied(1, false));
+	// A pile of a store or of a building site stays when it is empty
+	EXPECT_FALSE(GoesWhenEmptied(0, true));
+}
+
+TEST(ResourcePiles, AStorePileWithSomethingInItCallsPeopleWhenTheStoreStopsWorking)
+{
+	using openblack::magic::piles::CallsWhenStoreStops;
+	EXPECT_TRUE(CallsWhenStoreStops(1, openblack::Reaction::ReactToFood));
+	EXPECT_TRUE(CallsWhenStoreStops(5000, openblack::Reaction::ReactToWood));
+	// An empty pile does not call, nor a kind with no reaction
+	EXPECT_FALSE(CallsWhenStoreStops(0, openblack::Reaction::ReactToFood));
+	EXPECT_FALSE(CallsWhenStoreStops(100, openblack::Reaction::None));
+}
