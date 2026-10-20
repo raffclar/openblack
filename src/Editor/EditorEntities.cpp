@@ -19,6 +19,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/MapCoords.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -29,6 +30,7 @@
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Feature.h"
@@ -601,6 +603,16 @@ void MoveTo(entt::entity entity, glm::vec3 position)
 	{
 		orb->position += delta;
 		orb->middle += delta;
+	}
+	if (auto* animal = registry.TryGet<Animal>(entity))
+	{
+		// An animal continues from the place where it is put, on the land, as an animal that comes down from the hand
+		// does. Its turn and its drawn place start from this place, so the next turn does not put it back.
+		animal->position = position;
+		animal->previousPosition = position;
+		animal->height = 0.0f;
+		animal->move.position = {map_coords::ToFixed(position.x), map_coords::ToFixed(position.z)};
+		animal->move.goal = animal->move.position;
 	}
 	if (auto* locomotion = registry.TryGet<CreatureLocomotion>(entity))
 	{
