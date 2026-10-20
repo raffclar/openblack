@@ -920,11 +920,12 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	switch (event.type)
 	{
 	case SDL_QUIT:
-		return false;
+		_closeAsked = true;
+		break;
 	case SDL_WINDOWEVENT:
 		if (event.window.event == SDL_WINDOWEVENT_CLOSE && event.window.windowID == window.GetID())
 		{
-			return false;
+			_closeAsked = true;
 		}
 		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
 		break;
@@ -3551,7 +3552,11 @@ bool Game::Initialize() noexcept
 				HandleInterfaceAction();
 				return;
 			}
-			config.running = this->ProcessEvents(event);
+			// An event that stops the game keeps it stopped, whatever the events after it in the same frame are
+			if (!this->ProcessEvents(event))
+			{
+				config.running = false;
+			}
 			Locator::gameActionSystem::value().ProcessEvent(event);
 		}
 	}));
@@ -4762,6 +4767,12 @@ bool Game::Run() noexcept
 			                  Locator::rendererInterface::value().GetPipelinesMade());
 		}
 		frameStart = frameEnd;
+		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene
+		const auto& director = Locator::cinematicDirectorSystem::value();
+		if (game_session::CloseEndsGame(_closeAsked, director.IsWideScreenOn() && director.GetWideScreenOwner() != 0))
+		{
+			break;
+		}
 	}
 
 	// As the player leaves the game, the game saves it into the slot of the save on exit

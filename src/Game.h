@@ -451,6 +451,8 @@ private:
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};
 	bool _quitRequested {false};
+	/// The player closed the window. The game ends at the end of a frame outside a script's cut scene.
+	bool _closeAsked {false};
 
 	/// The machine's ticks at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
