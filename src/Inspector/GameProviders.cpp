@@ -2442,7 +2442,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
-	provider->Add(Query("bookmarks", "The camera's bookmarks", {}, ResultKind::List),
+	provider->Add(Query("bookmarks", "The camera's bookmarks: each slot, whether it is set, and whether the camera follows it",
+	                    {}, ResultKind::List),
 	              Serve<Locator::cameraBookmarkSystem>(
 	                  "the bookmarks", [](const ecs::systems::CameraBookmarkSystemInterface& bookmarks, const QueryContext&) {
 		                  const auto* registry = Registry();
@@ -2456,6 +2457,8 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			                  }
 			                  auto item = Listed(*registry, entity);
 			                  item["slot"] = i;
+			                  item["set"] = bookmarks.IsSet(i);
+			                  item["followed"] = bookmarks.GetFollowed() == i;
 			                  items.push_back(std::move(item));
 		                  }
 		                  return items;

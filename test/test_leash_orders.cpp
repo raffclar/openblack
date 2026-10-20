@@ -267,13 +267,6 @@ TEST(LeashOrders, TheMarker)
 {
 	EXPECT_NEAR(MarkerOverLand({1.0f, 10.0f, 2.0f}).y, 12.0f, k_Tolerance);
 	EXPECT_NEAR(MarkerOverThing({1.0f, 10.0f, 2.0f}, 6.0f).y, 18.0f, k_Tolerance);
-	// Widest at the turn of the clock, narrowest a half second on, the height a fifth of a second behind
-	const auto start = MarkerSize(0);
-	EXPECT_NEAR(start.x, 1.2f, k_Tolerance);
-	EXPECT_NEAR(start.y, std::abs(std::cos(0.2f * 3.14159265f)) + 0.2f, 1e-3f);
-	EXPECT_NEAR(MarkerSize(500).x, 0.2f, k_Tolerance);
-	EXPECT_NEAR(MarkerSize(1000).x, 1.2f, k_Tolerance);
-	EXPECT_NEAR(MarkerSize(300).y, 0.2f, k_Tolerance);
 	// The ape's hand, the cow's hoof, the horse's shoe, the chicken's smiley, and the first for anything past them
 	EXPECT_EQ(FootprintCell(0), 0);
 	EXPECT_EQ(FootprintCell(1), 2);

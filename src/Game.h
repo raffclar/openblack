@@ -42,6 +42,7 @@
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandKnock.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -498,14 +499,8 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
-	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
-	/// Holding something puts it off, and it starts over once the hand lets go.
-	struct HandKnock
-	{
-		glm::vec3 point;
-		std::chrono::microseconds time {0};
-	};
-	std::optional<HandKnock> _handKnock;
+	/// The hand's tap after it knocked on a house
+	hand_knock::Tap _handKnock;
 	/// Where the pointer was last put on the hand while it holds a town's totem
 	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame
@@ -660,6 +655,9 @@ private:
 	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
+	/// Whether the keys of the camera's bookmarks work: not while a script has the cinema bars in, and only while the
+	/// script's interface level gives the player the keys of the camera and of its places
+	[[nodiscard]] static bool BookmarkKeysAllowed();
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
 	/// tattoo editor
 	[[nodiscard]] bool FrontEndBoxShows() const;

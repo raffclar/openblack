@@ -1556,3 +1556,20 @@ set_tests_properties(
   test_oracle_push_scroll
   PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(
+  test_camera_bookmarks camera/test_camera_bookmarks.cpp
+)
+openblack_setup_and_add_test(
+  test_oracle_marker_pulse oracle/test_oracle_marker_pulse.cpp
+)
+set_tests_properties(
+  test_oracle_marker_pulse
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_hand_cycle_choice hand/test_hand_cycle_choice.cpp
+)
+openblack_setup_and_add_test(
+  test_hand_knock hand/test_hand_knock.cpp
+)

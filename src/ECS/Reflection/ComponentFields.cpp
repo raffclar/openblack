@@ -568,8 +568,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::BuildingPiece::drawMesh>("drawMesh");
 	Reflect<components::CameraBookmark>(context)
 	    .Field<&components::CameraBookmark::number>("number")
-	    .Field<&components::CameraBookmark::animationTime>("animationTime")
-	    .Field<&components::CameraBookmark::savedOrigin>("savedOrigin");
+	    .Field<&components::CameraBookmark::set>("set")
+	    .Field<&components::CameraBookmark::point>("point")
+	    .Field<&components::CameraBookmark::thing>("thing")
+	    .Field<&components::CameraBookmark::cameraOffset>("cameraOffset");
 	Reflect<components::CarriedByTornado>(context).Field<&components::CarriedByTornado::carried>("carried");
 	Reflect<components::CaughtByTornado> {context};
 	Reflect<components::ChallengePicture>(context)

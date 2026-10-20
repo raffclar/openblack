@@ -215,6 +215,8 @@ public:
 	{
 		uint32_t food {0};
 		bool ripe {false};
+		/// The hand can lock onto it only when its crop has grown at all and it has more than one food
+		bool lockable {true};
 	};
 	[[nodiscard]] virtual std::optional<FieldFacts> FieldFactsOf(entt::entity field) const = 0;
 	/// Food is taken out of a field by the hand

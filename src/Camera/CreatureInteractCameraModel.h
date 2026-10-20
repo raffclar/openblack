@@ -77,6 +77,8 @@ public:
 	/// The player's controls don't move it
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
+	/// While the hand holds a creature, no other camera can take over
+	[[nodiscard]] bool CanBeLeft() const override { return false; }
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override;
 	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }

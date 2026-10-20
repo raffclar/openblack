@@ -92,6 +92,9 @@ public:
 	/// Whether where the camera goes is kept within the world's ball round the middle of the map, as for every camera of
 	/// the game
 	[[nodiscard]] virtual bool HeldInsideTheWorld() const { return true; }
+	/// Whether another camera can take over from this one, as the world camera does for a jump to a bookmark. Most
+	/// cameras let it.
+	[[nodiscard]] virtual bool CanBeLeft() const { return true; }
 	/// What the camera does with the mouse, which the hand shows: the hints the cursor's place offers, and what a
 	/// drag of the land has turned into
 	[[nodiscard]] virtual HandCues GetHandCues() const { return {}; }
