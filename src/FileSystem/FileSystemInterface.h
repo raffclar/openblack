@@ -153,6 +153,9 @@ public:
 	virtual bool Rename(const std::filesystem::path& from, const std::filesystem::path& to);
 	/// Removes a file. Returns true when the file was there and is gone.
 	virtual bool Remove(const std::filesystem::path& path);
+	/// Removes every file and folder in the folder at the exact path. The folder itself stays. The game only reads its
+	/// own folder, thus this removes nothing there. Returns true when the folder is there and empty after the call.
+	virtual bool EmptyFolder(const std::filesystem::path& path);
 	/// True when the path is in the game's folder
 	[[nodiscard]] bool InGameFolder(const std::filesystem::path& path) const;
 };

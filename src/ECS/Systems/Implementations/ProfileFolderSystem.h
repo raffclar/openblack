@@ -36,6 +36,7 @@ public:
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPlayerFile(std::u16string_view player,
 	                                                                 std::string_view file) const override;
 	bool WritePlayerFile(std::u16string_view player, std::string_view file, std::span<const uint8_t> bytes) override;
+	bool EmptyPlayerFolder(std::u16string_view player) override;
 
 private:
 	filesystem::FileSystemInterface& _fileSystem;

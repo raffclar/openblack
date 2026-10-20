@@ -100,3 +100,18 @@ bool ProfileFolderSystem::WritePlayerFile(std::u16string_view player, std::strin
 	}
 	return written;
 }
+
+bool ProfileFolderSystem::EmptyPlayerFolder(std::u16string_view player)
+{
+	const auto folder = GetPlayerFolder(player);
+	if (!folder.has_value())
+	{
+		return false;
+	}
+	const bool emptied = _fileSystem.EmptyFolder(*folder);
+	if (const auto logger = spdlog::get("game"); !emptied && logger != nullptr)
+	{
+		SPDLOG_LOGGER_WARN(logger, "The game could not empty the folder {}", folder->generic_string());
+	}
+	return emptied;
+}

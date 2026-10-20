@@ -1326,6 +1326,8 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	{
 		return false;
 	}
+	// The help counts the gift as the creature may take it, before the creature starts to take it
+	_world->CountHelpEvent(help::profile::k_Give);
 	if (!_world->GiveTo(*creature, held, !_world->RightHanded()))
 	{
 		return false;

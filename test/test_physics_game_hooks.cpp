@@ -33,6 +33,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -45,6 +46,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/TempleHeartPassOn.h"
+#include "Help/HelpProfile.h"
 #include "Physics/Body.h"
 #include "Physics/LivingRules.h"
 #include "Physics/TempleHeart.h"
@@ -208,6 +210,7 @@ public:
 		return true;
 	}
 	void AddToPile(entt::entity /*pile*/, ResourceType /*type*/, uint32_t /*amount*/, bool /*poisoned*/) override {}
+	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
 	void SetDying(entt::entity /*animal*/) override {}
 	[[nodiscard]] bool HasMinds() const override { return true; }
 	[[nodiscard]] const creature_mind_tables::Tables* MindTables() const override { return nullptr; }
@@ -274,6 +277,7 @@ public:
 		components::DrawnIntoVortex::Flight flight;
 	};
 	std::vector<StruckVortex> struckVortices;
+	std::vector<uint32_t> helpEvents;
 	std::vector<std::pair<entt::entity, entt::entity>> taken;
 	std::vector<Deed> deeds;
 	std::vector<float> feedbacks;
@@ -537,6 +541,29 @@ TEST(PhysicsGameHooks, AThingThatIsAResourceGoesIntoTheStoreItMeets)
 	f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = store, .player = PlayerNames::PLAYER_ONE});
 	const std::vector<std::pair<entt::entity, entt::entity>> taken {{store, tree}};
 	EXPECT_EQ(f.world->taken, taken);
+}
+
+TEST(PhysicsGameHooks, AStoragePitThatTakesAThrowOfTheLocalPlayerCountsForTheHelp)
+{
+	Fixture f;
+	auto& registry = f.world->registry;
+	const auto pit = registry.Create();
+	registry.Assign<StoragePit>(pit);
+	const auto site = registry.Create();
+	f.world->stores = {pit, site};
+	const auto strike = [&f, &registry](entt::entity store, PlayerNames player) {
+		const auto tree = registry.Create();
+		f.world->resources[tree] = {.type = ResourceType::Wood, .amount = 100};
+		f.struck.entity = tree;
+		f.hooks->ReactToImpact(f.dynamics, f.struck, {.hitBy = store, .player = player});
+	};
+	strike(pit, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(f.world->helpEvents, std::vector<uint32_t> {help::profile::k_ThrownIntoStore});
+	// Another player's throw, or a store that is not a storage pit, counts nothing
+	strike(pit, PlayerNames::PLAYER_TWO);
+	strike(site, PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(f.world->helpEvents.size(), 1u);
+	EXPECT_EQ(f.world->taken.size(), 3u);
 }
 
 TEST(PhysicsGameHooks, RocksBreakBuildings)

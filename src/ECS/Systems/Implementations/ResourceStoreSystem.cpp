@@ -780,8 +780,6 @@ bool ResourceStoreSystem::TakeObject(entt::entity store, entt::entity object, st
 	{
 		return false;
 	}
-	// TODO(stores): a thing thrown into a storage pit by the local player shows the help for giving; openblack has no
-	// help system yet
 	const auto* transform = registry.TryGet<const Transform>(object);
 	const auto at = transform != nullptr ? transform->position : glm::vec3(0.0f);
 	const auto added = AddToStore(store, resource.type, resource.amount, giver, resource.poisoned, at);

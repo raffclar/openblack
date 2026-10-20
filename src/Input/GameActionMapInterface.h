@@ -154,6 +154,9 @@ public:
 	/// The mouse's own movement this frame, with the part that the screen's sides stopped the pointer from following:
 	/// while the window has the mouse, the mouse's movement before the pointer's speed; else the pointer's movement
 	[[nodiscard]] virtual glm::ivec2 GetMousePushDelta() const { return GetMouseDelta(); }
+	/// The movements of the mouse that the help counts in this frame. Each call takes them, so the next call gives the
+	/// ones that came after it.
+	[[nodiscard]] virtual uint32_t TakeMouseMoves() { return 0; }
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
