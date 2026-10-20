@@ -42,6 +42,8 @@ public:
 	uint32_t AddToTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount,
 	                        std::optional<glm::vec3> at) override;
 	uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) override;
+	void StoreStopsWorking(entt::entity store) override;
+	void StoreWorksAgain(entt::entity store) override;
 
 	/// One site at a building takes wood: a temple's onto its pile nearest where it is brought, any other's onto its one
 	/// pile, made for the first wood. What it took.

@@ -22,6 +22,7 @@
 #include <algorithm>
 #include <chrono>
 #include <limits>
+#include <vector>
 
 #include <LNDFile.h>
 #include <entt/core/hashed_string.hpp>
@@ -133,6 +134,26 @@ void PlayInGame(uint32_t sample, glm::vec3 position, entt::entity owner)
 void Thud(entt::entity pile, ResourceType type, uint32_t amount, glm::vec3 position)
 {
 	PlayInGame(piles::PileSoundSample(type, amount, TickMs()), position, pile);
+}
+
+/// A pile that a store or a building site keeps stays when it is empty. It loses its poison and stops calling people.
+void PileEmptied(entt::entity pile, Pot& pot)
+{
+	pot.poisoned = false;
+	const auto reaction = PotInfoOf(pot.type).associatedReaction;
+	if (reaction != Reaction::None && Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().RemoveFrom(pile, reaction);
+	}
+}
+
+/// The piles of a storage pit that exist: its food pile, then its wood piles
+std::vector<entt::entity> PitPiles(const StoragePit& pit)
+{
+	std::vector<entt::entity> piles {pit.foodPile};
+	piles.insert(piles.end(), pit.woodPiles.begin(), pit.woodPiles.end());
+	std::erase_if(piles, [](entt::entity pile) { return !Entities().Valid(pile) || !Entities().AllOf<Pot>(pile); });
+	return piles;
 }
 
 /// The pile a storage pit keeps its food or wood in, made empty where the pit's model says if it has none
@@ -632,6 +653,10 @@ uint32_t ResourceStoreSystem::TakeFromPit(entt::entity store, ResourceType type,
 		pot.amount -= from;
 		taken += from;
 		amount -= from;
+		if (from != 0 && pot.amount == 0)
+		{
+			PileEmptied(pile, pot);
+		}
 	};
 	if (type == ResourceType::Food)
 	{
@@ -667,7 +692,7 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 		// A pile on its own goes once it has nothing left
 		const auto taken = std::min(amount, pot->amount);
 		pot->amount -= taken;
-		if (pot->amount == 0)
+		if (piles::GoesWhenEmptied(pot->amount, false))
 		{
 			ecs::world_objects::Remove(pile);
 		}
@@ -685,6 +710,10 @@ uint32_t ResourceStoreSystem::TakeFromPile(entt::entity pile, ResourceType type,
 	{
 		taken = std::min(asked, pot->amount);
 		pot->amount -= taken;
+		if (taken != 0 && pot->amount == 0)
+		{
+			PileEmptied(pile, *pot);
+		}
 	}
 	if (taken != 0)
 	{
@@ -1225,7 +1254,7 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 				pot->amount -= taken;
 				if (pot->amount == 0)
 				{
-					pot->poisoned = false;
+					PileEmptied(pile, *pot);
 				}
 				removed += taken;
 				amount -= taken;
@@ -1241,7 +1270,7 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 		pot->amount -= removed;
 		if (pot->amount == 0)
 		{
-			pot->poisoned = false;
+			PileEmptied(site.piles.front(), *pot);
 		}
 	}
 	if (auto* tally = TallyOf(ecs::construction::TownOfSite(building)))
@@ -1262,4 +1291,44 @@ uint32_t ResourceStoreSystem::RemoveFromTownsSite(entt::entity building, entt::e
 {
 	auto* site = ecs::construction::SiteOf(town, building);
 	return site != nullptr ? TakeFromSite(building, *site, type, amount) : 0u;
+}
+
+void ResourceStoreSystem::StoreStopsWorking(entt::entity store)
+{
+	auto& registry = Entities();
+	const auto* pit = registry.TryGet<const StoragePit>(store);
+	if (pit == nullptr || !Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& reactions = Locator::reactionSystem::value();
+	const auto player = ecs::world_objects::PlayerOf(store).value_or(PlayerNames::NEUTRAL);
+	for (const auto pile : PitPiles(*pit))
+	{
+		const auto& pot = registry.Get<const Pot>(pile);
+		const auto reaction = PotInfoOf(pot.type).associatedReaction;
+		const auto* transform = registry.TryGet<const Transform>(pile);
+		if (transform != nullptr && piles::CallsWhenStoreStops(pot.amount, reaction) && !reactions.HasReaction(pile))
+		{
+			reactions.Create({.initiator = pile, .type = reaction, .player = player, .position = transform->position});
+		}
+	}
+}
+
+void ResourceStoreSystem::StoreWorksAgain(entt::entity store)
+{
+	auto& registry = Entities();
+	const auto* pit = registry.TryGet<const StoragePit>(store);
+	if (pit == nullptr || !Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	for (const auto pile : PitPiles(*pit))
+	{
+		const auto reaction = PotInfoOf(registry.Get<const Pot>(pile).type).associatedReaction;
+		if (reaction != Reaction::None)
+		{
+			Locator::reactionSystem::value().RemoveFrom(pile, reaction);
+		}
+	}
 }
