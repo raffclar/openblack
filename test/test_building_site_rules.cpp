@@ -238,6 +238,16 @@ TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVilla
 	EXPECT_EQ(WhenSiteCloses(600), LeftoverPile::CallForWood);
 }
 
+TEST(BuildingSiteRules, ATownRemovesASiteWhoseBuildingHasGoneOrStandsWhole)
+{
+	EXPECT_TRUE(HasNoUse(false, false, false));
+	EXPECT_TRUE(HasNoUse(true, true, true));
+	// A building going up, or built but still short of its full life, keeps its site
+	EXPECT_FALSE(HasNoUse(true, false, true));
+	EXPECT_FALSE(HasNoUse(true, false, false));
+	EXPECT_FALSE(HasNoUse(true, true, false));
+}
+
 TEST(BuildingSiteRules, AStandardSitesPileLiesBeyondTheBuildingAwayFromItsDoor)
 {
 	const glm::vec2 building {100.0f, 200.0f};

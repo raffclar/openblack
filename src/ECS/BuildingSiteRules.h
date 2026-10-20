@@ -154,6 +154,13 @@ enum class LeftoverPile : uint8_t
 };
 [[nodiscard]] LeftoverPile WhenSiteCloses(uint32_t woodInPile);
 
+/// Whether a town removes its site at a building on its turn: the site has no use once the building has gone, or once
+/// the building is built and has its full life again
+[[nodiscard]] constexpr bool HasNoUse(bool buildingThere, bool built, bool whole)
+{
+	return !buildingThere || (built && whole);
+}
+
 /// Of the sites wanting builders (or all of them for a builder disciple), the one whose building's nearest edge is
 /// nearest, each distance weighed by how much the site wants villagers. The earlier one on a tie.
 struct SiteCandidate

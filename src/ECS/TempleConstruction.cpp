@@ -273,6 +273,18 @@ void construction::CloseTownsSite(entt::entity building, entt::entity town)
 	}
 }
 
+void construction::PruneSites(entt::entity town)
+{
+	for (const auto building : SitesOfTown(town))
+	{
+		const bool there = Entities().Valid(building);
+		if (building_site::HasNoUse(there, there && IsBuilt(building), there && world_objects::LifeOf(building) >= 1.0f))
+		{
+			CloseTownsSite(building, town);
+		}
+	}
+}
+
 namespace
 {
 
