@@ -38,6 +38,8 @@ struct SpellDispenser
 	entt::entity town {entt::null};
 	/// Its town chose it for mending, and it is not whole yet: its town does not choose it again
 	bool putUpForMending {false};
+	/// How many of its town's passes over its buildings it has stood through, up to the age it counts as settled
+	uint32_t age {0};
 };
 
 /// One of the dispensers the testbed lays out in a grid, cleared away when a scenario asks for none

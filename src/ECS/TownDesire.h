@@ -91,6 +91,10 @@ struct DesireInputs
 	Tribe tribe {Tribe::CELTIC};
 };
 
+/// A built building of the town, a miracle dispenser too, counts among its buildings and among those of its number. A
+/// building of a civic kind also counts among its civic buildings.
+void CountBuiltBuilding(DesireInputs& in, AbodeNumber number, AbodeType type);
+
 /// Everything a desire reads: the town's desires (this turn's for those already worked out, last turn's for the rest),
 /// the inputs and the info
 struct DesireContext

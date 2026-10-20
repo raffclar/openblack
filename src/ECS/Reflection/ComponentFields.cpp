@@ -1807,7 +1807,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::SpellDispenser::effect>("effect")
 	    .Field<&components::SpellDispenser::building>("building")
 	    .Field<&components::SpellDispenser::town>("town")
-	    .Field<&components::SpellDispenser::putUpForMending>("putUpForMending");
+	    .Field<&components::SpellDispenser::putUpForMending>("putUpForMending")
+	    .Field<&components::SpellDispenser::age>("age");
 	Reflect<components::TestbedDispenser> {context};
 	Reflect<components::TownMagic>(context).Field<&components::TownMagic::held>("held");
 	Reflect<components::TownCentreIcon>(context)

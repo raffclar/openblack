@@ -645,6 +645,16 @@ float world_objects::ReduceLife(entt::entity object, float damage, std::optional
 			player_statistics::CountDestroyed(registry, *by);
 		}
 	}
+	// A miracle dispenser is a building of its town and counts by the same rule
+	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object); dispenser != nullptr)
+	{
+		if (const auto* info = AbodeInfoOf(object);
+		    info != nullptr && statistics::StopsWorking(before, life.life, info->thresholdForStopBeingFunctional) &&
+		    statistics::CountsAsDestroyed(by.has_value(), dispenser->age))
+		{
+			player_statistics::CountDestroyed(registry, *by);
+		}
+	}
 	// A built building of a town left under its full life gets a site for its repair, which starts from a little less
 	// than the life it is left with, whatever took it there
 	if (life.life < 1.0f && IsBuiltBuildingOfATown(registry, object))
