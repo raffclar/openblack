@@ -276,6 +276,7 @@
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandGrabRules.h"
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
@@ -6911,14 +6912,16 @@ void Game::PlayHandGrabSound()
 		isLand = landCell != nullptr && landCell->properties.hasWater == 0;
 	}
 
-	if (isLand)
+	const auto feedback = hand_grab::GripFeedbackOf(isLand, !Locator::cinematicDirectorSystem::value().IsInterfaceActive());
+	if (feedback == hand_grab::GripFeedback::None)
+	{
+		return;
+	}
+	if (feedback == hand_grab::GripFeedback::Dust)
 	{
 		// The game throws up a spot visual where the hand grips the land, as it plays the sound
 		GripLandscapeEffect::Spawn(
 		    glm::vec3(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z));
-	}
-	if (isLand)
-	{
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);

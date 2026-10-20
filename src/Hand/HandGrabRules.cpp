@@ -453,3 +453,12 @@ uint32_t hand_grab::ScoopTaken(uint32_t wanted, uint32_t sourceHas, uint32_t hel
 	}
 	return taken;
 }
+
+hand_grab::GripFeedback hand_grab::GripFeedbackOf(bool onLand, bool cinemaBars)
+{
+	if (!onLand)
+	{
+		return GripFeedback::Splash;
+	}
+	return cinemaBars ? GripFeedback::None : GripFeedback::Dust;
+}

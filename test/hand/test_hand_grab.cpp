@@ -460,3 +460,11 @@ TEST(HandGrab, TheScoopingSoundRisesInPitchWithTheRamp)
 	EXPECT_EQ(ScoopSoundPitch(0.999f), 239u);
 	EXPECT_EQ(ScoopSoundPitch(1.0f), 240u);
 }
+
+TEST(HandGrab, TheCinemaBarsSilenceAGripOfTheLandButNotOfTheSea)
+{
+	EXPECT_EQ(GripFeedbackOf(true, false), GripFeedback::Dust);
+	EXPECT_EQ(GripFeedbackOf(true, true), GripFeedback::None);
+	EXPECT_EQ(GripFeedbackOf(false, false), GripFeedback::Splash);
+	EXPECT_EQ(GripFeedbackOf(false, true), GripFeedback::Splash);
+}
