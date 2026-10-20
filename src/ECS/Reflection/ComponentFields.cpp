@@ -56,6 +56,7 @@
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePhysiology.h"
@@ -971,6 +972,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::walked>("walked")
+	    .Field<&components::CreatureObjectAction::stall>("stall")
 	    .Field<&components::CreatureObjectAction::turnedToReach>("turnedToReach")
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
@@ -2713,6 +2715,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_object_actions::ApproachStall>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_actions::ApproachStall::turns>("turns")
+	    .Field<&openblack::creature_object_actions::ApproachStall::note>("note");
 	Reflect<openblack::creature_object_beliefs::Belief>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::Belief::thing>("thing")
 	    .Field<&openblack::creature_object_beliefs::Belief::kind>("kind")

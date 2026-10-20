@@ -1217,8 +1217,10 @@ void AimWhileMoving(entt::entity creature, CreatureObjectAction& action, const C
 	}
 }
 
+/// One step of the walk or the turn to get in reach. Only the step of each game turn (newTurn) counts the turns of the
+/// walk. This step also occurs on the turn that the action starts.
 void Approach(entt::entity creature, CreatureObjectAction& action, const Creature& body, const Transform& transform,
-              CreatureAnimation& animation, const CreatureHeldObject* held)
+              CreatureAnimation& animation, const CreatureHeldObject* held, bool newTurn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
@@ -1237,6 +1239,19 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 	{
 		locomotion.Stop(creature);
 		Fail(action, "it is not on the map", creature_object_actions::Failure::NoWay);
+		return;
+	}
+	// A walk to a thing to pick up or stomp on fails when it does not move the creature for a time. It fails as a walk
+	// to a place where the creature cannot stand fails. Then the mind does not choose the thing again for a time
+	// (deviation 90).
+	if (newTurn && (action.kind == Kind::PickUp || action.kind == Kind::Destroy) &&
+	    creature_object_actions::StallsOnTurn(action.stall, glm::xz(transform.position),
+	                                          registry.AllOf<ScriptControlled>(creature)))
+	{
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} gives up its walk to {}: it got nowhere",
+		                    entt::to_integral(creature), action.target.has_value() ? entt::to_integral(*action.target) : 0u);
+		locomotion.Stop(creature);
+		Fail(action, "navigation failed", creature_object_actions::Failure::NoWay);
 		return;
 	}
 	if (locomotion.IsMoving(creature))
@@ -1908,8 +1923,8 @@ bool CreatureObjectActionSystem::Start(entt::entity creature, CreatureObjectActi
 	// that waits while this creature walks to a thing sees the walk at once.
 	if (started && kept.phase == Phase::Approach)
 	{
-		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature),
-		         held);
+		Approach(creature, kept, body, registry.Get<const Transform>(creature), registry.Get<CreatureAnimation>(creature), held,
+		         false);
 	}
 	return started;
 }
@@ -2738,7 +2753,7 @@ void CreatureObjectActionSystem::ProcessTurn()
 	        CreatureObjectAction& action) {
 		    if (action.status == Status::Running && action.phase == Phase::Approach)
 		    {
-			    Approach(entity, action, body, transform, animation, registry.TryGet<const CreatureHeldObject>(entity));
+			    Approach(entity, action, body, transform, animation, registry.TryGet<const CreatureHeldObject>(entity), true);
 		    }
 	    });
 

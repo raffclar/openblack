@@ -71,6 +71,8 @@ struct CreatureObjectAction
 	uint32_t attempts {0};
 	/// Whether it has started a walk to get in reach
 	bool walked {false};
+	/// Whether its walk to get in reach moves it
+	creature_object_actions::ApproachStall stall;
 	/// Whether it turned to get the thing in reach, and reaches when the turn ends
 	bool turnedToReach {false};
 	/// Whether it waited one turn after its walk stopped because it was shut in, for the mind to clear the way
