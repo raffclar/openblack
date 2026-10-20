@@ -23,6 +23,13 @@
 namespace openblack::ecs::components
 {
 
+/// The ground a town covers, in map units: the least and the greatest corner of the box (x and z)
+struct TownArea
+{
+	glm::ivec2 min {0, 0};
+	glm::ivec2 max {0, 0};
+};
+
 struct Town
 {
 	uint32_t id;
@@ -79,6 +86,8 @@ struct Town
 	uint32_t emptyTownTimer {0};
 	/// The temporary piles of food and wood it keeps while it has no storage pit that works, none until one is wanted
 	std::array<entt::entity, 2> temporaryStores {entt::null, entt::null};
+	/// The ground it covers, made again when a building joins or leaves it or one of its fields goes
+	TownArea area;
 };
 
 } // namespace openblack::ecs::components

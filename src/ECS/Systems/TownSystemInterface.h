@@ -99,6 +99,8 @@ public:
 	virtual void SetStoragePit(entt::entity town) = 0;
 	/// A new building standing on a town's gathering place moves it
 	virtual void BuildingCreated(entt::entity town, glm::vec2 position, float radius) = 0;
+	/// A building joined or left a town, or one of its fields went: the town makes the ground it covers again
+	virtual void StructuresChanged(entt::entity town) = 0;
 
 	/// Whether a town is in an emergency: for a while after one was last called
 	[[nodiscard]] virtual bool IsInStateOfEmergency(entt::entity town) const = 0;

@@ -36,6 +36,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Breeding.h"
+#include "ECS/Components/Field.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicPile.h"
@@ -69,6 +70,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TemporaryStoreRules.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownCentreParts.h"
 #include "ECS/TownEmpty.h"
 #include "ECS/TownHomes.h"
@@ -101,6 +103,7 @@ TownSystem::TownSystem()
 	_connections.push_back(_registry->OnDestroy<Abode>().connect<&TownSystem::OnAbodeGone>(*this));
 	// A miracle dispenser is one of its town's buildings too
 	_connections.push_back(_registry->OnDestroy<SpellDispenser>().connect<&TownSystem::OnAbodeGone>(*this));
+	_connections.push_back(_registry->OnDestroy<Field>().connect<&TownSystem::OnFieldGone>(*this));
 	_connections.push_back(_registry->OnDestroy<Villager>().connect<&TownSystem::OnVillagerGone>(*this));
 }
 
@@ -116,11 +119,67 @@ TownSystem::~TownSystem()
 	}
 }
 
+void TownSystem::OnFieldGone(entt::registry& registry, entt::entity field)
+{
+	const auto& data = registry.get<const Field>(field);
+	const auto& towns = _registry->Context().towns;
+	if (const auto town = towns.find(static_cast<uint32_t>(data.town)); town != towns.end() && registry.valid(town->second))
+	{
+		StructuresChanged(town->second, field);
+	}
+}
+
+void TownSystem::StructuresChanged(entt::entity town)
+{
+	StructuresChanged(town, entt::null);
+}
+
+void TownSystem::StructuresChanged(entt::entity townEntity, entt::entity leaving)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(townEntity) || !registry.AllOf<Town>(townEntity))
+	{
+		return;
+	}
+	auto area = town_area::Emptied();
+	const auto widen = [&registry, &area](entt::entity thing) {
+		if (const auto* at = registry.TryGet<const Transform>(thing); at != nullptr)
+		{
+			town_area::Widen(area, map_coords::FromMetres(glm::xz(at->position)), world_objects::SizeOf(thing).radius);
+		}
+	};
+	// Its buildings, the newest first, then its fields
+	auto& town = registry.Get<Town>(townEntity);
+	for (const auto abode : town.abodes)
+	{
+		if (registry.Valid(abode))
+		{
+			widen(abode);
+		}
+	}
+	registry.Each<const Field>([&](entt::entity field, const Field& data) {
+		if (field != leaving && data.town == static_cast<int>(town.id))
+		{
+			widen(field);
+		}
+	});
+	town.area = area;
+}
+
 void TownSystem::OnAbodeGone(entt::registry& registry, entt::entity abode)
 {
+	std::vector<entt::entity> left;
 	for (auto [entity, town] : registry.view<Town>().each())
 	{
-		std::erase(town.abodes, abode);
+		if (std::erase(town.abodes, abode) != 0)
+		{
+			left.push_back(entity);
+		}
+	}
+	// Each town that the building left makes its ground again
+	for (const auto town : left)
+	{
+		StructuresChanged(town);
 	}
 	// A storage pit that goes makes its town let go of any temporary piles it keeps
 	const auto* data = registry.try_get<const Abode>(abode);

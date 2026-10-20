@@ -81,6 +81,7 @@
 #include "ECS/TempleConstruction.h"
 #include "ECS/ThingModel.h"
 #include "ECS/TownAggression.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownPlanning.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -353,6 +354,11 @@ world_objects::Size world_objects::SizeOf(entt::entity object)
 	if (registry.AllOf<FishFarm>(object))
 	{
 		return {.radius = fish_farm::k_Radius, .height = 0.0f};
+	}
+	// A town reaches half the longer side of the ground it keeps as covered
+	if (const auto* town = registry.TryGet<const Town>(object); town != nullptr)
+	{
+		return {.radius = town_area::Radius(town->area), .height = 0.0f};
 	}
 	Size size {.radius = k_DefaultRadius, .height = k_DefaultHeight};
 	const auto* transform = registry.TryGet<const Transform>(object);

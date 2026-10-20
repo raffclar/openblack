@@ -59,6 +59,7 @@ public:
 	                                                     ClearAreaFilter filter, entt::entity ignore) const override;
 	glm::vec2 GetCongregationPos(entt::entity town) override;
 	void BuildingCreated(entt::entity town, glm::vec2 position, float radius) override;
+	void StructuresChanged(entt::entity town) override;
 	[[nodiscard]] bool IsInStateOfEmergency(entt::entity town) const override;
 	void SetInStateOfEmergency(entt::entity town) override;
 	void ProcessTurn() override;
@@ -77,6 +78,9 @@ public:
 private:
 	/// A building or a person gone from the world leaves its town's lists
 	void OnAbodeGone(entt::registry& registry, entt::entity abode);
+	void OnFieldGone(entt::registry& registry, entt::entity field);
+	/// Make the town's ground again, without a field that is about to go
+	void StructuresChanged(entt::entity town, entt::entity leaving);
 	void OnVillagerGone(entt::registry& registry, entt::entity villager);
 	/// The people of a town
 	[[nodiscard]] static uint32_t PopulationOf(entt::entity town);

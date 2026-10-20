@@ -70,6 +70,7 @@
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/VillagerWorkRules.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -1157,28 +1158,11 @@ void ForestSystem::MakeScenicForests()
 		}
 	});
 	registry.Each<Town>([&](entt::entity, Town& town) {
-		// The town's centre is the middle of the ground its buildings and fields cover
-		ecs::scenic_forest::TownArea area;
-		registry.Each<const Abode, const Transform>([&](entt::entity thing, const Abode& abode, const Transform& at) {
-			if (abode.townId == town.id)
-			{
-				area.Add({at.position.x, at.position.z}, ecs::world_objects::SizeOf(thing).radius);
-			}
-		});
-		registry.Each<const Field, const Transform>([&](entt::entity thing, const Field& field, const Transform& at) {
-			if (field.town == static_cast<int>(town.id))
-			{
-				area.Add({at.position.x, at.position.z}, ecs::world_objects::SizeOf(thing).radius);
-			}
-		});
-		// A town with neither buildings nor fields has its centre far off the land, where the walk meets no tree
-		if (area.Empty())
-		{
-			return;
-		}
-		const auto centre = area.Centre();
+		// The town's centre is the middle of the ground that it keeps as covered by its buildings and fields
+		const auto middle = ecs::town_area::Centre(town.area);
+		const auto centre = map_coords::ToMetres(middle);
 		std::optional<uint32_t> forest = town.scenicForest;
-		for (const auto& coords : ecs::scenic_forest::Walk(map_coords::FromMetres(centre), reach))
+		for (const auto& coords : ecs::scenic_forest::Walk(middle, reach))
 		{
 			const glm::ivec2 cell = map_coords::Cell(coords);
 			if (!map_coords::InBounds(cell))

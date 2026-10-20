@@ -3801,6 +3801,7 @@ void Runner::PlaceRewardDispenser(const DispenserSetup& setup, glm::vec3 positio
 		if (registry.Valid(dispenser.town))
 		{
 			std::erase(registry.Get<ecs::components::Town>(dispenser.town).abodes, made);
+			Locator::townSystem::value().StructuresChanged(dispenser.town);
 		}
 		dispenser.town = entt::null;
 	}

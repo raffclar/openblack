@@ -1912,6 +1912,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::TempleExterior::morphed>("morphed")
 	    .Field<&components::TempleExterior::drawnBuilt>("drawnBuilt")
 	    .Field<&components::TempleExterior::lanternsMade>("lanternsMade");
+	Reflect<components::TownArea>(context).Field<&components::TownArea::min>("min").Field<&components::TownArea::max>("max");
 	Reflect<components::Town>(context)
 	    .Field<&components::Town::id>("id")
 	    .Field<&components::Town::owner>("owner")
@@ -1939,7 +1940,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Town::planned>("planned")
 	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn")
 	    .Field<&components::Town::emptyTownTimer>("emptyTownTimer")
-	    .Field<&components::Town::temporaryStores>("temporaryStores");
+	    .Field<&components::Town::temporaryStores>("temporaryStores")
+	    .Field<&components::Town::area>("area");
 	Reflect<components::TownAggression>(context).Field<&components::TownAggression::record>("record");
 	Reflect<components::TownArtefact>(context)
 	    .Field<&components::TownArtefact::town>("town")
