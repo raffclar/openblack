@@ -1851,6 +1851,23 @@ void AddStory(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
 	});
 	all.push_back({
+	    .id = "temple.heart_fade",
+	    .name = "The temple's heart glows and fades out in its destruction",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle, near the camera. Two seconds in, its destruction "
+	                   "starts, as when its heart loses the last of its life.",
+	    .expected = "From 5.5 seconds the temple glows in red, the player's colour, and the glow beats with the heartbeat. "
+	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
+	                "the land and the things behind it show through it, and its cut-out parts go first. It is not drawn "
+	                "after 23.8 seconds, just before it goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 2.0f, .value = 0}},
+	});
+	all.push_back({
 	    .id = "temple.intro_movement",
 	    .name = "Looking about the temple while the advisors introduce it",
 	    .facet = Facet::Story,

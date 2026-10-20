@@ -20,12 +20,14 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "3D/ModelSurface.h"
+#include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageLight.h"
 #include "ECS/Registry.h"
 #include "GameTempleDestructionWorld.h"
+#include "Graphics/TempleHeartLook.h"
 #include "Physics/TempleHeart.h"
 #include "Temple/TempleDestruction.h"
 
@@ -248,8 +250,15 @@ void TempleDestructionSystem::Step(entt::entity entity, Temple& temple)
 		temple.destructionBeamSource.reset();
 	}
 	// The local player's heartbeat quickens with the clock (the heartbeat system reads it)
-	// TODO(physics): the heart fades out from fourteen seconds under a shell drawn over it; openblack draws no heart fade
-	// or shell yet
+	// TODO(physics): the heart fades out from fourteen seconds under a shell drawn over it; openblack draws no shell yet
+	// The heart fades out from fourteen seconds. Once it is a little faded, the materials of its model change for good.
+	namespace heart_look = graphics::temple_heart_look;
+	auto* registry = _world->Entities();
+	if (heart_look::MaterialsChange(temple.destroying, heart_look::DrawnAlpha(td::HeartAlpha(temple.destructionClock))) &&
+	    !registry->AllOf<ChangedMaterials>(entity))
+	{
+		registry->Assign<ChangedMaterials>(entity, heart_look::k_Changed);
+	}
 	// A clock started again while the loop still plays starts another loop, sounding over the first, as the game makes a
 	// new sound each time
 	if (events.loopStarts)

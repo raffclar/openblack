@@ -136,5 +136,7 @@ private:
 	/// The detail the explorers' boat was last drawn at, which the sea mirrors it at the frame after (kept while it is
 	/// too far off to be drawn)
 	std::unordered_map<entt::entity, uint8_t> _filmReflectionLevels;
+	/// The colour, 0xRRGGBB, that the heart of each temple glows in its destruction, as the last frame set it
+	std::unordered_map<entt::entity, uint32_t> _heartGlows;
 };
 } // namespace openblack::ecs::systems

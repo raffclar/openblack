@@ -24,7 +24,8 @@ uniform vec4 u_glow;
 // it unlit, in that colour alone, with its alpha by w
 uniform vec4 u_tint;
 // x: 1 to show only what stands above the height y: in the sea's reflection, which shows only what stands above the sea,
-// and for a mesh cut by a plane. z: 1 to blend by the instance's alpha rather than dissolve the share of it gone
+// and for a mesh cut by a plane. z: 1 to blend by the instance's alpha rather than dissolve the share of it gone. w: 1 to
+// multiply the texture's alpha by the instance's before the alpha test, as a material that the game changed does.
 uniform vec4 u_seaClip;
 // w: the whole object's alpha, which its texture's is multiplied by; 0 for an object drawn as its materials say
 uniform vec4 u_objectLook;
@@ -68,6 +69,11 @@ void main()
 	bool tinted = u_tint.w > 0.0f;
 	diffuseTex.rgb = diffuseTex.rgb * (tinted ? vec3_splat(1.0f) : light) * u_tint.rgb;
 	diffuseTex.a = diffuseTex.a * (tinted ? u_tint.w : 1.0f) * (u_objectLook.w > 0.0f ? u_objectLook.w : 1.0f);
+	bool alphaBeforeTest = u_seaClip.w > 0.5f;
+	if (alphaBeforeTest)
+	{
+		diffuseTex.a = diffuseTex.a * v_color0.a;
+	}
 	if (diffuseTex.a <= alphaThreshold || (u_seaClip.x > 0.5f && v_position.y < u_seaClip.y) ||
 	    (u_keepBelow.x > 0.5f && v_position.y > u_keepBelow.y))
 	{
@@ -76,7 +82,7 @@ void main()
 	// Fading by its alpha, blended over what is behind it
 	if (u_seaClip.z > 0.5f)
 	{
-		diffuseTex.a = diffuseTex.a * v_color0.a;
+		diffuseTex.a = alphaBeforeTest ? diffuseTex.a : diffuseTex.a * v_color0.a;
 	}
 	// Fading out of sight: the share of it gone, in specks of the world picked at random, isn't drawn
 	else if (v_color0.a < 1.0f)
