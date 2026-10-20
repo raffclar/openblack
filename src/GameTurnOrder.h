@@ -31,7 +31,7 @@ enum class Stage : uint8_t
 	StartTurn,
 	/// The storms move on, and the snow on the land lies and melts
 	Atmosphere,
-	/// Each player in turn: its temple, its towns, its computer mind and its influence
+	/// Each player in turn: its temple, its towns, its computer mind, its influence and its alignment
 	Players,
 	Dances,
 	/// The fields, the fish farms, the things that walk along tracks and the footpaths that are found
@@ -100,6 +100,9 @@ enum class Step : uint8_t
 	Influence,
 	PlayerStatistics,
 	Heartbeats,
+	TempleLooks,
+	WorshipSiteLooks,
+	PlayerAlignment,
 	VillageTotems,
 	ChimneySmoke,
 	Dances,
@@ -158,9 +161,7 @@ enum class Step : uint8_t
 	CameraChecks,
 	BuildingPieces,
 	MusicMoods,
-	Alignment,
-	TempleLooks,
-	WorshipSiteLooks,
+	CreatureAlignment,
 	SoundTags,
 	Ambience,
 	Music,
@@ -201,6 +202,11 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Influence, .stage = Stage::Players},
     {.step = Step::PlayerStatistics, .stage = Stage::Players},
     {.step = Step::Heartbeats, .stage = Stage::Players},
+    // The temples' looks follow their players' alignments as they were before this turn's change
+    {.step = Step::TempleLooks, .stage = Stage::Players},
+    {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
+    // At the end of the players' turns: their alignments, then the alignment at the camera's eye
+    {.step = Step::PlayerAlignment, .stage = Stage::Players},
     {.step = Step::VillageTotems, .stage = std::nullopt},
     {.step = Step::ChimneySmoke, .stage = std::nullopt},
     {.step = Step::Dances, .stage = Stage::Dances},
@@ -259,10 +265,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CameraChecks, .stage = Stage::CameraChecks},
     {.step = Step::BuildingPieces, .stage = Stage::Fragments},
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
-    // The alignments and the looks that follow them. The ambience of the end of the turn hears this alignment.
-    {.step = Step::Alignment, .stage = std::nullopt},
-    {.step = Step::TempleLooks, .stage = std::nullopt},
-    {.step = Step::WorshipSiteLooks, .stage = std::nullopt},
+    {.step = Step::CreatureAlignment, .stage = std::nullopt},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
     {.step = Step::Music, .stage = Stage::EndTurn},

@@ -110,6 +110,15 @@ TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay
 	EXPECT_TRUE(recorder.Before(Step::ScriptHighlights, Step::Climates));
 }
 
+TEST(GameTurnOrder, TheAlignmentsMoveAtTheEndOfThePlayersTurns)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Players, Step::TempleLooks));
+	EXPECT_TRUE(recorder.Before(Step::TempleLooks, Step::PlayerAlignment));
+	EXPECT_TRUE(recorder.Before(Step::WorshipSiteLooks, Step::PlayerAlignment));
+	EXPECT_TRUE(recorder.Before(Step::PlayerAlignment, Step::Dances));
+}
+
 TEST(GameTurnOrder, TheFieldsAndFishFarmsComeBeforeTheTracksAndTheFootpaths)
 {
 	const auto recorder = PlayOneTurn();

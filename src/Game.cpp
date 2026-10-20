@@ -1885,6 +1885,22 @@ void Game::PlayTurnStep(game_turn::Step step)
 			Locator::heartbeatSystem::value().ProcessTurn(turn);
 		}
 		break;
+	case Step::TempleLooks:
+		// The temples' outsides follow their players' alignments
+		Locator::templeExteriorSystem::value().UpdateTurn();
+		break;
+	case Step::WorshipSiteLooks:
+		// And their worship sites wear their looks
+		if (Locator::worshipSiteSystem::has_value())
+		{
+			Locator::worshipSiteSystem::value().UpdateTurn();
+		}
+		break;
+	case Step::PlayerAlignment:
+		// Each player's waiting change moves its alignment. Then the camera takes the alignment of the player of most
+		// influence at its eye.
+		Locator::alignmentSystem::value().UpdatePlayersTurn(cameraPosition);
+		break;
 	case Step::VillageTotems:
 		// A town totem that arrives at its share rings the village bell
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
@@ -2240,20 +2256,9 @@ void Game::PlayTurnStep(game_turn::Step step)
 			Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
 		}
 		break;
-	case Step::Alignment:
-		// The camera takes the alignment of the player of most influence at its eye
-		Locator::alignmentSystem::value().UpdateTurn(cameraPosition);
-		break;
-	case Step::TempleLooks:
-		// The temples' outsides follow their players' alignments
-		Locator::templeExteriorSystem::value().UpdateTurn();
-		break;
-	case Step::WorshipSiteLooks:
-		// And their worship sites wear their looks
-		if (Locator::worshipSiteSystem::has_value())
-		{
-			Locator::worshipSiteSystem::value().UpdateTurn();
-		}
+	case Step::CreatureAlignment:
+		// The plan of each creature moves its alignment
+		Locator::alignmentSystem::value().UpdateCreaturesTurn();
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from

@@ -120,14 +120,14 @@ TEST_F(Alignment, TheCameraTakesTheMostInfluentialPlayersAtTheTurn)
 	influence.influence.at(0) = 0.3f;
 	influence.influence.at(1) = 0.2f;
 	EXPECT_EQ(_alignment.GetCameraAlignment(), 0.0f);
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	EXPECT_FLOAT_EQ(_alignment.GetCameraAlignment(), -0.75f);
 	influence.influence.at(1) = 0.4f;
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	EXPECT_FLOAT_EQ(_alignment.GetCameraAlignment(), 0.5f);
 	// Where no player has any influence the place is the neutral player's
 	influence.influence = {};
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	EXPECT_EQ(_alignment.GetCameraAlignment(), 0.0f);
 }
 
@@ -158,7 +158,7 @@ TEST(AlignmentRules, TheLandShowsAnAlignmentHeldBetweenEvilAndGood)
 TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)
 {
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, -1.0f);
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	_alignment.Update(500ms);
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -0.5f);
 	// Not while paused
@@ -168,7 +168,7 @@ TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -1.0f);
 	// And back the other way
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 1.0f);
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	_alignment.Update(1500ms);
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), 0.5f);
 }
@@ -184,10 +184,10 @@ TEST_F(Alignment, WhatTheirDeedsChangeScalesOneTurnsChange)
 	// Setting the alignment keeps what is still to come
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 0.5f);
 	// The turn's change is the limit times what waits, and the rest of what waited is gone
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
 	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), 0.0f);
-	_alignment.UpdateTurn({});
+	_alignment.UpdatePlayersTurn({});
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
 	Locator::infoConstants::reset();
 }
@@ -215,26 +215,26 @@ TEST_F(Alignment, ThePlanOfACreatureMovesItsAlignmentEachTurn)
 	auto& mind = registry.Assign<components::CreatureMindState>(creature);
 
 	// Without a plan the alignment stays
-	_alignment.UpdateTurn({});
+	_alignment.UpdateCreaturesTurn();
 	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, 0.0f);
 
 	// A plan to be nice moves it to good
 	mind.planActive = true;
 	mind.planner.current = creature_planner::Plan {.desire = creature_desires::Desire::Compassion};
-	_alignment.UpdateTurn({});
+	_alignment.UpdateCreaturesTurn();
 	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, 0.2f * 0.01f);
 
 	// A plan to eat a villager moves it to evil, more strongly against the good alignment
 	mind.planner.current =
 	    creature_planner::Plan {.desire = creature_desires::Desire::Hunger, .object = entt::to_integral(villager)};
 	const float before = registry.Get<components::Creature>(creature).alignment;
-	_alignment.UpdateTurn({});
+	_alignment.UpdateCreaturesTurn();
 	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, before - (0.2f * (1.0f + (before * 0.5f)) * 0.01f));
 
 	// A plan that is not active does not count
 	mind.planActive = false;
 	const float after = registry.Get<components::Creature>(creature).alignment;
-	_alignment.UpdateTurn({});
+	_alignment.UpdateCreaturesTurn();
 	EXPECT_FLOAT_EQ(registry.Get<components::Creature>(creature).alignment, after);
 	Locator::infoConstants::reset();
 }
