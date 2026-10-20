@@ -1516,3 +1516,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_town_empty test_town_empty.cpp)
 openblack_setup_and_add_test(test_temporary_store test_temporary_store.cpp)
+openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)

@@ -3073,6 +3073,14 @@ void Runner::Give(const Command& command)
 	case Kind::Poo:
 		result = minds.Poo(*entity) ? "started" : "can't";
 		break;
+	case Kind::ForceAction:
+		result =
+		    minds.ForcePlan(
+		        *entity,
+		        {.desire = creature_desires::Desire::ObeyPlayer, .action = command.action, .object = *entity, .ordered = true})
+		        ? fmt::format("forced {}", command.action)
+		        : "can't";
+		break;
 	case Kind::Fart:
 		// A fart is always a plan for the desire to poo
 		result = minds.ForcePlan(*entity, {.desire = creature_desires::Desire::Poo, .action = "Fart"}) ? "started" : "can't";

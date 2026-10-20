@@ -467,6 +467,24 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.forced_walk_kept_at_home",
+	    .name = "Forced walk out of the area that holds a creature",
+	    .facet = Facet::Needs,
+	    .description = "A tiger starts north of the middle, short of the testbed's lake. It is kept within 20 units of "
+	                   "where it stands, as a young creature is kept near its home. After one second its player orders "
+	                   "it to look at its reflection, whose walk goes to the shore of the lake.",
+	    .expected = "The forced plan fails as it starts, because its walk leaves the area. The tiger does not go to the "
+	                "lake and stays near where it stands. The log tells that it cannot walk out of its area.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 60.0f},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 20.0f},
+	                 {.kind = Kind::ForceAction, .delaySeconds = 1.0f, .action = "LookAtReflection"}},
+	});
+
+	all.push_back({
 	    .id = "needs.thirst_kept_at_home",
 	    .name = "Thirsty creature kept far from water",
 	    .facet = Facet::Needs,
@@ -9728,7 +9746,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 166> k_Names {
+	constexpr std::array<std::string_view, 167> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9895,6 +9913,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hold the route search",
 	    "pause the game",
 	    "set the game's speed",
+	    "force an action",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

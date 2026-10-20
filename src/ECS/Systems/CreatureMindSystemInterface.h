@@ -314,6 +314,9 @@ public:
 		/// The priority of the plan against the plans that the creature finds for itself. With none, nothing that it wants
 		/// is more pressing.
 		std::optional<float> priority;
+		/// The plan counts as a walk back into the area that holds the creature, as a leash order does. Then the area
+		/// refuses none of its walks.
+		bool walksBack {false};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already
