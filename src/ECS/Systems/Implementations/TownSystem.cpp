@@ -952,6 +952,12 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 	const auto abodes = registry.Get<const Town>(townEntity).abodes;
 	for (const auto abode : abodes)
 	{
+		// A miracle dispenser ages as any building does. Nobody lives in it, thus it is never empty and not neglected.
+		if (auto* dispenser = registry.Valid(abode) ? registry.TryGet<SpellDispenser>(abode) : nullptr; dispenser != nullptr)
+		{
+			dispenser->age = statistics::AgedOnePass(dispenser->age);
+			continue;
+		}
 		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
 		{
 			continue;

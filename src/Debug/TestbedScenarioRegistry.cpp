@@ -5876,6 +5876,37 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
+
+	// A dispenser floats a heal globe in front of the camera, in the player's influence, and the pointer rests on it
+	all.push_back({
+	    .id = "hand.globe_tooltip",
+	    .name = "The name of the miracle over a one-shot globe",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests on the land for three seconds, then on the dispenser's globe for six seconds.",
+	    .expected = "Over the land: \"Move\". Over the globe: the name of its miracle (the heal miracle) at once, with no "
+	                "mouse button, and no \"Pick Up\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.31f}}},
+	});
+	// A "did you know" sign stands in front of the camera. The hand taps it, and its tip bubble comes up.
+	all.push_back({
+	    .id = "hand.bubble_scroll_tooltip",
+	    .name = "The tooltip over the tip bubble of a sign",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes to the sign and taps it with a quick press of the Action button. Then move the "
+	                   "pointer onto the tip bubble, and hold the Action button on it.",
+	    .expected = "Over the bubble, and while the hand grips it: \"Scroll\" with the Action button and the up and down "
+	                "arrows. Over the land: \"Move\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 3.0f, 6.0f}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)

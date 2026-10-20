@@ -216,3 +216,19 @@ TEST(HandToolTips, AMiracleIconNamesItsMiracleWithNoMouse)
 	EXPECT_FALSE(SpellIconOffer(0xE73 + 170).has_value());
 	EXPECT_TRUE(SpellIconOffer(0xE73 + 169).has_value());
 }
+
+TEST(HandToolTips, AGlobeNamesItsMiracleOrElseItsSeed)
+{
+	constexpr uint32_t k_FirstText = 0xE73;
+	constexpr uint32_t k_MiracleText = k_FirstText + 40;
+	constexpr uint32_t k_SeedText = k_FirstText + 50;
+	EXPECT_EQ(GlobeOffer(true, k_MiracleText, k_SeedText)->index, 40U);
+	EXPECT_EQ(GlobeOffer(false, k_MiracleText, k_SeedText)->index, 50U);
+	// A text outside the tooltips gives no tooltip
+	EXPECT_FALSE(GlobeOffer(true, 0, k_SeedText).has_value());
+}
+
+TEST(HandToolTips, TheTipBubbleOffersToScrollItsWordsUpAndDown)
+{
+	EXPECT_EQ(BubbleOffer(), (Offer {.index = k_Scroll, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_UpDown}));
+}

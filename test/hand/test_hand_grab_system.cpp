@@ -1692,3 +1692,25 @@ TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)
 	Frame(230);
 	EXPECT_TRUE(world->given.empty());
 }
+
+// The hand forgets the last thing it took and the last thing it let go of once that thing is gone
+TEST_F(HandGrabSystemWithWorld, TheLastThingsTakenAndLetGoAreForgottenWhenTheyGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	Release();
+	auto& grab = world->registry.Get<HandGrab>(world->hand);
+	const auto taken = world->AddRock({2.0f, 0.0f, 0.0f});
+	const auto dropped = world->AddRock({4.0f, 0.0f, 0.0f});
+	grab.lastPickedUp = taken;
+	grab.lastDropped = dropped;
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, taken);
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, dropped);
+	world->registry.Destroy(taken);
+	world->registry.Destroy(dropped);
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, entt::entity {entt::null});
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, entt::entity {entt::null});
+}

@@ -1754,6 +1754,17 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		overNothing();
 		return;
 	}
+	// While the hand grips the tip bubble of a sign, or the pointer is on the bubble and on nothing else, the hand offers
+	// to scroll its words
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		const auto& bubble = Locator::tipBubbleSystem::value();
+		if (bubble.IsGripped() || (!pointed.has_value() && bubble.IsUnderHand()))
+		{
+			submitAll({tips::BubbleOffer()});
+			return;
+		}
+	}
 	if (!pointed.has_value() || !tips::IsInteractable(*pointed))
 	{
 		overNothing();
@@ -1823,6 +1834,19 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		const auto charge =
 		    Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ShownCharge(*pointed) : std::nullopt;
 		toolTips.ForceWithCharge(icon->index, charge);
+		return;
+	}
+	// Over a one-shot globe at rest, the hand names its miracle at once. A globe in flight is caught as any thing is.
+	if (const auto globe = tips::GlobeOf(*pointed); globe.has_value())
+	{
+		if (tips::IsMoving(*pointed))
+		{
+			submitAll(tips::OverTakeable(true, std::nullopt));
+		}
+		else
+		{
+			toolTips.ForceWithCharge(globe->index, std::nullopt);
+		}
 		return;
 	}
 	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
