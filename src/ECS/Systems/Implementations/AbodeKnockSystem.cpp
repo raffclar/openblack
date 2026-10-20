@@ -19,7 +19,6 @@
 #include "Audio/Sound.h"
 #include "ECS/AbodeKnock.h"
 #include "ECS/Components/Abode.h"
-#include "ECS/Components/Field.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Town.h"
@@ -56,15 +55,6 @@ bool AbodeKnockSystem::Tap(entt::entity abodeEntity, glm::vec3 handPoint, bool o
 		const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(dispenser->building));
 		return Knock(abodeEntity, info.abodeType, 1.0f, registry.Valid(dispenser->town) ? dispenser->town : entt::null, {},
 		             handPoint, ownHand);
-	}
-	// A field is a building of its town too. A press locks onto a field that has food to give, so only a field that has
-	// none takes the knock. Nobody lives in a field and it does not knock back.
-	if (const auto* field = registry.TryGet<const Field>(abodeEntity))
-	{
-		const auto& towns = registry.Context().towns;
-		const auto town = towns.find(static_cast<uint32_t>(field->town));
-		return Knock(abodeEntity, AbodeType::Field, 1.0f,
-		             town != towns.end() && registry.Valid(town->second) ? town->second : entt::null, {}, handPoint, ownHand);
 	}
 	const auto* abode = registry.TryGet<const Abode>(abodeEntity);
 	const auto* info = ecs::world_objects::AbodeInfoOf(abodeEntity);
