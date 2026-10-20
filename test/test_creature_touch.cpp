@@ -159,6 +159,17 @@ TEST(CreatureTouch, AClickIsLettingGoWithinNearlyHalfASecond)
 	EXPECT_FALSE(creature_hand::IsClick(450.0f, false));
 }
 
+TEST(CreatureTouch, TheRightButtonUpAlwaysLetsGoAlsoOfAHoldThatACommandStarted)
+{
+	// A hold that a command started has no right button down, so only the event of the button that comes up tells
+	EXPECT_TRUE(creature_hand::LetsGoOfCreature(false, true));
+	// The mouse moved with the right button up after it was down
+	EXPECT_TRUE(creature_hand::LetsGoOfCreature(true, false));
+	EXPECT_TRUE(creature_hand::LetsGoOfCreature(true, true));
+	// The mouse moved and no button changed: the hold stays
+	EXPECT_FALSE(creature_hand::LetsGoOfCreature(false, false));
+}
+
 TEST(CreatureTouch, TheCameraLooksAtTheCreaturesMiddleFromInFront)
 {
 	const glm::vec3 position {100.0f, 20.0f, 300.0f};

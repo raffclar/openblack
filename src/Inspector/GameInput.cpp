@@ -22,6 +22,7 @@
 #include <imgui.h>
 
 #include "Camera/Camera.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -282,6 +283,8 @@ std::string GameInput::Apply(const InputEvent& event)
 			return "no gesture " + event.name;
 		}
 		auto& gestures = Locator::gestureSystem::value();
+		// The hand that draws the gesture is not on a creature: it lets go of a hold that a command started
+		LetGoOfCommandHold();
 		// Drawn as the debug windows and the testbed draw it: across the middle of the screen
 		const auto aspect = gestures.GetScreenAspect();
 		const glm::vec2 middle {gesture::k_ReferenceHeight * aspect * 0.5f, gesture::k_ReferenceHeight * 0.5f};
@@ -326,6 +329,8 @@ void GameInput::Release()
 		SDL_PushEvent(&up);
 	}
 	SDL_SetModState(KMOD_NONE);
+	// A hold on a creature that a command started has no button to let go, so it lets go here
+	LetGoOfCommandHold();
 	// The buttons held once what was sent is pumped, which the mouse's timing may not have yet
 	if (const auto applied = actions.GetScriptedPointer(); applied.has_value())
 	{
@@ -350,6 +355,14 @@ void GameInput::Release()
 	}
 	actions.SetScriptedPointer(std::nullopt);
 	KeepDebugWindowsOffTheMouse(false);
+}
+
+void GameInput::LetGoOfCommandHold()
+{
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsHeldByCommand())
+	{
+		Locator::creatureHandSystem::value().Release();
+	}
 }
 
 glm::ivec2 GameInput::ScreenSize() const

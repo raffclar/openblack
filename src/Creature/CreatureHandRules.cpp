@@ -52,6 +52,11 @@ bool creature_hand::IsClick(float heldMs, bool strokedOrSlapped)
 	return heldMs < k_ClickMaxMs && !strokedOrSlapped;
 }
 
+bool creature_hand::LetsGoOfCreature(bool rightLetGo, bool rightButtonUp)
+{
+	return rightLetGo || rightButtonUp;
+}
+
 creature_hand::CreaturePress creature_hand::PressOn(bool playersOwnCreature, bool leashOn)
 {
 	return !playersOwnCreature && leashOn ? CreaturePress::Leash : CreaturePress::Hold;

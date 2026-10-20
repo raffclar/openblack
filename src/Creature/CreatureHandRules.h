@@ -65,6 +65,11 @@ constexpr float k_ClickMaxMs = 450.0f;
 /// Whether a press of the right button on a creature was a click: let go quickly, having neither stroked nor slapped
 [[nodiscard]] bool IsClick(float heldMs, bool strokedOrSlapped);
 
+/// Whether the hand lets go of the creature that it holds. The hand lets go when the right button comes up, or when the
+/// mouse moves with the right button up after it was down. A hold that a command started lets go in the same way, so
+/// the mouse can always release the creature.
+[[nodiscard]] bool LetsGoOfCreature(bool rightLetGo, bool rightButtonUp);
+
 /// What a press of the right button on a creature does, before the hand's own rules (MayHold) apply
 enum class CreaturePress : uint8_t
 {

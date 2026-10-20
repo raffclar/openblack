@@ -2320,7 +2320,7 @@
   "writes": true
  },
  {
-  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen",
+  "description": "Draws a gesture through the recogniser as the hand would draw it, in the middle of the screen; first lets go of a creature that sim.feedback holds",
   "kind": "object",
   "parameters": [
    {
@@ -2339,7 +2339,7 @@
   "writes": true
  },
  {
-  "description": "Lets go of every button and hands the mouse back to the player; forgets input still to come",
+  "description": "Lets go of every button and of a creature that sim.feedback holds, and hands the mouse back to the player; forgets input still to come",
   "kind": "object",
   "parameters": [],
   "query": "input.release",
@@ -2467,7 +2467,7 @@
   "writes": true
  },
  {
-  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
+  "description": "The player's hand strokes or slaps the player's creature, as the button would: it takes hold of the creature by a command first. With release, or kind release, it lets go, and the creature learns from the sum. The right button let go, input.release or input.gesture also lets go. A stroke waits for the clocks of the last one, and a slap needs the hand to hold the creature for a second first: an answer of busy is no stroke or slap",
   "kind": "object",
   "parameters": [
    {

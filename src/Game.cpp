@@ -897,9 +897,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		fights.Release(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		_fightButton.reset();
 	}
-	// Letting go of the right button lets go of the creature. Let go quickly, having neither stroked nor slapped it, the
-	// press was a click, which puts the leash on the player's creature.
-	if (rightLetGo && creatureHand.GetCreature().has_value() && !creatureHand.IsHeldByCommand())
+	// Letting go of the right button lets go of the creature, also of a hold that a command started. Let go quickly,
+	// having neither stroked nor slapped it, the press was a click, which puts the leash on the player's creature.
+	if (creature_hand::LetsGoOfCreature(rightLetGo,
+	                                    event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT) &&
+	    creatureHand.GetCreature().has_value())
 	{
 		const auto creature = *creatureHand.GetCreature();
 		const bool click = creatureHand.IsClick();
