@@ -567,9 +567,9 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		object_physics::TapRock(Locator::dynamicsSystem::value(), object, handPoint, player);
 		return true;
 	}
-	// The hand knocks on a building of a town, whoever owns the town. A miracle dispenser is such a building. When the
-	// leash takes the tap as an order to the creature, the hand does not knock.
-	if (Entities().AnyOf<Abode, SpellDispenser>(object) && Locator::abodeKnockSystem::has_value() &&
+	// The hand knocks on a building of a town, whoever owns the town. A miracle dispenser and a field are such buildings.
+	// When the leash takes the tap as an order to the creature, the hand does not knock.
+	if (Entities().AnyOf<Abode, SpellDispenser, Field>(object) && Locator::abodeKnockSystem::has_value() &&
 	    !LeashTakesTap(object, player))
 	{
 		countTap();

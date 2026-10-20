@@ -40,6 +40,12 @@ TEST(AbodeKnock, AMiracleDispenserTakesAKnockButDoesNotKnockBack)
 	EXPECT_FALSE(KnocksBack(AbodeType::SpellDispenser));
 }
 
+TEST(AbodeKnock, AFieldTakesAKnockButDoesNotKnockBack)
+{
+	EXPECT_TRUE(IsTappable(AbodeType::Field, 1.0f));
+	EXPECT_FALSE(KnocksBack(AbodeType::Field));
+}
+
 TEST(AbodeKnock, TheNineSoundsComeInTurn)
 {
 	EXPECT_EQ(NextKnockSound(0), 1u);

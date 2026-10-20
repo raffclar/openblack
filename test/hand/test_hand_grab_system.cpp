@@ -1451,6 +1451,8 @@ TEST_F(HandGrabSystemWithWorld, TheHandLocksOntoAFieldOnlyWhenItsCropCanGiveFood
 	EXPECT_FALSE(system->GetHeld().has_value());
 	EXPECT_FALSE(system->GetLockedOn().has_value());
 	EXPECT_EQ(world->fields[field].food, 1000u);
+	// The press taps the field instead, as a building of its town
+	EXPECT_EQ(std::ranges::count(world->tapped, field), 1);
 }
 
 TEST_F(HandGrabSystemWithWorld, TheLockOntoAScoopedThingHoldsWhileTheInfluenceHolds)
