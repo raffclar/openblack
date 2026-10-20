@@ -167,3 +167,15 @@ TEST(Heartbeat, ATemplesDestructionHoldsTheHeartUntilItEnds)
 	EXPECT_FLOAT_EQ(HeldBeats(2.0f, std::nullopt), 2.0f);
 	EXPECT_FLOAT_EQ(HeldBeats(0.0f, std::nullopt), 0.0f);
 }
+
+TEST(Heartbeat, TheHeartIsHeardAtItsRateWhileTheTempleIsBuiltAndHasLife)
+{
+	// The rate cut to a whole number is the playback rate in percent
+	EXPECT_EQ(SoundPitchPercent(State {.rate = 30.0f}, true, 1.0f), 30u);
+	EXPECT_EQ(SoundPitchPercent(State {.rate = 47.9f}, true, 0.5f), 47u);
+	EXPECT_EQ(SoundPitchPercent(State {.rate = 100.0f}, true, 0.01f), 100u);
+	// Nothing while the temple goes up, or once its heart has no life
+	EXPECT_FALSE(SoundPitchPercent(State {.rate = 30.0f}, false, 1.0f).has_value());
+	EXPECT_FALSE(SoundPitchPercent(State {.rate = 30.0f}, true, 0.0f).has_value());
+	EXPECT_FALSE(SoundPitchPercent(State {.rate = 30.0f}, true, -0.5f).has_value());
+}

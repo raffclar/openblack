@@ -101,6 +101,14 @@ void Step(State& state, float secondsPerTurn);
 /// about 0.64 to 1.27 over nineteen seconds, and to about 3.98 at twenty-five
 [[nodiscard]] float DestructionBeats(float clock);
 
+/// The heartbeat of this computer's player is heard from their temple, to this distance
+inline constexpr float k_SoundReach = 500.0f;
+
+/// The playback rate of the heartbeat sound, in percent, after a turn of the beat: the beat's rate, cut to a whole
+/// number. The sound plays only while the player's temple is built and its heart has life. In other conditions it is
+/// none, and a sound that plays already continues as it is.
+[[nodiscard]] std::optional<uint32_t> SoundPitchPercent(const State& state, bool templeBuilt, float heartLife);
+
 /// The beats a second the heart is held at this turn: those of the temple being destroyed, else those it was held at
 /// already. Only the destruction's end lets the heart go, so a temple that goes with its land while it is destroyed
 /// leaves the heart held at its last beats on the next land, as in Black & White

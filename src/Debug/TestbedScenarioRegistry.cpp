@@ -1923,6 +1923,22 @@ void AddStory(std::vector<Scenario>& all)
 	                .distance = 1.0f},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
 	});
+	all.push_back({
+	    .id = "audio.temple_heartbeat",
+	    .name = "The heartbeat heard from the player's temple",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle, fully built, with no danger to the player's "
+	                   "people. The camera looks at it from less than 140 m.",
+	    .expected = "From the first turn a heartbeat sounds from the temple without a stop, heard to 500 m and fully to a "
+	                "third of that. It plays at 30% of its rate, as the heart is calm, and the temple's column of light "
+	                "throbs with the same beat. It starts only once: it is not heard twice over. It starts only with the "
+	                "camera within 140 m of the temple.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
+	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
 	AddGuideStorm(all);

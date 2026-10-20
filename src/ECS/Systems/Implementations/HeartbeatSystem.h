@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <entt/entity/entity.hpp>
+
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -29,7 +31,12 @@ public:
 	void EndDestruction(PlayerNames player) override;
 
 private:
+	/// The heartbeat of this computer's player is heard from their temple
+	void SoundHeart();
+
 	heartbeat::KeptHearts _kept;
+	/// The sound of the heartbeat, once it has started
+	entt::entity _sound {entt::null};
 };
 
 } // namespace openblack::ecs::systems

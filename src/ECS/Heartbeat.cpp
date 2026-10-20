@@ -94,6 +94,15 @@ float Pulse(const State& state, float turnFraction)
 	return (state.pulse - state.previousPulse) * turnFraction + state.previousPulse;
 }
 
+std::optional<uint32_t> SoundPitchPercent(const State& state, bool templeBuilt, float heartLife)
+{
+	if (!templeBuilt || !(heartLife > 0.0f))
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint32_t>(state.rate);
+}
+
 float DestructionBeats(float clock)
 {
 	if (clock < k_ClockPoints.front())
