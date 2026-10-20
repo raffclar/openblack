@@ -814,6 +814,11 @@ struct Command
 		/// Opens the game's menu on its Controls page, picks the row that the value gives and double clicks it, so that the
 		/// box asks for the row's new key or mouse input. Needs no creature
 		OpenControlsBox,
+		/// Opens the game's menu on the page that the value gives (the main menu 0, Options 1, Players 2, Advanced 3,
+		/// Controls 4). With ctrl, the menu acts as if the game had no sound. Needs no creature
+		OpenMenuPage,
+		/// Presses a key in the game's menu: the value is the SDL key code, with Shift when ctrl is set. Needs no creature
+		PressMenuKey,
 		/// The custom music player plays the track of the custom music folder that the value gives, from 0, and the music
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature
