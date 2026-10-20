@@ -247,3 +247,37 @@ TEST(ScriptFlocks, ARandomMemberPassesOverTheOneLeftOut)
 	EXPECT_EQ(asked, 1u);
 	EXPECT_EQ(picked, b);
 }
+
+TEST(ScriptFlocks, ADetachWithNoMemberGivenPassesOverTheLeaderWhenOthersAreThere)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto a = Living(registry, 1, 1);
+	const auto b = Living(registry, 2, 2);
+	script_flocks::AddLiving(registry, flock, a);
+	script_flocks::AddLiving(registry, flock, b);
+	ASSERT_EQ(script_flocks::Leader(registry, flock), a);
+	uint32_t asked = 0;
+	const auto picked = script_flocks::MemberToDetach(registry, flock, [&asked](uint32_t n) {
+		asked = n;
+		return 0u;
+	});
+	EXPECT_EQ(asked, 1u);
+	EXPECT_EQ(picked, b);
+}
+
+TEST(ScriptFlocks, ADetachWithNoMemberGivenTakesTheLastMemberAlsoWhenItIsTheLeader)
+{
+	Registry registry;
+	const auto flock = script_flocks::Create(registry, Metres(0, 0));
+	const auto a = Living(registry, 1, 1);
+	script_flocks::AddLiving(registry, flock, a);
+	ASSERT_EQ(script_flocks::Leader(registry, flock), a);
+	uint32_t asked = 0;
+	const auto picked = script_flocks::MemberToDetach(registry, flock, [&asked](uint32_t n) {
+		asked = n;
+		return 0u;
+	});
+	EXPECT_EQ(asked, 1u);
+	EXPECT_EQ(picked, a);
+}

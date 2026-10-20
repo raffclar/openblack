@@ -57,6 +57,10 @@ void MoveTo(Registry& registry, entt::entity flock, const map_coords::MapCoords&
 /// draw counting from the start of the line and passing over `exclude`; none in an empty flock
 [[nodiscard]] entt::entity RandomMember(const Registry& registry, entt::entity flock, entt::entity exclude,
                                         const std::function<uint32_t(uint32_t)>& random);
+/// The member that a script takes out of a flock when it gives no member: a member at random. The draw passes over the
+/// leader only when the flock has other members. A flock with one member gives that member, also when it is the leader.
+[[nodiscard]] entt::entity MemberToDetach(const Registry& registry, entt::entity flock,
+                                          const std::function<uint32_t(uint32_t)>& random);
 
 /// The position of a living as the flocks measure it
 [[nodiscard]] map_coords::MapCoords PositionOf(const Registry& registry, entt::entity living);
