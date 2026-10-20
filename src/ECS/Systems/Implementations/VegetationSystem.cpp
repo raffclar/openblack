@@ -27,13 +27,17 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/RandomNumberManager.h"
-#include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Swayable.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
@@ -56,12 +60,8 @@ constexpr float k_Lean = 0.03f;
 // How much further a field's crop leans than a tree
 constexpr float k_FieldLean = 1.75f;
 
-// A tree within a bend point's radius leans away from it by up to this many radians
+// A bent tree leans away from the bend point by up to this many radians
 constexpr float k_MaxBend = 0.47123894f;
-// The bend falls from (1 - k_BendCore / radius) at the trunk to nothing at the radius
-constexpr float k_BendCore = 1.5f;
-/// A creature bends the trees within this many times its radius of its feet
-constexpr float k_CreatureBendReach = 1.5f;
 } // namespace
 
 void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -85,73 +85,129 @@ void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	}
 }
 
-// The game marks the trees around the thing the hand holds to bend away from it, within its bounding sphere
-void VegetationSystem::UpdateBendPoints(bool handShown)
+void VegetationSystem::Mark(const nature::tree_bend::Source& source, std::optional<uint8_t> slot)
 {
-	_bendPoints.clear();
-	const auto& registry = Locator::entitiesRegistry::value();
-	// Creatures walk through the trees too small for them to walk round, and bend them as they go
-	registry.Each<const CreatureLocomotion, const Transform>(
-	    [this](const CreatureLocomotion& creature, const Transform& transform) {
-		    _bendPoints.push_back({.position = transform.position, .radius = creature.radius * k_CreatureBendReach});
-	    });
-
-	// The hand put away bends nothing: it is still and touches nothing until it comes back
-	if (!handShown)
+	const auto written = _bendTable.Write(source, slot);
+	if (!Locator::entitiesMap::has_value())
 	{
 		return;
 	}
-	// The empty hand passes through the trees without bending them: only a thing it holds bends them, as its model is
-	// drawn in the hand
-	std::optional<nature::tree_bend::HeldModel> heldModel;
-	if (Locator::handGrabSystem::has_value())
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& map = Locator::entitiesMap::value();
+	const auto cells = nature::tree_bend::CellsMarkedBy(source.position);
+	for (int x = cells.first.x; x <= cells.last.x; ++x)
 	{
-		if (const auto held = Locator::handGrabSystem::value().GetHeld(); held.has_value() && registry.Valid(*held))
+		for (int z = cells.first.y; z <= cells.last.y; ++z)
 		{
-			const auto* transform = registry.TryGet<const Transform>(*held);
-			const auto* mesh = registry.TryGet<const Mesh>(*held);
-			auto& meshes = Locator::resources::value().GetMeshes();
-			if (transform != nullptr && mesh != nullptr && meshes.Contains(mesh->id))
+			if (x < 0 || z < 0 || x >= MapInterface::k_GridSize.x || z >= MapInterface::k_GridSize.y)
 			{
-				heldModel = nature::tree_bend::HeldModel {
-				    .position = transform->position,
-				    .scale = transform->scale.y,
-				    .halfDiagonal =
-				        openblack::graphics::mesh_detail::HalfDiagonal(meshes.Handle(mesh->id)->GetBoundingBox().Size()),
-				};
+				continue;
+			}
+			for (const auto entity : map.GetFixedInGridCell(MapInterface::CellId(x, z)))
+			{
+				if (auto* tree = registry.TryGet<Tree>(entity))
+				{
+					tree->bendSlot = written;
+				}
 			}
 		}
 	}
-	if (const auto source = nature::tree_bend::HandSource(heldModel))
-	{
-		_bendPoints.push_back({.position = source->position, .radius = source->radius});
-	}
 }
 
-std::optional<VegetationSystem::Bend> VegetationSystem::GetBend(const glm::vec3& position, float height) const
+void VegetationSystem::UpdateBendPoints(bool handShown)
 {
-	std::optional<Bend> most;
-	for (const auto& point : _bendPoints)
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& meshes = Locator::resources::value().GetMeshes();
+	// A model bends the trees as far as its scaled size reaches, from where it is drawn
+	const auto modelSource = [&registry, &meshes](entt::entity entity,
+	                                              const glm::vec3& position) -> std::optional<nature::tree_bend::Source> {
+		const auto* transform = registry.TryGet<const Transform>(entity);
+		const auto* mesh = registry.TryGet<const Mesh>(entity);
+		if (transform == nullptr || mesh == nullptr || !meshes.Contains(mesh->id))
+		{
+			return std::nullopt;
+		}
+		return nature::tree_bend::HandSource(nature::tree_bend::HeldModel {
+		    .position = position,
+		    .scale = transform->scale.y,
+		    .halfDiagonal = openblack::graphics::mesh_detail::HalfDiagonal(meshes.Handle(mesh->id)->GetBoundingBox().Size()),
+		});
+	};
+
+	// 1. The thing that the hand holds. The empty hand, or the hand put away, writes nothing: its slot keeps the last
+	// point
+	if (handShown && Locator::handGrabSystem::has_value())
 	{
-		// A thing bends the trees it is among, from below their tops
-		if (point.position.y > position.y + height || point.radius <= 0.0f)
+		if (const auto held = Locator::handGrabSystem::value().GetHeld(); held.has_value() && registry.Valid(*held))
 		{
-			continue;
-		}
-		const auto away = glm::xz(position) - glm::xz(point.position);
-		const auto distance = glm::length(away);
-		if (distance >= point.radius || distance <= 0.0f)
-		{
-			continue;
-		}
-		const auto radius = point.radius;
-		const auto amount = 1.0f - (((((radius - k_BendCore) * distance) / radius) + k_BendCore) / radius);
-		if (amount > 0.0f && (!most || amount > most->amount))
-		{
-			most = Bend {.direction = glm::vec3(away.x, 0.0f, away.y) / distance, .amount = amount};
+			if (const auto* transform = registry.TryGet<const Transform>(*held))
+			{
+				if (const auto source = modelSource(*held, transform->position))
+				{
+					Mark(*source, nature::tree_bend::k_HandSlot);
+				}
+			}
 		}
 	}
-	return most;
+	// 2. Each body that moves in the physics, in the order of the list of bodies, from where the frame draws it
+	if (Locator::dynamicsSystem::has_value())
+	{
+		for (const auto body : Locator::dynamicsSystem::value().DrawnBodies())
+		{
+			if (!registry.Valid(body))
+			{
+				continue;
+			}
+			const auto* pose = registry.TryGet<const PhysicsDrawPose>(body);
+			const auto* transform = registry.TryGet<const Transform>(body);
+			if (transform == nullptr)
+			{
+				continue;
+			}
+			if (const auto source = modelSource(body, pose != nullptr ? pose->origin : transform->position))
+			{
+				Mark(*source, std::nullopt);
+			}
+		}
+	}
+	// 3. The primary creature of the local player, as far as its body reaches across the ground
+	if (Locator::playerSystem::has_value())
+	{
+		auto& players = Locator::playerSystem::value();
+		if (const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+		    creature.has_value() && registry.Valid(*creature))
+		{
+			if (const auto* transform = registry.TryGet<const Transform>(*creature))
+			{
+				Mark({.position = transform->position, .radius = object_measures::TwoDRadius(registry, *creature)},
+				     nature::tree_bend::k_CreatureSlot);
+			}
+		}
+	}
+
+	// Each marked tree reads the point in its slot. It loses its mark when the point is above it or out of its reach
+	_bends.clear();
+	std::unordered_map<entt::id_type, float> meshHeights;
+	registry.Each<Tree, const Transform, const Mesh>([&](entt::entity entity, Tree& tree, const Transform& transform,
+	                                                     const Mesh& mesh) {
+		if (tree.bendSlot == nature::tree_bend::k_NoSlot)
+		{
+			return;
+		}
+		const auto [found, inserted] = meshHeights.try_emplace(mesh.id, 0.0f);
+		if (inserted && meshes.Contains(mesh.id))
+		{
+			found->second = meshes.Handle(mesh.id)->GetBoundingBox().Size().y;
+		}
+		const auto bend =
+		    nature::tree_bend::ReadBend(_bendTable.At(tree.bendSlot), transform.position, transform.scale.y * found->second);
+		if (!bend.has_value())
+		{
+			tree.bendSlot = nature::tree_bend::k_NoSlot;
+			return;
+		}
+		_bends.emplace(entity, *bend);
+	});
 }
 
 void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
@@ -185,22 +241,20 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 	registry.Each<const Tree, const Transform, const Mesh, const Swayable>([&](entt::entity entity, const Tree& /*unused*/,
 	                                                                           const Transform& transform, const Mesh& mesh,
 	                                                                           const Swayable& /*unused*/) {
-		// Only a tree near the camera or within a bend point's reach can rustle, and only for those does its height
-		// matter: the others are passed over before it is looked up
-		const bool nearBend = std::ranges::any_of(_bendPoints, [&transform](const BendPoint& point) {
-			return point.radius > 0.0f && glm::distance(glm::xz(transform.position), glm::xz(point.position)) < point.radius;
-		});
-		if (!nearBend && !TreeRustle::IsNearCamera(transform.position, camera))
+		// Only a bent tree or a tree near the camera can rustle, and only for those does its height matter: the others
+		// are passed over before it is looked up
+		const auto bend = _bends.find(entity);
+		if (bend == _bends.end() && !TreeRustle::IsNearCamera(transform.position, camera))
 		{
 			return;
 		}
-		const auto height = transform.scale.y * meshHeight(mesh.id);
-		if (const auto bend = GetBend(transform.position, height))
+		if (bend != _bends.end())
 		{
 			// The bend's sound measures its distance from the camera with the squares in another order than the idle's
-			audio.PlayAnimEffect(bank, TreeRustle::BendKeys(bend->amount).ToArray(), entity, transform.position, conditions,
-			                     openblack::audio::AnimEffectMeasure::AcrossFirst);
+			audio.PlayAnimEffect(bank, TreeRustle::BendKeys(bend->second.amount).ToArray(), entity, transform.position,
+			                     conditions, openblack::audio::AnimEffectMeasure::AcrossFirst);
 		}
+		const auto height = transform.scale.y * meshHeight(mesh.id);
 		if (idleChance > 1 && TreeRustle::IsAmongTree(transform.position, height, camera) &&
 		    rng.NextValue<uint32_t>(0, idleChance - 1) == 1)
 		{
@@ -212,14 +266,18 @@ void VegetationSystem::Rustle(std::chrono::duration<float, std::milli> gameTime)
 	});
 }
 
-glm::mat4 VegetationSystem::GetTreeMatrix(const glm::mat4& model, const glm::vec3& position, float scale, float height,
+glm::mat4 VegetationSystem::GetTreeMatrix(entt::entity tree, const glm::mat4& model, const glm::vec3& position, float scale,
                                           uint8_t swaySlot) const
 {
-	if (const auto bend = GetBend(position, scale * height))
+	if (const auto bend = _bends.find(tree); bend != _bends.end())
 	{
-		// Tip the tree's top away from the hand, about its base
-		const auto axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), bend->direction);
-		const auto tilt = glm::rotate(glm::mat4(1.0f), k_MaxBend * bend->amount, axis);
+		// Tip the tree's top away from the bend point, about its base. A point exactly at the trunk tips it nowhere
+		const auto axis = glm::cross(glm::vec3(0.0f, 1.0f, 0.0f), bend->second.direction);
+		if (glm::dot(axis, axis) <= 0.0f)
+		{
+			return model;
+		}
+		const auto tilt = glm::rotate(glm::mat4(1.0f), k_MaxBend * bend->second.amount, axis);
 		return glm::translate(glm::mat4(1.0f), position) * tilt * glm::translate(glm::mat4(1.0f), -position) * model;
 	}
 
