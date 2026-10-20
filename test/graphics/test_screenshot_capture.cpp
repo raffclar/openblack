@@ -20,6 +20,8 @@
 #include "Graphics/ScreenshotCapture.h"
 #include "Windowing/WindowState.h"
 
+#include "../TestTempFolder.h"
+
 using openblack::graphics::PlanScreenshot;
 using openblack::graphics::ScreenPictures;
 using openblack::graphics::ScreenshotFailures;
@@ -90,7 +92,7 @@ TEST(ScreenshotCapture, AFailureIsToldOnce)
 // The pixels are written whole under the picture's name, nothing left aside; too few pixels are refused
 TEST(ScreenshotCapture, PixelsAreWrittenWhole)
 {
-	const auto folder = std::filesystem::temp_directory_path() / "openblack_test_screenshot_capture";
+	const auto folder = openblack::test::UniqueTempPath("screenshot_capture");
 	std::error_code error;
 	std::filesystem::remove_all(folder, error);
 	std::filesystem::create_directories(folder);

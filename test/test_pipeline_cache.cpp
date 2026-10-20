@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/PipelineCache.h"
+#include "TestTempFolder.h"
 
 using openblack::graphics::PipelineCache;
 
@@ -30,7 +31,7 @@ protected:
 	void SetUp() override
 	{
 		const auto* info = ::testing::UnitTest::GetInstance()->current_test_info();
-		_folder = std::filesystem::temp_directory_path() / "openblack_test_pipeline_cache" / info->name();
+		_folder = openblack::test::UniqueTempPath(std::string("pipeline_cache_") + info->name());
 		std::filesystem::remove_all(_folder);
 	}
 	void TearDown() override { std::filesystem::remove_all(_folder); }

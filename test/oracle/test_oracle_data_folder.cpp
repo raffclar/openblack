@@ -17,6 +17,8 @@
 
 #include "OracleData.h"
 
+#include "../TestTempFolder.h"
+
 using namespace openblack;
 
 namespace
@@ -55,7 +57,7 @@ private:
 TEST(OracleDataFolder, FollowsTheEnvironmentVariable)
 {
 	const RestoreFolder restore;
-	const auto folder = std::filesystem::temp_directory_path() / "openblack_oracle_data_folder_test";
+	const auto folder = openblack::test::UniqueTempPath("oracle_data_folder_test");
 	std::filesystem::create_directories(folder);
 	{
 		std::ofstream file(folder / "only_here.txt");
@@ -76,7 +78,7 @@ TEST(OracleDataFolder, FollowsTheEnvironmentVariable)
 TEST(OracleDataFolder, EmptyFolderHasNoPinnedFiles)
 {
 	const RestoreFolder restore;
-	const auto folder = std::filesystem::temp_directory_path() / "openblack_oracle_data_folder_empty";
+	const auto folder = openblack::test::UniqueTempPath("oracle_data_folder_empty");
 	std::filesystem::create_directories(folder);
 	SetFolder(folder.string());
 
