@@ -372,6 +372,11 @@
     "description": "How many desires (5 by default)",
     "name": "top",
     "type": "integer"
+   },
+   {
+    "description": "Also write out each desire's sources: kind, value, threshold, multiplier and drive",
+    "name": "sources",
+    "type": "boolean"
    }
   ],
   "query": "creature.desires"

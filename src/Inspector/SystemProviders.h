@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -96,6 +97,8 @@ struct PhysicsSources
 
 /// A creature's strongest activated desires, strongest first: name, value, its most and whether it is held back
 [[nodiscard]] Json DesireItems(const creature_desires::Desires& desires, size_t top);
+/// The sources of the desire of that name, as the desires query writes them out
+[[nodiscard]] Json DesireSources(const creature_desires::Desires& desires, std::string_view name);
 /// What a creature is doing: its plan (desire, action, object, priority), its activity and its agenda's steps
 [[nodiscard]] Json PlanJson(const ecs::components::CreatureMindState& mind, const creature_mind_tables::Tables* tables);
 

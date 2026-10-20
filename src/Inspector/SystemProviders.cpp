@@ -409,6 +409,29 @@ Json openblack::inspector::DesireItems(const creature_desires::Desires& desires,
 	return items;
 }
 
+Json openblack::inspector::DesireSources(const creature_desires::Desires& desires, std::string_view name)
+{
+	Json sources = Json::array();
+	for (size_t i = 0; i < desires.desires.size(); ++i)
+	{
+		if (creature_desires::Name(static_cast<creature_desires::Desire>(i)) != name)
+		{
+			continue;
+		}
+		for (const auto& source : desires.desires.at(i).sources)
+		{
+			sources.push_back({
+			    {"type", source.type},
+			    {"value", source.value},
+			    {"threshold", source.threshold},
+			    {"multiplier", source.multiplier},
+			    {"drive", source.drive},
+			});
+		}
+	}
+	return sources;
+}
+
 Json openblack::inspector::PlanJson(const CreatureMindState& mind, const creature_mind_tables::Tables* tables)
 {
 	Json steps = Json::array();
@@ -460,30 +483,40 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              });
 		              return QueryResult::Value(std::move(items));
 	              });
-	provider->Add(Query("desires", "A creature's strongest desires, strongest first",
-	                    {id, Parameter("top", "integer", "How many desires (5 by default)", false)}),
-	              [sources](const QueryContext& context) {
-		              const auto* registry = Registry(sources.world);
-		              if (registry == nullptr)
-		              {
-			              return QueryResult::Error(std::string(k_NoRegistry));
-		              }
-		              const auto creature = CreatureParam(*registry, context.params);
-		              if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
-		              {
-			              return QueryResult::Error(*problem);
-		              }
-		              const auto entity = std::get<entt::entity>(creature);
-		              const auto& mind = registry->Get<const CreatureMindState>(entity);
-		              if (!mind.desires.has_value())
-		              {
-			              return QueryResult::Error("its desires aren't set up yet: its mind hasn't thought");
-		              }
-		              const auto top =
-		                  static_cast<size_t>(std::max(1.0, NumberMember(context.params, "top").value_or(k_DefaultTopDesires)));
-		              return QueryResult::Value(
-		                  {{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", DesireItems(*mind.desires, top)}});
-	              });
+	provider->Add(
+	    Query("desires", "A creature's strongest desires, strongest first",
+	          {id, Parameter("top", "integer", "How many desires (5 by default)", false),
+	           Parameter("sources", "boolean",
+	                     "Also write out each desire's sources: kind, value, threshold, multiplier and drive", false)}),
+	    [sources](const QueryContext& context) {
+		    const auto* registry = Registry(sources.world);
+		    if (registry == nullptr)
+		    {
+			    return QueryResult::Error(std::string(k_NoRegistry));
+		    }
+		    const auto creature = CreatureParam(*registry, context.params);
+		    if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		    {
+			    return QueryResult::Error(*problem);
+		    }
+		    const auto entity = std::get<entt::entity>(creature);
+		    const auto& mind = registry->Get<const CreatureMindState>(entity);
+		    if (!mind.desires.has_value())
+		    {
+			    return QueryResult::Error("its desires aren't set up yet: its mind hasn't thought");
+		    }
+		    const auto top =
+		        static_cast<size_t>(std::max(1.0, NumberMember(context.params, "top").value_or(k_DefaultTopDesires)));
+		    auto items = DesireItems(*mind.desires, top);
+		    if (BoolMember(context.params, "sources").value_or(false))
+		    {
+			    for (auto& item : items)
+			    {
+				    item["sources"] = DesireSources(*mind.desires, item["desire"].get<std::string>());
+			    }
+		    }
+		    return QueryResult::Value({{"id", ToId(entity)}, {"sum", mind.desires->sum}, {"desires", std::move(items)}});
+	    });
 	provider->Add(Query("reactions",
 	                    "Whether a creature takes notice of reactions. A creature that a script makes takes no notice until a "
 	                    "script or a swap of minds tells it to: it reacts to nothing near it and catches nothing",
