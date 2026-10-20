@@ -114,7 +114,6 @@ void PlaceDrawing(ecs::Registry& registry, entt::entity entity, const Transform&
 	pose.easedHeading = headings.eased;
 	pose.detailedHeading = headings.detailed;
 	pose.drawnHeading = headings.drawn;
-	pose.slopeLift = SlopeLift(transform, *pose.drawnAt, headings.eased);
 }
 
 /// The pose of a high-detail villager that just changed clip, with the old clip's pose held where it was mixed in
@@ -237,8 +236,7 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 
 	registry.Each<const Villager, const Mesh, const Transform, VillagerPose>(
 	    [&](entt::entity entity, const Villager& /*unused*/, const Mesh& mesh, const Transform& transform, VillagerPose& pose) {
-		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
-		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId) || !meshes.Contains(mesh.id))
+		    if (!meshes.Contains(mesh.id))
 		    {
 			    pose.bones.clear();
 			    return;
@@ -254,6 +252,17 @@ void LivingActionSystem::PoseVillagersInView(const glm::mat4& viewProjection)
 		    const bool seen = registry.AnyOf<InPhysics, InHand>(entity)
 		                          ? graphics::view_frustum::SeesSphereOrReflection(view, centre, radius)
 		                          : graphics::view_frustum::SeesSphere(view, centre, radius);
+		    // Only a villager in view leans to the slope of the land, as the game leans only the villagers it draws
+		    if (seen && pose.drawnAt.has_value() && pose.easedHeading.has_value())
+		    {
+			    pose.slopeLift = SlopeLift(transform, *pose.drawnAt, *pose.easedHeading);
+		    }
+		    const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(pose.clip));
+		    if (static_cast<int>(pose.clip) < 0 || !animations.Contains(clipId))
+		    {
+			    pose.bones.clear();
+			    return;
+		    }
 		    if (!seen)
 		    {
 			    return;
