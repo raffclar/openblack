@@ -177,6 +177,16 @@ TEST(PhysicsLiving, LandedAnimalsMoveTheirFlocksHomeByKind)
 	EXPECT_EQ(LairOnLanding(AnimalInfo::Wolf, false), LandedLair::ForestOfItsKind);
 }
 
+TEST(PhysicsLiving, ALandedAnimalJoinsAFlockNearItThenWanders)
+{
+	// Grazers and birds both go through the flock merge after a landing
+	EXPECT_TRUE(JoinsAFlockAfterLanding(AnimalInfo::Cow));
+	EXPECT_TRUE(JoinsAFlockAfterLanding(AnimalInfo::Tortoise));
+	EXPECT_TRUE(JoinsAFlockAfterLanding(AnimalInfo::Dove));
+	EXPECT_TRUE(JoinsAFlockAfterLanding(AnimalInfo::Seagull));
+	EXPECT_FALSE(JoinsAFlockAfterLanding(AnimalInfo::SpellWolf));
+}
+
 TEST(PhysicsLiving, AHeadingStandsAThingUpright)
 {
 	const auto axes = HeadingAxes(k_Pi * 0.5f);

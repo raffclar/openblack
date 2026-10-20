@@ -716,6 +716,14 @@ void AnimalSystem::Bird(entt::entity entity, Animal& animal)
 	case AnimalState::FollowFlock:
 		FollowFlock(entity, animal);
 		break;
+	case AnimalState::InteractDecideWhatToDo:
+		// Up again after a landing, it joins a flock near it if it can, then it starts on a leg of its own
+		if (EntityRegistry().AllOf<Flock>(animal.flock))
+		{
+			MergeNearbyHerd(entity, animal);
+		}
+		StartWander(entity, animal);
+		break;
 	case AnimalState::MoveToPos:
 		// Its kind's move: there, it takes its final state
 		if (MoveTo3D(animal))
@@ -1447,10 +1455,9 @@ void AnimalSystem::Landed(entt::entity entity, Animal& animal)
 			break;
 		}
 	}
-	// It plays its landing clip to the end, then it decides what to do. A grazer joins a herd near it if it can, then
-	// it wanders off
-	WaitForClipOfState(animal, animals::grazers::IsGrazer(animal.type) ? AnimalState::InteractDecideWhatToDo
-	                                                                   : AnimalState::DecideWhatToDo);
+	// It plays its landing clip to the end. Then it joins a flock near it if it can, and it wanders off
+	WaitForClipOfState(animal, physics::living::JoinsAFlockAfterLanding(animal.type) ? AnimalState::InteractDecideWhatToDo
+	                                                                                 : AnimalState::DecideWhatToDo);
 }
 
 void AnimalSystem::FinishPouncing(entt::entity wolf, Animal& animal, entt::entity prey)
