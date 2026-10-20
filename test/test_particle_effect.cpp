@@ -800,7 +800,7 @@ TEST_F(ParticleEffectTest, AnObjectsHighlightAsksForSparksRisingFromIt)
 		                         "PROPERTY DoShower BOOL " +
 		                             std::string(shower ? "1" : "0") + "\n");
 	};
-	constexpr auto k_Stone = static_cast<entt::entity>(5);
+	static constexpr auto k_Stone = static_cast<entt::entity>(5);
 	auto effect = Make(text(true));
 	effect->AddTarget(k_Stone);
 	size_t visited = 0;
@@ -836,7 +836,7 @@ TEST_F(ParticleEffectTest, ASparkShowerRisesFromItsObjectAsStrongAsItsAtom)
 	auto effect = Make(Header() + Object("CreateRule_GameObjectRef", "Create0",
 	                                     "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR NULL_STRING\n"
 	                                     "PROPERTY Alpha INTEGER 100\nPROPERTY DoShower BOOL 1\n"));
-	constexpr auto k_Stone = static_cast<entt::entity>(5);
+	static constexpr auto k_Stone = static_cast<entt::entity>(5);
 	effect->AddTarget(k_Stone);
 	effect->Step(k_Step);
 	effect->Step(k_Step);
