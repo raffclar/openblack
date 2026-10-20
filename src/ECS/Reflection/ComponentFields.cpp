@@ -1304,7 +1304,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::GuidanceHeard>(context)
 	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")
 	    .Field<&components::GuidanceHeard::alignmentDrift>("alignmentDrift")
-	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid");
+	    .Field<&components::GuidanceHeard::oneOffSaid>("oneOffSaid")
+	    .Field<&components::GuidanceHeard::lastDesireVoice>("lastDesireVoice")
+	    .Field<&components::GuidanceHeard::seenThings>("seenThings");
 	Reflect<components::Hand>(context)
 	    .Field<&components::Hand::rightHanded>("rightHanded")
 	    .Field<&components::Hand::renderType>("renderType")
@@ -2248,7 +2250,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CitadelWorship::facing>("facing")
 	    .Field<&components::CitadelWorship::cannotMakeSites>("cannotMakeSites")
 	    .Field<&components::CitadelWorship::standing>("standing")
-	    .Field<&components::CitadelWorship::sitesMade>("sitesMade");
+	    .Field<&components::CitadelWorship::sitesMade>("sitesMade")
+	    .Field<&components::CitadelWorship::strainSound>("strainSound");
 	Reflect<components::WorshipSite>(context)
 	    .Field<&components::WorshipSite::temple>("temple")
 	    .Field<&components::WorshipSite::player>("player")
@@ -3155,6 +3158,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
 	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
 	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
+	Reflect<openblack::ecs::components::GuidanceHeard::SeenThing>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::thing>("thing")
+	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::since>("since");
 	Reflect<openblack::ecs::components::HandGrab::Throw>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandGrab::Throw::velocity>("velocity")
 	    .Field<&openblack::ecs::components::HandGrab::Throw::springVelocity>("springVelocity")

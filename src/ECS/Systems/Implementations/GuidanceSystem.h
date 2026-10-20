@@ -50,6 +50,9 @@ private:
 	void SayRemark(guidance::Kind kind);
 	void Say(uint32_t text, guidance::Kind kind);
 	void LookAtMoon();
+	/// Play the town desire voice of this turn, if there is one: the voice of the town or the worship site near the
+	/// camera that wants something most
+	void TownDesireVoices();
 
 	/// The new land's stamps are still to be drawn
 	bool _stampsDue {true};
