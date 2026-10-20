@@ -63,6 +63,7 @@ public:
 	void CountSave() final;
 	void CountLoad() final;
 	uint32_t TakeLandAutosave(uint32_t land) final;
+	[[nodiscard]] std::function<bool()> ProfilesFileJob() const final;
 
 	/// The computer's own: its account's name, and the milliseconds since it started
 	[[nodiscard]] static Machine ThisMachine();

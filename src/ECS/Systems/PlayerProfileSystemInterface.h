@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -69,9 +70,13 @@ public:
 	/// The player saved or loaded a game in the save game room. The profile keeps the count with its next change.
 	virtual void CountSave() = 0;
 	virtual void CountLoad() = 0;
-	/// An autosave on the land: gives how many autosaves the profile played counts for the land, then counts one more
-	/// and keeps the profile. Zero without a profile.
+	/// An autosave on the land: gives how many autosaves the profile played counts for the land, then counts one more.
+	/// Zero without a profile. This does not write the profiles file: the save gives its writer the job of
+	/// ProfilesFileJob after the files of the save.
 	virtual uint32_t TakeLandAutosave(uint32_t land) = 0;
+	/// A job that writes the profiles as they are now into their file, on the thread that runs it. None when the game
+	/// keeps no file of the profiles.
+	[[nodiscard]] virtual std::function<bool()> ProfilesFileJob() const { return {}; }
 };
 
 } // namespace openblack::ecs::systems

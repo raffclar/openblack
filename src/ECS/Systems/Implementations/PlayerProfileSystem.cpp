@@ -17,9 +17,11 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iterator>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -289,23 +291,34 @@ uint32_t PlayerProfileSystem::TakeLandAutosave(uint32_t land)
 	}
 	const auto count = profile->landAutosaves[land];
 	profile->landAutosaves[land] = count + 1;
-	Save();
 	return count;
+}
+
+std::function<bool()> PlayerProfileSystem::ProfilesFileJob() const
+{
+	if (_store.developer || !_store.folder.has_value())
+	{
+		return {};
+	}
+	// The job keeps a copy of the text, so the profiles can change before it runs
+	return [folder = *_store.folder, text = player_profiles::Write(_profiles)]() {
+		std::error_code error;
+		std::filesystem::create_directories(folder, error);
+		const auto path = folder / k_ProfilesFile;
+		std::ofstream stream(path, std::ios::binary | std::ios::trunc);
+		stream << text;
+		if (const auto logger = spdlog::get("game"); !stream && logger != nullptr)
+		{
+			SPDLOG_LOGGER_WARN(logger, "The player profiles could not be written to {}", path.string());
+		}
+		return static_cast<bool>(stream);
+	};
 }
 
 void PlayerProfileSystem::Save() const
 {
-	if (_store.developer || !_store.folder.has_value())
+	if (const auto job = ProfilesFileJob(); job)
 	{
-		return;
-	}
-	std::error_code error;
-	std::filesystem::create_directories(*_store.folder, error);
-	const auto path = *_store.folder / k_ProfilesFile;
-	std::ofstream stream(path, std::ios::binary | std::ios::trunc);
-	stream << player_profiles::Write(_profiles);
-	if (const auto logger = spdlog::get("game"); !stream && logger != nullptr)
-	{
-		SPDLOG_LOGGER_WARN(logger, "The player profiles could not be written to {}", path.string());
+		std::ignore = job();
 	}
 }
