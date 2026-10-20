@@ -267,11 +267,11 @@ void GameObjectEffects::AddWaterRing(glm::vec3 centre, float size)
 	}
 }
 
-void GameObjectEffects::ShakeCamera(glm::vec3 position, float radius, float strength, float seconds)
+void GameObjectEffects::ShakeCamera(glm::vec3 position, float radius, float strength, int32_t milliseconds)
 {
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().AddShake(position, radius, strength, seconds, true);
+		Locator::explosionSystem::value().AddShake(position, radius, strength, milliseconds, true);
 	}
 }
 

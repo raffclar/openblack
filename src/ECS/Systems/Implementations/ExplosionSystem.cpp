@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleBlast.h"
@@ -168,9 +169,8 @@ void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, dust_puff::K
 	_puffs.push_back(dust_puff::Make(centre, size, LocalRandom, kind, colour));
 }
 
-void ExplosionSystem::AddShake(const glm::vec3& position, float radius, float strength, float seconds, bool verticalOnly)
+void ExplosionSystem::AddShake(const glm::vec3& position, float radius, float strength, int32_t milliseconds, bool verticalOnly)
 {
-	const float milliseconds = seconds * 1000.0f;
 	_shakes.push_back({.position = position,
 	                   .radius = radius,
 	                   .strength = strength,
@@ -228,12 +228,16 @@ void ExplosionSystem::Update(float milliseconds)
 	}
 	const float seconds = milliseconds / 1000.0f;
 	std::erase_if(_puffs, [seconds](dust_puff::Puff& puff) { return !dust_puff::Advance(puff, seconds); });
-	camera_shake::Advance(_shakes, milliseconds);
+	// The shakes count down by the real time of the frame, also when the game pauses
+	const auto realMilliseconds = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime().count() : 0;
+	camera_shake::Advance(_shakes, static_cast<int32_t>(realMilliseconds));
 	if (Locator::camera::has_value())
 	{
 		auto& camera = Locator::camera::value();
-		const auto* nearest = camera_shake::Nearest(_shakes, camera.GetOrigin());
-		const auto offsets = camera_shake::Jitter(camera_shake::Amplitude(_shakes, camera.GetOrigin()),
+		// The distance to a shake is from the eye that the game drew, with its shake
+		const auto eye = camera.GetOrigin(Camera::Interpolation::Drawn);
+		const auto* nearest = camera_shake::Nearest(_shakes, eye);
+		const auto offsets = camera_shake::Jitter(camera_shake::Amplitude(_shakes, eye),
 		                                          nearest == nullptr || nearest->verticalOnly, LocalRandom);
 		camera.SetShake(offsets.eye, offsets.focus);
 	}

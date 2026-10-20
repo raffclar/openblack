@@ -53,7 +53,6 @@ public:
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return _origin; }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _focus; }
-	[[nodiscard]] std::chrono::seconds GetIdleTime() const override { return std::chrono::seconds::zero(); }
 	/// The editor's camera goes anywhere
 	[[nodiscard]] bool HeldInsideTheWorld() const override { return false; }
 

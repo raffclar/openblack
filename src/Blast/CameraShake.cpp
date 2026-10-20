@@ -9,30 +9,54 @@
 
 #include "CameraShake.h"
 
-#include <algorithm>
-#include <ranges>
+#include <cmath>
 
-#include <glm/geometric.hpp>
+#include <ranges>
 
 using namespace openblack;
 using namespace openblack::camera_shake;
 
-void camera_shake::Advance(std::vector<Shake>& shakes, float milliseconds)
+int32_t camera_shake::ScriptMilliseconds(float seconds)
 {
-	std::erase_if(shakes, [milliseconds](Shake& shake) {
-		shake.millisecondsLeft -= milliseconds;
-		return shake.millisecondsLeft < 1.0f;
+	const float milliseconds = seconds * 1000.0f;
+	return static_cast<int32_t>(std::lrint(milliseconds));
+}
+
+int32_t camera_shake::EffectMilliseconds(float seconds)
+{
+	const float milliseconds = seconds * 1000.0f;
+	return static_cast<int32_t>(milliseconds);
+}
+
+void camera_shake::Advance(std::vector<Shake>& shakes, int32_t frameMilliseconds)
+{
+	std::erase_if(shakes, [frameMilliseconds](Shake& shake) {
+		shake.millisecondsLeft -= frameMilliseconds;
+		return shake.millisecondsLeft <= 0;
 	});
 }
 
+namespace
+{
+
+/// The distance from the camera to the shake, with the squares added in the order z, y, x
+float Distance(const glm::vec3& shake, const glm::vec3& camera)
+{
+	const glm::vec3 offset = shake - camera;
+	const float squares = offset.z * offset.z + offset.y * offset.y;
+	return std::sqrt(squares + offset.x * offset.x);
+}
+
+} // namespace
+
 const Shake* camera_shake::Nearest(std::span<const Shake> shakes, const glm::vec3& camera)
 {
-	// The newest shake is met first, and only a strictly nearer one replaces the nearest so far
+	// The newest shake is first, and only a shake that is strictly nearer replaces the nearest
 	const Shake* nearest = nullptr;
 	float best = 0.0f;
 	for (const auto& shake : std::ranges::reverse_view(shakes))
 	{
-		const float distance = glm::distance(shake.position, camera);
+		const float distance = Distance(shake.position, camera);
 		if (nearest == nullptr || distance < best)
 		{
 			nearest = &shake;
@@ -45,13 +69,14 @@ const Shake* camera_shake::Nearest(std::span<const Shake> shakes, const glm::vec
 float camera_shake::Amplitude(std::span<const Shake> shakes, const glm::vec3& camera)
 {
 	const Shake* nearest = Nearest(shakes, camera);
-	const float best = nearest != nullptr ? glm::distance(nearest->position, camera) : 0.0f;
-	// Only a camera strictly inside the shake's radius shakes
-	if (nearest == nullptr || best >= nearest->radius || nearest->milliseconds <= 0.0f)
+	// Only a camera that is strictly in the radius of the shake shakes
+	if (nearest == nullptr || !(Distance(nearest->position, camera) < nearest->radius) || nearest->milliseconds <= 0)
 	{
 		return 0.0f;
 	}
-	return nearest->strength * std::max(nearest->millisecondsLeft, 0.0f) / nearest->milliseconds;
+	// The share of the time that is left, then times the strength
+	const float share = static_cast<float>(nearest->millisecondsLeft) / static_cast<float>(nearest->milliseconds);
+	return share * nearest->strength;
 }
 
 Offsets camera_shake::Jitter(float amplitude, bool verticalOnly, const std::function<float(float, float)>& random)

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <functional>
 #include <optional>
 #include <span>
@@ -16,11 +18,10 @@
 
 #include <glm/vec3.hpp>
 
-/// The camera shaking as a blast lands near it: each shake has a place, a radius it reaches, a strength and a time it
-/// lasts. Only the nearest shake counts, at full strength anywhere within its radius and none beyond, its strength
-/// falling steadily to nothing over its time. The camera's eye and what it looks at each jump up or down by a fresh
-/// random amount up to that strength every frame: up or down only, or along all three axes for a shake that isn't
-/// vertical only (a reward chest's thump).
+/// The camera shakes as a blast lands near it. Each shake has a place, a radius, a strength and a time in whole
+/// milliseconds. Only the nearest shake counts, and only when the camera is in its radius. Its strength decreases
+/// steadily to zero over its time. Each frame, the eye and the focus move by a new random distance up to that strength.
+/// A shake moves them up or down only, or along all three axes when it is not vertical only.
 namespace openblack::camera_shake
 {
 
@@ -29,8 +30,8 @@ struct Shake
 	glm::vec3 position {0.0f};
 	float radius {0.0f};
 	float strength {1.0f};
-	float milliseconds {0.0f};
-	float millisecondsLeft {0.0f};
+	int32_t milliseconds {0};
+	int32_t millisecondsLeft {0};
 	/// It jitters the camera up and down only, not along every axis
 	bool verticalOnly {true};
 
@@ -42,8 +43,13 @@ struct Shake
 	}
 };
 
-/// The shakes count down by the frame's time; those with less than a millisecond left go
-void Advance(std::vector<Shake>& shakes, float milliseconds);
+/// The milliseconds of a script's shake: the seconds times 1000, rounded to the nearest whole number (a half goes to
+/// the even number)
+[[nodiscard]] int32_t ScriptMilliseconds(float seconds);
+/// The milliseconds of a particle effect's shake: the seconds times 1000, with the fraction removed
+[[nodiscard]] int32_t EffectMilliseconds(float seconds);
+/// The shakes count down by the whole milliseconds of the real frame. A shake with no time left stops
+void Advance(std::vector<Shake>& shakes, int32_t frameMilliseconds);
 /// How hard the camera shakes where it is: by the nearest shake, when within its radius
 [[nodiscard]] float Amplitude(std::span<const Shake> shakes, const glm::vec3& camera);
 /// The nearest shake to the camera, which is the one that shakes it; none without shakes

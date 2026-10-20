@@ -583,8 +583,3 @@ glm::vec3 ScriptCameraModel::GetTargetFocus() const
 {
 	return DestinationOf(_focus);
 }
-
-std::chrono::seconds ScriptCameraModel::GetIdleTime() const
-{
-	return std::chrono::seconds::zero();
-}

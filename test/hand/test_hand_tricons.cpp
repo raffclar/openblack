@@ -338,6 +338,12 @@ TEST(HandTricons, HeldBackOnlyTheCrossShows)
 	EXPECT_EQ(icons.icons, icon::k_Cross);
 }
 
+TEST(HandTricons, UnderAMenuBoxNoIconShowsNotEvenTheCross)
+{
+	const auto icons = WorldCamera({.mouseHints = k_TooFar, .tilt = 1.0f, .features = k_AllFeatures, .inputOff = true}, 0.0f);
+	EXPECT_EQ(icons.icons, 0U);
+}
+
 TEST(HandTricons, TheCrossBrightensWithAThingUnderTheHandAndAtOnceWithTheAction)
 {
 	Fades fades {};
