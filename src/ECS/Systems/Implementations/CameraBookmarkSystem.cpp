@@ -11,21 +11,51 @@
 
 #include "CameraBookmarkSystem.h"
 
-#include <glm/trigonometric.hpp>
-
-#include "3D/LandIslandInterface.h"
+#include "3D/PhysicsDrawMatrix.h"
+#include "3D/TempleInteriorInterface.h"
+#include "Camera/Camera.h"
+#include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/DoubleClickFlight.h"
 #include "ECS/Archetypes/CameraBookmarkArchetype.h"
 #include "ECS/Components/CameraBookmark.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
 
+using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
+
+namespace
+{
+
+/// The place of the player's hand on the land, or the camera's focus when the hand is not on the land
+glm::vec3 HandPoint(const Camera& camera)
+{
+	if (Locator::handSystem::has_value())
+	{
+		for (const auto& position : Locator::handSystem::value().GetPlayerHandPositions())
+		{
+			if (position.has_value())
+			{
+				return *position;
+			}
+		}
+	}
+	return camera.GetFocus();
+}
+
+} // namespace
 
 bool CameraBookmarkSystem::Initialize()
 {
 	_bookmarks = archetypes::CameraBookmarkArchetype::CreateAll();
+	_back.reset();
+	_current = 0;
+	_followed.reset();
+	_pulseClockMs = 0;
 	return true;
 }
 
@@ -38,43 +68,210 @@ void CameraBookmarkSystem::FindAfterLoad()
 			_bookmarks.at(bookmark.number) = entity;
 		}
 	});
+	_back.reset();
+	_followed.reset();
 }
 
-void CameraBookmarkSystem::Update(const std::chrono::microseconds& dt) const
+void CameraBookmarkSystem::Update(std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
-	Locator::entitiesRegistry::value().Each<CameraBookmark, Transform>([&dt](CameraBookmark& bookmark, Transform& transform) {
-		std::chrono::duration<float> const seconds = dt;
-		auto t = bookmark.animationTime * 5.0f;
-		transform.scale = glm::vec3(glm::sin(t) * 0.5f + 0.5f, glm::cos(t) * 0.5f + 0.5f, 1.0f);
-		bookmark.animationTime += seconds.count();
+	// The throb moves on only on a frame that draws the land
+	if (landDrawn)
+	{
+		_pulseClockMs = camera_bookmarks::StepPulseClock(_pulseClockMs, static_cast<int32_t>(frameGameTime.count()));
+	}
+	const auto size = glm::vec3(GetMarkerHalfSize(), 1.0f);
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const CameraBookmark, Transform>([&registry, size](const CameraBookmark& bookmark, Transform& transform) {
+		// A marker on a thing goes where the frame draws the thing
+		auto point = bookmark.point;
+		if (bookmark.thing != entt::null && registry.Valid(bookmark.thing))
+		{
+			if (const auto* at = registry.TryGet<const Transform>(bookmark.thing); at != nullptr)
+			{
+				point = physics_draw::Position(at->position, registry.TryGet<const PhysicsDrawPose>(bookmark.thing));
+			}
+		}
+		transform.position = camera_bookmarks::MarkerPlace(point);
+		transform.scale = size;
 	});
 }
 
-void CameraBookmarkSystem::SetBookmark(uint8_t index, const glm::vec3& position, const glm::vec3& savedCameraOrigin) const
+void CameraBookmarkSystem::ProcessTurn()
 {
-	if (index < _bookmarks.size())
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto entity : _bookmarks)
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		auto entity = _bookmarks.at(index);
-		registry.AssignOrReplace<Transform>(entity, position + glm::vec3(0.0f, 1.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		auto& bookmark = registry.Get<CameraBookmark>(entity);
-		bookmark.animationTime = 0.0f;
-		bookmark.savedOrigin = savedCameraOrigin;
+		auto* bookmark = registry.TryGet<CameraBookmark>(entity);
+		if (bookmark == nullptr || !bookmark->set || bookmark->thing == entt::null)
+		{
+			continue;
+		}
+		// A bookmark forgets a thing that has gone, and stays at its last place
+		const auto* at = registry.Valid(bookmark->thing) ? registry.TryGet<const Transform>(bookmark->thing) : nullptr;
+		if (at == nullptr)
+		{
+			bookmark->thing = entt::null;
+			continue;
+		}
+		bookmark->point = at->position;
 	}
-	else
+
+	// The world camera flies to the bookmark that it follows, each turn. Another camera stops the follow. A move of the
+	// camera by the player also stops it.
+	if (!Locator::camera::has_value())
 	{
-		assert(false);
+		return;
+	}
+	const auto* world = dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel());
+	if (world == nullptr)
+	{
+		_followed.reset();
+	}
+	else if (_followed.has_value())
+	{
+		JumpTo(*_followed);
+	}
+	if (world != nullptr && world->MovedByPlayer())
+	{
+		_followed.reset();
 	}
 }
 
-void CameraBookmarkSystem::ClearBookmark(uint8_t index) const
+void CameraBookmarkSystem::SetBookmark(size_t slot, glm::vec3 point, std::optional<entt::entity> thing, glm::vec3 cameraOrigin)
 {
-	if (index < _bookmarks.size())
+	if (slot >= _bookmarks.size())
 	{
-		Locator::entitiesRegistry::value().Remove<Transform>(_bookmarks.at(index));
+		return;
 	}
-	else
+	_followed.reset();
+	_current = slot;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = _bookmarks.at(slot);
+	auto& bookmark = registry.Get<CameraBookmark>(entity);
+	bookmark.set = true;
+	bookmark.thing = entt::null;
+	bookmark.point = point;
+	// A bookmark on a thing starts at the place of the thing
+	if (thing.has_value() && registry.Valid(*thing))
 	{
-		assert(false);
+		if (const auto* at = registry.TryGet<const Transform>(*thing); at != nullptr)
+		{
+			bookmark.thing = *thing;
+			bookmark.point = at->position;
+		}
+	}
+	bookmark.cameraOffset = cameraOrigin - bookmark.point;
+	registry.AssignOrReplace<Transform>(entity, camera_bookmarks::MarkerPlace(bookmark.point), glm::mat3(1.0f),
+	                                    glm::vec3(GetMarkerHalfSize(), 1.0f));
+}
+
+void CameraBookmarkSystem::ClearBookmark(size_t slot)
+{
+	if (slot >= _bookmarks.size())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = _bookmarks.at(slot);
+	auto& bookmark = registry.Get<CameraBookmark>(entity);
+	bookmark.set = false;
+	bookmark.thing = entt::null;
+	registry.Remove<Transform>(entity);
+}
+
+bool CameraBookmarkSystem::IsSet(size_t slot) const
+{
+	if (slot >= _bookmarks.size())
+	{
+		return false;
+	}
+	const auto* bookmark = Locator::entitiesRegistry::value().TryGet<const CameraBookmark>(_bookmarks.at(slot));
+	return bookmark != nullptr && bookmark->set;
+}
+
+std::optional<CameraBookmarkSystem::View> CameraBookmarkSystem::ViewOf(size_t slot) const
+{
+	if (slot == camera_bookmarks::k_BackSlot)
+	{
+		return _back;
+	}
+	if (!IsSet(slot))
+	{
+		return std::nullopt;
+	}
+	const auto& bookmark = Locator::entitiesRegistry::value().Get<const CameraBookmark>(_bookmarks.at(slot));
+	return View {.point = bookmark.point, .cameraOffset = bookmark.cameraOffset};
+}
+
+void CameraBookmarkSystem::JumpTo(size_t slot)
+{
+	const auto view = ViewOf(slot);
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!view.has_value() || inTemple || !Locator::camera::has_value())
+	{
+		return;
+	}
+	_current = slot;
+	if (_followed != slot)
+	{
+		_followed.reset();
+	}
+	auto& camera = Locator::camera::value();
+	camera.GetModel().SetFlight(view->point + view->cameraOffset, view->point, camera_fly::k_BookmarkRise);
+	// The go-back key keeps the view from before the jump: the place of the hand, and the position of the camera from it
+	const auto handPoint = HandPoint(camera);
+	_back = View {.point = handPoint, .cameraOffset = camera.GetOrigin() - handPoint};
+}
+
+void CameraBookmarkSystem::JumpBack()
+{
+	JumpTo(camera_bookmarks::k_BackSlot);
+}
+
+std::array<bool, camera_bookmarks::k_SteppedSlots> CameraBookmarkSystem::SteppedSet() const
+{
+	std::array<bool, camera_bookmarks::k_SteppedSlots> set {};
+	for (size_t slot = 0; slot < set.size(); ++slot)
+	{
+		set.at(slot) = IsSet(slot);
+	}
+	return set;
+}
+
+void CameraBookmarkSystem::JumpToNext()
+{
+	if (const auto slot = camera_bookmarks::NextSet(_current, SteppedSet()); slot.has_value())
+	{
+		JumpTo(*slot);
+	}
+}
+
+void CameraBookmarkSystem::JumpToPrevious()
+{
+	if (const auto slot = camera_bookmarks::PreviousSet(_current, SteppedSet()); slot.has_value())
+	{
+		JumpTo(*slot);
+	}
+}
+
+void CameraBookmarkSystem::ToggleFollow(size_t slot)
+{
+	if (!IsSet(slot))
+	{
+		return;
+	}
+	const auto& bookmark = Locator::entitiesRegistry::value().Get<const CameraBookmark>(_bookmarks.at(slot));
+	switch (camera_bookmarks::ShiftKey(bookmark.thing != entt::null, _followed, slot))
+	{
+	case camera_bookmarks::FollowKey::Jump:
+		JumpTo(slot);
+		_followed.reset();
+		break;
+	case camera_bookmarks::FollowKey::Follow:
+		_followed = slot;
+		break;
+	case camera_bookmarks::FollowKey::Stop:
+		_followed.reset();
+		break;
 	}
 }

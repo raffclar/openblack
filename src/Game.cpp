@@ -955,48 +955,79 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_5:
 		case SDLK_6:
 		case SDLK_7:
-		case SDLK_8:
+		{
+			const auto mod = event.key.keysym.mod;
+			const bool shift = (mod & KMOD_SHIFT) != 0;
+			const bool ctrl = (mod & KMOD_CTRL) != 0;
+			const bool alt = (mod & KMOD_ALT) != 0;
 			// Alt and 1 halves the game's speed, to half of normal at the least. Alt and 2 doubles it, to twice
 			// normal at the most. Shift or Ctrl with the key goes before Alt.
-			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) &&
-			    (event.key.keysym.mod & (KMOD_SHIFT | KMOD_CTRL)) == 0 && (event.key.keysym.mod & KMOD_ALT) != 0)
+			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) && !shift && !ctrl && alt)
 			{
 				auto& clock = Locator::time::value();
 				clock.SetSpeed(event.key.keysym.sym == SDLK_1 ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
 				                                              : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
 				break;
 			}
-			// The camera's bookmarks aren't for the player while a script has the cinema bars in
-			if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive() ||
-			    !Locator::cameraBookmarkSystem::value().IsEnabled())
+			if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
 			{
 				break;
 			}
-			if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+			auto& bookmarks = Locator::cameraBookmarkSystem::value();
+			const auto slot = static_cast<size_t>(event.key.keysym.sym - SDLK_1);
+			// Ctrl and Shift clear a set bookmark. Ctrl without Alt keeps the place of the hand, or the thing under the
+			// hand. The key alone jumps to a set bookmark. Shift starts or stops a follow of a set bookmark.
+			if (ctrl && shift)
 			{
-				const auto index = static_cast<uint8_t>(event.key.keysym.sym - SDLK_1);
-				const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
-				if (positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)] ||
-				    positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)])
+				if (bookmarks.IsSet(slot))
 				{
-					const auto handPosition =
-					    positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)].value_or(
-					        positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)].value_or(
-					            glm::zero<glm::vec3>()));
-					Locator::cameraBookmarkSystem::value().SetBookmark(index, handPosition, camera.GetOrigin());
+					bookmarks.ClearBookmark(slot);
 				}
 			}
-			else
+			else if (ctrl && !alt)
 			{
-				const auto& entitiesRegistry = Locator::entitiesRegistry::value();
-				const size_t index = event.key.keysym.sym - SDLK_1;
-				const auto& bookmarkEntities = Locator::cameraBookmarkSystem::value().GetBookmarks();
-				const auto entity = bookmarkEntities.at(index);
-				const auto [transform, bookmark] =
-				    entitiesRegistry.TryGet<ecs::components::Transform, ecs::components::CameraBookmark>(entity);
-				if (transform != nullptr && bookmark != nullptr)
+				const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
+				const auto left = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				const auto right = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+				if (left.has_value() || right.has_value())
 				{
-					camera.GetModel().SetFlight(bookmark->savedOrigin, transform->position, camera_fly::k_BookmarkRise);
+					std::optional<entt::entity> thing;
+					if (Locator::pickingSystem::has_value())
+					{
+						thing = Locator::pickingSystem::value().GetPick().object;
+					}
+					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
+					                      camera.GetOrigin());
+				}
+			}
+			else if (shift)
+			{
+				bookmarks.ToggleFollow(slot);
+			}
+			else if (!ctrl && !alt)
+			{
+				bookmarks.JumpTo(slot);
+			}
+			break;
+		}
+		case SDLK_BACKSPACE:
+			// The go-back key flies the camera back to the view before the last jump to a bookmark
+			if (BookmarkKeysAllowed())
+			{
+				Locator::cameraBookmarkSystem::value().JumpBack();
+			}
+			break;
+		case SDLK_TAB:
+			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one
+			if (BookmarkKeysAllowed())
+			{
+				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
+				{
+					Locator::cameraBookmarkSystem::value().JumpToPrevious();
+				}
+				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
+				{
+					Locator::cameraBookmarkSystem::value().JumpToNext();
 				}
 			}
 			break;
@@ -1183,6 +1214,20 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 		_mousePosition = glm::ivec2(*drawing * (size.y / gesture::k_ReferenceHeight));
 		_handPointer.Moved();
 	}
+}
+
+bool Game::BookmarkKeysAllowed()
+{
+	if (!Locator::cinematicDirectorSystem::value().IsInterfaceActive())
+	{
+		return false;
+	}
+	if (!Locator::cameraHelpSystem::has_value())
+	{
+		return true;
+	}
+	const auto& help = Locator::cameraHelpSystem::value().Get();
+	return help.cameraKeys && help.placeKeys;
 }
 
 bool Game::HandOverThing() const
@@ -2091,6 +2136,9 @@ bool Game::GameLogicLoop() noexcept
 		Locator::worshipSiteSystem::value().UpdateTurn();
 	}
 
+	// The camera's bookmarks on things move with their things, and the camera flies again to the bookmark that it follows
+	Locator::cameraBookmarkSystem::value().ProcessTurn();
+
 	if (_atmosAudio)
 	{
 		_atmosAudio->SetAlignment(Locator::alignmentSystem::value().GetCameraAlignment());
@@ -2449,7 +2497,13 @@ bool Game::Update() noexcept
 			RequestQuit();
 		}
 	}
-	Locator::cameraBookmarkSystem::value().Update(deltaTime);
+	{
+		// The markers of the bookmarks throb on, only on a frame that draws the land
+		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+		const bool landHidden = Locator::videoSystem::has_value() &&
+		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+		Locator::cameraBookmarkSystem::value().Update(Locator::time::value().GetFrameGameTime(), !inTemple && !landHidden);
+	}
 	// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
 	Locator::highDetailSystem::value().Update();
 	if (_interface)

@@ -13,13 +13,16 @@
 
 #include <entt/fwd.hpp>
 
+#include "Camera/CameraBookmarks.h"
+
 namespace openblack::ecs::archetypes
 {
 
 class CameraBookmarkArchetype
 {
 public:
-	static std::array<entt::entity, 8> CreateAll();
+	/// The markers of the bookmarks of the number keys, none of them set
+	static std::array<entt::entity, camera_bookmarks::k_KeySlots> CreateAll();
 };
 
 } // namespace openblack::ecs::archetypes

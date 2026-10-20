@@ -652,6 +652,9 @@ private:
 	void ShowSavingBox(bool loading, bool darken);
 	/// Whether the hand hovers over a thing: a one-shot bubble, or anything with a model that the cursor picks
 	[[nodiscard]] bool HandOverThing() const;
+	/// Whether the keys of the camera's bookmarks work: not while a script has the cinema bars in, and only while the
+	/// script's interface level gives the player the keys of the camera and of its places
+	[[nodiscard]] static bool BookmarkKeysAllowed();
 	/// Whether a front-end box shows over the game: the game's menu, the question at the start of a new game, or the
 	/// tattoo editor
 	[[nodiscard]] bool FrontEndBoxShows() const;

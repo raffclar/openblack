@@ -308,11 +308,6 @@ constexpr float k_MarkerLift = 2.0f;
 /// Where the ring hangs: above a thing's top, by its point on the land and its height, or above a point of the land
 [[nodiscard]] glm::vec3 MarkerOverThing(glm::vec3 point, float height);
 [[nodiscard]] glm::vec3 MarkerOverLand(glm::vec3 point);
-/// The ring throbs: its half width and half height each swing from 0.2 to 1.2 once a second, the height a fifth of a
-/// second behind the width, on a clock of milliseconds that goes round every two seconds
-constexpr uint32_t k_PulsePeriodMs = 2000;
-constexpr uint32_t k_PulseLagMs = 200;
-[[nodiscard]] glm::vec2 MarkerSize(uint32_t clockMs);
 /// The footprint inside the ring is this much the ring's size, turned a quarter turn
 constexpr float k_FootprintShare = 0.7f;
 /// The footprint turns a quarter turn to the left on the screen, so the top of its picture points to the left

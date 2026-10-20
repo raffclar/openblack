@@ -9473,6 +9473,26 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
 	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
 	});
+	all.push_back({
+	    .id = "tutorial.bookmark_markers_follow",
+	    .name = "Bookmark markers and a followed creature",
+	    .facet = Facet::Tutorial,
+	    .description = "Three bookmarks go on the land near the middle of the map, as Ctrl and the keys 1, 2 and 3 do. Then "
+	                   "the player keeps the tiger in bookmark 4, as Ctrl and the key 4 do with the hand over it, and the "
+	                   "camera follows it, as Shift and the key 4 do. The tiger walks away to the north.",
+	    .expected = "Each bookmark shows its yellow number in a ring, two metres above its place. The marker of bookmark 4 "
+	                "stays two metres above the tiger and moves with it. All the markers throb together: the width and "
+	                "the height each swing once a second, the height a fifth of a second behind. The camera flies after "
+	                "the tiger each turn, until the player moves the camera.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, -10.0f}, 0.0f)},
+	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {25.0f, 0.0f}, .value = 0},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {-25.0f, 0.0f}, .value = 1},
+	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 0.5f, .point = {0.0f, 25.0f}, .value = 2},
+	                 {.kind = Kind::BookmarkCreature, .creature = 0, .delaySeconds = 1.0f, .value = 3},
+	                 Go(Kind::WalkTo, 0, {0.0f, 160.0f}, 0.5f, false)},
+	});
 }
 
 /// A blow that sways the creature, and a wolf that frightens it
@@ -9576,6 +9596,7 @@ std::vector<Scenario> Build()
 	AddCreatureExplorationScenarios(all);
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
+	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	return all;
 }
@@ -9746,7 +9767,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 167> k_Names {
+	constexpr std::array<std::string_view, 168> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9883,6 +9904,8 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "open the tattoo editor from the menu",
 	    "play custom music",
 	    "show the custom music controls",
+	    "save the game",
+	    "load the game",
 	    "script reaction",
 	    "script place",
 	    "stop script",
@@ -9890,8 +9913,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "start script music",
 	    "write the web page",
 	    "fly to a bookmark",
-	    "save the game",
-	    "load the game",
+	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
 	    "give hand glows",
 	    "give a creed power",

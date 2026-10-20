@@ -844,6 +844,9 @@ struct Command
 		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
 		/// Needs no creature
 		FlyToBookmark,
+		/// The player keeps the creature in a bookmark (value, 0 to 6), as Ctrl and the number key do with the hand over
+		/// it. Then the camera follows the bookmark, as Shift and the number key do.
+		BookmarkCreature,
 		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
 		/// creature over the film. Needs no creature of its own
 		PlayFallingSpellFilm,
