@@ -775,6 +775,7 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 
 void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm::vec3 focusAtFrameStart)
 {
+	_clearViewHand.reset();
 	if (_clearViewHeld)
 	{
 		if (_clearViewStarts)
@@ -803,6 +804,11 @@ void DefaultWorldCameraModel::UpdateClearView(glm::vec3 originAtFrameStart, glm:
 		{
 			_clearCentre.y = Locator::terrainSystem::value().GetAltitude(zoom_to::MapCoordOf(_clearCentre.x),
 			                                                             zoom_to::MapCoordOf(_clearCentre.z));
+		}
+		// The hand goes to the thing that the camera follows, on the land under it
+		if (_clearObject.has_value())
+		{
+			_clearViewHand = _clearCentre;
 		}
 	}
 	// The camera eases between where it was and the orbit

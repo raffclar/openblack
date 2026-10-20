@@ -195,6 +195,9 @@ private:
 	{
 		return std::nullopt;
 	}
+
+protected:
+	/// What the cursor picks. A test can put a thing in it.
 	Pick _pick;
 };
 

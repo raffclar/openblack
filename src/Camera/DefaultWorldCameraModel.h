@@ -77,6 +77,9 @@ public:
 	/// One of the four wooshes of a flight
 	static void Woosh();
 	[[nodiscard]] HandCues GetHandCues() const final;
+	/// Where the hand is in the clear view of this frame: on the land at the thing that the camera turns round. No point
+	/// when the clear view is not held or follows no thing.
+	[[nodiscard]] std::optional<glm::vec3> GetClearViewHand() const { return _clearViewHand; }
 
 private:
 	void UpdateCameraInterpolationValues(const Camera& camera);
@@ -250,6 +253,8 @@ private:
 	std::optional<clear_view::Orbit> _clearOrbit;
 	glm::vec3 _clearCentre {0.0f};
 	std::optional<entt::entity> _clearObject;
+	/// The point of the hand that the clear view gives in this frame
+	std::optional<glm::vec3> _clearViewHand;
 	/// The player's camera controls this frame, and the help events they make while the controls are handled
 	camera_help::events::ControlsFrame _helpControls;
 	camera_help::events::EventSet _helpEvents;
