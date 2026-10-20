@@ -34,6 +34,7 @@
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/AppleBarrel.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/BoatFilm.h"
@@ -104,6 +105,7 @@
 #include "Profiler.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
+#include "Scenery/AppleBarrelRules.h"
 
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
@@ -621,8 +623,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			                              : drawnMesh;
 			    if (const auto& box = MeshBox(bounding); box.has_value())
 			    {
+				    const float drawImportance = object_detail::Importance(registry, entity);
 				    const auto choice = ChooseDetail(
-				        *box, detail != nullptr ? detail->importance : 0.0f, modelMatrix, transform.scale.x,
+				        *box, drawImportance, modelMatrix, transform.scale.x,
 				        [&registry, entity] {
 					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
 				        },
@@ -886,6 +889,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    look.z = lanternLook.shown ? look.z : 1.0f;
 				    look.w = lanternLook.snowCap;
 				    lightOffset = lanternLook.lightOffset;
+			    }
+		    }
+
+		    // The worm on the apple barrel takes the land's light of the point where the barrel stands
+		    if (const auto* worm = registry.TryGet<const AppleBarrelWorm>(entity);
+		        worm != nullptr && registry.Valid(worm->barrel))
+		    {
+			    if (const auto* barrelTransform = registry.TryGet<const Transform>(worm->barrel); barrelTransform != nullptr)
+			    {
+				    lightOffset = apple_barrel::WormLightOffset(barrelTransform->position, transform.position);
 			    }
 		    }
 
@@ -1585,7 +1598,7 @@ void RenderingSystem::NoteKept(ObjectDrawListSystemInterface& drawList, const Re
 		if (const auto& box = MeshBox(boxMesh); box.has_value())
 		{
 			const auto centre = glm::vec3(model * glm::vec4(box->Center(), 1.0f));
-			const float radius = std::abs(scale) * glm::length(box->Size() * 0.5f);
+			const float radius = std::abs(scale) * graphics::mesh_detail::HalfDiagonal(box->Size());
 			onScreen = object_draw_list::SphereOnScreen(*drawList.GetView(), glm::vec3(model[3]), centre, radius);
 		}
 	}

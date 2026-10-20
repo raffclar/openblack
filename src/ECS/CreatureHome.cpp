@@ -11,6 +11,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/TemplePen.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/Mesh.h"
@@ -59,6 +60,25 @@ std::optional<glm::vec3> creature_home::HomeOf(const Registry& registry, entt::e
 	}
 	// The temple's pen while the temple stands, whatever home it was given; else that home
 	return openblack::creature_mode::PenOf(home, temple, glm::vec3 {});
+}
+
+std::optional<openblack::map_coords::MapCoords> creature_home::HomeOnMapOf(const Registry& registry, entt::entity creature)
+{
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body == nullptr)
+	{
+		return std::nullopt;
+	}
+	if (const auto temple = TemplePenOf(registry, body->owner))
+	{
+		return temple_pen::MapPosition(*temple);
+	}
+	const auto* leash = registry.TryGet<const CreatureLeash>(creature);
+	if (leash == nullptr || !leash->home.has_value())
+	{
+		return std::nullopt;
+	}
+	return leash->homeOnMap.value_or(openblack::map_coords::FromMetres({leash->home->x, leash->home->z}));
 }
 
 std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, PlayerNames owner)

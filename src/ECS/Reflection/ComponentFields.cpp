@@ -135,6 +135,7 @@
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/Disciple.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/DrinkWaypoint.h"
 #include "ECS/Components/DrinkingWater.h"
 #include "ECS/Components/FallingRoots.h"
@@ -516,7 +517,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::AppleBarrel>(context)
 	    .Field<&components::AppleBarrel::store>("store")
 	    .Field<&components::AppleBarrel::worm>("worm");
-	Reflect<components::AppleBarrelWorm>(context).Field<&components::AppleBarrelWorm::place>("place");
+	Reflect<components::AppleBarrelWorm>(context)
+	    .Field<&components::AppleBarrelWorm::barrel>("barrel")
+	    .Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
 	    .Field<&components::AudioEmitter::sourceId>("sourceId")
@@ -1137,6 +1140,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::DiscipleMark>(context)
 	    .Field<&components::DiscipleMark::villager>("villager")
 	    .Field<&components::DiscipleMark::symbol>("symbol");
+	Reflect<components::DrawImportance>(context).Field<&components::DrawImportance::importance>("importance");
 	Reflect<components::DrinkWaypoint>(context).Field<&components::DrinkWaypoint::number>("number");
 	Reflect<components::DrinkingWater>(context).Field<&components::DrinkingWater::place>("place");
 	Reflect<components::DropsRoots> {context};
@@ -2598,6 +2602,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_mind::IdleMind::stepStarted>("stepStarted")
 	    .Field<&openblack::creature_mind::IdleMind::stepSeconds>("stepSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::sitEnding>("sitEnding")
+	    .Field<&openblack::creature_mind::IdleMind::faintLay>("faintLay")
 	    .Field<&openblack::creature_mind::IdleMind::faceSeconds>("faceSeconds")
 	    .Field<&openblack::creature_mind::IdleMind::eyesToClear>("eyesToClear")
 	    .Field<&openblack::creature_mind::IdleMind::faceVariety>("faceVariety")

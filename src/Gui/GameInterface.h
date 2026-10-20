@@ -133,6 +133,13 @@ public:
 	[[nodiscard]] glm::ivec2 FromMusicControls(glm::ivec2 layout, glm::u16vec2 resolution);
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept { return _menu->IsOpen() || _skipBox->IsActive(); }
+	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
+	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
+	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
+	{
+		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
+		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+	}
 
 	/// Asks a new player for their name, over the front end's swirling backdrop; Cancel shows only when someone has a
 	/// profile. checkName says whether a name may be taken

@@ -18,6 +18,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -66,7 +67,7 @@ bool ecs::thing_on_screen::OnScreen(const screen_pick::View& view, entt::entity 
 		// The sphere about the model's box: its centre placed as the thing is, its radius the half diagonal times the
 		// thing's size
 		const auto centre = transform->position + transform->rotation * (transform->scale * box.Center());
-		const float radius = glm::length(box.Size() * 0.5f) * transform->scale.x;
+		const float radius = openblack::graphics::mesh_detail::HalfDiagonal(box.Size()) * transform->scale.x;
 		return screen_pick::SphereOnScreen(view, centre, radius, transform->position);
 	}
 	// Where it stands, across the land as a map position holds it

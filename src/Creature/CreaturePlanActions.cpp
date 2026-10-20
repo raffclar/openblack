@@ -301,7 +301,8 @@ constexpr std::array k_Executors {
     // The desire to follow the player copies the player's last deed again; the action itself makes no steps
     Executor {.action = "MimicPlayer", .build = Build::MimicPlayer},
     Executor {.action = "SleepAtHome", .build = Build::SleepAtHome, .activity = Activity::Sleep},
-    Executor {.action = "WaveAtObject", .target = Target::Anything, .build = Build::WaveAt},
+    // A script can make the creature wave at any thing. When the creature does the action again, it waves at a creature
+    Executor {.action = "WaveAtObject", .target = Target::Creature, .build = Build::WaveAt},
     Executor {.action = "PutDown", .build = Build::PutDown, .activity = Activity::PutDown},
     Executor {.action = "CastHealSpellPU1", .target = Target::HurtVillager, .build = Build::CastHelpful},
     // The helpful miracles cast the way the heal is: the food power-up, the shields at anything, and wood into a storage
@@ -310,6 +311,8 @@ constexpr std::array k_Executors {
     Executor {.action = "CastMagicWood", .target = Target::StoragePit, .build = Build::CastHelpful},
     Executor {.action = "CastPhysicalShield", .target = Target::Anything, .build = Build::CastHelpful},
     Executor {.action = "CastShieldPU1", .target = Target::Anything, .build = Build::CastHelpful},
+    // The desire to explore: far from its home, the creature casts the teleport miracle at itself
+    Executor {.action = "ExploreAndCastTeleport", .build = Build::CastTeleportFromAfar},
     // Food into a store, the shield at anything, water on itself while it burns, and a miracle to impress villagers
     Executor {.action = "CastMagicFood", .target = Target::BuiltFoodStore, .build = Build::CastFood},
     Executor {.action = "CastShield", .target = Target::Anything, .build = Build::CastShield},
@@ -724,6 +727,7 @@ bool creature_plan_actions::IsCast(const Executor& executor)
 	{
 	case Build::CastLightning:
 	case Build::CastHelpful:
+	case Build::CastTeleportFromAfar:
 	case Build::CastPlayful:
 	case Build::CastAggressive:
 	case Build::CastExplosion:
@@ -908,6 +912,17 @@ std::optional<std::vector<creature_mind::Step>> BringHomeAgenda(const Executor& 
 }
 } // namespace
 
+float creature_plan_actions::HomeCellDistance(const map_coords::MapCoords& at, const map_coords::MapCoords& home)
+{
+	const auto cell = map_coords::Cell(home);
+	return gutils::GetDistanceInMetresToCell(at, {static_cast<int16_t>(cell.x), static_cast<int16_t>(cell.y)});
+}
+
+bool creature_plan_actions::FarEnoughToTeleport(float homeCellDistance)
+{
+	return homeCellDistance > k_TeleportFromHomeMetres;
+}
+
 bool creature_plan_actions::Possible(const Executor& executor, const Situation& situation)
 {
 	if (executor.leavesHome && situation.stage < k_LeaveHomeStage)
@@ -941,6 +956,8 @@ bool creature_plan_actions::Possible(const Executor& executor, const Situation& 
 	case Build::GoHome:
 		return situation.home.has_value() && situation.homeDistance.has_value() &&
 		       creature_mind::FarFromHome(*situation.homeDistance);
+	case Build::CastTeleportFromAfar:
+		return situation.homeCellDistance.has_value() && FarEnoughToTeleport(*situation.homeCellDistance);
 	case Build::GoHomeToRecover:
 	case Build::RunHome:
 		return situation.home.has_value();
@@ -1382,6 +1399,7 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 		return creature_mind::CastAt(creature_mind::CastStyle::Lightning, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);
 	case Build::CastHelpful:
+	case Build::CastTeleportFromAfar:
 		return creature_mind::CastAt(creature_mind::CastStyle::Helpful, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);
 	case Build::CastPlayful:

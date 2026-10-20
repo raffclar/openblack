@@ -28,6 +28,8 @@ struct AppleBarrel
 /// The worm wriggling on the apple barrel: only drawn, never met by the cursor or anything else
 struct AppleBarrelWorm
 {
+	/// The barrel it sits on: the worm takes the light of the land where the barrel stands
+	entt::entity barrel {entt::null};
 	/// Its place in its clip, in milliseconds
 	uint32_t place {0};
 };

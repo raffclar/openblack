@@ -43,6 +43,7 @@
 #include "Creature/CreatureActionAgendas.h"
 #include "Creature/CreatureActionHistory.h"
 #include "Creature/CreatureActivity.h"
+#include "Creature/CreatureAgendaArea.h"
 #include "Creature/CreatureAttention.h"
 #include "Creature/CreatureBringHome.h"
 #include "Creature/CreatureDance.h"
@@ -1628,16 +1629,16 @@ bool OutsideConfinedArea(const ecs::Registry& registry, entt::entity creature, c
 /// The action that takes the creature to a teleport stone, whose walks the area that holds the creature never refuses
 constexpr std::string_view k_GoToTeleportAction = "GoToTeleport";
 
-/// Whether the area that holds the creature refuses a walk of a new agenda for an action. The area refuses only a walk
-/// to a point, not a walk to a thing.
-bool AgendaLeavesArea(const ecs::Registry& registry, entt::entity creature, std::string_view action,
-                      std::span<const creature_mind::Step> agenda)
+/// The area that holds the creature as a new agenda for an action starts, and the place of the creature then. None for a
+/// creature without a leash state or a place.
+std::optional<std::pair<creature_leash::AgendaArea, glm::vec2>>
+AgendaAreaOf(const ecs::Registry& registry, entt::entity creature, std::string_view action, bool walksBack = false)
 {
 	const auto* leashes = registry.TryGet<const CreatureLeash>(creature);
 	const auto* at = registry.TryGet<const Transform>(creature);
 	if (leashes == nullptr || at == nullptr)
 	{
-		return false;
+		return std::nullopt;
 	}
 	const bool leashed = leashes->worn.has_value();
 	const creature_leash::AgendaArea area {
@@ -1645,27 +1646,20 @@ bool AgendaLeavesArea(const ecs::Registry& registry, entt::entity creature, std:
 	    .leashed = leashed,
 	    .leashWorks = !leashed || leashes->worn->works,
 	    .centre = glm::xz(leashes->confinementCentre),
-	    .walkingBack = leashes->returnTo.has_value(),
+	    .walkingBack = walksBack || leashes->returnTo.has_value(),
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .toTeleport = action == k_GoToTeleportAction,
 	};
-	using Kind = creature_mind::Movement::Kind;
-	return std::ranges::any_of(agenda, [&area, &at](const creature_mind::Step& step) {
-		if (step.kind != creature_mind::Step::Kind::Move || step.movement.object.has_value())
-		{
-			return false;
-		}
-		switch (step.movement.kind)
-		{
-		case Kind::ToPoint:
-			return creature_leash::RefusesWalk(area, step.movement.point);
-		case Kind::Nearby:
-			// A walk to a place near the creature starts from the place of the creature when the mind makes the agenda
-			return creature_leash::RefusesWalk(area, glm::xz(at->position) + step.movement.point);
-		default:
-			return false;
-		}
-	});
+	return std::pair {area, glm::vec2(glm::xz(at->position))};
+}
+
+/// Whether the area that holds the creature refuses a walk of a new agenda for an action. The area refuses only a walk
+/// to a point, not a walk to a thing.
+bool AgendaLeavesArea(const ecs::Registry& registry, entt::entity creature, std::string_view action,
+                      std::span<const creature_mind::Step> agenda)
+{
+	const auto area = AgendaAreaOf(registry, creature, action);
+	return area.has_value() && creature_agenda_area::RefusesAgenda(area->first, area->second, agenda);
 }
 
 /// Whether the creature does not want an action now: the area that holds it refused a walk of the action's agenda,
@@ -1864,6 +1858,7 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	{
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
+	const bool refused = mind.agendaRefused;
 	if (!Replan(creature, executor->activity, std::move(agenda)))
 	{
 		return false;
@@ -1879,7 +1874,13 @@ bool CreatureMindSystem::Adopt(entt::entity creature, CreatureMindState& mind, c
 	mind.planActions = mind.plannedActions.at(static_cast<size_t>(plan.desire));
 	// It is remembered for the player's feedback unless nothing says why it wants what the plan serves, as a forced plan
 	// is, and the desires the plan's desire opposes are held back
-	if (const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]); source.has_value())
+	// A plan that failed at once because the area refused a walk is not remembered and holds back no desire.
+	const auto source = creature_learning::TakeUpChosenPlan((*mind.desires)[plan.desire]);
+	if (refused)
+	{
+		return true;
+	}
+	if (source.has_value())
 	{
 		const auto activity = LessonActivity(*tables, plan.desire, plan.object, plan.about);
 		RememberAction(
@@ -3470,12 +3471,40 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			activity = executor->activity;
 		}
 	}
-	if (!agenda.has_value() || !Replan(creature, activity, std::move(*agenda)))
+	if (!agenda.has_value())
 	{
 		return false;
 	}
-	// Forced, nothing it wants is ever more pressing than the plan until it is done
+	// The area that holds the creature checks each walk of the new agenda. An agenda that the action makes fails when the
+	// area refuses one of its walks, and the creature does not want the action while the area holds it. An agenda that
+	// the forced plan gives itself only loses the walks that the area refuses.
 	const auto action = creature_mind_tables::FindAction(*tables, plan.action);
+	bool refused = false;
+	if (const auto area = AgendaAreaOf(registry, creature, plan.action, plan.walksBack); area.has_value())
+	{
+		if (plan.agenda.has_value())
+		{
+			agenda = creature_agenda_area::WithoutRefusedWalks(area->first, area->second, std::move(*agenda));
+		}
+		else
+		{
+			refused = creature_agenda_area::RefusesAgenda(area->first, area->second, *agenda);
+		}
+	}
+	if (refused && action.has_value())
+	{
+		mind->leftAreaActions.resize(std::max(mind->leftAreaActions.size(), tables->actions.size()), false);
+		mind->leftAreaActions[*action] = true;
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} cannot walk out of its area to {}", entt::to_integral(creature),
+		                    plan.action);
+	}
+	mind->agendaRefused = refused;
+	if (!Replan(creature, activity, std::move(*agenda)))
+	{
+		mind->agendaRefused = false;
+		return false;
+	}
+	// Forced, nothing it wants is ever more pressing than the plan until it is done
 	if (!action.has_value())
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} carries out {}, which the action table hasn't",
@@ -3494,6 +3523,11 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 	mind->satisfiedByEffect = false;
 	mind->desireSeenTo = false;
 	mind->planActions = tables->desireActions.at(static_cast<size_t>(plan.desire));
+	// A plan that failed at once is not remembered for the player's feedback, and holds back no desire
+	if (refused)
+	{
+		return true;
+	}
 	const auto& info = tables->actions[*action];
 	// TODO(usefulness-use-tree): the game's forced plans each name what their desire is about; only the give passes it
 	// here yet, and the rest count as the planner's own plans do
@@ -3834,6 +3868,10 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 	{
 		situation.home = glm::vec2(home->x, home->z);
 		situation.homeDistance = gutils::GetDistanceInMetres(situation.position, *situation.home);
+	}
+	if (const auto home = ecs::creature_home::HomeOnMapOf(registry, creature))
+	{
+		situation.homeCellDistance = creature_plan_actions::HomeCellDistance(map_coords::FromMetres(situation.position), *home);
 	}
 	// The heart of its player's temple is the temple itself, on the ground
 	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& building, const Transform& place) {

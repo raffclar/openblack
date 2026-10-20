@@ -21,6 +21,7 @@
 #include "Common/X87Vector.h"
 #include "Creature/CreatureDance.h"
 #include "Creature/CreatureEmoteAgendas.h"
+#include "Creature/CreatureFight.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureTownHelp.h"
@@ -49,6 +50,7 @@ void FinishStep(IdleMind& mind)
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
+	mind.faintLay = false;
 	// With its last step done, it stops what it does
 	if (mind.step >= mind.agenda.size())
 	{
@@ -674,6 +676,7 @@ void creature_mind::Plan(IdleMind& mind, Activity activity, std::vector<Step> ag
 	mind.stepStarted = false;
 	mind.stepSeconds = 0.0f;
 	mind.sitEnding = false;
+	mind.faintLay = false;
 	mind.wakeWanted = false;
 	mind.gaveUp = false;
 	mind.stoppedByScript = false;
@@ -1348,6 +1351,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		mind.handsChecked.reset();
 		mind.movedOn = mind.step;
 		mind.stepSeconds = 0.0f;
+		mind.faintLay = false;
 		// Each step pulls the face it is meant to as it starts, held for as long as the face goes with
 		commands.face = PullFace(mind, step.face, senses, random, gameRandom);
 		if (step.heldEyes.has_value())
@@ -1653,11 +1657,17 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 	case Step::Kind::Static:
 	{
 		commands.lookAbout = senses.bodyLooping && !step.closedEyes;
-		// A faint counts its time only from when the creature lies still. Its wait starts on the turn after the creature
-		// lies still, and the creature gets up on the turn after the wait ends.
-		if (step.faint && !senses.bodyLooping && !mind.sitEnding)
+		// A faint counts its time only from when the creature first lies still. Its wait starts on the turn after that,
+		// and the creature gets up on the turn after the wait ends. After that, the wait stops only while the body plays
+		// an action that is not the loop of the faint.
+		if (step.faint && !mind.sitEnding)
 		{
-			mind.stepSeconds = -k_FaintWaitTurnsLate * senses.seconds;
+			const auto wait = creature_fight::LyingTurn(
+			    {.seconds = mind.stepSeconds - senses.seconds, .started = mind.faintLay},
+			    {.faintStarted = true, .acts = senses.bodyBusy && !senses.bodyLooping, .lies = senses.bodyLooping},
+			    senses.seconds, -k_FaintWaitTurnsLate * senses.seconds);
+			mind.stepSeconds = wait.seconds;
+			mind.faintLay = wait.started;
 		}
 		// Sitting rests it a little every turn until it is told to get up
 		commands.restSitting = !mind.sitEnding && step.sequence[1] == animations::k_Sit;
@@ -1671,7 +1681,10 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 		const bool done = mind.wakeWanted || (step.untilBetter   ? better
 		                                      : step.untilRested ? senses.rested
 		                                                         : mind.stepSeconds >= step.seconds);
-		if (!senses.bodyBusy)
+		// A body that stands with no action does not end a faint, as after a script moves the creature. The faint ends
+		// only when its wait ends.
+		const bool faintHolds = step.faint && !mind.sitEnding;
+		if (!senses.bodyBusy && !faintHolds)
 		{
 			if (step.closedEyes)
 			{

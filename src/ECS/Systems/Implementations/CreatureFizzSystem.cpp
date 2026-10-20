@@ -30,6 +30,7 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
 #include "Resources/ResourcesInterface.h"
@@ -146,7 +147,7 @@ void CreatureFizzSystem::SlideDrawnStatic(float seconds)
 				    // The sphere round the box of the body's model, at the place and size that the frame draws the body
 				    const auto box = meshes->Handle(mesh.id)->GetBoundingBox();
 				    const auto centre = transform.position + (transform.rotation * (transform.scale * box.Center()));
-				    const float radius = std::abs(transform.scale.x) * glm::length(box.Size() * 0.5f);
+				    const float radius = std::abs(transform.scale.x) * graphics::mesh_detail::HalfDiagonal(box.Size());
 				    onScreen = object_draw_list::SphereOnScreen(*view, transform.position, centre, radius);
 			    }
 		    }

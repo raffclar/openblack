@@ -204,3 +204,15 @@ TEST(VortexRules, TheSquareFlattensRoundItsMiddleAndLeavesItsCorners)
 	EXPECT_EQ(untouched[60], 131);
 	EXPECT_EQ(untouched[0], 10);
 }
+
+TEST(VortexRules, ALoadedVortexLevelsTheLandAgainAsFarAsItDidAtTheSave)
+{
+	// The levelling at the save comes back, for both land vortices
+	EXPECT_EQ(LevelAfterLoad(VortexType::In, 1.0f, k_LevelCellCount), 1.0f);
+	EXPECT_EQ(LevelAfterLoad(VortexType::Out, 0.25f, k_LevelCellCount), 0.25f);
+	EXPECT_EQ(LevelAfterLoad(VortexType::In, 0.0f, k_LevelCellCount), 0.0f);
+	// A vortex that did not level yet, the volcano's mouth and a vortex with no heights kept do nothing
+	EXPECT_FALSE(LevelAfterLoad(VortexType::In, -1.0f, k_LevelCellCount).has_value());
+	EXPECT_FALSE(LevelAfterLoad(VortexType::Volcano, 1.0f, k_LevelCellCount).has_value());
+	EXPECT_FALSE(LevelAfterLoad(VortexType::In, 1.0f, 0).has_value());
+}

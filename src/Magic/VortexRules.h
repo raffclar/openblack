@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
 #include <span>
 
 #include <glm/vec2.hpp>
@@ -92,6 +93,18 @@ enum class Step
 [[nodiscard]] constexpr bool LevelsGround(VortexType type)
 {
 	return type != VortexType::Volcano;
+}
+
+/// How far a loaded vortex levels the land again at once, if it levels it. The land comes back from its file at a load,
+/// without the levelling. The vortex keeps the heights that it read first and how far it levelled them, so it can do the
+/// same levelling again.
+[[nodiscard]] constexpr std::optional<float> LevelAfterLoad(VortexType type, float levelApplied, size_t heightsKept)
+{
+	if (!LevelsGround(type) || levelApplied < 0.0f || heightsKept != k_LevelCellCount)
+	{
+		return std::nullopt;
+	}
+	return levelApplied;
 }
 
 /// The map cell a vortex at a point on the land levels round: its position in cells, rounded towards zero

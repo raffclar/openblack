@@ -540,4 +540,26 @@ void testbed_scenarios::AddCreatureCastingScenarios(std::vector<Scenario>& all)
 	                  .value = static_cast<size_t>(SpellSeedType::CreatureSpellItchy)}},
 	    .hand = HandHold {.offset = {0.0f, 30.0f}, .height = 8.0f},
 	});
+
+	// Far from its home, the creature leaves a teleport stone where it explores
+	all.push_back({
+	    .id = "miracles.creature_teleport_from_afar",
+	    .name = "Creature casting: the teleport miracle far from its home",
+	    .facet = Facet::Miracles,
+	    .description = "A script puts the home of a tiger that knows the teleport miracle 200 metres away. Then a script "
+	                   "tells it to explore and cast the teleport miracle.",
+	    .expected = "One time in five it plays the action that shows that it feels nice. It walks a little to the east, "
+	                "turns, raises its arms into the casting pose and casts the teleport miracle at itself. A teleport "
+	                "stone with its vortex comes up near the tiger. The tiger tires a little.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -30.0f}, {60.0f, 30.0f}}},
+	    .creatures = {Caster({0.0f, 0.0f}, "explorer")},
+	    .commands = {Know(MagicType::Teleport),
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_CREATURE_HOME",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Creature, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Position, .point = {-200.0f, 0.0f}}}},
+	                 {.kind = Kind::DoAction, .delaySeconds = 2.0f, .action = "ExploreAndCastTeleport", .atCreature = 0}},
+	});
 }

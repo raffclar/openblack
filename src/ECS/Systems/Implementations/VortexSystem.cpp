@@ -176,8 +176,12 @@ void VortexSystem::StartEffects(Vortex& vortex)
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
 		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
 	};
-	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes
-	vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
+	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
+	// loaded vortex keeps the effect of the save, with the things that it carries.
+	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect)
+	{
+		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
+	}
 	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
 	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
 	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
@@ -747,6 +751,7 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 	{
 		return false;
 	}
+	StartAgainAfterLoad();
 	const auto path = CrossingFilePath();
 	if (!path.has_value())
 	{
@@ -765,6 +770,43 @@ bool VortexSystem::LoadState(reflection::BinaryReader& in)
 		_vortexGone = Locator::entitiesRegistry::value().OnDestroy<Vortex>().connect<&VortexSystem::OnVortexGone>(*this);
 	}
 	return true;
+}
+
+void VortexSystem::StartAgainAfterLoad()
+{
+	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
+	bool levelled = false;
+	Locator::entitiesRegistry::value().Each<Vortex>([&levelled, particles](Vortex& vortex) {
+		if (const auto amount = vortex::LevelAfterLoad(vortex.type, vortex.levelApplied, vortex.groundHeights.size()))
+		{
+			// The things about the vortex came back where they were on the levelled land, so none of them moves
+			LevelGround(vortex, *amount);
+			levelled = true;
+		}
+		if (particles == nullptr)
+		{
+			return;
+		}
+		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation.
+		// The new effects make the hum again.
+		for (auto* effect : {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect})
+		{
+			if (*effect != ParticleSystemInterface::k_NoEffect)
+			{
+				particles->Delete(*effect);
+				*effect = ParticleSystemInterface::k_NoEffect;
+			}
+		}
+		if (particles->Find(vortex.objectMoverEffect) == nullptr)
+		{
+			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
+		}
+		StartEffects(vortex);
+	});
+	if (levelled)
+	{
+		Locator::terrainSystem::value().CommitAltitudeChanges();
+	}
 }
 
 void VortexSystem::ReadCrossingFile(Vortex& vortex)

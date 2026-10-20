@@ -162,6 +162,7 @@
 #include "Graphics/LightBeams.h"
 #include "Graphics/LightShine.h"
 #include "Graphics/MaterialStages.h"
+#include "Graphics/MeshDetail.h"
 #include "Graphics/ModelLight.h"
 #include "Graphics/Moon.h"
 #include "Graphics/ObjectShadows.h"
@@ -5190,7 +5191,8 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 				const auto model =
 				    glm::translate(transform->position) * glm::mat4(transform->rotation) * glm::scale(transform->scale);
 				const auto ground = land.GetHeightAt(glm::vec2(transform->position.x, transform->position.z));
-				const auto radius = glm::length(handMesh->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+				const auto radius =
+				    openblack::graphics::mesh_detail::HalfDiagonal(handMesh->GetBoundingBox().Size()) * scaleOf(model);
 				const auto& sky = Locator::skySystem::value();
 				const auto fade =
 				    GroundShadow::Fade(glm::distance(camera, glm::vec3(transform->position.x, ground, transform->position.z)),
@@ -5266,7 +5268,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			const auto* body = &*meshManager.Handle(mesh->id);
 			const auto& model = renderCtx.instanceUniforms[instance].model;
 			const auto standsAt = glm::vec3(model[3]);
-			const auto radius = glm::length(body->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(body->GetBoundingBox().Size()) * scaleOf(model);
 			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
 			const auto alpha = GroundShadow::ScaledAlpha(
 			    GroundShadow::Fade(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius));
@@ -5318,7 +5320,7 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 			const auto& model = draw.castModel;
 			const auto standsAt = glm::vec3(model[3]);
 			const auto ground = land.GetHeightAt(glm::vec2(standsAt.x, standsAt.z));
-			const auto radius = glm::length(mesh->GetBoundingBox().Size()) * 0.5f * scaleOf(model);
+			const auto radius = openblack::graphics::mesh_detail::HalfDiagonal(mesh->GetBoundingBox().Size()) * scaleOf(model);
 			const auto alpha = GroundShadow::Alpha(glm::distance(camera, glm::vec3(standsAt.x, ground, standsAt.z)), radius);
 			if (alpha == 0)
 			{
@@ -7219,6 +7221,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			DrawInfluenceRipples(desc);
 			// The mists blend over the rest, the farthest first
 			DrawMists(desc);
+			DrawPauseText(desc);
 
 			// The game mirrors the hand in the sea while the hand shows, wherever it is: in one flat grey, with no light
 			// and no glow, and only its front faces. Its texture alone gives its alpha.

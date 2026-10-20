@@ -54,6 +54,10 @@ struct Choice
 /// the field of view or the screen's size.
 [[nodiscard]] float ViewDepth(const glm::vec3& point, const glm::vec3& eye, const glm::vec3& forward) noexcept;
 
+/// The length of half the diagonal of a box of the given size. The engine halves each side first, then adds the
+/// squares from z to x.
+[[nodiscard]] float HalfDiagonal(const glm::vec3& boxSize) noexcept;
+
 /// The radius of the sphere around a model's bounding box (half the box's diagonal) at the model's scale
 [[nodiscard]] float ScaledRadius(const glm::vec3& boxSize, float scale) noexcept;
 

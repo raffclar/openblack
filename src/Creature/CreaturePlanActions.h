@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "Creature/CreatureCastAgenda.h"
 #include "Creature/CreatureDrink.h"
 #include "Creature/CreatureFriendAgendas.h"
@@ -233,6 +234,8 @@ enum class Build : uint8_t
 	CastAggressive,
 	CastExplosion,
 	CastFireball,
+	/// Far from its home, the creature casts the teleport miracle at itself, as it casts a helpful miracle
+	CastTeleportFromAfar,
 	/// The creature casts food into a store from near it, and a shield from where it stands. It casts water on itself to
 	/// stop its own fire, and a miracle to impress the people of a villager.
 	CastFood,
@@ -486,6 +489,13 @@ constexpr uint32_t k_LeaveHomeStage = 3;
 /// Some joint actions with a friend start only when a desire of the creature is stronger than this, or its sadness is
 /// less
 constexpr float k_SlightDesire = 0.1f;
+/// The creature casts the teleport miracle only when it is farther than this from the middle of its home's cell, in
+/// metres
+constexpr float k_TeleportFromHomeMetres = 150.0f;
+/// How far a map position is from the middle of the cell of the home's map position, in metres, as the game measures it
+[[nodiscard]] float HomeCellDistance(const map_coords::MapCoords& at, const map_coords::MapCoords& home);
+/// Whether the creature is far enough from its home to cast the teleport miracle
+[[nodiscard]] bool FarEnoughToTeleport(float homeCellDistance);
 
 /// Every action that can be carried out
 [[nodiscard]] std::span<const Executor> All();
@@ -585,6 +595,8 @@ struct Situation
 	bool lookedAt {false};
 	/// How far its home is, in metres, none without a home; and whether its player has a temple
 	std::optional<float> homeDistance;
+	/// How far it is from the middle of its home's cell on the map, in metres; none without a home
+	std::optional<float> homeCellDistance;
 	bool hasTemple {false};
 	/// The heart of its player's temple, on the ground, and the heart's radius on the ground; none without a temple
 	struct TempleHeart

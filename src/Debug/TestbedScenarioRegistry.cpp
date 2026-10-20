@@ -467,6 +467,24 @@ void AddNeeds(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "needs.forced_walk_kept_at_home",
+	    .name = "Forced walk out of the area that holds a creature",
+	    .facet = Facet::Needs,
+	    .description = "A tiger starts north of the middle, short of the testbed's lake. It is kept within 20 units of "
+	                   "where it stands, as a young creature is kept near its home. After one second its player orders "
+	                   "it to look at its reflection, whose walk goes to the shore of the lake.",
+	    .expected = "The forced plan fails as it starts, because its walk leaves the area. The tiger does not go to the "
+	                "lake and stays near where it stands. The log tells that it cannot walk out of its area.",
+	    .framing = {.shot = Shot::Overview, .include = LakeInView()},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .offset = {0.0f, 60.0f},
+	    }},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 20.0f},
+	                 {.kind = Kind::ForceAction, .delaySeconds = 1.0f, .action = "LookAtReflection"}},
+	});
+
+	all.push_back({
 	    .id = "needs.thirst_kept_at_home",
 	    .name = "Thirsty creature kept far from water",
 	    .facet = Facet::Needs,
@@ -726,6 +744,48 @@ void AddNeeds(std::vector<Scenario>& all)
 	    }},
 	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -40.0f}, .living = true},
 	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
+	});
+
+	all.push_back({
+	    .id = "needs.hungry_kept_at_home",
+	    .name = "Starving creature kept at home",
+	    .facet = Facet::Needs,
+	    .description = "A starving tiger with its hunger desire as strong as it gets. A script keeps it within 10 units of "
+	                   "where it stands. A pig stands inside the area and a cow stands far outside it.",
+	    .expected = "It chooses only food that it believes is inside the area. It walks to the pig, picks it up and eats "
+	                "it. It does not walk to the cow.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .needs = {.energy = 0.05f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Hunger, .fraction = 1.0f}},
+	    }},
+	    .objects = {{.type = AnimalInfo::Pig, .offset = {0.0f, -6.0f}, .living = true},
+	                {.type = AnimalInfo::Cow, .offset = {30.0f, -60.0f}, .living = true}},
+	    .commands = {{.kind = Kind::ConfineToHome, .delaySeconds = 0.1f, .radius = 10.0f}},
+	});
+
+	all.push_back({
+	    .id = "needs.toy_in_creche",
+	    .name = "Playful creature and a toy inside a creche",
+	    .facet = Facet::Needs,
+	    .description = "A young tiger, playful and hungry, at the stage of the first land's food lesson. A Norse creche "
+	                   "stands in front of it, with a cuddly toy at the middle of the creche. The creche, its turn and "
+	                   "the toy are as on the first land. A pig stands to the side.",
+	    .expected = "It chooses to stroke the toy. It walks to the edge of the creche, out of reach of the toy, and stays "
+	                "there. Its walk ends at once on each turn and the plan does not end until the creature faints from "
+	                "hunger. The hunger plan cannot take its place. The game does the same (vanilla-bugs row 389).",
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, -60.0f}, {20.0f, 10.0f}}},
+	    .creatures = {CreatureSetup {
+	        .species = CreatureType::Tiger,
+	        .size = 0.25f,
+	        .phase = 9u,
+	        .needs = {.energy = 0.3f, .dehydration = 0.0f, .poo = 0.0f},
+	        .desires = {{.desire = Desire::Play, .fraction = 1.0f}, {.desire = Desire::Hunger, .fraction = 0.9f}},
+	    }},
+	    .objects = {{.type = AbodeInfo::NorseCreche, .offset = {0.0f, -40.0f}, .yawDegrees = 281.15f},
+	                {.type = MobileStaticInfo::ToyCuddly, .offset = {1.35f, -39.21f}, .scale = 0.381f},
+	                {.type = AnimalInfo::Pig, .offset = {40.0f, -10.0f}, .living = true}},
 	});
 
 	all.push_back({
@@ -3516,6 +3576,33 @@ void AddAudio(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 1.0f, .value = 2},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
 	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
+	    .id = "interface.pause_text",
+	    .name = "The words of the pause",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game pauses, as the pause key does. Press P to continue the game, and P "
+	                   "again to pause it.",
+	    .expected = "Game Paused shows in white at the top middle of the screen. The words fade in as they move away, "
+	                "and each letter turns a little after the letter before it. When the game continues, the words fade "
+	                "out as they come nearer. The menu (Escape) hides the words at once.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
+	    .id = "interface.speed_text",
+	    .name = "The words of the game's speed",
+	    .facet = Facet::Interface,
+	    .description = "After a second the game goes at half speed, as Alt and 1 does. Six seconds later it goes at "
+	                   "twice the speed, as Alt and 2 does. Six seconds later it goes at the normal speed again.",
+	    .expected = "Slow Down Time shows in white at the top middle of the screen, as Game Paused does. Then it fades "
+	                "out, and Speed Up Time fades in. At the normal speed the words fade out and nothing shows.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SetGameSpeed, .delaySeconds = 1.0f, .amount = 0.5f},
+	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 3.0f, .amount = 2.0f},
+	                 {.kind = Kind::SetGameSpeed, .delaySeconds = 12.0f, .amount = 1.0f}},
 	});
 
 	all.push_back({
@@ -8015,6 +8102,25 @@ void AddMind(std::vector<Scenario>& all)
 	                 Command {.kind = Kind::LoadGame, .delaySeconds = 6.0f, .value = 0}},
 	});
 
+	// Both kinds of land vortex, open at a save: after the load each looks as it did before the save
+	all.push_back({
+	    .id = "saves.vortex_drawn_after_load",
+	    .name = "Save and load: two open vortices",
+	    .facet = Facet::Story,
+	    .description = "A vortex that leads away from the land opens on the left. A vortex that leads into the land "
+	                   "opens on the right. 6 seconds after the start the game saves into slot 0. 4 seconds after the "
+	                   "save the game loads slot 0.",
+	    .expected = "Before and after the load, each vortex shows its swirl in the hole in the land, with the stars "
+	                "that turn over it. The land under each vortex stays level. After the load nothing of the land "
+	                "or the sea shows in the holes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-60.0f, -30.0f}, {60.0f, 30.0f}}},
+	    .vortices = {{.type = VortexType::In, .offset = {-35.0f, 0.0f}, .delaySeconds = 0.5f},
+	                 {.type = VortexType::Out, .offset = {35.0f, 0.0f}, .delaySeconds = 0.5f}},
+	    .commands = {Command {.kind = Kind::SaveGame, .delaySeconds = 6.0f, .value = 0},
+	                 Command {.kind = Kind::LoadGame, .delaySeconds = 4.0f, .value = 0}},
+	});
+
 	all.push_back({
 	    .id = "frontend.continue_with_menu",
 	    .name = "Start-up: continue from the save on exit",
@@ -9612,15 +9718,16 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",      "Expressions",   "Senses",  "Needs",  "Growth",  "Appearance", "Light",     "Movement", "Footprints",
-	    "Audio",     "Objects",       "Hand",    "Leash",  "Combat",  "Mind",       "Particles", "Editor",   "Miracles",
-	    "Benchmark", "Creature Mode", "Physics", "Nature", "Animals", "Sky",        "Advisors",  "Story",    "Tutorial",
+	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
+	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
+	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Physics",
+	    "Nature",   "Animals",     "Sky",    "Advisors", "Story",     "Tutorial",      "Interface",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -9639,7 +9746,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 164> k_Names {
+	constexpr std::array<std::string_view, 167> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9804,6 +9911,9 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "call a script native",
 	    "animal flees",
 	    "hold the route search",
+	    "pause the game",
+	    "set the game's speed",
+	    "force an action",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

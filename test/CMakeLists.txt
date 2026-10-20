@@ -1495,3 +1495,24 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_pause_text gui/test_pause_text.cpp)
+openblack_setup_and_add_test(
+  test_oracle_mesh_box oracle/test_oracle_mesh_box.cpp
+)
+target_link_libraries(test_oracle_mesh_box PRIVATE l3d)
+set_tests_properties(
+  test_oracle_mesh_box
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_creature_teleport_from_afar
+  oracle/test_oracle_creature_teleport_from_afar.cpp
+)
+set_tests_properties(
+  test_oracle_creature_teleport_from_afar
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+
+openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)

@@ -13,10 +13,12 @@
 
 #include "Common/X87Angle.h"
 #include "ECS/Components/DeadTree.h"
+#include "ECS/Components/DrawImportance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/ObjectDetail.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "InfoConstants.h"
@@ -64,6 +66,8 @@ entt::entity DeadTreeArchetype::Create(const glm::vec3& position, TreeInfo type,
 	registry.Assign<DeadTree>(entity, DeadTree {.type = type, .model = model});
 	registry.Assign<Unlit>(entity);
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(model), static_cast<int8_t>(0), static_cast<int8_t>(-1));
+	// A dead tree stays in detail twice as far as a live thing of its size
+	registry.Assign<DrawImportance>(entity, DrawImportance {.importance = ecs::object_detail::k_DeadTreeImportance});
 
 	return entity;
 }

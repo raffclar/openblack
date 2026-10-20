@@ -11,6 +11,7 @@
 
 #include <array>
 #include <optional>
+#include <string_view>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -20,6 +21,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureLearning.h"
+#include "Creature/CreaturePlanActions.h"
 
 using namespace openblack;
 using namespace openblack::creature_friendship;
@@ -257,4 +259,56 @@ TEST(CreatureFriendship, AJointActionThatEndsWithAnOrderStopsOnTheNextTurn)
 	empty.hadStepsLeft = false;
 	empty.hasStepsLeft = false;
 	EXPECT_EQ(JointTurnOf(empty), JointTurn::Continues);
+}
+
+// Each action with another creature acts on the creatures that the game's object test of the action lets through
+TEST(CreatureFriendship, TheActionsWithAnotherCreatureActOnTheCreaturesOfTheGame)
+{
+	using creature_plan_actions::Target;
+	struct Row
+	{
+		std::string_view action;
+		Target target;
+		Target use;
+	};
+	constexpr std::array k_Rows {
+	    Row {"SmileAtFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"DanceWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"InspectCreature", Target::Creature, Target::None},
+	    Row {"WaveAtObject", Target::Creature, Target::None},
+	    Row {"ShowFriendCitadel", Target::CreatureFreeForJoint, Target::None},
+	    Row {"KissFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"SitOnTopOfHillWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"DrinkWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"PooWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"SitWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"BeHappyWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"SleepWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"ArgueWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"MopeAboutWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"ShowOffToFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"PineForFriend", Target::Creature, Target::None},
+	    Row {"LookForFriend", Target::Creature, Target::None},
+	    Row {"PlayThrowingGameWithFriend", Target::CreatureFreeForJoint, Target::Toy},
+	    Row {"TellCreatureToSodOff", Target::CreatureFreeForJoint, Target::None},
+	    Row {"WaveAtFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"EatFromFieldWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"AttackWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"HelpTownWithFriend", Target::CreatureFreeForJoint, Target::None},
+	    Row {"GetAttentionFromFriend", Target::CreatureNotFreeForJoint, Target::None},
+	    Row {"ExamineOtherCreatureWithFriend", Target::CreatureFreeForJoint, Target::Creature},
+	    Row {"GiveFriendToy", Target::CreatureFreeForJoint, Target::Toy},
+	    Row {"CastAmusingSpellOnCreature", Target::FriendlyCreature, Target::None},
+	    Row {"HowlAtFriend", Target::Creature, Target::None},
+	    Row {"TellFriendAJoke", Target::CreatureFreeForJoint, Target::None},
+	    Row {"TalkToFriend", Target::CreatureFreeForJoint, Target::None},
+	};
+	for (const auto& row : k_Rows)
+	{
+		SCOPED_TRACE(row.action);
+		const auto* executor = creature_plan_actions::For(row.action);
+		ASSERT_NE(executor, nullptr);
+		EXPECT_EQ(executor->target, row.target);
+		EXPECT_EQ(executor->use, row.use);
+	}
 }
