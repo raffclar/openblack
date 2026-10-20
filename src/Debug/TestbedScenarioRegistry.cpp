@@ -1031,6 +1031,22 @@ void AddNeeds(std::vector<Scenario>& all)
 	                {.type = AnimalInfo::Cow, .offset = {16.0f, 0.0f}, .living = true}},
 	});
 
+	// A burning barrel west of a cow, and a hut east of the cow: the cow's run from the fire leads it into the hut
+	all.push_back({
+	    .id = "animals.cow_runs_round_a_hut",
+	    .name = "A cow runs round a hut in its way",
+	    .facet = Facet::Animals,
+	    .description = "A barrel burns in open land. A free cow stands 6 metres east of it, and a hut stands 4.5 metres east "
+	                   "of the cow, in the way of its run from the fire.",
+	    .expected = "The cow runs east from the fire. It does not walk through the hut: it goes round the side of the "
+	                "hut, then on to where it runs to. Then it turns to watch the fire.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -15.0f}, {40.0f, 15.0f}}, .distance = 0.6f},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {0.0f, 0.0f}, .alight = true},
+	                {.type = AnimalInfo::Cow, .offset = {6.0f, 0.0f}, .living = true},
+	                {.type = AbodeInfo::CelticHut, .offset = {10.5f, 0.0f}}},
+	});
+
 	all.push_back({
 	    .id = "needs.starving",
 	    .name = "Starving creature faints",

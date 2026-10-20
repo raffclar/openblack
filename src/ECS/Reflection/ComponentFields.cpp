@@ -459,6 +459,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Animal::stateBeforeReaction>("stateBeforeReaction")
 	    .Field<&components::Animal::turnsInState>("turnsInState")
 	    .Field<&components::Animal::move>("move")
+	    .Field<&components::Animal::walksRound>("walksRound")
 	    .Field<&components::Animal::goalHeight>("goalHeight")
 	    .Field<&components::Animal::height>("height")
 	    .Field<&components::Animal::bank>("bank")
@@ -2153,6 +2154,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::WallHugLookahead::spareTurnedRound>("spareTurnedRound")
 	    .Field<&components::WallHugLookahead::turnedRound>("turnedRound")
 	    .Field<&components::WallHugLookahead::landingShutIn>("landingShutIn");
+	Reflect<components::TurningWalker>(context)
+	    .Field<&components::TurningWalker::turnAngle>("turnAngle")
+	    .Field<&components::TurningWalker::speed>("speed");
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")

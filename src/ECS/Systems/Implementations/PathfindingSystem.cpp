@@ -28,6 +28,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/AnimalMove.h"
 #include "Common/GUtilsAngle.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
@@ -226,6 +227,8 @@ struct Walker
 	bool needsLookahead {false};
 	/// A stand-in on a trial walk, never seen: it isn't put on the ground
 	bool standIn {false};
+	/// For a walker that turns as an animal does: the most it turns towards its goal in one aim
+	std::optional<uint16_t> turnAngle;
 };
 
 /// Where the walk holds a walker: its whole map position. When something else moved it, the walk takes its place again:
@@ -268,10 +271,20 @@ void FaceAngle(Walker& walker, uint16_t angle)
 	wallHug.stepAltitude = 0.0f;
 }
 
-/// Faces the walker towards its goal
+/// Faces the walker towards its goal. A walker that turns as an animal does turns towards it by at most its turn angle,
+/// and harder when the goal is near.
 void FaceGoal(Walker& walker)
 {
-	FaceAngle(walker, gutils::GetAngleFromXZ(walker.wallHug.position, walker.goal));
+	const auto target = gutils::GetAngleFromXZ(walker.wallHug.position, walker.goal);
+	if (!walker.turnAngle.has_value())
+	{
+		FaceAngle(walker, target);
+		return;
+	}
+	const float distance = glm::length(glm::vec2(walker.goal - walker.wallHug.position)) * map_coords::k_MetresPerFixed;
+	const auto turn = animals::TurnTowards(walker.wallHug.gameAngle, target, *walker.turnAngle,
+	                                       static_cast<uint16_t>(walker.speed), distance);
+	FaceAngle(walker, turn.angle);
 }
 
 [[nodiscard]] bool AtGoal(const Walker& walker)
@@ -504,12 +517,20 @@ void WalkOut(ecs::Registry& registry, Walker& walker)
 void StepThrough(Walker& walker)
 {
 	auto& wallHug = walker.wallHug;
-	// A small signed count, as the game keeps it: from 0 it goes round through -128 to 127
-	wallHug.turnsUntilStepRebuild = static_cast<int8_t>(static_cast<uint8_t>(wallHug.turnsUntilStepRebuild) - 1U);
-	if (wallHug.turnsUntilStepRebuild == 0)
+	if (walker.turnAngle.has_value())
 	{
-		wallHug.turnsUntilStepRebuild = k_TurnsToReaimStepping;
+		// A walker that turns as an animal does aims again each turn
 		FaceGoal(walker);
+	}
+	else
+	{
+		// A small signed count, as the game keeps it: from 0 it goes round through -128 to 127
+		wallHug.turnsUntilStepRebuild = static_cast<int8_t>(static_cast<uint8_t>(wallHug.turnsUntilStepRebuild) - 1U);
+		if (wallHug.turnsUntilStepRebuild == 0)
+		{
+			wallHug.turnsUntilStepRebuild = k_TurnsToReaimStepping;
+			FaceGoal(walker);
+		}
 	}
 	MoveWalker(walker, wallHug.position + wallHug.step);
 	if (AtGoal(walker))
@@ -559,6 +580,11 @@ void CollectWalkers(ecs::Registry& registry, std::vector<Walker>& walkers)
 	registry.Each<const MoveStateTagComponent<S>, WallHug, Transform>(
 	    [&walkers, &registry](entt::entity entity, const MoveStateTagComponent<S>& tag, WallHug& wallHug,
 	                          Transform& transform) {
+		    // A walker that turns as an animal does walks in its own turn
+		    if (registry.AllOf<TurningWalker>(entity))
+		    {
+			    return;
+		    }
 		    // A villager's walk waits while it is in a state that doesn't walk it
 		    if (const auto* action = registry.TryGet<const LivingAction>(entity);
 		        action != nullptr && registry.AllOf<Villager>(entity) &&
@@ -624,6 +650,11 @@ Walker WalkerOf(ecs::Registry& registry, entt::entity entity, WallHug& wallHug, 
 	               .clockwise = MoveStateClockwise::Undefined,
 	               .speed = wall_hug::WholeSpeed(wallHug.speed),
 	               .goal = wall_hug::ToWhole(wallHug.goal)};
+	if (const auto* turning = registry.TryGet<const TurningWalker>(entity))
+	{
+		walker.speed = turning->speed;
+		walker.turnAngle = turning->turnAngle;
+	}
 	const auto take = [&registry, &walker]<MoveState S>() {
 		if (const auto* tag = registry.TryGet<const MoveStateTagComponent<S>>(walker.entity); tag != nullptr)
 		{
@@ -859,4 +890,59 @@ void PathfindingSystem::WalkTo(entt::entity walker, glm::ivec2 goal)
 	FaceGoal(walking);
 	ScanAhead(registry, walking);
 	Retag(registry, walking);
+}
+
+void PathfindingSystem::SetupWalkRound(entt::entity walker, glm::ivec2 goal)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	if (wallHug == nullptr || transform == nullptr)
+	{
+		return;
+	}
+	HeldPosition(registry, walker, *wallHug, *transform);
+	wallHug->goal = wall_hug::ToPoint(goal);
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	walking.goal = goal;
+	walking.clockwise = MoveStateClockwise::Undefined;
+	FaceGoal(walking);
+	// A new walk may be tried both ways round again, and it starts round its next circle afresh
+	if (const auto* lookahead = registry.TryGet<const WallHugLookahead>(walker); lookahead != nullptr && lookahead->tried)
+	{
+		registry.Remove<WallHugLookahead>(walker);
+	}
+	registry.Remove<WallHugObjectReference>(walker);
+	if (AtGoal(walking))
+	{
+		walking.state = MoveState::Arrived;
+	}
+	else
+	{
+		walking.state = MoveState::Linear;
+		ScanAhead(registry, walking);
+	}
+	Retag(registry, walking);
+}
+
+bool PathfindingSystem::WalkOne(entt::entity walker)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	if (wallHug == nullptr || transform == nullptr)
+	{
+		return false;
+	}
+	HeldPosition(registry, walker, *wallHug, *transform);
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	const bool arrived = Walk(registry, walking);
+	Retag(registry, walking);
+	// One that came up against water, the land's edge or a fence waits for its trial of both ways round, unless it has
+	// had it
+	if (walking.needsLookahead && !registry.AllOf<WallHugLookahead>(walker))
+	{
+		registry.Assign<WallHugLookahead>(walker);
+	}
+	return arrived;
 }

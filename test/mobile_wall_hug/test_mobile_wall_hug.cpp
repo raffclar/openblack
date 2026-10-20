@@ -653,6 +653,47 @@ TEST_F(WalkerToGoal, AWalkWaitsWhileTheVillagerIsCalledAway)
 	EXPECT_EQ(turns, 137u);
 }
 
+// A walker that turns as an animal does walks only in its own turn. It goes round the circle in its way and gets to its
+// goal, though it aims at the goal by only a small angle at a time.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AnAnimalsWalkGoesRoundACircleInItsOwnTurn)
+{
+	using namespace openblack::ecs::components;
+	Load("goal_beside_circle.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	registry.Get<Transform>(_walker).position = glm::vec3(2149.5f, 0.0f, 2235.0f);
+	auto& wallHug = registry.Get<WallHug>(_walker);
+	wallHug.position = ecs::wall_hug::ToWhole({2149.5f, 2235.0f});
+	wallHug.placedAt = {2149.5f, 2235.0f};
+	// It faces its goal, with the circle in its way
+	wallHug.gameAngle = gutils::GetAngleFromXZ(wallHug.position, ecs::wall_hug::ToWhole({2150.0f, 2255.41f}));
+	// A fifth of a metre a turn, aiming by at most a sixteenth of a circle at a time
+	registry.Assign<TurningWalker>(_walker, TurningWalker {.turnAngle = 128, .speed = 1311});
+	auto& pathfinding = Locator::pathfindingSystem::value();
+	pathfinding.SetupWalkRound(_walker, ecs::wall_hug::ToWhole({2150.0f, 2255.41f}));
+	EXPECT_TRUE(registry.AllOf<MoveStateLinearTag>(_walker));
+	// The walk of all the walkers leaves it where it is
+	const auto before = registry.Get<const WallHug>(_walker).position;
+	pathfinding.Update();
+	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, before);
+
+	bool wentRound = false;
+	uint32_t turns = 1;
+	for (; turns <= 2000; ++turns)
+	{
+		const bool arrived = pathfinding.WalkOne(_walker);
+		wentRound = wentRound || registry.AllOf<MoveStateOrbitTag>(_walker);
+		if (arrived)
+		{
+			break;
+		}
+	}
+	EXPECT_TRUE(wentRound);
+	EXPECT_LT(turns, 2000u);
+	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, ecs::wall_hug::ToWhole({2150.0f, 2255.41f}));
+}
+
 /// A walker that went round a circle on its way, given a trial of both ways round as one that came up against a fence
 /// is
 class WalkerTrial: public WalkerToGoal

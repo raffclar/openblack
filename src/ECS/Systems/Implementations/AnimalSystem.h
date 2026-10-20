@@ -93,6 +93,10 @@ private:
 	                 components::AnimalState finalState) = delete;
 	/// The same with a goal in 16.16 map units
 	void SetupMoveToFixed(components::Animal& animal, glm::ivec2 goal, float goalHeight, components::AnimalState finalState);
+	/// Off to a goal on the land that it walks to round what is in its way, into a final state once there
+	void SetupMoveRoundTo(entt::entity entity, components::Animal& animal, glm::vec2 goal, components::AnimalState finalState);
+	/// The walk round what is in its way ends: it takes the walk's place and way, and the walk's parts go
+	static void EndWalkRound(entt::entity entity);
 	/// A turn's move towards its goal, climbing or sinking towards its goal's height: whether it arrived
 	bool MoveTo3D(components::Animal& animal);
 	/// It tilts into the turn it made
@@ -140,8 +144,8 @@ private:
 	void MergeNearbyHerd(entt::entity entity, components::Animal& animal);
 	/// A grazer's new speed, and its clip at that speed
 	static void SetGrazerSpeed(components::Animal& animal, uint16_t speed);
-	/// A turn's walk on the land towards its goal: whether it arrived
-	static bool GroundMoveTo(components::Animal& animal);
+	/// A turn's walk on the land towards its goal, straight through or round what is in its way: whether it arrived
+	static bool GroundMoveTo(entt::entity entity, components::Animal& animal);
 	/// Where its herd's leader is, an animal or a villager, or the herd's home with no leader
 	[[nodiscard]] glm::ivec2 HerdPosOf(entt::entity flock) const;
 	/// Whether a point is within the reach of an animal's herd's home: never for an animal with no herd
