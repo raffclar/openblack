@@ -82,6 +82,11 @@ public:
 	                                std::optional<glm::vec3> at) = 0;
 	/// A town's site at a building gives up to an amount of wood to its builders. What it gave.
 	virtual uint32_t RemoveFromTownsSite(entt::entity building, entt::entity town, ResourceType type, uint32_t amount) = 0;
+	/// A storage pit stops working when damage takes its life down to the limit for its kind. Each of its piles that
+	/// holds something then calls the people near it, as a pile on its own does.
+	virtual void StoreStopsWorking(entt::entity /*store*/) {}
+	/// A storage pit starts to work again when repairs take its life above that limit. Its piles stop calling people.
+	virtual void StoreWorksAgain(entt::entity /*store*/) {}
 };
 
 } // namespace openblack::ecs::systems

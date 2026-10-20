@@ -9578,6 +9578,34 @@ void AddSwayAndFrightScenarios(std::vector<Scenario>& all)
 	});
 }
 
+void AddStoreScenarios(std::vector<Scenario>& all)
+{
+	std::vector<ObjectSetup> objects {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = {-30.0f, 30.0f}, .life = 0.1f, .storedFood = 2000, .storedWood = 1000},
+	};
+	for (size_t i = 0; i < 3; ++i)
+	{
+		const float x = (static_cast<float>(i) - 1.5f) * 3.0f;
+		objects.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true});
+		objects.push_back({.type = VillagerInfo::CelticHousewifeFemale, .offset = {x, 17.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "objects.store_stops_working",
+	    .name = "A broken storage pit calls people to its piles",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with food and wood. The "
+	                   "storage pit has damage down to a tenth of its life. Six villagers of the town stand near it.",
+	    .expected = "The storage pit stops working. Its food pile and each wood pile with wood in it call the people "
+	                "near them, as a pile on its own does (the inspector shows the reactions of the piles). A repair "
+	                "of the pit above its limit stops the calls. A pile that becomes empty stops its call and keeps its "
+	                "place.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 30.0f}, {0.0f, 50.0f}, {0.0f, 17.0f}}},
+	    .objects = std::move(objects),
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -9643,6 +9671,7 @@ std::vector<Scenario> Build()
 	AddScriptTaskRelease(all);
 	AddLandOneScriptStubScenarios(all);
 	AddSwayAndFrightScenarios(all);
+	AddStoreScenarios(all);
 	return all;
 }
 
