@@ -865,13 +865,17 @@ void DefaultWorldCameraModel::HandleKeys(std::chrono::microseconds dt)
 		steps.move.y += ScaleKeyboardMove(step.strafe, moveSpeed);
 	}
 	_keySteps = steps;
+	// After the keys, the cursor past a side of the screen pushes the camera
+	PushWithKeys();
 }
 
 void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 {
-	// The steps of the keys of the last frame, to which the mouse of this frame adds
+	// The steps of the keys of the last frame, to which the mouse of this frame adds. The step uses them one time, so a
+	// frame that does not read the keys gives the next step no key steps.
 	_rotateAroundDelta = _keySteps.rotateAround;
 	_keyBoardMoveDelta = _keySteps.move;
+	_keySteps = {};
 	_dragTurn = 0.0f;
 	_dragTilt = 0.0f;
 
@@ -1127,7 +1131,10 @@ void DefaultWorldCameraModel::HandlePushScroll(std::chrono::microseconds dt, boo
 	namespace push = camera_push_scroll;
 	_pushMove = glm::vec3(0.0f);
 	_pushTurn = 0.0f;
+	_pushCanAdd = false;
+	_pushGripping = gripping;
 	const float seconds = push::Seconds(_pushClock.Step(dt));
+	_pushSeconds = seconds;
 	if (!Locator::windowing::has_value())
 	{
 		return;
@@ -1167,15 +1174,24 @@ void DefaultWorldCameraModel::HandlePushScroll(std::chrono::microseconds dt, boo
 		}
 	}
 	push::Fade(_pushSpeed, seconds, _pushPointer.insideX && _pushPointer.insideY);
+	// The push with the keys acts only in full screen
+	_pushCanAdd = !windowed;
+}
 
-	// The frame's push, as the game reads its keys after its camera moved: only in full screen, with the land not gripped
-	// and the player having the interface
-	const bool interface =
-	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
-	if (!gripping && !windowed && interface)
+void DefaultWorldCameraModel::PushWithKeys()
+{
+	namespace push = camera_push_scroll;
+	// A grip of the land stops the push. A camera that holds back all the controls does not keep the grip.
+	if (!_pushCanAdd || (_pushGripping && !_heldBack))
 	{
-		push::Push(_pushSpeed, _pushPointer, push::Speed(_currentOrigin.y, _currentFocus.y), seconds);
+		return;
 	}
+	// The speed comes from the heights of the camera after its step in this frame
+	const auto origin =
+	    Locator::camera::has_value() ? Locator::camera::value().GetOrigin(Camera::Interpolation::Current) : _currentOrigin;
+	const auto focus =
+	    Locator::camera::has_value() ? Locator::camera::value().GetFocus(Camera::Interpolation::Current) : _currentFocus;
+	push::Push(_pushSpeed, _pushPointer, push::Speed(origin.y, focus.y), _pushSeconds);
 }
 
 void DefaultWorldCameraModel::UpdateIconFrame(bool onFight)
