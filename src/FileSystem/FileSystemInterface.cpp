@@ -14,6 +14,7 @@
 #include <fstream>
 #include <ios>
 #include <system_error>
+#include <vector>
 
 using namespace openblack::filesystem;
 
@@ -142,4 +143,27 @@ bool FileSystemInterface::Remove(const std::filesystem::path& path)
 	}
 	std::error_code error;
 	return std::filesystem::remove(path, error);
+}
+
+bool FileSystemInterface::EmptyFolder(const std::filesystem::path& path)
+{
+	if (InGameFolder(path))
+	{
+		return false;
+	}
+	std::error_code error;
+	if (!std::filesystem::is_directory(path, error))
+	{
+		return false;
+	}
+	std::vector<std::filesystem::path> entries;
+	for (const auto& entry : std::filesystem::directory_iterator(path, error))
+	{
+		entries.push_back(entry.path());
+	}
+	for (const auto& entry : entries)
+	{
+		std::filesystem::remove_all(entry, error);
+	}
+	return std::filesystem::is_empty(path, error);
 }

@@ -5998,7 +5998,13 @@ void Game::HandleInterfaceAction()
 	case Action::DeletePlayer:
 	{
 		auto& profiles = Locator::playerProfileSystem::value();
-		profiles.DeleteProfile(_interface->GetMenu().GetPlayerToDelete());
+		// The player's folder is emptied first: its saved games, pictures and help record go, but the empty folder stays
+		const auto deleted = _interface->GetMenu().GetPlayerToDelete();
+		if (Locator::profileFolderSystem::has_value())
+		{
+			Locator::profileFolderSystem::value().EmptyPlayerFolder(deleted);
+		}
+		profiles.DeleteProfile(deleted);
 		const auto next = _interface->GetMenu().GetPickedPlayer();
 		const auto& list = profiles.GetProfiles().profiles;
 		if (next.has_value() && *next < list.size())
