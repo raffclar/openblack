@@ -30,6 +30,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -190,6 +191,11 @@ void ShortcutKeys::Update()
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{
 		return;
+	}
+	// The keys fly the world camera: the creature's follow camera first gives the camera back
+	if (Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().IsActive())
+	{
+		Locator::creatureModeSystem::value().Leave();
 	}
 	auto& camera = Locator::camera::value();
 	const auto& land = Locator::terrainSystem::value();
