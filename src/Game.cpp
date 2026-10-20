@@ -2562,10 +2562,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateInput();
 		break;
 	case Step::ScreenMarks:
-		// The numbers floating up from things rise and fade
-		UpdateFloatingNumbers(std::chrono::duration<float>(frame.deltaTime).count());
-		// The marks over creatures that learn rise, blink and fade
-		UpdateLearningMarks(std::chrono::duration<float, std::milli>(frame.deltaTime).count());
+		UpdateScreenMarks();
 		break;
 	case Step::DebugGui:
 		return UpdateDebugGui();
@@ -2605,6 +2602,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Camera:
 		UpdateCamera();
 		break;
+	case Step::CameraShake:
+	{
+		// The blasts' rubble lies and fades, their dust flies and the camera shakes
+		auto explosions = Locator::profiler::value().BeginScoped(Profiler::Stage::ExplosionUpdate);
+		Locator::explosionSystem::value().Update(
+		    std::chrono::duration<float, std::milli>(Locator::time::value().GetFrameGameTime()).count());
+		break;
+	}
 	case Step::Temple:
 		UpdateTemple(frame.deltaTime);
 		break;
@@ -2620,6 +2625,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::HighDetail:
 		// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
 		Locator::highDetailSystem::value().Update();
+		break;
+	case Step::CreaturePoses:
+		UpdateCreaturePoses();
 		break;
 	case Step::FrameEffects:
 		UpdateFrameEffects();
@@ -2893,6 +2901,63 @@ bool Game::PlayTurns()
 	return true;
 }
 
+void Game::UpdateCreaturePoses()
+{
+	auto& profiler = Locator::profiler::value();
+	auto& clock = Locator::time::value();
+	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
+	// The static that the eyes of all the creatures fizz through continues to slide as the draw starts
+	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	{
+		// The fight animations play, blows land and the fighters move as their animations carry them
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().Update(gameTime);
+	}
+	{
+		// The creatures are drawn moving between the last two turns
+		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
+		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
+	}
+	{
+		// What they do with things plays on their bodies
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().Update(gameTime);
+	}
+	{
+		// The creatures breathe, act, pull faces and look about
+		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
+		Locator::creatureAnimationSystem::value().Update(gameTime);
+	}
+	{
+		// Their hair swings from the posed bodies
+		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
+		Locator::creatureHairSystem::value().Update(gameTime);
+	}
+	{
+		// They make the sounds of the moments their animations have played past
+		auto creatureAudio = profiler.BeginScoped(Profiler::Stage::CreatureAudioUpdate);
+		Locator::creatureAudioSystem::value().Update(gameTime);
+	}
+}
+
+void Game::UpdateScreenMarks()
+{
+	// The numbers and the marks rise and fade only on a frame that draws the land, by the game time of the frame. They
+	// stand still while the game pauses.
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	if (inTemple || landHidden)
+	{
+		return;
+	}
+	const auto milliseconds = static_cast<float>(Locator::time::value().GetFrameGameTime().count());
+	// The marks over creatures that learn rise, blink and fade
+	UpdateLearningMarks(milliseconds);
+	// The numbers floating up from things rise and fade
+	UpdateFloatingNumbers(milliseconds * 0.001f);
+}
+
 void Game::UpdateFrameEffects()
 {
 	auto& profiler = Locator::profiler::value();
@@ -2911,8 +2976,6 @@ void Game::UpdateFrameEffects()
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
 	                                    camera.GetOrigin());
-	// The static that the eyes of all the creatures fizz through continues to slide
-	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	// The ribbons' textures slide on the frames that draw them
@@ -2935,11 +2998,6 @@ void Game::UpdateFrameEffects()
 	{
 		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
 	}
-	{
-		// The blasts' rubble lies and fades, their dust flies and the camera shakes
-		auto explosions = profiler.BeginScoped(Profiler::Stage::ExplosionUpdate);
-		Locator::explosionSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
-	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())
 	{
@@ -2960,12 +3018,15 @@ void Game::UpdateFrameEffects()
 		Locator::liquidParticleSystem::value().UpdateFrame(liquid_particles::FrameSeconds(milliseconds.count()), true);
 	}
 	{
-		// The fight animations play, blows land and the fighters move as their animations carry them
+		// The sparkles that mark the player's queued fight moves. The hand goes to a sparkle in the next frame.
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().Update(gameTime);
-		// The sparkles marking the player's queued fight moves
 		Locator::creatureFightSystem::value().DrawMarks(
 		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
+	}
+	{
+		// The creatures take hold of and let go of things with their hands as posed, and what they let go of flies
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().LateUpdate(gameTime);
 	}
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
@@ -2981,36 +3042,6 @@ void Game::UpdateFrameEffects()
 		Locator::boatLaunchSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
 		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
-	}
-	{
-		// The creatures are drawn moving between the last two turns
-		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
-		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
-	}
-	{
-		// What they do with things plays on their bodies
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().Update(gameTime);
-	}
-	{
-		// The creatures breathe, act, pull faces and look about
-		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
-		Locator::creatureAnimationSystem::value().Update(gameTime);
-	}
-	{
-		// They take hold of and let go of things with their hands as posed, and what they let go of flies
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().LateUpdate(gameTime);
-	}
-	{
-		// Their hair swings from the posed bodies
-		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
-		Locator::creatureHairSystem::value().Update(gameTime);
-	}
-	{
-		// They make the sounds of the moments their animations have played past
-		auto creatureAudio = profiler.BeginScoped(Profiler::Stage::CreatureAudioUpdate);
-		Locator::creatureAudioSystem::value().Update(gameTime);
 	}
 	{
 		// Their footprints fade away, only on a frame that draws the land
@@ -3728,7 +3759,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    {.position = handTransform->position,
 				     .size = handSize,
 				     .cameraPosition = camera.GetOrigin(),
-				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing()});
+				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing(),
+				     .selecting = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsSelecting()});
 			}
 			// The temples' leashes, the picked one round the wrist of the hand as it is drawn, after the blend of its pose
 			Locator::leashSystem::value().ShowPosts(IsHandDrawn());
@@ -3833,6 +3865,17 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
+	// In the temple, without the interface or with a box on the screen, the camera does not read its keys
+	const bool interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	if (!game_frame::CameraReadsKeys({
+	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	        .interfaceActive = interfaceActive,
+	        .boxShows = FrontEndBoxShows(),
+	    }))
+	{
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
 	auto& actions = Locator::gameActionSystem::value();

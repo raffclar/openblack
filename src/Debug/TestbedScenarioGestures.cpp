@@ -219,6 +219,44 @@ void testbed_scenarios::AddGestureScenarios(std::vector<Scenario>& all)
 	                 Draw(GestureType::Scribble)},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "leash.picker_hand_effect",
+	    .name = "The hand's effect while the leash picker is open",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows every leash and its leash comes off. The hand draws the leash gesture (a square "
+	                   "spiral), which puts the leash on and opens the leash picker. Eight seconds later the hand draws "
+	                   "a scribble.",
+	    .expected = "While the picker is open, small white sparks come out of the hand and fade in half a second. The "
+	                "scribble closes the picker: the shake sound plays, a band flies off the hand to the camera, and the "
+	                "sparks stop. The leash stays on.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Tiger()},
+	    .commands = {{.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Evil},
+	                 {.kind = Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Good},
+	                 {.kind = Kind::TakeOffLeash, .creature = 0, .delaySeconds = 1.0f},
+	                 Draw(GestureType::SquareSpirial, 1.0f),
+	                 Draw(GestureType::Scribble, 8.0f)},
+	    // The hand held over the middle of the land, near the camera, where the sparks show
+	    .hand = HandHold {.offset = {0.0f, 0.0f}, .height = 6.0f},
+	});
+
+	all.push_back({
+	    .id = "miracles.gesture_chain_any_seed",
+	    .name = "The chain behind a hand that holds a miracle",
+	    .facet = Facet::Miracles,
+	    .description = "A water miracle is put in the hand, as from a globe: it can not be powered up and no circle sizes "
+	                   "it. Two seconds later the hand draws a circle across the middle of the screen.",
+	    .expected = "When the miracle comes into the hand, and again after its first turn there, the hand starts its "
+	                "path again. From then on, the faint chain in the player's colour trails behind the hand while it "
+	                "holds the miracle, also while the hand draws the circle. The circle does nothing, because no "
+	                "miracle in the hand waits for it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {HoldSeed(SpellSeedType::Water, 1.0f), Draw(GestureType::Circle, 2.0f)},
+	    .repeatFrom = 0,
+	});
 	all.push_back({
 	    .id = "story.hidden_phone_box",
 	    .name = "The square wave starts the hidden phone box",

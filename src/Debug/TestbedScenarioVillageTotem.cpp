@@ -120,6 +120,29 @@ void openblack::testbed_scenarios::AddVillageTotemScenarios(std::vector<Scenario
 	    .hand = HandHold {.offset = watcher, .height = 12.0f},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	all.push_back({
+	    .id = "interface.floating_number_pause",
+	    .name = "The share floats up and stops while the game pauses",
+	    .facet = Facet::Interface,
+	    .description = "The player's Norse town centre, with its worship site built. The hand takes hold of the totem and "
+	                   "lets go, so that the share floats up over it. One second later the game pauses. Press P to "
+	                   "continue the game.",
+	    .expected = "The grey share rises over the totem and fades in its last second. While the game pauses, the share "
+	                "stands still and keeps its strength. When the game continues, it rises and fades again from where it "
+	                "stopped. A faster game speed makes it rise faster.",
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(15.0f), k_Centre + glm::vec2(15.0f)},
+	                .distance = 0.5f},
+	    .objects = {{.type = AbodeInfo::NorseTownCentre, .offset = k_Centre},
+	                {.type = VillagerInfo::NorseHousewifeFemale,
+	                 .offset = k_Centre + glm::vec2(10.0f, -10.0f),
+	                 .joinTown = true}},
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::HandGripTotem, .delaySeconds = 2.0f, .object = 0},
+	                 {.kind = Command::Kind::HandGripTotem, .delaySeconds = 1.0f, .object = 0},
+	                 {.kind = Command::Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 
 	for (const auto& carving : k_Carvings)
 	{

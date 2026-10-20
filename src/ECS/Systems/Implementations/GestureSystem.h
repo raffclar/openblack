@@ -51,6 +51,8 @@ public:
 		return _drawing.empty() ? std::nullopt : std::optional(_drawing.front());
 	}
 	void ForgetPath() override;
+	void SeedFirstTurnInHand() override;
+	[[nodiscard]] bool IsSelecting() const override { return _picker.open; }
 	[[nodiscard]] std::span<const gestures::GestureTemplate> GetTemplates() const override;
 	[[nodiscard]] const gesture::GestureRecorder& GetPath() const override { return _recorder; }
 	[[nodiscard]] float GetScreenAspect() const override { return _screenAspect; }
@@ -91,6 +93,8 @@ private:
 	std::optional<Recognised> _lastRecognised;
 	uint32_t _recognisedCount {0};
 	gesture::LeashPicker _picker;
+	/// A miracle did its first turn in the hand on this land: the chain follows the hand while it holds any miracle
+	bool _seedTurnedOnLand {false};
 	/// The circle drawn for the seed in the hand, while it is remembered
 	float _circleSeconds {0.0f};
 	bool _gesturing {false};

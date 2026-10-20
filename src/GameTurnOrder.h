@@ -71,6 +71,8 @@ enum class Stage : uint8_t
 	Rewards,
 	/// The guidance of the advisors
 	Guidance,
+	/// The advisors confirm what the player does, as when they cheer the player's turning of the camera
+	Confirmations,
 	/// The camera's stacked views let go of things that are not there now
 	CameraChecks,
 	/// The pieces broken off buildings
@@ -188,7 +190,8 @@ struct Place
 inline constexpr std::array k_Turn = std::to_array<Place>({
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
-    {.step = Step::TurnCheering, .stage = std::nullopt},
+    // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
+    {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
     // The places of the turn's start, which the frames draw from, and the map's cells of what moved
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
@@ -198,6 +201,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Storms, .stage = Stage::Atmosphere},
     {.step = Step::Snow, .stage = Stage::Atmosphere},
     {.step = Step::Players, .stage = Stage::Players},
+    // A town's totem takes its turn with the buildings of its town
+    {.step = Step::VillageTotems, .stage = Stage::Players},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.
@@ -209,8 +214,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
     // At the end of the players' turns: their alignments, then the alignment at the camera's eye
     {.step = Step::PlayerAlignment, .stage = Stage::Players},
-    {.step = Step::VillageTotems, .stage = std::nullopt},
-    {.step = Step::ChimneySmoke, .stage = std::nullopt},
     {.step = Step::Dances, .stage = Stage::Dances},
     {.step = Step::Fields, .stage = Stage::Lists},
     {.step = Step::FishFarms, .stage = Stage::Lists},
@@ -230,13 +233,16 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::CreatureObjectActions, .stage = Stage::Living},
     {.step = Step::CreatureFights, .stage = Stage::Living},
     {.step = Step::CreatureFizz, .stage = Stage::Living},
-    {.step = Step::CreatureHelp, .stage = std::nullopt},
+    // The rest of each creature's own turn: what the last land kept of it, its picture for its web page, the help that
+    // tells of it, and the change of its alignment at the end
+    {.step = Step::CreatureCarryOver, .stage = Stage::Living},
+    {.step = Step::CreatureWebPage, .stage = Stage::Living},
+    {.step = Step::CreatureHelp, .stage = Stage::Living},
+    {.step = Step::CreatureAlignment, .stage = Stage::Living},
     {.step = Step::CreaturePoses, .stage = Stage::Living},
     {.step = Step::Villagers, .stage = Stage::Living},
     {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Animals, .stage = Stage::Living},
-    {.step = Step::CreatureWebPage, .stage = std::nullopt},
-    {.step = Step::CreatureCarryOver, .stage = std::nullopt},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::Teleports, .stage = std::nullopt},
@@ -254,9 +260,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::ScriptFade, .stage = Stage::Scripts},
     {.step = Step::Advisors, .stage = Stage::Help},
     {.step = Step::HandToolTips, .stage = Stage::Help},
+    // The tip bubble closes when its sign is gone, after the hand's tooltip and before the banter
+    {.step = Step::TipBubble, .stage = Stage::Help},
     {.step = Step::Banter, .stage = Stage::Help},
     {.step = Step::HelpProfile, .stage = Stage::HelpProfile},
-    {.step = Step::TipBubble, .stage = std::nullopt},
     {.step = Step::TimeOfDay, .stage = Stage::TimeOfDay},
     {.step = Step::WeatherThings, .stage = Stage::WeatherThings},
     {.step = Step::CameraBookmarks, .stage = Stage::WeatherThings},
@@ -265,10 +272,11 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::HeldThing, .stage = Stage::Hand},
     {.step = Step::Rewards, .stage = Stage::Rewards},
     {.step = Step::Guidance, .stage = Stage::Guidance},
+    // The advisors cheer the player's turning of the camera
+    {.step = Step::TurnCheering, .stage = Stage::Confirmations},
     {.step = Step::CameraChecks, .stage = Stage::CameraChecks},
     {.step = Step::BuildingPieces, .stage = Stage::Fragments},
     {.step = Step::MusicMoods, .stage = Stage::MusicMoods},
-    {.step = Step::CreatureAlignment, .stage = std::nullopt},
     {.step = Step::SoundTags, .stage = Stage::EndTurn},
     {.step = Step::Ambience, .stage = Stage::EndTurn},
     {.step = Step::Music, .stage = Stage::EndTurn},

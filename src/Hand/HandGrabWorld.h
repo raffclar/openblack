@@ -115,6 +115,8 @@ public:
 	virtual void CatchFirefly(entt::entity object) = 0;
 	/// The help counts an event of the hand of the local player (see help::profile)
 	virtual void CountHelpEvent(uint32_t event) = 0;
+	/// The hand of the local player takes a thing or lets go of it: the hand forgets the path of the gesture it draws
+	virtual void ForgetGesturePath() {}
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
 	/// A sound of the in-game bank where something is

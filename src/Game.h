@@ -269,8 +269,12 @@ public:
 	void UpdateInterfaceFrame(std::chrono::microseconds deltaTime);
 	/// The turn of the game when one is due. It returns false when the game must stop.
 	bool PlayTurns();
-	/// The effects of the frame, by the frame's game time
+	/// The draw starts: the creatures get their poses, before the hand moves
+	void UpdateCreaturePoses();
+	/// The effects of the frame that the draw moves on, by the frame's game time, after the hand moved
 	void UpdateFrameEffects();
+	/// The numbers and the marks that rise over things
+	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// The things in view are made ready for the draw of this frame

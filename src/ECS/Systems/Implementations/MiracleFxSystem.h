@@ -36,6 +36,7 @@ public:
 	void SeedInHand(int powerUp, int previousPowerUp) override;
 	void SeedLeftHand() override;
 	void SeedShakenOff() override;
+	void HandShaken() override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;

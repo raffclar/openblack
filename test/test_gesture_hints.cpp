@@ -70,6 +70,34 @@ TEST(GestureHints, TheLeashGestureIsHintedWithTheCollarOfTheLeashItIsAbout)
 	EXPECT_EQ(hints[1].order, k_LeashGestureOrder);
 }
 
+TEST(GestureHints, InAFightTheSpecialMoveAndTheFightMiraclesAreHinted)
+{
+	const std::vector<gesture::Request> requests {
+	    {.gesture = GestureType::Star, .purpose = gesture::Purpose::FightSpecialMove},
+	    {.gesture = GestureType::VerticalScribble,
+	     .purpose = gesture::Purpose::FightMiracle,
+	     .magic = MagicType::Fireball,
+	     .seed = SpellSeedType::Fire},
+	    {.gesture = GestureType::Heart,
+	     .purpose = gesture::Purpose::FightMiracle,
+	     .magic = MagicType::Heal,
+	     .seed = SpellSeedType::Heal},
+	};
+	const auto hints = HintsFor(requests, FakeShapes);
+	ASSERT_EQ(hints.size(), 3u);
+	// The fight miracles take the squares nearest the right edge, the later gesture number first; the special move is
+	// last
+	EXPECT_EQ(hints[0].gesture, GestureType::Heart);
+	EXPECT_EQ(hints[0].seed, SpellSeedType::Heal);
+	EXPECT_EQ(hints[0].order, k_FightMiracleOrder);
+	EXPECT_EQ(hints[1].gesture, GestureType::VerticalScribble);
+	EXPECT_EQ(hints[1].seed, SpellSeedType::Fire);
+	EXPECT_EQ(hints[2].gesture, GestureType::Star);
+	EXPECT_EQ(hints[2].order, k_SpecialMoveOrder);
+	EXPECT_EQ(hints[2].seed, SpellSeedType::None);
+	EXPECT_EQ(hints[2].leash, LeashType::None);
+}
+
 TEST(GestureHints, TheDotRunsAlongAGestureInTimeWithItsLengthAgainstTheCircles)
 {
 	const std::vector<gesture::Request> requests {Pick(GestureType::Heart, LeashType::Good)};
