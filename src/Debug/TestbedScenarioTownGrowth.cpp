@@ -46,6 +46,9 @@ constexpr size_t k_FirstEmergencyHut = 2;
 constexpr float k_NearlyNeglected = 0.995f;
 /// Two fields east of the town
 constexpr std::array<glm::vec2, 2> k_Fields {{{55.0f, 40.0f}, {55.0f, 15.0f}}};
+/// A hut that is only a tenth built, and the foresters that build it
+constexpr float k_HutGoingUp = 0.1f;
+constexpr size_t k_SiteBuilders = 3;
 } // namespace
 
 void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>& all)
@@ -141,6 +144,37 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Centre, {0.0f, 75.0f}}, .distance = 0.6f},
 	    .objects = std::move(centreMending),
+	});
+
+	// A hut that goes while its builders work at it
+	std::vector<ObjectSetup> siteGoes {
+	    {.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	    {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = k_PitStock, .storedWood = k_PitStock},
+	    {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	    {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[1], .yawDegrees = 180.0f, .built = k_HutGoingUp},
+	};
+	for (size_t i = 0; i < k_SiteBuilders; ++i)
+	{
+		const float x = (static_cast<float>(i) - (static_cast<float>(k_SiteBuilders) * 0.5f)) * k_VillagerSpacing;
+		siteGoes.push_back({.type = VillagerInfo::CelticForesterMale, .offset = {x, 20.0f}, .joinTown = true});
+	}
+	all.push_back({
+	    .id = "town.site_goes_with_builders",
+	    .name = "A hut that goes while its builders work at it",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre, a full storage pit, one built hut and a "
+	                   "second hut in front that is only a tenth built, with a site open. Three foresters of the town "
+	                   "stand near. Best watched at game speed 4.",
+	    .expected = "The foresters go to the site, fetch wood from the pit and build the hut. Destroy the hut with the "
+	                "inspector (edit.destroy) while they build: at once no builder keeps the site (the inspector's "
+	                "Villager buildingSite is empty). Each builder near the hut walks two metres clear of where it "
+	                "stood, and a builder away from it stops its trip. Then each one decides what to do again. The town "
+	                "plans the hut again where it stood and starts it again with nothing built, so the builders come "
+	                "back to the new site.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit, k_Hut, k_PlannedHuts[1]}, .distance = 0.5f},
+	    .objects = std::move(siteGoes),
+	    .townBeliefInPlayer = 1.0f,
 	});
 
 	// A town with one hut that a couple lives in and two empty huts
