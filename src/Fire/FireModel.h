@@ -173,4 +173,8 @@ struct Transfer
 /// turn.
 [[nodiscard]] TurnOutcome Step(State& state, const Material& material, const Surroundings& surroundings);
 
+/// Whether a burning thing spreads its fire about the land. A thing that is not held always spreads. A thing in the hand
+/// spreads only where the player who holds it has influence (more than none).
+[[nodiscard]] bool SpreadsFrom(bool held, float holderInfluence);
+
 } // namespace openblack::fire

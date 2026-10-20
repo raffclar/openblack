@@ -406,3 +406,12 @@ TEST(ViaPoint, AVillagerGoesRoundAFireInItsWayOnTheSideItLeansTo)
 	EXPECT_FALSE(openblack::fire::GetViaPoint(at(0.0f, 20.0f), at(40.0f, 20.0f), at(20.0f, 0.0f), 5.0f, 1.0f, 0.0f).detour);
 	EXPECT_TRUE(openblack::fire::GetViaPoint(at(19.0f, 0.0f), at(40.0f, 0.0f), at(20.0f, 0.0f), 5.0f, 1.0f, 0.0f).inside);
 }
+
+TEST(FireModel, AHeldHotThingSpreadsFireOnlyInsideItsHoldersInfluence)
+{
+	// A thing on the land always spreads
+	EXPECT_TRUE(fire::SpreadsFrom(false, 0.0f));
+	// A thing in the hand spreads where its holder has some influence, and not where the holder has none
+	EXPECT_TRUE(fire::SpreadsFrom(true, 0.25f));
+	EXPECT_FALSE(fire::SpreadsFrom(true, 0.0f));
+}
