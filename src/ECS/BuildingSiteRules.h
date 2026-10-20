@@ -154,6 +154,30 @@ enum class LeftoverPile : uint8_t
 };
 [[nodiscard]] LeftoverPile WhenSiteCloses(uint32_t woodInPile);
 
+/// The kinds of site, as the wood its town counts at its sites sees them
+enum class SiteWoodKind : uint8_t
+{
+	WorshipSite,
+	Temple,
+	Other,
+};
+/// The wood a town counts at its building sites, after one of its sites takes in some wood and gives out some. The
+/// wood at a worship site's site is never counted. The temple site's wood is counted when it comes in, but not taken off
+/// when builders take it away, as in the original game.
+[[nodiscard]] constexpr float WoodAtSitesAfter(float counted, SiteWoodKind kind, uint32_t added, uint32_t removed)
+{
+	if (kind == SiteWoodKind::WorshipSite)
+	{
+		return counted;
+	}
+	counted += static_cast<float>(added);
+	if (kind == SiteWoodKind::Other)
+	{
+		counted -= static_cast<float>(removed);
+	}
+	return counted;
+}
+
 /// Whether a town removes its site at a building on its turn: the site has no use once the building has gone, or once
 /// the building is built and has its full life again
 [[nodiscard]] constexpr bool HasNoUse(bool buildingThere, bool built, bool whole)

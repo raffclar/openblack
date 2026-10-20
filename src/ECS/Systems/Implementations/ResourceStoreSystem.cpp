@@ -39,6 +39,7 @@
 #include "Common/MachineClock.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/Archetypes/PotArchetype.h"
+#include "ECS/BuildingSiteRules.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
@@ -1280,7 +1281,9 @@ uint32_t ResourceStoreSystem::AddToSite(entt::entity building, BuildingSite& sit
 	}
 	if (auto* tally = TallyOf(ecs::construction::TownOfSite(building)))
 	{
-		tally->woodAtSites += static_cast<float>(added);
+		const auto kind =
+		    registry.AllOf<Temple>(building) ? building_site::SiteWoodKind::Temple : building_site::SiteWoodKind::Other;
+		tally->woodAtSites = building_site::WoodAtSitesAfter(tally->woodAtSites, kind, added, 0);
 	}
 	return added;
 }
@@ -1341,7 +1344,8 @@ uint32_t ResourceStoreSystem::TakeFromSite(entt::entity building, BuildingSite& 
 	}
 	if (auto* tally = TallyOf(ecs::construction::TownOfSite(building)))
 	{
-		tally->woodAtSites -= static_cast<float>(removed);
+		tally->woodAtSites =
+		    building_site::WoodAtSitesAfter(tally->woodAtSites, building_site::SiteWoodKind::Other, 0, removed);
 	}
 	return removed;
 }

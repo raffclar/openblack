@@ -238,6 +238,22 @@ TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVilla
 	EXPECT_EQ(WhenSiteCloses(600), LeftoverPile::CallForWood);
 }
 
+TEST(BuildingSiteRules, ATownCountsTheWoodAtItsSitesButNeverTakesOffATemplesWood)
+{
+	EXPECT_EQ(WoodAtSitesAfter(10.0f, SiteWoodKind::Other, 5, 0), 15.0f);
+	EXPECT_EQ(WoodAtSitesAfter(15.0f, SiteWoodKind::Other, 0, 3), 12.0f);
+	EXPECT_EQ(WoodAtSitesAfter(10.0f, SiteWoodKind::Temple, 5, 0), 15.0f);
+	EXPECT_EQ(WoodAtSitesAfter(15.0f, SiteWoodKind::Temple, 0, 3), 15.0f);
+	EXPECT_EQ(WoodAtSitesAfter(10.0f, SiteWoodKind::WorshipSite, 5, 3), 10.0f);
+	// The running count over a house built from a pile filled twice and emptied
+	float counted = 0.0f;
+	counted = WoodAtSitesAfter(counted, SiteWoodKind::Other, 40, 0);
+	counted = WoodAtSitesAfter(counted, SiteWoodKind::Other, 0, 25);
+	counted = WoodAtSitesAfter(counted, SiteWoodKind::Other, 30, 0);
+	counted = WoodAtSitesAfter(counted, SiteWoodKind::Other, 0, 45);
+	EXPECT_EQ(counted, 0.0f);
+}
+
 TEST(BuildingSiteRules, ATownRemovesASiteWhoseBuildingHasGoneOrStandsWhole)
 {
 	EXPECT_TRUE(HasNoUse(false, false, false));
