@@ -92,6 +92,14 @@ void GameActionMap::ResetKeyBindings()
 	ApplyMouseBindings();
 }
 
+void GameActionMap::SetKeyBindings(const KeyBindingTable& bindings)
+{
+	// Every action lets go, so that no action stays held by an input that is no longer its own
+	_bindableMap = BindableActionMap::NONE;
+	_bindings = bindings;
+	ApplyMouseBindings();
+}
+
 void GameActionMap::QueuePress(BindableActionMap action)
 {
 	_queuedPresses.emplace_back(action);

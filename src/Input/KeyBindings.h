@@ -88,6 +88,8 @@ struct KeyBinding
 	std::optional<KeyChord> key;
 	MouseInput mouse {MouseInput::None};
 	BindStatus status {BindStatus::Implemented};
+
+	[[nodiscard]] bool operator==(const KeyBinding&) const = default;
 };
 
 inline constexpr size_t k_KeyBindingCount = 33;

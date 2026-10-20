@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] std::span<const KeyBinding> GetKeyBindings() const final;
 	void SetKeyBinding(BindableActionMap action, std::optional<KeyChord> key) final;
 	void ResetKeyBindings() final;
+	void SetKeyBindings(const KeyBindingTable& bindings) final;
 	void QueuePress(BindableActionMap action) final;
 	[[nodiscard]] bool TakeDoubleClick() final;
 	[[nodiscard]] bool HasQueuedPresses() const final;

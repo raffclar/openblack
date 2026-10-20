@@ -269,6 +269,10 @@ TextDatabase MenuTexts()
 	    {u"HELP_TEXT_DIALOG_RESTART", u"Restarting now."},
 	    {u"HELP_TEXT_DIALOG_AERYOUSUREDELETE", u"Delete player %s?"},
 	    {u"HELP_TEXT_DIALOG_ADDITION_20", u"New game?"},
+	    {u"HELP_TEXT_DIALOG_KEYREMINDER", u"Define a key for "},
+	    {u"HELP_TEXT_DIALOG_LOADDEFAULTS", u"Load Defaults"},
+	    {u"HELP_TEXT_REQUESTER_BOXES_03", u"Cancel"},
+	    {u"HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON", u"RMB "},
 	};
 	for (const auto& [name, text] : texts)
 	{
@@ -929,7 +933,165 @@ TEST(GameMenu, ListsTheControls)
 	EXPECT_EQ(items[1].text, u"Move :       (LMB)");
 	EXPECT_EQ(items[1].mouseCell, 9);
 	EXPECT_TRUE(items[1].mouseMirrored);
-	EXPECT_EQ(items[6].text, u"Zoom On : CTRL ");
+	EXPECT_EQ(items[6].text, u"Zoom On : Ctrl ");
 	EXPECT_EQ(items[6].mouseCell, 10);
-	EXPECT_EQ(items[29].text, u" : CTRL + S ");
+	EXPECT_EQ(items[29].text, u" : Ctrl + S ");
+}
+
+namespace
+{
+/// The middle of a row of the Controls page, as the list shows it
+glm::ivec2 ControlRow(const GameMenu& menu, size_t row)
+{
+	const auto& list = menu.GetControls();
+	for (int y = list.rect.min.y; y < list.rect.max.y; ++y)
+	{
+		if (list.ItemAt(y) == row)
+		{
+			return {list.rect.Centre().x, y + 4};
+		}
+	}
+	return {-1, -1};
+}
+
+/// Picks a row with a click, then double clicks it
+void DoubleClickRow(GameMenu& menu, size_t row)
+{
+	const auto point = ControlRow(menu, row);
+	Click(menu, point);
+	menu.DoubleClick(point);
+	menu.MouseDown(point);
+	menu.MouseUp(point);
+}
+
+// The Cancel and the OK of a box: arrows at the left and at the right of its bottom
+constexpr glm::ivec2 k_BoxCancel {216, 354};
+constexpr glm::ivec2 k_BoxOk {584, 354};
+} // namespace
+
+TEST(GameMenu, ADoubleClickOnTheRowPickedAsksForItsKey)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	ASSERT_TRUE(f.menu.IsCapturing());
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:");
+
+	// The box shows the key that a press gives, and OK binds it
+	EXPECT_TRUE(f.menu.CaptureKey(SDL_SCANCODE_N, {}));
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:\nN");
+	Click(f.menu, k_BoxOk);
+	f.menu.Update(0.0f);
+	EXPECT_FALSE(f.menu.IsCapturing());
+	EXPECT_TRUE(f.menu.TakeControlsChanged());
+	const auto& bindings = f.menu.GetControlBindings();
+	EXPECT_EQ(bindings.at(0).key, (openblack::input::KeyChord {.key = SDL_SCANCODE_N}));
+	// Show Villager Names lost the N key
+	EXPECT_FALSE(bindings.at(27).key.has_value());
+	EXPECT_EQ(f.menu.GetControls().GetItems().at(0).text, u"Help : N ");
+}
+
+TEST(GameMenu, TheKeysThatTheGameKeepsAreIgnored)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	ASSERT_TRUE(f.menu.IsCapturing());
+	EXPECT_TRUE(f.menu.CaptureKey(SDL_SCANCODE_TAB, {}));
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:");
+	// Cancel keeps the binding
+	Click(f.menu, k_BoxCancel);
+	f.menu.Update(0.0f);
+	EXPECT_FALSE(f.menu.IsCapturing());
+	EXPECT_FALSE(f.menu.TakeControlsChanged());
+	EXPECT_EQ(f.menu.GetControlBindings().at(0).key, (openblack::input::KeyChord {.key = SDL_SCANCODE_F1}));
+}
+
+TEST(GameMenu, ADoubleClickOnAnotherRowAsksNothing)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	// The first click picked row 1; the second click of the double click is on row 2
+	Click(f.menu, ControlRow(f.menu, 1));
+	f.menu.DoubleClick(ControlRow(f.menu, 2));
+	EXPECT_FALSE(f.menu.IsCapturing());
+	// Off the list, keys go to the page as before
+	EXPECT_FALSE(f.menu.CaptureKey(SDL_SCANCODE_N, {}));
+}
+
+TEST(GameMenu, AMouseButtonHeldOffTheBoxsButtonsGivesTheMouseInput)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	// Over the OK, the button held is the OK's click
+	f.menu.PollCapture(true, false, false, k_BoxOk);
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:");
+	f.menu.PollCapture(false, true, false, {400, 250});
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:\n     (RMB )");
+	// A key after the mouse input takes its place
+	f.menu.CaptureKey(SDL_SCANCODE_X, {.shift = false, .ctrl = true, .alt = false});
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  Help:\nCtrl + X");
+	f.menu.PollCapture(true, false, false, {400, 250});
+	Click(f.menu, k_BoxOk);
+	f.menu.Update(0.0f);
+	const auto& bindings = f.menu.GetControlBindings();
+	EXPECT_EQ(bindings.at(0).mouse, openblack::input::MouseInput::LeftButton);
+	EXPECT_EQ(bindings.at(0).key, (openblack::input::KeyChord {.key = SDL_SCANCODE_F1}));
+	// Move lost the left button
+	EXPECT_EQ(bindings.at(1).mouse, openblack::input::MouseInput::None);
+}
+
+TEST(GameMenu, AMouseInputGivenBeforeACancelStaysForTheNextBox)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	f.menu.PollCapture(false, false, true, {400, 250});
+	Click(f.menu, k_BoxCancel);
+	f.menu.Update(0.0f);
+	// The next box shows the middle button again with nothing pressed, and OK binds it
+	DoubleClickRow(f.menu, 5);
+	f.menu.PollCapture(false, false, false, {400, 250});
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Define a key for  :\n     ()");
+	Click(f.menu, k_BoxOk);
+	f.menu.Update(0.0f);
+	EXPECT_EQ(f.menu.GetControlBindings().at(5).mouse, openblack::input::MouseInput::MiddleButton);
+	EXPECT_EQ(f.menu.GetControlBindings().at(16).mouse, openblack::input::MouseInput::None);
+}
+
+TEST(GameMenu, OkWithNothingPressedUnbindsTheKey)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	Click(f.menu, k_BoxOk);
+	f.menu.Update(0.0f);
+	EXPECT_FALSE(f.menu.GetControlBindings().at(0).key.has_value());
+	EXPECT_EQ(f.menu.GetControls().GetItems().at(0).text, u"Help :  ");
+}
+
+TEST(GameMenu, LoadDefaultsAsksThenPutsEveryBindingBack)
+{
+	MenuFixture f;
+	auto bindings = openblack::input::k_DefaultKeyBindings;
+	bindings.at(0).key.reset();
+	f.menu.SetControls(bindings);
+	f.menu.ShowPage(Page::Controls);
+	Click(f.menu, {400, 550});
+	EXPECT_EQ(f.menu.GetQuestionText(), u"Load Defaults");
+	Click(f.menu, k_BoxOk);
+	f.menu.Update(0.0f);
+	EXPECT_TRUE(f.menu.TakeControlsChanged());
+	EXPECT_EQ(f.menu.GetControlBindings(), openblack::input::k_DefaultKeyBindings);
+}
+
+TEST(GameMenu, BackFromTheControlsKeepsTheBindings)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	EXPECT_FALSE(f.menu.TakeControlsToKeep());
+	Click(f.menu, k_Back);
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+	EXPECT_TRUE(f.menu.TakeControlsToKeep());
 }

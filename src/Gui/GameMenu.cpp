@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <functional>
+#include <span>
 #include <string_view>
 #include <tuple>
 #include <vector>
@@ -18,6 +19,7 @@
 #include <SDL_keycode.h>
 
 #include "GameFont.h"
+#include "Input/KeyRebinding.h"
 #include "StatisticsBox.h"
 #include "TextDatabase.h"
 
@@ -62,7 +64,7 @@ constexpr std::array k_StoryTexts = {"HELP_TEXT_DIALOG_NOTEXT", "HELP_TEXT_DIALO
 constexpr std::array k_ToolTipTexts = {"HELP_TEXT_DIALOG_NOTOOLTIPS", "HELP_TEXT_DIALOG_MINIMUMTOOLTIPS",
                                        "HELP_TEXT_DIALOG_INTELLIGENTNOTOOLTIPS", "HELP_TEXT_DIALOG_ALLTOOLTIPS"};
 
-/// The mouse buttons an action can be bound to
+/// The pictures of the mouse that the Controls page draws beside an action
 enum class Mouse
 {
 	None,
@@ -71,106 +73,101 @@ enum class Mouse
 	WheelUp,
 	WheelDown,
 	Right,
-	/// Both buttons, for the actions that zoom while a key is held
+	/// Both buttons, for the zoom actions that have no mouse input of their own
 	Both,
 };
 
-/// The default controls for a mouse with a wheel: the actions in the order the Controls page lists them, their
-/// names, and the DirectInput key and mouse button bound to them
-struct Binding
-{
-	std::string_view name;
-	uint8_t key;
-	uint8_t modifier;
-	Mouse mouse;
-};
-constexpr std::array k_Bindings = {
-    Binding {.name = "HELP_TEXT_ACTIONS_HELP", .key = 0x3B, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_SELECT", .key = 0, .modifier = 0, .mouse = Mouse::Left},
-    Binding {.name = "HELP_TEXT_ACTIONS_APPLY", .key = 0, .modifier = 0, .mouse = Mouse::Right},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMOUT", .key = 0, .modifier = 0, .mouse = Mouse::WheelDown},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMIN", .key = 0, .modifier = 0, .mouse = Mouse::WheelUp},
-    Binding {.name = "HELP_TEXT_ACTIONS_TALK", .key = 0x14, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMON", .key = 0x9D, .modifier = 0, .mouse = Mouse::Both},
-    Binding {.name = "HELP_TEXT_ACTIONS_MOVELEFT", .key = 0xCB, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_MOVERIGHT", .key = 0xCD, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_MOVEFORWARD", .key = 0xC8, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_MOVEBACKWARD", .key = 0xD0, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_TILTUP", .key = 0x1E, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_TILTDOWN", .key = 0x10, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ROTATELEFT", .key = 0x2C, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ROTATERIGHT", .key = 0x16, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_TILTROTATEON", .key = 0x36, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_TILTROTATEAROUNDMOUSE", .key = 0, .modifier = 0, .mouse = Mouse::Middle},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_CITADEL", .key = 0x39, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_CREATURE", .key = 0x2E, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_REALM", .key = 0x3D, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_INSIDECITADEL", .key = 0x3E, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_CREATUREROOM", .key = 0x3F, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_CHALLENGEROOM", .key = 0x40, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_SAVEGAMEROOM", .key = 0x41, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_OPTIONSROOM", .key = 0x42, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_ZOOMTO_MULTIPLAYERROOM", .key = 0x43, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_LEASH", .key = 0x26, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_SHOWVILLAGERNAME", .key = 0x31, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_SHOWVILLAGERDETAILS", .key = 0x1F, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_TOOLTIP_155", .key = 0x1F, .modifier = 0x1D, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_TOOLTIP_154", .key = 0x26, .modifier = 0x1D, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_PREVIOUS_LEASH", .key = 0x2F, .modifier = 0, .mouse = Mouse::None},
-    Binding {.name = "HELP_TEXT_ACTIONS_NEXT_LEASH", .key = 0x30, .modifier = 0, .mouse = Mouse::None},
+/// The names of the actions, in the order that the Controls page lists them
+constexpr std::array<std::string_view, openblack::input::k_KeyBindingCount> k_ActionTexts = {
+    "HELP_TEXT_ACTIONS_HELP",
+    "HELP_TEXT_ACTIONS_SELECT",
+    "HELP_TEXT_ACTIONS_APPLY",
+    "HELP_TEXT_ACTIONS_ZOOMOUT",
+    "HELP_TEXT_ACTIONS_ZOOMIN",
+    "HELP_TEXT_ACTIONS_TALK",
+    "HELP_TEXT_ACTIONS_ZOOMON",
+    "HELP_TEXT_ACTIONS_MOVELEFT",
+    "HELP_TEXT_ACTIONS_MOVERIGHT",
+    "HELP_TEXT_ACTIONS_MOVEFORWARD",
+    "HELP_TEXT_ACTIONS_MOVEBACKWARD",
+    "HELP_TEXT_ACTIONS_TILTUP",
+    "HELP_TEXT_ACTIONS_TILTDOWN",
+    "HELP_TEXT_ACTIONS_ROTATELEFT",
+    "HELP_TEXT_ACTIONS_ROTATERIGHT",
+    "HELP_TEXT_ACTIONS_TILTROTATEON",
+    "HELP_TEXT_ACTIONS_TILTROTATEAROUNDMOUSE",
+    "HELP_TEXT_ACTIONS_ZOOMTO_CITADEL",
+    "HELP_TEXT_ACTIONS_ZOOMTO_CREATURE",
+    "HELP_TEXT_ACTIONS_ZOOMTO_REALM",
+    "HELP_TEXT_ACTIONS_ZOOMTO_INSIDECITADEL",
+    "HELP_TEXT_ACTIONS_ZOOMTO_CREATUREROOM",
+    "HELP_TEXT_ACTIONS_ZOOMTO_CHALLENGEROOM",
+    "HELP_TEXT_ACTIONS_ZOOMTO_SAVEGAMEROOM",
+    "HELP_TEXT_ACTIONS_ZOOMTO_OPTIONSROOM",
+    "HELP_TEXT_ACTIONS_ZOOMTO_MULTIPLAYERROOM",
+    "HELP_TEXT_ACTIONS_LEASH",
+    "HELP_TEXT_ACTIONS_SHOWVILLAGERNAME",
+    "HELP_TEXT_ACTIONS_SHOWVILLAGERDETAILS",
+    "HELP_TEXT_TOOLTIP_155",
+    "HELP_TEXT_TOOLTIP_154",
+    "HELP_TEXT_ACTIONS_PREVIOUS_LEASH",
+    "HELP_TEXT_ACTIONS_NEXT_LEASH",
 };
 
-/// GetKeyNameText's names, which the game shows, of the DirectInput keys bound by default
-std::u16string KeyName(uint8_t key)
+/// The name of a mouse input, empty for none
+std::string_view MouseText(openblack::input::MouseInput mouse)
 {
-	switch (key)
+	using openblack::input::MouseInput;
+	switch (mouse)
 	{
-	case 0x0B:
-		return u"0";
-	case 0x10:
-		return u"Q";
-	case 0x14:
-		return u"T";
-	case 0x16:
-		return u"U";
-	case 0x1D:
-	case 0x9D:
-		return u"CTRL";
-	case 0x1E:
-		return u"A";
-	case 0x1F:
-		return u"S";
-	case 0x26:
-		return u"L";
-	case 0x2C:
-		return u"Z";
-	case 0x2E:
-		return u"C";
-	case 0x2F:
-		return u"V";
-	case 0x30:
-		return u"B";
-	case 0x31:
-		return u"N";
-	case 0x36:
-		return u"RIGHT SHIFT";
-	case 0x39:
-		return u"SPACE";
-	case 0xC8:
-		return u"UP";
-	case 0xCB:
-		return u"LEFT";
-	case 0xCD:
-		return u"RIGHT";
-	case 0xD0:
-		return u"DOWN";
-	default:
-		if (key >= 0x3B && key <= 0x44)
-		{
-			return u"F" + ToUtf16(std::to_string(key - 0x3B + 1));
-		}
-		return u"?";
+	case MouseInput::LeftButton:
+		return "HELP_TEXT_ACTIONS_LEFTMOUSEBUTTON";
+	case MouseInput::RightButton:
+		return "HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON";
+	case MouseInput::MiddleButton:
+		return "HELP_TEXT_ACTIONS_MIDDLEMOUSEBUTTON";
+	case MouseInput::WheelUp:
+		return "HELP_TEXT_ACTIONS_WHEEL_UP";
+	case MouseInput::WheelDown:
+		return "HELP_TEXT_ACTIONS_WHEEL_DOWN";
+	case MouseInput::None:
+		break;
 	}
+	return {};
+}
+
+/// The mouse that the Controls page draws beside a row: the row's own mouse input. A zoom action with no mouse input
+/// shows both buttons while the move and the action are on the left and the right buttons, either way round.
+Mouse ShownMouse(std::span<const openblack::input::KeyBinding> bindings, size_t row)
+{
+	using openblack::input::BindableActionMap;
+	using openblack::input::MouseInput;
+	const auto& binding = bindings[row];
+	if (binding.mouse != MouseInput::None)
+	{
+		return static_cast<Mouse>(binding.mouse);
+	}
+	const bool zoom = binding.action == BindableActionMap::ZOOM_OUT || binding.action == BindableActionMap::ZOOM_IN ||
+	                  binding.action == BindableActionMap::ZOOM_ON;
+	if (!zoom)
+	{
+		return Mouse::None;
+	}
+	const auto mouseOf = [bindings](BindableActionMap action) {
+		const auto index = openblack::input::IndexOf(bindings, action);
+		return index.has_value() ? bindings[*index].mouse : MouseInput::None;
+	};
+	const auto move = mouseOf(BindableActionMap::MOVE);
+	const auto act = mouseOf(BindableActionMap::ACTION);
+	const bool buttons = (act == MouseInput::LeftButton && move == MouseInput::RightButton) ||
+	                     (act == MouseInput::RightButton && move == MouseInput::LeftButton);
+	return buttons ? Mouse::Both : Mouse::None;
+}
+
+/// The gap and the brackets that the Controls page writes a mouse input in: the gap leaves space for the picture
+std::u16string MouseWords(std::u16string_view name)
+{
+	return u"     (" + std::u16string(name) + u")";
 }
 
 /// The Controls page's mice for a wheel mouse: the third row of data/textures/mousehelp.raw, the left button the
@@ -711,80 +708,188 @@ void GameMenu::BuildControls(const TextDatabase& texts)
 	                   std::make_unique<Dialog>(OptionsTabs(texts, Page::Controls), static_cast<size_t>(Page::Controls)));
 	page.Add<StaticText>(DialogRect {.min = {100, 60}, .max = {700, 160}},
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_CONTROLTITLE")), Layout::Wrapped);
+	for (size_t i = 0; i < k_ActionTexts.size(); ++i)
+	{
+		_actionNames.at(i) = texts.Get(k_ActionTexts.at(i));
+	}
+	_keyReminder = texts.Get("HELP_TEXT_DIALOG_KEYREMINDER");
+	_loadDefaults = texts.Get("HELP_TEXT_DIALOG_LOADDEFAULTS");
+	_cancel = texts.Get("HELP_TEXT_REQUESTER_BOXES_03");
 
+	// Halfway between the big and the mid text size
+	_controls =
+	    &page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + k_Mid) / 2, true, true, false);
+	RefreshControls();
+
+	// Load Defaults asks first, then puts every binding back
+	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}}, _loadDefaults, k_Mid).onClick = [this] {
+		Confirm(_loadDefaults, [this] {
+			_bindings = input::k_DefaultKeyBindings;
+			RefreshControls();
+			_controlsChanged = true;
+		});
+	};
+
+	// Back keeps the bindings with the player's profile
+	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
+	                    Look::LeftArrow)
+	    .onClick = [this] {
+		_keepControls = true;
+		Back();
+	};
+}
+
+void GameMenu::RefreshControls()
+{
 	// Each binding reads "<action> : <key> <mouse>", the mouse's name after a gap of five spaces for its picture
 	std::vector<List::Item> items;
-	for (size_t i = 0; i < k_Bindings.size(); ++i)
+	_wheelMice.clear();
+	for (size_t i = 0; i < _bindings.size(); ++i)
 	{
-		const auto& binding = k_Bindings.at(i);
-		std::u16string text(texts.Get(binding.name));
-		text += u" : ";
-		if (binding.key != 0)
+		const auto& binding = _bindings.at(i);
+		auto text = _actionNames.at(i) + u" : " + input::rebinding::ChordName(binding.key) + u" ";
+		if (const auto mouseName = MouseText(binding.mouse); !mouseName.empty())
 		{
-			text += binding.modifier != 0 ? KeyName(binding.modifier) + u" + " + KeyName(binding.key) : KeyName(binding.key);
+			text += MouseWords(_texts.Get(mouseName));
 		}
-		text += u" ";
-		std::string_view mouseName;
-		switch (binding.mouse)
-		{
-		case Mouse::Left:
-			mouseName = "HELP_TEXT_ACTIONS_LEFTMOUSEBUTTON";
-			break;
-		case Mouse::Right:
-			mouseName = "HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON";
-			break;
-		case Mouse::Middle:
-			mouseName = "HELP_TEXT_ACTIONS_MIDDLEMOUSEBUTTON";
-			break;
-		case Mouse::WheelUp:
-			mouseName = "HELP_TEXT_ACTIONS_WHEEL_UP";
-			break;
-		case Mouse::WheelDown:
-			mouseName = "HELP_TEXT_ACTIONS_WHEEL_DOWN";
-			break;
-		default:
-			break;
-		}
-		if (!mouseName.empty())
-		{
-			text += u"     (" + std::u16string(texts.Get(mouseName)) + u")";
-		}
-		const auto cell = MouseCell(binding.mouse);
+		const auto shown = ShownMouse(_bindings, i);
+		const auto cell = MouseCell(shown);
 		items.push_back({.text = std::move(text),
 		                 .mouseCell = cell ? std::optional(cell->first) : std::nullopt,
 		                 .mouseMirrored = cell && cell->second});
-		if (binding.mouse == Mouse::WheelUp || binding.mouse == Mouse::WheelDown)
+		if (shown == Mouse::WheelUp || shown == Mouse::WheelDown)
 		{
-			_wheelMice.emplace_back(i, binding.mouse == Mouse::WheelUp);
+			_wheelMice.emplace_back(i, shown == Mouse::WheelUp);
 		}
 	}
-	// Halfway between the big and the mid text size
-	auto& list =
-	    page.Add<List>(_font, DialogRect {.min = {100, 120}, .max = {700, 440}}, (k_Big + k_Mid) / 2, true, true, false);
-	list.SetItems(std::move(items));
-	// TODO(raffclar): redefining an action, by double clicking it
-	_controls = &list;
+	// The list keeps the row picked and where it is scrolled to
+	_controls->SetItems(std::move(items));
+	// A mouse input taken for an earlier binding is forgotten
+	_mouseChosen = false;
+}
 
-	// TODO(raffclar): the bindings can't change yet, so they are the defaults already
-	page.Add<Button>(DialogRect {.min = {260, 530}, .max = {540, 570}},
-	                 std::u16string(texts.Get("HELP_TEXT_DIALOG_LOADDEFAULTS")), k_Mid);
+void GameMenu::SetControls(const input::KeyBindingTable& bindings)
+{
+	_bindings = bindings;
+	RefreshControls();
+}
 
-	page.Add<BigButton>(_font, k_BackPosition, k_BackSize, std::u16string(texts.Get("HELP_TEXT_DIALOG_BACK")), LabelSide::Right,
-	                    Look::LeftArrow)
-	    .onClick = [this] { Back(); };
+void GameMenu::DoubleClick(glm::ivec2 point)
+{
+	// A double click on the row picked asks for its new key or mouse input
+	if (!_open || _question || _page != Page::Controls || !_controls->rect.Contains(point))
+	{
+		return;
+	}
+	const auto row = _controls->ItemAt(point.y);
+	if (!row.has_value() || row != _controls->GetSelection() || *row >= _bindings.size())
+	{
+		return;
+	}
+	_capture = Capture {.row = *row, .key = std::nullopt};
+	Confirm(CaptureText(std::nullopt), [this] { KeepCapture(); });
+}
+
+std::u16string GameMenu::CaptureText(const std::optional<std::u16string>& input) const
+{
+	auto text = _keyReminder + u" " + (_capture ? _actionNames.at(_capture->row) : std::u16string {}) + u":";
+	if (input.has_value())
+	{
+		text += u"\n" + *input;
+	}
+	return text;
+}
+
+void GameMenu::ShowCapture(const std::u16string& input)
+{
+	if (_question && _question->words != nullptr)
+	{
+		_question->words->text = CaptureText(input);
+		_question->text = _question->words->text;
+	}
+}
+
+bool GameMenu::CaptureKey(SDL_Scancode key, input::rebinding::HeldModifiers held)
+{
+	if (!_capture || !_question)
+	{
+		return false;
+	}
+	if (!input::rebinding::IsBindable(key))
+	{
+		return true;
+	}
+	_capture->key = input::rebinding::CapturedKey(key, held);
+	_mouseChosen = false;
+	ShowCapture(input::rebinding::ChordName(_capture->key));
+	return true;
+}
+
+void GameMenu::PollCapture(bool left, bool right, bool middle, glm::ivec2 point)
+{
+	if (!_capture || !_question)
+	{
+		return;
+	}
+	// The buttons of the box take their own clicks
+	if (std::ranges::any_of(_question->buttons,
+	                        [point](const Control* button) { return button != nullptr && button->HitTest(point); }))
+	{
+		return;
+	}
+	const auto mouse = input::rebinding::CapturedMouse(left, right, middle, _captureWheel);
+	if (!mouse.has_value() && !_mouseChosen)
+	{
+		return;
+	}
+	if (mouse.has_value())
+	{
+		// The wheel's steps are used only when no button gives the input
+		if (!left && !right && !middle)
+		{
+			_captureWheel = 0;
+		}
+		_pendingMouse = *mouse;
+		_mouseChosen = true;
+	}
+	ShowCapture(MouseWords(_texts.Get(MouseText(_pendingMouse))));
+}
+
+void GameMenu::KeepCapture()
+{
+	if (!_capture)
+	{
+		return;
+	}
+	if (_mouseChosen)
+	{
+		input::rebinding::AssignMouse(_bindings, _capture->row, _pendingMouse);
+	}
+	else
+	{
+		// With no key pressed the action loses its key
+		input::rebinding::AssignKey(_bindings, _capture->row, _capture->key);
+	}
+	_capture.reset();
+	RefreshControls();
+	_controlsChanged = true;
 }
 
 void GameMenu::Ask(std::u16string text, Action yes)
 {
 	// A question with a Yes and a No: the question in the middle of a 500 by 200 box
 	auto answers = std::make_unique<Dialog>();
-	answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	answers->Add<BigButton>(_font, glm::ivec2(200, 338), k_ArrowSize, _yes, LabelSide::Right, Look::LeftArrow).onClick =
-	    [this, yes] { Settle(yes); };
-	answers->Add<BigButton>(_font, glm::ivec2(568, 338), k_ArrowSize, _no, LabelSide::Left, Look::RightArrow).onClick = [this] {
-		Settle(Action::None);
-	};
-	_question = Question {.text = std::move(text), .answers = std::move(answers), .fade = Zoomer()};
+	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
+	auto& yesButton =
+	    answers->Add<BigButton>(_font, glm::ivec2(200, 338), k_ArrowSize, _yes, LabelSide::Right, Look::LeftArrow);
+	yesButton.onClick = [this, yes] { Settle(yes); };
+	auto& noButton = answers->Add<BigButton>(_font, glm::ivec2(568, 338), k_ArrowSize, _no, LabelSide::Left, Look::RightArrow);
+	noButton.onClick = [this] { Settle(Action::None); };
+	_question = Question {.text = std::move(text),
+	                      .answers = std::move(answers),
+	                      .fade = Zoomer(),
+	                      .words = &words,
+	                      .buttons = {&yesButton, &noButton}};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -793,9 +898,36 @@ void GameMenu::Tell(std::u16string text, Action ok)
 {
 	// A message with an OK button 150 by 32 under it, in the same box as a question
 	auto answers = std::make_unique<Dialog>();
-	answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
-	answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid).onClick = [this, ok] { Settle(ok); };
-	_question = Question {.text = std::move(text), .answers = std::move(answers), .fade = Zoomer()};
+	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
+	auto& okButton = answers->Add<Button>(DialogRect {.min = {325, 338}, .max = {475, 370}}, _ok, k_Mid);
+	okButton.onClick = [this, ok] { Settle(ok); };
+	_question = Question {.text = std::move(text),
+	                      .answers = std::move(answers),
+	                      .fade = Zoomer(),
+	                      .words = &words,
+	                      .buttons = {&okButton, nullptr}};
+	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
+	CurrentDialog().Reset();
+}
+
+void GameMenu::Confirm(std::u16string text, std::function<void()> ok)
+{
+	// A question with a Cancel at the left and an OK at the right, in the same box as a question with a Yes and a No
+	auto answers = std::make_unique<Dialog>();
+	auto& words = answers->Add<StaticText>(DialogRect {.min = {200, 220}, .max = {600, 350}}, text, Layout::Wrapped);
+	auto& cancelButton =
+	    answers->Add<BigButton>(_font, glm::ivec2(200, 338), k_ArrowSize, _cancel, LabelSide::Right, Look::LeftArrow);
+	cancelButton.onClick = [this] { Settle(Action::None); };
+	auto& okButton = answers->Add<BigButton>(_font, glm::ivec2(568, 338), k_ArrowSize, _ok, LabelSide::Left, Look::RightArrow);
+	okButton.onClick = [this, ok = std::move(ok)] {
+		ok();
+		Settle(Action::None);
+	};
+	_question = Question {.text = std::move(text),
+	                      .answers = std::move(answers),
+	                      .fade = Zoomer(),
+	                      .words = &words,
+	                      .buttons = {&cancelButton, &okButton}};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -847,6 +979,12 @@ void GameMenu::ShowPage(Page page)
 		_mustRestart = false;
 		_previousProfile = _originalName;
 		UpdatePlayersPage();
+	}
+	if (page == Page::Controls && _page != Page::Controls)
+	{
+		// Shown afresh, the page picks its first row and shows the bindings as they are now
+		_controls->SetSelection(0);
+		RefreshControls();
 	}
 	_page = page;
 	CurrentDialog().Reset();
@@ -910,6 +1048,12 @@ void GameMenu::Update(float deltaSeconds)
 {
 	_fade.Update(deltaSeconds);
 	_statistics->Update(deltaSeconds);
+	// The box that asks for a new input has gone, by its Cancel, by Escape or with the menu
+	if (!_question)
+	{
+		_capture.reset();
+		_captureWheel = 0;
+	}
 	if (_question)
 	{
 		_question->fade.Update(deltaSeconds);
@@ -973,6 +1117,11 @@ GameMenu::Action GameMenu::MouseUp(glm::ivec2 point)
 
 void GameMenu::Wheel(glm::ivec2 point, int steps)
 {
+	if (IsCapturing())
+	{
+		_captureWheel += steps;
+		return;
+	}
 	if (_open && !_question)
 	{
 		CurrentDialog().Wheel(point, steps);

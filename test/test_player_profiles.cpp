@@ -401,3 +401,19 @@ TEST(PlayerProfileSystem, DeletingAProfileDeletesItsCreaturesMindFileButNotItsPh
 	EXPECT_FALSE(std::filesystem::exists(mind));
 	EXPECT_TRUE(std::filesystem::exists(physique));
 }
+
+TEST(PlayerProfiles, TheBindingsAreKeptWithTheProfile)
+{
+	player_profiles::Profiles kept;
+	kept.profiles.push_back({.name = "Ann", .creatureFile = "C1.erc", .creatureName = "Ann"});
+	kept.current = "Ann";
+	kept.profiles.front().keys = {{0, {.primary = 0x3B, .primaryModifier = 0, .mouseButton = 0}},
+	                              {29, {.primary = 0x1F, .primaryModifier = 0x1D, .mouseButton = 5}}};
+	const auto read = player_profiles::Read(player_profiles::Write(kept));
+	ASSERT_EQ(read.profiles.size(), 1u);
+	EXPECT_EQ(read.profiles.front().keys, kept.profiles.front().keys);
+	// A line that can't be read leaves the bindings out
+	const auto broken = player_profiles::Read("profile\tAnn\tC1.erc\t0\tAnn\nkeys\tAnn\t3\t1\tx\t0\n");
+	ASSERT_EQ(broken.profiles.size(), 1u);
+	EXPECT_TRUE(broken.profiles.front().keys.empty());
+}

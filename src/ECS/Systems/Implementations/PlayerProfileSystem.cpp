@@ -219,6 +219,17 @@ void PlayerProfileSystem::SetCurrentSettings(const player_profiles::Settings& se
 	Save();
 }
 
+void PlayerProfileSystem::SetCurrentKeys(const std::map<uint32_t, player_profiles::KeptKey>& keys)
+{
+	auto* profile = CurrentProfile();
+	if (profile == nullptr || profile->keys == keys)
+	{
+		return;
+	}
+	profile->keys = keys;
+	Save();
+}
+
 void PlayerProfileSystem::SetCurrentAlignment(double alignment)
 {
 	auto* profile = CurrentProfile();

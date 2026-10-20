@@ -811,6 +811,9 @@ struct Command
 		/// Opens the game's menu on its Players page, then the tattoo editor over it, as the page's Edit Tattoo button
 		/// does. Needs no creature
 		OpenTattooMenu,
+		/// Opens the game's menu on its Controls page, picks the row that the value gives and double clicks it, so that the
+		/// box asks for the row's new key or mouse input. Needs no creature
+		OpenControlsBox,
 		/// The custom music player plays the track of the custom music folder that the value gives, from 0, and the music
 		/// moods look at the music on this turn. The value k_StopCustomMusic stops the music. The game reads the folder again
 		/// first. Needs no creature

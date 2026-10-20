@@ -3592,6 +3592,21 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.controls_rebind",
+	    .name = "The Controls page asks for a new key",
+	    .facet = Facet::Interface,
+	    .description = "After a second the menu opens on its Controls page. The page picks the Help row and double "
+	                   "clicks it. Press a key, or click a mouse button away from the box's buttons, then click OK. Load "
+	                   "Defaults asks first, then puts every binding back.",
+	    .expected = "The box reads \"Define a key for  Help:\" between a Cancel and an OK arrow. A key shows under the "
+	                "words, with Ctrl, Shift or Alt before it. Escape, Tab, P, F1, F2 and the Enter key of the number pad "
+	                "show nothing. OK binds the input, and the action that had it before loses it. The keys have the "
+	                "names that the system gives them, such as Ctrl and Space.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::OpenControlsBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "interface.speed_text",
 	    .name = "The words of the game's speed",
 	    .facet = Facet::Interface,
@@ -9713,12 +9728,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
-	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::StopScript ||
+	       kind == Kind::StartScriptMusic || kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave ||
+	       kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm ||
+	       kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease ||
+	       kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding ||
+	       kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -9746,7 +9761,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 167> k_Names {
+	constexpr std::array<std::string_view, 168> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -9881,6 +9896,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "check the profile folder",
 	    "give the player a picture of their own",
 	    "open the tattoo editor from the menu",
+	    "open the box of the controls page",
 	    "play custom music",
 	    "show the custom music controls",
 	    "script reaction",

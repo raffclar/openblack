@@ -22,6 +22,8 @@
 #include "Common/Zoomer.h"
 #include "Dialog.h"
 #include "ECS/StatisticsRules.h"
+#include "Input/KeyBindings.h"
+#include "Input/KeyRebinding.h"
 
 namespace openblack::gui
 {
@@ -92,7 +94,6 @@ public:
 		StartNewGame,
 		/// The player said yes to the game starting again, as the profile now picked
 		Restart,
-		RedefineControl,
 		Quit,
 	};
 
@@ -204,6 +205,25 @@ public:
 	[[nodiscard]] const std::u16string& GetButtonLabel(size_t index) const { return _buttonLabels.at(index); }
 	/// The lines of the Controls page
 	[[nodiscard]] const List& GetControls() const noexcept { return *_controls; }
+	/// The bindings that the Controls page shows and changes
+	[[nodiscard]] const input::KeyBindingTable& GetControlBindings() const noexcept { return _bindings; }
+	/// The Controls page shows these bindings, as the profile or the game has them
+	void SetControls(const input::KeyBindingTable& bindings);
+	/// Whether the player changed a binding since last asked: the game then uses the page's bindings
+	bool TakeControlsChanged() noexcept { return std::exchange(_controlsChanged, false); }
+	/// Whether the player left the Controls page by Back since last asked: the profile then keeps the bindings
+	bool TakeControlsToKeep() noexcept { return std::exchange(_keepControls, false); }
+	/// A double click of the left button. On the row picked of the Controls page, it opens the box that asks for the
+	/// row's new key or mouse input.
+	void DoubleClick(glm::ivec2 point);
+	/// Whether the box that asks for a new key or mouse input is open
+	[[nodiscard]] bool IsCapturing() const noexcept { return _capture.has_value() && _question.has_value(); }
+	/// A key press while the box asks for a new key: the box shows the key that the press gives, and OK binds it. The
+	/// game keeps some keys for itself, and the box ignores them. Whether the box took the press.
+	bool CaptureKey(SDL_Scancode key, input::rebinding::HeldModifiers held);
+	/// Once a frame while the box asks for a new input: the mouse buttons held, and the pointer. A button held, or the
+	/// wheel turned, with the pointer off the box's buttons, gives the mouse input that OK binds.
+	void PollCapture(bool left, bool right, bool middle, glm::ivec2 point);
 	/// What the player can press by name now: the question's answers while it is asked, else the page's buttons, check
 	/// boxes, sliders and tabs
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
@@ -214,6 +234,17 @@ private:
 		std::u16string text;
 		std::unique_ptr<Dialog> answers;
 		Zoomer fade;
+		/// The text of the box, which can change while the box is open
+		StaticText* words {nullptr};
+		/// The box's buttons, which take their own clicks
+		std::array<const Control*, 2> buttons {};
+	};
+
+	/// The binding that the box asks a new key or mouse input for: its row, and the key pressed
+	struct Capture
+	{
+		size_t row {0};
+		std::optional<input::KeyChord> key;
 	};
 
 	void BuildMain(const TextDatabase& texts);
@@ -221,12 +252,21 @@ private:
 	void BuildPlayers(const TextDatabase& texts);
 	void BuildAdvanced(const TextDatabase& texts);
 	void BuildControls(const TextDatabase& texts);
+	/// The Controls page's rows from the bindings
+	void RefreshControls();
+	/// The words of the box that asks for a new key or mouse input, with the input given so far
+	[[nodiscard]] std::u16string CaptureText(const std::optional<std::u16string>& input) const;
+	void ShowCapture(const std::u16string& input);
+	/// OK in the box: the row takes the input given
+	void KeepCapture();
 	/// The tabs of the options' pages, with selected open
 	std::vector<Dialog::Tab> OptionsTabs(const TextDatabase& texts, Page selected);
 	/// A question with a Yes, which settles on the action, and a No
 	void Ask(std::u16string text, Action yes);
 	/// A message with an OK, which settles on the action
 	void Tell(std::u16string text, Action ok);
+	/// A question with a Cancel and an OK, which does what it is given
+	void Confirm(std::u16string text, std::function<void()> ok);
 	void Settle(Action action);
 	/// Back from an options page, or their first tab
 	void Back();
@@ -281,6 +321,21 @@ private:
 	/// The options page's Quit arrow, hidden inside the temple
 	BigButton* _optionsQuit {nullptr};
 	List* _controls {nullptr};
+	input::KeyBindingTable _bindings {input::k_DefaultKeyBindings};
+	std::array<std::u16string, input::k_KeyBindingCount> _actionNames;
+	/// HELP_TEXT_DIALOG_KEYREMINDER, HELP_TEXT_DIALOG_LOADDEFAULTS and the Cancel of a box
+	std::u16string _keyReminder;
+	std::u16string _loadDefaults;
+	std::u16string _cancel;
+	std::optional<Capture> _capture;
+	/// The last mouse input given in the box, and whether it came after the last key. They stay after a Cancel, so the
+	/// next box starts with them, until the page shows its rows again.
+	input::MouseInput _pendingMouse {input::MouseInput::None};
+	bool _mouseChosen {false};
+	/// Steps of the wheel turned while the box is open and not used yet
+	int _captureWheel {0};
+	bool _controlsChanged {false};
+	bool _keepControls {false};
 	List* _players {nullptr};
 	EditBox* _creatureNameBox {nullptr};
 	SymbolPicture* _symbolPicture {nullptr};

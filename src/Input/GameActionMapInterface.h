@@ -161,6 +161,8 @@ public:
 	virtual void SetKeyBinding([[maybe_unused]] BindableActionMap action, [[maybe_unused]] std::optional<KeyChord> key) {}
 	/// Puts every binding back to the game's defaults
 	virtual void ResetKeyBindings() {}
+	/// Replaces every binding, the keys and the mouse inputs, as the Controls page or the profile gives them
+	virtual void SetKeyBindings([[maybe_unused]] const KeyBindingTable& bindings) {}
 	/// Presses an action's key for one frame, as if the player had, so its handling can be tried out
 	virtual void QueuePress([[maybe_unused]] BindableActionMap action) {}
 	/// Whether a double click is waiting, and takes it: a double click is marked as its second press comes and stays

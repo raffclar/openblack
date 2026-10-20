@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <map>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -54,6 +55,8 @@ public:
 	virtual void EditCurrentProfile(std::u16string_view creatureName, int symbol) = 0;
 	/// Keeps the options the player set with the profile played
 	virtual void SetCurrentSettings(const player_profiles::Settings& settings) = 0;
+	/// Keeps the bindings of the Controls page with the profile played, by the place of each action in the list
+	virtual void SetCurrentKeys(const std::map<uint32_t, player_profiles::KeptKey>& keys) = 0;
 	/// Keeps how good or evil the player is now with the profile played, for their next new game to start them there
 	virtual void SetCurrentAlignment(double alignment) = 0;
 
