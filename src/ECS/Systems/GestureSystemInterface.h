@@ -112,6 +112,11 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec2> GetDrawingPoint() const = 0;
 	/// Forgets the hand's path
 	virtual void ForgetPath() = 0;
+	/// A miracle seed in the hand does its first turn there: the hand forgets its path. From then on this land, the chain
+	/// follows the hand while it holds any miracle.
+	virtual void SeedFirstTurnInHand() { ForgetPath(); }
+	/// Whether the hand shows the effect of a selection, round the hand: while the leash picker is open
+	[[nodiscard]] virtual bool IsSelecting() const { return false; }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
 	[[nodiscard]] virtual std::span<const gestures::GestureTemplate> GetTemplates() const = 0;
@@ -125,8 +130,8 @@ public:
 	[[nodiscard]] virtual bool IsLeashPickerOpen() const = 0;
 	/// Whether a circle drawn for the storm or shield in the hand is remembered, and for how much longer
 	[[nodiscard]] virtual float GetCircleSecondsLeft() const = 0;
-	/// Whether the hand is drawing a gesture that the chain behind it shows: one that powers up the miracle in it, or the
-	/// circle that sizes it
+	/// Whether the hand is drawing a gesture that the chain behind it shows: while it holds a miracle that it can power up,
+	/// a miracle that a circle sizes, or any miracle once a miracle did its first turn in the hand on this land
 	[[nodiscard]] virtual bool IsGesturing() const = 0;
 	/// The row of hints of the gestures the hand waits for, at the bottom right of the screen
 	[[nodiscard]] virtual const gesture_hints::Row& GetHints() const = 0;

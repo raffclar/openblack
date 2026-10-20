@@ -81,8 +81,9 @@ struct Request
 	int powerUpLevel {-1};
 	/// PickLeash: the leash; LeashGesture: the leash worn, else the one picked to put on next
 	LeashType leash {LeashType::None};
-	/// FightMiracle: the miracle
+	/// FightMiracle: the miracle, and the seed of the miracle that its hint shows
 	MagicType magic {MagicType::None};
+	SpellSeedType seed {SpellSeedType::None};
 
 	bool operator==(const Request&) const = default;
 };
@@ -135,6 +136,7 @@ struct HandContext
 		{
 			GestureType gesture {GestureType::None};
 			MagicType magic {MagicType::None};
+			SpellSeedType seed {SpellSeedType::None};
 		};
 		std::vector<FightMiracle> fightMiracles;
 	};
@@ -161,6 +163,10 @@ inline constexpr std::string_view k_HiddenScript = "HiddenScript";
 /// The event that the help counts when the hand draws the gesture of a request, none for most gestures. A scribble
 /// counts only when it is about a miracle that the hand can power up.
 [[nodiscard]] std::optional<uint32_t> HelpEventOf(const Request& request, const HandContext& context);
+/// Whether the chain follows the hand. It follows the hand while the hand holds a miracle that it can power up or that a
+/// circle sizes. After a miracle did its first turn in the hand on the land, it follows the hand while it holds any
+/// miracle.
+[[nodiscard]] bool ChainFollows(const std::optional<HandContext::Seed>& seed, bool seedTurnedOnLand);
 /// Whether the help counts a cast of the miracle in the hand as a cast with a power-up. The miracle must be ready, not
 /// cast, from an icon and powered up. A miracle that a gesture sizes must have that gesture as the last gesture drawn.
 [[nodiscard]] bool CountsPoweredUpCast(const HandContext::Seed& seed, GestureType lastGesture);

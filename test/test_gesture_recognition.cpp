@@ -352,6 +352,20 @@ TEST(GestureRequests, EveryGestureButAScribbleIsShownRecognised)
 	EXPECT_FALSE(ShowsRecognition(Purpose::ClosePicker));
 }
 
+TEST(GestureRequests, TheChainFollowsAMiracleOnceAMiracleTurnedInTheHand)
+{
+	// No miracle in the hand: no chain
+	EXPECT_FALSE(ChainFollows(std::nullopt, true));
+	// A miracle from a globe can not be powered up and no circle sizes it
+	const HandContext::Seed globe {.canPowerUp = false};
+	EXPECT_FALSE(ChainFollows(globe, false));
+	// After the first turn of a miracle in the hand on the land, the chain follows every miracle in the hand
+	EXPECT_TRUE(ChainFollows(globe, true));
+	// A miracle that the hand can power up, and one that a circle sizes, always have the chain
+	EXPECT_TRUE(ChainFollows(HandContext::Seed {}, false));
+	EXPECT_TRUE(ChainFollows(HandContext::Seed {.sizingGesture = GestureType::Circle, .canPowerUp = false}, false));
+}
+
 TEST(GestureRequests, TheLeash)
 {
 	HandContext context;

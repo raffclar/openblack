@@ -67,6 +67,22 @@ TEST(GestureSystem, SamplesTheCursorAtTheGamesPace)
 	EXPECT_TRUE(system.GetPath().Empty());
 }
 
+TEST(GestureSystem, AMiraclesFirstTurnInTheHandStartsThePathAgain)
+{
+	GestureSystem system;
+	for (int i = 0; i < 10; ++i)
+	{
+		auto frame = Frame(gesture::k_SampleSeconds);
+		frame.cursor = {100.0f + static_cast<float>(i * 10), 100.0f};
+		system.Update(frame);
+	}
+	ASSERT_FALSE(system.GetPath().Empty());
+	system.SeedFirstTurnInHand();
+	EXPECT_TRUE(system.GetPath().Empty());
+	// With no leash picker open, the hand shows no effect of a selection
+	EXPECT_FALSE(system.IsSelecting());
+}
+
 TEST(GestureSystem, ADrawnPathIsTakenInPlaceOfTheCursor)
 {
 	GestureSystem system;

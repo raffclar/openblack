@@ -86,6 +86,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -433,6 +434,14 @@ void GameHandGrabWorld::CountHelpEvent(uint32_t event)
 	if (Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().Trigger(event);
+	}
+}
+
+void GameHandGrabWorld::ForgetGesturePath()
+{
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
 	}
 }
 
