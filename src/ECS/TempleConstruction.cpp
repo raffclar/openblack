@@ -709,7 +709,7 @@ void construction::MakeSitePiles(entt::entity building, BuildingSite& site)
 		}
 		const auto random = [](float limit) { return Locator::gameRandom::value().GameFloatRand(limit); };
 		const auto at = glm::xz(registry.Get<const Transform>(building).position);
-		const auto place = building_site::StandardPilePlace(at, villager_home::ArrivePosition(building), random);
+		const auto place = building_site::StandardPilePlace(at, villager_home::DoorPosition(building), random);
 		auto position = glm::vec3(place.position.x, 0.0f, place.position.y);
 		if (Locator::terrainSystem::has_value())
 		{
