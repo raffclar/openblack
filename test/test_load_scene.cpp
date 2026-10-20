@@ -39,6 +39,7 @@ protected:
 		    .gamePath = mock_game_path.string(),
 		    .numFramesToSimulate = 0,
 		    .logFile = "stdout",
+		    .background = true,
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
 		args.profileFolder = profileFolder_.Path();
