@@ -69,7 +69,9 @@ public:
 	bool SetWeatherThingSpeed(entt::entity thing, float speed) override;
 	bool SetWeatherThingAffectedByWind(entt::entity thing, bool affected) override;
 
-	void Update(uint32_t turn) override;
+	void ProcessStorms(uint32_t turn) override;
+	void ProcessWeatherThings() override;
+	void ProcessClimates(uint32_t turn) override;
 	[[nodiscard]] std::span<const components::Storm> GetActiveStorms() const override { return _activeStorms; }
 
 	[[nodiscard]] components::WeatherInfo GetWeather(const glm::vec3& position) override;
@@ -89,7 +91,6 @@ private:
 	void InitialiseClimate(components::Climate& climate) const;
 
 	void UpdateStorms();
-	void ProcessWeatherThings();
 	/// The wind that blows a weather thing's storm where it is: the air's and the climates'
 	[[nodiscard]] script_weather::Wind DriftWindAt(const glm::vec3& position);
 	void ProcessClimate(entt::entity entity, bool newDay);

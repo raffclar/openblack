@@ -37,6 +37,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameSession.h"
+#include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
@@ -241,6 +242,8 @@ public:
 
 	bool ProcessEvents(const SDL_Event& event) noexcept;
 	bool GameLogicLoop() noexcept;
+	/// One step of the game turn
+	void PlayTurnStep(game_turn::Step step);
 	/// The game's music, for a turn of the world or of the temple
 	void ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel);
 	/// The paused, slower and quicker words at the top of the screen, a frame on by the real time
