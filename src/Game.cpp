@@ -1815,6 +1815,19 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		toolTips.ForceWithCharge(icon->index, charge);
 		return;
 	}
+	// Over a one-shot globe at rest, the hand names its miracle at once. A globe in flight is caught as any thing is.
+	if (const auto globe = tips::GlobeOf(*pointed); globe.has_value())
+	{
+		if (tips::IsMoving(*pointed))
+		{
+			submitAll(tips::OverTakeable(true, std::nullopt));
+		}
+		else
+		{
+			toolTips.ForceWithCharge(globe->index, std::nullopt);
+		}
+		return;
+	}
 	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
 	if (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().WhyNotTake(*pointed).empty())
 	{

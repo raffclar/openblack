@@ -135,6 +135,8 @@ enum class TapKind : uint8_t
 /// Over a miracle icon in the player's influence, the hand names the icon's miracle at once, in the words of the
 /// miracle's own tooltip text, with no mouse button. A text that is not one of the game's tooltips shows nothing.
 [[nodiscard]] std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText);
+/// What a one-shot globe offers: the name of the miracle that it gives, or of its seed when it gives no miracle
+[[nodiscard]] std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText);
 
 /// What the hand can do with the thing it holds, at the thing under the pointer
 enum class HeldUse : uint8_t

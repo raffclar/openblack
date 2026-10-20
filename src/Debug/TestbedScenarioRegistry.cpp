@@ -5876,6 +5876,21 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
+
+	// A dispenser floats a heal globe in front of the camera, in the player's influence, and the pointer rests on it
+	all.push_back({
+	    .id = "hand.globe_tooltip",
+	    .name = "The name of the miracle over a one-shot globe",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests on the land for three seconds, then on the dispenser's globe for six seconds.",
+	    .expected = "Over the land: \"Move\". Over the globe: the name of its miracle (the heal miracle) at once, with no "
+	                "mouse button, and no \"Pick Up\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.31f}}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -10084,13 +10099,13 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
-	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
-	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)

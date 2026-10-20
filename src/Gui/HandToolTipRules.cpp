@@ -96,6 +96,11 @@ std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText)
 	return Offer {.index = miracleToolTipText - k_FirstToolTipText};
 }
 
+std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText)
+{
+	return SpellIconOffer(givesAMiracle ? miracleToolTipText : seedToolTipText);
+}
+
 std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree)
 {
 	if (!handInInfluence)
