@@ -1531,3 +1531,6 @@ set_tests_properties(
 openblack_setup_and_add_test(
   test_hand_cycle_choice hand/test_hand_cycle_choice.cpp
 )
+openblack_setup_and_add_test(
+  test_hand_knock hand/test_hand_knock.cpp
+)

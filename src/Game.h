@@ -42,6 +42,7 @@
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
 #include "Hand/HandFeel.h"
+#include "Hand/HandKnock.h"
 #include "Input/HandPointer.h"
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
@@ -494,14 +495,8 @@ private:
 	glm::vec3 _handGripPoint {0.0f, 0.0f, 0.0f};
 	/// The fade from where the hand was to where it is now held, as it grips the land or lets go
 	HandCrossFade _handCrossFade;
-	/// The hand's tap after it knocked on a house: it stays upright where it knocked while the tap plays through once.
-	/// Holding something puts it off, and it starts over once the hand lets go.
-	struct HandKnock
-	{
-		glm::vec3 point;
-		std::chrono::microseconds time {0};
-	};
-	std::optional<HandKnock> _handKnock;
+	/// The hand's tap after it knocked on a house
+	hand_knock::Tap _handKnock;
 	/// Where the pointer was last put on the hand while it holds a town's totem
 	std::optional<glm::ivec2> _totemPointer;
 	/// The hand plays its tap this frame

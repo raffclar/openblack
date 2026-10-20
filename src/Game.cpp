@@ -3268,15 +3268,9 @@ bool Game::Update() noexcept
 			{
 				// Knocking on a house, the hand plays its tap once through, without leaning
 				const auto* tap = _handAnimation->GetAnimation(static_cast<size_t>(HandCycle::TapHouse));
-				const auto timeMs =
-				    static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(_handKnock->time).count());
+				const auto timeMs = _handKnock.Play(deltaTime, tap != nullptr ? tap->duration : 0);
 				_handAnimation->UpdateHeld(deltaTime, HandCycle::TapHouse, timeMs, _mousePosition);
 				_handAnimation->SettleCursor(_mousePosition);
-				_handKnock->time += deltaTime;
-				if (tap == nullptr || _handKnock->time >= std::chrono::milliseconds(tap->duration))
-				{
-					_handKnock.reset();
-				}
 			}
 			else if (!holdingSeed)
 			{
@@ -6304,7 +6298,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 	// Tapping a house it knocked on, the hand stays where it knocked
 	if (_handKnocking)
 	{
-		_handPosition = _handKnock->point;
+		_handPosition = _handKnock.Point().value_or(_handPosition);
 		_handCrossFade.Update(deltaSeconds);
 		handTransform.position = _handCrossFade.Apply(_handPosition);
 		return;
@@ -6467,14 +6461,7 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 	// A knock while the tap plays doesn't start it over, the hand already being where it knocked
 	if (knocks.TakeHandKnock())
 	{
-		if (_handKnock.has_value())
-		{
-			_handKnock->point = _handPosition;
-		}
-		else
-		{
-			_handKnock = HandKnock {.point = _handPosition};
-		}
+		_handKnock.Knock(_handPosition);
 	}
 	// Holding something comes first; the tap starts over once the hand lets go
 	bool holds = magic::HandHoldPoser::Find().has_value();
@@ -6482,11 +6469,7 @@ void Game::UpdateHandKnock(const ecs::components::Transform& handTransform)
 	{
 		holds = Locator::handGrabSystem::value().GetHeldPose().has_value();
 	}
-	if (holds && _handKnock.has_value())
-	{
-		_handKnock->time = std::chrono::microseconds::zero();
-	}
-	const bool knocking = _handKnock.has_value() && !holds;
+	const bool knocking = _handKnock.Hold(holds);
 	// Starting and ending the tap, the hand fades from where it was drawn
 	if (knocking != _handKnocking)
 	{
