@@ -5541,6 +5541,25 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
 	});
 
+	// The camera looks down at 45 degrees on a large oak from about 150 m, the pointer on its crown. The oak is heavy, so
+	// the hand must pull it for a time before it comes out.
+	all.push_back({
+	    .id = "hand.tree_tug_heavy",
+	    .name = "Pulling a heavy tree out of the ground",
+	    .facet = Facet::Hand,
+	    .description = "Seen from about 150 m away at 45 degrees, the hand grips a very large oak, pulls it slowly up the "
+	                   "screen until it comes out of the ground, then carries it.",
+	    .expected = "The oak leans and stretches towards the pull. When it comes out, the hand and the oak move together "
+	                "to under the pointer. On no frame is the hand drawn away from the oak.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 106.0f, -66.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {0.0f, 40.0f}, .scale = 2.5f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.42f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.0f, -0.3f}, .amount = 3.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
+	});
+
 	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
 	// distances, two more walk to and fro, two stand by an oak, and a cow, a sheep, a horse and a pig graze to the left
 	all.push_back({

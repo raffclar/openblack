@@ -6773,7 +6773,12 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		const auto model =
 		    glm::translate(glm::mat4(1.0f), hand.position) * glm::mat4(hand.rotation) * glm::scale(glm::mat4(1.0f), hand.scale);
 		frame->visible = glm::vec3(model * glm::vec4(_handAnimation->LeafBoneCentre(), 1.0f));
-		if (const auto& bones = _handAnimation->GetBoneMatrices(); !bones.empty())
+		// The wrist as it is drawn: after the blend of the drawn pose, which the animation's own bones do not have
+		const auto handEntity =
+		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::Hand>(handEntity);
+		const auto& bones = drawn != nullptr ? drawn->boneMatrices : _handAnimation->GetBoneMatrices();
+		if (!bones.empty())
 		{
 			frame->wrist = glm::vec3(model * bones.front()[3]);
 		}
