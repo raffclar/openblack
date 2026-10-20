@@ -234,8 +234,10 @@ void ExplosionSystem::Update(float milliseconds)
 	if (Locator::camera::has_value())
 	{
 		auto& camera = Locator::camera::value();
-		const auto* nearest = camera_shake::Nearest(_shakes, camera.GetOrigin());
-		const auto offsets = camera_shake::Jitter(camera_shake::Amplitude(_shakes, camera.GetOrigin()),
+		// The distance to a shake is from the eye that the game drew, with its shake
+		const auto eye = camera.GetOrigin(Camera::Interpolation::Drawn);
+		const auto* nearest = camera_shake::Nearest(_shakes, eye);
+		const auto offsets = camera_shake::Jitter(camera_shake::Amplitude(_shakes, eye),
 		                                          nearest == nullptr || nearest->verticalOnly, LocalRandom);
 		camera.SetShake(offsets.eye, offsets.focus);
 	}
