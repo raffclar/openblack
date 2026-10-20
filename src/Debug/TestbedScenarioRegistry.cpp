@@ -9768,6 +9768,7 @@ bool ScriptArgumentsFit(const Command& command, const Scenario& scenario)
 		switch (argument.kind)
 		{
 		case ScriptArgument::Kind::Number:
+		case ScriptArgument::Kind::Integer:
 			return true;
 		case ScriptArgument::Kind::Marker:
 		case ScriptArgument::Kind::Position:
