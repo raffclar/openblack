@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <string>
 
+#include <SDL_keyboard.h>
 #include <SDL_keycode.h>
 
 #include "Controls.h"
@@ -217,7 +218,8 @@ bool TattooEditorDialog::KeyDown(int key, ecs::systems::TattooEditorSystemInterf
 		Cancel(editor);
 		return true;
 	}
-	return false;
+	// Tab moves the focus over the editor's controls
+	return _dialog.KeyDown(key, (SDL_GetModState() & KMOD_SHIFT) != 0);
 }
 
 void TattooEditorDialog::Ok(ecs::systems::TattooEditorSystemInterface& editor)

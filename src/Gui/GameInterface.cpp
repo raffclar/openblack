@@ -845,7 +845,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 		return true;
 	}
 	case SDL_TEXTINPUT:
-		_menu->TextInput(ToUtf16(event.text.text));
+		TakeMenuAction(_menu->TextInput(ToUtf16(event.text.text)));
 		return true;
 	// Keys let go of still reach the game, so that none stays held down
 	case SDL_KEYDOWN:
@@ -853,14 +853,29 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 		const auto mod = event.key.keysym.mod;
 		const input::rebinding::HeldModifiers held {
 		    .shift = (mod & KMOD_SHIFT) != 0, .ctrl = (mod & KMOD_CTRL) != 0, .alt = (mod & KMOD_ALT) != 0};
-		if (!_menu->CaptureKey(event.key.keysym.scancode, held))
-		{
-			_menu->KeyDown(event.key.keysym.sym);
-		}
+		// The box that asks for a key takes it first, then the key can also press the box's OK or Cancel: Return binds
+		// Return and closes the box
+		_menu->CaptureKey(event.key.keysym.scancode, held);
+		TakeMenuAction(_menu->KeyDown(event.key.keysym.sym, held.shift));
 		return true;
 	}
 	default:
 		return false;
+	}
+}
+
+void GameInterface::TakeMenuAction(GameMenu::Action action)
+{
+	// A key or a letter that chose nothing leaves what the mouse chose in this frame
+	if (action == GameMenu::Action::None)
+	{
+		return;
+	}
+	_action = action;
+	if (_action == GameMenu::Action::Continue)
+	{
+		_menu->Close();
+		SDL_StopTextInput();
 	}
 }
 

@@ -274,6 +274,8 @@ TextDatabase MenuTexts()
 	    {u"HELP_TEXT_DIALOG_LOADDEFAULTS", u"Load Defaults"},
 	    {u"HELP_TEXT_REQUESTER_BOXES_03", u"Cancel"},
 	    {u"HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON", u"RMB "},
+	    {u"HELP_TEXT_PAUSE_STATS_145", u"YES"},
+	    {u"HELP_TEXT_PAUSE_STATS_144", u"NO"},
 	};
 	for (const auto& [name, text] : texts)
 	{
@@ -452,13 +454,13 @@ TEST(GameMenu, QuittingAsksFirst)
 	// The menu's buttons are behind the question
 	EXPECT_EQ(Click(f.menu, ButtonCentre(0)), Action::None);
 
-	// Escape backs out of the question
+	// A question with a Yes and a No takes neither Escape nor Return
 	EXPECT_EQ(f.menu.Escape(), Action::None);
-	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.KeyDown(SDLK_RETURN), Action::None);
+	EXPECT_TRUE(f.menu.IsAskingToQuit());
 	EXPECT_TRUE(f.menu.IsOpen());
 
-	// No backs out too, on the arrow or its label to its left
-	Click(f.menu, ButtonCentre(4));
+	// No backs out, on the arrow or its label to its left
 	EXPECT_EQ(Click(f.menu, {584, 354}), Action::None);
 	EXPECT_FALSE(f.menu.IsAskingToQuit());
 	Click(f.menu, ButtonCentre(4));
@@ -1139,4 +1141,70 @@ TEST(GameMenu, AChangedDetailIsToldBeforeATabOrEscape)
 	EXPECT_EQ(f.menu.GetQuestionText(), u"Next time.");
 	Click(f.menu, {400, 354});
 	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+}
+
+TEST(GameMenu, TheFirstLettersOfYesAndNoAnswerAQuestion)
+{
+	MenuFixture f;
+	Click(f.menu, ButtonCentre(4));
+	EXPECT_EQ(f.menu.TextInput(u"x"), Action::None);
+	EXPECT_TRUE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.TextInput(u"n"), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	Click(f.menu, ButtonCentre(4));
+	EXPECT_EQ(f.menu.TextInput(u"y"), Action::Quit);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+}
+
+TEST(GameMenu, ReturnAndEscapePressTheOkOfAMessage)
+{
+	MenuFixture f;
+	// A changed detail is told as the page closes; Escape on the message presses its OK, which goes back
+	Click(f.menu, ButtonCentre(3));
+	Click(f.menu, {400, 365});
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	ASSERT_TRUE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+
+	// Return presses it too
+	Click(f.menu, ButtonCentre(3));
+	Click(f.menu, {400, 365});
+	f.menu.Escape();
+	ASSERT_TRUE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.KeyDown(SDLK_KP_ENTER), Action::None);
+	EXPECT_FALSE(f.menu.IsAskingToQuit());
+	EXPECT_EQ(f.menu.GetPage(), Page::Main);
+}
+
+TEST(GameMenu, EscapeLeavesTheFirstPageOpenWhileAControlHasTheFocus)
+{
+	MenuFixture f;
+	f.menu.KeyDown(SDLK_TAB);
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	EXPECT_TRUE(f.menu.IsOpen());
+	// A click on no control takes the focus away
+	Click(f.menu, {20, 300});
+	EXPECT_EQ(f.menu.Escape(), Action::Continue);
+}
+
+TEST(GameMenu, ReturnInTheKeyBoxBindsReturnAndEscapeCancels)
+{
+	MenuFixture f;
+	f.menu.ShowPage(Page::Controls);
+	DoubleClickRow(f.menu, 0);
+	ASSERT_TRUE(f.menu.IsCapturing());
+	// Escape presses Cancel: the binding stays
+	EXPECT_EQ(f.menu.Escape(), Action::None);
+	EXPECT_FALSE(f.menu.IsCapturing());
+	EXPECT_FALSE(f.menu.TakeControlsChanged());
+	// Return is taken as the key, then it presses OK
+	DoubleClickRow(f.menu, 0);
+	ASSERT_TRUE(f.menu.IsCapturing());
+	EXPECT_TRUE(f.menu.CaptureKey(SDL_SCANCODE_RETURN, {}));
+	f.menu.KeyDown(SDLK_RETURN);
+	EXPECT_FALSE(f.menu.IsCapturing());
+	EXPECT_TRUE(f.menu.TakeControlsChanged());
+	EXPECT_EQ(f.menu.GetControlBindings().at(0).key, (openblack::input::KeyChord {.key = SDL_SCANCODE_RETURN}));
 }

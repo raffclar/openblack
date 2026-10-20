@@ -21,6 +21,7 @@
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
 #include "Dialog.h"
+#include "DialogKeyRules.h"
 #include "ECS/StatisticsRules.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
@@ -146,10 +147,15 @@ public:
 	/// What the player chose by letting go of the button, Quit only once they have said yes
 	Action MouseUp(glm::ivec2 point);
 	void Wheel(glm::ivec2 point, int steps);
-	void TextInput(std::u16string_view text);
-	void KeyDown(int key);
-	/// Escape backs out of the question, then out of the options, then continues the game. Inside the temple it
-	/// continues from any page.
+	/// Typing. In a question with a Yes and a No, the first letter of either word answers it.
+	Action TextInput(std::u16string_view text);
+	/// A key pressed while the menu is open. Tab, or Shift and Tab, moves the focus over the page's controls, or over
+	/// the buttons of a question. Return presses the OK of a question that has one. The arrows, Home and End move the
+	/// slider or the list that has the focus. What the player chose, as MouseUp gives it.
+	Action KeyDown(int key, bool shift = false);
+	/// Escape presses the Cancel of a question, else its OK; a question with a Yes and a No ignores it. Then Escape
+	/// backs out of the options, and continues the game from the first page while no control there has the focus.
+	/// Inside the temple it continues from any page.
 	Action Escape();
 
 	/// Whether a control was clicked since last asked, which the game's dialogs answer with the menu button sound
@@ -236,8 +242,9 @@ private:
 		Zoomer fade;
 		/// The text of the box, which can change while the box is open
 		StaticText* words {nullptr};
-		/// The box's buttons, which take their own clicks
-		std::array<const Control*, 2> buttons {};
+		/// The box's buttons, which take their own clicks: Yes and No, OK alone, or Cancel and OK
+		std::array<Control*, 2> buttons {};
+		dialog_keys::Buttons kind {dialog_keys::Buttons::Ok};
 	};
 
 	/// The binding that the box asks a new key or mouse input for: its row, and the key pressed
@@ -273,6 +280,8 @@ private:
 	/// A question with a Cancel and an OK, which does what it is given
 	void Confirm(std::u16string text, std::function<void()> ok);
 	void Settle(Action action);
+	/// A key or a letter presses a button of the question: what the player chose
+	Action AnswerQuestion(dialog_keys::Answer answer);
 	/// Back from an options page, or their first tab
 	void Back();
 	/// A tab of the options was picked: from the Players page, while leaving it starts the game again, the player is
@@ -297,6 +306,9 @@ private:
 	std::array<std::u16string, k_ButtonCount> _buttonLabels;
 	std::u16string _yes;
 	std::u16string _no;
+	/// The words whose first letters answer a question with a Yes and a No
+	std::u16string _yesKey;
+	std::u16string _noKey;
 	std::u16string _ok;
 	std::u16string _back;
 	std::u16string _restart;

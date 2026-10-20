@@ -226,6 +226,8 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _playerName(playerName)
     , _yes(texts.Get("HELP_TEXT_REQUESTER_BOXES_01"))
     , _no(texts.Get("HELP_TEXT_REQUESTER_BOXES_02"))
+    , _yesKey(texts.Get("HELP_TEXT_PAUSE_STATS_145"))
+    , _noKey(texts.Get("HELP_TEXT_PAUSE_STATS_144"))
     , _ok(texts.Get("HELP_TEXT_REQUESTER_BOXES_04"))
     , _back(texts.Get("HELP_TEXT_DIALOG_BACK"))
     , _restart(texts.Get("HELP_TEXT_FRONT_END_12"))
@@ -913,7 +915,8 @@ void GameMenu::Ask(std::u16string text, Action yes)
 	                      .answers = std::move(answers),
 	                      .fade = Zoomer(),
 	                      .words = &words,
-	                      .buttons = {&yesButton, &noButton}};
+	                      .buttons = {&yesButton, &noButton},
+	                      .kind = dialog_keys::Buttons::YesNo};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -929,7 +932,8 @@ void GameMenu::Tell(std::u16string text, Action ok)
 	                      .answers = std::move(answers),
 	                      .fade = Zoomer(),
 	                      .words = &words,
-	                      .buttons = {&okButton, nullptr}};
+	                      .buttons = {&okButton, nullptr},
+	                      .kind = dialog_keys::Buttons::Ok};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -948,7 +952,8 @@ void GameMenu::TellThen(std::u16string text, std::function<void()> then)
 	                      .answers = std::move(answers),
 	                      .fade = Zoomer(),
 	                      .words = &words,
-	                      .buttons = {&okButton, nullptr}};
+	                      .buttons = {&okButton, nullptr},
+	                      .kind = dialog_keys::Buttons::Ok};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -970,7 +975,8 @@ void GameMenu::Confirm(std::u16string text, std::function<void()> ok)
 	                      .answers = std::move(answers),
 	                      .fade = Zoomer(),
 	                      .words = &words,
-	                      .buttons = {&cancelButton, &okButton}};
+	                      .buttons = {&cancelButton, &okButton},
+	                      .kind = dialog_keys::Buttons::CancelOk};
 	_question->fade.SetDestination(1.0f, k_FadeInSeconds);
 	CurrentDialog().Reset();
 }
@@ -1176,24 +1182,82 @@ void GameMenu::Wheel(glm::ivec2 point, int steps)
 	}
 }
 
-void GameMenu::TextInput(std::u16string_view text)
+GameMenu::Action GameMenu::TextInput(std::u16string_view text)
 {
-	if (_open && !_question)
+	if (!_open)
 	{
-		CurrentDialog().TextInput(text);
+		return Action::None;
 	}
+	if (_question)
+	{
+		if (text.empty() || _yesKey.empty() || _noKey.empty())
+		{
+			return Action::None;
+		}
+		return AnswerQuestion(dialog_keys::AnswerTyped(_question->kind, text.front(), _yesKey.front(), _noKey.front()));
+	}
+	CurrentDialog().TextInput(text);
+	return Action::None;
 }
 
-void GameMenu::KeyDown(int key)
+GameMenu::Action GameMenu::KeyDown(int key, bool shift)
 {
-	if (_open && !_question)
+	if (!_open)
 	{
-		if (_page == Page::Players && (key == SDLK_RETURN || key == SDLK_KP_ENTER))
-		{
-			KeepPlayerEdits();
-		}
-		CurrentDialog().KeyDown(key);
+		return Action::None;
 	}
+	const bool isReturn = key == SDLK_RETURN || key == SDLK_KP_ENTER;
+	if (_question)
+	{
+		if (isReturn)
+		{
+			return AnswerQuestion(dialog_keys::AnswerKey(_question->kind, dialog_keys::Key::Return));
+		}
+		// Tab moves the focus over the question's buttons, but a button with the focus does not take Return
+		_question->answers->KeyDown(key, shift);
+		return Action::None;
+	}
+	if (_page == Page::Players && isReturn)
+	{
+		KeepPlayerEdits();
+	}
+	CurrentDialog().KeyDown(key, shift);
+	return Action::None;
+}
+
+GameMenu::Action GameMenu::AnswerQuestion(dialog_keys::Answer answer)
+{
+	if (!_question)
+	{
+		return Action::None;
+	}
+	// The first button is Yes, OK alone or Cancel; the second is No or the OK beside a Cancel
+	Control* button = nullptr;
+	switch (answer)
+	{
+	case dialog_keys::Answer::Yes:
+	case dialog_keys::Answer::Cancel:
+		button = _question->buttons[0];
+		break;
+	case dialog_keys::Answer::No:
+		button = _question->buttons[1];
+		break;
+	case dialog_keys::Answer::Ok:
+		button = _question->kind == dialog_keys::Buttons::CancelOk ? _question->buttons[1] : _question->buttons[0];
+		break;
+	case dialog_keys::Answer::None:
+		break;
+	}
+	if (button == nullptr)
+	{
+		return Action::None;
+	}
+	button->Activate(glm::ivec2(-1));
+	if (std::exchange(_answered, false))
+	{
+		_question.reset();
+	}
+	return std::exchange(_action, Action::None);
 }
 
 GameMenu::Action GameMenu::Escape()
@@ -1204,8 +1268,7 @@ GameMenu::Action GameMenu::Escape()
 	}
 	if (_question)
 	{
-		_question.reset();
-		return Action::None;
+		return AnswerQuestion(dialog_keys::AnswerKey(_question->kind, dialog_keys::Key::Escape));
 	}
 	if (_page == Page::Players)
 	{
@@ -1224,6 +1287,12 @@ GameMenu::Action GameMenu::Escape()
 	if (_page != Page::Main && !_insideTemple)
 	{
 		ShowPage(Page::Main);
+		return Action::None;
+	}
+	// The first page closes on Escape only while none of its controls has the focus. The game gives Escape to the
+	// control with the focus first, and that control does nothing with it.
+	if (_page == Page::Main && !_insideTemple && CurrentDialog().GetFocus() != nullptr)
+	{
 		return Action::None;
 	}
 	// The first page, or inside the temple any page: there is nothing under the menu to go back to

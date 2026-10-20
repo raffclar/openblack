@@ -1518,3 +1518,4 @@ set_tests_properties(
 openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)
 openblack_setup_and_add_test(test_key_rebinding input/test_key_rebinding.cpp)
 openblack_setup_and_add_test(test_save_slot_writes test_save_slot_writes.cpp)
+openblack_setup_and_add_test(test_dialog_keys gui/test_dialog_keys.cpp)
