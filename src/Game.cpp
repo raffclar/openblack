@@ -3481,7 +3481,14 @@ bool Game::Update() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
 		return false;
 	}
-	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
+	if (config.numFramesToSimulate != 0 && _frameCount >= config.numFramesToSimulate)
+	{
+		// Tell why the game stops, so that a run at its frame limit is not taken for a crash
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ran its {} frames (--num-frames-to-simulate) and stops",
+		                   config.numFramesToSimulate);
+		return false;
+	}
+	return true;
 }
 
 bool Game::Initialize() noexcept
