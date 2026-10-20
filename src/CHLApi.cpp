@@ -329,6 +329,13 @@ void ScriptMessage(std::string_view message)
 	}
 }
 
+/// A native was given a thing that is gone. The game says nothing and the native carries on. A script can ask about a
+/// gone thing on each turn, thus the note is only for a trace log.
+void ObjectNoLongerValid()
+{
+	SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Object no longer valid");
+}
+
 /// Nothing outside is in view while the player is inside the temple
 bool PlayerInsideTemple()
 {
@@ -1207,7 +1214,7 @@ void SpiritPointGameThing() // 010 SPIRIT_POINT_GAME_THING
 	const auto spirit = ScriptHelpSpirit(Pop().intVal);
 	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
@@ -1222,7 +1229,7 @@ void GameThingFieldOfView() // 011 GAME_THING_FIELD_OF_VIEW
 	const bool valid = object != entt::null && Locator::entitiesRegistry::value().Valid(object);
 	if (!valid)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 	}
 	const auto view = ecs::thing_on_screen::ScreenView();
 	Pushb(valid && !PlayerInsideTemple() && view.has_value() && ecs::thing_on_screen::OnScreen(*view, object));
@@ -1266,7 +1273,7 @@ void GameThingClicked() // 016 GAME_THING_CLICKED
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(false);
 		return;
 	}
@@ -1307,7 +1314,7 @@ void SetScriptState() // 017 SET_SCRIPT_STATE
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	// A group's living members each take the state as one would on its own, with no word of those that can't
@@ -1373,7 +1380,7 @@ void SetScriptStatePos() // 018 SET_SCRIPT_STATE_POS
 	const auto object = PopObject();
 	if (!Locator::entitiesRegistry::value().Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (!IsDirectableVillager(object))
@@ -1391,7 +1398,7 @@ void SetScriptFloat() // 019 SET_SCRIPT_FLOAT
 	const auto object = PopObject();
 	if (!Locator::entitiesRegistry::value().Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (!IsDirectableVillager(object))
@@ -1411,7 +1418,7 @@ void SetScriptUlong() // 020 SET_SCRIPT_ULONG
 	const auto object = PopObject();
 	if (!Locator::entitiesRegistry::value().Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (IsDirectableVillager(object))
@@ -1675,7 +1682,7 @@ void GetProperty() // 021 GET_PROPERTY
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushf(0.0f);
 		return;
 	}
@@ -1973,7 +1980,7 @@ void SetProperty() // 022 SET_PROPERTY
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (const auto need = NeedOf(prop); need.has_value())
@@ -2498,6 +2505,21 @@ void Call() // 026 CALL
 	Pusho(found == entt::null ? 0u : static_cast<uint32_t>(found));
 }
 
+/// A thing that a script makes goes into the map cells immediately, as the game puts each new thing in the map when it
+/// makes it. A script can then make a villager and release it in the same turn: the villager stands in the map and
+/// starts its usual tasks again. A thing in a hand or in flight does not go into the cells.
+static void FileInMapAtOnce(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (object == entt::null || !registry.Valid(object) || !Locator::entitiesMap::has_value() ||
+	    registry.AllOf<ecs::components::MapCellResident>(object) ||
+	    registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics>(object))
+	{
+		return;
+	}
+	Locator::entitiesMap::value().Refile(object);
+}
+
 /// CREATE and CREATE_WITH_ANGLE_AND_SCALE: a thing of a type the scripts may create, turned and scaled, which the script
 /// then holds; none for any other type, or when nothing could be made
 void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, float yAngleRadians, float scale)
@@ -2518,6 +2540,7 @@ void CreateForScript(int32_t type, int32_t subtype, const glm::vec3& position, f
 	{
 		ScriptMessage("Thing not created");
 	}
+	FileInMapAtOnce(object);
 	RegisterCreated(object);
 	PushObject(object);
 }
@@ -2643,7 +2666,7 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 	const auto object = PopObject();
 	if (!Locator::entitiesRegistry::value().Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (IsDirectableVillager(object))
@@ -3795,7 +3818,7 @@ void Played() // 064 PLAYED
 	if (!Locator::entitiesRegistry::value().Valid(object))
 	{
 		// Something gone has played whatever it was asked to
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(true);
 		return;
 	}
@@ -4540,7 +4563,7 @@ void LookGameThing() // 100 LOOK_GAME_THING
 	const auto spirit = ScriptHelpSpirit(Pop().intVal);
 	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (auto* advisors = ScriptAdvisors(); advisors != nullptr)
@@ -5241,7 +5264,7 @@ void SetTimerTime() // 145 SET_TIMER_TIME
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (auto* timer = ScriptTimerOf(object); timer != nullptr)
@@ -5279,7 +5302,7 @@ void GetTimerTimeRemaining() // 147 GET_TIMER_TIME_REMAINING
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushf(0.0f);
 		return;
 	}
@@ -5292,7 +5315,7 @@ void GetTimerTimeSinceSet() // 148 GET_TIMER_TIME_SINCE_SET
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushf(std::numeric_limits<float>::max());
 		return;
 	}
@@ -5915,7 +5938,7 @@ void IsOfType() // 192 IS_OF_TYPE
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(false);
 		return;
 	}
@@ -5934,7 +5957,7 @@ void GameThingHit() // 194 GAME_THING_HIT
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(false);
 		return;
 	}
@@ -6398,7 +6421,7 @@ void GameSubType() // 221 GAME_SUB_TYPE
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushi(0);
 		return;
 	}
@@ -6617,7 +6640,7 @@ void GetDesire() // 234 GET_DESIRE
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (town == entt::null || !registry.Valid(town))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		Pushf(0.0f);
 		return;
 	}
@@ -6771,7 +6794,7 @@ ecs::components::TownImpression* ScriptTownImpression(entt::entity object)
 	auto& registry = Locator::entitiesRegistry::value();
 	if (object == entt::null || !registry.Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return nullptr;
 	}
 	if (!registry.AllOf<ecs::components::Town>(object))
@@ -6843,7 +6866,7 @@ std::optional<entt::entity> PopHelpObject()
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushf(0.0f);
 		return std::nullopt;
 	}
@@ -6989,7 +7012,7 @@ void SetActive() // 255 SET_ACTIVE
 	const auto active = Pop().intVal != 0;
 	if (object == entt::null)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
@@ -7337,7 +7360,7 @@ std::pair<entt::entity, ScriptCameraModel*> FollowCommand(entt::entity thing)
 	const bool valid = thing != entt::null && Locator::entitiesRegistry::value().Valid(thing);
 	if (!valid)
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 	}
 	// While a two-thing camera has taken over, the script's own commands don't reach the camera
 	if (valid && camera != nullptr && camera->InDualView())
@@ -8243,7 +8266,7 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(false);
 		return;
 	}
@@ -8339,7 +8362,7 @@ void ThingJcSpecial() // 349 THING_JC_SPECIAL
 	const auto on = Pop().intVal != 0;
 	if (target == entt::null || !Locator::entitiesRegistry::value().Valid(target))
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (special == ecs::high_detail_rules::ThingSpecial::NeverFade)
@@ -8493,7 +8516,7 @@ void IsActive() // 361 IS_ACTIVE
 	const auto object = PopObject();
 	if (object == entt::null)
 	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Object no longer valid");
+		ObjectNoLongerValid();
 		Pushb(false);
 		return;
 	}
@@ -8602,7 +8625,7 @@ void SetDisciple() // 369 SET_DISCIPLE
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(object))
 	{
-		ScriptMessage("Object no longer valid");
+		ObjectNoLongerValid();
 		return;
 	}
 	if (!registry.AllOf<ecs::components::Villager>(object))

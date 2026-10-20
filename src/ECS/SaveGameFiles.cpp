@@ -68,3 +68,44 @@ ecs::save_files::SaveWrite ecs::save_files::WriteThroughTemporaries(filesystem::
 	}
 	return SaveWrite::Written;
 }
+
+ecs::save_files::SlotWriteResult ecs::save_files::WriteSlot(filesystem::FileSystemInterface& files, const SlotWrite& slot)
+{
+	SlotWriteResult result;
+	// The game makes each folder that is missing and does not look at the result. A folder that is not there makes the
+	// writes into it fail.
+	for (const auto& folder : slot.folders)
+	{
+		if (!files.MakeFolder(folder))
+		{
+			if (const auto log = spdlog::get("game"); log != nullptr)
+			{
+				SPDLOG_LOGGER_WARN(log, "The game could not make the folder {}", folder.generic_string());
+			}
+		}
+	}
+	if (slot.pictures && !slot.pictures(files))
+	{
+		++result.otherFailures;
+	}
+	if (!files.WriteAll(slot.info.path, slot.info.bytes))
+	{
+		++result.otherFailures;
+	}
+	// The temporary world file opens before the game writes the world and the files that come with it
+	if (files.WriteFile(TemporaryPath(slot.world), {}) == filesystem::FileSystemInterface::WriteResult::NotOpened)
+	{
+		result.world = SaveWrite::NotOpened;
+		return result;
+	}
+	for (const auto& step : slot.withWorld)
+	{
+		if (!step(files))
+		{
+			++result.otherFailures;
+		}
+	}
+	const auto group = slot.worldFiles ? slot.worldFiles() : std::vector<SaveFile> {};
+	result.world = group.empty() ? SaveWrite::Failed : WriteThroughTemporaries(files, group);
+	return result;
+}

@@ -22,6 +22,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -75,6 +76,24 @@ TEST_F(MapProductionFiling, AHandfulRefiledAsItIsMadeIsOnTheMapAtOnceAndOnlyOnce
 	const auto cell = map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f));
 	const auto inCell = map.GetAllInCell(cell);
 	EXPECT_EQ(std::ranges::count(inCell, handful), 1);
+}
+
+TEST_F(MapProductionFiling, AVillagerThatAScriptMakesIsOnTheMapBeforeTheScriptReleasesIt)
+{
+	// A script makes a villager, gives it to a town and releases it in the same turn. Only a villager in the map can go
+	// back to its tasks when a script releases it, so the villager goes into its cell when it is made, and only once.
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const auto villager = registry.Create();
+	registry.Assign<Transform>(villager, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mobile>(villager);
+	registry.Assign<Villager>(villager);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(villager));
+	map.Refile(villager);
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(villager));
+	map.Sync();
+	const auto inCell = map.GetAllInCell(map_coords::CellOf(glm::vec3(500.0f, 0.0f, 500.0f)));
+	EXPECT_EQ(std::ranges::count(inCell, villager), 1);
 }
 
 TEST_F(MapProductionFiling, AStoneHandOfAVillageCentreIsNeverPutOnTheMap)
