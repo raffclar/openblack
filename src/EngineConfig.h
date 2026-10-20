@@ -81,6 +81,11 @@ struct EngineConfig
 	/// The hand mesh is a left hand, which Black & White mirrors into a right hand unless the player profile asks for
 	/// a left hand
 	bool rightHandedHand {true};
+	/// Pushing the mouse on past the screen's sides moves the world camera, in full screen (the player's profile)
+	bool pushScrolling {false};
+	/// For the testbed only: a game in a window pushes the camera as one in full screen does, so that the push can be
+	/// watched without the game taking the whole screen
+	bool testbedPushScrollInWindow {false};
 	/// Creatures' vertices at the seams between their bones are blended towards their partners, as the game draws them
 	bool blendCreatureSeams {true};
 	/// Creatures cast their shadows onto the land and what stands on it, and villagers a script draws in high detail

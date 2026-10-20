@@ -21,6 +21,7 @@
 #include "CameraPan.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
+#include "PushScroll.h"
 
 class TestDefaultCameraModel;
 class TestDefaultCameraModel_single_line_Test;
@@ -81,6 +82,8 @@ private:
 	[[nodiscard]] Mode HandleDrag(bool held);
 	/// The help's profile counts the camera controls used
 	static void SendHelpEvents(camera_help::events::EventSet events);
+	/// Push scrolling for the frame: the speed moves and turns the camera, fades, then takes the frame's push
+	void HandlePushScroll(std::chrono::microseconds dt, bool buttonsFree, bool gripping);
 	/// Notes what the helper icons by the hand are picked from, once the controls are handled
 	void UpdateIconFrame(bool onFight);
 	/// The part of the screen the edge controls are laid out on: a 4:3 screen's worth, measured by the cinema bars'
@@ -231,6 +234,13 @@ private:
 	camera_help::events::EventSet _helpEvents;
 	/// What the helper icons by the hand are picked from this frame
 	hand_tricons::WorldCameraFrame _iconFrame;
+	/// Push scrolling: the mouse as the push reads it, the camera's speed across, forwards and round, the push's clock,
+	/// and what the speed moves and turns the camera by this frame
+	camera_push_scroll::Pointer _pushPointer;
+	glm::vec3 _pushSpeed {0.0f};
+	camera_push_scroll::MillisecondClock _pushClock;
+	glm::vec3 _pushMove {0.0f};
+	float _pushTurn {0.0f};
 	/// Time spent handling the controls, for timing the start of a drag
 	std::chrono::microseconds _controlsTime {std::chrono::microseconds::zero()};
 

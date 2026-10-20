@@ -6030,6 +6030,7 @@ void Game::ShowMenuOnStart()
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
 	Locator::config::value().rightHandedHand = !settings.leftHanded;
+	Locator::config::value().pushScrolling = settings.pushScrolling;
 	if (Locator::creatureHelpSystem::has_value())
 	{
 		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);

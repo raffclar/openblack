@@ -1182,6 +1182,11 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			    }
 		    });
 	}
+	if (environment.pushScrolling && Locator::config::has_value())
+	{
+		Locator::config::value().pushScrolling = true;
+		Locator::config::value().testbedPushScrollInWindow = true;
+	}
 	if (environment.drawFootpaths && Locator::config::has_value())
 	{
 		Locator::config::value().drawFootpaths = true;

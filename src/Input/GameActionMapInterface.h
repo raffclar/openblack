@@ -151,6 +151,9 @@ public:
 	[[nodiscard]] virtual bool GetUnbindableRepeat(UnbindableActionMap action) const = 0;
 	[[nodiscard]] virtual glm::uvec2 GetMousePosition() const = 0;
 	[[nodiscard]] virtual glm::ivec2 GetMouseDelta() const = 0;
+	/// The mouse's own movement this frame, with the part that the screen's sides stopped the pointer from following:
+	/// while the window has the mouse, the mouse's movement before the pointer's speed; else the pointer's movement
+	[[nodiscard]] virtual glm::ivec2 GetMousePushDelta() const { return GetMouseDelta(); }
 	/// Mouse wheel notches turned this frame, positive away from the user
 	[[nodiscard]] virtual float GetMouseWheelDelta() const = 0;
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
