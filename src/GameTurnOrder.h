@@ -202,7 +202,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Influence, .stage = Stage::Players},
     {.step = Step::PlayerStatistics, .stage = Stage::Players},
     {.step = Step::Heartbeats, .stage = Stage::Players},
-    // The temples' looks follow their players' alignments as they were before this turn's change
+    // The temples' looks follow their players' alignments as they were at the end of the last turn
     {.step = Step::TempleLooks, .stage = Stage::Players},
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
     // At the end of the players' turns: their alignments, then the alignment at the camera's eye
