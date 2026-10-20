@@ -1441,6 +1441,35 @@ TEST_F(HandGrabSystemWithWorld, ARipeFieldGivesHalfOfEachScoop)
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 16u);
 }
 
+TEST_F(HandGrabSystemWithWorld, TheHandLocksOntoAFieldOnlyWhenItsCropCanGiveFood)
+{
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000, .lockable = false};
+	world->underCursor = field;
+	EXPECT_FALSE(Press());
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(system->GetLockedOn().has_value());
+	EXPECT_EQ(world->fields[field].food, 1000u);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheLockOntoAScoopedThingHoldsWhileTheInfluenceHolds)
+{
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000};
+	world->underCursor = field;
+	EXPECT_TRUE(Press());
+	EXPECT_EQ(system->GetLockedOn(), std::optional(field));
+	system->ProcessTurn();
+	EXPECT_EQ(system->GetLockedOn(), std::optional(field));
+	// The player's influence goes from under the hand: the lock ends, and the hand keeps its handful
+	world->influence = false;
+	system->ProcessTurn();
+	EXPECT_FALSE(system->GetLockedOn().has_value());
+	EXPECT_TRUE(system->GetHeld().has_value());
+}
+
 TEST_F(HandGrabSystemWithWorld, AFishFarmGivesAFirstHandfulForNothingThenItsFishAsTheScoopRampsUp)
 {
 	const auto farm = world->registry.Create();

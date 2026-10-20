@@ -952,7 +952,8 @@ std::optional<hand_grab::HandGrabWorldInterface::FieldFacts> GameHandGrabWorld::
 	}
 	const auto& type = info->fieldType.at(static_cast<size_t>(data->type));
 	return FieldFacts {.food = data->crop.food > 0.0f ? static_cast<uint32_t>(data->crop.food) : 0u,
-	                   .ripe = data->crop.age >= type.ageRecolt};
+	                   .ripe = data->crop.age >= type.ageRecolt,
+	                   .lockable = data->crop.age > 0.0f && data->crop.food > 1.0f};
 }
 
 void GameHandGrabWorld::NoteTakenAt(glm::vec3 point)

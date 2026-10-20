@@ -8263,7 +8263,8 @@ void SetTownDesireBoost() // 341 SET_TOWN_DESIRE_BOOST
 
 void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 {
-	// Whether the player's hand is locked onto the thing: held to a creature with the button, or gripping a totem
+	// Whether the player's hand is locked onto the thing: held to a creature with the button, gripping a totem, or
+	// scooping from a field, a fish farm or a pile
 	const auto object = PopObject();
 	if (object == entt::null || !Locator::entitiesRegistry::value().Valid(object))
 	{
@@ -8275,7 +8276,9 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
-	Pushb(heldCreature || grippedTotem);
+	const bool scooped =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	Pushb(heldCreature || grippedTotem || scooped);
 }
 
 void SetCreatureName() // 343 SET_CREATURE_NAME

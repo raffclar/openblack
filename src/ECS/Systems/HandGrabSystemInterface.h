@@ -98,6 +98,8 @@ public:
 
 	/// What the hand holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
+	/// The field, fish farm or pile the hand is locked onto while it scoops from it, none when it scoops from nothing
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOn() const { return std::nullopt; }
 	/// Whether the Action button is down to throw what the hand holds
 	[[nodiscard]] virtual bool IsAboutToThrow() const { return false; }
 	/// Whether the creature under the pointer can take what the hand holds as a gift
