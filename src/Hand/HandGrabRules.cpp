@@ -371,9 +371,12 @@ bool hand_grab::PotPours(glm::vec3 velocity)
 
 glm::vec3 hand_grab::ReleaseSpinTorque(float mass, float speed, glm::vec3 handMoved)
 {
-	// A twist about the level axis across the hand's motion since it let go, its turning sense as the bodies count it
-	const float strength = k_ReleaseSpinFactor * mass * speed;
-	return {strength * handMoved.z, 0.0f, -strength * handMoved.x};
+	// A twist about the level axis across the hand's motion since it let go. The bodies count a turn in the sense
+	// opposite to the game's own sum, so the signs are the other way round. The products are made in the game's order:
+	// the factor times the mass times the motion, then times the speed.
+	const float acrossX = k_ReleaseSpinFactor * (mass * handMoved.x);
+	const float acrossZ = k_ReleaseSpinFactor * (mass * handMoved.z);
+	return {speed * acrossZ, 0.0f, -(acrossX * speed)};
 }
 
 bool hand_grab::LandsOnRelease(const Landing& landing)

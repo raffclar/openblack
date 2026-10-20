@@ -8,6 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
+
+#include <bit>
 
 #include <glm/geometric.hpp>
 #include <gtest/gtest.h>
@@ -404,6 +407,15 @@ TEST(HandGrab, ATwistTurnsAboutTheLevelAxisAcrossTheHandsMotion)
 	EXPECT_FLOAT_EQ(torque.z, -32.0f);
 	const auto forward = ReleaseSpinTorque(1.0f, 1.0f, {0.0f, 0.0f, 2.0f});
 	EXPECT_FLOAT_EQ(forward.x, 3.2f);
+}
+
+TEST(HandGrab, ATwistMakesItsProductsInTheGamesOrder)
+{
+	// The factor times the mass times the motion, then times the speed: another order gives other bits here
+	const auto torque = ReleaseSpinTorque(31.473f, 2.059f, {-4.868f, 0.0f, 3.375f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(torque.x), 0x43AEF7C6u);
+	EXPECT_EQ(torque.y, 0.0f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(torque.z), 0x43FC5E51u);
 }
 
 TEST(HandGrab, APutDownStandsOnlyOnLandWithoutBeingRaised)

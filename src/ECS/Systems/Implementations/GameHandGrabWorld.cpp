@@ -32,6 +32,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
 #include "ECS/AltarOffering.h"
 #include "ECS/Archetypes/PotArchetype.h"
@@ -1210,7 +1211,7 @@ std::optional<hand_grab::HandGrabWorldInterface::BodyFacts> GameHandGrabWorld::B
 	{
 		return std::nullopt;
 	}
-	return BodyFacts {.mass = entry->body->Mass(), .speed = glm::length(entry->body->velocity)};
+	return BodyFacts {.mass = entry->body->Mass(), .speed = x87::LengthZyx(entry->body->velocity)};
 }
 
 void GameHandGrabWorld::TwistBody(entt::entity object, glm::vec3 torque)
