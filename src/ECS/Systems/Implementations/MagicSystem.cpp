@@ -2429,6 +2429,11 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellSucceedCast, spell->castPosition, std::nullopt,
 		                                                 entt::null);
 	}
+	// The hand lets go of the seed, so it starts the path of its gesture again. A seed kept in the hand does not do this.
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+	}
 	SeedOutOfHandWithSpell(fate == magic::SeedAfterCast::FollowsSpell);
 }
 
