@@ -55,6 +55,24 @@ struct PlayerAtPlace
 	return (goodness * 2.0f) - 1.0f;
 }
 
+/// A script can change an alignment only by an amount from -1 to 1. Other amounts, and an amount that is not a number,
+/// change nothing.
+[[nodiscard]] inline bool ScriptChangeInRange(float change)
+{
+	return change >= -1.0f && change <= 1.0f;
+}
+
+/// The alignment after an amount is added to it at once, held between -1 and 1. A sum that is not a number becomes -1.
+[[nodiscard]] inline float AddedAlignment(float alignment, float change)
+{
+	const float sum = alignment + change;
+	if (!(sum >= -1.0f))
+	{
+		return -1.0f;
+	}
+	return sum > 1.0f ? 1.0f : sum;
+}
+
 } // namespace alignment
 
 /// The one source of how good or evil the world looks. Each player has an alignment, from -1, evil, to 1, good

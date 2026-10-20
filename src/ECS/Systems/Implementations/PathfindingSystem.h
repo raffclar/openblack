@@ -24,5 +24,7 @@ public:
 	void ProcessLookahead() override;
 	void LookAgain(entt::entity walker) override;
 	void WalkTo(entt::entity walker, glm::ivec2 goal) override;
+	void SetupWalkRound(entt::entity walker, glm::ivec2 goal) override;
+	bool WalkOne(entt::entity walker) override;
 };
 } // namespace openblack::ecs::systems

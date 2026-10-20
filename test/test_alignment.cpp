@@ -7,8 +7,11 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 #include <chrono>
+#include <limits>
 #include <memory>
 #include <span>
 
@@ -145,6 +148,27 @@ TEST(AlignmentRules, TheMostInfluentialPlayerHoldsAPlace)
 	const std::array more {PlayerAtPlace {.influence = 0.5f, .alignment = -1.0f},
 	                       PlayerAtPlace {.influence = 0.6f, .alignment = 0.25f}};
 	EXPECT_EQ(MostInfluentialAlignment(more), 0.25f);
+}
+
+TEST(AlignmentRules, AScriptChangesAnAlignmentOnlyByAnAmountFromMinusOneToOne)
+{
+	using systems::alignment::ScriptChangeInRange;
+	EXPECT_TRUE(ScriptChangeInRange(-1.0f));
+	EXPECT_TRUE(ScriptChangeInRange(1.0f));
+	EXPECT_TRUE(ScriptChangeInRange(0.25f));
+	EXPECT_FALSE(ScriptChangeInRange(std::nextafter(1.0f, 2.0f)));
+	EXPECT_FALSE(ScriptChangeInRange(-1.5f));
+	EXPECT_FALSE(ScriptChangeInRange(std::numeric_limits<float>::quiet_NaN()));
+}
+
+TEST(AlignmentRules, AnAmountAddedAtOnceIsHeldBetweenEvilAndGood)
+{
+	using systems::alignment::AddedAlignment;
+	EXPECT_EQ(AddedAlignment(0.25f, 0.5f), 0.75f);
+	EXPECT_EQ(AddedAlignment(0.75f, 0.5f), 1.0f);
+	EXPECT_EQ(AddedAlignment(-0.75f, -0.5f), -1.0f);
+	// A sum that is not a number goes to evil
+	EXPECT_EQ(AddedAlignment(std::numeric_limits<float>::quiet_NaN(), 0.5f), -1.0f);
 }
 
 TEST(AlignmentRules, TheLandShowsAnAlignmentHeldBetweenEvilAndGood)
