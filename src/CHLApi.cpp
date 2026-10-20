@@ -3076,8 +3076,8 @@ static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity
 		return;
 	}
 	// A member at random, not the leader when there are others
-	const auto member = ecs::script_flocks::RandomMember(registry, flock, ecs::script_flocks::Leader(registry, flock),
-	                                                     [](uint32_t n) { return Locator::gameRandom::value().GameRand(n); });
+	const auto member = ecs::script_flocks::MemberToDetach(registry, flock,
+	                                                       [](uint32_t n) { return Locator::gameRandom::value().GameRand(n); });
 	if (member == entt::null)
 	{
 		ScriptMessage("Thing not found from Flock");

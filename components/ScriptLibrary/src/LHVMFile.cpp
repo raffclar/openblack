@@ -106,6 +106,7 @@
 #include <cstdlib>
 #include <cstring>
 
+#include <algorithm>
 #include <fstream>
 #include <stdexcept>
 
@@ -303,7 +304,8 @@ void WriteStrings(std::ostream& stream, const std::vector<std::string>& values)
 
 void WriteBool(std::ostream& stream, bool value)
 {
-	const auto byte = static_cast<char>(value ? 1 : 0);
+	// The game writes all bits set for true
+	const auto byte = static_cast<char>(value ? 0xFF : 0);
 	stream.write(&byte, sizeof(byte));
 }
 
@@ -312,13 +314,11 @@ void WriteStack(std::ostream& stream, const VMStack& stack)
 	WriteU32(stream, stack.count);
 	WriteU32(stream, stack.pushCount);
 	WriteU32(stream, stack.popCount);
-	for (uint32_t i = 0; i < stack.count; ++i)
-	{
-		WriteU32(stream, stack.values.at(i).uintVal);
-	}
+	// The game writes each place as its type, then its value
 	for (uint32_t i = 0; i < stack.count; ++i)
 	{
 		WriteU32(stream, static_cast<uint32_t>(stack.types.at(i)));
+		WriteU32(stream, stack.values.at(i).uintVal);
 	}
 }
 
@@ -333,6 +333,18 @@ void WriteVariableValues(std::ostream& stream, const std::vector<VMVar>& variabl
 		WriteU32(stream, variable.value.uintVal);
 		WriteString(stream, variable.name);
 	}
+}
+
+/// Each state of a task is one byte, true when it is not zero
+bool ReadFlag(std::istream& stream, bool& flag)
+{
+	char byte = 0;
+	if (!stream.read(&byte, sizeof(byte)))
+	{
+		return false;
+	}
+	flag = byte != 0;
+	return true;
 }
 
 } // namespace
@@ -669,19 +681,16 @@ int LHVMFile::LoadStack(std::istream& stream, VMStack& stack)
 		return EXIT_FAILURE; // Error reading stack pop count
 	}
 
-	for (int i = 0; i < stack.count; i++)
-	{
-		if (!stream.read(reinterpret_cast<char*>(&stack.values.at(i)), sizeof(stack.values[0])))
-		{
-			return EXIT_FAILURE; // Error reading stack values
-		}
-	}
-
-	for (int i = 0; i < stack.count; i++)
+	// Each place is its type, then its value
+	for (uint32_t i = 0; i < stack.count; i++)
 	{
 		if (!stream.read(reinterpret_cast<char*>(&stack.types.at(i)), sizeof(stack.types[0])))
 		{
 			return EXIT_FAILURE; // Error reading stack types
+		}
+		if (!stream.read(reinterpret_cast<char*>(&stack.values.at(i)), sizeof(stack.values[0])))
+		{
+			return EXIT_FAILURE; // Error reading stack values
 		}
 	}
 
@@ -801,22 +810,22 @@ int LHVMFile::LoadTask(std::istream& stream, VMTask& task)
 		return EXIT_FAILURE; // Error reading type
 	}
 
-	if (!stream.read(reinterpret_cast<char*>(&task.inExceptionHandler), sizeof(task.inExceptionHandler)))
+	if (!ReadFlag(stream, task.inExceptionHandler))
 	{
 		return EXIT_FAILURE; // Error reading 'in exception handler'
 	}
 
-	if (!stream.read(reinterpret_cast<char*>(&task.stop), sizeof(task.stop)))
+	if (!ReadFlag(stream, task.stop))
 	{
 		return EXIT_FAILURE; // Error reading stop
 	}
 
-	if (!stream.read(reinterpret_cast<char*>(&task.iield), sizeof(task.iield)))
+	if (!ReadFlag(stream, task.iield))
 	{
 		return EXIT_FAILURE; // Error reading yield
 	}
 
-	if (!stream.read(reinterpret_cast<char*>(&task.sleeping), sizeof(task.sleeping)))
+	if (!ReadFlag(stream, task.sleeping))
 	{
 		return EXIT_FAILURE; // Error reading sleeping
 	}
@@ -837,13 +846,10 @@ int LHVMFile::LoadTask(std::istream& stream, VMTask& task)
 		return EXIT_FAILURE; // Error reading except struct
 	}
 
-	if (task.scriptId < 1 || task.scriptId > _scripts.size())
-	{
-		return EXIT_FAILURE; // Script not found
-	}
-	auto& script = _scripts[task.scriptId - 1];
-	task.name = script.name;
-	task.filename = script.filename;
+	// The game finds the task's script by its id. A task with no script stays, with "Not compiled" as its names.
+	const auto script = std::ranges::find(_scripts, task.scriptId, &VMScript::scriptId);
+	task.name = script != _scripts.end() ? script->name : "Not compiled";
+	task.filename = script != _scripts.end() ? script->filename : "Not compiled";
 
 	return EXIT_SUCCESS;
 }
