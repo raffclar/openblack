@@ -2580,6 +2580,66 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.moving_shadows",
+	    .name = "Shadows of things in flight",
+	    .facet = Facet::Light,
+	    .description = "A dead pine, a pot of food, a rock and a toy ball fly up high from a row on the land, one after "
+	                   "the other, and fly up again every eight seconds.",
+	    .expected = "While each thing flies, a shadow lies on the land straight below it and turns as the thing turns. "
+	                "The dead pine's and the pot's shadows are soft and light, through their textures. The rock's and "
+	                "the ball's shadows are solid and darker. Each shadow goes when its thing comes to rest.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true},
+	                {.type = PotInfo::FoodPot, .offset = {-6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {18.0f, 0.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2(-18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 1,
+	                .from = glm::vec2(-6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.5f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 2,
+	                .from = glm::vec2(6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 3,
+	                .from = glm::vec2(18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.5f,
+	                .repeatSeconds = 8.0f}},
+	});
+
+	// A row of animals that live and walk about, with a villager at the end to compare their blobs with his
+	all.push_back({
+	    .id = "light.animal_blobs",
+	    .name = "Blobs under the feet of animals",
+	    .facet = Facet::Light,
+	    .description = "A cow, a horse, a sheep, a tortoise and a wolf live and walk about in a row at midday. A farmer "
+	                   "stands at the end of the row.",
+	    .expected = "Under each foot of each animal, a short dark blob lies on the land and falls away to the south "
+	                "east. The blobs move with the feet as the animals walk. The farmer has a blob under each foot too.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -6.0f}, {14.0f, 6.0f}}, .distance = 0.5f},
+	    .objects = {{.type = AnimalInfo::Cow, .offset = {-12.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Horse, .offset = {-6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Sheep, .offset = {0.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Tortoise, .offset = {6.0f, 0.0f}, .living = true},
+	                {.type = AnimalInfo::Wolf, .offset = {12.0f, 0.0f}, .living = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {14.0f, 4.0f}}},
+	});
+
+	all.push_back({
 	    .id = "light.reflections",
 	    .name = "Reflections in the lake",
 	    .facet = Facet::Light,
@@ -8747,6 +8807,20 @@ void AddParticles(std::vector<Scenario>& all)
 	                  {.file = "SF_SeeThisBeam", .offset = {-10.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 6.0f},
 	                  {.file = "SF_TickerTape", .offset = {10.0f, 0.0f}, .height = 15.0f, .restartSeconds = 6.0f},
 	                  {.file = "SF_Flash", .offset = {30.0f, 0.0f}, .height = 3.0f, .magnitude = 2.0f, .restartSeconds = 3.0f}},
+	});
+
+	// The beam that marks a place for the player, as the first land marks where its vortex opens
+	all.push_back({
+	    .id = "particles.see_this_beam",
+	    .name = "The beam that marks a place",
+	    .facet = Facet::Particles,
+	    .description = "The yellow beam that a script puts on a place to show it to the player, as the first land shows "
+	                   "where its vortex will open. It starts again every ten seconds.",
+	    .expected = "A yellow cone of light stands on the land and turns to face the camera. Its brightness beats with "
+	                "the scrolls' highlights, about once every 1.3 seconds, from a dim glow to full and back.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-6.0f, -6.0f}, {6.0f, 6.0f}}, .distance = 0.5f},
+	    .particles = {{.file = "SF_SeeThisBeam", .offset = {0.0f, 0.0f}, .magnitude = 1.0f, .restartSeconds = 10.0f}},
 	});
 
 	all.push_back({

@@ -299,6 +299,13 @@ private:
 	};
 	/// Adds a body's points in the world, its counted parts and what it writes, to those of the shadow being made
 	void AddGroundShadowBody(const GroundShadowBody& body) const;
+	/// The levels of the texture of the shadow being made, from the coverage of its counted parts
+	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+	GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha) const;
+	/// The levels of the texture of a moving body's shadow, filled through its textures' alpha (see shadow_texture)
+	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+	ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint, const GroundShadow::Cast& cast,
+	                    uint8_t alpha) const;
 	/// Hands the moving shadows to the land's program, or none where it isn't to receive them
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
 	/// The objects' shadows on the land: those drawn each frame and the trees' baked ones
@@ -564,6 +571,14 @@ private:
 	mutable GroundShadow::Coverage _groundShadowCoverage;
 	/// The bones of the body being added, in the world
 	mutable std::vector<glm::mat4> _groundShadowBones;
+	/// The shadows of the things that the physics moves, as the last frame made them: their data for the land, and
+	/// where they lie. A thing under the sea keeps its shadow from when it went under.
+	struct KeptGroundShadow
+	{
+		std::vector<glm::vec4> texels;
+		GroundShadow::Footprint footprint;
+	};
+	mutable std::unordered_map<entt::entity, KeptGroundShadow> _keptGroundShadows;
 	/// The caps over the broken buildings' cut walls, by primitive and cut height; made afresh when a cut moves
 	mutable std::map<std::pair<const void*, float>, Cap> _caps;
 	/// The land's light this frame, and the 256 by 1 texture the terrain reads it from
