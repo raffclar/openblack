@@ -2579,6 +2579,47 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.moving_shadows",
+	    .name = "Shadows of things in flight",
+	    .facet = Facet::Light,
+	    .description = "A dead pine, a pot of food, a rock and a toy ball fly up high from a row on the land, one after "
+	                   "the other, and fly up again every eight seconds.",
+	    .expected = "While each thing flies, a shadow lies on the land straight below it and turns as the thing turns. "
+	                "The dead pine's and the pot's shadows are soft and light, through their textures. The rock's and "
+	                "the ball's shadows are solid and darker. Each shadow goes when its thing comes to rest.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
+	    .objects = {{.type = TreeInfo::Pine, .offset = {-18.0f, 0.0f}, .dead = true},
+	                {.type = PotInfo::FoodPot, .offset = {-6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::Rock, .offset = {6.0f, 0.0f}},
+	                {.type = MobileStaticInfo::ToyBall, .offset = {18.0f, 0.0f}}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2(-18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 1,
+	                .from = glm::vec2(-6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 1.5f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 2,
+	                .from = glm::vec2(6.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.0f,
+	                .repeatSeconds = 8.0f},
+	               {.object = 3,
+	                .from = glm::vec2(18.0f, 0.0f),
+	                .height = 2.0f,
+	                .velocity = {0.0f, 25.0f, 1.0f},
+	                .delaySeconds = 2.5f,
+	                .repeatSeconds = 8.0f}},
+	});
+
+	all.push_back({
 	    .id = "light.reflections",
 	    .name = "Reflections in the lake",
 	    .facet = Facet::Light,

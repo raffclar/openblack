@@ -1517,3 +1517,17 @@ set_tests_properties(
 
 openblack_setup_and_add_test(test_creature_agenda_area test_creature_agenda_area.cpp)
 openblack_setup_and_add_test(test_save_slot_writes test_save_slot_writes.cpp)
+openblack_setup_and_add_test(
+  test_oracle_shadow_texture oracle/test_oracle_shadow_texture.cpp
+)
+set_tests_properties(
+  test_oracle_shadow_texture
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_shadow_texture graphics/test_shadow_texture.cpp
+)
+openblack_setup_and_add_test(
+  test_moving_shadow_casters test_moving_shadow_casters.cpp
+)
