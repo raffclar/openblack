@@ -893,6 +893,34 @@ void openblack::testbed_scenarios::AddTownGrowthScenarios(std::vector<Scenario>&
 	                 .villagerAge = 12u}},
 	    .townBeliefInPlayer = 1.0f,
 	});
+	// A town with no storage pit and two villagers with homes carrying wood
+	all.push_back({
+	    .id = "town.home_is_the_store",
+	    .name = "Villagers of a town without a storage pit keeping their wood at home",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and two huts but no storage pit, and two "
+	                   "foresters of the town, each with a home in one of the huts and each carrying 300 wood, in "
+	                   "front of the huts. Best watched at game speed 4.",
+	    .expected = "Each forester decides to take its wood to the store. With no storage pit in the town, the store "
+	                "of each forester is its home. Each forester walks to the door of its own hut and leaves all its "
+	                "wood there (the inspector's Abode woodAmount rises by 300). The town makes no temporary pile.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Centre, k_Hut, k_PlannedHuts[0]}, .distance = 0.6f},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = k_Centre},
+	                {.type = AbodeInfo::CelticHut, .offset = k_Hut, .yawDegrees = 180.0f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_PlannedHuts[0], .yawDegrees = 180.0f},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = {0.0f, 20.0f},
+	                 .joinTown = true,
+	                 .homeIn = 1,
+	                 .woodHeld = 300},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = {4.0f, 20.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2,
+	                 .woodHeld = 300}},
+	    .townBeliefInPlayer = 1.0f,
+	});
 	// A town with no storage pit and two villagers carrying wood
 	all.push_back({
 	    .id = "town.temporary_wood_pile",
