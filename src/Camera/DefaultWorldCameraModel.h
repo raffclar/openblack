@@ -54,6 +54,9 @@ public:
 	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
+	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
+	/// The single tap of the temple key looks that far ahead. Returns the distance.
+	float RefreshClickDistance(const Camera& camera);
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const final;
 	[[nodiscard]] glm::vec3 GetTargetFocus() const final;
 	[[nodiscard]] Asked GetAsked() const final

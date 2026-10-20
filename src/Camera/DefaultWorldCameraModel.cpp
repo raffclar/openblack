@@ -332,6 +332,12 @@ DefaultWorldCameraModel::LimitsMoved DefaultWorldCameraModel::ApplyLimits(glm::v
 	return moved;
 }
 
+float DefaultWorldCameraModel::RefreshClickDistance(const Camera& camera)
+{
+	UpdateFocusPointInteractionParameters(camera.GetOrigin(), camera.GetFocus(), glm::vec3(0.0f), camera);
+	return _averageIslandDistance;
+}
+
 void DefaultWorldCameraModel::UpdateFocusPointInteractionParameters(glm::vec3 origin, glm::vec3 focus, glm::vec3 eulerAngles,
                                                                     const Camera& camera)
 {
