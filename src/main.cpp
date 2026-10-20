@@ -26,6 +26,7 @@
 #endif
 
 #include "Common/CrashHandler.h"
+#include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
 #include "EngineConfig.h"
 #include "Game.h"
@@ -391,6 +392,7 @@ int main(int argc, char* argv[]) noexcept
 	{
 		openblack::crash_handler::Install();
 	}
+	openblack::system_libraries::LoadBeforeDrivers();
 
 	// clang-format off
 	std::cout <<
