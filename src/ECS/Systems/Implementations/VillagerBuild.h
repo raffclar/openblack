@@ -64,8 +64,9 @@ void LetGoOfSite(entt::entity building, std::span<const entt::entity> workers);
 uint32_t CheckTakeResourcesToStoragePit(components::LivingAction& action);
 uint32_t GotoStoragePitForDropOff(components::LivingAction& action);
 uint32_t ArrivesAtStoragePitForDropOff(components::LivingAction& action);
-/// The same at a given storage pit, which may be another town's: the load still counts off its own town's carried
-uint32_t DropOffAtStoragePit(components::LivingAction& action, std::optional<entt::entity> pit);
+/// The same at the store of a given town, which can be another town. The load still counts off the carried figures
+/// of its own town.
+uint32_t DropOffAtStoragePit(components::LivingAction& action, entt::entity town);
 
 /// At its town's storage pit the villager takes what it can of up to an amount of a resource, walking to the pit
 /// first, then walks off into a state; with none to take, it goes into another state
@@ -75,6 +76,12 @@ uint32_t ArrivesAtStoragePitForResource(components::LivingAction& action, Resour
 /// Where the villager takes or leaves a resource: its storage pit's door when the pit works; with no town, where it
 /// stands; else at the edge of its town's temporary pile of the resource, nearest the villager, which is made if missing
 glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type);
+/// The same for the store of a given town, which can be another town than the town of the villager
+glm::vec2 ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town);
+
+/// The store that the villager uses as a member of a town: the storage pit of the town, else its own home. The town
+/// can be null or another town than its own.
+[[nodiscard]] std::optional<entt::entity> StoreOf(const components::Villager& villager, entt::entity town);
 
 /// Turns the villager towards a point by at most a step of the game's angles; whether it now faces it
 bool FaceTowards(entt::entity villager, glm::vec2 point, int32_t step);

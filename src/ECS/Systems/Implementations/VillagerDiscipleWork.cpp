@@ -120,20 +120,6 @@ std::pair<ResourceType, uint32_t> LargerLoad(const Villager& person)
 	return {ResourceType::None, 0};
 }
 
-/// Where a town takes in what is brought to it: its working store's door
-glm::vec2 DropOffPosition(entt::entity villager, std::optional<entt::entity> town)
-{
-	if (town.has_value())
-	{
-		if (const auto pit = construction::StoragePitOf(*town); IsFunctional(pit))
-		{
-			return villager_home::ArrivePosition(*pit);
-		}
-	}
-	// TODO(disciples): a town without a working store takes things in at its temporary pot, which openblack lacks
-	return GroundOf(villager);
-}
-
 /// With nothing to carry, the trader waits by the centre of the town it trades with
 uint32_t SetTraderNothingToDo(LivingAction& action, entt::entity tradeTown)
 {
@@ -266,10 +252,10 @@ uint32_t villager_disciple_work::CheckTrader(LivingAction& action)
 	}
 	// Its fullness is that of its larger load, whatever it is to carry; the food limit stands for both
 	const auto here = GroundOf(villager);
-	const auto leg =
-	    disciple_work::ChooseTradeLeg(LargerLoad(person).second, info->maxTraderFoodCarried,
-	                                  gutils::GetDistanceInMetres(here, DropOffPosition(villager, ValidTown(person.town))),
-	                                  gutils::GetDistanceInMetres(here, DropOffPosition(villager, tradeTown)));
+	const auto leg = disciple_work::ChooseTradeLeg(
+	    LargerLoad(person).second, info->maxTraderFoodCarried,
+	    gutils::GetDistanceInMetres(here, villager_build::ResourceDropoffPos(villager, *resource)),
+	    gutils::GetDistanceInMetres(here, villager_build::ResourceDropoffPos(villager, *resource, *tradeTown)));
 	SetTopState(action, leg == disciple_work::TradeLeg::Fetch ? VillagerStates::ArrivesAtStoragePitForTraderPickUp
 	                                                          : VillagerStates::ArrivesAtStoragePitForTraderDropOff);
 	return 1;
@@ -309,9 +295,9 @@ uint32_t villager_disciple_work::TraderDeliver(LivingAction& action)
 	const auto villager = EntityOf(action);
 	const auto* disciple = Entities().TryGet<const Disciple>(villager);
 	const auto tradeTown = disciple != nullptr ? ValidTown(disciple->tradeTown) : std::nullopt;
-	// What it delivers leaves its own town's count of what its people carry; the other town's store counts it in
-	return villager_build::DropOffAtStoragePit(action,
-	                                           tradeTown.has_value() ? construction::StoragePitOf(*tradeTown) : std::nullopt);
+	// It leaves its load at the store of the town that it trades with. What it delivers leaves the count of what the
+	// people of its own town carry.
+	return villager_build::DropOffAtStoragePit(action, tradeTown.value_or(entt::null));
 }
 
 uint32_t villager_disciple_work::CheckSupplyWorkshop(LivingAction& action)
@@ -329,7 +315,7 @@ uint32_t villager_disciple_work::CheckSupplyWorkshop(LivingAction& action)
 		                                         VillagerStates::ArrivesAtWorkshopForDropOff);
 		return 1;
 	}
-	const auto pit = construction::StoragePitOf(person.town);
+	const auto pit = villager_build::StoreOf(person, ValidTown(person.town).value_or(entt::null));
 	if (pit.has_value() && Entities().Valid(*pit) &&
 	    Locator::resourceStoreSystem::value().GetResource(*pit, ResourceType::Wood) > 0)
 	{
@@ -376,7 +362,7 @@ uint32_t villager_disciple_work::ArrivesAtStoragePitForWorkshopMaterials(LivingA
 	{
 		return 0;
 	}
-	const auto pit = construction::StoragePitOf(person.town);
+	const auto pit = villager_build::StoreOf(person, ValidTown(person.town).value_or(entt::null));
 	if (IsFunctional(pit))
 	{
 		const auto door = villager_home::ArrivePosition(*pit);

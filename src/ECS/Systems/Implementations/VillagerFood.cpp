@@ -129,10 +129,10 @@ bool IsPoisoned(entt::entity villager)
 	return Entities().AllOf<Poisoned>(villager);
 }
 
-/// Its town's storage pit when that works
+/// The store of the villager when that works: the storage pit of its town, else its home
 std::optional<entt::entity> WorkingStoragePit(const Villager& villager)
 {
-	const auto pit = construction::StoragePitOf(TownOf(villager));
+	const auto pit = villager_build::StoreOf(villager, TownOf(villager));
 	return pit.has_value() && villager_home::IsFunctional(*pit) ? pit : std::nullopt;
 }
 
