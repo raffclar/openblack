@@ -64,6 +64,15 @@ TEST(GameSession, OnlyAContinuedGameShowsTheMenuAsItStarts)
 	EXPECT_FALSE(ShowsMenuOnStart(Start::SavedGame, true));
 }
 
+TEST(GameSession, AWindowCloseWaitsForTheEndOfAScriptsCutScene)
+{
+	EXPECT_TRUE(CloseEndsGame(true, false));
+	// The game continues until the cut scene ends, and keeps the close until then
+	EXPECT_FALSE(CloseEndsGame(true, true));
+	EXPECT_FALSE(CloseEndsGame(false, false));
+	EXPECT_FALSE(CloseEndsGame(false, true));
+}
+
 TEST(GameSession, AGameSavesAsItEndsIntoTheProfilePlayed)
 {
 	EXPECT_EQ(ExitSaveFor(PlainQuit()), ExitSave::Current);

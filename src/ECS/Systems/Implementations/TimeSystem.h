@@ -54,6 +54,7 @@ public:
 
 	void StartGameClock(bool paused) override;
 	void RestartTurns() override;
+	void ResetTimerToTurn() override;
 	void ResumeAtTurn(uint32_t turn, int32_t remainderMs) override;
 	[[nodiscard]] int32_t GetTurnRemainderMs() const override { return _turnRemainderMs; }
 	[[nodiscard]] bool IsTurnDue() override;
@@ -88,8 +89,6 @@ public:
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return _pinnedDate; }
 
 private:
-	/// Sets the timer back to the current turn, from now
-	void ResetTimerToTurn();
 	/// The tick count the clock goes by: the tick source's, or while frames take a fixed time, one moved on by that
 	/// time each frame
 	[[nodiscard]] uint32_t Ticks() const;

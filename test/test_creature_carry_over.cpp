@@ -44,6 +44,7 @@
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
+#include "TestTempFolder.h"
 
 using namespace openblack;
 using namespace openblack::creature_carry_over;
@@ -197,7 +198,7 @@ class TestFolder
 {
 public:
 	explicit TestFolder(std::string_view name)
-	    : _path(std::filesystem::temp_directory_path() / "openblack_tests" / name)
+	    : _path(openblack::test::UniqueTempPath(name))
 	{
 		std::error_code error;
 		std::filesystem::remove_all(_path, error);

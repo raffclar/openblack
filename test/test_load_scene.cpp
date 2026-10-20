@@ -19,6 +19,8 @@
 #include <Locator.h>
 #include <gtest/gtest.h>
 
+#include "TestTempFolder.h"
+
 class LoadScene: public ::testing::Test
 {
 public:
@@ -39,10 +41,12 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::debug);
+		args.profileFolder = profileFolder_.Path();
 		game_ = std::make_unique<openblack::Game>(std::move(args));
 		ASSERT_TRUE(game_->Initialize());
 	}
 	void TearDown() override { game_.reset(); }
+	const openblack::test::TestTempFolder profileFolder_;
 	std::unique_ptr<openblack::Game> game_;
 };
 
@@ -181,4 +185,17 @@ SET_LAND_NUMBER(6)
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 6);
 	LoadTestScene("SET_LAND_NUMBER(8");
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 8);
+}
+
+TEST_F(LoadScene, command_with_too_few_values_stops_the_load_and_keeps_the_commands_before_it)
+{
+	// The game stops the land's script at a command that has too few values. It keeps what the commands before it did
+	// and does not do the commands after it.
+	ASSERT_THROW(LoadTestScene(R""""(
+SET_LAND_NUMBER(3)
+SET_LAND_NUMBER()
+SET_LAND_NUMBER(9)
+)""""),
+	             std::runtime_error);
+	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 3);
 }

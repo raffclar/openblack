@@ -20,11 +20,13 @@
 #include <gtest/gtest.h>
 
 #include "CHLApi.h"
+#include "Common/GameRandom.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "TestTempFolder.h"
 
 using namespace openblack;
 using namespace openblack::lhvm;
@@ -74,6 +76,7 @@ protected:
 		    .logFile = "stdout",
 		};
 		std::fill_n(args.logLevels.begin(), args.logLevels.size(), spdlog::level::warn);
+		args.profileFolder = _profileFolder.Path();
 		_game = std::make_unique<Game>(std::move(args));
 		ASSERT_TRUE(_game->Initialize());
 		ASSERT_TRUE(_game->LoadMap(Locator::filesystem::value().FindPath(std::string(k_NextLand))));
@@ -89,6 +92,7 @@ protected:
 
 	[[nodiscard]] static int32_t Global(size_t index) { return Locator::vm::value().GetVariables().at(index).value.intVal; }
 
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<Game> _game;
 };
 
@@ -125,4 +129,14 @@ TEST_F(StoryLandChange, ThePlayersAlignmentGoesOnToTheNextLand)
 		    players += player.name == PlayerNames::PLAYER_ONE ? 1 : 0;
 	    });
 	EXPECT_EQ(players, 1);
+}
+
+TEST_F(StoryLandChange, EachLoadOfALandStartsTheRandomNumbersAgain)
+{
+	// The game clears both random seeds as it loads a map, so a land always draws the same numbers as it loads
+	auto& random = Locator::gameRandom::value();
+	const auto afterLoad = random.GetSeeds();
+	random.SetSeeds({.synced = 12345, .local = 678});
+	ASSERT_TRUE(_game->LoadMap(Locator::filesystem::value().FindPath(std::string(k_NextLand))));
+	EXPECT_EQ(random.GetSeeds(), afterLoad);
 }
