@@ -82,8 +82,11 @@ private:
 		std::vector<uint32_t> slots;
 	};
 
-	/// Saves the world into the slot. With putPicture, the slot's picture comes from the temporary picture file now.
-	bool SaveSlot(uint32_t slot, std::u16string_view name, bool putPicture);
+	/// Takes the copies of the world for a save into the slot and gives the writer all the folder and file work. With
+	/// putPicture, the slot's picture comes from the temporary picture file now. Gives how the write of the world files
+	/// ends, which the writer sets on its thread, or none when the game cannot save.
+	std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveSlot(uint32_t slot, std::u16string_view name,
+	                                                                        bool putPicture);
 	/// Asks the renderer for a picture of the screen for the temporary picture file, then for the slots. Without a
 	/// renderer, the slots take the temporary picture file as it is.
 	void AskForPicture(std::vector<uint32_t> slots);
@@ -99,13 +102,10 @@ private:
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);
-	/// The files in the game's layout of a save of a game that came from such a file: the world file and the script file
+	/// The world file in the game's layout of a save of a game that came from such a file
 	[[nodiscard]] std::vector<ecs::save_files::SaveFile> VanillaFiles(uint32_t slot, const std::filesystem::path& slotFolder,
 	                                                                  std::span<const gamesave::SavedCreature> saved,
 	                                                                  std::span<const entt::entity> entities);
-	/// Gives the writer the world files of a save, which it writes through their temporary files. A write that does not
-	/// complete is told to the player on the game's thread.
-	void QueueWorldFiles(std::function<std::vector<ecs::save_files::SaveFile>()> files);
 	/// A load that the game refuses, or that stops after the land cleared: the land that is open starts again as a new
 	/// game, from its own script
 	void StartLandAgain() const;
@@ -115,10 +115,6 @@ private:
 	                       const gamesave::CreatureObject& loaded,
 	                       const std::optional<gamesave::LeashStatusObject>& loadedLeash);
 
-	/// Gives the writer a job that writes a file of a saved game into a folder of the profile, which it makes now. The
-	/// contents come from a function that the writer calls on its own thread. False when the folder cannot be made.
-	bool QueueFile(const std::filesystem::path& relativeFolder, std::string_view file,
-	               std::function<std::vector<uint8_t>()> contents);
 	/// Waits until the writer has written every file that it was given, before the game reads saved games
 	void FlushWrites() const;
 	[[nodiscard]] ecs::save_files::BackgroundWriter& Writer() const;
