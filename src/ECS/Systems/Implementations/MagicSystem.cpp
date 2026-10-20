@@ -2386,6 +2386,13 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	after.hasCast = true;
 	after.storedChants = -1.0f;
 	AfterSeedCast(after, type);
+	// The help counts the cast of this computer's hand, a spell for creatures apart from the other miracles
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(spell.spellClass == magic::SpellClass::Creature
+		                                                ? help::profile::k_CastCreatureMiracle
+		                                                : help::profile::k_CastMiracle);
+	}
 	// Food and wood lift and tip the hand as they pour, keeping it where it began; the water raises it eight units and
 	// lowers it again over eight seconds, over and over as it rains, the hand free to move
 	if (spell.castFromHand && spell.spellClass == magic::SpellClass::Resource)

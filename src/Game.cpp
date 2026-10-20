@@ -1639,6 +1639,15 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		submitAll({tips::OverNothing(camera)});
 	};
+	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
+	const auto leashTip = [pointed]() {
+		const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed);
+		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
+		}
+		return tip;
+	};
 	// While the hand grips the land, it shows "Zoom" when the Action button is held too. In other conditions it shows
 	// what a tap does with the leash, or how the drag moves the camera. The grip starts with a drag of the land and
 	// continues until the Move button is let go. Both buttons together stop the drag but not the grip.
@@ -1665,7 +1674,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			submitAll({zoom});
 			return;
 		}
-		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+		if (const auto tip = leashTip())
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 			return;
@@ -1685,7 +1694,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
-	if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+	if (const auto tip = leashTip())
 	{
 		toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		return;
@@ -2850,6 +2859,15 @@ void Game::UpdateTemple(std::chrono::microseconds deltaTime)
 
 void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 {
+	// The interface reads the places of the pointer that came in, and the help counts each movement of the mouse
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto moves = Locator::gameActionSystem::value().TakeMouseMoves();
+		for (uint32_t i = 0; i < moves && Locator::helpProfileSystem::has_value(); ++i)
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_MouseMoved);
+		}
+	}
 	if (_interface)
 	{
 		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out

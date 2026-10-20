@@ -1589,8 +1589,11 @@ TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWi
 	// Given once the button has been held more than 225 ms
 	Frame(200);
 	EXPECT_TRUE(world->given.empty());
+	world->helpEvents.clear();
 	Frame(30);
 	ASSERT_EQ(world->given.size(), 1u);
+	// The help counts the gift once
+	EXPECT_EQ(std::ranges::count(world->helpEvents, help::profile::k_Give), 1);
 	EXPECT_EQ(world->given.front().creature, creature);
 	EXPECT_EQ(world->given.front().held, rock);
 	EXPECT_TRUE(world->given.front().leftHand);

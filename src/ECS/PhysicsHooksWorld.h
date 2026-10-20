@@ -126,6 +126,8 @@ public:
 	[[nodiscard]] virtual bool IsStore(entt::entity store, ResourceType type) const = 0;
 	virtual bool TakeObject(entt::entity store, entt::entity object, std::optional<PlayerNames> giver) = 0;
 	virtual void AddToPile(entt::entity pile, ResourceType type, uint32_t amount, bool poisoned) = 0;
+	/// The help of this computer's player counts an event
+	virtual void CountHelpEvent([[maybe_unused]] uint32_t event) {}
 
 	virtual void SetDying(entt::entity animal) = 0;
 

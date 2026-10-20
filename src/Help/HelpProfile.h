@@ -23,11 +23,22 @@ namespace openblack::help::profile
 
 /// The things counted, numbered as the scripts number them; 0 is never asked for by a script
 constexpr uint32_t k_EventCount = 49;
+/// The interface reads a new place of the pointer, after the mouse moved
+constexpr uint32_t k_MouseMoved = 1;
 /// The hand takes a thing into it. The hand lets go of a thing that it holds: a throw, a drop or a pour.
 constexpr uint32_t k_PickUp = 2;
 constexpr uint32_t k_Throw = 4;
 /// A new miracle seed goes into the hand of this computer's player, before the hand counts it as a thing it took
 constexpr uint32_t k_SeedInHand = 12;
+/// The hand of this computer's player gives what it holds to a creature
+constexpr uint32_t k_Give = 5;
+/// A store takes a thing that the hand of this computer's player threw into it
+constexpr uint32_t k_ThrownIntoStore = 6;
+/// The hand of this computer's player casts a miracle. A spell for creatures has its own count.
+constexpr uint32_t k_CastMiracle = 9;
+constexpr uint32_t k_CastCreatureMiracle = 10;
+/// The hand holds the leash over nothing and the tooltip offers to focus on the creature
+constexpr uint32_t k_FocusCreatureTip = 47;
 /// The gestures that the help counts. All of them also count as the event for any gesture.
 /// - The hand powers up the miracle that it holds.
 /// - The player calls the special move of the creature in a fight.
