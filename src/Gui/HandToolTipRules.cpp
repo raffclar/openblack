@@ -96,6 +96,11 @@ std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText)
 	return Offer {.index = miracleToolTipText - k_FirstToolTipText};
 }
 
+Offer BubbleOffer()
+{
+	return {.index = k_Scroll, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_UpDown};
+}
+
 std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText)
 {
 	return SpellIconOffer(givesAMiracle ? miracleToolTipText : seedToolTipText);

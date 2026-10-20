@@ -5891,6 +5891,22 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.85f}},
 	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.31f}}},
 	});
+	// A "did you know" sign stands in front of the camera. The hand taps it, and its tip bubble comes up.
+	all.push_back({
+	    .id = "hand.bubble_scroll_tooltip",
+	    .name = "The tooltip over the tip bubble of a sign",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes to the sign and taps it with a quick press of the Action button. Then move the "
+	                   "pointer onto the tip bubble, and hold the Action button on it.",
+	    .expected = "Over the bubble, and while the hand grips it: \"Scroll\" with the Action button and the up and down "
+	                "arrows. Over the land: \"Move\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 3.0f, 6.0f}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)

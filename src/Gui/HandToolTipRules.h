@@ -38,6 +38,8 @@ constexpr uint32_t k_Catch = 13;
 /// "Activate", over a scroll that a script has not started; "Reminder" over a scroll that it started
 constexpr uint32_t k_Activate = 16;
 constexpr uint32_t k_Reminder = 45;
+/// "Scroll", over the tip bubble of a sign or while the hand grips it
+constexpr uint32_t k_Scroll = 17;
 /// "Give", while the hand holds a thing that a creature can take from it
 constexpr uint32_t k_Give = 20;
 /// "Zoom Out", with the camera near the land and pointed down
@@ -135,6 +137,9 @@ enum class TapKind : uint8_t
 /// Over a miracle icon in the player's influence, the hand names the icon's miracle at once, in the words of the
 /// miracle's own tooltip text, with no mouse button. A text that is not one of the game's tooltips shows nothing.
 [[nodiscard]] std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText);
+/// What the tip bubble of a sign offers while the pointer is on it or the hand grips it: to scroll its words with the
+/// Action button, up and down
+[[nodiscard]] Offer BubbleOffer();
 /// What a one-shot globe offers: the name of the miracle that it gives, or of its seed when it gives no miracle
 [[nodiscard]] std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText);
 

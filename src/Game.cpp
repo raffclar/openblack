@@ -1744,6 +1744,17 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		overNothing();
 		return;
 	}
+	// While the hand grips the tip bubble of a sign, or the pointer is on the bubble and on nothing else, the hand offers
+	// to scroll its words
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		const auto& bubble = Locator::tipBubbleSystem::value();
+		if (bubble.IsGripped() || (!pointed.has_value() && bubble.IsUnderHand()))
+		{
+			submitAll({tips::BubbleOffer()});
+			return;
+		}
+	}
 	if (!pointed.has_value() || !tips::IsInteractable(*pointed))
 	{
 		overNothing();

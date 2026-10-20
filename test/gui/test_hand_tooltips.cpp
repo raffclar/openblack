@@ -227,3 +227,8 @@ TEST(HandToolTips, AGlobeNamesItsMiracleOrElseItsSeed)
 	// A text outside the tooltips gives no tooltip
 	EXPECT_FALSE(GlobeOffer(true, 0, k_SeedText).has_value());
 }
+
+TEST(HandToolTips, TheTipBubbleOffersToScrollItsWordsUpAndDown)
+{
+	EXPECT_EQ(BubbleOffer(), (Offer {.index = k_Scroll, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_UpDown}));
+}
