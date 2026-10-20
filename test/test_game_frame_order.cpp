@@ -175,3 +175,18 @@ TEST(GameFrameOrder, TheScreenMarksRiseByTheGameTimeOfTheFrame)
 	const auto recorder = PlayOneFrame();
 	EXPECT_TRUE(recorder.Before(Step::FrameTime, Step::ScreenMarks));
 }
+
+TEST(GameFrameOrder, AFilmShowsItsFramesAfterTheCameraAndBeforeTheCreaturesArePosed)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::Video, Step::PauseText));
+	EXPECT_TRUE(recorder.Before(Step::Video, Step::CreaturePoses));
+}
+
+TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::Bookmarks));
+	EXPECT_TRUE(recorder.Before(Step::Bookmarks, Step::Entities));
+}

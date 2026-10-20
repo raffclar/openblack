@@ -37,8 +37,9 @@ enum class Stage : uint8_t
 	FrameTime,
 	/// The camera moves, with the movement of the mouse in this frame, and shakes
 	Camera,
-	/// The draw starts. The creatures get their poses between their last two turns, before the hand moves.
-	CreaturePoses,
+	/// The draw starts. A film shows its frames, and the creatures get their poses between their last two turns, before
+	/// the hand moves.
+	DrawStart,
 	/// The hand goes to the point under the cursor, as the camera now sees it
 	PreDraw,
 	/// The world is drawn. The effects move on as the draw shows them, after the hand moved.
@@ -59,18 +60,18 @@ enum class Step : uint8_t
 	GripEffect,
 	Turns,
 	FrameTime,
-	Video,
-	PauseText,
 	CameraMouse,
 	CameraPaths,
 	CameraControllers,
 	Camera,
 	CameraShake,
 	Temple,
-	Bookmarks,
 	HighDetail,
+	Video,
+	PauseText,
 	CreaturePoses,
 	Hand,
+	Bookmarks,
 	FrameEffects,
 	ScreenMarks,
 	Entities,
@@ -100,8 +101,6 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::GripEffect, .stage = std::nullopt},
     {.step = Step::Turns, .stage = Stage::Turns},
     {.step = Step::FrameTime, .stage = Stage::FrameTime},
-    {.step = Step::Video, .stage = std::nullopt},
-    {.step = Step::PauseText, .stage = std::nullopt},
     // The movement of the mouse turns, tilts and zooms the camera in the same frame
     {.step = Step::CameraMouse, .stage = Stage::Camera},
     // A miracle's camera path, the editor's camera and the creature's camera
@@ -112,12 +111,16 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::CameraShake, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
-    // The markers of the bookmarks throb by the game time of this frame
-    {.step = Step::Bookmarks, .stage = std::nullopt},
     {.step = Step::HighDetail, .stage = std::nullopt},
+    // A full-screen film decodes the frames that are due, as the draw starts
+    {.step = Step::Video, .stage = Stage::DrawStart},
+    // The words of the pause and the speed, after the frame's keys, turns and film
+    {.step = Step::PauseText, .stage = std::nullopt},
     // The creatures' fights, walks, animations, hair and the sounds of their animations
-    {.step = Step::CreaturePoses, .stage = Stage::CreaturePoses},
+    {.step = Step::CreaturePoses, .stage = Stage::DrawStart},
     {.step = Step::Hand, .stage = Stage::PreDraw},
+    // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
+    {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
     {.step = Step::FrameEffects, .stage = Stage::Draw},
     // The numbers and the marks that rise over things, by the game time of the frame
