@@ -48,6 +48,7 @@
 #include "ECS/Archetypes/TownArchetype.h"
 #include "ECS/Archetypes/TreeArchetype.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -70,9 +71,11 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Game.h"
@@ -410,15 +413,26 @@ void FeatureScriptCommands::CreatePlannedAbode(int32_t townId, glm::vec3 positio
 }
 
 void FeatureScriptCommands::CreateTownCentre(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
-                                             int32_t size, [[maybe_unused]] int32_t worshipPercentage)
+                                             int32_t size, int32_t worshipPercentage)
 {
 	const auto type = GAbodeInfo::Find(abodeInfo);
 	if (type == AbodeInfo::None)
 	{
 		return; // the game has no check (see GAbodeInfo::Find)
 	}
-	AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f, static_cast<uint32_t>(0),
-	                       static_cast<uint32_t>(0));
+	const auto centre = AbodeArchetype::Create(townId, position, type, rotation * 0.001f, size * 0.001f,
+	                                           static_cast<uint32_t>(0), static_cast<uint32_t>(0));
+	if (centre == entt::null || !Locator::villageTotemSystem::has_value())
+	{
+		return;
+	}
+	// The script then sets the town's worship share, in thousandths. A town with no worship site keeps a share of 0.
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& towns = registry.Context().towns;
+	if (const auto town = towns.find(registry.Get<const Abode>(centre).townId); town != towns.end())
+	{
+		Locator::villageTotemSystem::value().SetTownShare(town->second, ecs::village_totem::ShareFromScript(worshipPercentage));
+	}
 }
 
 void FeatureScriptCommands::CreateTownSpell(int32_t townId, const std::string& spellName)
