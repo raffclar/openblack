@@ -86,9 +86,6 @@ constexpr float k_DoorOpenRate = 0.4f;
 /// Walking back to the main room from another room, the doorway opens from the start of its swing, at this rate
 constexpr float k_DoorBackOpenFrom = 0.0f;
 constexpr float k_DoorBackOpenRate = 2.0f;
-/// The room's camera turns any doorway left open round to close, this long into a room's path, at this rate
-constexpr float k_IntroDoorCloseTime = 0.4f;
-constexpr float k_IntroDoorCloseRate = 1.6f;
 
 /// The camera's views of a room of pictures, as the game sets each room up: the camera and where it looks, low and
 /// looking up at lean 0 and high and looking down at lean 1, about the room's centre, turned by the camera's yaw and
@@ -1469,7 +1466,7 @@ void TempleCameraModel::FollowTemple()
 			// Any door the player has the room's camera back by is shut
 			doors.FastClose();
 		}
-		else if (_state == State::Intro && _introTime > k_IntroDoorCloseTime)
+		else if (_state == State::Intro && IntroClosesDoors(_introTime))
 		{
 			doors.Close(k_IntroDoorCloseRate);
 		}

@@ -115,6 +115,12 @@ public:
 	[[nodiscard]] static Pose LookPose(glm::vec3 from, float heading, float pitch);
 	/// The heading and pitch of a look at a point, as the game's camera works them out
 	[[nodiscard]] static glm::vec2 HeadingAndPitch(const Pose& look);
+	/// The doors start to close behind the camera once it has come in along the room's path for more than this many
+	/// seconds, at this rate
+	static constexpr float k_IntroDoorCloseTime = 0.4f;
+	static constexpr float k_IntroDoorCloseRate = 1.6f;
+	/// Whether the doors close at this time of the room's path in
+	[[nodiscard]] static constexpr bool IntroClosesDoors(float introSeconds) { return introSeconds > k_IntroDoorCloseTime; }
 
 	TempleCameraModel(Paths paths, Room room);
 	~TempleCameraModel() final;
