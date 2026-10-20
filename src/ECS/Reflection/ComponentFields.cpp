@@ -95,6 +95,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChallengePicture.h"
 #include "ECS/Components/ChallengeRecord.h"
+#include "ECS/Components/ChangedMaterials.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/Cloud.h"
 #include "ECS/Components/ComputerPlayer.h"
@@ -172,6 +173,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
@@ -279,6 +281,7 @@
 #include "Fire/FireModel.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/Moon.h"
+#include "Graphics/RenderModes.h"
 #include "Graphics/Sun.h"
 #include "Hand/HandGrabRules.h"
 #include "Magic/DispenserRules.h"
@@ -593,6 +596,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ChallengeRecord::quest>("quest")
 	    .Field<&components::ChallengeRecord::startedTurn>("startedTurn")
 	    .Field<&components::ChallengeRecord::doneTurn>("doneTurn");
+	Reflect<components::ChangedMaterials>(context).Field<&components::ChangedMaterials::properties>("properties");
 	Reflect<components::ChimneySmoke>(context)
 	    .Field<&components::ChimneySmoke::chimney>("chimney")
 	    .Field<&components::ChimneySmoke::rgb>("rgb")
@@ -1437,6 +1441,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
 	    .Field<&components::VirtualInfluence::hum>("hum");
+	Reflect<components::InterfaceLimits>(context)
+	    .Field<&components::InterfaceLimits::onlyHighlights>("onlyHighlights")
+	    .Field<&components::InterfaceLimits::noHolding>("noHolding");
 	Reflect<components::IntroHand>(context)
 	    .Field<&components::IntroHand::clip>("clip")
 	    .Field<&components::IntroHand::time>("time")
@@ -3416,6 +3423,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
 	    .Field<&openblack::graphics::moon::Placement::alpha>("alpha");
+	Reflect<openblack::graphics::render_modes::Properties>(context, ValueOnly {})
+	    .Field<&openblack::graphics::render_modes::Properties::additive>("additive")
+	    .Field<&openblack::graphics::render_modes::Properties::writesDepth>("writesDepth")
+	    .Field<&openblack::graphics::render_modes::Properties::bothSides>("bothSides")
+	    .Field<&openblack::graphics::render_modes::Properties::textureAlpha>("textureAlpha");
 	Reflect<openblack::graphics::sun::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::sun::Placement::position>("position")
 	    .Field<&openblack::graphics::sun::Placement::alpha>("alpha");

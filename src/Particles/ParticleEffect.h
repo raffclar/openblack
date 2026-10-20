@@ -301,6 +301,8 @@ public:
 	/// What a lightning bolt may strike round a point on the land, as the game finds it: everything standing in the first
 	/// cells of a spiral out from the point's cell, whatever its distance, in each cell what stays put and then what moves
 	/// in the map's order, a building only in the cell it stands in, but for the dead and the miracles' seeds
+	/// Whether a villager is among the things of the map cell that a point is in; false off the map
+	[[nodiscard]] virtual bool VillagerInCell(glm::vec3 /*point*/) const { return false; }
 	[[nodiscard]] virtual std::vector<StrikeCandidate> StrikeCandidates(glm::vec3 /*centre*/, size_t /*cells*/) const
 	{
 		return {};

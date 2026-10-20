@@ -256,6 +256,8 @@ public:
 	[[nodiscard]] static bool ReachedMusicLine(int32_t lastLine, int32_t line);
 	/// A script starting music starts its lyrics again: no line and no word
 	void ResetMusicLyrics() { _lyrics = {}; }
+	/// The end of a dialogue starts the sung line again at no word, and keeps the line
+	void ResetMusicWord() { _lyrics.word = 0; }
 	/// A cue heard in the script's music as it plays
 	void OnScriptMusicCue(std::string_view cue) { ApplyMusicCue(_lyrics, cue); }
 	[[nodiscard]] const MusicLyrics& GetMusicLyrics() const { return _lyrics; }

@@ -121,24 +121,19 @@ TEST(Blast, AModelBreaksIntoChainsOfAtMostSixteenJoinedTriangles)
 TEST(CameraShake, OnlyTheNearestCountsAtFullStrengthWithinItsRadiusFallingOverItsTime)
 {
 	std::vector<camera_shake::Shake> shakes {
-	    {.position = {0.0f, 0.0f, 0.0f},
-	     .radius = 200.0f,
-	     .strength = 1.0f,
-	     .milliseconds = 700.0f,
-	     .millisecondsLeft = 700.0f},
-	    {.position = {500.0f, 0.0f, 0.0f},
-	     .radius = 200.0f,
-	     .strength = 1.0f,
-	     .milliseconds = 700.0f,
-	     .millisecondsLeft = 700.0f},
+	    {.position = {0.0f, 0.0f, 0.0f}, .radius = 200.0f, .strength = 1.0f, .milliseconds = 700, .millisecondsLeft = 700},
+	    {.position = {500.0f, 0.0f, 0.0f}, .radius = 200.0f, .strength = 1.0f, .milliseconds = 700, .millisecondsLeft = 700},
 	};
 	EXPECT_FLOAT_EQ(camera_shake::Amplitude(shakes, {150.0f, 0.0f, 0.0f}), 1.0f);
 	EXPECT_FLOAT_EQ(camera_shake::Amplitude(shakes, {250.0f, 0.0f, 0.0f}), 0.0f);
 	// Exactly at the radius is outside it
 	EXPECT_FLOAT_EQ(camera_shake::Amplitude(shakes, {-200.0f, 0.0f, 0.0f}), 0.0f);
-	camera_shake::Advance(shakes, 350.0f);
+	camera_shake::Advance(shakes, 350);
 	EXPECT_NEAR(camera_shake::Amplitude(shakes, glm::vec3(0.0f)), 0.5f, k_Epsilon);
-	camera_shake::Advance(shakes, 400.0f);
+	// A shake stops when its time left is zero
+	camera_shake::Advance(shakes, 349);
+	EXPECT_EQ(shakes.size(), 2U);
+	camera_shake::Advance(shakes, 1);
 	EXPECT_TRUE(shakes.empty());
 	const auto offsets = camera_shake::Jitter(0.5f, true, [](float a, float b) { return b + 0.0f * a; });
 	EXPECT_FLOAT_EQ(offsets.eye.y, 0.5f);
@@ -149,6 +144,27 @@ TEST(CameraShake, OnlyTheNearestCountsAtFullStrengthWithinItsRadiusFallingOverIt
 	const auto all = camera_shake::Jitter(1.0f, false, [&draw](float, float) { return draw += 1.0f; });
 	EXPECT_EQ(all.eye, glm::vec3(3.0f, 2.0f, 1.0f));
 	EXPECT_EQ(all.focus, glm::vec3(6.0f, 5.0f, 4.0f));
+}
+
+TEST(CameraShake, TheStrengthIsTheShareOfTheTimeLeftTimesTheStrength)
+{
+	// The share of the time comes first: the other order gives a different last bit
+	const std::vector<camera_shake::Shake> shakes {
+	    {.radius = 10.0f, .strength = 1.7f, .milliseconds = 700, .millisecondsLeft = 3, .verticalOnly = false}};
+	const float share = 3.0f / 700.0f;
+	EXPECT_EQ(camera_shake::Amplitude(shakes, glm::vec3(0.0f)), share * 1.7f);
+	EXPECT_NE(camera_shake::Amplitude(shakes, glm::vec3(0.0f)), 1.7f * 3.0f / 700.0f);
+}
+
+TEST(CameraShake, AScriptRoundsItsTimeToTheEvenMillisecondAndAnEffectRemovesTheFraction)
+{
+	// 0.0625 s and 0.1875 s are 62.5 ms and 187.5 ms exactly
+	EXPECT_EQ(camera_shake::ScriptMilliseconds(0.0625f), 62);
+	EXPECT_EQ(camera_shake::ScriptMilliseconds(0.1875f), 188);
+	EXPECT_EQ(camera_shake::ScriptMilliseconds(2.0f), 2000);
+	EXPECT_EQ(camera_shake::EffectMilliseconds(0.0625f), 62);
+	EXPECT_EQ(camera_shake::EffectMilliseconds(0.1875f), 187);
+	EXPECT_EQ(camera_shake::EffectMilliseconds(0.4f), 400);
 }
 
 TEST(DustPuff, FifteenSpritesFlyUpAndOutGrowingAndFadingOverASecondAndAHalf)

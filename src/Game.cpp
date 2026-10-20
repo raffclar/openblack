@@ -114,6 +114,7 @@
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
@@ -121,6 +122,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Temple.h"
@@ -295,6 +297,7 @@
 #include "Profiler.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Serializer/FotFile.h"
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
@@ -720,6 +723,21 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// The hand holds one thing at a time: a thing it picked up, or a miracle
 	auto* handGrab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
 	const bool handHoldsThing = handGrab != nullptr && handGrab->IsBusy();
+	// The interface level of a lesson can stop the Action button from taking hold of creatures and totems. It can also
+	// stop an empty hand from acting on anything but a highlight that a script made.
+	ecs::components::InterfaceLimits interfaceLimits {};
+	if (Locator::playerSystem::has_value())
+	{
+		const auto player = Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE);
+		const auto& registry = Locator::entitiesRegistry::value();
+		if (const auto* limits =
+		        registry.Valid(player) ? registry.TryGet<const ecs::components::InterfaceLimits>(player) : nullptr;
+		    limits != nullptr)
+		{
+			interfaceLimits = *limits;
+		}
+	}
+	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
 	// Letting go of the Action button lets go of the tip bubble
 	if (Locator::tipBubbleSystem::has_value() && Locator::tipBubbleSystem::value().IsGripped() &&
 	    (rightLetGo || (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_RIGHT)))
@@ -831,7 +849,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			const bool tying =
 			    under.has_value() && own.has_value() &&
 			    creature_hand::PressOn(*under == *own, leashes.IsLeashed(*own)) == creature_hand::CreaturePress::Leash;
-			if (!_actionPressTaken && under.has_value() && !tying)
+			if (!_actionPressTaken && under.has_value() && !tying && mayHold)
 			{
 				_actionPressTaken = true;
 				if (handGrab != nullptr)
@@ -846,8 +864,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 		}
 		// A town's totem under the hand is taken hold of, to slide it up and down
-		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && Locator::villageTotemSystem::has_value() &&
-		    Locator::pickingSystem::has_value())
+		if (!_actionPressTaken && !magic.IsHandBusy() && !handHoldsThing && mayHold &&
+		    Locator::villageTotemSystem::has_value() && Locator::pickingSystem::has_value())
 		{
 			auto& totems = Locator::villageTotemSystem::value();
 			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
@@ -860,10 +878,20 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 			}
 		}
-		// Otherwise the hand takes hold of a thing under it
-		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr)
+		// Otherwise the hand takes hold of a thing under it. A lesson can let an empty hand act only on a highlight.
+		const auto picked =
+		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
+		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
+		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr && mayPress)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
+		}
+		// A press that the lesson refuses does nothing more: the leash gives no order and taps no post
+		if (!_actionPressTaken && !mayPress)
+		{
+			_actionPressTaken = true;
 		}
 	}
 	if (handTakesPresses && !magic.IsHandBusy() && !inTemple && event.type == SDL_MOUSEBUTTONDOWN &&
@@ -6818,6 +6846,8 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	{
 		auto frame = *cues.icons;
 		frame.handInInfluence = HandInInfluence();
+		// A box of the menu on the screen stops the camera input, so no icon shows
+		frame.inputOff = FrontEndBoxShows();
 		frame.tickMs = machine_clock::Ticks();
 		const auto icons = hand_tricons::WorldCamera(frame, _triconAngle);
 		_triconAngle = icons.rotateAngle;

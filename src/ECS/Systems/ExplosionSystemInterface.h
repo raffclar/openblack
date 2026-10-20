@@ -40,8 +40,8 @@ public:
 	/// root again throws up, the smoke a dead body leaves as it goes
 	virtual void AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind,
 	                      std::optional<uint32_t> colour = std::nullopt) = 0;
-	/// The camera shakes while within a radius of a point, from a strength down to none over the seconds
-	virtual void AddShake(const glm::vec3& position, float radius, float strength, float seconds, bool verticalOnly) = 0;
+	/// The camera shakes while it is in a radius of a point. The strength decreases to zero over the whole milliseconds
+	virtual void AddShake(const glm::vec3& position, float radius, float strength, int32_t milliseconds, bool verticalOnly) = 0;
 	/// Whether any shake is going on, near the camera or not
 	[[nodiscard]] virtual bool IsShaking() const = 0;
 	/// Once a frame of the game's time: the rubble lies and fades, the dust flies, and the camera shakes

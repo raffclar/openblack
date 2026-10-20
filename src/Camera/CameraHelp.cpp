@@ -131,6 +131,7 @@ void CameraHelp::ResetForNewLand()
 {
 	features = camera_drag::k_DefaultFeatures;
 	autoPitchHeight = k_DefaultAutoPitchHeight;
+	autoPitch = k_DefaultAutoPitch;
 }
 
 bool CameraHelp::SetInterfaceLevel(int32_t level)

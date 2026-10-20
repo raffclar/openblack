@@ -32,7 +32,7 @@ inline constexpr float k_Weight = 789.0f;
 /// The camera shake of its landing: within this reach of a point, at this strength, for this long, along every axis
 inline constexpr float k_ShakeRadius = 200.0f;
 inline constexpr float k_ShakeStrength = 1.0f;
-inline constexpr float k_ShakeSeconds = 0.4f;
+inline constexpr int32_t k_ShakeMilliseconds = 400;
 
 /// The cloud of dust about it, made with it and shown only once it has fallen
 inline constexpr size_t k_DustSprites = 27;

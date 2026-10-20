@@ -102,4 +102,21 @@ void testbed_scenarios::AddHighlightScenarios(std::vector<Scenario>& all)
 	                   {.kind = 1, .offset = {0.0f, -300.0f}, .challenge = 0, .tip = std::pair {4130u, 3u}},
 	                   {.kind = 1, .offset = {0.0f, 750.0f}, .challenge = 0, .tip = std::pair {4131u, 3u}}},
 	});
+	// The scrolls shine with the game's first environment map, which their models' materials add over their colour
+	all.push_back({
+	    .id = "light.scroll_shine",
+	    .name = "Scrolls shine with the environment map",
+	    .facet = Facet::Light,
+	    .description = "A plain scroll, a silver scroll, a gold scroll and a started gold scroll in a row, close before "
+	                   "the camera, on bare land. Turn the camera round them.",
+	    .expected = "The silver and gold scrolls, started or not, have a bright sheen added over their colour. The sheen "
+	                "moves over them as they spin and as the camera turns, because it follows the way their faces point "
+	                "across the view. The plain scroll has no sheen. The sea's mirror shows no sheen.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 4.0f, -9.0f}, .look = {0.0f, 1.5f, 0.0f}},
+	    .highlights = {{.kind = 0, .offset = {-4.5f, 0.0f}},
+	                   {.kind = 2, .offset = {-1.5f, 0.0f}},
+	                   {.kind = 3, .offset = {1.5f, 0.0f}},
+	                   {.kind = 3, .offset = {4.5f, 0.0f}, .active = true}},
+	});
 }

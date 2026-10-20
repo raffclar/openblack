@@ -1156,7 +1156,10 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	const Texture2D* nextTexture = primitives.empty() ? nullptr : skinOf(primitives.front().skinID);
 	for (auto it = primitives.begin(); it != primitives.end(); ++it)
 	{
-		const auto& prim = *it;
+		// A material that the game changed while it ran draws as the changed material
+		const auto changedPrim =
+		    desc.changedMaterials.has_value() ? std::optional(L3DSubMesh::Changed(*it, *desc.changedMaterials)) : std::nullopt;
+		const auto& prim = changedPrim.has_value() ? *changedPrim : *it;
 		// The alpha textured materials, which a desc may have added over what is behind them
 		constexpr uint32_t k_AlphaTextured = 4;
 		constexpr uint32_t k_AlphaTexturedAlpha = 5;
@@ -1298,9 +1301,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					height = std::max(height, 0.0f);
 				}
-				// z: 1 to blend by each instance's alpha rather than dissolve it
+				// z: 1 to blend by each instance's alpha rather than dissolve it. w: 1 to multiply the texture's alpha by
+				// the instance's before the alpha test, as the changed materials do.
 				const glm::vec4 u_seaClip {reflection || desc.cutBelow.has_value() ? 1.0f : 0.0f, height,
-				                           desc.instanceAlpha || shining ? 1.0f : 0.0f, 0.0f};
+				                           desc.instanceAlpha || shining ? 1.0f : 0.0f,
+				                           desc.changedMaterials.has_value() ? 1.0f : 0.0f};
 				setUniform(MeshUniform::SeaClip, &u_seaClip);
 			}
 			if (has(MeshUniform::Snow))
@@ -6017,6 +6022,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	const auto* objectShaderMorphInstanced = _shaderManager->GetShader("ObjectMorphInstanced");
 	const auto* objectShaderPosedInstanced = _shaderManager->GetShader("ObjectPosedInstanced");
 	const auto* objectShaderStaticInstanced = _shaderManager->GetShader("ObjectStaticInstanced");
+	const auto* objectShaderEnvironmentStaticInstanced = _shaderManager->GetShader("ObjectEnvironmentStaticInstanced");
+	const auto& sceneTextures = Locator::resources::value().GetTextures();
+	const auto firstEnvironmentMap = entt::hashed_string("raw/envmap").value();
+	const auto* environmentMap =
+	    sceneTextures.Contains(firstEnvironmentMap) ? &*sceneTextures.Handle(firstEnvironmentMap) : nullptr;
 	const auto* objectShaderHeightMapInstanced = _shaderManager->GetShader("ObjectHeightMapInstanced");
 	const auto* objectShaderHeightMapStaticInstanced = _shaderManager->GetShader("ObjectHeightMapStaticInstanced");
 	// Each mesh is drawn with the shader declaring the fewest bones that hold its skeleton
@@ -6381,6 +6391,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.shineColour = placers.shineColour;
 				submitDesc.additiveShare = placers.additiveShare;
 				submitDesc.instanceAlpha = placers.instanceAlpha;
+				submitDesc.changedMaterials = placers.changedMaterials;
 				// The game gives the rooms the temple's light; the hand keeps its own
 				const bool templeLit = Locator::temple::has_value() && Locator::temple::value().Active() &&
 				                       meshId != ecs::components::Hand::k_MeshId;
@@ -6526,6 +6537,17 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					submitDesc.snow = false;
 					submitDesc.groundShadows = false;
 				}
+				// The scripts' scrolls and signs take the first environment map, each primitive as its material says. The
+				// sea mirrors them without it.
+				const bool environmentMapped =
+				    placers.environmentMapped && environmentMap != nullptr && desc.viewId != RenderPass::Reflection &&
+				    desc.viewId != RenderPass::ReflectionTranslucent && desc.viewId != RenderPass::ReflectionMirrored &&
+				    !flatReflection.has_value() && submitDesc.program == objectShaderStaticInstanced;
+				submitDesc.environment = environmentMapped ? environmentMap : nullptr;
+				if (environmentMapped)
+				{
+					submitDesc.program = objectShaderEnvironmentStaticInstanced;
+				}
 				if (heldReflection.has_value())
 				{
 					submitDesc.shadeAt = glm::vec4(heldReflection->point, hand_reflection::k_HeldShade);
@@ -6540,6 +6562,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// TODO(bwrsandman): choose the correct LOD
 				DrawMesh(*mesh, submitDesc, std::numeric_limits<uint8_t>::max());
 				submitDesc.morphTargets = nullptr;
+				submitDesc.environment = nullptr;
 				submitDesc.landLightAndHaze = true;
 				submitDesc.shadeAt = glm::vec4(0.0f);
 				submitDesc.heldMirror.reset();
@@ -7444,8 +7467,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.viewId = desc.viewId;
 				submitDesc.sortDepth = 0;
 			}
-			// The game draws the hand after the rest of the scene, blended by its translucent texture. Black & White
-			// culls its back faces; here both sides are drawn, the inside first so that the outside blends over it.
+			// The game draws the hand after the rest of the scene, blended by its translucent texture. Its material
+			// shows only the front faces, so the inside of the hand never shows through it.
 			// The game's reflection of the main room has no hand in it
 			if (const auto hand = renderCtx.instancedDrawDescs.find(ecs::components::Hand::k_MeshId);
 			    mirroredViewId == desc.viewId && desc.drawHand && hand != renderCtx.instancedDrawDescs.end() &&
@@ -7468,10 +7491,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 				// The game lights the hand as it poses it, with the posed models' rule rather than the usual model light
 				submitDesc.posedModelLight = true;
-				// The inside does not write depth so the outside is never hidden behind it
-				const auto insideState = [opaqueState](uint64_t cull) {
-					return (opaqueState & ~(BGFX_STATE_CULL_MASK | BGFX_STATE_WRITE_Z)) | cull;
-				};
 				const auto outsideState = [opaqueState](uint64_t cull) { return (opaqueState & ~BGFX_STATE_CULL_MASK) | cull; };
 				// The glow is added over the hand without writing depth
 				const auto glowState = [opaqueState](uint64_t cull) {
@@ -7480,8 +7499,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return (opaqueState & k_Kept) | BGFX_STATE_DEPTH_TEST_GEQUAL |
 					       BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE) | cull;
 				};
-				submitDesc.state = insideState(cullFront);
-				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
 				submitDesc.state = outsideState(cullBack);
 				drawInstances(hand->first, hand->second, true, hand->second.offset, hand->second.count, nullptr, morph);
 				// Holding a miracle, the game draws the hand once more over itself: the same hand at the same depth, in the
@@ -7513,12 +7530,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					auto hidden = hand->second;
 					hidden.additiveShare.reset();
 					hidden.instanceAlpha = false;
-					submitDesc.state = insideState(cullBack);
-					drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
-					submitDesc.state = outsideState(cullFront);
-					drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
 					for (const auto cull : {cullBack, cullFront})
 					{
+						submitDesc.state = outsideState(cull);
+						drawInstances(hand->first, hidden, true, 0, 1, nullptr, morph, *_warmUpInstances);
 						submitDesc.state = glowState(cull);
 						drawInstances(hand->first, hidden, false, 0, 1, nullptr, morph, *_warmUpInstances);
 					}

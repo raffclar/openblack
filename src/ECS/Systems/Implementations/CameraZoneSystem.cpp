@@ -45,7 +45,7 @@ constexpr float k_PulseRadius = 200.0f;
 /// And shakes the camera every way, at full strength within this distance, for this long
 constexpr float k_ShakeRadius = 100.0f;
 constexpr float k_ShakeStrength = 1.0f;
-constexpr float k_ShakeSeconds = 0.4f;
+constexpr int32_t k_ShakeMilliseconds = 400;
 } // namespace
 
 CameraZoneSystem::CameraZoneSystem()
@@ -84,7 +84,7 @@ void CameraZoneSystem::FenceHit(const glm::vec3& origin, const glm::vec3& listen
 	    {.position = listener, .voicePlayType = pack::AudioBankLoop::Once, .follows = audio::Follows::Listener});
 	if (Locator::explosionSystem::has_value())
 	{
-		Locator::explosionSystem::value().AddShake(origin, k_ShakeRadius, k_ShakeStrength, k_ShakeSeconds, false);
+		Locator::explosionSystem::value().AddShake(origin, k_ShakeRadius, k_ShakeStrength, k_ShakeMilliseconds, false);
 	}
 	_forceField->Pulse(origin, k_PulseRadius);
 }

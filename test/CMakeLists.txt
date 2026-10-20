@@ -1599,3 +1599,13 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_game_turn_order test_game_turn_order.cpp)
 openblack_setup_and_add_test(test_world_save_clock test_world_save_clock.cpp)
+openblack_setup_and_add_test(test_script_interface_levels test_script_interface_levels.cpp)
+openblack_setup_and_add_test(test_camera_keys camera/test_camera_keys.cpp)
+openblack_setup_and_add_test(test_clear_view camera/test_clear_view.cpp)
+openblack_setup_and_add_test(test_temple_heart_look test_temple_heart_look.cpp)
+openblack_setup_and_add_test(test_particle_near_villagers test_particle_near_villagers.cpp)
+target_link_libraries(test_particle_near_villagers PRIVATE psys)
+openblack_setup_and_add_test(
+  test_lhvm_instructions lhvm/test_lhvm_instructions.cpp
+)
+target_link_libraries(test_lhvm_instructions PRIVATE ScriptLibrary)

@@ -262,6 +262,17 @@ TEST(ScriptMusic, StartingMusicStartsItsLyricsAgain)
 }
 
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST(ScriptMusic, TheEndOfADialogueStartsTheWordAgainAndKeepsTheLine)
+{
+	GameMusic music;
+	music.OnScriptMusicCue("L4");
+	music.OnScriptMusicCue("W");
+	music.ResetMusicWord();
+	EXPECT_EQ(music.GetMusicLyrics().line, 4);
+	EXPECT_EQ(music.GetMusicLyrics().word, 0);
+}
+
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
 TEST(ScriptMusic, ScriptMusicIsOverOnceOtherMusicOrNoneIsAskedFor)
 {
 	GameMusic music;
