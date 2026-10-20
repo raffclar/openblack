@@ -57,6 +57,7 @@ public:
 	void SetClassHooks(std::unique_ptr<PhysicsClassHooks> hooks) override;
 	void ProcessTurn() override;
 	void UpdateFrame(float turnFraction) override;
+	[[nodiscard]] std::span<const entt::entity> DrawnBodies() const override { return _drawnBodies; }
 
 	PhysicsStarted InitialisePhysics(entt::entity object, const PhysicsStart& start) override;
 	PhysicsStarted StartPhysicsAsObject(entt::entity object, const PhysicsStart& start) override;
@@ -142,6 +143,8 @@ private:
 	const LandIslandInterface* _groundLand {nullptr};
 	/// The bodies, in the order the physics goes through them
 	std::vector<std::unique_ptr<PhysicsEntry>> _entries;
+	/// The moving bodies that the last frame drew, in the order of _entries
+	std::vector<entt::entity> _drawnBodies;
 	/// The slots the list has room for: it grows only when a body is added to a full list, never while the moving
 	/// bodies wake what is near them
 	size_t _capacity {0};

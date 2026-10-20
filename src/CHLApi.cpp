@@ -3721,20 +3721,44 @@ void Snapshot() // 057 SNAPSHOT
 	                    script::challenge_snapshots::Call::Start);
 }
 
+/// The player that these natives name by its place in the game's player list, from 0. None past the last player.
+std::optional<PlayerNames> ScriptPlayerByIndex(uint32_t index)
+{
+	if (index >= static_cast<uint32_t>(PlayerNames::_COUNT))
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(index);
+}
+
 void GetAlignment() // 058 GET_ALIGNMENT
 {
-	// const auto zero = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto player = ScriptPlayerByIndex(Pop().uintVal);
+	// The game has no player past the last one and stops; here the script gets a neutral alignment
+	if (!player.has_value() || !Locator::alignmentSystem::has_value())
+	{
+		Pushf(0.0f);
+		return;
+	}
+	Pushf(Locator::alignmentSystem::value().GetPlayerAlignment(*player));
 }
 
 void SetAlignment() // 059 SET_ALIGNMENT
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerByIndex(Pop().uintVal);
+	const auto change = Pop().floatVal;
+	// In spite of its name, the native adds the amount to the alignment at once
+	if (!ecs::systems::alignment::ScriptChangeInRange(change))
+	{
+		ScriptMessage("Alignment out of range");
+		return;
+	}
+	// The game has no player past the last one and stops; here nothing changes
+	if (!player.has_value() || !Locator::alignmentSystem::has_value())
+	{
+		return;
+	}
+	Locator::alignmentSystem::value().AddPlayerAlignment(*player, change);
 }
 
 /// An influence a script makes for a player, at a place or going about with an object: within it the player has

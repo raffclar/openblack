@@ -517,6 +517,8 @@ struct ScriptArgument
 		/// A position as three numbers: the point from the middle of the map, at the height above the land. Only a
 		/// native call takes it.
 		Position,
+		/// A whole number (number, made whole towards zero), as a script gives a constant such as a resource type
+		Integer,
 	};
 	Kind kind {Kind::Number};
 	float number {0.0f};

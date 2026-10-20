@@ -68,9 +68,10 @@ void Sdl2WindowingSystem::SDLDestroyer::operator()(SDL_Window* window) const
 	SDL_DestroyWindow(window);
 }
 
-Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode displayMode,
-                                         uint32_t extraFlags)
+Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode requestedDisplayMode,
+                                         uint32_t extraFlags, bool background)
 {
+	const DisplayMode displayMode = BackgroundDisplayMode(requestedDisplayMode, background);
 	SDL_version compiledVersion;
 	SDL_VERSION(&compiledVersion);
 
@@ -115,7 +116,13 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	SDL_SetHint(SDL_HINT_MOUSE_DOUBLE_CLICK_RADIUS, "2");
 #endif
 
-	uint32_t flags = SDL_WINDOW_INPUT_FOCUS | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | extraFlags;
+	if (background)
+	{
+		// The window shows without becoming the active window, and takes no keyboard focus when it opens
+		SDL_SetHint(SDL_HINT_WINDOW_NO_ACTIVATION_WHEN_SHOWN, "1");
+	}
+
+	uint32_t flags = (background ? 0 : SDL_WINDOW_INPUT_FOCUS) | SDL_WINDOW_RESIZABLE | SDL_WINDOW_ALLOW_HIGHDPI | extraFlags;
 	if (displayMode == DisplayMode::Fullscreen)
 	{
 		flags |= SDL_WINDOW_FULLSCREEN;

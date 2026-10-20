@@ -7,7 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
+#include <bit>
 
 #include <gtest/gtest.h>
 
@@ -199,4 +202,17 @@ TEST(TownBelief, WantsCanTakeBeliefBelowNothing)
 	desire.at(0) = 1.0f;
 	LoseBeliefToDesires(town, PlayerNames::PLAYER_TWO, desire, table, 0.0f);
 	EXPECT_FLOAT_EQ(town.belief.at(1), -1.0f);
+}
+
+TEST(TownBelief, TheLossToADesireRoundsTheDifferenceAndTheProductToAFloat)
+{
+	Belief town;
+	town.belief.at(0) = 2.0f;
+	std::array<DesireDecay, k_DesireCount> table {};
+	table.at(0) = {.toBelief = 0.3f, .levelAfterGain = 1.17f, .levelFall = 0.0f};
+	std::array<float, k_DesireCount> desire {};
+	desire.at(0) = 3.3f;
+	LoseBeliefToDesires(town, PlayerNames::PLAYER_ONE, desire, table, 0.0f);
+	// The difference rounded to a float before the product gives one bit less than a wider difference does
+	EXPECT_EQ(std::bit_cast<uint32_t>(town.belief.at(0)), 0x3FAE353Fu);
 }

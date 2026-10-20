@@ -56,6 +56,7 @@
 #include "Creature/CreatureMeals.h"
 #include "Creature/CreatureMindModel.h"
 #include "Creature/CreatureMorph.h"
+#include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureObjectBeliefs.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePhysiology.h"
@@ -459,6 +460,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Animal::stateBeforeReaction>("stateBeforeReaction")
 	    .Field<&components::Animal::turnsInState>("turnsInState")
 	    .Field<&components::Animal::move>("move")
+	    .Field<&components::Animal::walksRound>("walksRound")
 	    .Field<&components::Animal::goalHeight>("goalHeight")
 	    .Field<&components::Animal::height>("height")
 	    .Field<&components::Animal::bank>("bank")
@@ -970,6 +972,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::maxReach>("maxReach")
 	    .Field<&components::CreatureObjectAction::attempts>("attempts")
 	    .Field<&components::CreatureObjectAction::walked>("walked")
+	    .Field<&components::CreatureObjectAction::stall>("stall")
 	    .Field<&components::CreatureObjectAction::turnedToReach>("turnedToReach")
 	    .Field<&components::CreatureObjectAction::waitedForWay>("waitedForWay")
 	    .Field<&components::CreatureObjectAction::flightSeconds>("flightSeconds")
@@ -2016,7 +2019,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Tree::maxSize>("maxSize")
 	    .Field<&components::Tree::growthCountdown>("growthCountdown")
 	    .Field<&components::Tree::madeToGrow>("madeToGrow")
-	    .Field<&components::Tree::nonScenic>("nonScenic");
+	    .Field<&components::Tree::nonScenic>("nonScenic")
+	    .Field<&components::Tree::bendSlot>("bendSlot");
 	Reflect<components::TurnAngles>(context)
 	    .Field<&components::TurnAngles::angles>("angles")
 	    .Field<&components::TurnAngles::turn>("turn");
@@ -2153,6 +2157,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::WallHugLookahead::spareTurnedRound>("spareTurnedRound")
 	    .Field<&components::WallHugLookahead::turnedRound>("turnedRound")
 	    .Field<&components::WallHugLookahead::landingShutIn>("landingShutIn");
+	Reflect<components::TurningWalker>(context)
+	    .Field<&components::TurningWalker::turnAngle>("turnAngle")
+	    .Field<&components::TurningWalker::speed>("speed");
 	Reflect<components::WallHug>(context)
 	    .Field<&components::WallHug::goal>("goal")
 	    .Field<&components::WallHug::step>("step")
@@ -2709,6 +2716,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_morph::Morph::evilGood>("evilGood")
 	    .Field<&openblack::creature_morph::Morph::thinFat>("thinFat")
 	    .Field<&openblack::creature_morph::Morph::weakStrong>("weakStrong");
+	Reflect<openblack::creature_object_actions::ApproachStall>(context, ValueOnly {})
+	    .Field<&openblack::creature_object_actions::ApproachStall::turns>("turns")
+	    .Field<&openblack::creature_object_actions::ApproachStall::note>("note");
 	Reflect<openblack::creature_object_beliefs::Belief>(context, ValueOnly {})
 	    .Field<&openblack::creature_object_beliefs::Belief::thing>("thing")
 	    .Field<&openblack::creature_object_beliefs::Belief::kind>("kind")
