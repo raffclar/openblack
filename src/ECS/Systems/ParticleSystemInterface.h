@@ -155,6 +155,8 @@ public:
 		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, or the circle that sizes
 		/// it
 		bool gesturing {false};
+		/// The leash picker is open: the effect of a selection shows round the hand
+		bool selecting {false};
 	};
 	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
 	virtual void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) = 0;

@@ -27,8 +27,9 @@
 /// The hints of the gestures the hand waits for: a row of squares along the bottom of the screen from its right edge,
 /// each showing the gesture's picture in the player's colour with a bright dot running along the gesture's shape, and
 /// above it a picture of what the gesture gives. While the leash picker is open, each other leash the creature knows is
-/// hinted, its collar turning slowly over its square. The whole row fades out while the advisors' words are on the
-/// screen and back in after.
+/// hinted, its collar turning slowly over its square. While the player's creature takes moves in a fight, the special
+/// move and each fight miracle that the creature knows are hinted. The whole row fades out while the advisors' words
+/// are on the screen and back in after.
 namespace openblack::gesture_hints
 {
 
@@ -40,6 +41,8 @@ struct Hint
 	int order {0};
 	/// The leash it picks, whose collar is pictured over it
 	LeashType leash {LeashType::None};
+	/// The miracle seed it gives, pictured over it
+	SpellSeedType seed {SpellSeedType::None};
 	/// The gesture's shape, its points taken evenly along it in a square 0 to 1 across (x to the right, z down)
 	std::vector<glm::vec3> path;
 	/// How long the dot takes to run along it, in seconds
@@ -55,6 +58,10 @@ inline constexpr int k_LeashOrderBase = 3;
 /// The leash gesture's own hint, with the collar of the leash it is about, comes nearer the screen's left than any
 /// leash's
 inline constexpr int k_LeashGestureOrder = 2;
+/// In a fight, the special move's hint comes nearer the screen's left than all others, and the hints of the fight
+/// miracles nearer the screen's right than the leash's
+inline constexpr int k_SpecialMoveOrder = 1;
+inline constexpr int k_FightMiracleOrder = 11;
 
 /// A gesture's shape: its points evenly along it, and its length in the square it was drawn in (see
 /// gesture::TrailSymbol)
@@ -68,9 +75,9 @@ using ShapeOf = std::function<std::optional<Shape>(GestureType)>;
 /// The dot runs along a circle in this many seconds, along other gestures in as many more as they are longer
 inline constexpr float k_CirclePeriod = 2.0f;
 
-/// The hints for what the hand waits for: the leash gesture with the collar of the leash it is about, and a hint for
-/// each leash the picker offers, in the order of the row. A gesture
-/// without a shape of its own takes the circle's.
+/// The hints for what the hand waits for, in the order of the row: the leash gesture with the collar of the leash it
+/// is about, a hint for each leash the picker offers, and in a fight the special move and each fight miracle with its
+/// seed. A gesture without a shape of its own takes the circle's.
 [[nodiscard]] std::vector<Hint> HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf);
 /// Whether a new row of hints differs from the one shown; the row is then replaced, every dot starting again
 [[nodiscard]] bool Differs(std::span<const Hint> shown, std::span<const Hint> next);

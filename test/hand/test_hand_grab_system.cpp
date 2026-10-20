@@ -130,6 +130,7 @@ public:
 	void FireStartedMoving(entt::entity, bool) override {}
 	void CatchFirefly(entt::entity) override {}
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
+	void ForgetGesturePath() override { ++pathsForgotten; }
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
@@ -380,6 +381,7 @@ public:
 	std::vector<ReactionRequest> reactions;
 	std::vector<entt::entity> heated;
 	std::vector<uint32_t> helpEvents;
+	int pathsForgotten {0};
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<uint32_t> samples;
@@ -746,6 +748,36 @@ TEST_F(HandGrabSystemWithWorld, TheHelpCountsATakeAndALetGo)
 	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
 	Release();
 	EXPECT_EQ(world->helpEvents, (std::vector<uint32_t> {help::profile::k_PickUp, help::profile::k_Throw}));
+}
+
+// The hand starts the path of its gesture again when it takes a thing and when it lets go of it. A let-go that the
+// influence refuses does not.
+TEST_F(HandGrabSystemWithWorld, TheGesturePathStartsAgainOnATakeAndALetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->pathsForgotten, 1);
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->pathsForgotten, 1);
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->pathsForgotten, 2);
 }
 
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it

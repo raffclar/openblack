@@ -3604,7 +3604,8 @@ bool Game::Update() noexcept
 				    {.position = handTransform->position,
 				     .size = handSize,
 				     .cameraPosition = camera.GetOrigin(),
-				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing()});
+				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing(),
+				     .selecting = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsSelecting()});
 			}
 			// The temples' leashes, the picked one round the wrist of the hand as it is drawn, after the blend of its pose
 			Locator::leashSystem::value().ShowPosts(IsHandDrawn());

@@ -364,6 +364,17 @@ void MiracleFxSystem::SeedShakenOff()
 	}
 }
 
+void MiracleFxSystem::HandShaken()
+{
+	// The shake sound plays without a position, at its own volume
+	if (Locator::audio::has_value())
+	{
+		constexpr uint32_t k_ShakeVolume = 35;
+		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
+	}
+	SeedShakenOff();
+}
+
 void MiracleFxSystem::Reset()
 {
 	_runners.clear();

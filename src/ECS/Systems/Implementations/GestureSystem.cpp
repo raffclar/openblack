@@ -33,6 +33,7 @@
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
@@ -55,6 +56,15 @@ constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
+
+/// A scribble shakes the hand: the shake sound plays and a band flies off the hand
+void ShakeHand()
+{
+	if (Locator::miracleFxSystem::has_value())
+	{
+		Locator::miracleFxSystem::value().HandShaken();
+	}
+}
 
 /// The shape a gesture's trail takes on the land, from its symbol's file; the circle's for a gesture without one
 std::optional<gesture::TrailSymbol> TrailSymbolOf(GestureType gesture)
@@ -109,6 +119,7 @@ void GestureSystem::Reset()
 	_events.clear();
 	_drawing.clear();
 	_picker.Close();
+	_seedTurnedOnLand = false;
 	_circleSeconds = 0.0f;
 	_circleSeed = entt::null;
 	_lastRecognised.reset();
@@ -122,6 +133,12 @@ void GestureSystem::ForgetPath()
 {
 	_recorder.Reset();
 	_sinceSample = 0.0f;
+}
+
+void GestureSystem::SeedFirstTurnInHand()
+{
+	ForgetPath();
+	_seedTurnedOnLand = true;
 }
 
 void GestureSystem::DrawPath(std::vector<glm::vec2> path, bool holdingAction)
@@ -253,14 +270,16 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		const auto* knowledge = mind != nullptr && mind->learnt.has_value() ? &mind->learnt->knowledge : nullptr;
 		if (info != nullptr && knowledge != nullptr)
 		{
-			// The seeds marked for fights, by the miracle each casts unpowered
-			for (const auto& seed : info->spellSeed)
+			// The seeds marked for fights, by the miracle each casts unpowered, each with its seed for its hint
+			for (size_t seedIndex = 0; seedIndex < info->spellSeed.size(); ++seedIndex)
 			{
+				const auto& seed = info->spellSeed.at(seedIndex);
 				const auto magic = seed.magicTypes.front();
 				const auto index = static_cast<size_t>(magic);
 				if (seed.unknown0x17C != 0 && index < knowledge->miraclesKnown.size() && knowledge->miraclesKnown[index])
 				{
-					state.fightMiracles.push_back({.gesture = seed.gesture, .magic = magic});
+					state.fightMiracles.push_back(
+					    {.gesture = seed.gesture, .magic = magic, .seed = static_cast<SpellSeedType>(seedIndex)});
 				}
 			}
 		}
@@ -301,10 +320,9 @@ void GestureSystem::Update(const Frame& frame)
 	context.pickerOpen = _picker.open;
 	_requests = gesture::Requests(context);
 	RefreshHints();
-	// The chain follows the hand while it powers up the miracle in it, or holds one that a circle sizes
-	const auto& seed = context.seed;
-	_gesturing =
-	    seed.has_value() && ((seed->ready && !seed->cast && seed->canPowerUp) || seed->sizingGesture == GestureType::Circle);
+	// The chain follows the hand while it powers up the miracle in it, or holds one that a circle sizes. Once a miracle
+	// did its first turn in the hand on this land, the chain follows the hand while it holds any miracle.
+	_gesturing = gesture::ChainFollows(context.seed, _seedTurnedOnLand);
 
 	// Moving the camera wipes the path being drawn, though not while the camera shakes. The fight view that shows a
 	// fight in its arena, and the camera that follows the creature, let the player draw on while they move.
@@ -474,13 +492,15 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		_events.push_back({.kind = GestureEvent::Kind::Scribble, .gesture = request.gesture, .centre = handAt});
 		break;
 	case Purpose::ShakeOffLeash:
+		ShakeHand();
 		if (leashes != nullptr)
 		{
 			leashes->Shake(frame.player);
 		}
 		break;
 	case Purpose::ShakeOffHeld:
-		// The hand lets go of it where it is, never planted again
+		// The hand shakes and lets go of it where it is, never planted again
+		ShakeHand();
 		if (Locator::handGrabSystem::has_value())
 		{
 			Locator::handGrabSystem::value().ForceDrop();
@@ -513,6 +533,7 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		_picker.Close();
 		break;
 	case Purpose::ClosePicker:
+		ShakeHand();
 		_picker.Close();
 		break;
 	case Purpose::FightSpecialMove:
