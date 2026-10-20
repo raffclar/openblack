@@ -53,6 +53,8 @@ enum class RenderPass : uint8_t
 	Main,
 	/// What blends in the world, drawn after the rest of the scene, the farthest first
 	Translucent,
+	/// The labels over the villagers' heads, tested against the depth of the scene that the views before leave
+	WorldLabels,
 	/// The collars of the leashes the gestures' hints offer, each in a view of its own over its hint's square
 	GestureHintCollar0,
 	GestureHintCollar1,
@@ -108,6 +110,7 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Land Pass",                   //
     "Main Pass",                   //
     "Translucent Pass",            //
+    "World Labels Pass",           //
     "Gesture Hint Collar 0 Pass",  //
     "Gesture Hint Collar 1 Pass",  //
     "Gesture Hint Collar 2 Pass",  //

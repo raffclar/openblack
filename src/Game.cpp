@@ -1133,6 +1133,8 @@ void Game::WarmUpFirstFrame()
 			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
 			// The interface draws over the scene too, and the cinema bars are its first draw
 			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+			// The villagers' labels test the depth of the scene
+			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
