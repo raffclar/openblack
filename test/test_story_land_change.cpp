@@ -26,7 +26,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
-#include "TestProfileFolder.h"
+#include "TestTempFolder.h"
 
 using namespace openblack;
 using namespace openblack::lhvm;
@@ -92,7 +92,7 @@ protected:
 
 	[[nodiscard]] static int32_t Global(size_t index) { return Locator::vm::value().GetVariables().at(index).value.intVal; }
 
-	const openblack::test::TestProfileFolder _profileFolder;
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<Game> _game;
 };
 

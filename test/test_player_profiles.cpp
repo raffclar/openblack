@@ -21,6 +21,7 @@
 // Enable this define because we use a custom locator
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/Systems/Implementations/PlayerProfileSystem.h"
+#include "TestTempFolder.h"
 
 using namespace openblack;
 using namespace openblack::player_profiles;
@@ -32,7 +33,7 @@ class ProfilesFolder
 {
 public:
 	explicit ProfilesFolder(std::string_view name)
-	    : _path(std::filesystem::temp_directory_path() / "openblack_tests" / name)
+	    : _path(openblack::test::UniqueTempPath(name))
 	{
 		std::error_code error;
 		std::filesystem::remove_all(_path, error);

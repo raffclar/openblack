@@ -19,7 +19,7 @@
 #include <glm/gtx/string_cast.hpp>
 #include <gtest/gtest.h>
 
-#include "TestProfileFolder.h"
+#include "TestTempFolder.h"
 #include "third_party/json_helpers.h"
 #include "vector_compare.h"
 
@@ -45,7 +45,7 @@ protected:
 		ASSERT_TRUE(_game->Initialize());
 	}
 	void TearDown() override { _game.reset(); }
-	const openblack::test::TestProfileFolder _profileFolder;
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<Game> _game;
 };
 

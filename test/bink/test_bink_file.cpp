@@ -23,6 +23,8 @@
 #include "BinkGolden.h"
 #include "BinkTestFiles.h"
 
+#include "../TestTempFolder.h"
+
 using namespace openblack::bink;
 using namespace openblack::bink::test;
 
@@ -167,7 +169,8 @@ TEST(BinkFile, EveryTruncationIsRejected)
 TEST(BinkFile, OpenReadsWhatParseReads)
 {
 	const auto data = MakeBik(Packets({4, 6}));
-	const auto path = std::filesystem::temp_directory_path() / "openblack_test_bink_file.bik";
+	const openblack::test::TestTempFolder folder("bink_file");
+	const auto path = folder.Path() / "file.bik";
 	{
 		std::ofstream stream(path, std::ios::binary);
 		stream.write(reinterpret_cast<const char*>(data.data()), static_cast<std::streamsize>(data.size()));

@@ -15,7 +15,7 @@
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 
-#include "../TestProfileFolder.h"
+#include "../TestTempFolder.h"
 
 class SetCameraPos: public ::testing::Test
 {
@@ -34,7 +34,7 @@ protected:
 		ASSERT_TRUE(_game->Initialize());
 	}
 	void TearDown() override { _game.reset(); }
-	const openblack::test::TestProfileFolder _profileFolder;
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<openblack::Game> _game;
 
 public:

@@ -19,7 +19,7 @@
 #include <Locator.h>
 #include <gtest/gtest.h>
 
-#include "TestProfileFolder.h"
+#include "TestTempFolder.h"
 
 class LoadScene: public ::testing::Test
 {
@@ -46,7 +46,7 @@ protected:
 		ASSERT_TRUE(game_->Initialize());
 	}
 	void TearDown() override { game_.reset(); }
-	const openblack::test::TestProfileFolder profileFolder_;
+	const openblack::test::TestTempFolder profileFolder_;
 	std::unique_ptr<openblack::Game> game_;
 };
 

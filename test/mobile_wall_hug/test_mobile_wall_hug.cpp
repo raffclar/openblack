@@ -35,7 +35,7 @@
 #include <json_helpers.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 
-#include "../TestProfileFolder.h"
+#include "../TestTempFolder.h"
 
 using nlohmann::json;
 using namespace openblack;
@@ -438,7 +438,7 @@ protected:
 	uint32_t _startTurn;
 	uint32_t _lastTurn;
 	std::vector<State> _expectedStates;
-	const openblack::test::TestProfileFolder _profileFolder;
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<openblack::Game> _game;
 	entt::entity _villagerEntt;
 };
@@ -569,7 +569,7 @@ protected:
 	}
 
 	static constexpr std::string_view k_ScenarioPath = TEST_BINARY_DIR "/mobile_wall_hug/scenarios";
-	const openblack::test::TestProfileFolder _profileFolder;
+	const openblack::test::TestTempFolder _profileFolder;
 	std::unique_ptr<openblack::Game> _game;
 	entt::entity _walker;
 };

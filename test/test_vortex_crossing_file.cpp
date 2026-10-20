@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Magic/VortexCrossingFile.h"
+#include "TestTempFolder.h"
 
 using namespace openblack;
 
@@ -32,8 +33,8 @@ class VortexCrossingFile: public ::testing::Test
 protected:
 	void SetUp() override
 	{
-		_folder = std::filesystem::temp_directory_path() /
-		          ("openblack_crossing_" + std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()));
+		_folder = openblack::test::UniqueTempPath("crossing_" +
+		                                          std::string(::testing::UnitTest::GetInstance()->current_test_info()->name()));
 		std::filesystem::create_directories(_folder);
 		_path = _folder / "vortex.txt";
 	}
