@@ -32,6 +32,7 @@
 #include <SDL_mouse.h>
 #include <bgfx/bgfx.h>
 #include <fmt/format.h>
+#include <glm/geometric.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <glm/trigonometric.hpp>
 #include <imgui.h>
@@ -256,6 +257,20 @@ using openblack::ecs::components::Transform;
 
 namespace
 {
+/// The type a script sees for a value the testbed gives it
+lhvm::DataType ScriptDataTypeOf(ScriptArgument::Kind kind)
+{
+	switch (kind)
+	{
+	case ScriptArgument::Kind::Number:
+		return lhvm::DataType::Float;
+	case ScriptArgument::Kind::Integer:
+		return lhvm::DataType::Int;
+	default:
+		return lhvm::DataType::Object;
+	}
+}
+
 using Kind = Command::Kind;
 using Pace = ecs::systems::CreatureLocomotionSystemInterface::Pace;
 
@@ -1917,6 +1932,27 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::world_objects::Remove(*object);
 		return "removed";
 	}
+	case Kind::RemoveTeleportStone:
+	{
+		if (!Locator::teleportSystem::has_value())
+		{
+			return "no teleport";
+		}
+		auto& teleport = Locator::teleportSystem::value();
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto at = MapPoint(_middle, command.point);
+		const auto stones = teleport.GetStones(PlayerNames::PLAYER_ONE);
+		const auto nearest = std::ranges::min_element(stones, {}, [&registry, &at](entt::entity stone) {
+			const auto& position = registry.Get<const ecs::components::Transform>(stone).position;
+			return glm::distance(glm::vec2(position.x, position.z), at);
+		});
+		if (nearest == stones.end())
+		{
+			return "no stone";
+		}
+		teleport.RemoveStone(*nearest);
+		return "removed";
+	}
 	case Kind::HandGripTotem:
 	{
 		const auto centre = ObjectAt(command.object);
@@ -2095,6 +2131,8 @@ std::optional<lhvm::VMValue> Runner::ScriptValueOf(const ScriptArgument& argumen
 	{
 	case ScriptArgument::Kind::Number:
 		return lhvm::VMValue(argument.number);
+	case ScriptArgument::Kind::Integer:
+		return lhvm::VMValue(static_cast<int32_t>(argument.number));
 	case ScriptArgument::Kind::Marker:
 	{
 		const auto& land = Locator::terrainSystem::value();
@@ -2158,7 +2196,7 @@ std::string Runner::CallNative(const Command& command)
 		{
 			return "an argument names nothing of the scenario's";
 		}
-		const auto type = argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
+		const auto type = ScriptDataTypeOf(argument.kind);
 		arguments.emplace_back(std::pair(*given, type));
 	}
 	std::vector<std::pair<lhvm::VMValue, lhvm::DataType>> results;
@@ -2182,9 +2220,7 @@ std::string Runner::RunScript(const Command& command)
 		return fmt::format("no script {}", command.script);
 	}
 	const auto value = [this](const ScriptArgument& argument) { return ScriptValueOf(argument); };
-	const auto type = [](const ScriptArgument& argument) {
-		return argument.kind == ScriptArgument::Kind::Number ? lhvm::DataType::Float : lhvm::DataType::Object;
-	};
+	const auto type = [](const ScriptArgument& argument) { return ScriptDataTypeOf(argument.kind); };
 	const auto& globals = vm.GetVariables();
 	for (const auto& [name, argument] : command.scriptGlobals)
 	{
@@ -2561,7 +2597,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed)
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3229,6 +3265,7 @@ void Runner::Give(const Command& command)
 	case Kind::FinishBuilding:
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
+	case Kind::RemoveTeleportStone:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

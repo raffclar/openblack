@@ -426,6 +426,48 @@ TEST(CreatureObjectBeliefs, AWalkNearAThingStopsAtTwiceTheRadii)
 	EXPECT_FLOAT_EQ(NearWalkDistance(0.0f, 0.0f), 0.0f);
 }
 
+TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsNowhereForFiftyTurnsGivesUp)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	// On turns 0 to 48, it records its place on turn 0 only
+	for (uint32_t turn = 0; turn < 49; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f, 20.0f}, false)) << turn;
+	}
+	// On turn 49, it moved less than 0.01 m since the record
+	EXPECT_TRUE(StallsOnTurn(stall, {10.0f, 20.005f}, false));
+}
+
+TEST(CreatureObjectBeliefs, AWalkToAThingThatGetsSomewhereGoesOn)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	for (uint32_t turn = 0; turn < 49; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {10.0f + (0.1f * static_cast<float>(turn)), 20.0f}, false));
+	}
+	EXPECT_FALSE(StallsOnTurn(stall, {14.9f, 20.0f}, false));
+	// On turn 50, it records the place again. The next span starts from this place.
+	EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	EXPECT_EQ(stall.note, glm::vec2(15.0f, 20.0f));
+	for (uint32_t turn = 51; turn < 99; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+	}
+	EXPECT_TRUE(StallsOnTurn(stall, {15.0f, 20.0f}, false));
+}
+
+TEST(CreatureObjectBeliefs, AWalkToAThingUnderTheControlOfAScriptNeverGivesUp)
+{
+	using namespace openblack::creature_object_actions;
+	ApproachStall stall;
+	for (uint32_t turn = 0; turn < 200; ++turn)
+	{
+		EXPECT_FALSE(StallsOnTurn(stall, {0.0f, 0.0f}, true));
+	}
+}
+
 TEST(CreatureObjectBeliefs, AThingHighAboveTheCreatureIsNotPickedUp)
 {
 	using openblack::creature_object_actions::TooHighToPickUp;

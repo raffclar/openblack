@@ -236,6 +236,9 @@ enum class Build : uint8_t
 	CastFireball,
 	/// Far from its home, the creature casts the teleport miracle at itself, as it casts a helpful miracle
 	CastTeleportFromAfar,
+	/// The creature walks to the teleport stone that it turned aside into, and asks the stone for a jump (see
+	/// creature_mind::GoToTeleport)
+	GoToTeleport,
 	/// The creature casts food into a store from near it, and a shield from where it stands. It casts water on itself to
 	/// stop its own fire, and a miracle to impress the people of a villager.
 	CastFood,

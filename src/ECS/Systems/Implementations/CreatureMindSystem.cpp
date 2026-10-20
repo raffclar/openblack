@@ -127,6 +127,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -2432,6 +2433,33 @@ void CreatureMindSystem::ProcessTurn()
 			{
 				GiveUp(mind.idle);
 			}
+		}
+		// The creature asks a teleport stone for a jump. A refused jump stops the plan as a failure. A jump gives the
+		// creature the plan of the stone that carries it.
+		if (commands.teleport.has_value())
+		{
+			const bool jumped =
+			    Locator::teleportSystem::has_value() &&
+			    Locator::teleportSystem::value().DoTeleport(static_cast<entt::entity>(*commands.teleport), entity, false);
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} asks the teleport stone {} for a jump: {}",
+			                    entt::to_integral(entity), *commands.teleport, jumped ? "it jumps" : "refused");
+			if (!jumped)
+			{
+				GiveUp(mind.idle);
+			}
+		}
+		if (commands.carry != creature_mind::Commands::Carry::None)
+		{
+			const bool start = commands.carry == creature_mind::Commands::Carry::Start;
+			if (!Locator::teleportSystem::has_value() || (start ? !Locator::teleportSystem::value().StartCarry(entity)
+			                                                    : Locator::teleportSystem::value().CarryTurn(entity)))
+			{
+				creature_mind::CarryDone(mind.idle);
+			}
+		}
+		if (commands.stopTeleportControl && Locator::teleportSystem::has_value())
+		{
+			Locator::teleportSystem::value().StopControl(entity);
 		}
 		// A building mended by a fifth of its life, and the tree used up mending it gone. When the building gets all of
 		// its life again, the end of the plan can decrease its desire.

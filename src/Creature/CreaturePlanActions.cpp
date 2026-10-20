@@ -31,6 +31,7 @@
 #include "Creature/CreatureSacrifice.h"
 #include "Creature/CreatureScriptAgendas.h"
 #include "Creature/CreatureSteal.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "Creature/CreatureTempleDance.h"
 #include "Creature/CreatureTownHelp.h"
 #include "Creature/CreatureTownTheft.h"
@@ -313,6 +314,8 @@ constexpr std::array k_Executors {
     Executor {.action = "CastShieldPU1", .target = Target::Anything, .build = Build::CastHelpful},
     // The desire to explore: far from its home, the creature casts the teleport miracle at itself
     Executor {.action = "ExploreAndCastTeleport", .build = Build::CastTeleportFromAfar},
+    // A teleport stone that the creature walks past: only the stone starts this action, with the stone as its object
+    Executor {.action = "GoToTeleport", .build = Build::GoToTeleport},
     // Food into a store, the shield at anything, water on itself while it burns, and a miracle to impress villagers
     Executor {.action = "CastMagicFood", .target = Target::BuiltFoodStore, .build = Build::CastFood},
     Executor {.action = "CastShield", .target = Target::Anything, .build = Build::CastShield},
@@ -1395,6 +1398,12 @@ std::optional<std::vector<creature_mind::Step>> creature_plan_actions::Agenda(co
 	case Build::ThrowInTheSea:
 	case Build::DanceByTheSea:
 		return ExplorationAgenda(executor.build, object, situation, random);
+	case Build::GoToTeleport:
+		if (!object.has_value())
+		{
+			return std::nullopt;
+		}
+		return creature_mind::GoToTeleport(*object, objectPoint);
 	case Build::CastLightning:
 		return creature_mind::CastAt(creature_mind::CastStyle::Lightning, cast->magicType, cast->gesture, *object, cast->height,
 		                             random);

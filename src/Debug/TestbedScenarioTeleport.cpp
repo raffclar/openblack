@@ -8,7 +8,8 @@
  *******************************************************************************/
 
 // The testbed's scenarios of the teleport miracle: two stones cast far apart by hand, villagers walking from one to the
-// other that take the shortcut, and a villager put down on a stone that jumps at once
+// other that take the shortcut, a villager put down on a stone that jumps at once, and creatures on the leash that a
+// stone takes or refuses
 
 #include "TestbedScenarioRegistry.h"
 
@@ -26,10 +27,21 @@ constexpr glm::vec2 k_Goal {46.0f, 74.0f};
 /// They set off once both stones are down, and turn back after this long
 constexpr float k_WalkAfter = 5.0f;
 constexpr float k_WalkRepeat = 30.0f;
-/// A creature that sets off at the walk time is in the stone this long after it sets off
-constexpr float k_TapWhileCarried = 3.0f;
+/// A creature told to go at the walk time is in the stone this long after it is told: it nods, turns aside, walks to the stone
+/// and jumps
+constexpr float k_TapWhileCarried = 4.5f;
 /// By this long after the tap in the stone, the creature is out of the far stone and walks on
 constexpr float k_TapAfterArrival = 8.0f;
+/// The leash goes on just before the order, so that the leash, which holds the creature near the hand, does not make
+/// it walk away first
+constexpr float k_LeashBefore = 0.5f;
+/// A creature told to go to the goal from here passes the first stone after a walk of some 35
+constexpr glm::vec2 k_FarStart {-70.0f, 2.0f};
+/// The second stone goes this long after the scenario starts, while the creature walks to the first stone
+constexpr float k_RemoveStoneAfter = 9.0f;
+/// A body that wants nothing: full, rested, watered, comfortable
+constexpr NeedOverrides k_Content {
+    .energy = 1.0f, .exhaustion = 0.0f, .dehydration = 0.0f, .poo = 0.0f, .life = 1.0f, .warmth = 0.0f};
 /// Two stones too far apart for a villager to walk between to worship
 constexpr glm::vec2 k_WorshipStoneA {-300.0f, 0.0f};
 constexpr glm::vec2 k_WorshipStoneB {300.0f, 0.0f};
@@ -92,19 +104,21 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	    .id = "miracles.teleport_creature",
 	    .name = "A creature takes the teleport",
 	    .facet = Facet::Miracles,
-	    .description = "The same two stones cast by hand, then a creature beside the first told to walk to beside the "
-	                   "second, its mind paused so nothing else takes it off its way.",
-	    .expected = "The creature turns aside into the near stone and, within 5 m of it, bursts into yellow sparks there "
-	                "and at the far stone while it fizzes out of sight over two seconds; it comes out of the far stone with "
-	                "the sound of arriving (and no sound of going), fizzes back into sight over two seconds, then walks on "
-	                "to within 5 m of where it was told and stops there.",
+	    .description = "The same two stones cast by hand, then a content tiger beside the first sets off to walk to beside "
+	                   "the second.",
+	    .expected = "The tiger turns aside into the near stone, curious: it walks to the stone with a puzzled face, and "
+	                "within 5 m of it, it bursts into yellow sparks there and at the far stone while it fizzes out of sight "
+	                "over two seconds. It comes out of the far stone with the sound of arriving (and no sound of going), "
+	                "fizzes back into sight over two seconds, then walks on to within 5 m of where it was going and decides "
+	                "what to do next.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB, k_Start, k_Goal}, .distance = 0.8f},
 	    .creatures = {{.label = "traveller",
 	                   .species = CreatureType::Tiger,
 	                   .offset = k_Start + glm::vec2(-6.0f, 2.0f),
 	                   .facingDegrees = 180.0f,
-	                   .pauseMind = true}},
+	                   .needs = k_Content,
+	                   .hold = true}},
 	    .miracles = {{.type = MagicType::Teleport,
 	                  .point = k_StoneA,
 	                  .handOffset = k_StoneA,
@@ -118,6 +132,46 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 3.0f,
 	                  .byHand = true}},
 	    .commands = {{.kind = Command::Kind::WalkTo, .creature = 0, .delaySeconds = k_WalkAfter, .point = k_Goal}},
+	});
+
+	all.push_back({
+	    .id = "miracles.teleport_creature_refused",
+	    .name = "A teleport stone refuses a creature",
+	    .facet = Facet::Miracles,
+	    .description = "The same two stones cast by hand. A content tiger on the learning leash, some 35 from the first "
+	                   "stone, is told with the leash to go to beside the second. While it walks to the first stone, the "
+	                   "second stone goes.",
+	    .expected = "The tiger turns aside into the near stone, curious: it walks to the stone with a puzzled face. Within "
+	                "5 m of the stone it asks for the jump, but with no other stone the stone refuses it. The tiger does "
+	                "not jump and does not wait: its plan stops there. Then the leash takes it back towards the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_StoneA, k_StoneB, k_FarStart, k_Goal}, .distance = 0.8f},
+	    .creatures = {{.label = "traveller",
+	                   .species = CreatureType::Tiger,
+	                   .offset = k_FarStart,
+	                   .facingDegrees = 60.0f,
+	                   .needs = k_Content,
+	                   .hold = true}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_StoneA,
+	                  .handOffset = k_StoneA,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_StoneB,
+	                  .handOffset = k_StoneB,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 3.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Command::Kind::PutOnLeash,
+	                  .creature = 0,
+	                  .delaySeconds = k_WalkAfter - k_LeashBefore,
+	                  .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::LeashOrderAt, .creature = 0, .delaySeconds = k_LeashBefore, .point = k_Goal},
+	                 {.kind = Command::Kind::RemoveTeleportStone,
+	                  .delaySeconds = k_RemoveStoneAfter - k_WalkAfter,
+	                  .point = k_StoneB}},
 	});
 
 	all.push_back({
@@ -166,7 +220,8 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                   .species = CreatureType::Tiger,
 	                   .offset = k_Start + glm::vec2(-6.0f, 2.0f),
 	                   .facingDegrees = 180.0f,
-	                   .pauseMind = true}},
+	                   .needs = k_Content,
+	                   .hold = true}},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_StoneA + glm::vec2(-14.0f, -12.0f)}},
 	    .miracles = {{.type = MagicType::Teleport,
 	                  .point = k_StoneA,
@@ -180,8 +235,11 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 3.0f,
 	                  .byHand = true}},
-	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
-	                 {.kind = Command::Kind::WalkTo, .creature = 0, .delaySeconds = k_WalkAfter - 1.0f, .point = k_Goal},
+	    .commands = {{.kind = Command::Kind::PutOnLeash,
+	                  .creature = 0,
+	                  .delaySeconds = k_WalkAfter - k_LeashBefore,
+	                  .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::LeashOrderAt, .creature = 0, .delaySeconds = k_LeashBefore, .point = k_Goal},
 	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapWhileCarried},
 	                 {.kind = Command::Kind::LeashTapBuilding, .creature = 0, .delaySeconds = k_TapAfterArrival}},
 	});

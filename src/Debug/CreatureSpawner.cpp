@@ -597,6 +597,15 @@ void CreatureSpawner::DrawMind(entt::entity entity) noexcept
 		case creature_mind::Step::Kind::ActOnItself:
 			ImGui::Text("Acting on itself from now on");
 			break;
+		case creature_mind::Step::Kind::Teleport:
+			ImGui::Text("Asking a teleport stone for a jump");
+			break;
+		case creature_mind::Step::Kind::Transported:
+			ImGui::Text("Carried by a teleport stone for %.1f s", static_cast<double>(idle.stepSeconds));
+			break;
+		case creature_mind::Step::Kind::StopTeleportControl:
+			ImGui::Text("Free of the teleport stone");
+			break;
 		case creature_mind::Step::Kind::WatchFlying:
 			ImGui::Text("Watching a thing fly for %.1f s", static_cast<double>(idle.stepSeconds));
 			break;

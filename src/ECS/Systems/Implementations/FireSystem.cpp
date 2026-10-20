@@ -238,7 +238,7 @@ bool SpreadsFrom(entt::entity object, const glm::vec3& position)
 	}
 	// The hands on the screen are the local player's
 	const auto holder = Locator::playerSystem::value().GetLocalPlayer();
-	return Locator::influenceSystem::value().PlayerInfluence(holder, position) > 0.0f;
+	return fire::SpreadsFrom(true, Locator::influenceSystem::value().PlayerInfluence(holder, position));
 }
 
 /// Whether an object is on the map: a fireball never is, nor is something held, flung through the air or carried by a
