@@ -137,55 +137,27 @@ bool L3DMesh::Load(const l3d::L3DFile& l3d) noexcept
 
 	if (ContainsLandscapeFeature() && l3d.GetFootprint().has_value())
 	{
-		struct FootprintVertex
-		{
-			glm::vec2 pos;
-			glm::vec2 texCoord;
-		};
-		VertexDecl decl;
-		decl.reserve(1);
-		decl.emplace_back(VertexAttrib::Attribute::Position, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
-		decl.emplace_back(VertexAttrib::Attribute::TexCoord0, static_cast<uint8_t>(2), VertexAttrib::Type::Float);
-
+		// The land is painted with the footprints on the processor, so their pictures and triangles stay here
 		const auto& footprint = *l3d.GetFootprint();
-
-		// TODO (#749) use use std::views::enumerate
-		for (uint32_t i = 1; const auto& entry : footprint.entries)
+		for (const auto& entry : footprint.entries)
 		{
-			auto texture = std::make_unique<Texture2D>("footprints/texture/" + _debugName + "/" + std::to_string(i));
-			++i;
-			texture->Create(
-			    static_cast<uint16_t>(footprint.header.width), static_cast<uint16_t>(footprint.header.height), 1,
-			    graphics::TextureFormat::BGRA4, Wrapping::ClampEdge, Filter::Nearest,
-			    bgfx::copy(entry.pixels.data(), static_cast<uint32_t>(entry.pixels.size() * sizeof(entry.pixels[0]))));
-
-			const bgfx::Memory* verticesMem =
-			    bgfx::alloc(static_cast<uint32_t>(sizeof(FootprintVertex) * entry.triangles.size() * 3));
-			auto* vertices = reinterpret_cast<FootprintVertex*>(verticesMem->data);
-			// TODO (#749) Maybe use std::views::enumerate
-			for (uint8_t j = 0; const auto& t : entry.triangles)
+			Footprint painted {
+			    .width = static_cast<int>(footprint.header.width),
+			    .height = static_cast<int>(footprint.header.height),
+			    .texels = entry.pixels,
+			    .triangles = {},
+			};
+			painted.triangles.reserve(entry.triangles.size());
+			for (const auto& triangle : entry.triangles)
 			{
-				for (uint8_t k = 0; k < 3; ++k)
+				footprint_paint::Triangle& made = painted.triangles.emplace_back();
+				for (size_t k = 0; k < made.corners.size(); ++k)
 				{
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): access is bound to size
-					auto& vertex = vertices[j];
-					++j;
-
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): access is bound to size
-					const auto& world = t.world[k];
-					// NOLINTNEXTLINE(cppcoreguidelines-pro-bounds-constant-array-index): access is bound to size
-					const auto& uv = t.texture[k];
-
-					vertex.pos.x = world.x;
-					vertex.pos.y = world.y;
-					vertex.texCoord.x = uv.x / footprint.header.width;
-					vertex.texCoord.y = uv.y / footprint.header.height;
+					made.corners.at(k) = glm::vec2(triangle.world.at(k).x, triangle.world.at(k).y);
+					made.texels.at(k) = glm::vec2(triangle.texture.at(k).x, triangle.texture.at(k).y);
 				}
 			}
-
-			auto* vertexBuffer = new VertexBuffer("footprints/quad/" + _debugName + "/" + std::to_string(i), verticesMem, decl);
-			auto mesh = std::make_unique<Mesh>(vertexBuffer);
-			_footprints.emplace_back(Footprint {std::move(texture), std::move(mesh)});
+			_footprints.emplace_back(std::move(painted));
 		}
 	}
 

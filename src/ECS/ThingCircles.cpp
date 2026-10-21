@@ -48,6 +48,10 @@ wall_hug::ThingShape thing_circles::ShapeOf(const Registry& registry, entt::enti
 	{
 		return wall_hug::ThingShape::TempleRing;
 	}
+	if (registry.AnyOf<WorshipSite>(thing))
+	{
+		return wall_hug::ThingShape::WorshipSiteBalls;
+	}
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, MobileStatic, DeadTree, SpellDispenser, TeleportStone,
 	                   WorshipAltar>(thing))
 	{

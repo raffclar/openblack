@@ -77,6 +77,7 @@ struct CreatureHandGlows;
 namespace graphics
 {
 class FrameBuffer;
+class LandFootprints;
 class LandShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
@@ -117,10 +118,9 @@ public:
 	void Reset(glm::u16vec2 resolution) const noexcept final;
 
 private:
-	void DrawFootprintPass(const DrawSceneDesc& drawDesc) const;
+	/// Paints the footprints into the blocks of the land where they changed
+	void PaintLandFootprints(const DrawSceneDesc& drawDesc) const;
 	/// The rivers' beds or channels, a footprint for each stretch of river
-	void DrawStreamFootprints(graphics::RenderPass viewId, entt::id_type meshId) const;
-	void DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const;
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights at night
 	void DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const;
 	[[nodiscard]] const Texture2D& GetLandLuminosity() const;
@@ -529,6 +529,7 @@ private:
 	/// The shadows baked into the land, as the game bakes them: the buildings', rocks' and other things', and the trees'
 	/// and big forests' unless they are drawn moving
 	mutable std::unique_ptr<LandShadowBake> _landShadowBake;
+	mutable std::unique_ptr<LandFootprints> _landFootprints;
 	/// Whether this frame's land takes the baked shadows
 	mutable bool _landShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for

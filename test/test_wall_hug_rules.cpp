@@ -327,6 +327,20 @@ TEST(WallHugRules, ATempleTurnsItsSpokesWithItsModel)
 	}
 }
 
+TEST(WallHugRules, AWorshipSiteStandsInTheWayWithItsTenBalls)
+{
+	const auto circles = CirclesOf(Placed(ThingShape::WorshipSiteBalls, glm::vec3(0.0f)));
+	ASSERT_EQ(circles.size(), 10u);
+	// The first ball, 1.4 high in the model, and the last, 3 high, in the order of the site's list
+	EXPECT_NEAR(circles[0].centre.x, 1000.0f + 2.448f, 0.001f);
+	EXPECT_NEAR(circles[0].centre.y, 1000.0f - 34.171f, 0.001f);
+	EXPECT_FLOAT_EQ(circles[0].radius, 1.3f * 1.4f);
+	EXPECT_NEAR(circles[9].centre.x, 1000.0f + 26.905f, 0.001f);
+	EXPECT_NEAR(circles[9].centre.y, 1000.0f - 33.063f, 0.001f);
+	EXPECT_FLOAT_EQ(circles[9].radius, 1.3f * 3.0f);
+	EXPECT_FALSE(circles[0].landscape);
+}
+
 TEST(WallHugRules, OnlyTheFencesModelsAreFences)
 {
 	EXPECT_TRUE(IsFenceModel(openblack::MeshId::BuildingAmericanFence));

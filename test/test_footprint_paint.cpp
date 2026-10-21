@@ -7,8 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#include <cmath>
 #include <cstdint>
+
+#include <array>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -18,42 +20,40 @@ namespace footprint_paint = openblack::footprint_paint;
 
 namespace
 {
-/// A value in [0, 1] as a 16-bit render target keeps it
-float StoredAt16Bits(float value)
+constexpr int k_Side = footprint_paint::k_BlockTexels;
+
+/// A block of black land, opaque
+std::vector<uint16_t> BlackBlock()
 {
-	return std::round(value * 65535.0f) / 65535.0f;
+	return std::vector<uint16_t>(static_cast<size_t>(k_Side) * k_Side, 0xF000);
+}
+
+uint16_t At(const std::vector<uint16_t>& block, int row, int column)
+{
+	return block[static_cast<size_t>(row * k_Side + column)];
+}
+
+/// A square of 10 units (16 texels) a side from the origin, as two triangles that share the diagonal from (0, 0) to
+/// (10, 10), with the picture's texel coordinates equal to the corners'
+std::array<footprint_paint::Triangle, 2> Square()
+{
+	return {{
+	    {.corners = {glm::vec2(0.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec2(10.0f, 10.0f)},
+	     .texels = {glm::vec2(0.0f, 0.0f), glm::vec2(10.0f, 0.0f), glm::vec2(10.0f, 10.0f)}},
+	    {.corners = {glm::vec2(0.0f, 0.0f), glm::vec2(10.0f, 10.0f), glm::vec2(0.0f, 10.0f)},
+	     .texels = {glm::vec2(0.0f, 0.0f), glm::vec2(10.0f, 10.0f), glm::vec2(0.0f, 10.0f)}},
+	}};
+}
+
+void PaintSquare(std::vector<uint16_t>& block, const std::vector<uint16_t>& picture, int side,
+                 const footprint_paint::Placement& placement = {}, footprint_paint::Mix mix = footprint_paint::Mix::Colour,
+                 glm::ivec2 blockIndex = {0, 0})
+{
+	const auto square = Square();
+	footprint_paint::PaintFootprint(block, blockIndex, {.width = side, .height = side, .texels = picture}, square, placement,
+	                                mix);
 }
 } // namespace
-
-TEST(FootprintPaint, LandHasOneAndSixTenthsTexelsAUnit)
-{
-	EXPECT_FLOAT_EQ(footprint_paint::k_TexelsPerUnit, 1.6f);
-}
-
-TEST(FootprintPaint, CornersSnapToTheNearestLandTexelCorner)
-{
-	// 10 units is 16 texels; a quarter of a texel either side of it still snaps there
-	EXPECT_EQ(footprint_paint::SnapToTexelCorner({10.0f, 10.0f}), glm::vec2(16.0f, 16.0f));
-	EXPECT_EQ(footprint_paint::SnapToTexelCorner({10.15f, 9.85f}), glm::vec2(16.0f, 16.0f));
-	// Past half a texel it moves to the next corner
-	EXPECT_EQ(footprint_paint::SnapToTexelCorner({10.35f, 9.65f}), glm::vec2(17.0f, 15.0f));
-	EXPECT_EQ(footprint_paint::SnapToTexelCorner({-0.4f, 2500.0f}), glm::vec2(-1.0f, 4000.0f));
-}
-
-TEST(FootprintPaint, EachLandTexelTakesTheNearestFootprintTexel)
-{
-	EXPECT_EQ(footprint_paint::FootprintTexel(0.0f, 64), 0);
-	EXPECT_EQ(footprint_paint::FootprintTexel(0.49f, 64), 0);
-	EXPECT_EQ(footprint_paint::FootprintTexel(0.51f, 64), 1);
-	EXPECT_EQ(footprint_paint::FootprintTexel(31.6f, 32), 31);
-}
-
-TEST(FootprintPaint, CoordinatesOutsideTheFootprintTakeItsEdge)
-{
-	EXPECT_EQ(footprint_paint::FootprintTexel(-3.0f, 32), 0);
-	EXPECT_EQ(footprint_paint::FootprintTexel(32.0f, 32), 31);
-	EXPECT_EQ(footprint_paint::FootprintTexel(64.0f, 64), 63);
-}
 
 TEST(FootprintPaint, OpaqueTexelsStillLetALittleLandThrough)
 {
@@ -88,21 +88,110 @@ TEST(FootprintPaint, PaintingKeepsTheLandsCoastAlpha)
 	EXPECT_EQ(painted & 0x0FFF, 0x0EEE);
 }
 
-TEST(FootprintPaint, TheGpuMixMatchesTheIntegerMixForEveryTexel)
+TEST(FootprintPaint, AChannelLowersTheAlphaAndKeepsTheColour)
 {
-	for (uint8_t alpha = 0; alpha < 16; ++alpha)
+	EXPECT_EQ(footprint_paint::LowerAlpha(0xF123, 0x3FFF), 0x3123);
+	// A channel more opaque than the land leaves the land as it is
+	EXPECT_EQ(footprint_paint::LowerAlpha(0x2123, 0x9000), 0x2123);
+}
+
+TEST(FootprintPaint, BothEndsOfEachRowAreFilled)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0xFFFF);
+	auto block = BlackBlock();
+	PaintSquare(block, picture, 16);
+	// 10 units are 16 texels: the rows and the columns 0 to 16 are painted, both ends too
+	EXPECT_NE(At(block, 16, 16), 0xF000);
+	EXPECT_NE(At(block, 16, 3), 0xF000);
+	EXPECT_NE(At(block, 3, 16), 0xF000);
+	EXPECT_EQ(At(block, 17, 3), 0xF000);
+	EXPECT_EQ(At(block, 3, 17), 0xF000);
+}
+
+TEST(FootprintPaint, TheSharedDiagonalIsPaintedTwice)
+{
+	// Half covered white: one coat takes black to 7, a second coat takes it to 11
+	const std::vector<uint16_t> picture(16 * 16, 0x8FFF);
+	auto block = BlackBlock();
+	PaintSquare(block, picture, 16);
+	// The walk along the diagonal steps across only when its error is more than the length, so it keeps one texel
+	// behind the true diagonal
+	EXPECT_EQ(At(block, 5, 4) & 0xF, 11);
+	EXPECT_EQ(At(block, 5, 5) & 0xF, 7);
+	EXPECT_EQ(At(block, 9, 2) & 0xF, 7);
+	EXPECT_EQ(At(block, 2, 9) & 0xF, 7);
+	// The first row is the edge of both triangles at its first texel only
+	EXPECT_EQ(At(block, 0, 0) & 0xF, 11);
+	EXPECT_EQ(At(block, 0, 5) & 0xF, 7);
+}
+
+TEST(FootprintPaint, EachLandTexelTakesTheNearestPictureTexelKeptInsideThePicture)
+{
+	// A picture of 4 by 4 with a different blue in each column; the coordinates of the square run to 10, past its edge
+	std::vector<uint16_t> picture(16);
+	for (int v = 0; v < 4; ++v)
 	{
-		const float coverage = static_cast<float>(footprint_paint::Coverage(alpha)) / 255.0f;
-		for (uint8_t footprint = 0; footprint < 16; ++footprint)
+		for (int u = 0; u < 4; ++u)
 		{
-			const float premultiplied = StoredAt16Bits(static_cast<float>(footprint) / 15.0f * coverage);
-			const float storedCoverage = StoredAt16Bits(coverage);
-			for (uint8_t land = 0; land < 16; ++land)
-			{
-				EXPECT_EQ(footprint_paint::MixChannelAsDrawn(land, premultiplied, storedCoverage),
-				          footprint_paint::MixChannel(land, footprint, alpha))
-				    << "land " << +land << " footprint " << +footprint << " alpha " << +alpha;
-			}
+			picture[static_cast<size_t>(v * 4 + u)] = static_cast<uint16_t>(0xF000 | (u + 1));
 		}
 	}
+	auto block = BlackBlock();
+	PaintSquare(block, picture, 4);
+	// At row 16 the picture's u is 10 at every column: past the picture, so its last column, blue 4
+	EXPECT_EQ(At(block, 16, 8) & 0xF, footprint_paint::MixChannel(0, 4, 15));
+	// At row 1 and column 0 the picture's u is 0.625: its texel 1, blue 2, painted by both triangles
+	EXPECT_EQ(At(block, 1, 0) & 0xF, footprint_paint::MixChannel(footprint_paint::MixChannel(0, 2, 15), 2, 15));
+}
+
+TEST(FootprintPaint, OnlyTheBlocksOwnTexelsArePainted)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0xFFFF);
+	auto block = BlackBlock();
+	// The square from 5 units before the corner of the block along x, and 5 before its far edge along z: three
+	// quarters of it fall outside
+	PaintSquare(block, picture, 16, {.origin = {-5.0f, 155.0f}});
+	EXPECT_NE(At(block, 0, 255), 0xF000);
+	EXPECT_NE(At(block, 8, 248), 0xF000);
+	EXPECT_EQ(At(block, 9, 248), 0xF000);
+	EXPECT_EQ(At(block, 8, 247), 0xF000);
+}
+
+TEST(FootprintPaint, TheBlockMovesTheFootprintByItsCorner)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0xFFFF);
+	auto block = BlackBlock();
+	// Block (2, 1) starts at 320 along x and 160 along z
+	PaintSquare(block, picture, 16, {.origin = {330.0f, 170.0f}}, footprint_paint::Mix::Colour, {2, 1});
+	EXPECT_EQ(At(block, 15, 15), 0xF000);
+	EXPECT_NE(At(block, 16, 16), 0xF000);
+	EXPECT_NE(At(block, 32, 32), 0xF000);
+	EXPECT_EQ(At(block, 33, 32), 0xF000);
+}
+
+TEST(FootprintPaint, CornersGoToTheNearestTexelAndAHalfGoesToTheEvenOne)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0xFFFF);
+	// 0.3125 units is half a texel: the near corner goes to texel 0, the far corner (16.5 texels) to texel 16
+	auto block = BlackBlock();
+	PaintSquare(block, picture, 16, {.origin = {0.3125f, 0.0f}});
+	EXPECT_NE(At(block, 0, 0), 0xF000);
+	EXPECT_NE(At(block, 16, 0), 0xF000);
+	EXPECT_EQ(At(block, 17, 0), 0xF000);
+	// 0.9375 units is a texel and a half: the near corner goes to texel 2, the far corner (17.5 texels) to texel 18
+	block = BlackBlock();
+	PaintSquare(block, picture, 16, {.origin = {0.9375f, 0.0f}});
+	EXPECT_EQ(At(block, 1, 0), 0xF000);
+	EXPECT_NE(At(block, 2, 0), 0xF000);
+	EXPECT_NE(At(block, 18, 0), 0xF000);
+	EXPECT_EQ(At(block, 19, 0), 0xF000);
+}
+
+TEST(FootprintPaint, AChannelPaintsOnlyTheAlpha)
+{
+	const std::vector<uint16_t> picture(16 * 16, 0x2FFF);
+	std::vector<uint16_t> block(static_cast<size_t>(k_Side) * k_Side, 0xF123);
+	PaintSquare(block, picture, 16, {}, footprint_paint::Mix::LowerAlpha);
+	EXPECT_EQ(At(block, 5, 5), 0x2123);
+	EXPECT_EQ(At(block, 20, 5), 0xF123);
 }

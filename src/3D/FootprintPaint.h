@@ -11,38 +11,37 @@
 
 #include <cstdint>
 
-#include <glm/vec2.hpp>
+#include <array>
+#include <span>
 
-#include "BlockTexture.h"
+#include <glm/vec2.hpp>
 
 namespace openblack
 {
 
 /// How Black & White paints a building's or a feature's footprint into the land's block textures. The footprint is a
-/// small texture (16 to 64 texels a side, 4 bits a channel) laid on the ground by a few triangles. It is painted into
-/// the block's own texels, so it shows at the land's resolution, 16 texels a cell, whatever its own:
+/// small picture (16 to 128 texels a side, 4 bits a channel) that a few triangles lay on the ground. The game paints it
+/// into the texels of each block that it covers, on the processor, at 16 texels a cell:
 ///
-/// - each triangle's corners are moved to the nearest corner of a land texel, and the footprint's coordinates are
-///   spread linearly over the moved triangle;
-/// - each land texel takes the footprint texel nearest to the coordinates at its corner (rounded, kept inside the
-///   footprint), unfiltered;
+/// - each corner of a triangle goes to the nearest texel of the block, and each edge is walked from corner to corner,
+///   one texel at a time along its longer axis;
+/// - each row of the block's texture (one texel along x) is filled from the lowest to the highest texel that an edge
+///   reached on it, both ends too;
+/// - each texel takes the footprint texel nearest to the picture coordinates there, kept inside the picture;
 /// - that texel's 4-bit alpha, times 16, out of 255, mixes its colour into the land's, each 4-bit channel rounded
-///   down; the land's own alpha (its coast fade) is kept.
+///   down. The land keeps its own alpha (its coast fade).
 ///
-/// The land's texture, footprints and all, is filtered only when it is drawn. The shaders vs_footprint_paint,
-/// fs_footprint and fs_terrain do this on the GPU; these functions are the same rules, for tests.
+/// The rivers' channels use the same triangles, but they lower the land's alpha to the picture's alpha and keep its
+/// colour. Each footprint is painted over the one before it, so each step rounds. The land is filtered only when it is
+/// drawn.
 namespace footprint_paint
 {
-/// Land texels a unit of the world: a block's 256 texels across its 160 units
-constexpr float k_TexelsPerUnit = static_cast<float>(block_texture::k_Side) / 160.0f;
-
-/// Where a footprint's corner at a point on the ground is painted from: the nearest corner of a land texel, in texels
-/// from the world's origin
-[[nodiscard]] glm::vec2 SnapToTexelCorner(glm::vec2 world);
-
-/// The footprint texel along one axis that a land texel takes, from the footprint coordinate at its corner (in
-/// footprint texels): the nearest, kept inside the footprint
-[[nodiscard]] int FootprintTexel(float coordinate, int size);
+/// Texels along a side of a block's texture
+constexpr int k_BlockTexels = 256;
+/// Units along a side of a block
+constexpr float k_BlockUnits = 160.0f;
+/// One 160th, as the game keeps it in a float: a unit as a part of the side of a block
+constexpr float k_UnitPerBlock = 0.00625f;
 
 /// How much a footprint texel of a 4-bit alpha covers the land under it, out of 255. Even the most opaque leaves a
 /// little of the land showing.
@@ -61,10 +60,50 @@ constexpr float k_TexelsPerUnit = static_cast<float>(block_texture::k_Side) / 16
 /// A land texel (ARGB, 4 bits a channel) with a footprint texel painted over it. The land keeps its alpha.
 [[nodiscard]] uint16_t Paint(uint16_t land, uint16_t footprint);
 
-/// The same mix as the GPU does it: the footprint layer is kept as a premultiplied colour and a coverage (each in
-/// [0, 1], stored at 16 bits), the land's 4-bit channel is mixed with them in floating point and rounded down to 4 bits
-/// again. Returns the 4-bit channel.
-[[nodiscard]] uint8_t MixChannelAsDrawn(uint8_t land4, float premultiplied, float coverage);
+/// A land texel with a river channel's texel painted over it: the land's alpha falls to the channel's where that is
+/// lower, and the land keeps its colour
+[[nodiscard]] uint16_t LowerAlpha(uint16_t land, uint16_t channel);
+
+/// What a footprint does to the land under it
+enum class Mix : uint8_t
+{
+	/// Mix the footprint's colour into the land's
+	Colour,
+	/// Lower the land's alpha to the footprint's, as a river's channel does
+	LowerAlpha,
+};
+
+/// A footprint's picture: ARGB texels at 4 bits a channel, a row of `width` texels for each texel along v
+struct Picture
+{
+	int width {0};
+	int height {0};
+	std::span<const uint16_t> texels;
+};
+
+/// A triangle of a footprint: its corners on the ground, along the model's x and z, and in the picture's texels
+struct Triangle
+{
+	std::array<glm::vec2, 3> corners;
+	std::array<glm::vec2, 3> texels;
+};
+
+/// The parts of a placed thing's matrix that move a point of its footprint on the ground: the world's x is
+/// `xFromX * x + xFromZ * z + origin.x`, the world's z is `zFromX * x + zFromZ * z + origin.y`
+struct Placement
+{
+	float xFromX {1.0f};
+	float xFromZ {0.0f};
+	float zFromX {0.0f};
+	float zFromZ {1.0f};
+	glm::vec2 origin {0.0f};
+};
+
+/// Paints a footprint into a block's texture. `block` holds k_BlockTexels by k_BlockTexels ARGB texels at 4 bits a
+/// channel, a row for each texel along x ([x * k_BlockTexels + z]). `blockIndex` is the block's column and row on the
+/// land, along x and z. The parts of the footprint outside the block are not painted.
+void PaintFootprint(std::span<uint16_t> block, glm::ivec2 blockIndex, const Picture& picture,
+                    std::span<const Triangle> triangles, const Placement& placement, Mix mix);
 } // namespace footprint_paint
 
 } // namespace openblack
