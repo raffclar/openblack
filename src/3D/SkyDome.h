@@ -87,6 +87,14 @@ private:
 	float _following {2.0f};
 	uint16_t _rowsDone {k_Rows};
 	std::optional<float> _wholeDome;
+
+public:
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Follow& self, Visitor&& visit)
+	{
+		visit(self._following, self._rowsDone, self._wholeDome);
+	}
 };
 
 /// Two of three pictures and how much of the second there is, of 255

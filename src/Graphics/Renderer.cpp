@@ -7695,12 +7695,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    }
 					    }
 					    // A sprite whose texture the cache does not have is not drawn
-					    const auto* texture = textures.Find(sprite.texture);
-					    const auto* alpha = textures.Find(sprite_textures::AlphaId(sprite));
-					    if (texture == nullptr || alpha == nullptr)
+					    const auto found =
+					        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+					    if (!found.has_value())
 					    {
 						    return;
 					    }
+					    const auto* texture = found->texture;
+					    const auto* alpha = found->alpha;
 					    glm::mat4 modelMatrix = glm::mat4(1.0f);
 					    modelMatrix = glm::translate(modelMatrix, transform.position);
 					    modelMatrix *= glm::mat4(transform.rotation);

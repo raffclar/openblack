@@ -83,6 +83,13 @@ struct PourSettings
 	/// The hand stays where it was when the pour began, rising and tipping there, so that all that pours lands in one
 	/// place
 	bool clampHand {true};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const PourSettings& self, Visitor&& visit)
+	{
+		visit(self.totalTime, self.heightToRaise, self.angleToRaise, self.loops, self.clampHand);
+	}
 };
 
 /// The food and wood miracles' pour, over and over: four seconds of rising and tipping along the curve, which swells to
@@ -100,6 +107,13 @@ struct PourPose
 	float tilt {0.0f};
 	/// Where the hand stays while the pour holds it, before it rises
 	std::optional<glm::vec3> pinned;
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const PourPose& self, Visitor&& visit)
+	{
+		visit(self.raise, self.tilt, self.pinned);
+	}
 };
 
 /// A pour of the hand in progress, stepped each game turn and drawn between turns
@@ -113,6 +127,13 @@ struct PourState
 	PourPose current;
 	/// Where the hand was when the pour began, which it stays at while the pour clamps it
 	std::optional<glm::vec3> pinned;
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const PourState& self, Visitor&& visit)
+	{
+		visit(self.active, self.settings, self.progress, self.previous, self.current, self.pinned);
+	}
 };
 
 /// Starts the pour from the pose the hand is in

@@ -374,6 +374,13 @@ struct ChainAtom
 	/// How many joints the hand's movement has asked for so far, and how many have been laid
 	float wanted {0.0f};
 	float laid {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ChainAtom& self, Visitor&& visit)
+	{
+		visit(self.active, self.first, self.stoppedAt, self.last, self.lastJoint, self.wanted, self.laid);
+	}
 };
 struct ChainState
 {

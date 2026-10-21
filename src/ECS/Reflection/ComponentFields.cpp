@@ -530,7 +530,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::AppleBarrelWorm::place>("place");
 	Reflect<components::AtHome>(context).Field<&components::AtHome::beenToBed>("beenToBed");
 	Reflect<components::AudioEmitter>(context)
-	    .Field<&components::AudioEmitter::sourceId>("sourceId")
+	    .RunField<&components::AudioEmitter::sourceId>("sourceId")
 	    .Field<&components::AudioEmitter::soundId>("soundId")
 	    .Field<&components::AudioEmitter::priority>("priority")
 	    .Field<&components::AudioEmitter::spatial>("spatial")
