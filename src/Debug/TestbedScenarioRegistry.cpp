@@ -9929,7 +9929,7 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                "until the clip ends. Then it walks. The villager walks in its own turn, and it does not walk while "
 	                "a clip into or out of a state plays.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -6.0f}, {14.0f, 6.0f}}},
+	    .framing = {.shot = Shot::Placed, .eye = {10.0f, 2.5f, -7.0f}, .look = {9.0f, 1.0f, 0.0f}},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
 	                 .offset = {-10.0f, 0.0f},
 	                 .walkTo = glm::vec2(10.0f, 0.0f),
