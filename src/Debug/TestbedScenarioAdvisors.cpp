@@ -27,6 +27,9 @@ constexpr size_t k_Good = 0;
 constexpr size_t k_Evil = 1;
 /// A message set of the help that says two texts through a help script
 constexpr size_t k_TwoTextsMessage = 97;
+/// The anim of an advisor that taps on the screen, and the anim of the evil advisor that shoots himself with his hand
+constexpr uint32_t k_TapScreenAnim = 58;
+constexpr uint32_t k_HandGunAnim = 60;
 
 Command Tell(size_t advisor, Action action, float delay, glm::vec2 point = glm::vec2(0.0f), uint32_t anim = 0)
 {
@@ -139,6 +142,23 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	                 Tell(k_Evil, Action::PointOnScreen, 0.0f, {0.8f, 0.2f}),
 	                 Tell(k_Good, Action::PlayAnim, 4.0f, {0.3f, 0.5f}, 20),
 	                 Tell(k_Evil, Action::PlayAnim, 0.0f, {0.7f, 0.5f}, 24), Tell(k_Evil, Action::Feel, 3.0f, {}, 7)},
+	});
+	all.push_back({
+	    .id = "advisors.anim_sounds",
+	    .name = "The advisors' anims make their sounds",
+	    .facet = Facet::Advisors,
+	    .description = "Both advisors come out. The good advisor taps on the screen, then the evil advisor taps on the "
+	                   "screen. Then the evil advisor shoots himself with his hand. The sounds come from the in-game "
+	                   "bank, as the anims pass their sound points.",
+	    .expected = "Each tap on the screen knocks on the glass two times for the good advisor and seven times for the "
+	                "evil advisor. The shot of the evil advisor makes the sound of a gun. The audio log names the samples "
+	                "162 and 161 of InGame.sad.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = AdvisorsFraming(),
+	    .commands = {Tell(k_Good, Action::Out, 0.2f), Tell(k_Evil, Action::Out, 0.0f),
+	                 Tell(k_Good, Action::PlayAnim, 2.0f, {0.3f, 0.5f}, k_TapScreenAnim),
+	                 Tell(k_Evil, Action::PlayAnim, 5.0f, {0.7f, 0.5f}, k_TapScreenAnim),
+	                 Tell(k_Evil, Action::PlayAnim, 12.0f, {0.7f, 0.5f}, k_HandGunAnim)},
 	});
 	all.push_back({
 	    .id = "advisors.appear_and_vanish",

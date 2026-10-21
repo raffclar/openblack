@@ -1929,6 +1929,12 @@ bool Game::GameLogicLoop() noexcept
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			ProcessTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
+			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
+			// only when it is already due.
+			if (Locator::helpMessageSystem::has_value())
+			{
+				Locator::helpMessageSystem::value().ProcessTurn();
+			}
 			_lastGameLoopTime = currentTime;
 		}
 		return false;
