@@ -17,6 +17,7 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/TempleInteriorInterface.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
 #include "ECS/HelpQueryFacts.h"
@@ -199,21 +200,21 @@ void HelpMessageSystem::HelpQuery()
 		return;
 	}
 	// What is in the hand, else what the hand is over, else the ground under it
-	std::optional<entt::entity> thing;
+	std::optional<entt::entity> held;
 	if (Locator::handGrabSystem::has_value())
 	{
-		thing = Locator::handGrabSystem::value().GetHeld();
+		held = Locator::handGrabSystem::value().GetHeld();
 	}
-	std::optional<glm::vec3> ground;
+	std::optional<entt::entity> underHand;
+	std::optional<glm::vec3> land;
 	if (Locator::pickingSystem::has_value())
 	{
 		const auto& pick = Locator::pickingSystem::value().GetPick();
-		if (!thing.has_value())
-		{
-			thing = pick.object;
-		}
-		ground = pick.land;
+		underHand = pick.object;
+		land = pick.land;
 	}
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const auto [thing, ground] = help_query::TargetOf(held, underHand, land, inTemple);
 	if (thing.has_value() && Locator::entitiesRegistry::value().Valid(*thing))
 	{
 		Say(help_query::About(ecs::help_query_facts::ThingOf(*thing)), ecs::help_query_facts::TextsOf(*thing));

@@ -146,6 +146,27 @@ constexpr uint32_t k_FoodPileText = 2872;
 {
 	return !inTemple || byMouse;
 }
+/// What the Help key asks about: the thing in the hand, else the thing under the hand, else the ground under the hand
+template <typename Thing, typename Point>
+struct Target
+{
+	std::optional<Thing> thing;
+	std::optional<Point> ground;
+};
+
+/// Inside the temple, the game does not draw the land, so the hand is over no thing and no ground. Only a thing in the
+/// hand can then get an answer, and without it the advisors say that nothing is of interest.
+template <typename Thing, typename Point>
+[[nodiscard]] constexpr Target<Thing, Point> TargetOf(std::optional<Thing> held, std::optional<Thing> underHand,
+                                                      std::optional<Point> ground, bool inTemple)
+{
+	if (inTemple)
+	{
+		return {.thing = held, .ground = std::nullopt};
+	}
+	return {.thing = held.has_value() ? held : underHand, .ground = ground};
+}
+
 /// The text of the first of the game's tooltips
 constexpr uint32_t k_FirstToolTipText = 0xE73;
 
