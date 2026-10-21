@@ -48,6 +48,8 @@ struct CreatureObjectAction
 	bool mirrored {false};
 	float timeMs {0.0f};
 	float durationMs {0.0f};
+	/// The animations play at two times the usual speed until the action ends, because the creature was told to hurry
+	bool hurried {false};
 	/// When it takes hold or lets go, in the animation's time, and whether that has happened
 	float eventMs {0.0f};
 	bool eventDone {false};

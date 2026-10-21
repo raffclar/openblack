@@ -424,9 +424,9 @@ void GamePhysicsHooksWorld::Catch(entt::entity creature, entt::entity object)
 
 void GamePhysicsHooksWorld::StopCreature(entt::entity creature)
 {
-	if (auto* body = Entities().TryGet<CreatureAnimation>(creature))
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		body->body = creature_layers::Hurry(body->body);
+		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
 	if (Locator::creatureLocomotionSystem::has_value())
 	{

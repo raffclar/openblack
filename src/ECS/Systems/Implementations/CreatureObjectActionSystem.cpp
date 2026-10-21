@@ -2831,7 +2831,10 @@ void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli>
 		    {
 			    return;
 		    }
-		    const float step = gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime);
+		    // A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
+		    // and does not change.
+		    const float step = creature_layers::HurriedStep(
+		        gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
 		    if (action.kind == Kind::Catch)
 		    {
 			    using Catching = CreatureObjectAction::Catching;

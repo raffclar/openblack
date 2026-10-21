@@ -80,6 +80,9 @@ public:
 	/// A force kicks a creature's body at a point, swaying its upper body when the point is high on it and its lower
 	/// body otherwise, unless it is striking with a destroying blow
 	virtual void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) = 0;
+	/// The creature is told to hurry. The action that its body plays, the action that it does with a thing, or its
+	/// moves in a fight continue at two times the usual speed, when they are of a kind that hurries.
+	virtual void Hurry(entt::entity /*creature*/) {}
 
 	/// Places the glows on a creature's body (see components::CreatureHandGlows) on its pose as it is now. Each glow's
 	/// texture slides on by the real milliseconds of the frame, and the circling glow turns by the game's milliseconds.
