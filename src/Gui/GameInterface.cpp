@@ -948,7 +948,6 @@ void GameInterface::Update(float deltaSeconds)
 	_saveGameBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
-	_screenFade.Update(deltaSeconds);
 }
 
 void GameInterface::UpdateTattooEditor(float deltaSeconds)

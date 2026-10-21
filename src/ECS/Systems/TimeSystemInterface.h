@@ -33,7 +33,12 @@ public:
 	virtual ~TimeSystemInterface() = default;
 
 	virtual void Start() = 0;
+	/// Moves the clock on to the frame: the time that frames take when they take a fixed time, and the real time since the
+	/// start
 	virtual void Update() = 0;
+	/// Measures the real time of the frame as its draw starts. The game does not draw while its window is minimised, so
+	/// the first frame that it draws after that takes all the time since the last draw.
+	virtual void StartDraw() = 0;
 	[[nodiscard]] virtual std::chrono::milliseconds GetElapsedTime() const = 0;
 
 	/// Starts the game clock from turn 0, as a map starts
@@ -62,8 +67,9 @@ public:
 	[[nodiscard]] virtual float GetTurnFraction() const = 0;
 	/// The game time of the frame, in whole milliseconds: none while paused, and quicker or slower with the game's speed
 	[[nodiscard]] virtual std::chrono::milliseconds GetFrameGameTime() const = 0;
-	/// The real time of the frame in whole milliseconds, the wall clock's whole milliseconds now less those at the last
-	/// frame, at least 1: what the hand and the camera step by
+	/// The real time of the frame in whole milliseconds, the wall clock's whole milliseconds at the start of this draw
+	/// less those at the start of the last draw, at least 1: what the hand and the camera step by. Before the draw of the
+	/// frame starts, it is the time of the last draw.
 	[[nodiscard]] virtual std::chrono::milliseconds GetFrameRealTime() const = 0;
 
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped

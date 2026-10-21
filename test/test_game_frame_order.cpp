@@ -191,19 +191,44 @@ TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
 	EXPECT_TRUE(recorder.Before(Step::Bookmarks, Step::Entities));
 }
 
-// While the window is minimised the game does not move the camera, put the hand under the cursor or draw the world
-TEST(GameFrameOrder, TheGraphicsAreTheCameraThePreDrawAndTheDraw)
+// While the window is minimised the game does not move the camera, start the draw, put the hand under the cursor or draw
+// the world
+TEST(GameFrameOrder, TheGraphicsAreTheCameraTheDrawStartThePreDrawAndTheDraw)
 {
-	for (const auto step : {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple,
-	                        Step::Hand, Step::Entities})
+	for (const auto step :
+	     {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple, Step::DrawClock,
+	      Step::Video, Step::CreaturePoses, Step::Hand, Step::HighDetail, Step::Entities, Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
-	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::Turns, Step::FrameTime, Step::CameraKeys,
-	                        Step::ProfileAlignment, Step::Audio})
+	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::GripEffect, Step::Turns, Step::FrameTime,
+	                        Step::FilmClock, Step::CameraKeys, Step::ProfileAlignment, Step::Audio})
 	{
 		EXPECT_FALSE(IsGraphics(step)) << static_cast<int>(step);
 	}
+}
+
+// The draw measures its real time after the camera moved, so the camera steps by the time of the last draw
+TEST(GameFrameOrder, TheDrawMeasuresItsRealTimeAfterTheCameraAndBeforeTheFilmAndTheHand)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::DrawClock));
+	EXPECT_TRUE(recorder.Before(Step::CameraShake, Step::DrawClock));
+	EXPECT_TRUE(recorder.Before(Step::FilmClock, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::DrawClock, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::DrawClock, Step::Hand));
+}
+
+// The high-detail villagers go back to usual as the land is drawn, the fade steps after the world and the words of the
+// pause as the draw finishes
+TEST(GameFrameOrder, TheHighDetailTheFadeAndThePauseWordsAreInTheDraw)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::HighDetail));
+	EXPECT_TRUE(recorder.Before(Step::HighDetail, Step::Entities));
+	EXPECT_TRUE(recorder.Before(Step::Entities, Step::ScreenFade));
+	EXPECT_TRUE(recorder.Before(Step::ScreenFade, Step::PauseText));
+	EXPECT_TRUE(recorder.Before(Step::PauseText, Step::CameraKeys));
 }
 
 // A minimised window skips the graphics, except in a frame that a picture is necessary from

@@ -60,6 +60,9 @@ public:
 	virtual void EndFallingSpell() = 0;
 	/// Once a frame, with the real clock's time now
 	virtual void Update(std::chrono::steady_clock::time_point now) = 0;
+	/// The film's own clock: counts the frames that are due by the real clock, and ends the film after its last frame. It
+	/// continues each frame while the window is minimised and the draw does not run.
+	virtual void CountDueFrames(std::chrono::steady_clock::time_point now) = 0;
 	/// The Escape key: true when a video took it
 	virtual bool Escape(bool shift, bool ctrl) = 0;
 	/// Skips the video as Escape does, without the key's checks

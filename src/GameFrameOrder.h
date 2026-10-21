@@ -37,8 +37,8 @@ enum class Stage : uint8_t
 	FrameTime,
 	/// The camera moves, with the movement of the mouse in this frame, and shakes
 	Camera,
-	/// The draw starts. A film shows its frames, and the creatures get their poses between their last two turns, before
-	/// the hand moves.
+	/// The draw starts. The real time of the frame is measured, a film shows its frames, and the creatures get their poses
+	/// between their last two turns, before the hand moves.
 	DrawStart,
 	/// The hand goes to the point under the cursor, as the camera now sees it
 	PreDraw,
@@ -66,15 +66,18 @@ enum class Step : uint8_t
 	Camera,
 	CameraShake,
 	Temple,
-	HighDetail,
+	FilmClock,
+	DrawClock,
 	Video,
-	PauseText,
 	CreaturePoses,
 	Hand,
+	HighDetail,
 	Bookmarks,
 	FrameEffects,
 	ScreenMarks,
 	Entities,
+	ScreenFade,
+	PauseText,
 	Audio,
 	CameraKeys,
 	ProfileAlignment,
@@ -111,14 +114,19 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::CameraShake, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
-    {.step = Step::HighDetail, .stage = std::nullopt},
-    // A full-screen film decodes the frames that are due, as the draw starts
+    // The clock of a full-screen film counts the frames that are due. It is not part of the draw, and it continues while
+    // the window is minimised.
+    {.step = Step::FilmClock, .stage = std::nullopt},
+    // The real time since the last frame that the game drew. The steps before this one use the time of the last draw.
+    {.step = Step::DrawClock, .stage = Stage::DrawStart},
+    // A full-screen film shows its frames, fades and ends, as the draw starts
     {.step = Step::Video, .stage = Stage::DrawStart},
-    // The words of the pause and the speed, after the frame's keys, turns and film
-    {.step = Step::PauseText, .stage = std::nullopt},
     // The creatures' fights, walks, animations, hair and the sounds of their animations
     {.step = Step::CreaturePoses, .stage = Stage::DrawStart},
     {.step = Step::Hand, .stage = Stage::PreDraw},
+    // The villagers that a script drew in high detail are drawn as usual once its cinema bars are gone, as the land is
+    // drawn
+    {.step = Step::HighDetail, .stage = Stage::Draw},
     // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
     {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
@@ -126,6 +134,10 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The numbers and the marks that rise over things, by the game time of the frame
     {.step = Step::ScreenMarks, .stage = Stage::Draw},
     {.step = Step::Entities, .stage = Stage::Draw},
+    // The colour over the screen fades by the real time of the draw, after the world is drawn
+    {.step = Step::ScreenFade, .stage = Stage::Draw},
+    // The words of the pause and the speed, as the draw finishes
+    {.step = Step::PauseText, .stage = Stage::Draw},
     {.step = Step::Audio, .stage = std::nullopt},
     // The keys of the camera act after the camera moved, so their steps move the camera in the next frame
     {.step = Step::CameraKeys, .stage = Stage::CameraKeys},
@@ -169,16 +181,17 @@ struct CameraKeyState
 	return !state.inTemple && state.interfaceActive && !state.boxShows;
 }
 
-/// Whether a step is part of the frame's graphics: it moves the camera, puts the hand under the cursor or draws the
-/// world. The game does none of these steps while its window is minimised. The turns, the keys and the other steps
-/// continue.
+/// Whether a step is part of the frame's graphics: it moves the camera, starts the draw, puts the hand under the cursor
+/// or draws the world. The game does none of these steps while its window is minimised. The turns, the keys, the
+/// film's clock and the other steps continue.
 [[nodiscard]] constexpr bool IsGraphics(Step step)
 {
 	for (const auto& place : k_Frame)
 	{
 		if (place.step == step)
 		{
-			return place.stage == Stage::Camera || place.stage == Stage::PreDraw || place.stage == Stage::Draw;
+			return place.stage == Stage::Camera || place.stage == Stage::DrawStart || place.stage == Stage::PreDraw ||
+			       place.stage == Stage::Draw;
 		}
 	}
 	return false;
