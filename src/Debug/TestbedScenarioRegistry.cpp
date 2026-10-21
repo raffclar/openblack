@@ -30,6 +30,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
 #include "TestbedDispenserGrid.h"
 
@@ -6670,6 +6671,28 @@ void AddCombat(std::vector<Scenario>& all)
 		                 {.kind = Kind::PointerPress, .delaySeconds = 0.1f, .value = k_LeftButton},
 		                 {.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.0f, -0.7f}, .amount = 2.0f},
 		                 {.kind = Kind::PointerRelease, .delaySeconds = 3.0f, .value = k_LeftButton}},
+		});
+		// The temple key is space
+		constexpr auto k_TempleKey = static_cast<size_t>(input::BindableActionMap::ZOOM_TO_TEMPLE);
+		all.push_back({
+		    .id = "combat.view_temple_key",
+		    .name = "A double tap of the temple key while the camera shows a fight",
+		    .facet = Facet::Combat,
+		    .description = "The player's red tiger and a blue tiger fight by themselves. The player's temple stands 150 "
+		                   "metres south of the arena. The camera shows the fight when the fighters have made their arena. "
+		                   "Eight seconds later the scenario presses the temple key twice, 0.2 seconds apart.",
+		    .expected = "The camera starts to fly towards the temple and rises high on the way. After about three "
+		                "quarters of a second it turns back, and the view of the fight eases the camera back to the "
+		                "duel. A single tap alone does nothing while the camera shows the fight.",
+		    .environment = {.dispenserGrid = false, .temple = glm::vec2 {0.0f, -150.0f}},
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 Fight(Kind::FightAuto, 1, 1, 0.2f),
+		                 Fight(Kind::FightView, 0, 0, 1.0f),
+		                 {.kind = Kind::PressKey, .delaySeconds = 8.0f, .value = k_TempleKey},
+		                 {.kind = Kind::PressKey, .delaySeconds = 0.2f, .value = k_TempleKey}},
 		});
 	}
 
