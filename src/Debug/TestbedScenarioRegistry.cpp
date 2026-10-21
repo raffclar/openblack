@@ -9694,6 +9694,35 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
+	// A script's dance about a person, as the Pied Piper's dance of Land 1, which wants its camera at once
+	all.push_back({
+	    .id = "story.dance_camera",
+	    .name = "The camera of a dance holds the view until a grip of the land",
+	    .facet = Facet::Story,
+	    .description = "A leader stands in the middle with six villagers round him. After one second, a script makes the "
+	                   "dance about a person (the dance of the Pied Piper on Land 1) about the leader, and the six "
+	                   "villagers join it. The scenario says that the hand was near the dance for more than ten seconds, "
+	                   "so the dance wants its camera.",
+	    .expected = "The villagers walk to their places and dance. At the first key frame of the dance that asks for "
+	                "the camera, the camera holds its view. The keys, the wheel and the mouse do not move it. A grip of "
+	                "the land with the left button gives the camera back in the next game turn, and the drag of the land "
+	                "starts. The dance does not take the camera again. The log tells the number of dancers.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -15.0f}, {15.0f, 15.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {6.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-6.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 6.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, -6.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 4.0f}},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-4.0f, -4.0f}}},
+	    .commands = {{.kind = Kind::MakeDance,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
+	                  .object = 0,
+	                  .ctrl = true}},
+	});
+
 	all.push_back({
 	    .id = "script.set_target_throw",
 	    .name = "A script throws a villager to get to a place in a time",
@@ -10239,7 +10268,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
 	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
 	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10267,7 +10296,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 172> k_Names {
+	constexpr std::array<std::string_view, 173> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10440,6 +10469,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "set the game's speed",
 	    "force an action",
 	    "remove the teleport stone",
+	    "make a dance",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

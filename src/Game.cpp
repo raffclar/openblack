@@ -285,6 +285,7 @@
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
+#include "Hand/ScriptHandState.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
 #include "Help/Spirits.h"
@@ -972,6 +973,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// A miracle in the hand doesn't stop the hand moving the land; the middle button, or both buttons, turn the camera
 	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
 	_handRotating = !inTemple && (middleMouseButton || (leftMouseButton && rightMouseButton));
+	_handSelectGrip = !inTemple && leftMouseButton && !onCreature && !fights.IsPressed();
+	_handOtherButton = rightMouseButton;
 
 	auto& window = Locator::windowing::value();
 	auto& camera = Locator::camera::value();
@@ -2389,6 +2392,11 @@ void Game::PlayTurnStep(game_turn::Step step)
 		    scriptCamera != nullptr)
 		{
 			scriptCamera->LetGoOfGoneThings();
+		}
+		// The camera of a dance that ended, or whose dance went, gives the camera back
+		if (Locator::danceSystem::has_value())
+		{
+			Locator::danceSystem::value().CheckCamera();
 		}
 		break;
 	case Step::BuildingPieces:
@@ -3989,6 +3997,17 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	if (!pathHeld)
 	{
 		camera.HandleKeys(deltaTime);
+	}
+	// A grip of the land ends the camera of a dance. A zoom with the land held does not end it.
+	hand::script_state::Facts grip {.gripsLand = _handSelectGrip, .otherButton = _handOtherButton};
+	if (Locator::cameraHelpSystem::has_value())
+	{
+		grip.cameraFeatures = Locator::cameraHelpSystem::value().Get().features;
+	}
+	if (Locator::danceSystem::has_value())
+	{
+		Locator::danceSystem::value().ProcessCameraKeys(hand::script_state::StateOf(grip) ==
+		                                                hand::script_state::State::GripLandscape);
 	}
 }
 

@@ -107,6 +107,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureTallies.h"
+#include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
@@ -142,6 +143,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/Dances.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/Registry.h"
@@ -166,6 +168,7 @@
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -185,6 +188,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBreeding.h"
 #include "ECS/Systems/Implementations/VillagerCreatureReactions.h"
+#include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
@@ -2030,6 +2034,41 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		teleport.RemoveStone(*nearest);
 		return "removed";
 	}
+	case Kind::MakeDance:
+	{
+		const auto centre = ObjectAt(command.object);
+		if (!centre.has_value() || !Locator::danceSystem::has_value())
+		{
+			return "no place";
+		}
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& place = registry.Get<const ecs::components::Transform>(*centre).position;
+		const auto dance =
+		    Locator::danceSystem::value().Create(static_cast<DanceInfo>(command.value), place, *centre, 0, true, entt::null);
+		if (dance == entt::null)
+		{
+			return "no dance";
+		}
+		uint32_t dancers = 0;
+		for (const auto object : _objects)
+		{
+			if (object == *centre || !registry.Valid(object) || !registry.AllOf<ecs::components::Villager>(object))
+			{
+				continue;
+			}
+			// The villager joins the dance as a script's attach does
+			if (ecs::dances::AddDancer(registry, dance, object, ecs::villager_dance::DanceSex(object)))
+			{
+				Locator::livingActionSystem::value().VillagerSetScriptState(object, VillagerStates::InDance);
+				++dancers;
+			}
+		}
+		if (command.ctrl)
+		{
+			registry.Get<ecs::components::Dance>(dance).cameraWanted = true;
+		}
+		return fmt::format("{} dancers{}", dancers, command.ctrl ? ", the dance wants its camera" : "");
+	}
 	case Kind::HandGripTotem:
 	{
 		const auto centre = ObjectAt(command.object);
@@ -2674,7 +2713,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone)
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
+	    command.kind == Kind::MakeDance)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3384,6 +3424,7 @@ void Runner::Give(const Command& command)
 	case Kind::PauseGame:
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
+	case Kind::MakeDance:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

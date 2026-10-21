@@ -17,6 +17,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
+#include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Transform.h"
@@ -109,8 +110,10 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 		// Already locked on, it moves over to the other creature from where the camera is
 		ReleaseCamera();
 	}
-	// Only the player's own camera is taken over: not the temple's, nor the editor's while it follows what it picked
-	if (dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr)
+	// Only the player's own camera and the camera of a dance are taken over. The temple's camera is not, and the editor's
+	// camera is not while it follows what it picked.
+	if (dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()) == nullptr &&
+	    dynamic_cast<DanceCameraModel*>(&camera.GetModel()) == nullptr)
 	{
 		_creature.reset();
 		return false;
