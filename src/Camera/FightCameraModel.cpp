@@ -90,8 +90,12 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> FightCameraModel::Upda
 	{
 		_started = true;
 		_sinceFlight = 0.0f;
+		// A flight asked for before this step replaces the flight to the fight
+		const auto to = _firstFlight.has_value() ? _firstFlight->to : _view;
+		const auto rise = _firstFlight.has_value() ? _firstFlight->rise : fight_view::k_StartWayRise;
+		_firstFlight.reset();
 		Fly(_chase, {.origin = camera.GetOrigin(), .focus = camera.GetFocus()},
-		    {.origin = camera.GetOriginVelocity(), .focus = camera.GetFocusVelocity()}, _view, fight_view::k_StartWayRise);
+		    {.origin = camera.GetOriginVelocity(), .focus = camera.GetFocusVelocity()}, to, rise);
 	}
 	// Any camera control the player uses stops the flight
 	if (_asked.controlsUsed)
@@ -162,10 +166,19 @@ void FightCameraModel::HandleKeys(std::chrono::microseconds dt)
 	}
 }
 
-void FightCameraModel::SetFlight([[maybe_unused]] glm::vec3 origin, [[maybe_unused]] glm::vec3 focus,
-                                 [[maybe_unused]] float rise)
+void FightCameraModel::SetFlight(glm::vec3 origin, glm::vec3 focus, float rise)
 {
-	// Watching a fight, the camera stays on it
+	// The flight starts from where the camera now is, through a point on the way, as the flight to the fight does. The
+	// camera first goes towards the point on the way. After half the flight it goes to the end of the flight for one
+	// step, and then the view of the fight takes the camera back on its own curves.
+	if (!_started)
+	{
+		// The first step starts this flight from where the camera is, in place of the flight to the fight
+		_firstFlight = FirstFlight {.to = {.origin = origin, .focus = focus}, .rise = rise};
+		return;
+	}
+	_sinceFlight = 0.0f;
+	Fly(_chase, _chase.GetValue(), _chase.GetSpeed(), {.origin = origin, .focus = focus}, rise);
 }
 
 } // namespace openblack
