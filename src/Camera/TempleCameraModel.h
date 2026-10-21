@@ -154,6 +154,14 @@ public:
 	/// Whether a dialog is up over the temple, as the game's options are in the Game Options room, which takes the rooms
 	/// of pictures' cameras from the player
 	void SetDialogOpen(bool open) { _dialogOpen = open; }
+	/// How much a room of pictures turns by itself this frame, or nothing when the arrow keys turn it instead
+	/// @param turnTime How long the room has turned by itself, which the turn speeds up over. It goes on by dt.
+	/// @param aroundPathEnd The room turns about where its path ends, as the library does, which keeps still
+	/// @param futureWordsShown The room is the future room and it shows its words
+	[[nodiscard]] static std::optional<float> PictureTurnByItself(float& turnTime, float dt, bool dialogOpen,
+	                                                              bool aroundPathEnd, bool futureWordsShown);
+	/// Whether the future room shows its words. While it does, its camera turns the room slowly by itself.
+	void SetFutureWordsShown(bool shown) { _futureWordsShown = shown; }
 	/// The main room's door the cursor is over, while the player has its camera
 	[[nodiscard]] std::optional<uint32_t> GetHoveredDoor() const { return _hoveredDoor; }
 	/// Whether the cursor is over the main room's pool, and whether a press began on it
@@ -301,10 +309,11 @@ private:
 	bool _wasPressed {false};
 	temple_press::HeldFromOutside _heldFromOutside;
 	bool _dialogOpen {false};
+	bool _futureWordsShown {false};
 	bool _overPool {false};
 	bool _pressingPool {false};
 	bool _overWayBack {false};
-	/// How long a room of pictures' camera has had the player, which its turn under a dialog speeds up over
+	/// How long a room of pictures' camera has turned by itself, which its turn speeds up over
 	float _pictureOrbitTime {0.0f};
 	std::optional<RoomHit> _pressHit;
 	float _lastHitAngle {0.0f};

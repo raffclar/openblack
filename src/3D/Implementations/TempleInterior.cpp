@@ -226,12 +226,12 @@ void PlayDoorSound(entt::id_type sound)
 	}
 }
 
-void PlayToggleSound(entt::id_type sound)
+void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
 {
 	// The game plays the buttons' sounds without a place
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(sound, std::nullopt);
+		audio::StartGameSoundEffect(sound, {.pitchPercent = pitchPercent});
 	}
 }
 } // namespace
@@ -774,7 +774,7 @@ const graphics::Texture2D* TempleInterior::GetTextTexture() const
 	return _interface != nullptr ? &_interface->GetFontTexture() : nullptr;
 }
 
-void TempleInterior::UpdateOptionsAndFutureRooms(float seconds)
+void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 {
 	const bool arrived = _cameraModel != nullptr && _cameraModel->IsInControl() && !_transitionRoom.has_value();
 	if (_interface != nullptr)
@@ -809,26 +809,29 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float seconds)
 		}
 	}
 
-	// The future room: once the camera has come into the room, "The future is still uncertain..." fades in to half over
-	// two seconds, from the start each time the camera comes in again
+	// The future room: once the camera has come into the room with no dialog up, "The future is still uncertain..."
+	// fades in to half over two seconds, from the start each time the camera comes in again. While the words show,
+	// the room turns slowly by itself.
 	std::optional<gui::GameInterface::Message> message;
-	if (_currentRoom == TempleRoom::Multi && _cameraModel != nullptr)
+	if (_currentRoom != TempleRoom::Multi || _cameraModel == nullptr)
 	{
-		if (!_cameraModel->IsInControl())
+		_futureWords = {};
+	}
+	else
+	{
+		const bool dialogOpen = _interface != nullptr && _interface->GetMenu().IsOpen();
+		const auto alpha = temple::future_room::Step(_futureWords, _cameraModel->IsInControl(), dialogOpen, milliseconds);
+		if (alpha.has_value() && _interface != nullptr)
 		{
-			_futureTime = 0.0f;
+			message = gui::GameInterface::Message {
+			    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
+			    .alpha = *alpha / 255.0f,
+			};
 		}
-		else
-		{
-			_futureTime += seconds;
-			if (_interface != nullptr)
-			{
-				message = gui::GameInterface::Message {
-				    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
-				    .alpha = std::min(128.0f, _futureTime * 64.0f) / 255.0f,
-				};
-			}
-		}
+	}
+	if (_cameraModel != nullptr)
+	{
+		_cameraModel->SetFutureWordsShown(_futureWords.shown);
 	}
 	if (_interface != nullptr)
 	{
@@ -1574,7 +1577,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			}
 		}
 
-		UpdateOptionsAndFutureRooms(milliseconds / 1000.0f);
+		UpdateOptionsAndFutureRooms(milliseconds);
 
 		// The glow of the control under the cursor runs out each frame, and drawing the room sets it off
 		// again as the cursor moves onto another submesh, while no control is held
