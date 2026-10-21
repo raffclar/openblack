@@ -3605,8 +3605,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::statistics::GlobalFigures::linesOfCode>("linesOfCode")
 	    .Field<&openblack::statistics::GlobalFigures::maxFrameRate>("maxFrameRate")
 	    .Field<&openblack::statistics::GlobalFigures::minFrameRate>("minFrameRate")
-	    .Field<&openblack::statistics::GlobalFigures::townsAtStart>("townsAtStart")
-	    .Field<&openblack::statistics::GlobalFigures::townsCounted>("townsCounted");
+	    .Field<&openblack::statistics::GlobalFigures::townsAtStart>("townsAtStart");
 	Reflect<openblack::statistics::History>(context, ValueOnly {})
 	    .Field<&openblack::statistics::History::points>("points")
 	    .Field<&openblack::statistics::History::index>("index")

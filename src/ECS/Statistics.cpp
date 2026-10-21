@@ -140,24 +140,19 @@ float BeliefIn(PlayerNames name)
 
 } // namespace
 
-void player_statistics::Made(entt::entity player)
+void player_statistics::GameStarts(ecs::Registry& registry)
 {
-	auto& registry = Entities();
-	const auto* record = registry.TryGet<const Player>(player);
-	if (record == nullptr)
-	{
-		return;
-	}
-	auto* kept = registry.TryGet<PlayerStatistics>(player);
-	auto& statistics = kept != nullptr ? *kept : registry.Assign<PlayerStatistics>(player);
-	if (const auto* alignment = registry.TryGet<const Alignment>(player))
-	{
-		statistics.startAlignment = alignment->value;
-	}
-	if (const auto* creature = CreatureOf(record->name))
-	{
-		statistics.startCreatureAlignment = creature->alignment;
-	}
+	registry.Each<const Player>([&registry](entt::entity entity, const Player& player) {
+		auto* kept = registry.TryGet<PlayerStatistics>(entity);
+		auto& statistics = kept != nullptr ? *kept : registry.Assign<PlayerStatistics>(entity);
+		const auto* alignment = registry.TryGet<const Alignment>(entity);
+		statistics.startAlignment = alignment != nullptr ? alignment->value : 0.0f;
+		const auto* creature = CreatureOf(player.name);
+		statistics.startCreatureAlignment = creature != nullptr ? creature->alignment : 0.0f;
+	});
+	uint32_t towns = 0;
+	registry.Each<const Town>([&towns](const Town&) { ++towns; });
+	registry.Context().globalStatistics.townsAtStart = towns;
 }
 
 void player_statistics::CountBirth(ecs::Registry& registry, PlayerNames player)
@@ -270,16 +265,7 @@ void player_statistics::ProcessTurn(uint32_t turn)
 
 void player_statistics::ProcessGlobalTurn(uint32_t turn, int32_t frameRate)
 {
-	auto& registry = Entities();
-	auto& global = registry.Context().globalStatistics;
-	// The towns the land starts with are counted once, as its first turn comes
-	if (!global.townsCounted)
-	{
-		global.townsCounted = true;
-		uint32_t towns = 0;
-		registry.Each<const Town>([&towns](const Town&) { ++towns; });
-		global.townsAtStart = towns;
-	}
+	auto& global = Entities().Context().globalStatistics;
 	if (turn % statistics::k_GlobalFiguresEvery != 0 || !Locator::gameRandom::has_value())
 	{
 		return;

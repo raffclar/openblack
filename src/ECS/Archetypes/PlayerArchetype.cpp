@@ -12,7 +12,6 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
-#include "ECS/Statistics.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 
@@ -31,7 +30,5 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	{
 		Locator::playerSystem::value().TakeUpKept(entity);
 	}
-	// Their statistics start on the land
-	player_statistics::Made(entity);
 	return entity;
 }
