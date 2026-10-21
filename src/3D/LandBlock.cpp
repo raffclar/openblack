@@ -140,6 +140,7 @@ void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 {
 	_block = std::make_unique<lnd::LNDBlock>(block);
 	_triangles.fill(nullptr);
+	_highestAltitude = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
 }
 
 void LandBlock::SetCellAltitude(size_t index, uint8_t altitude)

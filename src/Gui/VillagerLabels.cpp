@@ -297,6 +297,7 @@ bool Board::Add(const Request& request, float screenWidth, const WidthFn& width,
 	Label label {.pixel = glm::vec2(request.pixel),
 	             .distance = request.distance,
 	             .depth = request.depth,
+	             .point = request.point,
 	             .pixelScale = pixelScale,
 	             .colour = request.colour};
 	// Every size in pixels, at the label's size and the screen's scale

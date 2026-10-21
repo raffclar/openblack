@@ -183,6 +183,9 @@ struct Request
 	glm::ivec2 pixel {0};
 	float distance {0.0f};
 	float depth {0.0f};
+	/// The point over the head in the world. The game sorts the label among the see-through things of the world by its
+	/// squared distance from the camera.
+	glm::vec3 point {0.0f};
 	float size {1.0f};
 	std::u16string text;
 	glm::u8vec3 colour {255, 255, 255};
@@ -198,6 +201,8 @@ struct Label
 	float distance {0.0f};
 	/// The depth of the point in front of the camera
 	float depth {0.0f};
+	/// The point over the head in the world
+	glm::vec3 point {0.0f};
 	/// The screen's scale of the label's pixel sizes
 	float pixelScale {1.0f};
 	float lineHeight {0.0f};

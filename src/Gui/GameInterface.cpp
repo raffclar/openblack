@@ -49,6 +49,7 @@
 #include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
 #include "Graphics/VideoOverlay.h"
+#include "Graphics/ZSort.h"
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
@@ -250,16 +251,22 @@ struct WorldTextView
 	float pitch {0.0f};
 	float nearClip {0.0f};
 	glm::mat4 projection {1.0f};
+	/// Where the camera is: the world's see-through things are sorted by their squared distance from it
+	glm::vec3 eye {0.0f};
 };
 
 /// Makes a canvas test its draws against the world's depth as the camera's projection keeps it, and gives the camera's
-/// values for the depths
+/// values for the depths. Outside the temple the canvas's draws go among the world's see-through things, sorted with
+/// them by distance; the temple has no such sort.
 WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
 {
 	WorldTextView view;
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	canvas.SetSortedView(inTemple ? std::nullopt : std::optional(openblack::graphics::RenderPass::Translucent));
 	if (Locator::camera::has_value())
 	{
 		const auto& camera = Locator::camera::value();
+		view.eye = camera.GetOrigin();
 		view.pitch = openblack::script_camera::HeadingAndPitchFromPoints(camera.GetOrigin(), camera.GetFocus()).pitch;
 		view.nearClip = camera.GetNearClip();
 		view.projection = camera.GetProjectionMatrix();
@@ -1441,6 +1448,8 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 2.0f, view.nearClip));
 	const float inFront = world_text::BufferDepth(view.projection, view.nearClip);
 
+	// All of the bubble is sorted among the see-through things by its point in the world
+	canvas.SetSortDepth(graphics::zsort::Depth(*anchor, view.eye));
 	// The box and its tail
 	canvas.SetDepth(boxBuffer);
 	for (const auto& quad : tip::BoxShape(*placement, alpha))
@@ -1585,6 +1594,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	};
 	for (const auto* label : board.DrawOrder())
 	{
+		canvas.SetSortDepth(graphics::zsort::Depth(label->point, view.eye));
 		canvas.SetDepth(
 		    world_text::BufferDepth(view.projection, world_text::DrawnDepth(label->depth, view.pitch, view.nearClip)));
 		// The see-through black box, then the see-through black pointer down to the head, then the words

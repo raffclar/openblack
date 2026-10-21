@@ -61,4 +61,22 @@ void testbed_scenarios::AddVillagerLabelScenarios(std::vector<Scenario>& all)
 	                  .delaySeconds = 1.0f,
 	                  .value = static_cast<size_t>(input::BindableActionMap::SHOW_VILLAGER_NAMES)}},
 	});
+	all.push_back({
+	    .id = "villagers.names_behind_smoke",
+	    .name = "Smoke in front of a villager's name",
+	    .facet = Facet::Hand,
+	    .description = "Two named women of the player's town stand in front of the camera, one near and one further "
+	                   "away. Smoke goes up between them. The Show Villager Names key (N) is pressed after a second.",
+	    .expected = "The game sorts the names among the see-through things of the world by distance. The smoke is "
+	                "nearer to the camera than the far woman's name, so it goes over that name and makes it dim. The "
+	                "near woman's name is in front of the smoke and shows clearly over it.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.02f, 0.02f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 2.0f, -9.0f}, .look = {0.0f, 3.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-1.5f, -4.0f}, .joinTown = true, .nameRow = 1},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.5f, 5.0f}, .joinTown = true, .nameRow = 2}},
+	    .particles = {{.type = ParticleType::Smoke, .offset = {0.5f, 1.0f}, .height = 3.0f, .magnitude = 4.0f}},
+	    .commands = {{.kind = Kind::PressKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::SHOW_VILLAGER_NAMES)}},
+	});
 }
