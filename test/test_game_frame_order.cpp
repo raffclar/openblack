@@ -184,6 +184,21 @@ TEST(GameFrameOrder, AFilmShowsItsFramesAfterTheCameraAndBeforeTheCreaturesArePo
 	EXPECT_TRUE(recorder.Before(Step::Video, Step::CreaturePoses));
 }
 
+TEST(GameFrameOrder, TheHighDetailTheGripDustAndThePauseWordsAreInTheDraw)
+{
+	const auto recorder = PlayOneFrame();
+	// The land's draw lets the high-detail villagers go, after the creatures are posed and the hand moved
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::HighDetail));
+	EXPECT_TRUE(recorder.Before(Step::HighDetail, Step::Entities));
+	EXPECT_TRUE(recorder.Before(Step::Hand, Step::GripEffect));
+	// The words of the pause and the speed fade as the interface finishes the draw
+	EXPECT_TRUE(recorder.Before(Step::Entities, Step::PauseText));
+	for (const auto step : {Step::HighDetail, Step::GripEffect, Step::PauseText})
+	{
+		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
+	}
+}
+
 TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
 {
 	const auto recorder = PlayOneFrame();
