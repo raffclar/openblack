@@ -50,6 +50,9 @@ void SetupMobileMoveTo(components::LivingAction& action, glm::vec2 goal, WalkWay
 [[nodiscard]] bool WalkIsOverAt(entt::entity villager, glm::vec2 goal);
 /// Where the villager stands, in whole map units (a 65536th of a ten metre cell), as its walk holds it
 [[nodiscard]] glm::ivec2 WalkPosition(entt::entity villager);
+/// The villager takes the step of its walk for this turn. Each state that walks the villager calls this at the point
+/// where the game walks it: before, between or after the checks of the state.
+void TakeWalkStep(entt::entity villager);
 
 /// The villager goes into its abode, and isn't drawn while there
 void ArriveHome(entt::entity villager);

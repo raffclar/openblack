@@ -10042,6 +10042,28 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                 .walkRepeatSeconds = 20.0f,
 	                 .walkFinal = VillagerStates::SitAndChillout}},
 	});
+	// Dancers that walk to their places in a dance, each step at its point in the dance's state
+	all.push_back({
+	    .id = "movement.dancers_step_in_their_dance",
+	    .name = "Dancers take their steps in the dance",
+	    .facet = Facet::Movement,
+	    .description = "A leader stands in the middle with four villagers round him, 8 metres away. After one second, a "
+	                   "script makes the dance about a person about the leader, and the four villagers join it.",
+	    .expected = "Each dancer does the move of the dance first. In the same turn, it starts its walk to its place and "
+	                "takes the first step. When the group moves, each dancer takes its step to the new place in the "
+	                "turn that the group moves. A dancer on its place takes no step.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -18.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {8.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 8.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, -8.0f}}},
+	    .commands = {{.kind = Kind::MakeDance,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
+	                  .object = 0}},
+	});
 	// Two creatures, each with its own turn in the list of the living
 	all.push_back({
 	    .id = "mind.two_creatures_own_turns",
