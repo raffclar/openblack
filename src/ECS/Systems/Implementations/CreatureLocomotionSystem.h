@@ -35,6 +35,7 @@ public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void Update(float turnFraction) override;
 	void ShowTurnEnd(entt::entity creature) override;
 

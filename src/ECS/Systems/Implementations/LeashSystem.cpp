@@ -1347,22 +1347,40 @@ void LeashSystem::WalkBack(entt::entity creature)
 
 void LeashSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	BeginTurn();
+	std::vector<entt::entity> leashed;
+	Locator::entitiesRegistry::value().Each<CreatureLeash>(
+	    [&leashed](entt::entity entity, CreatureLeash& /*leashes*/) { leashed.push_back(entity); });
+	for (const auto entity : leashed)
+	{
+		CreatureTurn(entity);
+	}
+}
+
+void LeashSystem::BeginTurn()
+{
 	if (!_postsPlaced)
 	{
 		PlacePostsAtTemples();
 	}
-	std::vector<entt::entity> leashed;
-	registry.Each<CreatureLeash>([&leashed](entt::entity entity, CreatureLeash& /*leashes*/) { leashed.push_back(entity); });
-	// An order's marker goes once the creature finishes or gives up what it was told, or the thing is gone
-	for (const auto entity : leashed)
+}
+
+void LeashSystem::CreatureTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<CreatureLeash>(entity))
 	{
-		if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderInForce(entity))
-		{
-			EndOrder(entity);
-		}
+		return;
 	}
-	for (const auto entity : leashed)
+	// An order's marker goes once the creature finishes or gives up what it was told, or the thing is gone
+	if (registry.Get<const CreatureLeash>(entity).order.has_value() && !OrderInForce(entity))
+	{
+		EndOrder(entity);
+	}
+	if (!registry.AllOf<CreatureLeash>(entity))
+	{
+		return;
+	}
 	{
 		auto& leashes = registry.Get<CreatureLeash>(entity);
 		auto* mind = MindOf(registry, entity);
@@ -1371,7 +1389,7 @@ void LeashSystem::ProcessTurn()
 		// The leash does not move a creature that is knocked out
 		if (body == nullptr || transform == nullptr || registry.AllOf<CreatureKnockedOut>(entity))
 		{
-			continue;
+			return;
 		}
 		// On the first land a young creature of the local player's is kept near its home while off the leash
 		if (mind != nullptr && Locator::playerSystem::has_value() &&
@@ -1399,7 +1417,7 @@ void LeashSystem::ProcessTurn()
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s leash comes off: it isn't its holder's to lead",
 			                   entt::to_integral(entity));
 			TakeOff(entity);
-			continue;
+			return;
 		}
 		else
 		{
@@ -1441,7 +1459,7 @@ void LeashSystem::ProcessTurn()
 
 		if (!ShouldWalkBack(entity))
 		{
-			continue;
+			return;
 		}
 		// The walk back ends the current action of the creature, also a fight. The fight ends with no winner, as when
 		// the player gives an order with the leash.

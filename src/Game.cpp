@@ -1963,21 +1963,24 @@ void Game::ProcessLivingTurn()
 		auto& reactions = Locator::reactionSystem::value();
 		living_turn::Walk(
 		    std::span<const living_turn::Living<entt::entity>>(list),
-		    [this, &list, &reactions]() {
-			    // Each creature first lets go of a reaction that is over
-			    for (const auto& living : list)
-			    {
-				    if (living.kind == Kind::Creature)
-				    {
-					    reactions.EndReactionIfOver(living.id);
-				    }
-			    }
-			    game_turn::PlayCreaturesTurn([this](game_turn::Step step) { PlayTurnStep(step); });
-		    },
-		    [&villagers, &animals, &reactions, animalsTurn](const living_turn::Living<entt::entity>& living) {
+		    [this, &list, &villagers, &animals, &reactions, animalsTurn](const living_turn::Living<entt::entity>& living) {
 			    // At the start of its turn, it lets go of a reaction that is over
 			    reactions.EndReactionIfOver(living.id);
-			    if (living.kind == Kind::Villager)
+			    if (living.kind == Kind::Creature)
+			    {
+				    // A creature does each step of its own turn, in the game's order
+				    [[maybe_unused]] const auto place = &living - list.data();
+				    [[maybe_unused]] const auto drawsBefore =
+				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0;
+				    game_turn::PlayCreaturesTurn(
+				        [this, &living](game_turn::Step step) { PlayCreatureTurnStep(step, living.id); });
+				    SPDLOG_LOGGER_DEBUG(
+				        spdlog::get("game"),
+				        "Creature {} took its turn at place {} of {} in the list of the living: synced draws {} to {}",
+				        entt::to_integral(living.id), place, list.size(), drawsBefore,
+				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0);
+			    }
+			    else if (living.kind == Kind::Villager)
 			    {
 				    villagers.VillagerTurn(living.id);
 			    }
@@ -2043,6 +2046,165 @@ bool Game::GameLogicLoop() noexcept
 	_turnDeltaTime = delta;
 
 	return false;
+}
+
+void Game::PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
+{
+	using game_turn::Step;
+	auto& profiler = Locator::profiler::value();
+	// A creature that left the game in an earlier step of its turn, as one that fizzed out, does no more of its turn
+	if (!Locator::entitiesRegistry::value().Valid(creature))
+	{
+		return;
+	}
+	switch (step)
+	{
+	case Step::CreaturePens:
+		// Its home is its temple's pen, and in the pen it is shown smaller so that it fits
+		Locator::creaturePenSystem::value().CreatureTurn(creature);
+		break;
+	case Step::CreatureBreath:
+		Locator::creatureAnimationSystem::value().BreathTurn(creature);
+		break;
+	case Step::Leashes:
+	{
+		// A taut leash pulls the creature to the hand before its body lives the turn and its mind thinks
+		auto creatureLeash = profiler.BeginScoped(Profiler::Stage::CreatureLeashUpdate);
+		Locator::leashSystem::value().CreatureTurn(creature);
+		break;
+	}
+	case Step::CreaturePhysiology:
+	{
+		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
+		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
+		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureMinds:
+	{
+		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
+		Locator::creatureMindSystem::value().MindTurn(creature);
+		break;
+	}
+	case Step::CreatureHelp:
+		// The advisor tells of the player's creature: the messages that wait, and what the help watches of it
+		if (Locator::creatureHelpSystem::has_value())
+		{
+			Locator::creatureHelpSystem::value().CreatureTurn(creature);
+		}
+		break;
+	case Step::CreatureDesires:
+	{
+		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
+		Locator::creatureMindSystem::value().DesiresTurn(creature);
+		break;
+	}
+	case Step::CreaturePlans:
+	{
+		// It weighs its desires against what it could do about them, and changes what it does for a pressing plan
+		auto creaturePlanner = profiler.BeginScoped(Profiler::Stage::CreaturePlannerUpdate);
+		Locator::creatureMindSystem::value().PlanCreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureAgendas:
+	{
+		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
+		Locator::creatureMindSystem::value().AgendaTurn(creature);
+		break;
+	}
+	case Step::CreatureLearning:
+	{
+		// It learns from what the leash shows it, and from what it found of other creatures
+		auto creatureLearning = profiler.BeginScoped(Profiler::Stage::CreatureLearningUpdate);
+		Locator::creatureMindSystem::value().LearnCreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureLocomotion:
+	{
+		// It plans its route and walks, runs and turns
+		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
+		Locator::creatureLocomotionSystem::value().CreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureObjectActions:
+	{
+		// It walks up to the thing it acts on, and what it carries makes it stronger
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().CreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureFights:
+	{
+		// A fight starts, moves to its next stage or ends, and a creature that is knocked out comes round
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().FightTurn(creature);
+		break;
+	}
+	case Step::CreatureBodies:
+		// Its body follows its fatness
+		Locator::creatureAnimationSystem::value().BodyTurn(creature);
+		break;
+	case Step::CreatureFizz:
+	{
+		// It fizzes on out of sight or back in, after it acted
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFizzSystem::value().CreatureTurn(creature);
+		break;
+	}
+	case Step::CreatureSkin:
+		// Its marks heal
+		Locator::creatureSkinSystem::value().CreatureTurn(creature);
+		break;
+	case Step::CreatureMotes:
+		Locator::creatureAnimationSystem::value().MotesTurn(creature);
+		break;
+	case Step::CreatureBlood:
+	{
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().BloodTurn(creature);
+		break;
+	}
+	case Step::CreatureSway:
+		Locator::creatureAnimationSystem::value().SwayTurn(creature);
+		break;
+	case Step::CreatureFightMoves:
+	{
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().MovesTurn(creature);
+		break;
+	}
+	case Step::CreaturePoses:
+	{
+		// At the end of its body's turn it takes its pose, and each frame draws its body between the last two
+		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
+		Locator::creatureAnimationSystem::value().EndPoseTurn(creature);
+		break;
+	}
+	case Step::CreatureCarryOver:
+		// It is written to its files as it lives, and a creature from what a last land kept sparkles into sight
+		Locator::creatureCarryOverSystem::value().CreatureTurn(creature);
+		break;
+	case Step::CreatureWebPage:
+		// The game can take a picture of the player's creature for its web page
+		if (Locator::creatureWebPageSystem::has_value())
+		{
+			Locator::creatureWebPageSystem::value().CreatureTurn(creature);
+		}
+		break;
+	case Step::CreatureFightStamina:
+	{
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().StaminaTurn(creature);
+		break;
+	}
+	case Step::CreatureAlignment:
+		// Its plan moves its alignment
+		Locator::alignmentSystem::value().CreatureTurn(creature);
+		break;
+	default:
+		// Not a step of a creature's own turn
+		break;
+	}
 }
 
 void Game::PlayTurnStep(game_turn::Step step)
@@ -2173,112 +2335,47 @@ void Game::PlayTurnStep(game_turn::Step step)
 		// The forests' growing trees grow, faster in the rain, and the forests spread
 		Locator::forestSystem::value().GrowForests();
 		break;
+	case Step::CreaturesTurnStart:
+		// The parts of the creatures' turns that are not for one creature: the turns that the bodies live, the posts of
+		// the leashes, the feedback that reaches the minds, and what creatures that are gone held
+		Locator::creaturePhysiologySystem::value().BeginTurn();
+		Locator::leashSystem::value().BeginTurn();
+		Locator::creatureMindSystem::value().BeginTurn();
+		Locator::creatureObjectActionSystem::value().BeginTurn();
+		break;
 	case Step::CreaturePhysiology:
-	{
-		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep
-		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
-		Locator::creaturePhysiologySystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreaturePens:
-		// A creature's home is its temple's pen, and in the pen it is shown smaller so that it fits
-		Locator::creaturePenSystem::value().ProcessTurn();
-		break;
+	case Step::CreatureBreath:
 	case Step::CreatureBodies:
-		// The creatures' bodies follow their fatness
-		Locator::creatureAnimationSystem::value().ProcessTurn();
-		break;
 	case Step::CreatureSkin:
-		// The creatures' marks heal
-		Locator::creatureSkinSystem::value().ProcessTurn();
-		break;
 	case Step::Leashes:
-	{
-		// A taut leash pulls its creature to the hand before the creature's mind thinks
-		auto creatureLeash = profiler.BeginScoped(Profiler::Stage::CreatureLeashUpdate);
-		Locator::leashSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureMinds:
-	{
-		// The creatures want things, and decide what to do while idle
-		auto creatureMind = profiler.BeginScoped(Profiler::Stage::CreatureMindUpdate);
-		Locator::creatureMindSystem::value().ProcessTurn();
-		break;
-	}
+	case Step::CreatureDesires:
 	case Step::CreaturePlans:
-	{
-		// They weigh their desires against what they could do about them, and change what they do for a pressing plan
-		auto creaturePlanner = profiler.BeginScoped(Profiler::Stage::CreaturePlannerUpdate);
-		Locator::creatureMindSystem::value().PlanTurn();
-		break;
-	}
+	case Step::CreatureAgendas:
 	case Step::CreatureLearning:
-	{
-		// They learn from what the leash shows them, and copy the player
-		auto creatureLearning = profiler.BeginScoped(Profiler::Stage::CreatureLearningUpdate);
-		Locator::creatureMindSystem::value().LearnTurn();
-		break;
-	}
 	case Step::CreatureLocomotion:
-	{
-		// They plan their routes and walk, run and turn
-		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
-		Locator::creatureLocomotionSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureObjectActions:
-	{
-		// They walk up to the things they act on, and what they carry makes them stronger
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureFights:
-	{
-		// Fights start and end, the fighters choose their moves, and creatures knocked out come round
-		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureFizz:
-	{
-		// Creatures fizz on out of sight or back in, after they have acted
-		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFizzSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureHelp:
-		// The advisor tells of the player's creature: the messages that wait, and what the help watches of it
-		if (Locator::creatureHelpSystem::has_value())
-		{
-			Locator::creatureHelpSystem::value().ProcessTurn();
-		}
-		break;
+	case Step::CreatureMotes:
+	case Step::CreatureBlood:
+	case Step::CreatureSway:
+	case Step::CreatureFightMoves:
+	case Step::CreatureFightStamina:
 	case Step::CreaturePoses:
-	{
-		// At the end of their turns the creatures take their poses, and each frame draws their bodies between the last two
-		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
-		Locator::creatureAnimationSystem::value().PoseTurns();
+	case Step::CreatureWebPage:
+	case Step::CreatureCarryOver:
+	case Step::CreatureAlignment:
+		// Each creature does these steps in its own turn (see PlayCreatureTurnStep)
 		break;
-	}
 	case Step::Living:
 		ProcessLivingTurn();
 		break;
 	case Step::MapCellsAfterLiving:
 		// The living that walked this turn go into their new map cells before anything searches them
 		Locator::entitiesMap::value().Sync();
-		break;
-	case Step::CreatureWebPage:
-		// The game can take a picture of the player's creature for its web page
-		if (Locator::creatureWebPageSystem::has_value())
-		{
-			Locator::creatureWebPageSystem::value().ProcessTurn();
-		}
-		break;
-	case Step::CreatureCarryOver:
-		// A creature loaded from what a last land kept sparkles into sight
-		Locator::creatureCarryOverSystem::value().ProcessTurn();
 		break;
 	case Step::Fires:
 		// The game burns its fires here, after the living and before the miracles and the scripts. A fire that a later
@@ -2487,10 +2584,6 @@ void Game::PlayTurnStep(game_turn::Step step)
 		{
 			Locator::musicMoodSystem::value().UpdateOnGameTurn(false);
 		}
-		break;
-	case Step::CreatureAlignment:
-		// The plan of each creature moves its alignment
-		Locator::alignmentSystem::value().UpdateCreaturesTurn();
 		break;
 	case Step::SoundTags:
 		// The objects' looping sounds start again where they stopped, within reach of where the game hears them from

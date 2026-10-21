@@ -53,28 +53,14 @@ void NewestFirst(std::vector<Living<Id>>& list)
 	});
 }
 
-/// Walks the list in its order. Each villager and animal does its own turn (ownTurn). The creatures do their turns
-/// together (creaturesTurn), at the place of the first creature in the list. When the list has no creature, the creatures'
-/// turn comes before all the others, because the creatures' steps also do work that is not for one creature.
-template <typename Id, typename CreaturesTurn, typename OwnTurn>
-void Walk(std::span<const Living<Id>> list, CreaturesTurn&& creaturesTurn, OwnTurn&& ownTurn)
+/// Walks the list in its order. Each creature, villager and animal does its whole turn (turn) before the next one
+/// starts.
+template <typename Id, typename Turn>
+void Walk(std::span<const Living<Id>> list, Turn&& turn)
 {
-	bool creaturesDone = std::ranges::none_of(list, [](const Living<Id>& living) { return living.kind == Kind::Creature; });
-	if (creaturesDone)
-	{
-		creaturesTurn();
-	}
 	for (const auto& living : list)
 	{
-		if (living.kind != Kind::Creature)
-		{
-			ownTurn(living);
-		}
-		else if (!creaturesDone)
-		{
-			creaturesTurn();
-			creaturesDone = true;
-		}
+		turn(living);
 	}
 }
 

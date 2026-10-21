@@ -115,19 +115,38 @@ enum class Step : uint8_t
 	WalkPaths,
 	Footpaths,
 	ForestGrowth,
+	/// The parts of the creatures' turns that are not for one creature, before the turn of the living
+	CreaturesTurnStart,
 	CreaturePhysiology,
 	CreaturePens,
+	/// The breath of a creature goes back to the resting period of its size
+	CreatureBreath,
 	CreatureBodies,
 	CreatureSkin,
 	Leashes,
+	/// The first part of a creature's mind: it looks about and sees to its emergencies
 	CreatureMinds,
+	/// The second part of a creature's mind: its desires change, and it decides when it has no plan
+	CreatureDesires,
 	CreaturePlans,
+	/// The last part of a creature's mind: it does the step of its agenda
+	CreatureAgendas,
 	CreatureLearning,
 	CreatureLocomotion,
 	CreatureObjectActions,
 	CreatureFights,
 	CreatureFizz,
 	CreatureHelp,
+	/// The motes and the smoke of a creature's alignment
+	CreatureMotes,
+	/// The blood of a creature's wounds runs down its skin
+	CreatureBlood,
+	/// The body of a creature sways from what hit it
+	CreatureSway,
+	/// A fighter's moves and blows in the duel
+	CreatureFightMoves,
+	/// A fighter gets back stamina
+	CreatureFightStamina,
 	CreaturePoses,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
@@ -223,8 +242,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WalkPaths, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
-    // Each living thing takes its own turn in the order of the game's list of the living. The creatures do the steps of
-    // k_CreaturesTurn in it. Each villager takes the step of its walk in its own turn.
+    // Each living thing takes its own turn in the order of the game's list of the living. Each creature does the steps
+    // of k_CreaturesTurn in its own turn. Each villager takes the step of its walk in its own turn.
+    {.step = Step::CreaturesTurnStart, .stage = Stage::Living},
     {.step = Step::Living, .stage = Stage::Living},
     {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
@@ -272,27 +292,43 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
 });
 
-/// The steps of the creatures' own turns, which the turn of the living does at the place of the creatures in its list
+/// The steps of a creature's own turn, in the game's order. The turn of the living does them for each creature at the
+/// place of the creature in its list.
 inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
-    Step::CreaturePhysiology,
+    // Its home, the size that it shows there, and the breath of that size
     Step::CreaturePens,
-    Step::CreatureBodies,
-    Step::CreatureSkin,
+    Step::CreatureBreath,
+    // The leash pulls it and keeps it near, before its body lives the turn
     Step::Leashes,
+    Step::CreaturePhysiology,
     Step::CreatureMinds,
+    // The advisor tells of it before its desires change
+    Step::CreatureHelp,
+    Step::CreatureDesires,
+    // It decides before it does the step of its agenda
     Step::CreaturePlans,
+    Step::CreatureAgendas,
     Step::CreatureLearning,
     Step::CreatureLocomotion,
     Step::CreatureObjectActions,
     Step::CreatureFights,
+    // After its action: its body follows its fatness, and it fizzes on out of sight or back in
+    Step::CreatureBodies,
     Step::CreatureFizz,
-    // The rest of each creature's own turn: what the last land kept of it, its picture for its web page, the help that
-    // tells of it, and the change of its alignment at the end
+    // Then its body lives the turn: the marks heal, the motes show its alignment, the blood runs and the body sways.
+    // A fighter moves and strikes, and the body takes its pose.
+    Step::CreatureSkin,
+    Step::CreatureMotes,
+    Step::CreatureBlood,
+    Step::CreatureSway,
+    Step::CreatureFightMoves,
+    Step::CreaturePoses,
+    // The rest of its turn: what a land keeps of it, its picture for its web page, the stamina of a fighter, and the
+    // change of its alignment at the end
     Step::CreatureCarryOver,
     Step::CreatureWebPage,
-    Step::CreatureHelp,
+    Step::CreatureFightStamina,
     Step::CreatureAlignment,
-    Step::CreaturePoses,
 });
 
 /// True when no step of the turn comes before a step of an earlier stage. The steps with no stage are not checked.

@@ -10042,6 +10042,27 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                 .walkRepeatSeconds = 20.0f,
 	                 .walkFinal = VillagerStates::SitAndChillout}},
 	});
+	// Two creatures, each with its own turn in the list of the living
+	all.push_back({
+	    .id = "mind.two_creatures_own_turns",
+	    .name = "Two creatures each take their turn at their own place",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a cow stand 30 metres apart with nothing to do, and a villager walks between them. "
+	                   "With the game's log at the debug level, each creature writes the synced random numbers of its "
+	                   "turn.",
+	    .expected = "Each creature thinks, walks and acts as it does alone. In the log, the numbers that each creature "
+	                "draws come together in its own turn, the newer creature first. No numbers of the other creature come "
+	                "between them.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "older"),
+	                  Content(CreatureType::Cow, {15.0f, 0.0f}, 270.0f, "newer")},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {0.0f, -10.0f},
+	                 .walkTo = glm::vec2(0.0f, 10.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 20.0f}},
+	});
 
 	// The tutorial's interface levels, as a lesson's script steps through them
 	std::vector<Command> levels;

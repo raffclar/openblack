@@ -27,6 +27,8 @@ class LeashSystem final: public LeashSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void BeginTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void Update(float seconds) override;
 	void ShowPosts(bool handShown) override;
 	void HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken) override;

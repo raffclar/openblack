@@ -51,8 +51,12 @@ public:
 
 	virtual ~LeashSystemInterface() = default;
 
-	/// Once a game turn
+	/// Once a game turn: the start of the turn, then the turn of each leashed creature
 	virtual void ProcessTurn() = 0;
+	/// Once a game turn, before the creatures' own turns: the posts go up at the temples
+	virtual void BeginTurn() {}
+	/// In the creature's own turn, before its body lives the turn: its leash pulls it and keeps it near
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame, some seconds of game time on: the ropes swing
 	virtual void Update(float seconds) = 0;
 	/// Once a frame, after the hand is posed: the leashes on the temples are put where they are drawn, the picked one

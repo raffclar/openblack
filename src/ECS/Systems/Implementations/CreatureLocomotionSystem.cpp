@@ -1451,12 +1451,27 @@ bool CreatureLocomotionSystem::IsMoving(entt::entity creature) const
 
 void CreatureLocomotionSystem::ProcessTurn()
 {
+	std::vector<entt::entity> walkers;
+	Locator::entitiesRegistry::value().Each<CreatureLocomotion>(
+	    [&walkers](entt::entity entity, CreatureLocomotion& /*self*/) { walkers.push_back(entity); });
+	for (const auto entity : walkers)
+	{
+		CreatureTurn(entity);
+	}
+}
+
+void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
+{
 	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<CreatureLocomotion>(entity))
+	{
+		return;
+	}
 	const auto& land = GetWalkableLand();
 
 	// Following something, the walk is pointed anew as it moves away
-	std::vector<std::pair<entt::entity, entt::entity>> retarget;
-	registry.Each<CreatureLocomotion>([&](entt::entity entity, CreatureLocomotion& self) {
+	[&]() {
+		auto& self = registry.Get<CreatureLocomotion>(entity);
 		if (!self.following.has_value() || !self.started)
 		{
 			return;
@@ -1474,204 +1489,205 @@ void CreatureLocomotionSystem::ProcessTurn()
 		    !IsMovingMotion(self.motion) && glm::distance(target, PositionOf(self)) > self.ring.max + k_FollowRetarget;
 		if (moved || left)
 		{
-			retarget.emplace_back(entity, *self.following);
+			// The walk that it points anew keeps the speed that it got last
+			const auto followed = *self.following;
+			const auto distance = self.followDistance;
+			Follow(entity, followed, distance, Pace::Keep);
 		}
-	});
-	for (const auto& [entity, target] : retarget)
+	}();
+
+	if (!registry.AllOf<Creature, CreatureLocomotion, Transform, CreatureAnimation>(entity))
 	{
-		const auto distance = registry.Get<CreatureLocomotion>(entity).followDistance;
-		// The walk that it points anew keeps the speed that it got last
-		Follow(entity, target, distance, Pace::Keep);
+		return;
+	}
+	bool stopped = false;
+	{
+		const auto& creature = registry.Get<const Creature>(entity);
+		auto& self = registry.Get<CreatureLocomotion>(entity);
+		const auto& transform = registry.Get<const Transform>(entity);
+		auto& animation = registry.Get<CreatureAnimation>(entity);
+		if (!self.started)
+		{
+			self.started = true;
+			self.heading = HeadingOfRotation(transform.rotation);
+			self.toPosition = transform.position;
+			self.toHeading = self.heading;
+		}
+		self.fromPosition = self.toPosition;
+		self.fromHeading = self.headingSnaps ? self.heading : self.toHeading;
+		self.toHeading = self.fromHeading;
+		self.headingSnaps = false;
+		const auto lastTracks = std::exchange(self.tracks, {});
+		self.distance = 0.0f;
+		Measure(self, creature, transform, BodyRadius(creature.species));
+		const auto moves = MovesOf(creature.species);
+
+		// The route is searched for a little each turn, further on a walk's first turn
+		const auto standing = [&self]() {
+			return self.follower.GetState() == route::Follower::State::Standing ||
+			       self.follower.GetState() == route::Follower::State::Planning;
+		};
+		const bool wasStanding = standing();
+		if (self.follower.IsSearching() && !self.searchHeld)
+		{
+			const auto first = std::exchange(self.firstSearchTurn, false);
+			switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
+			{
+			case route::Follower::Outcome::Found:
+				if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)
+				{
+					self.routeReady = true;
+				}
+				break;
+			case route::Follower::Outcome::GaveUp:
+				// It is shut in. It stands where it is, and its walk ends as if it arrived. The mind can clear one of
+				// the things that the search met, then walk on.
+				if (self.destination.has_value())
+				{
+					self.gaveUp = CreatureLocomotion::GaveUp {.destination = *self.destination, .met = self.follower.GetMet()};
+				}
+				ClearWalk(self);
+				break;
+			case route::Follower::Outcome::Failed:
+				// No way there: it stands where it is
+				ClearWalk(self);
+				self.failed = true;
+				break;
+			case route::Follower::Outcome::None:
+				break;
+			}
+		}
+		const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
+		const auto fractions = FractionsOf(creature.species);
+		// Exhausted, the creature gets its slow speed and keeps it until a new action or a run sets a different speed
+		self.fraction = locomotion::RequiredFraction(
+		    self.fraction, fractions.slow, needs != nullptr ? needs->needs.exhaustion : 0.0f, registry.AnyOf<InHand>(entity));
+		// A frozen creature lives fewer milliseconds in each turn: its steps, turns and waits slow down. Its walk along
+		// the route does not.
+		const auto turnMs = planner::TurnMs(animation.playbackScale, static_cast<int32_t>(k_TurnMs));
+		const WalkTurn walkTurn {.moves = moves,
+		                         .topSpeed = locomotion::TargetSpeed(self.fraction, self.speeds.run),
+		                         .breathPhase = animation.breathPhase,
+		                         .turnMs = turnMs,
+		                         .spinMs = animation.realTime ? turnMs : planner::ClipStepMs(turnMs, ShownSize(creature)),
+		                         .lastTracks = lastTracks,
+		                         .land = land};
+
+		switch (self.motion)
+		{
+		case Motion::Standing:
+			self.speed = 0.0f;
+			break;
+		case Motion::Planning:
+			if (self.routeReady)
+			{
+				// Sitting or playing an action, it gets up and finishes first
+				if (creature_layers::IsLooping(animation.body))
+				{
+					animation.body = creature_layers::EndLoop(animation.body);
+				}
+				if (!creature_layers::IsPlaying(animation.body))
+				{
+					self.routeReady = false;
+					StartLeg(self, walkTurn, true);
+				}
+				break;
+			}
+			{
+				// The wait counts down by the milliseconds that the animations play
+				locomotion::FidgetWait wait {.ms = self.fidgetMs, .fidgeted = self.fidgeted};
+				const auto turn = locomotion::WaitTurn(wait, static_cast<float>(walkTurn.spinMs),
+				                                       !creature_layers::IsPlaying(animation.body), GameRand);
+				self.fidgetMs = wait.ms;
+				self.fidgeted = wait.fidgeted;
+				if (turn.fidget == locomotion::Fidget::Puzzled)
+				{
+					animation.face =
+					    creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
+				}
+				else if (turn.fidget == locomotion::Fidget::Confused)
+				{
+					if (auto confused =
+					        creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused, turn.mirrored))
+					{
+						animation.body = *confused;
+						self.motion = Motion::Confused;
+					}
+				}
+				else if (turn.fidget == locomotion::Fidget::LookAbout)
+				{
+					// It points at the route ahead, from this turn on
+					StartRoutePoint(entity, self, walkTurn, animation, transform);
+					if (self.motion == Motion::Pointing)
+					{
+						StepRouteLook(self, walkTurn.spinMs);
+						self.routePoint->point = self.routeLook.point;
+						AimRoutePoint(entity, self, walkTurn, ShownSize(creature));
+					}
+				}
+			}
+			break;
+		case Motion::Pointing:
+			RoutePointTurn(entity, self, walkTurn, ShownSize(creature));
+			break;
+		case Motion::Confused:
+			if (!creature_layers::IsPlaying(animation.body))
+			{
+				self.motion = Motion::Planning;
+				self.fidgetMs = locomotion::k_FidgetMs;
+			}
+			break;
+		case Motion::Turning:
+			TurnStep(self, walkTurn);
+			break;
+		case Motion::Stepping:
+			StepOff(self, walkTurn);
+			break;
+		case Motion::Walking:
+			Walk(self, walkTurn);
+			break;
+		}
+		// A stop while it waited for its route ended the search: it stands
+		if (self.motion == Motion::Planning && self.follower.GetState() == route::Follower::State::Standing)
+		{
+			StandPose(self, moves);
+			Arrive(self);
+		}
+		// A stop while it pointed at the route ends the point
+		if (self.motion == Motion::Pointing && self.follower.GetState() == route::Follower::State::Standing)
+		{
+			self.routePoint->ending = true;
+		}
+
+		// A step or the walk put it somewhere it cannot stand: it is put back where it can, or stays where it is when
+		// there is no such place, and sets off again. When it cannot set off again, it cannot find a route.
+		if (walkTurn.strayed && self.destination.has_value())
+		{
+			PlaceAt(self, land.NearestStandable(PositionOf(self)).value_or(PositionOf(self)));
+			self.fromPosition = self.toPosition;
+			const auto destination = *self.destination;
+			const auto ring = self.ring;
+			ClearWalk(self);
+			if (StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination) !=
+			    MoveResult::Started)
+			{
+				self.failed = true;
+			}
+		}
+		self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;
+		stopped = !wasStanding && standing();
 	}
 
-	std::vector<entt::entity> stopped;
-	registry.Each<const Creature, CreatureLocomotion, const Transform, CreatureAnimation>(
-	    [&](entt::entity entity, const Creature& creature, CreatureLocomotion& self, const Transform& transform,
-	        CreatureAnimation& animation) {
-		    if (!self.started)
-		    {
-			    self.started = true;
-			    self.heading = HeadingOfRotation(transform.rotation);
-			    self.toPosition = transform.position;
-			    self.toHeading = self.heading;
-		    }
-		    self.fromPosition = self.toPosition;
-		    self.fromHeading = self.headingSnaps ? self.heading : self.toHeading;
-		    self.toHeading = self.fromHeading;
-		    self.headingSnaps = false;
-		    const auto lastTracks = std::exchange(self.tracks, {});
-		    self.distance = 0.0f;
-		    Measure(self, creature, transform, BodyRadius(creature.species));
-		    const auto moves = MovesOf(creature.species);
-
-		    // The route is searched for a little each turn, further on a walk's first turn
-		    const auto standing = [&self]() {
-			    return self.follower.GetState() == route::Follower::State::Standing ||
-			           self.follower.GetState() == route::Follower::State::Planning;
-		    };
-		    const bool wasStanding = standing();
-		    if (self.follower.IsSearching() && !self.searchHeld)
-		    {
-			    const auto first = std::exchange(self.firstSearchTurn, false);
-			    switch (self.follower.Update(first ? k_FirstTurnSearchSteps : k_TurnSearchSteps, first, JoinAhead(self)))
-			    {
-			    case route::Follower::Outcome::Found:
-				    if (self.motion == Motion::Planning || self.motion == Motion::Confused || self.motion == Motion::Pointing)
-				    {
-					    self.routeReady = true;
-				    }
-				    break;
-			    case route::Follower::Outcome::GaveUp:
-				    // It is shut in. It stands where it is, and its walk ends as if it arrived. The mind can clear one of
-				    // the things that the search met, then walk on.
-				    if (self.destination.has_value())
-				    {
-					    self.gaveUp =
-					        CreatureLocomotion::GaveUp {.destination = *self.destination, .met = self.follower.GetMet()};
-				    }
-				    ClearWalk(self);
-				    break;
-			    case route::Follower::Outcome::Failed:
-				    // No way there: it stands where it is
-				    ClearWalk(self);
-				    self.failed = true;
-				    break;
-			    case route::Follower::Outcome::None:
-				    break;
-			    }
-		    }
-		    const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
-		    const auto fractions = FractionsOf(creature.species);
-		    // Exhausted, the creature gets its slow speed and keeps it until a new action or a run sets a different speed
-		    self.fraction =
-		        locomotion::RequiredFraction(self.fraction, fractions.slow, needs != nullptr ? needs->needs.exhaustion : 0.0f,
-		                                     registry.AnyOf<InHand>(entity));
-		    // A frozen creature lives fewer milliseconds in each turn: its steps, turns and waits slow down. Its walk along
-		    // the route does not.
-		    const auto turnMs = planner::TurnMs(animation.playbackScale, static_cast<int32_t>(k_TurnMs));
-		    const WalkTurn walkTurn {.moves = moves,
-		                             .topSpeed = locomotion::TargetSpeed(self.fraction, self.speeds.run),
-		                             .breathPhase = animation.breathPhase,
-		                             .turnMs = turnMs,
-		                             .spinMs = animation.realTime ? turnMs : planner::ClipStepMs(turnMs, ShownSize(creature)),
-		                             .lastTracks = lastTracks,
-		                             .land = land};
-
-		    switch (self.motion)
-		    {
-		    case Motion::Standing:
-			    self.speed = 0.0f;
-			    break;
-		    case Motion::Planning:
-			    if (self.routeReady)
-			    {
-				    // Sitting or playing an action, it gets up and finishes first
-				    if (creature_layers::IsLooping(animation.body))
-				    {
-					    animation.body = creature_layers::EndLoop(animation.body);
-				    }
-				    if (!creature_layers::IsPlaying(animation.body))
-				    {
-					    self.routeReady = false;
-					    StartLeg(self, walkTurn, true);
-				    }
-				    break;
-			    }
-			    {
-				    // The wait counts down by the milliseconds that the animations play
-				    locomotion::FidgetWait wait {.ms = self.fidgetMs, .fidgeted = self.fidgeted};
-				    const auto turn = locomotion::WaitTurn(wait, static_cast<float>(walkTurn.spinMs),
-				                                           !creature_layers::IsPlaying(animation.body), GameRand);
-				    self.fidgetMs = wait.ms;
-				    self.fidgeted = wait.fidgeted;
-				    if (turn.fidget == locomotion::Fidget::Puzzled)
-				    {
-					    animation.face =
-					        creature_layers::PullFace(animation.face, k_PuzzledFace, k_PuzzledMs, creature_face::Cue::Lost);
-				    }
-				    else if (turn.fidget == locomotion::Fidget::Confused)
-				    {
-					    if (auto confused = creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused,
-					                                                  turn.mirrored))
-					    {
-						    animation.body = *confused;
-						    self.motion = Motion::Confused;
-					    }
-				    }
-				    else if (turn.fidget == locomotion::Fidget::LookAbout)
-				    {
-					    // It points at the route ahead, from this turn on
-					    StartRoutePoint(entity, self, walkTurn, animation, transform);
-					    if (self.motion == Motion::Pointing)
-					    {
-						    StepRouteLook(self, walkTurn.spinMs);
-						    self.routePoint->point = self.routeLook.point;
-						    AimRoutePoint(entity, self, walkTurn, ShownSize(creature));
-					    }
-				    }
-			    }
-			    break;
-		    case Motion::Pointing:
-			    RoutePointTurn(entity, self, walkTurn, ShownSize(creature));
-			    break;
-		    case Motion::Confused:
-			    if (!creature_layers::IsPlaying(animation.body))
-			    {
-				    self.motion = Motion::Planning;
-				    self.fidgetMs = locomotion::k_FidgetMs;
-			    }
-			    break;
-		    case Motion::Turning:
-			    TurnStep(self, walkTurn);
-			    break;
-		    case Motion::Stepping:
-			    StepOff(self, walkTurn);
-			    break;
-		    case Motion::Walking:
-			    Walk(self, walkTurn);
-			    break;
-		    }
-		    // A stop while it waited for its route ended the search: it stands
-		    if (self.motion == Motion::Planning && self.follower.GetState() == route::Follower::State::Standing)
-		    {
-			    StandPose(self, moves);
-			    Arrive(self);
-		    }
-		    // A stop while it pointed at the route ends the point
-		    if (self.motion == Motion::Pointing && self.follower.GetState() == route::Follower::State::Standing)
-		    {
-			    self.routePoint->ending = true;
-		    }
-
-		    // A step or the walk put it somewhere it cannot stand: it is put back where it can, or stays where it is when
-		    // there is no such place, and sets off again. When it cannot set off again, it cannot find a route.
-		    if (walkTurn.strayed && self.destination.has_value())
-		    {
-			    PlaceAt(self, land.NearestStandable(PositionOf(self)).value_or(PositionOf(self)));
-			    self.fromPosition = self.toPosition;
-			    const auto destination = *self.destination;
-			    const auto ring = self.ring;
-			    ClearWalk(self);
-			    if (StartMove(entity, self, destination, self.fraction, ring.min, ring.max, self.ontoDestination) !=
-			        MoveResult::Started)
-			    {
-				    self.failed = true;
-			    }
-		    }
-		    self.toHeading = self.headingSnaps ? self.fromHeading : self.heading;
-		    if (!wasStanding && standing())
-		    {
-			    stopped.push_back(entity);
-		    }
-	    });
-
 	// A creature that has just stopped is now in the way of the others still on their walks
-	for (const auto entity : stopped)
+	if (!stopped)
 	{
+		return;
+	}
+	[&]() {
 		const auto thing = things::ThingOf(registry, entity);
 		if (!thing.has_value())
 		{
-			continue;
+			return;
 		}
 		registry.Each<const Creature, CreatureLocomotion>(
 		    [&](entt::entity other, const Creature& body, CreatureLocomotion& walking) {
@@ -1689,7 +1705,7 @@ void CreatureLocomotionSystem::ProcessTurn()
 				    walking.follower.GetObstacles().Add(entt::to_integral(entity), circle.centre, circle.radius);
 			    }
 		    });
-	}
+	}();
 }
 
 namespace
