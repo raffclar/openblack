@@ -62,6 +62,7 @@ class Camera;
 class LandLightTable;
 struct BgfxCallback;
 class Game;
+class WorkerPool;
 
 namespace ecs
 {
@@ -297,11 +298,13 @@ private:
 		/// It covers only the second row of each texel's pair of sample rows, as the hand itself does
 		bool secondRowsOnly;
 	};
+	/// The memory in which one lane of the workers makes a shadow (see GroundShadowScratch below)
+	struct GroundShadowScratch;
 	/// Adds a body's points in the world, its counted parts and what it writes, to those of the shadow being made
-	void AddGroundShadowBody(const GroundShadowBody& body) const;
+	static void AddGroundShadowBody(const GroundShadowBody& body, GroundShadowScratch& scratch);
 	/// The levels of the texture of the shadow being made, from the coverage of its counted parts
-	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
-	GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha) const;
+	[[nodiscard]] static std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
+	GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha, GroundShadowScratch& scratch);
 	/// The levels of the texture of a moving body's shadow, filled through its textures' alpha (see shadow_texture)
 	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
 	ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint, const GroundShadow::Cast& cast,
@@ -570,15 +573,29 @@ private:
 		uint32_t first;
 		bool secondRowsOnly;
 	};
-	/// The bodies of the shadow being made: their points in the world, their counted parts, their points on the grid of
-	/// samples and the samples covered, made afresh for each
-	mutable std::vector<GroundShadow::Point> _groundShadowPoints;
-	mutable std::vector<GroundShadowPart> _groundShadowParts;
-	mutable std::vector<glm::vec2> _groundShadowFlattened;
-	mutable std::vector<glm::vec2> _groundShadowSamples;
-	mutable GroundShadow::Coverage _groundShadowCoverage;
-	/// The bones of the body being added, in the world
-	mutable std::vector<glm::mat4> _groundShadowBones;
+	/// The memory for the bodies of one shadow: their points in the world, their counted parts, their points on the grid
+	/// of samples and the samples that they cover. Each shadow starts it again. Each lane of the workers has its own,
+	/// and keeps it from frame to frame, thus a frame does not allocate it again.
+	struct GroundShadowScratch
+	{
+		std::vector<GroundShadow::Point> points;
+		std::vector<GroundShadowPart> parts;
+		std::vector<glm::vec2> flattened;
+		std::vector<glm::vec2> samples;
+		GroundShadow::Coverage coverage;
+		/// The bones of the body being added, in the world
+		std::vector<glm::mat4> bones;
+	};
+	mutable std::vector<GroundShadowScratch> _groundShadowScratch;
+	/// A shadow that the workers made for a caster: where it lies, if anywhere, and its texture's levels
+	struct GroundShadowMade
+	{
+		std::optional<GroundShadow::Footprint> footprint;
+		std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels> levels;
+	};
+	mutable std::vector<GroundShadowMade> _groundShadowMade;
+	/// The threads that make the shadows of a frame side by side
+	std::unique_ptr<WorkerPool> _workers;
 	/// The shadows of the things that the physics moves, as the last frame made them: their data for the land, and
 	/// where they lie. A thing under the sea keeps its shadow from when it went under.
 	struct KeptGroundShadow

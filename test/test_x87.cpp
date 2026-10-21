@@ -136,3 +136,43 @@ TEST(X87, VillagerTurnStepChain)
 	EXPECT_EQ(Bits(perMillisecond), 0x3BFA543Eu);
 	EXPECT_EQ(Bits(10.0f * perMillisecond), 0x3D9C74A7u);
 }
+
+TEST(X87, ShortWayGivesTheSameFloatAsTheExactWay)
+{
+	// Products, quotients and roots of many doubles, against the exact value rounded one time
+	uint64_t state = 0x9E3779B97F4A7C15u;
+	const auto next = [&state]() {
+		state ^= state << 13U;
+		state ^= state >> 7U;
+		state ^= state << 17U;
+		return state;
+	};
+	const auto value = [&next]() {
+		// A double between -1024 and 1024, some with fewer mantissa bits, as floats and their products have
+		auto wide = (static_cast<double>(next() >> 11U) / 9007199254740992.0 - 0.5) * 2048.0;
+		if ((next() & 3U) == 0)
+		{
+			wide = static_cast<double>(static_cast<float>(wide));
+		}
+		return wide;
+	};
+	for (int i = 0; i < 200'000; ++i)
+	{
+		const double a = value();
+		const double b = value();
+		const auto [product, productError] = x87::detail::TwoProduct(a, b);
+		ASSERT_EQ(Bits(x87::Mul(a, b)), Bits(x87::detail::RoundOnce(product, productError)));
+		if (b != 0.0)
+		{
+			const double quotient = a / b;
+			const auto [back, backError] = x87::detail::TwoProduct(quotient, b);
+			const double remainder = (a - back) - backError;
+			const double side = (remainder > 0.0) == (b > 0.0) ? 1.0 : -1.0;
+			ASSERT_EQ(Bits(x87::Div(a, b)), Bits(x87::detail::RoundOnce(quotient, remainder == 0.0 ? 0.0 : side)));
+		}
+		const double positive = std::abs(a);
+		const double root = std::sqrt(positive);
+		const auto [square, squareError] = x87::detail::TwoProduct(root, root);
+		ASSERT_EQ(Bits(x87::Sqrt(positive)), Bits(x87::detail::RoundOnce(root, (positive - square) - squareError)));
+	}
+}
