@@ -83,6 +83,7 @@
 #include "Gui/GameMenu.h"
 #include "Gui/SaveGameBoxes.h"
 #include "InfoConstants.h"
+#include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
@@ -255,6 +256,11 @@ std::optional<std::vector<uint8_t>> ReadSavedGamePicture(std::string_view fileNa
 TempleScrolls::Facts GatherScrollFacts()
 {
 	auto facts = TempleScrolls::Facts::Mock();
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+		facts.bindings.assign(bindings.begin(), bindings.end());
+	}
 	// The world scroll tells the player at this machine of the world and their people
 	const auto local =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;

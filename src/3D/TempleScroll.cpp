@@ -146,6 +146,19 @@ void DrawGlyph(std::span<uint16_t> texels, const gui::GameFont::SmallGlyph& smal
 }
 } // namespace
 
+std::u16string TempleScrollText::ControlWords(std::u16string_view key, std::u16string_view mouse)
+{
+	std::u16string words = u"(";
+	words += key;
+	if (!key.empty() && !mouse.empty())
+	{
+		words += u' ';
+	}
+	words += mouse;
+	words += u')';
+	return words;
+}
+
 TempleScrollText::TempleScrollText(const gui::GameFont& font)
     : _font(font)
 {
@@ -202,9 +215,20 @@ void TempleScrollText::Add(std::u16string_view source)
 				}
 				else
 				{
-					// TODO(raffclar): For the controls 0 to 32 the line goes on "(" with the keys and mouse buttons the
-					// control is bound to, a space between them, then ")"
 					control = number;
+					// For one of the game's controls the text goes on with the words of its key and mouse input.
+					// They are written where the text ends first, over what follows it.
+					if (control >= 0 && static_cast<size_t>(control) < _controlWords.size())
+					{
+						const auto& words = _controlWords[static_cast<size_t>(control)];
+						const auto at = text.find(u'\0');
+						if (text.size() < at + words.size() + 1)
+						{
+							text.resize(at + words.size() + 1);
+						}
+						std::ranges::copy(words, text.begin() + static_cast<std::ptrdiff_t>(at));
+						text[at + words.size()] = u'\0';
+					}
 				}
 			}
 			else
@@ -340,7 +364,7 @@ void TempleScrollTexture::DrawText(std::span<uint16_t> texels, std::u16string_vi
 		{
 			DrawGlyph(texels, font.GetSmallGlyph(*glyph), glyph->width, x, y, scale, size, ramp, colour);
 		}
-		// TODO(raffclar): Letters 26 texels and higher are drawn from the half height glyphs; the scrolls' are 10
+		// The game draws letters 26 texels and higher from the half height glyphs, but the scrolls' letters are 10
 		x = (scale * glyph->right) + (scale * glyph->ink) + x;
 	}
 }

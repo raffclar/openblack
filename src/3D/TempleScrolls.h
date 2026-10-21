@@ -26,6 +26,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Help/StoryHistory.h"
+#include "Input/KeyBindings.h"
 
 namespace openblack
 {
@@ -147,6 +148,8 @@ public:
 		const help::StoryHistory* history {nullptr};
 		/// The player's creature, without which most of the creature's scrolls aren't written
 		std::optional<CreatureFacts> creature;
+		/// What each of the game's controls is bound to, which the help that names a control tells
+		std::vector<input::KeyBinding> bindings {input::k_DefaultKeyBindings.begin(), input::k_DefaultKeyBindings.end()};
 
 		/// Made up facts, for the systems openblack doesn't have yet
 		static Facts Mock();

@@ -206,6 +206,26 @@ std::u16string KeyName(SDL_Scancode key)
 	return found != nullptr ? std::u16string(found->name) : std::u16string();
 }
 
+std::string_view MouseTextName(MouseInput mouse) noexcept
+{
+	switch (mouse)
+	{
+	case MouseInput::LeftButton:
+		return "HELP_TEXT_ACTIONS_LEFTMOUSEBUTTON";
+	case MouseInput::RightButton:
+		return "HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON";
+	case MouseInput::MiddleButton:
+		return "HELP_TEXT_ACTIONS_MIDDLEMOUSEBUTTON";
+	case MouseInput::WheelUp:
+		return "HELP_TEXT_ACTIONS_WHEEL_UP";
+	case MouseInput::WheelDown:
+		return "HELP_TEXT_ACTIONS_WHEEL_DOWN";
+	case MouseInput::None:
+		break;
+	}
+	return {};
+}
+
 std::u16string ChordName(const std::optional<KeyChord>& chord)
 {
 	if (!chord.has_value() || chord->key == SDL_SCANCODE_UNKNOWN)

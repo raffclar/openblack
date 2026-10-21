@@ -15,6 +15,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <vector>
 
 namespace openblack
 {
@@ -50,6 +51,12 @@ public:
 
 	[[nodiscard]] const std::u16string& GetText() const noexcept { return _text; }
 
+	/// Gives the words that follow the text before a control's picture, for each of the game's 33 controls in turn
+	void SetControlWords(std::vector<std::u16string> words) { _controlWords = std::move(words); }
+	/// The words that follow the text before a control's picture: the control's key and its mouse input, a space
+	/// between them, in brackets. A control with neither has empty brackets.
+	[[nodiscard]] static std::u16string ControlWords(std::u16string_view key, std::u16string_view mouse);
+
 	/// Text with its first "$I" the number
 	[[nodiscard]] static std::u16string WithNumber(std::u16string_view text, int32_t number);
 	/// Text with its first "$s" the string
@@ -58,6 +65,7 @@ public:
 private:
 	const gui::GameFont& _font;
 	std::u16string _text;
+	std::vector<std::u16string> _controlWords;
 };
 
 /// A scroll's texture: the parchment of ChallengeScroll.raw with the scroll's text written over it, as the game draws
