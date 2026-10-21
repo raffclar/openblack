@@ -2531,6 +2531,12 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	if (Locator::infoConstants::has_value())
+	{
+		const auto& sound = Locator::infoConstants::value().sound;
+		music.townTriggerDistance = sound.townTriggerDistance;
+		music.townTriggerOffDistance = sound.townTriggerOffDistance;
+	}
 	if (Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().FightMusicHeard(cameraPosition))
 	{
 		const auto& context = Locator::entitiesRegistry::value().Context();

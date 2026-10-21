@@ -184,6 +184,11 @@ public:
 		/// A script holds the cinema bars, or they are sliding in or out: the land's music waits
 		bool cinema;
 		std::vector<Town> towns;
+		/// The info table's town distances: a town's music starts within the first of the camera and carries on to the
+		/// second, and there is no town music while the camera is the second or more above the land. The defaults are the
+		/// shipped table's values.
+		float townTriggerDistance {300.0f};
+		float townTriggerOffDistance {400.0f};
 		/// Where an object with attached music is, none once it has gone
 		std::function<std::optional<glm::vec3>(uint32_t thing)> thingPosition;
 		/// The music of the creature's dance with villagers that the camera hears, and where the creature is

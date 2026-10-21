@@ -35,16 +35,15 @@ using creature_desires::k_DesireCount;
 
 /// Feedback weaker than this counts as this strong, either way
 constexpr float k_MinFeedback = 0.5f;
-/// How a desire lesson moves its source's threshold, its maximum, and its decay, at full feedback, and how far from
-/// where it started the maximum may go either way
-constexpr float k_ThresholdStep = 0.12f;
+/// How a desire lesson moves its maximum and its decay, at full feedback, and how far from where it started the maximum
+/// may go either way
 constexpr float k_MaxStep = 0.1f;
 constexpr float k_DecayStep = 0.001f;
 constexpr float k_MaxReach = 0.2f;
-/// The bounds of a desire's growing time, in seconds, of its sources' thresholds, its weight, and its maximum
+/// The bounds of a desire's growing time, in seconds, the highest threshold of a source, and the bounds of a desire's
+/// weight and its maximum
 constexpr float k_MinIncreaseSeconds = 1.0f;
 constexpr float k_MaxIncreaseSeconds = 1200.0f;
-constexpr float k_MinThreshold = 0.2f;
 constexpr float k_MaxThreshold = 1.0f;
 constexpr float k_MinWeight = 1.0f;
 constexpr float k_MaxWeight = 8.0f;
@@ -81,15 +80,26 @@ struct DesireRules
 };
 using AllDesireRules = std::array<DesireRules, k_DesireCount>;
 
+/// How a desire lesson moves the threshold of a kind of source, from the game's tables: the step at full feedback, and
+/// the lowest and the highest threshold that the lesson can give
+struct ThresholdBounds
+{
+	float min {0.0f};
+	float max {1.0f};
+	float step {0.0f};
+};
+using AllThresholdBounds = std::array<ThresholdBounds, creature_desires::k_SourceCount>;
+
 /// How much each desire depends on each other: positive for desires that go together, negative for opposed ones
 using Dependencies = std::array<std::array<float, k_DesireCount>, k_DesireCount>;
 
 /// The factor a desire's growing time is multiplied by for feedback
 [[nodiscard]] float LessonFactor(float divisor, float feedback);
 /// Learns to want a desire more (positive feedback) or less: it grows faster, further, its source drives it more
-/// readily, it fades more slowly; desires that go with it grow faster too, and opposed ones slower
+/// readily (by the bounds of that kind of source), it fades more slowly; desires that go with it grow faster too, and
+/// opposed ones slower
 void LearnDesireLesson(creature_desires::Desires& desires, Desire desire, std::optional<size_t> source, float feedback,
-                       const AllDesireRules& rules, const Dependencies& dependencies);
+                       const AllDesireRules& rules, const Dependencies& dependencies, const AllThresholdBounds& bounds);
 /// The opinion of an action after feedback for it
 [[nodiscard]] float OpinionAfter(float opinion, float feedback);
 /// Feedback made at least the weakest that counts

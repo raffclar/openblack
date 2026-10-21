@@ -68,6 +68,14 @@ creature_desires::Desires TwoDesires()
 	anger.increaseSeconds = 5.0f;
 	return desires;
 }
+
+// Every kind of source with the same threshold bounds
+creature_learning::AllThresholdBounds SameBounds(float min, float max, float step)
+{
+	creature_learning::AllThresholdBounds bounds {};
+	bounds.fill({.min = min, .max = max, .step = step});
+	return bounds;
+}
 } // namespace
 
 // Decision trees
@@ -811,7 +819,7 @@ TEST(CreatureLearning, DesireLessonAndDependencies)
 	hunger = {.initialMax = 2.0f, .decayMin = 0.9f, .decayMax = 0.95f, .lessonDivisor = 2.0f, .learnable = true};
 	creature_learning::Dependencies dependencies {};
 	dependencies.at(static_cast<size_t>(Desire::Hunger)).at(static_cast<size_t>(Desire::Anger)) = -0.5f;
-	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, 1.0f, rules, dependencies);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, 1.0f, rules, dependencies, SameBounds(0.2f, 1.0f, 0.12f));
 	const auto& state = desires[Desire::Hunger];
 	// Rewarded, it grows twice as fast, its source drives it sooner, it fades more slowly
 	EXPECT_FLOAT_EQ(state.increaseSeconds, 10.0f);
@@ -821,14 +829,37 @@ TEST(CreatureLearning, DesireLessonAndDependencies)
 	EXPECT_FLOAT_EQ(state.decay, 0.901f);
 	// The opposed desire grows slower
 	EXPECT_FLOAT_EQ(desires[Desire::Anger].increaseSeconds, 10.0f);
-	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies, SameBounds(0.2f, 1.0f, 0.12f));
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.9f);
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].increaseSeconds, 15.0f);
 	// The maximum goes at most 0.2 below where it started
-	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies, SameBounds(0.2f, 1.0f, 0.12f));
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.8f);
-	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies, SameBounds(0.2f, 1.0f, 0.12f));
 	EXPECT_FLOAT_EQ(desires[Desire::Hunger].max, 1.8f);
+}
+
+TEST(CreatureLearning, DesireLessonMovesThresholdByItsKindOfSource)
+{
+	auto desires = TwoDesires();
+	creature_learning::AllDesireRules rules {};
+	rules.at(static_cast<size_t>(Desire::Hunger)) = {.initialMax = 2.0f, .lessonDivisor = 2.0f, .learnable = true};
+	const creature_learning::Dependencies dependencies {};
+	// The first source is of kind 14, which can go no higher than 0.7; the second of kind 15, no lower than 0.45
+	auto bounds = SameBounds(0.2f, 1.0f, 0.12f);
+	bounds.at(14) = {.min = 0.2f, .max = 0.7f, .step = 0.12f};
+	bounds.at(15) = {.min = 0.45f, .max = 1.0f, .step = 0.12f};
+	for (int i = 0; i < 3; ++i)
+	{
+		creature_learning::LearnDesireLesson(desires, Desire::Hunger, 0, -1.0f, rules, dependencies, bounds);
+	}
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].sources[0].threshold, 0.7f);
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 1, 1.0f, rules, dependencies, bounds);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].sources[1].threshold, 0.45f);
+	// A source of no known kind keeps its threshold
+	desires[Desire::Hunger].sources[1].type = creature_desires::k_NoSource;
+	creature_learning::LearnDesireLesson(desires, Desire::Hunger, 1, 1.0f, rules, dependencies, bounds);
+	EXPECT_FLOAT_EQ(desires[Desire::Hunger].sources[1].threshold, 0.45f);
 }
 
 TEST(CreatureLearning, DesireMaximumReachesTwoTenthsEitherWay)
@@ -840,12 +871,14 @@ TEST(CreatureLearning, DesireMaximumReachesTwoTenthsEitherWay)
 	const creature_learning::Dependencies dependencies {};
 	for (int i = 0; i < 5; ++i)
 	{
-		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, 1.0f, rules, dependencies);
+		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, 1.0f, rules, dependencies,
+		                                     SameBounds(0.2f, 1.0f, 0.12f));
 	}
 	EXPECT_FLOAT_EQ(desires[Desire::Anger].max, 1.0f);
 	for (int i = 0; i < 10; ++i)
 	{
-		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, -1.0f, rules, dependencies);
+		creature_learning::LearnDesireLesson(desires, Desire::Anger, std::nullopt, -1.0f, rules, dependencies,
+		                                     SameBounds(0.2f, 1.0f, 0.12f));
 	}
 	EXPECT_FLOAT_EQ(desires[Desire::Anger].max, 0.6f);
 }

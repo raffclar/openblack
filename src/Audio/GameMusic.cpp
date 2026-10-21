@@ -138,10 +138,6 @@ constexpr std::array<MusicType, 9> k_TribeTownMusic = {
     MusicType::GreekTownEvil,    MusicType::NorseTownEvil,  MusicType::TibetanTownEvil,
 };
 
-// The town trigger distances in info.dat: a town's music starts within 300 of the camera and carries on to
-// 400. Above 400 from the land there is no town music.
-constexpr float k_TownTriggerDistance = 300.0f;
-constexpr float k_TownTriggerOffDistance = 400.0f;
 // The land's music only starts once the game has been going a little while
 constexpr uint32_t k_LandMusicFirstTurn = 20;
 // The land's music played to its end only comes back after this many turns away
@@ -704,7 +700,7 @@ MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 
 	const Town* nearest = nullptr;
 	// The game takes the nearest town strictly nearer than the off distance
-	auto nearestDistance = k_TownTriggerOffDistance;
+	auto nearestDistance = inputs.townTriggerOffDistance;
 	const Town* remembered = nullptr;
 	for (const auto& town : inputs.towns)
 	{
@@ -724,14 +720,14 @@ MusicType GameMusic::SelectLandType(const TurnInputs& inputs)
 		_rememberedTown.reset();
 	}
 
-	if (nearest != nullptr && inputs.camera.y - inputs.groundHeight < k_TownTriggerOffDistance)
+	if (nearest != nullptr && inputs.camera.y - inputs.groundHeight < inputs.townTriggerOffDistance)
 	{
-		if (nearestDistance <= k_TownTriggerDistance)
+		if (nearestDistance <= inputs.townTriggerDistance)
 		{
 			_rememberedTown = nearest->id;
 			return townMusic(*nearest);
 		}
-		if (remembered != nullptr && remembered != nearest && distance(*remembered) < k_TownTriggerOffDistance)
+		if (remembered != nullptr && remembered != nearest && distance(*remembered) < inputs.townTriggerOffDistance)
 		{
 			return townMusic(*remembered);
 		}
