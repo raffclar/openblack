@@ -72,8 +72,14 @@ private:
 		/// The camera's origin and focus, each coordinate gliding
 		std::array<camera::Zoomer, 3> origin;
 		std::array<camera::Zoomer, 3> focus;
+		/// Where the player's camera was going when the path took the camera, to which it flies back when the path ends
+		/// by itself
+		glm::vec3 returnOrigin {0.0f};
+		glm::vec3 returnFocus {0.0f};
 	};
 	void UpdatePlaced(float seconds);
+	/// The path ends by itself: the player's camera takes the camera again and flies back to where it was going
+	void EndPlaced();
 	std::optional<Placed> _placed;
 
 	entt::resource<CameraPath> _path;
