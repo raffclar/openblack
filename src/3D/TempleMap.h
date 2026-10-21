@@ -98,8 +98,8 @@ public:
 	}
 
 	/// The colour the map marks a player's things in: the player's colour, black as white, lightened a quarter of the
-	/// way to white. Without a player, white.
-	[[nodiscard]] static glm::u8vec3 MarkerColour(std::optional<PlayerNames> player);
+	/// way to white. Without a player, white. Some lands of the story (landNumber) swap the colours of some players.
+	[[nodiscard]] static glm::u8vec3 MarkerColour(std::optional<PlayerNames> player, int32_t landNumber);
 	/// Where a marker of a thing at a point of the world stands on the map: on the cell the thing is in
 	[[nodiscard]] glm::vec3 MarkerPosition(glm::vec2 world) const;
 

@@ -15,6 +15,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Gui/VillagerLabels.h"
+
 using namespace openblack;
 
 namespace
@@ -134,7 +136,7 @@ glm::vec3 TempleMap::ToMap(glm::vec2 world) const
 	        (u.y - static_cast<float>(_centre.y)) * _scale};
 }
 
-glm::u8vec3 TempleMap::MarkerColour(std::optional<PlayerNames> player)
+glm::u8vec3 TempleMap::MarkerColour(std::optional<PlayerNames> player, int32_t landNumber)
 {
 	// The players' colours, the neutral one black
 	constexpr std::array<glm::u8vec3, 8> k_PlayerColours = {
@@ -142,10 +144,10 @@ glm::u8vec3 TempleMap::MarkerColour(std::optional<PlayerNames> player)
 	    glm::u8vec3 {0x47, 0xF9, 0xFF}, glm::u8vec3 {0xFF, 0xFD, 0x47}, glm::u8vec3 {0x47, 0x77, 0xFF},
 	    glm::u8vec3 {0xFF, 0xA2, 0x47}, glm::u8vec3 {0x00, 0x00, 0x00},
 	};
-	// TODO(raffclar): the game gives some lands' second and third players others' colours, by the land's number
-	auto colour = player.has_value() && static_cast<size_t>(*player) < k_PlayerColours.size()
-	                  ? k_PlayerColours.at(static_cast<size_t>(*player))
-	                  : glm::u8vec3(0xFF);
+	// Some lands of the story give their second and third players the colours of others
+	const auto index = player.has_value() ? gui::villager_labels::PlayerColourIndex(static_cast<uint8_t>(*player), landNumber)
+	                                      : static_cast<uint8_t>(k_PlayerColours.size());
+	auto colour = index < k_PlayerColours.size() ? k_PlayerColours.at(index) : glm::u8vec3(0xFF);
 	if (colour == glm::u8vec3(0))
 	{
 		colour = glm::u8vec3(0xFF);

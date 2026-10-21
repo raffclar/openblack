@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 
 #include <SDL_scancode.h>
 
@@ -38,6 +39,8 @@ namespace openblack::input::rebinding
 [[nodiscard]] std::u16string KeyName(SDL_Scancode key);
 /// A key with its modifier as the Controls page writes it: "Ctrl + S". Empty for no key.
 [[nodiscard]] std::u16string ChordName(const std::optional<KeyChord>& chord);
+/// The name in the game's texts of a mouse input, as the Controls page writes it. Empty for no mouse input.
+[[nodiscard]] std::string_view MouseTextName(MouseInput mouse) noexcept;
 
 /// Whether the player can bind a key. The game keeps Escape, Tab, P, F1, F2 and the Enter key of the number pad for
 /// itself, and the game ignores a key that it has no number for.

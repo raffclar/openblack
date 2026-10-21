@@ -1628,3 +1628,5 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_temple_exit_glow graphics/test_temple_exit_glow.cpp)
 openblack_setup_and_add_test(test_temple_room_meshes temple/test_temple_room_meshes.cpp)
+openblack_setup_and_add_test(test_future_room temple/test_future_room.cpp)
+openblack_setup_and_add_test(test_temple_controls temple/test_temple_controls.cpp)

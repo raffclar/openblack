@@ -42,7 +42,8 @@ public:
 	};
 	static constexpr size_t k_Count = 5;
 
-	using PlaySound = std::function<void(entt::id_type)>;
+	/// Plays a click, with its pitch in percent
+	using PlaySound = std::function<void(entt::id_type, uint32_t)>;
 	explicit TempleToggles(PlaySound playSound);
 
 	/// Finds the buttons among the main room's submeshes, by their names

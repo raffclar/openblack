@@ -43,6 +43,15 @@ TEST(TempleExteriorMorph, StepsTowardWhereItIsToBe)
 	EXPECT_FLOAT_EQ(Step(0.9995f, 1.0f), 1.0f);
 }
 
+TEST(TempleExteriorMorph, OnTheFirstLandEveryTempleGrowsTowardTheSameSmallSize)
+{
+	EXPECT_FLOAT_EQ(SizeTarget(1, std::nullopt), 0.02f);
+	EXPECT_FLOAT_EQ(SizeTarget(1, 0.5f), 0.02f);
+	// On the other lands the size is twice the share, or twice the share of no influence when nobody has any
+	EXPECT_FLOAT_EQ(SizeTarget(2, 0.3f), 0.6f);
+	EXPECT_FLOAT_EQ(SizeTarget(2, std::nullopt), 0.02f);
+}
+
 TEST(TempleExteriorMorph, ASmallNeutralTempleIsTheMiddleStage)
 {
 	const auto corners = Corners(0.0f, 0.5f);

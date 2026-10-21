@@ -28,13 +28,18 @@ struct ButtonPlace
 	std::string_view checked;
 	std::string_view unchecked;
 	uint32_t toolTip;
+	/// The pitch in percent of the click as the checked button turns its things off, and as the unchecked one turns
+	/// them on
+	uint32_t offPitch;
+	uint32_t onPitch;
 };
 constexpr std::array<ButtonPlace, TempleToggles::k_Count> k_Buttons = {
-    ButtonPlace {"LH_CheckBox_DisplayCitadel_Checked", "LH_CheckBox_DisplayCitadel_Unchecked", 0xE91 - 0xE73},
-    ButtonPlace {"LH_CheckBox_DisplayCreature_Checked", "LH_CheckBox_DisplayCreature_Unchecked", 0xE8F - 0xE73},
-    ButtonPlace {"LH_CheckBox_DisplayMagicActivity_Checked", "LH_CheckBox_DisplayMagicActivity_Unchecked", 0xE93 - 0xE73},
-    ButtonPlace {"LH_CheckBox_DisplayInfluence_Checked", "LH_CheckBox_DisplayInfluence_Unchecked", 0xE92 - 0xE73},
-    ButtonPlace {"LH_CheckBox_DisplayChallenges_Checked", "LH_CheckBox_DisplayChallenges_Unchecked", 0xE90 - 0xE73},
+    ButtonPlace {"LH_CheckBox_DisplayCitadel_Checked", "LH_CheckBox_DisplayCitadel_Unchecked", 0xE91 - 0xE73, 100, 100},
+    ButtonPlace {"LH_CheckBox_DisplayCreature_Checked", "LH_CheckBox_DisplayCreature_Unchecked", 0xE8F - 0xE73, 110, 100},
+    ButtonPlace {"LH_CheckBox_DisplayMagicActivity_Checked", "LH_CheckBox_DisplayMagicActivity_Unchecked", 0xE93 - 0xE73, 95,
+                 95},
+    ButtonPlace {"LH_CheckBox_DisplayInfluence_Checked", "LH_CheckBox_DisplayInfluence_Unchecked", 0xE92 - 0xE73, 105, 105},
+    ButtonPlace {"LH_CheckBox_DisplayChallenges_Checked", "LH_CheckBox_DisplayChallenges_Unchecked", 0xE90 - 0xE73, 108, 108},
 };
 
 bool SameName(std::string_view a, std::string_view b)
@@ -101,12 +106,13 @@ bool TempleToggles::Hold(bool pressed, std::optional<uint32_t> hoveredSubMesh)
 	if (Drawn(button) == hoveredSubMesh)
 	{
 		_shown.at(button) = !_shown.at(button);
-		// TODO(raffclar): the callbacks play each button with its own sound setting (100, 110, 95, 105 and 108 in turn,
-		// 100 by default), most likely its pitch in percent
+		// Each button clicks at its own pitch
 		if (_playSound)
 		{
-			_playSound(static_cast<entt::id_type>(_shown.at(button) ? audio::SoundId::G_CitadelButtonUp_01
-			                                                        : audio::SoundId::G_CitadelButtonDown_01));
+			const bool shown = _shown.at(button);
+			_playSound(static_cast<entt::id_type>(shown ? audio::SoundId::G_CitadelButtonUp_01
+			                                            : audio::SoundId::G_CitadelButtonDown_01),
+			           shown ? k_Buttons.at(button).onPitch : k_Buttons.at(button).offPitch);
 		}
 		// The land of the map keeps its colours: the influence button shows the influence circles in the main room
 	}

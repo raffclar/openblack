@@ -284,3 +284,31 @@ TEST(TempleCamera, TheDoorsCloseOnlyAfterTheFirstFourTenthsOfASecondIn)
 	EXPECT_TRUE(TempleCameraModel::IntroClosesDoors(0.41f));
 	EXPECT_EQ(TempleCameraModel::k_IntroDoorCloseRate, 1.6f);
 }
+
+TEST(TempleCamera, APictureRoomTurnsByItselfUnderADialogSpeedingUpOverASecond)
+{
+	float time = 0.0f;
+	// No dialog and no words: the arrow keys turn the room, and the time stays
+	EXPECT_FALSE(TempleCameraModel::PictureTurnByItself(time, 0.5f, false, false, false).has_value());
+	EXPECT_FLOAT_EQ(time, 0.0f);
+	// The first frame of the turn has no speed, then the turn speeds up over a second to a quarter turn a second
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.5f, true, false, false), 0.0f);
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.5f, true, false, false), 0.5f * 0.5f * 0.25f);
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.5f, true, false, false), 0.5f * 0.25f);
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.5f, true, false, false), 0.5f * 0.25f);
+}
+
+TEST(TempleCamera, TheLibraryKeepsStillUnderADialog)
+{
+	float time = 2.0f;
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.5f, true, true, false), 0.0f);
+	EXPECT_FLOAT_EQ(time, 2.5f);
+}
+
+TEST(TempleCamera, TheFutureRoomTurnsByItselfWhileItShowsItsWords)
+{
+	float time = 0.0f;
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.25f, false, false, true), 0.0f);
+	EXPECT_FLOAT_EQ(*TempleCameraModel::PictureTurnByItself(time, 0.25f, false, false, true), 0.25f * 0.25f * 0.25f);
+	EXPECT_FLOAT_EQ(time, 0.5f);
+}

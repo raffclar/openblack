@@ -13,7 +13,9 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string_view>
+#include <unordered_map>
 #include <vector>
 
 #include <SaveSlots.h>
@@ -27,6 +29,7 @@
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Temple/FutureRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/TempleHelp.h"
 #include "Temple/TemplePeople.h"
@@ -74,6 +77,7 @@ public:
 	bool HoldControl(bool pressed, float mouseY) override;
 	[[nodiscard]] std::vector<TempleSubMeshTexture> GetScrollTextures(TempleRoom room) const override;
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
+	[[nodiscard]] std::span<const uint32_t> GetControlSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetText() const override { return _text; }
 	[[nodiscard]] std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const override;
 	[[nodiscard]] std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const override;
@@ -247,8 +251,10 @@ private:
 	std::vector<OrientedTextVertex> _text;
 	/// Whether the options room has opened the game's options
 	bool _optionsShown {false};
-	/// How long the future room has shown its words, which fade in
-	float _futureTime {0.0f};
+	/// The submeshes of each room that are its controls, found as the rooms are set up
+	std::unordered_map<TempleRoom, std::vector<uint32_t>> _controlSubMeshes;
+	/// The future room's words in this visit, which fade in
+	temple::future_room::Words _futureWords;
 	/// The submesh the cursor is over, and how long is left of the glow it set off, in milliseconds. Moving onto
 	/// another submesh sets the glow off again, unless a control is being dragged.
 	std::optional<std::pair<TempleRoom, uint32_t>> _hovered;
@@ -257,7 +263,7 @@ private:
 	TempleToolTip _toolTip {k_FirstTempleToolTip};
 	float _toolTipTurnTime {0.0f};
 	/// Moves on the options room and the future room, and what the future room draws
-	void UpdateOptionsAndFutureRooms(float seconds);
+	void UpdateOptionsAndFutureRooms(float milliseconds);
 	/// The tooltip the hand shows, and where on the screen the hand is
 	void UpdateToolTips(float milliseconds);
 	void StopCreatureCaveSounds();
