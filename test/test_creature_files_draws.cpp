@@ -17,6 +17,7 @@
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureMindModel.h"
+#include "ECS/Components/CreatureLocomotion.h"
 
 using namespace openblack;
 
@@ -77,4 +78,24 @@ TEST(CreatureFilesDraws, AToldSitLastsTenSecondsAndAFloatDrawOfUpToFive)
 	ASSERT_EQ(draws.size(), 1);
 	EXPECT_EQ(draws[0], 5.0f);
 	EXPECT_EQ(sit.seconds, 12.75f);
+}
+
+// The body's needs count the whole move as moving: the wait for the route, the fidgets, the point, the turns, the steps
+// and the walk. A turn on the spot to face a point and a stand do not count.
+TEST(CreatureFilesDraws, TheWholeMoveCountsAsMovingButATurnToFaceDoesNot)
+{
+	using ecs::components::CreatureLocomotion;
+	using Motion = CreatureLocomotion::Motion;
+	CreatureLocomotion self;
+	for (const auto motion :
+	     {Motion::Planning, Motion::Confused, Motion::Pointing, Motion::Turning, Motion::Stepping, Motion::Walking})
+	{
+		self.motion = motion;
+		EXPECT_TRUE(ecs::components::InMove(self)) << static_cast<int>(motion);
+	}
+	self.motion = Motion::Standing;
+	EXPECT_FALSE(ecs::components::InMove(self));
+	self.motion = Motion::Turning;
+	self.facingOnly = true;
+	EXPECT_FALSE(ecs::components::InMove(self));
 }
