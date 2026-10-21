@@ -1860,7 +1860,8 @@ void AddStory(std::vector<Scenario>& all)
 	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
 	                "the land and the things behind it show through it, and its cut-out parts go first. From 16 seconds a "
 	                "faint shell of light in red covers the heart, reaching out with the heartbeat and growing at the "
-	                "end. It is not drawn after 23.8 seconds, just before it goes.",
+	                "end. Where the shell touches the heart it adds a faint grey. It is not drawn after 23.8 seconds, "
+	                "just before it goes.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
