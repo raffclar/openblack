@@ -34,6 +34,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerStateEntry.h"
@@ -1278,6 +1279,11 @@ void LivingActionSystem::VillagerTurn(entt::entity entity)
 	}
 	// The life its state costs and the checks on its needs come before its state does its part
 	villager_checks::CheckEveryTime(action);
+	// A state that walks the villager takes the step of its walk first, then looks at where the villager is
+	if (Locator::pathfindingSystem::has_value())
+	{
+		Locator::pathfindingSystem::value().WalkInOwnTurn(entity);
+	}
 	VillagerCallState(action, LivingAction::Index::Top);
 }
 

@@ -1943,10 +1943,23 @@ void Game::ProcessLivingTurn()
 	}
 	{
 		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
+		auto& reactions = Locator::reactionSystem::value();
 		living_turn::Walk(
 		    std::span<const living_turn::Living<entt::entity>>(list),
-		    [this]() { game_turn::PlayCreaturesTurn([this](game_turn::Step step) { PlayTurnStep(step); }); },
-		    [&villagers, &animals, animalsTurn](const living_turn::Living<entt::entity>& living) {
+		    [this, &list, &reactions]() {
+			    // Each creature first lets go of a reaction that is over
+			    for (const auto& living : list)
+			    {
+				    if (living.kind == Kind::Creature)
+				    {
+					    reactions.EndReactionIfOver(living.id);
+				    }
+			    }
+			    game_turn::PlayCreaturesTurn([this](game_turn::Step step) { PlayTurnStep(step); });
+		    },
+		    [&villagers, &animals, &reactions, animalsTurn](const living_turn::Living<entt::entity>& living) {
+			    // At the start of its turn, it lets go of a reaction that is over
+			    reactions.EndReactionIfOver(living.id);
 			    if (living.kind == Kind::Villager)
 			    {
 				    villagers.VillagerTurn(living.id);
@@ -2029,6 +2042,9 @@ void Game::PlayTurnStep(game_turn::Step step)
 		break;
 	case Step::Clock:
 		clock.StartTurn();
+		break;
+	case Step::ReactionClock:
+		Locator::reactionSystem::value().StartTurn();
 		break;
 	case Step::TurnStartPlaces:
 		// The villagers are drawn gliding through the turn from where they stand as it begins
@@ -2134,12 +2150,6 @@ void Game::PlayTurnStep(game_turn::Step step)
 		// The forests' growing trees grow, faster in the rain, and the forests spread
 		Locator::forestSystem::value().GrowForests();
 		break;
-	case Step::Pathfinding:
-	{
-		auto pathfinding = profiler.BeginScoped(Profiler::Stage::PathfindingUpdate);
-		Locator::pathfindingSystem::value().Update();
-		break;
-	}
 	case Step::CreaturePhysiology:
 	{
 		// The creatures age, grow, get hungry, tired and thirsty, and heal while they sleep

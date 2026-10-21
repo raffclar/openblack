@@ -659,6 +659,40 @@ TEST_F(WalkerToGoal, AWalkWaitsWhileTheVillagerIsCalledAway)
 	EXPECT_EQ(turns, 137u);
 }
 
+// A villager takes the steps of its walk in its own turn, as the walk of all walkers takes them. With no walk under way,
+// or in a state that does not walk it, it stands where it is.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(WalkerToGoal, AVillagerWalksInItsOwnTurn)
+{
+	using namespace openblack::ecs::components;
+	Load("goal_beside_trees.txt");
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::entitiesMap::value().Sync();
+	registry.Get<Transform>(_walker).position = glm::vec3(2161.24f, 0.0f, 2276.99f);
+	auto& wallHug = registry.Get<WallHug>(_walker);
+	wallHug.speed = 2.0f;
+	wallHug.step = {0, 0};
+	wallHug.goal = {2150.0f, 2250.0f};
+	const auto before = wallHug.position;
+	Locator::pathfindingSystem::value().WalkInOwnTurn(_walker);
+	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, before);
+
+	registry.Assign<MoveStateLinearTag>(_walker);
+	auto& top = registry.Get<LivingAction>(_walker).states.at(static_cast<size_t>(LivingAction::Index::Top));
+	top = static_cast<uint8_t>(VillagerStates::HavingSex);
+	Locator::pathfindingSystem::value().WalkInOwnTurn(_walker);
+	EXPECT_EQ(registry.Get<const WallHug>(_walker).position, before);
+
+	top = static_cast<uint8_t>(VillagerStates::MoveToPos);
+	uint32_t turns = 0;
+	for (; turns < 2000 && !registry.AnyOf<MoveStateFinalStepTag, MoveStateArrivedTag>(_walker); ++turns)
+	{
+		Locator::pathfindingSystem::value().WalkInOwnTurn(_walker);
+	}
+	// The same 147 turns as the walk of all walkers
+	EXPECT_EQ(turns, 147u);
+}
+
 // A walker that turns as an animal does walks only in its own turn. It goes round the circle in its way and gets to its
 // goal, though it aims at the goal by only a small angle at a time.
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro

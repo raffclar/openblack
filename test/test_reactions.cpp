@@ -327,6 +327,21 @@ protected:
 		return static_cast<VillagerStates>(Locator::entitiesRegistry::value().Get<const LivingAction>(villager).states.at(0));
 	}
 
+	/// One game turn as the game plays it: the turn count moves on, each living thing lets go of a reaction that is over
+	/// in its own turn, then the reactions take their turn
+	void PlayTurn()
+	{
+		_reactions.StartTurn();
+		std::vector<entt::entity> living;
+		Locator::entitiesRegistry::value().Each<const LivingReaction>(
+		    [&living](entt::entity entity, const LivingReaction&) { living.push_back(entity); });
+		for (const auto entity : living)
+		{
+			_reactions.EndReactionIfOver(entity);
+		}
+		_reactions.ProcessTurn();
+	}
+
 	std::unique_ptr<InfoConstants> _info;
 	entt::entity _town {entt::null};
 	std::vector<entt::entity> _villagers;
@@ -405,7 +420,7 @@ TEST_F(Reactions, VillagersInReachTakeUpANiceMiracleAndBelieveOnce)
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::LookingAtObjectReaction);
 	EXPECT_EQ(StateOf(_villagers[2]), VillagerStates::DecideWhatToDo);
 	// Spread again, those reacting already aren't impressed again
-	_reactions.ProcessTurn();
+	PlayTurn();
 	// The town's turn of belief comes in the turn of its player
 	_reactions.BelieveInTown(_town);
 	const auto& town = registry.Get<const TownImpression>(_town).belief;
@@ -473,7 +488,7 @@ TEST_F(Reactions, VillagersStopAfterTheirTimeAndGoBack)
 	_reactions.Create(Miracle());
 	for (int turn = 0; turn < 100; ++turn)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 	}
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::DecideWhatToDo);
 	EXPECT_EQ(Locator::entitiesRegistry::value().Get<const LivingReaction>(_villagers[0]).reaction, 0u);
@@ -483,7 +498,7 @@ TEST_F(Reactions, AVillagerLettingGoOfAReactionKeepsWhatItDoesAndWaitsItsTimeFro
 {
 	for (int turn = 0; turn < 5; ++turn)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 	}
 	_reactions.Create(Miracle());
 	auto& registry = Locator::entitiesRegistry::value();
@@ -503,7 +518,7 @@ TEST_F(Reactions, ACreatureWaitsItsTimeFromTheEndOfItsReaction)
 {
 	for (int turn = 0; turn < 5; ++turn)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 	}
 	_reactions.Create(Miracle());
 	auto& registry = Locator::entitiesRegistry::value();
@@ -511,7 +526,7 @@ TEST_F(Reactions, ACreatureWaitsItsTimeFromTheEndOfItsReaction)
 	const auto takenUp = _reactions.CurrentTurn();
 	for (int turn = 0; turn < 100 && registry.Get<const LivingReaction>(_creature).reaction != 0; ++turn)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 	}
 	ASSERT_EQ(registry.Get<const LivingReaction>(_creature).reaction, 0u);
 	const auto& memory = registry.Get<const LivingReaction>(_creature).creatureMemory;
@@ -529,7 +544,7 @@ TEST_F(Reactions, AVillagerWaitsItsTimeFromTheEndOfItsReaction)
 	uint32_t turns = 0;
 	while (registry.Get<const LivingReaction>(_villagers[0]).reaction != 0 && turns < 200)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 		++turns;
 	}
 	ASSERT_EQ(registry.Get<const LivingReaction>(_villagers[0]).reaction, 0u);
@@ -543,7 +558,7 @@ TEST_F(Reactions, AnAnimalWaitsItsTimeFromTheEndOfAReactionThatIsGone)
 	auto& registry = Locator::entitiesRegistry::value();
 	for (int turn = 0; turn < 4; ++turn)
 	{
-		_reactions.ProcessTurn();
+		PlayTurn();
 	}
 	const auto animal = registry.Create();
 	registry.Assign<Transform>(animal, k_Here, glm::mat3(1.0f), glm::vec3(1.0f));
@@ -551,7 +566,7 @@ TEST_F(Reactions, AnAnimalWaitsItsTimeFromTheEndOfAReactionThatIsGone)
 	auto& state = registry.Assign<LivingReaction>(animal, LivingReaction {.reaction = 999, .type = Reaction::LookAtNiceSpell});
 	state.creatureMemory.Record(static_cast<uint32_t>(Reaction::LookAtNiceSpell), 1);
 	// The reaction does not exist, so the animal stops it on the next turn
-	_reactions.ProcessTurn();
+	PlayTurn();
 	const auto& after = registry.Get<const LivingReaction>(animal);
 	EXPECT_EQ(after.reaction, 0u);
 	EXPECT_EQ(after.creatureMemory.LastReacted(static_cast<uint32_t>(Reaction::LookAtNiceSpell)), 5u);
@@ -566,7 +581,7 @@ TEST_F(Reactions, AnAnimalWhoseReactionIsGoneStaysInItsState)
 	registry.Assign<Animal>(animal);
 	registry.Assign<LivingReaction>(animal, LivingReaction {.reaction = 999, .type = Reaction::FleeFromObject});
 	// The reaction does not exist, so the animal lets go of it and keeps its state
-	_reactions.ProcessTurn();
+	PlayTurn();
 	EXPECT_EQ(animals.stops, std::vector<bool> {false});
 	Locator::animalSystem::reset();
 }
@@ -877,7 +892,7 @@ TEST(ReactionRules, LettingGoOfAKindBringsItUpToNowOnlyWhenRemembered)
 TEST_F(Reactions, VillagersFleeAFrighteningMiracle)
 {
 	// A turn in, as a turn of 0 is remembered as not lately
-	_reactions.ProcessTurn();
+	PlayTurn();
 	_reactions.Create(Miracle(Reaction::FleeFromSpell));
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FleeingFromObjectReaction);
 	// Remembered with the kinds the shields' reactions see
@@ -974,7 +989,7 @@ TEST_F(Reactions, ACreatureIsNotImpressedByItsOwnMiracle)
 	auto source = Miracle();
 	source.casterCreature = _creature;
 	_reactions.Create(source);
-	_reactions.ProcessTurn();
+	PlayTurn();
 	EXPECT_EQ(Locator::entitiesRegistry::value().TryGet<const CreatureImpression>(_creature), nullptr);
 }
 
@@ -1046,7 +1061,7 @@ TEST_F(Reactions, ADancingVillagerNoticesAFlyingThingOnlyWhenItComesAtIt)
 		const auto* state = registry.TryGet<const LivingReaction>(villager);
 		return state != nullptr ? state->reaction : 0u;
 	};
-	_reactions.ProcessTurn();
+	PlayTurn();
 	EXPECT_EQ(reactingTo(_villagers[0]), 0u);
 	EXPECT_NE(reactingTo(_villagers[1]), 0u);
 	Locator::dynamicsSystem::reset();
@@ -1126,7 +1141,7 @@ TEST_F(Reactions, OnlyAMateToBeWaitsForAVillagerHeldInTheHandAndOnlyWhileItIsNea
 
 	// Carried out of her reach, the reaction follows him and she stops waiting
 	registry.Get<Transform>(held).position = k_Here + glm::vec3(0.0f, 0.0f, 30.0f);
-	_reactions.ProcessTurn();
+	PlayTurn();
 	ASSERT_TRUE(_reactions.Find(id).has_value());
 	EXPECT_EQ(_reactions.Find(id)->source.position, k_Here + glm::vec3(0.0f, 0.0f, 30.0f));
 	ecs::systems::villager_reactions::WaitForMate(registry.Get<LivingAction>(_villagers[0]));
@@ -1163,7 +1178,7 @@ TEST(ShieldRules, WhatIsSurelyWithinAShield)
 // A script makes a thing for the living around it to run from: the villagers near it flee as from a frightening miracle
 TEST_F(Reactions, VillagersFleeAThingToFlee)
 {
-	_reactions.ProcessTurn();
+	PlayTurn();
 	_reactions.Create({.initiator = _creature,
 	                   .type = Reaction::FleeFromObject,
 	                   .player = PlayerNames::NEUTRAL,
@@ -1189,7 +1204,7 @@ TEST_F(Reactions, ACreaturesReactionFollowsIt)
 	                                   .playerless = true});
 	const glm::vec3 moved = k_Here + glm::vec3(20.0f, 0.0f, -10.0f);
 	registry.Get<Transform>(_creature).position = moved;
-	_reactions.ProcessTurn();
+	PlayTurn();
 	const auto reaction = _reactions.Find(id);
 	ASSERT_TRUE(reaction.has_value());
 	EXPECT_EQ(reaction->source.position, moved);
@@ -1250,6 +1265,8 @@ TEST_F(Reactions, AVillagerRemembersTheStateItWasHeadingForAndTakesUpWhereThatRe
 	EXPECT_EQ(SlotOf(villager, LivingAction::Index::Previous), k_Job);
 	for (int turn = 0; turn < 100; ++turn)
 	{
+		reactions.StartTurn();
+		reactions.EndReactionIfOver(villager);
 		reactions.ProcessTurn();
 	}
 	// Its time over, it takes up the state its job resumes in, remembers nothing, and waits its time from now before
@@ -1261,6 +1278,37 @@ TEST_F(Reactions, AVillagerRemembersTheStateItWasHeadingForAndTakesUpWhereThatRe
 	EXPECT_GT(registry.Get<const VillagerReactionMemory>(villager).memory.LastReacted(
 	              static_cast<uint32_t>(Reaction::LookAtNiceSpell)),
 	          80u);
+	Locator::reactionSystem::reset();
+}
+
+// A villager lets go of its reaction at the start of its own turn, as soon as the thing that it reacts to is gone. The
+// reactions' own turn is not necessary for this. A villager that holds no reaction stays as it is.
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(Reactions, AVillagerLetsGoOfItsReactionInItsOwnTurnOnceWhatItReactsToIsGone)
+{
+	MakeJob(*_info, k_JobAgain);
+	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
+	auto& reactions = Locator::reactionSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = _villagers[0];
+	const auto far = _villagers[2];
+	WalkToJob(villager);
+	auto miracle = Miracle();
+	miracle.initiator = registry.Create();
+	reactions.Create(miracle);
+	ASSERT_EQ(StateOf(villager), VillagerStates::LookingAtObjectReaction);
+	const auto farState = StateOf(far);
+
+	reactions.StartTurn();
+	reactions.EndReactionIfOver(villager);
+	EXPECT_NE(registry.Get<const LivingReaction>(villager).reaction, 0u);
+
+	registry.Destroy(miracle.initiator);
+	reactions.EndReactionIfOver(villager);
+	reactions.EndReactionIfOver(far);
+	EXPECT_EQ(registry.Get<const LivingReaction>(villager).reaction, 0u);
+	EXPECT_EQ(StateOf(villager), k_JobAgain);
+	EXPECT_EQ(StateOf(far), farState);
 	Locator::reactionSystem::reset();
 }
 
@@ -1536,8 +1584,8 @@ TEST_F(Reactions, VillagersHeedTheHandPickingUpOrSomethingCrushedWithoutTakingIt
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	// A few turns in, so that what is remembered is later than nothing
-	_reactions.ProcessTurn();
-	_reactions.ProcessTurn();
+	PlayTurn();
+	PlayTurn();
 	for (const auto type : {Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed})
 	{
 		_reactions.Create(Miracle(type));
@@ -1714,7 +1762,7 @@ TEST_F(Reactions, VillagersFaintWhereTheyStandUntilTheStinkIsOver)
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FaintingReaction);
 	EXPECT_EQ(registry.Get<const LivingReaction>(_villagers[0]).type, Reaction::Fainting);
 	// The villager stays in the faint state while the reaction continues
-	_reactions.ProcessTurn();
+	PlayTurn();
 	EXPECT_EQ(StateOf(_villagers[0]), VillagerStates::FaintingReaction);
 	// At the end of the reaction, the villager does its last task again
 	_reactions.Remove(id);

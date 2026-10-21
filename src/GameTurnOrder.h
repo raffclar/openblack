@@ -91,6 +91,8 @@ enum class Step : uint8_t
 	HandStillness,
 	TurnCheering,
 	Clock,
+	/// The count of the turns that the reactions keep
+	ReactionClock,
 	TurnStartPlaces,
 	InfluenceTurnStart,
 	MapCells,
@@ -113,7 +115,6 @@ enum class Step : uint8_t
 	WalkPaths,
 	Footpaths,
 	ForestGrowth,
-	Pathfinding,
 	CreaturePhysiology,
 	CreaturePens,
 	CreatureBodies,
@@ -193,6 +194,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
     {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
+    // The living's reactions count their times by the same turn count as the game
+    {.step = Step::ReactionClock, .stage = Stage::StartTurn},
     // The places of the turn's start, which the frames draw from, and the map's cells of what moved
     {.step = Step::TurnStartPlaces, .stage = Stage::StartTurn},
     {.step = Step::InfluenceTurnStart, .stage = Stage::StartTurn},
@@ -220,9 +223,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WalkPaths, .stage = Stage::Lists},
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
-    {.step = Step::Pathfinding, .stage = Stage::Living},
     // Each living thing takes its own turn in the order of the game's list of the living. The creatures do the steps of
-    // k_CreaturesTurn in it.
+    // k_CreaturesTurn in it. Each villager takes the step of its walk in its own turn.
     {.step = Step::Living, .stage = Stage::Living},
     {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},

@@ -44,6 +44,8 @@ public:
 	[[nodiscard]] bool HasReaction(entt::entity initiator) const override;
 	[[nodiscard]] bool IsAvailable(entt::entity living, Reaction type) const override;
 	void ProcessTurn() override;
+	void StartTurn() override;
+	void EndReactionIfOver(entt::entity living) override;
 	void BelieveInTown(entt::entity town) override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
@@ -79,8 +81,6 @@ private:
 	void StartVillager(const Active& reaction, entt::entity living, components::LivingReaction& state, bool wasReacting);
 	/// A living thing stops reacting, a villager going back to what it was doing when asked
 	void Stop(entt::entity living, components::LivingReaction& state, bool resetState);
-	/// A turn of each living thing's reaction: it stops once it has reacted its time, or its reaction has gone
-	void ProcessLiving();
 	/// The reaction's impression on the living thing taking it up
 	void Impress(const Active& reaction, entt::entity living, const glm::vec3& at);
 	/// How much a creature impresses a villager taking up its reaction, by its size and what it last did, at the town's

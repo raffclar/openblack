@@ -1487,48 +1487,47 @@ void ReactionSystem::StopReacting(entt::entity living)
 	state->type = Reaction::None;
 }
 
-void ReactionSystem::ProcessLiving()
+void ReactionSystem::EndReactionIfOver(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> reacting;
-	registry.Each<const LivingReaction>([&](entt::entity entity, const LivingReaction& state) {
-		if (state.reaction != 0)
-		{
-			reacting.push_back(entity);
-		}
-	});
-	for (const auto entity : reacting)
+	auto* state = registry.Valid(entity) ? registry.TryGet<LivingReaction>(entity) : nullptr;
+	if (state == nullptr || state->reaction == 0)
 	{
-		auto& state = registry.Get<LivingReaction>(entity);
-		const auto reaction = Find(state.reaction);
-		if (!reaction.has_value())
-		{
-			Stop(entity, state, false);
-			continue;
-		}
-		// What it reacts to gone (deleted, or a villager dying), it stops at once; fainting or confused, it reacts to
-		// itself
-		const auto* info = InfoOf(state.type);
-		const auto target = reaction_timing::ReactsToItself(state.type) ? entity : reaction->source.initiator;
-		if (info == nullptr || !registry.AllOf<Transform>(entity) || ThingGone(registry, target))
-		{
-			Stop(entity, state, true);
-			continue;
-		}
-		// Its time counts from when it last took up a reaction of the kind, and lasts by how far it is from what it reacts
-		// to now
-		const auto since =
-		    static_cast<int32_t>(_turn - MemoryOf(registry, entity, state).LastReacted(static_cast<uint32_t>(state.type)));
-		if (const auto turns = TurnsToReact(*reaction, entity, state.type); since > turns)
-		{
-			if (const auto logger = spdlog::get("game"); logger != nullptr)
-			{
-				SPDLOG_LOGGER_DEBUG(logger, "Reaction: {} stops reacting to kind {} after {} turns (its time {})",
-				                    static_cast<uint32_t>(entity), static_cast<int>(state.type), since, turns);
-			}
-			Stop(entity, state, true);
-		}
+		return;
 	}
+	const auto reaction = Find(state->reaction);
+	if (!reaction.has_value())
+	{
+		Stop(entity, *state, false);
+		return;
+	}
+	// What it reacts to gone (deleted, or a villager dying), it stops at once; fainting or confused, it reacts to
+	// itself
+	const auto* info = InfoOf(state->type);
+	const auto target = reaction_timing::ReactsToItself(state->type) ? entity : reaction->source.initiator;
+	if (info == nullptr || !registry.AllOf<Transform>(entity) || ThingGone(registry, target))
+	{
+		Stop(entity, *state, true);
+		return;
+	}
+	// Its time counts from when it last took up a reaction of the kind, and lasts by how far it is from what it reacts
+	// to now
+	const auto since =
+	    static_cast<int32_t>(_turn - MemoryOf(registry, entity, *state).LastReacted(static_cast<uint32_t>(state->type)));
+	if (const auto turns = TurnsToReact(*reaction, entity, state->type); since > turns)
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "Reaction: {} stops reacting to kind {} after {} turns (its time {})",
+			                    static_cast<uint32_t>(entity), static_cast<int>(state->type), since, turns);
+		}
+		Stop(entity, *state, true);
+	}
+}
+
+void ReactionSystem::StartTurn()
+{
+	++_turn;
 }
 
 void ReactionSystem::ProcessTurn()
@@ -1537,7 +1536,6 @@ void ReactionSystem::ProcessTurn()
 	{
 		return;
 	}
-	++_turn;
 	for (auto& reaction : _reactions)
 	{
 		++reaction.age;
@@ -1644,7 +1642,6 @@ void ReactionSystem::ProcessTurn()
 			Spread(reaction);
 		}
 	}
-	ProcessLiving();
 }
 
 void ReactionSystem::BelieveInTown(entt::entity entity)
