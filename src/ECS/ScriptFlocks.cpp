@@ -227,6 +227,25 @@ void script_flocks::Remove(Registry& registry, entt::entity living, bool deleteW
 	}
 }
 
+entt::entity script_flocks::SeparateIntoNewFlock(Registry& registry, entt::entity living)
+{
+	const auto old = FlockOf(registry, living);
+	if (old == entt::null)
+	{
+		return entt::null;
+	}
+	const auto& oldData = registry.Get<const Flock>(old);
+	const auto domainRadius = oldData.domainRadius;
+	const auto flockDistance = oldData.flockDistance;
+	Remove(registry, living, false);
+	const auto own = Create(registry, PositionOf(registry, living));
+	AddLiving(registry, own, living);
+	auto& ownData = registry.Get<Flock>(own);
+	ownData.domainRadius = domainRadius;
+	ownData.flockDistance = flockDistance;
+	return own;
+}
+
 MapCoords script_flocks::PositionOf(const Registry& registry, entt::entity living)
 {
 	const auto* transform = registry.TryGet<const Transform>(living);

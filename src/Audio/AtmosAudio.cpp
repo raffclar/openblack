@@ -176,6 +176,8 @@ void AtmosAudio::ContinueTurn(const TurnInputs& inputs)
 	CopyTargets(inputs.inCitadel);
 	ProcessAtmosBanks();
 	audio.StopOutOfRangeEmitters();
+	// Then the listener moves to the camera, and every placed sound is heard from where it is now
+	audio.ProcessTurn();
 	if (!inputs.videoPlaying)
 	{
 		audio.AtmosProcess(true);

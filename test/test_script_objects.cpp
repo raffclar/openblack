@@ -67,6 +67,7 @@ struct FakeWorld final: World
 	std::vector<entt::entity> decided;
 	std::vector<entt::entity> decideAfterPhysics;
 	std::vector<entt::entity> abandoned;
+	std::vector<entt::entity> releasedAnimals;
 	std::vector<entt::entity> deleted;
 	/// The members that left a container, waiting for their script
 	std::vector<entt::entity> waiting;
@@ -96,6 +97,7 @@ struct FakeWorld final: World
 	void SetVillagerDecideWhatToDo(entt::entity villager) override { decided.push_back(villager); }
 	void SetVillagerPreviousDecideWhatToDo(entt::entity villager) override { decideAfterPhysics.push_back(villager); }
 	void AbandonCreatureAction(entt::entity creature) override { abandoned.push_back(creature); }
+	void ReleaseAnimal(entt::entity animal) override { releasedAnimals.push_back(animal); }
 	void Delete(entt::entity object) override
 	{
 		deleted.push_back(object);
@@ -735,4 +737,15 @@ TEST(ScriptObjectsSystem, AReleasedAnimalOrCreatureHasNoVillagerRelease)
 	system->ReleaseFromScript(animal);
 	system->ReleaseFromScript(creature);
 	EXPECT_TRUE(world->released.empty());
+}
+
+TEST(ScriptObjectsSystem, AReleasedAnimalGoesBackToItsOwnLife)
+{
+	auto [world, system] = MakeSystem();
+	const auto animal = world->Add(4, {.kind = Kind::Animal, .controlled = true});
+	const auto free = world->Add(5, {.kind = Kind::Animal});
+	system->ReleaseFromScript(animal);
+	system->ReleaseFromScript(free);
+	EXPECT_EQ(world->releasedAnimals, std::vector {animal});
+	EXPECT_FALSE(world->IsControlled(animal));
 }
