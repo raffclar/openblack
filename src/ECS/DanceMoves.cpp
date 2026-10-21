@@ -258,9 +258,19 @@ bool dance_moves::ApplyAction(Dance& dance, std::size_t index, uint32_t type, co
 		group->rotation = count > 0 ? static_cast<float>(2048u / (count * 2u)) : 0.0f;
 		return false;
 	}
+	case 18:
+		// The dance asks for its camera only when the hand stayed near it, and only one time
+		if (dance.cameraWanted && !dance.cameraMade)
+		{
+			dance.cameraMade = true;
+			dance.cameraAsked = true;
+		}
+		return false;
 	default:
-		// TODO(opening): dancers moved over from another group (7), what each dancer is told (9, 10), the dance's camera
-		// (18), the setting kept for later (19) and the dance's lights (20-23)
+		// The lights (20 to 23) only move lights that the game does not show. Their places on a group change no
+		// dancer's place, because the one file with lights puts them on groups that take no dancers.
+		// No shipped dance file uses the other actions: dancers moved over from another group (7), what each dancer
+		// is told (9, 10) and the setting kept for later (19).
 		return false;
 	}
 }

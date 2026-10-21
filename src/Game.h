@@ -527,6 +527,9 @@ private:
 	bool _dialogueClick {false};
 	/// Gripping the land with the mouse, which the hand only does once a button is pressed: it starts out not gripping
 	bool _handGripping {false};
+	/// The select button holds the land, not on a creature and not for a fight, and the other button is held too or not
+	bool _handSelectGrip {false};
+	bool _handOtherButton {false};
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};

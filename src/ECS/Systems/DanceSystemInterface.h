@@ -36,6 +36,11 @@ public:
 	virtual void Destroy(entt::entity dance) = 0;
 	/// Each turn, after the players and before the living: each dance's turn
 	virtual void ProcessTurn() = 0;
+	/// Each frame that the camera reads the keys: a grip of the land ends the camera of a dance
+	virtual void ProcessCameraKeys(bool /*gripsLand*/) {}
+	/// Each turn, when the camera does its checks: the camera of a dance that ended, or whose dance went, gives the
+	/// camera back to the camera that it took over from
+	virtual void CheckCamera() {}
 	/// The shapes the dances' groups stand in, with those that the game reads from its data folder
 	[[nodiscard]] virtual const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& Shapes()
 	{

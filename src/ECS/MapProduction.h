@@ -58,6 +58,7 @@ public:
 	void Sync() override;
 	void Refile(entt::entity entity) override;
 	void FileResidents() override;
+	[[nodiscard]] bool InMap(entt::entity entity) const override;
 	/// Keeps the order of the things in each cell and each block, and the things made since the last sync
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
