@@ -954,3 +954,11 @@ TEST(SpellSeedRules, TheForestSeedIsHiddenUntilPlantedThenRidesOverItsTallestTre
 	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 12.0f), 12.0f);
 	EXPECT_FLOAT_EQ(ForestSeedHeight(3.0f, 0.0f), 3.0f);
 }
+
+TEST(SpellRules, AThingAScriptHoldsInACutsceneIsSparedUnlessAScriptControlsTheMiracle)
+{
+	EXPECT_FALSE(SparedAsHeldInCutscene(false, false));
+	EXPECT_FALSE(SparedAsHeldInCutscene(false, true));
+	EXPECT_TRUE(SparedAsHeldInCutscene(true, false));
+	EXPECT_FALSE(SparedAsHeldInCutscene(true, true));
+}

@@ -61,6 +61,7 @@
 #include "VillagerForester.h"
 #include "VillagerHome.h"
 #include "VillagerHousewife.h"
+#include "VillagerMagicTree.h"
 #include "VillagerMourning.h"
 #include "VillagerMoveToObject.h"
 #include "VillagerPhysics.h"
@@ -99,6 +100,7 @@ namespace villager_shepherd = openblack::ecs::villager_shepherd;
 namespace villager_fisherman = openblack::ecs::villager_fisherman;
 namespace villager_housewife = openblack::ecs::villager_housewife;
 namespace villager_mourning = openblack::ecs::villager_mourning;
+namespace villager_magic_tree = openblack::ecs::villager_magic_tree;
 namespace villager_creature = openblack::ecs::villager_creature;
 namespace villager_checks = openblack::ecs::villager_checks;
 namespace villager_breeding = openblack::ecs::villager_breeding;
@@ -802,10 +804,30 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
         .exitState = &villager_reactions::ExitReaction,
         .validate = &villager_reactions::ReactionValidate,
     },
-    /* INITIALISE_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
-    /* PERFORM_BEWILDERED_BY_MAGIC_TREE_REACTION */ k_TodoEntry,
-    /* TURN_TO_FACE_MAGIC_TREE */ k_TodoEntry,
-    /* LOOK_AT_MAGIC_TREE */ k_TodoEntry,
+    /* INITIALISE_BEWILDERED_BY_MAGIC_TREE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_magic_tree::InitialiseBewilderedByMagicTreeReaction,
+        .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
+    },
+    /* PERFORM_BEWILDERED_BY_MAGIC_TREE_REACTION */
+    VillagerStateTableEntry {
+        .state = &villager_magic_tree::PerformBewilderedByMagicTreeReaction,
+        .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
+    },
+    /* TURN_TO_FACE_MAGIC_TREE */
+    VillagerStateTableEntry {
+        .state = &villager_magic_tree::TurnToFaceMagicTree,
+        .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
+    },
+    /* LOOK_AT_MAGIC_TREE */
+    VillagerStateTableEntry {
+        .state = &villager_magic_tree::LookAtMagicTree,
+        .exitState = &villager_reactions::ExitReaction,
+        .validate = &villager_reactions::ReactionValidate,
+    },
     /* DANCE_FOR_EDITING_PURPOSES */ k_TodoEntry,
     /* MOVE_TO_DANCE_POS */
     VillagerStateTableEntry {

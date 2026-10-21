@@ -392,6 +392,27 @@ void AddForests(std::vector<Scenario>& all)
 	                  .delaySeconds = 0.5f,
 	                  .byHand = true}},
 	});
+
+	all.push_back({
+	    .id = "miracles.villagers_look_at_magic_trees",
+	    .name = "Villagers look at the trees of a forest miracle",
+	    .facet = Facet::Miracles,
+	    .description = "Four villagers of the player's town stand near grass. A forest is cast by hand on the grass.",
+	    .expected = "Villagers that take up the forest's call walk to a tree, turn to the next tree and look up at it, then "
+	                "look about, for 2 to 5 seconds. They go from tree to tree in the forest's order, and stop after about "
+	                "half to all of the trees. Then they go back to what they did before.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-40.0f, 10.0f}, {40.0f, 75.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {-25.0f, 30.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {25.0f, 45.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {-20.0f, 60.0f}, .joinTown = true},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {20.0f, 20.0f}, .joinTown = true}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true}},
+	});
 }
 } // namespace
 

@@ -826,9 +826,9 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	}
 }
 
-bool GameMagicWorld::CanBeDestroyedBySpell(entt::entity object) const
+bool GameMagicWorld::CanBeDestroyedBySpell(entt::entity object, entt::entity spell) const
 {
-	return ecs::world_objects::CanBeDestroyedBySpell(object);
+	return ecs::world_objects::CanBeDestroyedBySpell(object, spell);
 }
 
 void GameMagicWorld::PlantNear(entt::entity tree, const magic::WaterDrop& drop)
