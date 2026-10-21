@@ -10005,6 +10005,36 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
 	});
 	all.push_back({
+	    .id = "tutorial.tab_town_flights",
+	    .name = "The Tab key flies to the player's towns",
+	    .facet = Facet::Tutorial,
+	    .description = "Lines of a land script make three towns of the player in this order: a town with a storage pit to "
+	                   "the west, a town with a village centre to the north, and a town with no building to the east. A "
+	                   "neutral town with a storage pit stands to the south. The player presses the Tab key four times, "
+	                   "eight seconds apart.",
+	    .expected = "The first press flies the camera to the village centre to the north. The second press flies it to the "
+	                "storage pit to the west. The town to the east has no place to fly to, so the third press flies to "
+	                "the north again, and the fourth to the west. The camera never goes to the neutral town. Each flight "
+	                "ends 24 metres west, 28 metres up and 47 metres north of the place, looking at it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .landScript = R"(CREATE_TOWN(60, "-70.0,0.0", "PLAYER_ONE", 0, "CELTIC")
+SET_TOWN_BELIEF(60, "PLAYER_ONE", 10.0)
+CREATE_ABODE(60, "-70.0,10.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
+CREATE_TOWN(61, "0.0,80.0", "PLAYER_ONE", 0, "NORSE")
+SET_TOWN_BELIEF(61, "PLAYER_ONE", 10.0)
+CREATE_TOWN_CENTRE(61, "0.0,90.0", "NORSE_ABODE_TOWN_CENTRE", 0, 990, 0)
+CREATE_TOWN(62, "70.0,0.0", "PLAYER_ONE", 0, "CELTIC")
+SET_TOWN_BELIEF(62, "PLAYER_ONE", 10.0)
+CREATE_TOWN(63, "0.0,-80.0", "NEUTRAL", 0, "CELTIC")
+CREATE_ABODE(63, "0.0,-70.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
+)",
+	    .commands = {{.kind = Kind::TabToTown, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f}},
+	});
+	all.push_back({
 	    .id = "tutorial.bookmark_markers_follow",
 	    .name = "Bookmark markers and a followed creature",
 	    .facet = Facet::Tutorial,
@@ -10308,12 +10338,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::SetOpenClose ||
-	       kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText ||
-	       kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
-	       kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
-	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
@@ -10350,7 +10380,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 172> k_Names {
+	constexpr std::array<std::string_view, 173> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10499,6 +10529,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "start script music",
 	    "write the web page",
 	    "fly to a bookmark",
+	    "press the Tab key",
 	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
 	    "give hand glows",

@@ -11,6 +11,11 @@
 
 #include "CameraBookmarkSystem.h"
 
+#include <vector>
+
+#include <glm/gtx/vec_swizzle.hpp>
+
+#include "3D/LandIslandInterface.h"
 #include "3D/PhysicsDrawMatrix.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
@@ -19,13 +24,19 @@
 #include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
 #include "ECS/Archetypes/CameraBookmarkArchetype.h"
+#include "ECS/BuildingSites.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/CameraBookmark.h"
 #include "ECS/Components/Physics.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerTowns.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -51,12 +62,40 @@ glm::vec3 HandPoint(const Camera& camera)
 	return camera.GetFocus();
 }
 
+/// The place that the Tab key flies to in a town: its working storage pit, else its village centre, on the land
+std::optional<glm::vec3> TownPlace(entt::entity town)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::optional<glm::vec3> place;
+	if (const auto pit = ecs::construction::StoragePitOf(town); pit.has_value() && ecs::construction::IsBuilt(*pit))
+	{
+		place = registry.Get<const Transform>(*pit).position;
+	}
+	else
+	{
+		const auto id = registry.Get<const Town>(town).id;
+		registry.Each<const Abode, const Transform>([&](entt::entity, const Abode& abode, const Transform& transform) {
+			if (!place.has_value() && abode.type == AbodeNumber::TownCentre && abode.townId == id)
+			{
+				place = transform.position;
+			}
+		});
+	}
+	if (place.has_value() && Locator::terrainSystem::has_value())
+	{
+		place->y = Locator::terrainSystem::value().GetHeightAt(glm::xz(*place));
+	}
+	return place;
+}
+
 } // namespace
 
 bool CameraBookmarkSystem::Initialize()
 {
 	_bookmarks = archetypes::CameraBookmarkArchetype::CreateAll();
 	_back.reset();
+	_townKey.reset();
+	_lastTown.reset();
 	_current = 0;
 	_followed.reset();
 	_pulseClockMs = 0;
@@ -81,6 +120,7 @@ void CameraBookmarkSystem::FindAfterLoad()
 		}
 	}
 	_back.reset();
+	_lastTown.reset();
 	_followed.reset();
 }
 
@@ -93,6 +133,10 @@ void CameraBookmarkSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _current);
 	reflection::Save(out, _followed);
 	reflection::Save(out, _enabled);
+	const auto townPoint = _townKey.has_value() ? std::optional(_townKey->point) : std::nullopt;
+	const auto townOffset = _townKey.has_value() ? std::optional(_townKey->cameraOffset) : std::nullopt;
+	reflection::Save(out, townPoint);
+	reflection::Save(out, townOffset);
 }
 
 bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
@@ -107,6 +151,14 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, current);
 	reflection::Load(in, followed);
 	reflection::Load(in, enabled);
+	// A save made before the town key was kept has no town key
+	std::optional<glm::vec3> townPoint;
+	std::optional<glm::vec3> townOffset;
+	if (in.Remaining() > 0)
+	{
+		reflection::Load(in, townPoint);
+		reflection::Load(in, townOffset);
+	}
 	if (in.Failed())
 	{
 		return false;
@@ -114,6 +166,9 @@ bool CameraBookmarkSystem::LoadState(reflection::BinaryReader& in)
 	_back = backPoint.has_value() && backOffset.has_value()
 	            ? std::optional(View {.point = *backPoint, .cameraOffset = *backOffset})
 	            : std::nullopt;
+	_townKey = townPoint.has_value() && townOffset.has_value()
+	               ? std::optional(View {.point = *townPoint, .cameraOffset = *townOffset})
+	               : std::nullopt;
 	_current = current;
 	_followed = followed;
 	_enabled = enabled;
@@ -322,6 +377,52 @@ void CameraBookmarkSystem::JumpToPrevious()
 	if (const auto slot = camera_bookmarks::PreviousSet(_current, SteppedSet()); slot.has_value())
 	{
 		JumpTo(*slot);
+	}
+}
+
+void CameraBookmarkSystem::FlyToNextTown(std::optional<entt::entity> thingUnderHand)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto towns = player_towns::InOrder(registry, Locator::playerSystem::value().GetLocalPlayer());
+	std::vector<camera_bookmarks::TownStop> stops;
+	std::vector<std::optional<glm::vec3>> places;
+	stops.reserve(towns.size());
+	places.reserve(towns.size());
+	for (const auto town : towns)
+	{
+		places.push_back(TownPlace(town));
+		stops.push_back({.id = registry.Get<const Town>(town).id, .hasPlace = places.back().has_value()});
+	}
+	const auto next = camera_bookmarks::NextTown(stops, _lastTown);
+	if (!next.has_value())
+	{
+		return;
+	}
+	const auto place = *places.at(*next);
+	auto& camera = Locator::camera::value();
+	// The town key keeps the place as a number key does: on the thing under the hand, if there is one
+	_followed.reset();
+	_current = camera_bookmarks::k_TownSlot;
+	auto point = place;
+	if (thingUnderHand.has_value() && registry.Valid(*thingUnderHand))
+	{
+		if (const auto* at = registry.TryGet<const Transform>(*thingUnderHand); at != nullptr)
+		{
+			point = at->position;
+		}
+	}
+	_townKey = View {.point = point, .cameraOffset = camera.GetOrigin() - point};
+	_lastTown = stops.at(*next).id;
+	// Only the world camera flies
+	const auto& model = camera.GetModel();
+	if (dynamic_cast<const DefaultWorldCameraModel*>(&model) != nullptr ||
+	    dynamic_cast<const FightCameraModel*>(&model) != nullptr)
+	{
+		camera.GetModel().SetFlight(camera_bookmarks::TownViewFrom(place), place, camera_fly::k_BookmarkRise);
 	}
 }
 

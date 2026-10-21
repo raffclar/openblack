@@ -1535,8 +1535,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::VillagerShieldReaction::reaction>("reaction")
 	    .Field<&components::VillagerShieldReaction::type>("type")
 	    .Field<&components::VillagerShieldReaction::shield>("shield")
-	    .Field<&components::VillagerShieldReaction::lookAt>("lookAt")
-	    .Field<&components::VillagerShieldReaction::animation>("animation");
+	    .Field<&components::VillagerShieldReaction::lookAt>("lookAt");
 	Reflect<components::VillagerReactionMemory>(context).Field<&components::VillagerReactionMemory::memory>("memory");
 	Reflect<components::MagicTreeWatch>(context)
 	    .Field<&components::MagicTreeWatch::tree>("tree")

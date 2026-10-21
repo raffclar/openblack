@@ -87,14 +87,13 @@ struct AntiInfluence
 };
 
 /// On a villager reacting to a shield, standing, struck or destroyed: the reaction and the shield it is to, the point it
-/// looks towards, and the animation it last chose
+/// looks towards
 struct VillagerShieldReaction
 {
 	uint32_t reaction {0};
 	Reaction type {Reaction::None};
 	entt::entity shield {entt::null};
 	glm::vec2 lookAt {0.0f};
-	uint32_t animation {0};
 };
 
 /// The kinds of reaction a villager took up lately, and when

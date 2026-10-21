@@ -42,6 +42,7 @@ public:
 	void JumpBack() override;
 	void JumpToNext() override;
 	void JumpToPrevious() override;
+	void FlyToNextTown(std::optional<entt::entity> thingUnderHand) override;
 	void ToggleFollow(size_t slot) override;
 	[[nodiscard]] std::optional<size_t> GetFollowed() const override { return _followed; }
 	[[nodiscard]] glm::vec2 GetMarkerHalfSize() const override { return camera_bookmarks::MarkerHalfSize(_pulseClockMs); }
@@ -65,6 +66,10 @@ private:
 	std::array<entt::entity, camera_bookmarks::k_KeySlots> _bookmarks {};
 	/// The view before the last jump, for the go-back key
 	std::optional<View> _back;
+	/// The place that the town key keeps
+	std::optional<View> _townKey;
+	/// The town that the Tab key flew to last. A new land or a load forgets it.
+	std::optional<uint32_t> _lastTown;
 	/// The slot of the last bookmark that the player set or jumped to. The Tab keys step from it.
 	size_t _current {0};
 	std::optional<size_t> _followed;
