@@ -72,10 +72,12 @@ struct Settings
 /// y up, z ahead), widened across and up by the projection's scales, each then made one long, and summed by the normal
 [[nodiscard]] glm::vec3 ViewNormal(glm::vec3 normal, const std::array<glm::vec3, 3>& axes, glm::vec2 projectionScale);
 /// How bright a corner of the shell's inner edge is, 0..255 (255 is the whole colour), by its normal in the camera's
-/// frame (x right, y up): the more side on, the brighter. A model moved by bones measures side on another way.
-[[nodiscard]] uint32_t EdgeLevel(glm::vec2 viewNormal, bool boned);
-/// The colour of a corner of the inner edge at a level: red, green and blue scaled as whole bytes, the alpha kept
-[[nodiscard]] uint32_t InnerArgb(uint32_t argb, uint32_t level);
+/// frame (x right, y up): the more side on, the brighter. A model moved by bones measures side on another way. None
+/// for a corner that the camera sees too much from the front: it is dark and clear.
+[[nodiscard]] std::optional<uint32_t> EdgeLevel(glm::vec2 viewNormal, bool boned);
+/// The colour of a corner of the inner edge at a level: red, green and blue scaled as whole bytes, the alpha kept. With
+/// no level, the corner is dark and clear.
+[[nodiscard]] uint32_t InnerArgb(uint32_t argb, std::optional<uint32_t> level);
 /// Where a corner reads the texture: across by how much its normal points up in the camera's frame, up from the slide
 /// at the inner edge to a fraction further back at the outer
 [[nodiscard]] glm::vec2 TextureCoordinates(float viewNormalY, glm::vec2 offset, glm::vec2 fraction, bool outer);
