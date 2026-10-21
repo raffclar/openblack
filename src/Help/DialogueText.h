@@ -113,7 +113,8 @@ public:
 		bool topToBottom {false};
 		/// From 0 (slow) to 1 (fast)
 		float readSpeed {0.5f};
-		/// The reading time: so many game turns a word, and so many more
+		/// The reading time: so many game turns a word, and so many more. The game takes them from the info table; the
+		/// defaults are the shipped table's values.
 		uint32_t turnsPerWord {5};
 		uint32_t extraTurns {8};
 		/// The length of a game turn

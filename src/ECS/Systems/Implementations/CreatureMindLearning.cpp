@@ -4270,7 +4270,7 @@ void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindSt
 	if (tables->rules.at(d).learnable)
 	{
 		creature_learning::LearnDesireLesson(desires, desire, creature_learning::DominantSource(desires[desire]), strength,
-		                                     tables->rules, tables->dependencies);
+		                                     tables->rules, tables->dependencies, tables->thresholdBounds);
 		creature_mind_model::Think(learnt, creature_learning::DesireLessonText(strength, texts.desire));
 		// What the desire was about teaches what such things are worth as its point; what it acted on, when that was
 		// something else and not itself, what such things are worth acting on (soiling only a little either way)

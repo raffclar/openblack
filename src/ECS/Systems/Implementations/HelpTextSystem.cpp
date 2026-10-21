@@ -26,6 +26,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Help/Spirits.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -238,9 +239,16 @@ help::DialogueText::Hooks HelpTextSystem::DialogueHooks()
 void HelpTextSystem::Start(const gui::TextDatabase& texts, int screenHeight)
 {
 	_texts = &texts;
+	// The reading time of a text comes from the info table: so many game turns a word, and so many more
+	help::DialogueText::Settings settings {};
+	if (Locator::infoConstants::has_value())
+	{
+		const auto& help = Locator::infoConstants::value().helpSystem;
+		settings.turnsPerWord = help.readDefaultWordGTTime;
+		settings.extraTurns = help.readDefaultAdjustGTTime;
+	}
 	// Some languages' texts are drawn bigger; the game's English ones are not
-	_dialogue = std::make_unique<help::DialogueText>(screenHeight, false, help::DialogueText::Settings {}, DialogueQueries(),
-	                                                 DialogueHooks());
+	_dialogue = std::make_unique<help::DialogueText>(screenHeight, false, settings, DialogueQueries(), DialogueHooks());
 	SetTextChoices(_textChoices);
 }
 

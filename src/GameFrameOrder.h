@@ -92,13 +92,14 @@ struct Place
 
 /// The frame, step by step
 inline constexpr std::array k_Frame = std::to_array<Place>({
-    // The clock of the frame and the debug inspector, before the input
+    // The clock of the frame and the debug inspector, before the input. They are openblack's own and have no place in the
+    // game's frame.
     {.step = Step::FrameClock, .stage = std::nullopt},
     // The keys, the mouse buttons and the pointer
     {.step = Step::Input, .stage = Stage::Input},
+    // The debug windows are openblack's own and have no place in the game's frame
     {.step = Step::DebugGui, .stage = std::nullopt},
     {.step = Step::Interface, .stage = Stage::FrameUpdates},
-    {.step = Step::GripEffect, .stage = std::nullopt},
     {.step = Step::Turns, .stage = Stage::Turns},
     {.step = Step::FrameTime, .stage = Stage::FrameTime},
     // The movement of the mouse turns, tilts and zooms the camera in the same frame
@@ -111,14 +112,15 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::CameraShake, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
-    {.step = Step::HighDetail, .stage = std::nullopt},
     // A full-screen film decodes the frames that are due, as the draw starts
     {.step = Step::Video, .stage = Stage::DrawStart},
-    // The words of the pause and the speed, after the frame's keys, turns and film
-    {.step = Step::PauseText, .stage = std::nullopt},
     // The creatures' fights, walks, animations, hair and the sounds of their animations
     {.step = Step::CreaturePoses, .stage = Stage::DrawStart},
     {.step = Step::Hand, .stage = Stage::PreDraw},
+    // The land's draw lets the villagers that a script draws in high detail go once the script's cinema bars are gone
+    {.step = Step::HighDetail, .stage = Stage::Draw},
+    // The dust where the hand grips the land moves on as the draw shows it, as the other spot effects do
+    {.step = Step::GripEffect, .stage = Stage::Draw},
     // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
     {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
@@ -126,6 +128,10 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The numbers and the marks that rise over things, by the game time of the frame
     {.step = Step::ScreenMarks, .stage = Stage::Draw},
     {.step = Step::Entities, .stage = Stage::Draw},
+    // The words of the pause and the speed fade as the interface finishes the draw of the frame
+    {.step = Step::PauseText, .stage = Stage::Draw},
+    // The sound library's own work: the voices that finished are let go and the sounds follow the listener. The game's
+    // sound library does this work itself, outside the game's frame.
     {.step = Step::Audio, .stage = std::nullopt},
     // The keys of the camera act after the camera moved, so their steps move the camera in the next frame
     {.step = Step::CameraKeys, .stage = Stage::CameraKeys},

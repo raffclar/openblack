@@ -86,6 +86,8 @@ struct Tables
 	creature_town_compassion::DesireActions townActions {};
 	creature_learning::AllDesireRules rules {};
 	creature_learning::Dependencies dependencies {};
+	/// How a desire lesson moves each kind of source's threshold
+	creature_learning::AllThresholdBounds thresholdBounds {};
 	std::array<std::vector<creature_tree::Attribute>, k_DesireCount> attributes {};
 	std::array<DesireTexts, k_DesireCount> texts {};
 	std::vector<creature_watching::SkillRule> skills;

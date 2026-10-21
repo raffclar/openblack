@@ -381,6 +381,31 @@ TEST(GameMusic, TownsNearTheCameraPlayTheirTribesMusic)
 	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
 }
 
+TEST(GameMusic, TheTownDistancesComeFromTheInfoTable)
+{
+	GameMusic music;
+	GameMusic::TurnInputs inputs {
+	    .turn = 100,
+	    .camera = {1000.0f, 100.0f, 1000.0f},
+	    .groundHeight = 0.0f,
+	    .inCitadel = false,
+	    .alignment = 0.0f,
+	    .playerAlignment = 0.0f,
+	    .cinema = false,
+	    .towns = {{.position = {1200.0f, 0.0f, 1000.0f}, .tribe = 5, .id = 1}},
+	    .townTriggerDistance = 150.0f,
+	    .townTriggerOffDistance = 250.0f,
+	    .thingPosition = {},
+	};
+	// The town is 200 away: not within the table's 150, so no town music starts
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
+	inputs.camera.x = 1100.0f;
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::EgyptianTownNeutral);
+	// The camera is 250 above the land, the table's off height: no town music
+	inputs.camera.y = 250.0f;
+	EXPECT_EQ(music.SelectLandType(inputs), MusicType::GenericNeutral);
+}
+
 TEST(GameMusic, AttachedMusicIsHeardAsFarAsItsBankCarries)
 {
 	// The celtic chant's bank carries 120

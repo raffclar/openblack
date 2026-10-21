@@ -137,6 +137,11 @@ Tables creature_mind_tables::Build(const InfoConstants& info)
 			tables.townActions.at(d).push_back(action);
 		}
 	}
+	for (size_t s = 0; s < tables.thresholdBounds.size() && s < info.creatureSourceBounds.size(); ++s)
+	{
+		const auto& row = info.creatureSourceBounds.at(s);
+		tables.thresholdBounds.at(s) = {.min = row.minThreshold, .max = row.maxThreshold, .step = row.thresholdStep};
+	}
 	for (const auto& entry : info.creatireActionKnownAboutEntry)
 	{
 		tables.skills.push_back({

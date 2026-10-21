@@ -34,7 +34,8 @@ float creature_learning::LessonFactor(float divisor, float feedback)
 }
 
 void creature_learning::LearnDesireLesson(creature_desires::Desires& desires, Desire desire, std::optional<size_t> source,
-                                          float feedback, const AllDesireRules& rules, const Dependencies& dependencies)
+                                          float feedback, const AllDesireRules& rules, const Dependencies& dependencies,
+                                          const AllThresholdBounds& bounds)
 {
 	const auto index = static_cast<size_t>(desire);
 	const auto& rule = rules.at(index);
@@ -48,7 +49,11 @@ void creature_learning::LearnDesireLesson(creature_desires::Desires& desires, De
 	if (source.has_value() && *source < state.sources.size())
 	{
 		auto& driver = state.sources.at(*source);
-		driver.threshold = std::clamp(driver.threshold - k_ThresholdStep * feedback, k_MinThreshold, k_MaxThreshold);
+		if (driver.type < bounds.size())
+		{
+			const auto& bound = bounds.at(driver.type);
+			driver.threshold = std::clamp(driver.threshold - bound.step * feedback, bound.min, bound.max);
+		}
 	}
 	const auto lowest = std::max(rule.initialMax - k_MaxReach, 0.0f);
 	const auto highest = std::min(rule.initialMax + k_MaxReach, k_MaxMax);
