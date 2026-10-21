@@ -16,6 +16,7 @@
 #include <limits>
 #include <memory>
 
+#include <glm/common.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
@@ -421,6 +422,7 @@ void FootpathSystem::BuildingWorking(entt::entity building)
 	{
 		return;
 	}
+	CatchUpWithMap();
 	// The path is planned from the pit to the building's door, with no end moved out of its building
 	const auto start = ArrivePlace(*pit);
 	const auto goal = ArrivePlace(building);
@@ -447,6 +449,7 @@ void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 	{
 		return;
 	}
+	CatchUpWithMap();
 	if (!registry.AllOf<FootpathLink>(site))
 	{
 		registry.Assign<FootpathLink>(site, registry.Get<const Transform>(site).position, std::vector<Footpath::Id> {});
@@ -482,6 +485,7 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	{
 		return;
 	}
+	CatchUpWithMap();
 	// The path is planned from the dance to the pit, and laid at once
 	const auto [start, goal] = PlannedEnds(dance, *pit);
 	auto plan = StartPlan(start, goal);
@@ -559,6 +563,26 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 {
 	auto& registry = Entities();
 	const auto& footpath = registry.Get<const Footpath>(entity);
+	const obstacle_rules::Obstacle obstacle {.radius = change.radius, .place = change.place};
+	// A thing put far from every node of the path leaves the path as it is: most things come nowhere near most paths
+	if (change.put)
+	{
+		if (footpath.nodes.empty())
+		{
+			return;
+		}
+		glm::ivec2 low = footpath.nodes.front().place;
+		glm::ivec2 high = low;
+		for (const auto& node : footpath.nodes)
+		{
+			low = glm::min(low, node.place);
+			high = glm::max(high, node.place);
+		}
+		if (obstacle_rules::GoesClearOf(low, high, obstacle))
+		{
+			return;
+		}
+	}
 	std::vector<obstacle_rules::KeyedNode> nodes;
 	nodes.reserve(footpath.nodes.size());
 	for (size_t i = 0; i < footpath.nodes.size(); ++i)
@@ -567,14 +591,22 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 		nodes.push_back({.node = {.place = node.place, .planned = node.planned, .hidden = node.hidden, .marker = node.marker},
 		                 .key = static_cast<uint32_t>(i + 1)});
 	}
-	auto followers = FollowersOf(registry, entity);
+	// The walkers on the path are found only when the rules need them
+	std::optional<std::vector<Follower>> found;
+	const auto followers = [&found, &registry, entity]() -> std::vector<Follower>& {
+		if (!found.has_value())
+		{
+			found = FollowersOf(registry, entity);
+		}
+		return *found;
+	};
 	auto* pathfinding = Locator::pathfindingSystem::has_value() ? &Locator::pathfindingSystem::value() : nullptr;
 	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
 	const obstacle_rules::Hooks hooks {
 	    .planRoute = [this](glm::ivec2 from, glm::ivec2 to) { return PlanBetween(from, to); },
 	    .lookAgain =
 	        [&followers, pathfinding](uint32_t key, bool towardsStart) {
-		        for (const auto& follower : followers)
+		        for (const auto& follower : followers())
 		        {
 			        if (follower.key == key && follower.towardsStart == towardsStart && pathfinding != nullptr)
 			        {
@@ -584,7 +616,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	        },
 	    .sendOn =
 	        [&followers, pathfinding](uint32_t gone, uint32_t back, glm::ivec2 backPlace, uint32_t on, glm::ivec2 onPlace) {
-		        for (auto& follower : followers)
+		        for (auto& follower : followers())
 		        {
 			        if (follower.key != gone)
 			        {
@@ -600,7 +632,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	    .cutOff =
 	        [&followers](uint32_t gone, uint32_t onwardFrom, uint32_t first) {
 		        // Each walks on to where the node was, as it did
-		        for (auto& follower : followers)
+		        for (auto& follower : followers())
 		        {
 			        if (follower.key == gone)
 			        {
@@ -611,7 +643,6 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	    .altitude = [land](glm::ivec2 place) { return land != nullptr ? land->GetAltitude(place.x, place.y) : 0.0f; },
 	};
 	const auto before = nodes;
-	const obstacle_rules::Obstacle obstacle {.radius = change.radius, .place = change.place};
 	if (change.put)
 	{
 		obstacle_rules::GoRound(nodes, obstacle, hooks);
@@ -633,7 +664,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	std::ranges::transform(nodes, std::back_inserter(laid), &obstacle_rules::KeyedNode::node);
 	SetNodes(registry.Get<Footpath>(entity), laid);
 	// Each walker walks on to its node where the node now is
-	for (const auto& follower : followers)
+	for (const auto& follower : followers())
 	{
 		auto& walk = registry.Get<FootpathWalk>(follower.villager);
 		const auto at = std::ranges::find(nodes, follower.key, &obstacle_rules::KeyedNode::key);
@@ -661,6 +692,15 @@ void FootpathSystem::ProcessObstacleChanges()
 			Reroute(footpath, change);
 		}
 	}
+}
+
+void FootpathSystem::CatchUpWithMap()
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Sync();
+	}
+	ProcessObstacleChanges();
 }
 
 void FootpathSystem::ProcessTurn()

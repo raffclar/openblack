@@ -78,6 +78,11 @@ struct Hooks
 /// hundredth
 [[nodiscard]] bool StraightEnough(glm::vec3 first, glm::vec3 second, glm::vec3 corner);
 
+/// Whether a thing put on the map cannot touch a path whose node places all lie in the square from low to high. Then
+/// GoRound changes no node and asks nothing of the hooks. A square about the thing that wraps round the map's integers
+/// always counts as a touch.
+[[nodiscard]] bool GoesClearOf(glm::ivec2 low, glm::ivec2 high, const Obstacle& obstacle);
+
 /// A thing is put on the map: the path is sent round it. Changes the nodes.
 void GoRound(std::vector<KeyedNode>& nodes, const Obstacle& obstacle, const Hooks& hooks);
 

@@ -35,6 +35,7 @@
 #include "3D/LandData.h"
 #include "3D/LandNormal.h"
 #include "3D/MapCoords.h"
+#include "Common/WorkerPool.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
@@ -246,12 +247,15 @@ void LandIsland::Build(const LandData& data)
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
 	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
 	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
-	std::vector<uint8_t> blockTexels(block_texture::k_BlockBytes);
-	for (size_t i = 0; i < _landBlocks.size(); ++i)
-	{
-		block_texture::BuildBlock(_landBlocks[i].GetLndBlock()->cells, sources, blockTexels);
-		_blockTextures->UpdateLayer(static_cast<uint16_t>(i), blockTexels.data(), static_cast<uint32_t>(blockTexels.size()));
-	}
+	// Threads that live as long as the build paint the blocks
+	WorkerPool painters(WorkerPool::DefaultThreadCount());
+	block_texture::BuildBlocks(
+	    _landBlocks.size(),
+	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
+	    painters,
+	    [this](size_t block, std::span<const uint8_t> rgba) {
+		    _blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
+	    });
 	// The footprints are painted into the blocks after
 	_repaintedBlocks.resize(_landBlocks.size());
 	std::iota(_repaintedBlocks.begin(), _repaintedBlocks.end(), size_t {0});

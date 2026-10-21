@@ -216,6 +216,11 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	                     .type = "array",
 	                     .description = "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the "
 	                                    "hand eases towards the pointer every frame drawn, paused or not",
+	                     .required = false},
+	                    {.name = "ids",
+	                     .type = "boolean",
+	                     .description = "false: leave out the ids, so that two loads of a land give the same hash although "
+	                                    "the registry gave the entities other ids (true by default)",
 	                     .required = false}},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
@@ -332,10 +337,22 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 		    }
 	    });
 	std::ranges::sort(entities);
+	const auto ids = params.find("ids");
+	const bool withIds = ids == params.end() || !ids->is_boolean() || ids->get<bool>();
+	// With no ids, each entity has a hash of its own. The hashes are then put in order and hashed together, so that the
+	// order of the ids does not change the result.
+	std::vector<uint64_t> eachEntity;
 	for (const auto entity : entities)
 	{
+		if (!withIds)
+		{
+			hash = k_Offset;
+		}
 		const auto id = entt::to_integral(entity);
-		mix(&id, sizeof(id));
+		if (withIds)
+		{
+			mix(&id, sizeof(id));
+		}
 		const auto& transform = registry.Get<const ecs::components::Transform>(entity);
 		mix(&transform.position, sizeof(transform.position));
 		mix(&transform.rotation, sizeof(transform.rotation));
@@ -345,6 +362,19 @@ QueryResult RegistryProvider::Hash(const ecs::Registry& registry, const Json& pa
 			const auto fields =
 			    Dump(reflection::ComponentToJson(_context, reflection::StorageType(*extra), extra->value(entity)));
 			mix(fields.data(), fields.size());
+		}
+		if (!withIds)
+		{
+			eachEntity.push_back(hash);
+		}
+	}
+	if (!withIds)
+	{
+		std::ranges::sort(eachEntity);
+		hash = k_Offset;
+		for (const auto each : eachEntity)
+		{
+			mix(&each, sizeof(each));
 		}
 	}
 	return QueryResult::Value({{"hash", fmt::format("{:016x}", hash)}, {"entities", entities.size()}});

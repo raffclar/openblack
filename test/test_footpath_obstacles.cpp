@@ -15,10 +15,12 @@
 #include <tuple>
 #include <vector>
 
+#include <glm/common.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/GUtilsDistance.h"
 #include "ECS/FootpathObstacles.h"
 #include "ECS/FootpathPlanning.h"
 #include "ECS/FootpathRules.h"
@@ -215,4 +217,79 @@ TEST(FootpathRulesPassedBy, WalkersPassHiddenNodesAndMarkersBy)
 	EXPECT_EQ(rules::NearestNode(places, East(19.0f), false, passedBy), 3u);
 	// Without the flags every node counts
 	EXPECT_EQ(rules::NextNode(places, 0, false), 1u);
+}
+
+TEST(FootpathObstaclesClear, AThingFarFromEveryNodeIsClearOfThePath)
+{
+	const auto nodes = ThreeAnchors();
+	const obstacle_rules::Obstacle far {.radius = k_Radius, .place = East(100.0f)};
+	EXPECT_TRUE(obstacle_rules::GoesClearOf(nodes.front().node.place, nodes.back().node.place, far));
+	const obstacle_rules::Obstacle near {.radius = k_Radius, .place = East(20.0f)};
+	EXPECT_FALSE(obstacle_rules::GoesClearOf(nodes.front().node.place, nodes.back().node.place, near));
+}
+
+TEST(FootpathObstaclesClear, AThingJustOffTheEndOfThePathTouchesIt)
+{
+	// The square about the thing reaches the last node exactly: the rules look at that node
+	const auto nodes = ThreeAnchors();
+	const auto half = gutils::ConvertMetersToWholeDistance(k_Radius);
+	const auto last = nodes.back().node.place;
+	const obstacle_rules::Obstacle touching {.radius = k_Radius, .place = {last.x + half, last.y}};
+	EXPECT_FALSE(obstacle_rules::GoesClearOf(nodes.front().node.place, last, touching));
+	const obstacle_rules::Obstacle clear {.radius = k_Radius, .place = {last.x + half + 1, last.y}};
+	EXPECT_TRUE(obstacle_rules::GoesClearOf(nodes.front().node.place, last, clear));
+}
+
+TEST(FootpathObstaclesClear, ASquareThatWrapsIsNeverClear)
+{
+	const obstacle_rules::Obstacle atEdge {.radius = k_Radius, .place = {0, 0}};
+	EXPECT_FALSE(obstacle_rules::GoesClearOf(East(100.0f), East(200.0f), atEdge));
+}
+
+TEST(FootpathObstaclesClear, APathClearOfTheThingIsLeftAsItIsWithNoCalls)
+{
+	// Many paths of random nodes and things at random places: each time the test says clear, the rules change nothing
+	uint32_t seed = 12345;
+	const auto next = [&seed](int32_t range) {
+		seed = seed * 1664525u + 1013904223u;
+		return static_cast<int32_t>((seed >> 8u) % static_cast<uint32_t>(range));
+	};
+	int clearCount = 0;
+	for (int round = 0; round < 3000; ++round)
+	{
+		std::vector<obstacle_rules::KeyedNode> nodes;
+		const auto count = 2 + next(6);
+		for (int32_t i = 0; i < count; ++i)
+		{
+			nodes.push_back({.node = {.place = East(static_cast<float>(next(200))) + glm::ivec2 {0, next(400000)},
+			                          .planned = next(3) == 0,
+			                          .hidden = next(5) == 0,
+			                          .marker = next(7) == 0},
+			                 .key = static_cast<uint32_t>(i + 1)});
+		}
+		const obstacle_rules::Obstacle thing {.radius = 1.0f + static_cast<float>(next(20)),
+		                                      .place = East(static_cast<float>(next(260)) - 30.0f) +
+		                                               glm::ivec2 {0, next(500000) - 50000}};
+		glm::ivec2 low = nodes.front().node.place;
+		glm::ivec2 high = low;
+		for (const auto& node : nodes)
+		{
+			low = glm::min(low, node.node.place);
+			high = glm::max(high, node.node.place);
+		}
+		if (!obstacle_rules::GoesClearOf(low, high, thing))
+		{
+			continue;
+		}
+		++clearCount;
+		Calls calls;
+		auto changed = nodes;
+		obstacle_rules::GoRound(changed, thing, FakeHooks(calls, std::vector<glm::ivec2> {East(1.0f)}));
+		EXPECT_EQ(changed, nodes);
+		EXPECT_TRUE(calls.plans.empty());
+		EXPECT_TRUE(calls.lookAgain.empty());
+		EXPECT_TRUE(calls.sendOn.empty());
+		EXPECT_TRUE(calls.cutOff.empty());
+	}
+	EXPECT_GT(clearCount, 100);
 }
