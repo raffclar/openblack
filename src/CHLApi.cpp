@@ -2304,6 +2304,12 @@ void SetPosition() // 024 SET_POSITION
 		{
 			return;
 		}
+		// A thing out of the map's cells stays where it is, as a thing that a creature holds
+		if (registry.Valid(object) && Locator::entitiesMap::has_value() && !Locator::entitiesMap::value().InMap(object))
+		{
+			ScriptMessage("Trying to set position - Object not in map");
+			return;
+		}
 		// The thing goes to the map position of the point, on the land there
 		const auto& island = Locator::terrainSystem::value();
 		const auto place = map_coords::FromMetres({position.x, position.z});
