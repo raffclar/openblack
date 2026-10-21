@@ -167,6 +167,7 @@ int LHVM::LoadBinary(const LHVMFile& file)
 
 	StopAllTasks();
 
+	_programFile.reset();
 	_instructions = file.GetInstructions();
 	_scripts = file.GetScripts();
 	_data = file.GetData();
@@ -201,6 +202,8 @@ int LHVM::LoadBinary(const LHVMFile& file)
 	{
 		StartScript(scriptId);
 	}
+	// The copy for saves is made now, while the game loads, and not at the first save
+	[[maybe_unused]] const auto program = ProgramFile();
 
 	return EXIT_SUCCESS;
 }
@@ -212,6 +215,7 @@ int LHVM::UpdateProgram(const LHVMFile& file)
 	{
 		return EXIT_FAILURE;
 	}
+	_programFile.reset();
 	_instructions = file.GetInstructions();
 	_scripts = file.GetScripts();
 	_data = file.GetData();
@@ -222,6 +226,8 @@ int LHVM::UpdateProgram(const LHVMFile& file)
 	}
 	_variablesNames = names;
 	_highestScriptId = static_cast<uint32_t>(_scripts.size());
+	// The copy for saves is made now, while the game loads, and not at the first save
+	[[maybe_unused]] const auto program = ProgramFile();
 	return EXIT_SUCCESS;
 }
 
@@ -248,6 +254,7 @@ int LHVM::RestoreState(const LHVMFile& file)
 
 	StopAllTasks();
 
+	_programFile.reset();
 	_instructions = file.GetInstructions();
 	_scripts = file.GetScripts();
 	_data = file.GetData();
@@ -273,6 +280,8 @@ int LHVM::RestoreState(const LHVMFile& file)
 	_highestTaskId = file.GetHighestTaskId();
 	_highestScriptId = file.GetHighestScriptId();
 	_executedInstructions = file.GetExecutedInstructions();
+	// The copy for saves is made now, while the game loads, and not at the first save
+	[[maybe_unused]] const auto program = ProgramFile();
 
 	return EXIT_SUCCESS;
 }
@@ -347,6 +356,7 @@ void LHVM::Reboot()
 {
 	StopAllTasks();
 	_variables.clear();
+	_programFile.reset();
 	_variablesNames.clear();
 	_scripts.clear();
 	_auto.clear();
@@ -376,15 +386,53 @@ int LHVM::SaveBinary(const std::filesystem::path& filepath)
 
 LHVMFile LHVM::StateFile() const
 {
-	std::vector<VMTask> tasks;
-	tasks.reserve(_tasks.size());
+	return StateFile(*ProgramFile(), CopyRunningState());
+}
+
+std::shared_ptr<const LHVMFile> LHVM::ProgramFile() const
+{
+	if (!_programFile)
+	{
+		_programFile = std::make_shared<const LHVMFile>(LHVMVersion::BlackAndWhite, _variablesNames, _instructions, _auto,
+		                                                _scripts, _data);
+	}
+	return _programFile;
+}
+
+LHVM::RunningState LHVM::CopyRunningState() const
+{
+	RunningState state {.stack = _mainStack,
+	                    .variables = _variables,
+	                    .tasks = {},
+	                    .ticks = _ticks,
+	                    .currentLineNumber = _currentLineNumber,
+	                    .highestTaskId = _highestTaskId,
+	                    .highestScriptId = _highestScriptId,
+	                    .executedInstructions = _executedInstructions};
+	state.tasks.reserve(_tasks.size());
 	for (const auto& [id, task] : _tasks)
 	{
-		tasks.emplace_back(task);
+		state.tasks.emplace_back(task);
 	}
+	return state;
+}
 
-	return LHVMFile(LHVMVersion::BlackAndWhite, _variablesNames, _instructions, _auto, _scripts, _data, _mainStack, _variables,
-	                tasks, _ticks, _currentLineNumber, _highestTaskId, _highestScriptId, _executedInstructions);
+LHVMFile LHVM::StateFile(const LHVMFile& program, const RunningState& state)
+{
+	return {program.GetVersion(),
+	        program.GetVariablesNames(),
+	        program.GetInstructions(),
+	        program.GetAutostart(),
+	        program.GetScripts(),
+	        program.GetData(),
+	        state.stack,
+	        state.variables,
+	        state.tasks,
+	        state.ticks,
+	        state.currentLineNumber,
+	        state.highestTaskId,
+	        state.highestScriptId,
+	        state.executedInstructions};
 }
 
 int LHVM::SaveState(const std::filesystem::path& filepath)
@@ -1710,6 +1758,7 @@ bool LHVM::CallNative(uint32_t id, std::span<const NativeArgument> arguments,
 		if (const auto* text = std::get_if<std::string>(&argument))
 		{
 			const auto offset = static_cast<uint32_t>(_data.size());
+			_programFile.reset();
 			_data.insert(_data.end(), text->begin(), text->end());
 			_data.push_back('\0');
 			Push(VMValue(offset), DataType::Int);
@@ -1727,8 +1776,9 @@ bool LHVM::CallNative(uint32_t id, std::span<const NativeArgument> arguments,
 	_functions->at(id).impl();
 	InvokeNativeCallExitCallback(id);
 	// A native that loaded other scripts has replaced the data, texts and all: only the call's own texts are taken off
-	if (_data.size() == withTexts)
+	if (_data.size() == withTexts && withTexts != scriptsData)
 	{
+		_programFile.reset();
 		_data.resize(scriptsData);
 	}
 	// What it gave back sits on top of what was there before
