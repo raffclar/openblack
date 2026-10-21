@@ -50,6 +50,7 @@ public:
 
 	void Start() override;
 	void Update() override;
+	void StartDraw() override;
 	[[nodiscard]] std::chrono::milliseconds GetElapsedTime() const override;
 
 	void StartGameClock(bool paused) override;
@@ -102,8 +103,10 @@ private:
 	/// While frames take a fixed time, the tick count; after, what is added to the tick source's to carry on from it
 	uint32_t _fixedTicks {0};
 	uint32_t _tickOffset {0};
-	/// The wall clock's whole milliseconds at the last frame, and the frame's real time
+	/// The wall clock's whole milliseconds at the last frame
 	uint32_t _lastFrameTicks {0};
+	/// The wall clock's whole milliseconds at the start of the last draw, and the real time of the draw
+	uint32_t _lastDrawTicks {0};
 	uint32_t _frameRealMs {1};
 	std::chrono::milliseconds _elapsedTime {0};
 	/// The tick count the game's reading of the clock counts from, and the date pinned at that moment, if any

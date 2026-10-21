@@ -184,7 +184,7 @@ TEST(GameFrameOrder, AFilmShowsItsFramesAfterTheCameraAndBeforeTheCreaturesArePo
 	EXPECT_TRUE(recorder.Before(Step::Video, Step::CreaturePoses));
 }
 
-TEST(GameFrameOrder, TheHighDetailTheGripDustAndThePauseWordsAreInTheDraw)
+TEST(GameFrameOrder, TheHighDetailTheGripDustTheFadeAndThePauseWordsAreInTheDraw)
 {
 	const auto recorder = PlayOneFrame();
 	// The land's draw lets the high-detail villagers go, after the creatures are posed and the hand moved
@@ -192,8 +192,12 @@ TEST(GameFrameOrder, TheHighDetailTheGripDustAndThePauseWordsAreInTheDraw)
 	EXPECT_TRUE(recorder.Before(Step::HighDetail, Step::Entities));
 	EXPECT_TRUE(recorder.Before(Step::Hand, Step::GripEffect));
 	// The words of the pause and the speed fade as the interface finishes the draw
+	// The fade steps after the world is drawn and before the words of the pause
+	EXPECT_TRUE(recorder.Before(Step::Entities, Step::ScreenFade));
+	EXPECT_TRUE(recorder.Before(Step::ScreenFade, Step::PauseText));
 	EXPECT_TRUE(recorder.Before(Step::Entities, Step::PauseText));
-	for (const auto step : {Step::HighDetail, Step::GripEffect, Step::PauseText})
+	EXPECT_TRUE(recorder.Before(Step::PauseText, Step::CameraKeys));
+	for (const auto step : {Step::HighDetail, Step::GripEffect, Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
@@ -206,19 +210,32 @@ TEST(GameFrameOrder, TheBookmarksThrobAsTheDrawShowsThem)
 	EXPECT_TRUE(recorder.Before(Step::Bookmarks, Step::Entities));
 }
 
-// While the window is minimised the game does not move the camera, put the hand under the cursor or draw the world
-TEST(GameFrameOrder, TheGraphicsAreTheCameraThePreDrawAndTheDraw)
+// While the window is minimised the game does not move the camera, start the draw, put the hand under the cursor or draw
+// the world
+TEST(GameFrameOrder, TheGraphicsAreTheCameraTheDrawStartThePreDrawAndTheDraw)
 {
 	for (const auto step : {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::Temple,
-	                        Step::Hand, Step::Entities})
+	                        Step::DrawClock, Step::Video, Step::CreaturePoses, Step::Hand, Step::HighDetail, Step::GripEffect,
+	                        Step::Entities, Step::ScreenFade, Step::PauseText})
 	{
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
-	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::Turns, Step::FrameTime, Step::CameraKeys,
-	                        Step::ProfileAlignment, Step::Audio})
+	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::Turns, Step::FrameTime, Step::FilmClock,
+	                        Step::CameraKeys, Step::ProfileAlignment, Step::Audio})
 	{
 		EXPECT_FALSE(IsGraphics(step)) << static_cast<int>(step);
 	}
+}
+
+// The draw measures its real time after the camera moved, so the camera steps by the time of the last draw
+TEST(GameFrameOrder, TheDrawMeasuresItsRealTimeAfterTheCameraAndBeforeTheFilmAndTheHand)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Camera, Step::DrawClock));
+	EXPECT_TRUE(recorder.Before(Step::CameraShake, Step::DrawClock));
+	EXPECT_TRUE(recorder.Before(Step::FilmClock, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::DrawClock, Step::Video));
+	EXPECT_TRUE(recorder.Before(Step::DrawClock, Step::Hand));
 }
 
 // A minimised window skips the graphics, except in a frame that a picture is necessary from

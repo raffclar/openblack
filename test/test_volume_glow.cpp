@@ -120,8 +120,8 @@ TEST(VolumeGlowRules, TheViewNormalIsWidenedByTheProjectionThenEachAxisMadeOneLo
 
 TEST(VolumeGlowRules, TheInnerEdgeGlowsTheMoreSideOnItIsSeen)
 {
-	// Facing the camera: dark
-	EXPECT_EQ(volume_glow::EdgeLevel({0.0f, 0.0f}, false), 0u);
+	// Facing the camera: dark and clear
+	EXPECT_EQ(volume_glow::EdgeLevel({0.0f, 0.0f}, false), std::nullopt);
 	// Wholly side on, a model without bones reaches only a little of the colour
 	EXPECT_EQ(volume_glow::EdgeLevel({1.0f, 0.0f}, false), 24u);
 	EXPECT_EQ(volume_glow::EdgeLevel({0.7071f, 0.7071f}, false), 24u);
@@ -130,7 +130,7 @@ TEST(VolumeGlowRules, TheInnerEdgeGlowsTheMoreSideOnItIsSeen)
 	// A model moved by bones measures side on by the sum of the two
 	EXPECT_EQ(volume_glow::EdgeLevel({0.7071f, 0.7071f}, true), 151u);
 	EXPECT_EQ(volume_glow::EdgeLevel({1.5f, 1.5f}, true), 255u);
-	EXPECT_EQ(volume_glow::EdgeLevel({0.5f, 0.0f}, true), 0u);
+	EXPECT_EQ(volume_glow::EdgeLevel({0.5f, 0.0f}, true), std::nullopt);
 }
 
 TEST(VolumeGlowRules, TheInnerColourScalesItsChannelsAsWholeBytesKeepingItsAlpha)
@@ -138,6 +138,8 @@ TEST(VolumeGlowRules, TheInnerColourScalesItsChannelsAsWholeBytesKeepingItsAlpha
 	EXPECT_EQ(volume_glow::InnerArgb(0xCFFF4646u, 255), 0xCFFF4646u);
 	EXPECT_EQ(volume_glow::InnerArgb(0xCFFF4646u, 24), 0xCF170606u);
 	EXPECT_EQ(volume_glow::InnerArgb(0xCFFF4646u, 0), 0xCF000000u);
+	// A corner seen too much from the front loses its alpha too
+	EXPECT_EQ(volume_glow::InnerArgb(0xCFFF4646u, std::nullopt), 0u);
 }
 
 TEST(VolumeGlowRules, TextureCoordinatesRunAcrossByTheNormalAndBackToTheOuterEdge)
