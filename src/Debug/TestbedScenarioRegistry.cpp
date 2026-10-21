@@ -2855,6 +2855,32 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger walks down the bank of the lake and up again, then along the bank, seen from the side
+	const glm::vec2 aboveBank {k_Lake.x, k_NearShallows - 34.0f};
+	const glm::vec2 belowBank {k_Lake.x, k_NearShallows - 2.0f};
+	const glm::vec2 alongBank {k_Lake.x - 30.0f, k_NearShallows - 16.0f};
+	const glm::vec2 alongBankEnd {k_Lake.x + 30.0f, k_NearShallows - 16.0f};
+	all.push_back({
+	    .id = "movement.land_tilt",
+	    .name = "The body leans with the slope of the land",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks down the steep bank of the lake to the shallows and back up to the grass. Then it "
+	                   "walks along the middle of the bank and back. The camera looks at it from the side.",
+	    .expected = "On the flat grass the tiger stands level. On the bank its body leans with the slope: its head is "
+	                "lower than its tail when it walks down, and higher when it walks up. Along the bank, the side of "
+	                "the body that is up the slope is higher. Its legs and its neck stay upright, and do not lean over "
+	                "with the land. The lean changes smoothly as the slope under it changes.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.05f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x + 55.0f, 14.0f, k_NearShallows - 20.0f},
+	                .look = {k_Lake.x, 2.0f, k_NearShallows - 18.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, aboveBank, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, belowBank, 1.0f), Go(Kind::WalkTo, 0, aboveBank, 1.0f),
+	                 Go(Kind::WalkTo, 0, alongBank, 1.0f), Go(Kind::WalkTo, 0, alongBankEnd, 1.0f),
+	                 Go(Kind::WalkTo, 0, aboveBank, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	all.push_back({
 	    .id = "movement.footstep_dust_snow",
 	    .name = "Dust from the footsteps in the snow",

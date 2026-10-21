@@ -153,12 +153,6 @@ bool StallsOnTurn(ApproachStall& stall, glm::vec2 here, bool scripted);
 constexpr size_t k_KickAnimation = 117;
 /// A thing kicked flies off at this many times the creature's size
 constexpr float k_KickSpeedPerSize = 45.0f;
-/// How the creature leans with the land under it: the rise across its width, by the heights a radius to either side of
-/// it, times this share, at most this much either way
-constexpr float k_LeanShare = 0.6f;
-constexpr float k_MostLean = 0.3f;
-/// How the creature leans along the land's two axes, from the land's heights a radius to either side of it along each
-[[nodiscard]] glm::vec2 LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius);
 /// How a thing it kicks starts to fly: half up and half ahead of the creature, the ahead part tipped up or down with the
 /// creature's lean, at the kick's speed for its size. The scale is the creature's drawn scale
 /// The way of a kick, of length 1: half up and half ahead of the creature, the ahead part tipped up or down with the

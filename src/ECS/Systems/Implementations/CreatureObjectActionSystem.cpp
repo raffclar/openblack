@@ -104,6 +104,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -730,14 +731,8 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		return;
 	}
 	// It kicks the way it faces, leaning with the land under it
-	const glm::vec2 at {transform.position.x, transform.position.z};
-	const auto radius = object_measures::TwoDRadius(registry, creature);
-	const auto height = [](glm::vec2 point) {
-		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
-	};
-	const auto lean =
-	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
-	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
+	const auto tilt = ecs::creature_placement::TiltOf(registry, creature, transform);
+	const glm::vec2 lean {tilt.alongX, tilt.alongZ};
 	// Its heading, or the way its rotation faces when it does not walk
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
 	const auto ahead = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
@@ -1078,9 +1073,25 @@ float AboveGround(const glm::vec3& point)
 	                                                             map_coords::FtoL(point.z * 65536.0f * 0.1f));
 }
 
-/// A villager or an animal as a thing that a creature aims ahead of. None for anything else.
+/// A villager, an animal or a creature as a thing that a creature aims ahead of. None for anything else.
 std::optional<creature_lead::Living> LivingOf(const ecs::Registry& registry, entt::entity thing)
 {
+	if (const auto* other = registry.TryGet<const Creature>(thing))
+	{
+		// Another creature on its way is led by the speed of its species' table
+		const auto* transform = registry.TryGet<const Transform>(thing);
+		if (transform == nullptr || !Locator::infoConstants::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& info = Locator::infoConstants::value();
+		const auto row = creature::InfoRow(other->species);
+		const auto speed = row < info.creature.size() ? static_cast<int32_t>(info.creature.at(row).speedGroup.speedDefault) : 0;
+		return creature_lead::CreatureAsLiving(
+		    {map_coords::ToFixed(transform->position.x), map_coords::ToFixed(transform->position.z)}, transform->position.y,
+		    speed,
+		    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(thing));
+	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
 		// The animal's place at the end of its last turn, not the place where it is drawn between two turns
@@ -1558,7 +1569,9 @@ bool StepAccepted(entt::entity creature, const Transform& transform, bool mirror
 	{
 		step.x = -step.x;
 	}
-	const auto end = transform.position + (transform.rotation * (step * transform.scale));
+	// The step leans with the slope of the land, as the body does
+	const auto placement = ecs::creature_placement::PlacementOf(Locator::entitiesRegistry::value(), creature, transform);
+	const auto end = glm::vec3(placement * glm::vec4(step, 1.0f));
 	// The circles of the land it may not stand on and of the things it walks round in the block's cells. They give way to
 	// where the creature's route last left it, which is where it stands.
 	const auto circles = creature_route::StepBlockCircles(

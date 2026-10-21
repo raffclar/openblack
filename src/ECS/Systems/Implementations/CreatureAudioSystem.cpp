@@ -31,6 +31,7 @@
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureFootstepPuffs.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreaturePointing.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/Creature.h"
@@ -185,12 +186,18 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 		layers.face = creature_audio::Played {*animation.face.current, animation.face.timeMs};
 	}
 	std::vector<float> weights;
+	std::vector<size_t> animations;
 	for (const auto& slot : animation.slots)
 	{
 		layers.slots.push_back({slot.animation, slot.timeMs});
 		weights.push_back(slot.weight);
+		animations.push_back(slot.animation);
 	}
-	layers.soundingSlot = creature_audio::SoundingSlot(weights);
+	// The game moves the four animations of a point on as the first of them, so only its events sound, whatever the
+	// weights
+	const auto pointing =
+	    creature_audio::BlendSoundingSlot(animations, creature_pointing::k_Animations, creature_pointing::k_Animations.front());
+	layers.soundingSlot = pointing.has_value() ? pointing : creature_audio::SoundingSlot(weights);
 	return layers;
 }
 
