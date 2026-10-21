@@ -1617,3 +1617,14 @@ openblack_setup_and_add_test(test_mouse_moves help/test_mouse_moves.cpp)
 openblack_setup_and_add_test(test_players_symbols test_players_symbols.cpp)
 openblack_setup_and_add_test(test_system_libraries test_system_libraries.cpp)
 openblack_setup_and_add_test(test_map_script test_map_script.cpp)
+openblack_setup_and_add_test(test_world_text_depth test_world_text_depth.cpp)
+openblack_setup_and_add_test(
+  test_oracle_world_text_depth oracle/test_oracle_world_text_depth.cpp
+)
+set_tests_properties(
+  test_oracle_world_text_depth
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_temple_exit_glow graphics/test_temple_exit_glow.cpp)
+openblack_setup_and_add_test(test_temple_room_meshes temple/test_temple_room_meshes.cpp)

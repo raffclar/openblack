@@ -573,11 +573,13 @@ bool TempleCameraModel::GoThroughDoorTo(Room room)
 	}
 	for (uint32_t door = 0; door < 8; ++door)
 	{
-		if (RoomBehindDoor(door) == room)
+		// No room is the way out
+		const auto behind = RoomBehindDoor(door);
+		if (behind == room || (room == Room::Unknown && !behind.has_value() && door != k_ScrollWall))
 		{
 			_doorStart = TurnToDoor(k_DoorApproach, door);
 			_doorEnd = TurnToDoor(k_DoorEntry, door);
-			_doorRoom = room;
+			_doorRoom = behind;
 			_nextState = State::ThroughDoor;
 			ChangeState();
 			return true;

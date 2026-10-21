@@ -358,6 +358,8 @@ private:
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
+	/// The same, on another canvas
+	void DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The picture of the control that does a tip's action: its mouse buttons or its key cap
 	void DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
 	                       float pixelScale);
@@ -396,6 +398,8 @@ private:
 	std::optional<FontFace> _evilAdvisorFont;
 	Canvas _canvas;
 	Canvas _pointerCanvas {graphics::RenderPass::Cursor};
+	/// The villagers' labels, which the world in front of them hides
+	Canvas _worldLabelsCanvas {graphics::RenderPass::WorldLabels, Canvas::DepthTest::NearerIsGreater};
 	/// The cinema bars, under the advisors near the screen
 	Canvas _cinemaBarsCanvas {graphics::RenderPass::CinemaBars};
 	/// What the tattoo editor draws over the creature that it shows from the main menu

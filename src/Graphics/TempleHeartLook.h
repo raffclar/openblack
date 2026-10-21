@@ -83,4 +83,27 @@ inline constexpr float k_GlowHigh = 60.0f;
 /// Whether the heart is drawn: always, but in its destruction only until a moment before the temple goes
 [[nodiscard]] bool Drawn(bool destroying, float clock) noexcept;
 
+/// From this time in its destruction to its end, a shell of the creed's light in its player's colour covers the heart.
+/// The creed's model itself is not drawn: only its glowing shell, centred on the heart.
+inline constexpr float k_ShellFrom = 14.0f;
+/// The shell's texture slides this fast across and up, in sheets a second of game time, and spans this much of it
+inline constexpr float k_ShellSlideAcross = 0.6f;
+inline constexpr float k_ShellSlideUp = 0.2f;
+inline constexpr float k_ShellTextureAcross = 0.7f;
+inline constexpr float k_ShellTextureUp = 0.1f;
+/// The number of the shell's texture in the list of the glowing shells' textures (S_TileLandscape)
+inline constexpr int k_ShellTexture = 6;
+/// The colour the game gives the shell's points as their specular. Whether the shell's draw adds it is not traced.
+inline constexpr uint32_t k_ShellSpecular = 0x141414u;
+[[nodiscard]] constexpr bool ShellShown(bool destroying, float clock) noexcept
+{
+	return destroying && clock >= k_ShellFrom;
+}
+/// The shell's size, the same on each axis, at a time in the destruction: 0.3 until 20 seconds, then growing to 0.6 at
+/// 22 seconds
+[[nodiscard]] float ShellScale(float clock) noexcept;
+/// How far the shell reaches out, in parts of the creed model's half diagonal, before the heartbeat's pulse multiplies
+/// it: 5 until 20 seconds, then growing to 10 at 22 seconds
+[[nodiscard]] float ShellReach(float clock) noexcept;
+
 } // namespace openblack::graphics::temple_heart_look

@@ -30,6 +30,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
+#include "Camera/ScriptCameraModel.h"
 #include "Common/FixedFormat.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -54,6 +55,7 @@
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
+#include "Gui/WorldTextDepth.h"
 #include "Gui/WorldToolTipRules.h"
 #include "Help/ClickCue.h"
 #include "Help/ControlIcons.h"
@@ -989,6 +991,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 {
 	_canvas.Begin(resolution);
 	_pointerCanvas.Begin(resolution);
+	_worldLabelsCanvas.Begin(resolution);
 	_menuCreatureCanvas.Begin(resolution);
 	_filmOverlayCanvas.Begin(resolution);
 	_painter.Begin(resolution);
@@ -1137,6 +1140,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		fadeCanvas.DrawQuad(glm::vec2(0.0f), glm::vec2(resolution), glm::vec2(0.0f), glm::vec2(1.0f), fade, nullptr);
 	}
 	_canvas.End();
+	_worldLabelsCanvas.End();
 	_menuCreatureCanvas.End();
 	_filmOverlayCanvas.End();
 	_pointerCanvas.End();
@@ -1523,13 +1527,29 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	{
 		board.Add(request, static_cast<float>(resolution.x), width, pixelScale);
 	}
-	const auto draw = [this](const labels::Quad& quad, glm::vec4 colour) {
-		_canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
-		                  {quad[0].uv, quad[1].uv, quad[2].uv, quad[3].uv}, {colour, colour, colour, colour},
-		                  _gatheringText.get());
+	// The labels are flat on the screen, but the world in front of each one hides it. Each label is at a depth a little
+	// nearer to the camera than its point, and the more the camera looks down, the nearer it is.
+	auto& canvas = _worldLabelsCanvas;
+	float pitch = 0.0f;
+	float nearClip = 0.0f;
+	glm::mat4 projection {1.0f};
+	if (Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		pitch = script_camera::HeadingAndPitchFromPoints(camera.GetOrigin(), camera.GetFocus()).pitch;
+		nearClip = camera.GetNearClip();
+		projection = camera.GetProjectionMatrix();
+		canvas.SetDepthTest(camera.GetCameraProjection() == Camera::Projection::ReversedZ ? Canvas::DepthTest::NearerIsGreater
+		                                                                                  : Canvas::DepthTest::NearerIsLess);
+	}
+	const auto draw = [&canvas, this](const labels::Quad& quad, glm::vec4 colour) {
+		canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
+		                 {quad[0].uv, quad[1].uv, quad[2].uv, quad[3].uv}, {colour, colour, colour, colour},
+		                 _gatheringText.get());
 	};
 	for (const auto* label : board.DrawOrder())
 	{
+		canvas.SetDepth(world_text::BufferDepth(projection, world_text::DrawnDepth(label->depth, pitch, nearClip)));
 		// The see-through black box, then the see-through black pointer down to the head, then the words
 		const auto boxColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->boxAlpha) / 255.0f);
 		for (const auto& quad : labels::BoxShape(*label))
@@ -1554,7 +1574,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 			    .clipTop = 0.0f,
 			    .clipBottom = static_cast<float>(resolution.y),
 			};
-			DrawBubbleLine(line, colour);
+			DrawBubbleLine(canvas, line, colour);
 		}
 	}
 }
@@ -1565,6 +1585,11 @@ float GameInterface::BubbleTextWidth(std::u16string_view text, float size) const
 }
 
 void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour)
+{
+	DrawBubbleLine(_canvas, line, colour);
+}
+
+void GameInterface::DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour)
 {
 	const float scale = line.size / static_cast<float>(_font.GetHeight());
 	const auto atlasSize = glm::vec2(_font.GetAtlasSize());
@@ -1599,11 +1624,11 @@ void GameInterface::DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3
 		uvMax.y -= (bottom - clippedBottom) * vPerPixel;
 		const auto topColour = glm::vec4(colour, alphaAt(clippedTop));
 		const auto bottomColour = glm::vec4(colour, alphaAt(clippedBottom));
-		_canvas.DrawShape({glm::vec2(left, clippedTop), glm::vec2(left + width, clippedTop),
-		                   glm::vec2(left + width, clippedBottom), glm::vec2(left, clippedBottom)},
-		                  {glm::vec2(uvMin.x, uvMin.y), glm::vec2(uvMax.x, uvMin.y), glm::vec2(uvMax.x, uvMax.y),
-		                   glm::vec2(uvMin.x, uvMax.y)},
-		                  {topColour, topColour, bottomColour, bottomColour}, _fontTexture.get());
+		canvas.DrawShape({glm::vec2(left, clippedTop), glm::vec2(left + width, clippedTop),
+		                  glm::vec2(left + width, clippedBottom), glm::vec2(left, clippedBottom)},
+		                 {glm::vec2(uvMin.x, uvMin.y), glm::vec2(uvMax.x, uvMin.y), glm::vec2(uvMax.x, uvMax.y),
+		                  glm::vec2(uvMin.x, uvMax.y)},
+		                 {topColour, topColour, bottomColour, bottomColour}, _fontTexture.get());
 	}
 }
 
