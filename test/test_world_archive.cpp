@@ -17,7 +17,9 @@
 #include <limits>
 #include <memory>
 #include <optional>
+#include <regex>
 #include <string>
+#include <string_view>
 #include <unordered_map>
 #include <utility>
 #include <variant>
@@ -26,6 +28,8 @@
 #include <entt/core/hashed_string.hpp>
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
+#include <entt/meta/factory.hpp>
+#include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -34,6 +38,7 @@
 
 #include "Common/GameHeading.h"
 #include "Creature/CreatureRouteFollow.h"
+#include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
@@ -43,6 +48,7 @@
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "Enums.h"
+#include "Graphics/GraphicsHandle.h"
 #include "Graphics/SpriteTextures.h"
 
 using namespace openblack;
@@ -765,4 +771,201 @@ TEST(WorldArchive, ASpriteKeepsTheIdsOfItsTextures)
 	const auto& alone = loaded.get<ecs::components::Sprite>(lone);
 	EXPECT_FALSE(alone.alpha.has_value());
 	EXPECT_EQ(graphics::sprite_textures::AlphaId(alone), k_Sheet.value());
+}
+
+namespace
+{
+
+/// A texture of a fake cache: the handle number that one run gave it
+struct FakeRunTexture
+{
+	uint32_t handle {0};
+};
+
+/// The texture cache of one run, by the stable ids of the textures
+using FakeTextureCache = std::unordered_map<entt::id_type, FakeRunTexture>;
+
+const FakeRunTexture* FindIn(const FakeTextureCache& cache, entt::id_type id)
+{
+	const auto found = cache.find(id);
+	return found != cache.end() ? &found->second : nullptr;
+}
+
+/// Whether a type is a pointer or a graphics handle, or holds one in a list, an option, a pair or a map
+bool HoldsRunHandle(const entt::meta_type& type)
+{
+	if (!type)
+	{
+		return false;
+	}
+	if (type.is_pointer())
+	{
+		return true;
+	}
+	// The full name of the type also names the types in its lists, options, pairs and maps
+	const std::regex runHandle(R"(\*|\b(bgfx|openblack::graphics)::\w*Handle\b)");
+	const std::string name(type.info().name());
+	return std::regex_search(name, runHandle);
+}
+
+/// The fields that the binary archive keeps and that hold a pointer or a graphics handle, as "Type.field"
+std::vector<std::string> SavedRunHandles(const entt::meta_ctx& context)
+{
+	std::vector<std::string> found;
+	for (auto&& [typeId, type] : entt::resolve(context))
+	{
+		for (auto&& [fieldId, data] : type.data())
+		{
+			const FieldInfo* info = data.custom();
+			const bool kept = info != nullptr && (info->save != nullptr || info->saveFrom != nullptr);
+			if (kept && HoldsRunHandle(data.type()))
+			{
+				found.push_back(ShortTypeName(type.info()) + "." + info->name);
+			}
+		}
+	}
+	return found;
+}
+
+/// A value that keeps graphics handles, registered past the checks of Reflect, as a careless registration could
+struct FakeHandleHolder
+{
+	graphics::TextureHandle texture;
+	std::optional<std::vector<graphics::ProgramHandle>> programs;
+	int kept {0};
+};
+
+void SaveNothing(const entt::meta_any& /*value*/, BinaryWriter& /*out*/) {}
+
+} // namespace
+
+TEST(WorldArchive, ARunHandleIsAPointerOrAGraphicsHandle)
+{
+	static_assert(detail::k_IsRunHandle<int*>);
+	static_assert(detail::k_IsRunHandle<const int*>);
+	static_assert(detail::k_IsRunHandle<int FakeSpot::*>);
+	static_assert(detail::k_IsRunHandle<graphics::TextureHandle>);
+	static_assert(detail::k_IsRunHandle<const graphics::ProgramHandle>);
+	static_assert(detail::k_IsRunHandle<bgfx::TextureHandle>);
+	static_assert(detail::k_IsRunHandle<bgfx::FrameBufferHandle>);
+	static_assert(!detail::k_IsRunHandle<entt::id_type>);
+	static_assert(!detail::k_IsRunHandle<entt::entity>);
+	static_assert(!detail::k_IsRunHandle<std::shared_ptr<int>>);
+	static_assert(!detail::k_IsRunHandle<std::optional<entt::id_type>>);
+	SUCCEED();
+}
+
+TEST(WorldArchive, NoSavedFieldOfTheGameHoldsAPointerOrAGraphicsHandle)
+{
+	// The next run gives its resources other numbers, so a saved handle names nothing or the wrong thing
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	const auto found = SavedRunHandles(context);
+	EXPECT_TRUE(found.empty()) << found.front();
+}
+
+TEST(WorldArchive, TheCheckOfSavedFieldsFindsGraphicsHandles)
+{
+	entt::meta_ctx context;
+	entt::meta_factory<FakeHandleHolder> factory {context};
+	factory.data<&FakeHandleHolder::texture, entt::as_ref_t>(entt::hashed_string("texture"));
+	factory.custom<FieldInfo>(FieldInfo {.name = "texture", .save = &SaveNothing});
+	factory.data<&FakeHandleHolder::programs, entt::as_ref_t>(entt::hashed_string("programs"));
+	factory.custom<FieldInfo>(FieldInfo {.name = "programs", .save = &SaveNothing});
+	factory.data<&FakeHandleHolder::kept, entt::as_ref_t>(entt::hashed_string("kept"));
+	factory.custom<FieldInfo>(FieldInfo {.name = "kept", .save = &SaveNothing});
+	auto found = SavedRunHandles(context);
+	std::ranges::sort(found);
+	EXPECT_EQ(found, (std::vector<std::string> {"FakeHandleHolder.programs", "FakeHandleHolder.texture"}));
+}
+
+TEST(WorldArchive, ASpriteFindsItsTexturesInTheCacheOfTheNextRun)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	constexpr auto k_Sheet = entt::hashed_string("raw/ATMOS");
+	constexpr auto k_SheetAlpha = entt::hashed_string("raw/ATMOSA");
+	constexpr auto k_Gone = entt::hashed_string("raw/GONE");
+	// The run that saves gives the textures one set of handle numbers
+	const FakeTextureCache saver {
+	    {k_Sheet.value(), {.handle = 1146}}, {k_SheetAlpha.value(), {.handle = 1147}}, {k_Gone.value(), {.handle = 1148}}};
+	entt::registry original;
+	const auto glow = original.create();
+	original.emplace<ecs::components::Sprite>(glow, ecs::components::Sprite {.texture = k_Sheet.value(),
+	                                                                         .uvMin = glm::vec2(0.0f),
+	                                                                         .uvExtent = glm::vec2(1.0f),
+	                                                                         .tint = glm::vec4(1.0f),
+	                                                                         .alpha = k_SheetAlpha.value()});
+	const auto lost = original.create();
+	original.emplace<ecs::components::Sprite>(
+	    lost, ecs::components::Sprite {
+	              .texture = k_Gone.value(), .uvMin = glm::vec2(0.0f), .uvExtent = glm::vec2(1.0f), .tint = glm::vec4(1.0f)});
+	const auto before = graphics::sprite_textures::FindTextures(original.get<ecs::components::Sprite>(glow),
+	                                                            [&saver](entt::id_type id) { return FindIn(saver, id); });
+	ASSERT_TRUE(before.has_value());
+	EXPECT_EQ(before->texture->handle, 1146u);
+	const auto bytes = SaveWorld(original, context);
+
+	// The run that loads gives the same textures other numbers, and does not have one of them
+	const FakeTextureCache loader {{k_SheetAlpha.value(), {.handle = 3}}, {k_Sheet.value(), {.handle = 7}}};
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto find = [&loader](entt::id_type id) { return FindIn(loader, id); };
+	const auto after = graphics::sprite_textures::FindTextures(loaded.get<ecs::components::Sprite>(glow), find);
+	ASSERT_TRUE(after.has_value());
+	EXPECT_EQ(after->texture->handle, 7u);
+	EXPECT_EQ(after->alpha->handle, 3u);
+	// A sprite whose texture the run does not have draws nothing
+	EXPECT_FALSE(graphics::sprite_textures::FindTextures(loaded.get<ecs::components::Sprite>(lost), find).has_value());
+}
+
+TEST(WorldArchive, AnAudioEmitterKeepsNoSourceOfTheAudioDevice)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	constexpr auto k_Sound = entt::hashed_string("G_Rustle");
+	entt::registry original;
+	const auto emitter = original.create();
+	original.emplace<ecs::components::AudioEmitter>(emitter, ecs::components::AudioEmitter {
+	                                                             .sourceId = 4242,
+	                                                             .soundId = k_Sound.value(),
+	                                                             .priority = 3,
+	                                                         });
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	const auto result = LoadWorld(loaded, context, bytes, WorldLoadMode::Exact);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_TRUE(result->report.unknownFields.empty());
+	const auto& sound = loaded.get<ecs::components::AudioEmitter>(emitter);
+	// The source number of the saved run does not come back
+	EXPECT_EQ(sound.sourceId, 0u);
+	EXPECT_EQ(sound.soundId, k_Sound.value());
+	EXPECT_EQ(sound.priority, 3);
+}
+
+TEST(WorldArchive, AnOlderSaveOfAnAudioEmitterLoadsWithoutItsSource)
+{
+	// A build before the fix kept the source number of the audio device
+	entt::meta_ctx older;
+	Reflect<ecs::components::AudioEmitter>(older)
+	    .Field<&ecs::components::AudioEmitter::sourceId>("sourceId")
+	    .Field<&ecs::components::AudioEmitter::soundId>("soundId");
+	constexpr auto k_Sound = entt::hashed_string("G_Rustle");
+	entt::registry original;
+	const auto emitter = original.create();
+	original.emplace<ecs::components::AudioEmitter>(
+	    emitter, ecs::components::AudioEmitter {.sourceId = 4242, .soundId = k_Sound.value()});
+	const auto bytes = SaveWorld(original, older);
+
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry loaded;
+	const auto result = LoadWorld(loaded, context, bytes, WorldLoadMode::Exact);
+	ASSERT_TRUE(result.has_value());
+	EXPECT_EQ(result->report.unknownFields, std::vector<std::string> {"AudioEmitter.sourceId"});
+	const auto& sound = loaded.get<ecs::components::AudioEmitter>(emitter);
+	EXPECT_EQ(sound.sourceId, 0u);
+	EXPECT_EQ(sound.soundId, k_Sound.value());
 }

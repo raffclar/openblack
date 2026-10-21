@@ -456,6 +456,28 @@ public:
 		return *this;
 	}
 
+	/// A field that means something only in the run that set it, such as a handle of the audio device. The inspector
+	/// reads and sets it. The binary archive does not keep it, so a load leaves the value that the type starts with.
+	template <auto Member>
+	Reflect& RunField(std::string_view name)
+	{
+		using Value = std::remove_cvref_t<decltype(std::declval<Type&>().*Member)>;
+		_factory.template data<Member, entt::as_ref_t>(entt::hashed_string::value(name.data(), name.size()));
+		FieldInfo info {.name = std::string(name), .refersTo = RefersToFunction<Value>()};
+#if defined(OPENBLACK_INSPECTOR)
+		info.encode = [](const entt::meta_any& any) -> std::optional<Json> {
+			if (const auto* value = any.try_cast<const Value>(); value != nullptr)
+			{
+				return Encode(*value);
+			}
+			return std::nullopt;
+		};
+		info.decode = &detail::DecodeAny<Value>;
+#endif
+		_factory.template custom<FieldInfo>(std::move(info));
+		return *this;
+	}
+
 	/// A value reached through functions, for a type whose data is private: a getter giving it from a const reference,
 	/// and a setter taking it, or nullptr for one that is only read. Set, it is read, changed and set back whole. The
 	/// binary archive keeps only a value that has a setter.

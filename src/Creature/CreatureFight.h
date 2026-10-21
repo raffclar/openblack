@@ -233,6 +233,13 @@ struct Move
 	uint32_t value {0};
 
 	bool operator==(const Move&) const = default;
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Move& self, Visitor&& visit)
+	{
+		visit(self.kind, self.value);
+	}
 };
 [[nodiscard]] Move AttackMove(Band band);
 [[nodiscard]] Move StepMove(Step step);
@@ -284,6 +291,13 @@ struct QueuedMove
 {
 	Move move {};
 	std::optional<float> chargeMs;
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const QueuedMove& self, Visitor&& visit)
+	{
+		visit(self.move, self.chargeMs);
+	}
 };
 
 /// The moves a creature has been told to make, in turn, at most twelve
@@ -315,6 +329,14 @@ private:
 	size_t _count {0};
 	/// The move added last is a blow waiting for the button to be let go
 	bool _awaitingRelease {false};
+
+public:
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const MoveQueue& self, Visitor&& visit)
+	{
+		visit(self._moves, self._count, self._awaitingRelease);
+	}
 };
 
 /// How many of the queued moves are blows at a band (not blocks, steps, miracles or the special move)

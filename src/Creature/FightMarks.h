@@ -56,6 +56,13 @@ struct Mark
 	float chargeMs {0.0f};
 	/// Its frame in the sparkle sheet
 	uint32_t frame {0};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Mark& self, Visitor&& visit)
+	{
+		visit(self.anchor, self.subMesh, self.firstIndex, self.s, self.t, self.local, self.chargeMs, self.frame);
+	}
 };
 
 /// The sparkles, one for each move the player has queued, in queue order
@@ -84,6 +91,14 @@ public:
 private:
 	std::array<Mark, k_Capacity> _marks {};
 	size_t _count {0};
+
+public:
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const MarkList& self, Visitor&& visit)
+	{
+		visit(self._marks, self._count);
+	}
 };
 
 /// A held click charges its sparkle up to this

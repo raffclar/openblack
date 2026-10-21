@@ -40,6 +40,13 @@ SKIPPED = {
     "MapScriptGlobals",
 }
 
+# Fields that mean something only in the run that set them, such as a handle of the audio device. The inspector reads
+# them, but a save does not keep them. Keep a stable key in a field that a save keeps.
+RUN_ONLY = {
+    # The sounds of a saved game do not come back: a load removes each emitter
+    "AudioEmitter": {"sourceId"},
+}
+
 SOURCES = ROOT / "src"
 # The headers of libraries whose types the saved world keeps, included by their names
 LIBRARY_HEADERS = [ROOT / "components" / "creaturemind" / "include"]
@@ -438,8 +445,10 @@ def names_array(enum_name):
     return "k_" + "".join(word[:1].upper() + word[1:] for word in words) + "Names"
 
 
-def field_line(owner, member, levels):
+def field_line(owner, member, levels, run_only=False):
     """A field's registration, with the names of the enumerations indexing it"""
+    if run_only:
+        return f'\n\t    .RunField<&{owner}::{member}>("{member}")'
     if not levels:
         return f'\n\t    .Field<&{owner}::{member}>("{member}")'
     names = ", ".join(names_array(level) if level is not None else "std::span<const std::string_view> {}"
@@ -573,7 +582,7 @@ def main():
             continue
         lines.append(f"\tReflect<components::{name}>(context)")
         for member, levels in component_fields[name]:
-            lines.append(field_line(f"components::{name}", member, levels))
+            lines.append(field_line(f"components::{name}", member, levels, member in RUN_ONLY.get(name, set())))
         lines.append(";\n")
     if values:
         lines.append("\n\t// The values the components' fields hold\n")
