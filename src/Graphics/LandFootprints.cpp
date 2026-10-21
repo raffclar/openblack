@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <initializer_list>
 #include <iterator>
 #include <span>
 
@@ -22,6 +23,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/X87Angle.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
@@ -38,6 +40,7 @@ namespace openblack::graphics
 namespace
 {
 using MeshComponent = ecs::components::Mesh;
+using ecs::components::GroundPrint;
 using ecs::components::MapCellResident;
 using ecs::components::Stream;
 using ecs::components::StreamSegment;
@@ -107,6 +110,8 @@ void LandFootprints::Reset(size_t blockCount)
 	_known.clear();
 	_rivers.clear();
 	_riverPoints.clear();
+	_groundPrints.clear();
+	_groundPrintThings.clear();
 	_footprints.clear();
 	_dirty.clear();
 	_ownTexels.clear();
@@ -242,6 +247,42 @@ void LandFootprints::FindChangedRivers()
 	}
 }
 
+void LandFootprints::FindChangedGroundPrints()
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	std::vector<land_footprints::GroundPrintThing> things;
+	registry.Each<const GroundPrint, const MeshComponent, const Transform>(
+	    [&things](const GroundPrint& print, const MeshComponent& mesh, const Transform& transform) {
+		    things.push_back({.mesh = mesh.id, .position = transform.position, .made = print.made});
+	    });
+	// The same things in the same order paint the same prints
+	std::ranges::sort(things, {}, &land_footprints::GroundPrintThing::made);
+	if (things == _groundPrintThings)
+	{
+		return;
+	}
+	for (const auto& print : _groundPrints)
+	{
+		const auto [lowBlock, highBlock] = BlocksOf(print.bounds);
+		MarkBlocks(lowBlock, highBlock);
+	}
+	_groundPrints.clear();
+	_groundPrintThings = things;
+	for (const auto index : land_footprints::GroundPrintOrder(things))
+	{
+		const auto* footprint = FootprintOf(things[index].mesh);
+		if (footprint == nullptr)
+		{
+			continue;
+		}
+		const auto placement = land_footprints::GroundPrintPlacement(things[index].position);
+		const auto bounds = land_footprints::GroundBounds(footprint->triangles, placement);
+		_groundPrints.push_back({.footprint = footprint, .placement = placement, .bounds = bounds, .channel = false});
+		const auto [lowBlock, highBlock] = BlocksOf(bounds);
+		MarkBlocks(lowBlock, highBlock);
+	}
+}
+
 void LandFootprints::PaintBlock(size_t block)
 {
 	auto& island = Locator::terrainSystem::value();
@@ -258,15 +299,20 @@ void LandFootprints::PaintBlock(size_t block)
 		    const auto* mesh = registry.TryGet<const MeshComponent>(entity);
 		    return mesh != nullptr && registry.AllOf<Transform, MapCellResident>(entity) && FootprintOf(mesh->id) != nullptr;
 	    });
-	std::vector<const RiverFootprint*> rivers;
-	for (const auto& river : _rivers)
+	// After the things come the loose prints, the newest first: the prints of the things that show only as prints, then
+	// the rivers, which the land made before its scripts started
+	std::vector<const LoosePrint*> loose;
+	for (const auto* prints : {&_groundPrints, &_rivers})
 	{
-		if (land_footprints::ReachesBlock(river.bounds, corner))
+		for (const auto& print : *prints)
 		{
-			rivers.push_back(&river);
+			if (land_footprints::ReachesBlock(print.bounds, corner))
+			{
+				loose.push_back(&print);
+			}
 		}
 	}
-	const bool hasFootprints = !things.empty() || !rivers.empty();
+	const bool hasFootprints = !things.empty() || !loose.empty();
 	if (!hasFootprints && !_painted.at(block))
 	{
 		return;
@@ -290,15 +336,15 @@ void LandFootprints::PaintBlock(size_t block)
 		                           : PlacementFor(registry, entity, transform);
 		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour);
 	}
-	for (const auto* river : rivers)
+	for (const auto* print : loose)
 	{
-		Paint(_texels, position, *river->footprint, river->placement,
-		      river->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour);
+		Paint(_texels, position, *print->footprint, print->placement,
+		      print->channel ? footprint_paint::Mix::LowerAlpha : footprint_paint::Mix::Colour);
 	}
 	island.SetBlockTexels(block, _texels);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"),
-	                    "Land footprints: block {} ({}, {}) painted with {} things and {} river prints", block, position.x,
-	                    position.y, things.size(), rivers.size());
+	                    "Land footprints: block {} ({}, {}) painted with {} things and {} loose prints", block, position.x,
+	                    position.y, things.size(), loose.size());
 	_painted.at(block) = hasFootprints;
 }
 
@@ -328,6 +374,7 @@ void LandFootprints::Update()
 	}
 	FindChangedThings();
 	FindChangedRivers();
+	FindChangedGroundPrints();
 	for (const auto block : _dirty)
 	{
 		if (block < blockCount)

@@ -159,6 +159,7 @@
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/GroundMark.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
@@ -1319,6 +1320,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::GroundMark>(context)
 	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::GroundMark::alpha>("alpha");
+	Reflect<components::GroundPrint>(context).Field<&components::GroundPrint::made>("made");
 	Reflect<components::GuidanceHeard>(context)
 	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")
 	    .Field<&components::GuidanceHeard::alignmentDrift>("alignmentDrift")

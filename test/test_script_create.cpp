@@ -47,19 +47,36 @@ TEST(ScriptCreate, TheScriptsNumberTheTypesAsTheGameDoes)
 	EXPECT_EQ(static_cast<int32_t>(SpellSeedType::Water), 9);
 }
 
-TEST(ScriptCreate, OnlyMarkersAndMobileStaticsKeepTheScriptsHeight)
+TEST(ScriptCreate, OnlyMarkersAndSomeMobileStaticsKeepTheScriptsHeight)
 {
-	// A marker (type 1) and a mobile static (type 8) keep the height the script gave; villagers (4), children (5) and
-	// the rest stand on the land under the place asked for
+	// A marker (type 1) keeps the height that the script gave. A mobile static (type 8) keeps it only when it can not
+	// move in the physics. Villagers (4), children (5) and the rest stand on the land under the place asked for.
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::Marker), 1);
 	EXPECT_EQ(static_cast<int32_t>(ScriptType::MobileStatic), 8);
 	EXPECT_TRUE(KeepsScriptHeight(ScriptType::Marker));
-	EXPECT_TRUE(KeepsScriptHeight(ScriptType::MobileStatic));
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Villager));
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::VillagerChild));
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock));
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Creature));
 	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Ball));
+}
+
+TEST(ScriptCreate, AMobileStaticThatCanMoveInThePhysicsGoesOntoTheLand)
+{
+	const auto keeps = [](MobileStaticInfo row) {
+		return KeepsScriptHeight(ScriptType::MobileStatic, static_cast<uint32_t>(row));
+	};
+	// The singing stones go onto the land, also the ones that the circle makes at no height
+	EXPECT_FALSE(keeps(MobileStaticInfo::SingingStone_1));
+	EXPECT_FALSE(keeps(MobileStaticInfo::Rock));
+	EXPECT_FALSE(keeps(MobileStaticInfo::CeltFenceShort));
+	// The holders of the singing stones, the lanterns and the bonfires do not move in the physics
+	EXPECT_TRUE(keeps(MobileStaticInfo::SingingStoneBase));
+	EXPECT_TRUE(keeps(MobileStaticInfo::StreetLantern));
+	EXPECT_TRUE(keeps(MobileStaticInfo::CountryLantern));
+	EXPECT_TRUE(keeps(MobileStaticInfo::Bonfire));
+	// A rock made by its own type goes onto the land, a holder too
+	EXPECT_FALSE(KeepsScriptHeight(ScriptType::Rock, static_cast<uint32_t>(MobileStaticInfo::SingingStoneBase)));
 }
 
 TEST(ScriptCreate, AnglesAreGivenInDegrees)

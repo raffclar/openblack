@@ -25,16 +25,17 @@
 #include "3D/FootprintPaint.h"
 #include "3D/L3DMesh.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/LandFootprintRules.h"
 
 namespace openblack::graphics
 {
 
-/// Paints the footprints of the buildings, the features and the rivers into the land's block textures, as Black & White
-/// does: on the processor, texel by texel, each footprint over the one before it (see footprint_paint and
-/// ecs::land_footprints). The game paints a block's footprints again each time a thing with a footprint over it comes
-/// onto the map, goes from it or is built, and each time the land under the block changes height. This paints a block
-/// again when a thing with a footprint over it goes into the map's cells or comes out of them, moves or turns, and when
-/// the land paints the block again.
+/// Paints the footprints of the buildings, the features, the prints of things and the rivers into the land's block
+/// textures, as Black & White does: on the processor, texel by texel, each footprint over the one before it (see
+/// footprint_paint and ecs::land_footprints). The game paints a block's footprints again each time a thing with a
+/// footprint over it comes onto the map, goes from it or is built, and each time the land under the block changes
+/// height. This paints a block again when a thing with a footprint over it goes into the map's cells or comes out of
+/// them, moves or turns, when a print of a thing changes, and when the land paints the block again.
 class LandFootprints
 {
 public:
@@ -55,8 +56,9 @@ private:
 		glm::ivec2 highBlock {0};
 		bool seen {false};
 	};
-	/// A stretch of a river whose footprint the blocks take
-	struct RiverFootprint
+	/// A print that no thing in the map's cells gives: the print of a thing that shows only as a print, or a stretch of
+	/// a river. A channel lowers the land's alpha; every other print mixes its colour into the land.
+	struct LoosePrint
 	{
 		const L3DMesh::Footprint* footprint {nullptr};
 		footprint_paint::Placement placement {};
@@ -70,6 +72,8 @@ private:
 	void FindChangedThings();
 	/// Finds whether the rivers changed, and the blocks that take their footprints
 	void FindChangedRivers();
+	/// Finds whether the prints of the things that show only as prints changed, and the blocks that take them
+	void FindChangedGroundPrints();
 	/// Adds the blocks within the bounds of a footprint to the blocks to paint again
 	void MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock);
 	void PaintBlock(size_t block);
@@ -77,7 +81,11 @@ private:
 
 	std::unordered_map<entt::id_type, const L3DMesh::Footprint*> _footprints;
 	std::unordered_map<entt::entity, Known> _known;
-	std::vector<RiverFootprint> _rivers;
+	std::vector<LoosePrint> _rivers;
+	/// The prints of the things that show only as prints, the newest first
+	std::vector<LoosePrint> _groundPrints;
+	/// The things that show only as prints, as they were the last time
+	std::vector<ecs::land_footprints::GroundPrintThing> _groundPrintThings;
 	/// The points of each river, in the order of the rivers' numbers, as the rivers were the last time
 	std::vector<std::vector<glm::vec3>> _riverPoints;
 	/// Each block by its column and row on the land
