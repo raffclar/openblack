@@ -11,12 +11,22 @@
 
 #include "HeartbeatSystem.h"
 
+#include <optional>
 #include <unordered_map>
 #include <vector>
 
+#include <glm/gtx/vec_swizzle.hpp>
+
+#include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
+#include "Audio/HeaderOverrides.h"
+#include "Audio/Sound.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/Fire.h"
 #include "ECS/Components/Heartbeat.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -27,6 +37,7 @@
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
+#include "Help/VillageVoices.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -204,6 +215,56 @@ void HeartbeatSystem::ProcessTurn(uint32_t turn)
 		state.destructionBeats = heartbeat::HeldBeats(state.destructionBeats, DestructionBeatsOf(registry, name));
 		heartbeat::Step(state, secondsPerTurn);
 	}
+	SoundHeart();
+}
+
+void HeartbeatSystem::SoundHeart()
+{
+	if (!Locator::playerSystem::has_value() || !Locator::audio::has_value())
+	{
+		return;
+	}
+	const auto player = Locator::playerSystem::value().GetLocalPlayer();
+	const auto state = StateOf(player);
+	auto& registry = Locator::entitiesRegistry::value();
+	std::optional<glm::vec3> place;
+	std::optional<uint32_t> pitch;
+	registry.Each<const Temple, const Transform>([&](entt::entity temple, const Temple& owner, const Transform& at) {
+		if (owner.owner != player || place.has_value() || !state.has_value())
+		{
+			return;
+		}
+		const auto* progress = registry.TryGet<const BuildProgress>(temple);
+		const auto* life = registry.TryGet<const ObjectLife>(temple);
+		place = at.position;
+		pitch = heartbeat::SoundPitchPercent(*state, progress == nullptr || progress->built >= 1.0f,
+		                                     life != nullptr ? life->life : 1.0f);
+	});
+	if (!pitch.has_value())
+	{
+		return;
+	}
+	// The heart sounds from the land at its temple, heard fully to a third of its reach. The bank makes it loop, and a
+	// heartbeat that plays already is not started again. Each turn it beats at the rate of the heart.
+	if (Locator::terrainSystem::has_value())
+	{
+		place->y = Locator::terrainSystem::value().GetHeightAt(glm::xz(*place));
+	}
+	auto& audio = Locator::audio::value();
+	if (!audio.EmitterExists(_sound))
+	{
+		_sound = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_Heartbeat_01),
+		                                     {.position = place,
+		                                      .pitchPercent = pitch,
+		                                      .playType = audio::PlayType::Repeat,
+		                                      .voicePlayType = pack::AudioBankLoop::Once,
+		                                      .voiceOwner = audio::VoiceOwner::Number,
+		                                      .ownerNumber = static_cast<uint32_t>(player),
+		                                      .minDistance = heartbeat::k_SoundReach * guidance::k_VoiceNearShare,
+		                                      .maxDistance = heartbeat::k_SoundReach,
+		                                      .callerWins = audio::k_CallerDistancesWin});
+	}
+	audio.SetEmitterPitch(_sound, *pitch);
 }
 
 float HeartbeatSystem::Pulse(PlayerNames player, float turnFraction) const

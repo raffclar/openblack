@@ -487,6 +487,28 @@ bool HandInInfluence()
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
 }
 
+/// Whether the hand points at the water where the fish of a fish farm show, with the hand in the local player's
+/// influence: the hand can take fish there, though the farm has no model to point at
+bool HandOverFish()
+{
+	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
+	if (!point.has_value() || !Locator::fishFarmSystem::has_value() || !HandInInfluence())
+	{
+		return false;
+	}
+	// Water is a cell of the land with water in it, or a place off the land
+	const auto cell = map_coords::CellOf(*point);
+	if (map_coords::InBounds(cell) && Locator::terrainSystem::has_value())
+	{
+		const auto* land = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+		if (land != nullptr && land->properties.hasWater == 0)
+		{
+			return false;
+		}
+	}
+	return Locator::fishFarmSystem::value().FarmWithFishAt({point->x, point->z}).has_value();
+}
+
 /// Draws the player's creature in the falling spell's film, when the film shows it, and the film's effects
 void DrawFilmCreature(const graphics::RendererInterface::DrawSceneDesc& drawDesc)
 {
@@ -1635,11 +1657,13 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	// the middle of the screen shows the land, the help counts it.
 	const auto overNothing = [&submitAll]() {
 		const auto camera = tips::CameraNow();
-		if (const auto event = tips::OverNothingHelpEvent(camera); event.has_value() && Locator::helpProfileSystem::has_value())
+		const bool overFish = HandOverFish();
+		if (const auto event = tips::OverNothingHelpEvent(camera, overFish);
+		    event.has_value() && Locator::helpProfileSystem::has_value())
 		{
 			Locator::helpProfileSystem::value().Trigger(*event);
 		}
-		submitAll({tips::OverNothing(camera)});
+		submitAll({tips::OverNothing(camera, overFish)});
 	};
 	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
 	const auto leashTip = [pointed]() {
