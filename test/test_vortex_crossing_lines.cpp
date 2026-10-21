@@ -320,3 +320,19 @@ TEST(VortexCrossingLines, ARockIsWrittenAtTheHeightItWasPutDownAt)
 	ASSERT_TRUE(line.has_value());
 	EXPECT_FLOAT_EQ(std::get<vortex::crossing::MobileStaticLine>(*line).offset.altitude, 1.5f);
 }
+
+TEST(VortexCrossingLines, EachToyIsWrittenAsTheSameToyAtItsSize)
+{
+	Registry registry;
+	// The five toys are static things: each goes in as its own row, so the next land makes the same toy again
+	for (const auto toy : {MobileStaticInfo::ToyBall, MobileStaticInfo::ToyCuddly, MobileStaticInfo::ToyDie,
+	                       MobileStaticInfo::ToySkittle, MobileStaticInfo::ToyBowlingBall})
+	{
+		const auto thing = Thing(registry, {1000.0f, k_Ground, 2000.0f}, glm::mat3(1.0f), 0.5f);
+		registry.Assign<MobileStatic>(thing, toy);
+		EXPECT_EQ(LineText(registry, thing), fmt::format("CREATE_MOBILE_STATIC(\"0.00,0.00\", {}, 0.000000, 0.000000, "
+		                                                 "0.000000, 0.000000, 0.500000)\n",
+		                                                 static_cast<int>(toy)));
+		registry.Destroy(thing);
+	}
+}
