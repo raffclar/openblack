@@ -115,4 +115,20 @@ struct LandStorm
 ///   upper bytes), and the wind along spills into the snow cover and past the end.
 [[nodiscard]] LandStorm ParseLandStorm(std::string_view shape, std::string_view clouds, std::string_view weather);
 
+/// What a weather thing does at the end of a turn
+enum class ThingAfterTurn : uint8_t
+{
+	/// It stands where its storm is
+	FollowsItsStorm,
+	/// Its storm ended, and a script holds it: it stays with no storm, until a script change of its weather brings the
+	/// storm back
+	StaysWithoutStorm,
+	/// Its storm ended, and no script holds it: it goes
+	Goes,
+};
+
+/// A weather thing follows its storm while the storm lives. When the storm ends at the end of its life, the thing loses
+/// the storm. Then a script that holds the thing keeps it, else the thing goes.
+[[nodiscard]] ThingAfterTurn AfterTurn(bool stormLives, bool heldByScript);
+
 } // namespace openblack::ecs::script_weather

@@ -37,6 +37,14 @@ struct SilentPlayback
 	}
 };
 
+/// Whether the length of its sample gives the time of a spoken line, not the sound device. This is true when the device
+/// is lost. It is also true when each frame has a fixed game time, as in the tools' simulation modes. Then the clock of
+/// the game times the line, and a wait for the line takes the same number of turns in each run.
+[[nodiscard]] constexpr bool TimedByLength(bool deviceLost, bool fixedFrameTime)
+{
+	return deviceLost || fixedFrameTime;
+}
+
 /// Whether a sound plays: as the device tells while the device works, or by its sample's length once the device is lost
 [[nodiscard]] constexpr bool PlaysOn(bool sounding, bool deviceLost, const SilentPlayback& playback, uint32_t nowMs)
 {

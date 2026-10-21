@@ -608,28 +608,29 @@ void WeatherSystem::ProcessWeatherThings()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> gone;
-	registry.Each<WeatherThing, Transform>(
-	    [this, &registry, &gone](entt::entity entity, WeatherThing& thing, Transform& transform) {
-		    if (thing.storm != entt::null)
-		    {
-			    auto* storm = registry.Valid(thing.storm) ? registry.TryGet<Storm>(thing.storm) : nullptr;
-			    if (storm != nullptr && !storm->dead)
-			    {
-				    if (thing.affectedByWind)
-				    {
-					    storm->position = script_weather::Drift(storm->position, DriftWindAt(storm->position));
-				    }
-				    transform.position = storm->position;
-				    thing.lastStorm = *storm;
-				    return;
-			    }
-			    thing.storm = entt::null;
-		    }
-		    if (!registry.AllOf<components::InScript>(entity))
-		    {
-			    gone.push_back(entity);
-		    }
-	    });
+	registry.Each<WeatherThing, Transform>([this, &registry, &gone](entt::entity entity, WeatherThing& thing,
+	                                                                Transform& transform) {
+		auto* storm = thing.storm != entt::null && registry.Valid(thing.storm) ? registry.TryGet<Storm>(thing.storm) : nullptr;
+		const bool stormLives = storm != nullptr && !storm->dead;
+		switch (script_weather::AfterTurn(stormLives, registry.AllOf<components::InScript>(entity)))
+		{
+		case script_weather::ThingAfterTurn::FollowsItsStorm:
+			if (thing.affectedByWind)
+			{
+				storm->position = script_weather::Drift(storm->position, DriftWindAt(storm->position));
+			}
+			transform.position = storm->position;
+			thing.lastStorm = *storm;
+			break;
+		case script_weather::ThingAfterTurn::StaysWithoutStorm:
+			thing.storm = entt::null;
+			break;
+		case script_weather::ThingAfterTurn::Goes:
+			thing.storm = entt::null;
+			gone.push_back(entity);
+			break;
+		}
+	});
 	for (const auto entity : gone)
 	{
 		registry.Destroy(entity);

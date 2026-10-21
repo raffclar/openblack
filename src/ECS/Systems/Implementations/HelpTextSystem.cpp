@@ -55,6 +55,12 @@ uint32_t NowMs()
 	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
 }
 
+/// Whether the length of its sample times the advisor's line, not the sound device
+bool TimedByLength()
+{
+	return audio::TimedByLength(Locator::audio::value().IsDeviceLost(), Locator::time::value().GetFixedFrameTime().has_value());
+}
+
 /// A line's recording decoded once more, as the sound plays it, with the cue labels its gestures are read from
 help::AdvisorVoices::Recording LineRecording(const audio::Sound& sound)
 {
@@ -110,12 +116,12 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		    .startMs = NowMs(),
 		    .lengthMs = Locator::resources::value().GetSounds().Handle(*sound)->duration * 1000.0f,
 		};
-		// With the sound device lost, the line starts as if the device is still there
-		return _advisorLine != entt::null || sounds.IsDeviceLost();
+		// With the sound device lost, or with a fixed frame time, the line starts and lasts the length of its sample
+		return _advisorLine != entt::null || TimedByLength();
 	};
 	audio.isPlaying = [this](uint32_t) { return AdvisorLinePlays(); };
 	audio.percentageDone = [this](uint32_t) {
-		if (Locator::audio::value().IsDeviceLost())
+		if (TimedByLength())
 		{
 			return _advisorPlayback.Progress(NowMs());
 		}
@@ -151,7 +157,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 		{
 			return -1;
 		}
-		if (Locator::audio::value().IsDeviceLost())
+		if (TimedByLength())
 		{
 			return static_cast<int64_t>(NowMs() - _advisorPlayback.startMs);
 		}
@@ -164,7 +170,7 @@ help::AdvisorVoices::Audio HelpTextSystem::VoiceAudio()
 
 bool HelpTextSystem::AdvisorLinePlays() const
 {
-	return audio::PlaysOn(Sounding(_advisorLine), Locator::audio::value().IsDeviceLost(), _advisorPlayback, NowMs());
+	return audio::PlaysOn(Sounding(_advisorLine), TimedByLength(), _advisorPlayback, NowMs());
 }
 
 help::AdvisorVoices::Hooks HelpTextSystem::VoiceHooks()

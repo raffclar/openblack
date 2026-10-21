@@ -83,4 +83,32 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 700.0f, -410.0f}, .look = {0.0f, 0.0f, -140.0f}},
 	    .objects = TreesToTheEast(),
 	});
+
+	all.push_back({
+	    .id = "sky.sun_glare_overcast",
+	    .name = "The sun and its glare through an overcast",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under rain, the camera low on the land looking at the sun in the north "
+	                   "west. The rain's clouds make an overcast over the camera.",
+	    .expected = "The sun and the orange glare over it both show dimmer than under a clear sky: at a full overcast, "
+	                "with the fog option of the default detail level, each shows at a ninth of its clear strength. The "
+	                "glare grows and fades with the overcast, as the sun does.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .weather = Weather::Rain, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 65.0f, -100.0f}},
+	    .objects = TreesToTheEast(),
+	});
+
+	all.push_back({
+	    .id = "sky.temple_without_sun",
+	    .name = "The temple's sky has no sun",
+	    .facet = Facet::Sky,
+	    .description = "The clock stands at noon under a clear sky. The player has a temple, and after ten seconds the "
+	                   "player goes into its main room.",
+	    .expected = "Outside, the sun and its orange glare show in the north west. Inside the temple, the sky shows no "
+	                "sun and no glare. The moon still shows at night.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, 0.0f}, .look = {-100.0f, 65.0f, -100.0f}},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Command::Kind::EnterTemple, .delaySeconds = 10.0f, .value = 3}},
+	});
 }

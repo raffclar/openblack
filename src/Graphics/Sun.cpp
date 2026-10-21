@@ -12,6 +12,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
+
+#include "3D/SkyDome.h"
+#include "Common/X87.h"
 
 using namespace openblack::graphics;
 
@@ -63,7 +67,15 @@ float sun::GlareHidingDepth(float near)
 
 float sun::EaseGlare(float glare, int hiddenSamples, uint32_t frameMilliseconds)
 {
-	const float target = (1.0f - (0.2f * static_cast<float>(hiddenSamples))) * 255.0f;
+	// The game holds the fifth as a double
+	const float target = (1.0f - x87::Mul(static_cast<float>(hiddenSamples), 0.2)) * 255.0f;
 	const float step = static_cast<float>(frameMilliseconds) * 0.01f;
 	return std::clamp(((target - glare) * step) + glare, 0.0f, 255.0f);
+}
+
+float sun::GlareAlpha(float glare, float sunAlpha, float overcast, bool fog)
+{
+	// The game holds the inverse of 255 as a float
+	constexpr float k_InverseOf255 = std::bit_cast<float>(0x3B808081u);
+	return sky_dome::ThroughOvercast((glare * sunAlpha) * k_InverseOf255, overcast, fog);
 }

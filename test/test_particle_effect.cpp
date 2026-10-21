@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
 #include <cstdlib>
 
 #include <algorithm>
@@ -903,4 +904,38 @@ TEST(RisingSparks, FramesPassWholeMillisecondsKeepingWhatIsLeftOver)
 	EXPECT_EQ(clock.Take(16.75f), 17u);
 	EXPECT_EQ(clock.Take(16.75f), 17u);
 	EXPECT_EQ(clock.Take(-5.0f), 0u);
+}
+
+TEST_F(ParticleEffectTest, AGustyWindPushesAnAtomAcrossTheGroundOnly)
+{
+	const auto make = [this](bool simulate) {
+		return Make(Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+		                Object("CreateRuleAnAtom", "Create0",
+		                       "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY OffsetY FLOAT 10\n") +
+		                Object("UR_GustyWind", "Wind0",
+		                       "PROPERTY Group INTEGER 0\nPROPERTY NoiseFreq FLOAT 0.37\nPROPERTY WindSpeed FLOAT 5\n"
+		                       "PROPERTY Damping FLOAT 0\nPROPERTY SimWind BOOL " +
+		                           std::string(simulate ? "1" : "0") + "\n"),
+		            {3.0f, 0.0f, 7.0f});
+	};
+	const auto noiseHere = noise.Wind(glm::vec3(3.0f, 10.0f, 7.0f) * 0.37f);
+	ASSERT_TRUE(noiseHere.x != 0.0f || noiseHere.y != 0.0f);
+	auto pushed = make(false);
+	auto drawnTowards = make(true);
+	for (int i = 0; i < 4; ++i)
+	{
+		pushed->Step(k_Step);
+		drawnTowards->Step(k_Step);
+	}
+	std::vector<Effect::DrawAtom> atoms;
+	pushed->Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	// The wind does not lift or drop the atom
+	EXPECT_EQ(atoms[0].position.y, 10.0f);
+	EXPECT_GT(std::abs(atoms[0].position.x - 3.0f) + std::abs(atoms[0].position.z - 7.0f), 0.0f);
+	// With the simulated wind and no damping, the atom keeps its velocity of 0 and stays where it was made
+	atoms.clear();
+	drawnTowards->Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	EXPECT_EQ(atoms[0].position, glm::vec3(3.0f, 10.0f, 7.0f));
 }

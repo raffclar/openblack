@@ -42,6 +42,7 @@
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Nature/TreeBend.h"
+#include "Nature/TreeSway.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack::ecs::systems;
@@ -50,13 +51,8 @@ using namespace openblack::ecs::components;
 namespace
 {
 // The sways speed up and slow down at random every two seconds
-constexpr auto k_SpeedChangeTime = std::chrono::duration<float, std::milli>(2000.0f);
-constexpr float k_MinSpeed = 1.0f;
-constexpr float k_MaxSpeed = 2.0f;
-// Radians a sway moves on per millisecond of game time at a speed of 1
-constexpr float k_PhasePerMillisecond = 0.0010606061f;
-// How far a sway leans a tree, per unit of its height
-constexpr float k_Lean = 0.03f;
+constexpr auto k_SpeedChangeTime =
+    std::chrono::duration<float, std::milli>(static_cast<float>(openblack::nature::tree_sway::k_SpeedChangeMilliseconds));
 // How much further a field's crop leans than a tree
 constexpr float k_FieldLean = 1.75f;
 
@@ -73,11 +69,10 @@ void VegetationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 	{
 		if (changeSpeeds)
 		{
-			_speeds.at(i) = rng.NextValue(k_MinSpeed, k_MaxSpeed);
+			_speeds.at(i) = rng.NextValue(nature::tree_sway::k_MinSpeed, nature::tree_sway::k_MaxSpeed);
 		}
-		_phases.at(i) += gameTime.count() * _speeds.at(i) * k_PhasePerMillisecond;
-		// The sways lean along the z axis only: the direction they lean in is fixed at 0
-		_leans.at(i) = -std::cos(_phases.at(i)) * k_Lean;
+		_phases.at(i) = nature::tree_sway::StepPhase(_phases.at(i), _speeds.at(i), static_cast<uint32_t>(gameTime.count()));
+		_leans.at(i) = nature::tree_sway::Lean(_phases.at(i));
 	}
 	if (changeSpeeds)
 	{
@@ -287,7 +282,7 @@ glm::mat4 VegetationSystem::GetTreeMatrix(entt::entity tree, const glm::mat4& mo
 	return swaying;
 }
 
-// TODO(raffclar): the game only sways a field once its crop is fully grown, there is no growth in openblack yet
+// The renderer asks for this matrix only for a ripe crop: an unripe crop does not sway
 glm::mat4 VegetationSystem::GetFieldMatrix(const glm::mat4& model, float scale, uint8_t swaySlot) const
 {
 	auto swaying = model;
