@@ -1381,7 +1381,9 @@ struct CreatureMagicActionKnownAboutEntry: CreatureActionKnownAboutEntry
 
 struct CreatureSourceBoundsInfo
 {
-	glm::vec3 field0x0;
+	float minThreshold;
+	float maxThreshold;
+	float thresholdStep;
 };
 
 struct GPlayerInfo
