@@ -13,6 +13,7 @@
 #include <chrono>
 #include <span>
 
+#include <entt/entity/fwd.hpp>
 #include <glm/vec3.hpp>
 
 #include "Enums.h"
@@ -101,6 +102,8 @@ public:
 	virtual void UpdatePlayersTurn(const glm::vec3& eye) = 0;
 	/// Each game turn: the plan of each creature adds its change, and the waiting change moves its alignment
 	virtual void UpdateCreaturesTurn() = 0;
+	/// At the end of the creature's own turn: its plan adds its change, and the waiting change moves its alignment
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// The sky turns toward the camera's alignment, by game time, none while paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 

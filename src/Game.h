@@ -251,6 +251,8 @@ public:
 	bool GameLogicLoop() noexcept;
 	/// One step of the game turn
 	void PlayTurnStep(game_turn::Step step);
+	/// One step of the creature's own turn, at its place in the turn of the living
+	void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature);
 	/// What the steps of one frame share
 	struct FrameState
 	{

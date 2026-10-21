@@ -317,6 +317,20 @@ void CreatureHelpSystem::ProcessTurn()
 	}
 }
 
+void CreatureHelpSystem::CreatureTurn(entt::entity creature)
+{
+	if (!Locator::playerSystem::has_value() || !Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	// The help tells of the primary creature of the player at this machine
+	const auto& players = Locator::playerSystem::value();
+	if (players.GetPrimaryCreature(players.GetLocalPlayer()) == creature && Locator::entitiesRegistry::value().Valid(creature))
+	{
+		UpdateCreature(creature);
+	}
+}
+
 void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();

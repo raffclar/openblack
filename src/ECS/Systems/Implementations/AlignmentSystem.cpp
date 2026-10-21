@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <array>
 #include <span>
+#include <vector>
 
 #include "3D/CreatureBody.h"
 #include "Creature/CreatureDeedAlignment.h"
@@ -189,24 +190,38 @@ void AlignmentSystem::UpdatePlayersTurn(const glm::vec3& eye)
 
 void AlignmentSystem::UpdateCreaturesTurn()
 {
+	std::vector<entt::entity> creatures;
+	Locator::entitiesRegistry::value().Each<Creature>(
+	    [&creatures](entt::entity entity, Creature& /*creature*/) { creatures.push_back(entity); });
+	for (const auto creature : creatures)
+	{
+		CreatureTurn(creature);
+	}
+}
+
+void AlignmentSystem::CreatureTurn(entt::entity entity)
+{
 	if (!Locator::infoConstants::has_value())
 	{
 		return;
 	}
 	const auto& info = Locator::infoConstants::value();
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<Creature>([&info, &registry](entt::entity entity, Creature& creature) {
-		const auto row = creature::InfoRow(creature.species);
-		if (row < info.creature.size())
-		{
-			// The plan that the creature does adds its change before the turn moves the alignment
-			const auto& species = info.creature.at(row);
-			creature.pendingAlignment += creature_deed_alignment::TurnChange(DeedOf(registry, entity, info),
-			                                                                 species.alignmentChangeScale, creature.alignment);
-			creature.alignment = magic::StepPendingAlignment(creature.alignment, creature.pendingAlignment,
-			                                                 info.creature.at(row).alignmentChangePerTurn);
-		}
-	});
+	auto* creature = registry.Valid(entity) ? registry.TryGet<Creature>(entity) : nullptr;
+	if (creature == nullptr)
+	{
+		return;
+	}
+	const auto row = creature::InfoRow(creature->species);
+	if (row < info.creature.size())
+	{
+		// The plan that the creature does adds its change before the turn moves the alignment
+		const auto& species = info.creature.at(row);
+		creature->pendingAlignment += creature_deed_alignment::TurnChange(DeedOf(registry, entity, info),
+		                                                                  species.alignmentChangeScale, creature->alignment);
+		creature->alignment =
+		    magic::StepPendingAlignment(creature->alignment, creature->pendingAlignment, species.alignmentChangePerTurn);
+	}
 }
 
 void AlignmentSystem::Update(std::chrono::duration<float, std::milli> gameTime)

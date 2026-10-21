@@ -266,39 +266,46 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 
 void CreatureCarryOverSystem::SaveAsTheyLive()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto local = LocalPlayer();
-	std::vector<entt::entity> due;
-	registry.Each<const Creature, const CreatureNeeds>(
-	    [&registry, &due, local](entt::entity entity, const Creature& creature, const CreatureNeeds& needs) {
-		    if (creature.owner != local)
-		    {
-			    return;
-		    }
-		    const auto turns = needs.needs.turns;
-		    auto* save = registry.TryGet<CreatureFileSave>(entity);
-		    if (save == nullptr)
-		    {
-			    // A creature first looked at now is written only once it gets to the next multiple of 600 turns
-			    registry.Assign<CreatureFileSave>(entity, turns);
-			    return;
-		    }
-		    if (creature_carry_over::SavesAsItLives(save->turnsSeen, turns))
-		    {
-			    due.push_back(entity);
-		    }
-		    save->turnsSeen = turns;
+	std::vector<entt::entity> creatures;
+	Locator::entitiesRegistry::value().Each<const Creature, const CreatureNeeds>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/, const CreatureNeeds& /*needs*/) {
+		    creatures.push_back(entity);
 	    });
-	for (const auto creature : due)
+	for (const auto creature : creatures)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns",
-		                   entt::to_integral(creature), creature_carry_over::k_SaveEveryTurns);
-		KeepCreature(creature);
-		// The game writes the web page with the files of a creature that lives on, but not when a land keeps it
-		if (Locator::creatureWebPageSystem::has_value())
-		{
-			Locator::creatureWebPageSystem::value().WritePage(creature);
-		}
+		SaveAsItLives(creature);
+	}
+}
+
+void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureNeeds>(entity) ||
+	    registry.Get<const Creature>(entity).owner != LocalPlayer())
+	{
+		return;
+	}
+	const auto turns = registry.Get<const CreatureNeeds>(entity).needs.turns;
+	auto* save = registry.TryGet<CreatureFileSave>(entity);
+	if (save == nullptr)
+	{
+		// A creature first looked at now is written only once it gets to the next multiple of 600 turns
+		registry.Assign<CreatureFileSave>(entity, turns);
+		return;
+	}
+	const bool due = creature_carry_over::SavesAsItLives(save->turnsSeen, turns);
+	save->turnsSeen = turns;
+	if (!due)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns", entt::to_integral(entity),
+	                   creature_carry_over::k_SaveEveryTurns);
+	KeepCreature(entity);
+	// The game writes the web page with the files of a creature that lives on, but not when a land keeps it
+	if (Locator::creatureWebPageSystem::has_value())
+	{
+		Locator::creatureWebPageSystem::value().WritePage(entity);
 	}
 }
 
@@ -308,12 +315,31 @@ void CreatureCarryOverSystem::ProcessTurn()
 	{
 		SaveAsTheyLive();
 	}
+	StepArrivals(std::nullopt);
+}
+
+void CreatureCarryOverSystem::CreatureTurn(entt::entity creature)
+{
+	if (_landKeepsCreatures)
+	{
+		SaveAsItLives(creature);
+	}
+	StepArrivals(creature);
+}
+
+void CreatureCarryOverSystem::StepArrivals(std::optional<entt::entity> creature)
+{
 	if (_arriving.empty())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	std::erase_if(_arriving, [&registry](Arriving& arriving) {
+	std::erase_if(_arriving, [&registry, creature](Arriving& arriving) {
+		// A creature that is gone takes no turn, and its sparkle ends with it
+		if (creature.has_value() && arriving.creature != *creature && registry.Valid(arriving.creature))
+		{
+			return false;
+		}
 		auto* spells = registry.Valid(arriving.creature) ? registry.TryGet<CreatureSpells>(arriving.creature) : nullptr;
 		if (spells == nullptr)
 		{

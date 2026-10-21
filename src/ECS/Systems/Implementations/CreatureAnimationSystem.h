@@ -27,6 +27,11 @@ class CreatureAnimationSystem final: public CreatureAnimationSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void BreathTurn(entt::entity creature) override;
+	void BodyTurn(entt::entity creature) override;
+	void MotesTurn(entt::entity creature) override;
+	void SwayTurn(entt::entity creature) override;
+	void EndPoseTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
@@ -49,10 +54,6 @@ public:
 	void AddAlignmentMotesOf(entt::entity copy) override;
 
 private:
-	/// Each creature steps the sway of its body by the seconds that it lived in this game turn
-	static void StepSway();
-	/// Each creature whose body looks good or evil adds its motes or its smoke for this game turn
-	static void AddAlignmentMotes();
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
 	/// pose of the last turn becomes the older pose.
 	void PoseForTurn(entt::entity entity, float milliseconds);

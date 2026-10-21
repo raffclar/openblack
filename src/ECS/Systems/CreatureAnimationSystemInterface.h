@@ -34,6 +34,16 @@ public:
 
 	/// Once a game turn: the fatness each body shows follows its creature's a step
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, before its leash and its mind: the breath goes back to the resting period of its size
+	virtual void BreathTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, after its action: the fatness that its body shows follows its fatness a step
+	virtual void BodyTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, as its body lives the turn: the motes or the smoke of its alignment
+	virtual void MotesTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, as its body lives the turn: the body sways from what hit it
+	virtual void SwayTurn(entt::entity /*creature*/) {}
+	/// At the end of the creature's own turn, its body takes its pose for the turn if it has no pose yet
+	virtual void EndPoseTurn(entt::entity /*creature*/) {}
 	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
 	/// changed enough, drawn between the poses of their last two game turns, and their eyes placed
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;

@@ -23,6 +23,7 @@ class CreatureSkinSystem final: public CreatureSkinSystemInterface
 public:
 	void Update() override;
 	void ProcessTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void SetTattoos(entt::entity creature, const creature_tattoo::Slots& slots) override;
 	void ShowTattoos(entt::entity creature, std::optional<creature_tattoo::Slots> slots) override;
 	void SetTattooPictures(entt::entity creature, std::vector<uint8_t> pictures) override;

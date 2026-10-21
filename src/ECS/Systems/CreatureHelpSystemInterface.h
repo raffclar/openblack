@@ -49,8 +49,10 @@ public:
 
 	/// Something happened that the help may tell of: it is told now, waits its turn, or is let go
 	virtual void Raise(entt::entity creature, const creature_help::Message& message) = 0;
-	/// Once a game turn, after the creatures have thought: the waiting messages and the help's own watching
+	/// Once a game turn: the waiting messages and the help's own watching
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, before its desires change: the same for the player's creature
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// The player has shown they know one of the creature's prompts, which isn't given again
 	virtual void PromptKnown(entt::entity creature, creature_help::Prompt prompt) = 0;
 	/// The creature faints from what its body lacks: the help tells why first

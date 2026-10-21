@@ -50,8 +50,11 @@ public:
 	explicit CreaturePenSystem(World world);
 
 	void ProcessTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	/// A turn over the given registry
 	void ProcessTurn(Registry& registry) const;
+	/// The turn of one creature over the given registry
+	void CreatureTurn(Registry& registry, entt::entity entity) const;
 
 private:
 	World _world;

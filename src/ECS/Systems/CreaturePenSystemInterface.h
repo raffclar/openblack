@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <entt/entity/fwd.hpp>
+
 namespace openblack::ecs::systems
 {
 
@@ -21,8 +23,10 @@ class CreaturePenSystemInterface
 public:
 	virtual ~CreaturePenSystemInterface() = default;
 
-	/// Once a game turn, after the creatures have grown
+	/// Once a game turn, for each creature
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, before its leash and its body
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 };
 
 } // namespace openblack::ecs::systems

@@ -2689,12 +2689,23 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 
 void CreatureObjectActionSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value())
 	{
 		return;
 	}
+	BeginTurn();
+	std::vector<entt::entity> creatures;
+	Locator::entitiesRegistry::value().Each<const Creature>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/) { creatures.push_back(entity); });
+	for (const auto creature : creatures)
+	{
+		CreatureTurn(creature);
+	}
+}
 
+void CreatureObjectActionSystem::LetGoHeldThings(std::optional<entt::entity> creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	// What is held by a creature that is gone, or no longer holds it, falls. What left its hand to be eaten stays out of
 	// sight until the creature swallows it. If the eat stopped some other way, the creature swallows it now, and if the
 	// creature is gone, it comes back into sight and falls.
@@ -2702,6 +2713,12 @@ void CreatureObjectActionSystem::ProcessTurn()
 	std::vector<entt::entity> stoppedEats;
 	registry.Each<const HeldByCreature>([&](entt::entity entity, const HeldByCreature& by) {
 		const bool creatureExists = registry.Valid(by.creature);
+		// The creature's own turn sees to the things that it held. The start of the turn sees to the things of creatures
+		// that are gone.
+		if (creature.has_value() ? by.creature != *creature : creatureExists)
+		{
+			return;
+		}
 		const auto* held = creatureExists ? registry.TryGet<const CreatureHeldObject>(by.creature) : nullptr;
 		if (held != nullptr && held->object == entity)
 		{
@@ -2728,9 +2745,9 @@ void CreatureObjectActionSystem::ProcessTurn()
 	});
 	for (const auto entity : stoppedEats)
 	{
-		const auto creature = registry.Get<const HeldByCreature>(entity).creature;
+		const auto eater = registry.Get<const HeldByCreature>(entity).creature;
 		CreatureObjectAction ended {.kind = Kind::Eat, .eaten = entity};
-		Swallow(creature, ended, FoodValueOf(entity));
+		Swallow(eater, ended, FoodValueOf(entity));
 	}
 	for (const auto entity : loose)
 	{
@@ -2738,30 +2755,45 @@ void CreatureObjectActionSystem::ProcessTurn()
 		registry.Remove<HeldByCreature>(entity);
 		LetGo(entt::null, entity, glm::vec3(0.0f));
 	}
-	std::vector<entt::entity> emptyHanded;
-	registry.Each<const CreatureHeldObject>([&](entt::entity entity, const CreatureHeldObject& held) {
-		if (!registry.Valid(held.object))
-		{
-			emptyHanded.push_back(entity);
-		}
-	});
-	for (const auto entity : emptyHanded)
+}
+
+void CreatureObjectActionSystem::BeginTurn()
+{
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value())
+	{
+		return;
+	}
+	LetGoHeldThings(std::nullopt);
+}
+
+void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value() ||
+	    !registry.Valid(entity))
+	{
+		return;
+	}
+	LetGoHeldThings(entity);
+	if (const auto* held = registry.TryGet<const CreatureHeldObject>(entity); held != nullptr && !registry.Valid(held->object))
 	{
 		registry.Remove<CreatureHeldObject>(entity);
 	}
 
-	registry.Each<const Creature, const Transform, CreatureAnimation, CreatureObjectAction>(
-	    [&](entt::entity entity, const Creature& body, const Transform& transform, CreatureAnimation& animation,
-	        CreatureObjectAction& action) {
-		    if (action.status == Status::Running && action.phase == Phase::Approach)
-		    {
-			    Approach(entity, action, body, transform, animation, registry.TryGet<const CreatureHeldObject>(entity), true);
-		    }
-	    });
+	if (registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(entity))
+	{
+		auto& action = registry.Get<CreatureObjectAction>(entity);
+		if (action.status == Status::Running && action.phase == Phase::Approach)
+		{
+			Approach(entity, action, registry.Get<const Creature>(entity), registry.Get<const Transform>(entity),
+			         registry.Get<CreatureAnimation>(entity), registry.TryGet<const CreatureHeldObject>(entity), true);
+		}
+	}
 
 	// Carrying something heavy makes it stronger as it walks about
-	registry.Each<const Creature, CreatureNeeds>([&](entt::entity entity, const Creature&, CreatureNeeds& needs) {
-		needs.carriedWeight.reset();
+	if (auto* needs = registry.TryGet<CreatureNeeds>(entity); needs != nullptr && registry.AllOf<Creature>(entity))
+	{
+		needs->carriedWeight.reset();
 		const auto held = GetHeld(entity);
 		if (!held.has_value())
 		{
@@ -2771,9 +2803,9 @@ void CreatureObjectActionSystem::ProcessTurn()
 		const auto own = WeightOf(registry, entity);
 		if (weight.has_value() && own.has_value() && *own > 0.0f)
 		{
-			needs.carriedWeight = std::clamp(*weight / *own, 0.0f, 1.0f);
+			needs->carriedWeight = std::clamp(*weight / *own, 0.0f, 1.0f);
 		}
-	});
+	}
 }
 
 void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli> gameTime)

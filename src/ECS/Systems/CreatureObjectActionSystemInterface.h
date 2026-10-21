@@ -46,6 +46,10 @@ public:
 	/// Once a game turn: creatures walk up to what they act on, what they carry makes them stronger, and their towns'
 	/// views of them change
 	virtual void ProcessTurn() = 0;
+	/// Once a game turn, before the creatures' own turns: what creatures that are gone held falls
+	virtual void BeginTurn() {}
+	/// In the creature's own turn, after its walk: its hands walk up to their thing, and what it carries counts
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame before the bodies are posed, by the game time: the actions play on
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 	/// Once a frame after the bodies are posed: things are taken hold of and let go of, what is held rides in the hand,

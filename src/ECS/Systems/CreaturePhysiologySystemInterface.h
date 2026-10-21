@@ -27,8 +27,12 @@ class CreaturePhysiologySystemInterface: public SavedStateInterface
 public:
 	virtual ~CreaturePhysiologySystemInterface() = default;
 
-	/// Once a game turn
+	/// Once a game turn: the start of the turn, then the turn of each creature
 	virtual void ProcessTurn() = 0;
+	/// Once a game turn, before the creatures' own turns: the turns that the bodies live in this turn
+	virtual void BeginTurn() {}
+	/// In the creature's own turn: its body lives the turn
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 
 	/// The creature ate something of a food value. Returns the energy the meal gave it, by its size and species.
 	[[nodiscard]] virtual float Eat(entt::entity creature, float foodValue) = 0;

@@ -255,10 +255,27 @@ bool CreaturePhysiologySystem::LoadState(reflection::BinaryReader& in)
 
 void CreaturePhysiologySystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	BeginTurn();
+	std::vector<entt::entity> creatures;
+	Locator::entitiesRegistry::value().Each<const Creature>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/) { creatures.push_back(entity); });
+	for (const auto creature : creatures)
+	{
+		CreatureTurn(creature);
+	}
+}
+
+void CreaturePhysiologySystem::BeginTurn()
+{
 	_owedTurns += _timeScale;
-	const auto turns = static_cast<uint32_t>(std::floor(_owedTurns));
-	_owedTurns -= static_cast<float>(turns);
+	_turns = static_cast<uint32_t>(std::floor(_owedTurns));
+	_owedTurns -= static_cast<float>(_turns);
+}
+
+void CreaturePhysiologySystem::CreatureTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto turns = _turns;
 	const bool night = IsNight();
 	bool resized = false;
 	// The player's creature, whose size the creatures scripts scale to follow
@@ -275,7 +292,7 @@ void CreaturePhysiologySystem::ProcessTurn()
 		}
 	}
 
-	registry.Each<Creature, CreatureNeeds>([&](entt::entity entity, Creature& creature, CreatureNeeds& needs) {
+	const auto bodyTurn = [&](Creature& creature, CreatureNeeds& needs) {
 		const auto species = SpeciesOf(creature.species);
 		StartNeeds(needs, species);
 		auto* transform = registry.TryGet<Transform>(entity);
@@ -331,16 +348,20 @@ void CreaturePhysiologySystem::ProcessTurn()
 				needs.faint = physiology::ShouldFaint(needs.needs, phase, owned);
 			}
 		}
-	});
+	};
+	if (registry.AllOf<Creature, CreatureNeeds>(entity))
+	{
+		bodyTurn(registry.Get<Creature>(entity), registry.Get<CreatureNeeds>(entity));
+	}
 	if (resized)
 	{
 		registry.SetDirty();
 	}
 	// The squats count real game turns. The time scale of the bodies has no effect on them
-	StepSquats();
+	StepSquat(entity);
 }
 
-void CreaturePhysiologySystem::StepSquats()
+void CreaturePhysiologySystem::StepSquat(entt::entity entity)
 {
 	if (!Locator::creatureMindSystem::has_value())
 	{
@@ -349,51 +370,46 @@ void CreaturePhysiologySystem::StepSquats()
 	const auto* tables = Locator::creatureMindSystem::value().GetTables();
 	const auto fart = tables != nullptr ? creature_mind_tables::FindAction(*tables, "Fart") : std::nullopt;
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	if (mind == nullptr)
+	{
+		return;
+	}
 	// When the plan that made a fart smoke stops, the smoke stops at once
-	std::vector<entt::entity> smokesOut;
-	registry.Each<CreatureSquat, const ChimneySmoke, const CreatureMindState>(
-	    [&smokesOut](entt::entity creature, CreatureSquat& squat, const ChimneySmoke&, const CreatureMindState& mind) {
-		    if (!squat.smokePlan.has_value() ||
-		        !creature_fart::SmokeContinues(*squat.smokePlan, mind.planActive, mind.planSerial))
-		    {
-			    squat.smokePlan.reset();
-			    smokesOut.push_back(creature);
-		    }
-	    });
-	for (const auto creature : smokesOut)
+	if (auto* squat = registry.TryGet<CreatureSquat>(entity); squat != nullptr && registry.AllOf<ChimneySmoke>(entity))
 	{
-		registry.Remove<ChimneySmoke>(creature);
+		if (!squat->smokePlan.has_value() ||
+		    !creature_fart::SmokeContinues(*squat->smokePlan, mind->planActive, mind->planSerial))
+		{
+			squat->smokePlan.reset();
+			registry.Remove<ChimneySmoke>(entity);
+		}
 	}
-	std::vector<entt::entity> winds;
-	std::vector<entt::entity> lumps;
-	registry.Each<const CreatureAnimation, const CreatureMindState>(
-	    [&](entt::entity creature, const CreatureAnimation& animation, const CreatureMindState& mind) {
-		    if (!creature_fart::PlaysSquatLoop(animation.body))
-		    {
-			    return;
-		    }
-		    // The creature counts the game turns of its squat loops
-		    auto* squat = registry.TryGet<CreatureSquat>(creature);
-		    if (squat == nullptr)
-		    {
-			    squat = &registry.Assign<CreatureSquat>(creature);
-		    }
-		    if (!creature_fart::CountTurn(squat->turns))
-		    {
-			    return;
-		    }
-		    // A fart makes a cloud. Any other squat drops a lump of poo
-		    const bool farting = fart.has_value() && mind.planActive && mind.planner.current.has_value() &&
-		                         mind.planner.current->action == *fart;
-		    (creature_fart::BurstOf(farting) == creature_fart::Burst::Cloud ? winds : lumps).push_back(creature);
-	    });
-	for (const auto creature : winds)
+	const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
+	if (animation == nullptr || !creature_fart::PlaysSquatLoop(animation->body))
 	{
-		LetOutWind(creature);
+		return;
 	}
-	for (const auto creature : lumps)
+	// The creature counts the game turns of its squat loops
+	auto* squat = registry.TryGet<CreatureSquat>(entity);
+	if (squat == nullptr)
 	{
-		DropPooLump(creature);
+		squat = &registry.Assign<CreatureSquat>(entity);
+	}
+	if (!creature_fart::CountTurn(squat->turns))
+	{
+		return;
+	}
+	// A fart makes a cloud. Any other squat drops a lump of poo
+	const bool farting =
+	    fart.has_value() && mind->planActive && mind->planner.current.has_value() && mind->planner.current->action == *fart;
+	if (creature_fart::BurstOf(farting) == creature_fart::Burst::Cloud)
+	{
+		LetOutWind(entity);
+	}
+	else
+	{
+		DropPooLump(entity);
 	}
 }
 

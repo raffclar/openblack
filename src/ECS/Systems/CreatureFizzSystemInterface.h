@@ -26,6 +26,9 @@ public:
 	virtual void SetFizz(entt::entity creature, float target, float seconds, bool goesForGood) = 0;
 	/// Once a game turn, after the creatures have acted: every fizz moves on
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, after its action: its fizz moves on. A creature that fizzes out for good leaves the
+	/// game, and its turn ends.
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Each frame, by the frame's game time: the static that the eyes of all the creatures share continues to slide
 	virtual void UpdateFrame(float seconds) = 0;
 	/// Each frame after the game makes the land's draw list, by the frame's game time: the own static of each fizzing creature
