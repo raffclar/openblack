@@ -322,6 +322,11 @@ void main()
 	// The temple's lightmapped walls are drawn unlit, in the temple's light with its colour or a glow added, and fogged
 	// at each vertex
 	vec3 wallDiffuse = floor((vec3_splat(1.0f) - u_darkening.rgb) * 255.0f + 0.5f);
+	// A temple's control takes the white colour of its control in whole steps
+	if (u_darkening.w > 0.5f)
+	{
+		wallDiffuse = floor(wallDiffuse * 255.0f / 256.0f);
+	}
 	vec3 wallAdded = floor(u_glow.rgb * 255.0f + 0.5f);
 	if (InTempleFog())
 	{

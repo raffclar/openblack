@@ -13,6 +13,7 @@
 
 #include <chrono>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <glm/mat4x4.hpp>
@@ -92,6 +93,9 @@ struct TempleSubMeshTexture
 {
 	uint32_t subMesh;
 	graphics::TextureHandle texture;
+	/// The submesh is a picture of the challenge room or the save game room. The game draws a picture in one colour,
+	/// fogged once at its first vertex, with no lightmap and no light.
+	bool picture {false};
 };
 
 /// A distance and direction that one of a room's submeshes moves in its mesh, as a held button moves into the wall
@@ -164,6 +168,8 @@ public:
 	/// The submeshes of a room's mesh its controls leave undrawn, as each of the main room's buttons draws only one of
 	/// its pair
 	[[nodiscard]] virtual std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const = 0;
+	/// The submeshes of a room that are its controls, which the game draws with the white colour of their control
+	[[nodiscard]] virtual std::span<const uint32_t> GetControlSubMeshes(TempleRoom room) const = 0;
 	/// The glow of the control the cursor is over in a room's mesh, if it glows
 	[[nodiscard]] virtual std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const = 0;
 	/// The submeshes of a room's mesh that its held controls move, with the movement in the mesh

@@ -161,6 +161,34 @@ TEST(TempleScrollText, AGestureEndsTheTextAndGoesOnALineOfItsOwn)
 	EXPECT_EQ(text.GetText(), u"A <N>" + gesture + u"<N><N><N>");
 }
 
+TEST(TempleScrollText, AControlEndsTheTextWithItsKeyAndMouseInput)
+{
+	const auto font = LoadFont();
+	TempleScrollText text(font);
+	text.SetControlWords({u"()", TempleScrollText::ControlWords(u"Ctrl + S", u"Left Mouse Button")});
+	text.Add(u"Save $m1 now");
+	const std::u16string control {TempleScrollText::k_Control, static_cast<char16_t>(TempleScrollText::k_Hidden + 1)};
+	EXPECT_EQ(text.GetText(), u"Save (Ctrl + S Left Mouse Button)<N>" + control + u"<N><N><N>");
+}
+
+TEST(TempleScrollText, AControlOutsideTheGamesControlsHasNoWords)
+{
+	const auto font = LoadFont();
+	TempleScrollText text(font);
+	text.SetControlWords({u"()"});
+	text.Add(u"A $m40 A");
+	const std::u16string control {TempleScrollText::k_Control, static_cast<char16_t>(TempleScrollText::k_Hidden + 40)};
+	EXPECT_EQ(text.GetText(), u"A <N>" + control + u"<N><N><N>");
+}
+
+TEST(TempleScrollText, AControlsWordsAreItsKeyAndMouseInputInBrackets)
+{
+	EXPECT_EQ(TempleScrollText::ControlWords(u"F5", u""), u"(F5)");
+	EXPECT_EQ(TempleScrollText::ControlWords(u"", u"Right Mouse Button"), u"(Right Mouse Button)");
+	EXPECT_EQ(TempleScrollText::ControlWords(u"Shift + A", u"Wheel Up"), u"(Shift + A Wheel Up)");
+	EXPECT_EQ(TempleScrollText::ControlWords(u"", u""), u"()");
+}
+
 TEST(TempleScrollText, ValuesTakeThePlaceOfTheirMarks)
 {
 	EXPECT_EQ(TempleScrollText::WithNumber(u"Deaths: $I", 179), u"Deaths: 179");

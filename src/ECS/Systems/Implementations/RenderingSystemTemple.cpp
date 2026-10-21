@@ -277,6 +277,10 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 			for (const auto& scroll : temple.GetScrollTextures(room->second))
 			{
 				drawDesc->second.subMeshTextures.emplace_back(scroll.subMesh, scroll.texture);
+				if (scroll.picture)
+				{
+					drawDesc->second.pictureSubMeshes.push_back(scroll.subMesh);
+				}
 			}
 			for (const auto& glow : temple.GetControlGlows(room->second))
 			{
@@ -287,6 +291,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 				drawDesc->second.subMeshOffsets.emplace_back(moved.subMesh, moved.offset);
 			}
 			drawDesc->second.hiddenSubMeshes = temple.GetHiddenSubMeshes(room->second);
+			const auto controls = temple.GetControlSubMeshes(room->second);
+			drawDesc->second.controlSubMeshes.assign(controls.begin(), controls.end());
 		}
 		// The creature's room draws its water by the materials' alpha, sliding its texture down it
 		if (waterMeshIds.contains(meshId))

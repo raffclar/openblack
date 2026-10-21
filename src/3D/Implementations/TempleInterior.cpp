@@ -83,11 +83,13 @@
 #include "Gui/GameMenu.h"
 #include "Gui/SaveGameBoxes.h"
 #include "InfoConstants.h"
+#include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
 #include "Windowing/WindowingInterface.h"
@@ -226,12 +228,12 @@ void PlayDoorSound(entt::id_type sound)
 	}
 }
 
-void PlayToggleSound(entt::id_type sound)
+void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
 {
 	// The game plays the buttons' sounds without a place
 	if (Locator::audio::has_value())
 	{
-		audio::PlayGameSoundEffect(sound, std::nullopt);
+		audio::StartGameSoundEffect(sound, {.pitchPercent = pitchPercent});
 	}
 }
 } // namespace
@@ -255,6 +257,11 @@ std::optional<std::vector<uint8_t>> ReadSavedGamePicture(std::string_view fileNa
 TempleScrolls::Facts GatherScrollFacts()
 {
 	auto facts = TempleScrolls::Facts::Mock();
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto bindings = Locator::gameActionSystem::value().GetKeyBindings();
+		facts.bindings.assign(bindings.begin(), bindings.end());
+	}
 	// The world scroll tells the player at this machine of the world and their people
 	const auto local =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
@@ -391,6 +398,23 @@ void TempleInterior::CreateScrolls()
 		}
 	}
 	_toggles.Find(names);
+
+	// Each room finds its controls
+	_controlSubMeshes.clear();
+	for (const auto& [room, name] : k_TempleInteriorGlows)
+	{
+		const entt::id_type meshId = entt::hashed_string(fmt::format("temple/interior/{}_l3d", name).c_str()).value();
+		if (!meshes.Contains(meshId))
+		{
+			continue;
+		}
+		std::vector<std::string> roomNames;
+		for (const auto& subMesh : meshes.Handle(meshId)->GetSubMeshes())
+		{
+			roomNames.push_back(subMesh->GetName());
+		}
+		_controlSubMeshes[room] = temple::controls::SubMeshes(room, roomNames);
+	}
 
 	// The challenge room finds its pictures, frames and buttons
 	_challengeRoom = std::make_unique<TempleChallengeRoom>();
@@ -742,6 +766,12 @@ std::vector<TempleSubMeshTexture> TempleInterior::GetScrollTextures(TempleRoom r
 	return textures;
 }
 
+std::span<const uint32_t> TempleInterior::GetControlSubMeshes(TempleRoom room) const
+{
+	const auto found = _controlSubMeshes.find(room);
+	return found != _controlSubMeshes.end() ? std::span<const uint32_t>(found->second) : std::span<const uint32_t>();
+}
+
 std::vector<TempleSubMeshGlow> TempleInterior::GetControlGlows(TempleRoom room) const
 {
 	// The control under the cursor brightens by up to 12, 12 and 20 of 255 as the glow
@@ -774,7 +804,7 @@ const graphics::Texture2D* TempleInterior::GetTextTexture() const
 	return _interface != nullptr ? &_interface->GetFontTexture() : nullptr;
 }
 
-void TempleInterior::UpdateOptionsAndFutureRooms(float seconds)
+void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 {
 	const bool arrived = _cameraModel != nullptr && _cameraModel->IsInControl() && !_transitionRoom.has_value();
 	if (_interface != nullptr)
@@ -809,26 +839,29 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float seconds)
 		}
 	}
 
-	// The future room: once the camera has come into the room, "The future is still uncertain..." fades in to half over
-	// two seconds, from the start each time the camera comes in again
+	// The future room: once the camera has come into the room with no dialog up, "The future is still uncertain..."
+	// fades in to half over two seconds, from the start each time the camera comes in again. While the words show,
+	// the room turns slowly by itself.
 	std::optional<gui::GameInterface::Message> message;
-	if (_currentRoom == TempleRoom::Multi && _cameraModel != nullptr)
+	if (_currentRoom != TempleRoom::Multi || _cameraModel == nullptr)
 	{
-		if (!_cameraModel->IsInControl())
+		_futureWords = {};
+	}
+	else
+	{
+		const bool dialogOpen = _interface != nullptr && _interface->GetMenu().IsOpen();
+		const auto alpha = temple::future_room::Step(_futureWords, _cameraModel->IsInControl(), dialogOpen, milliseconds);
+		if (alpha.has_value() && _interface != nullptr)
 		{
-			_futureTime = 0.0f;
+			message = gui::GameInterface::Message {
+			    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
+			    .alpha = *alpha / 255.0f,
+			};
 		}
-		else
-		{
-			_futureTime += seconds;
-			if (_interface != nullptr)
-			{
-				message = gui::GameInterface::Message {
-				    .text = std::u16string(_interface->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_129")),
-				    .alpha = std::min(128.0f, _futureTime * 64.0f) / 255.0f,
-				};
-			}
-		}
+	}
+	if (_cameraModel != nullptr)
+	{
+		_cameraModel->SetFutureWordsShown(_futureWords.shown);
 	}
 	if (_interface != nullptr)
 	{
@@ -964,7 +997,7 @@ void TempleInterior::LeaveForMapPoint(glm::vec3 point)
 		return;
 	}
 	// Leaving the temple puts the camera 50 above the place and 70 along z from it, looking at it
-	// TODO(raffclar): the hand feels the click
+	// The game also starts a force-feedback effect here, which openblack leaves out (deviation 73)
 	_leaveTo = std::make_pair(glm::vec3(world.x, altitude + 50.0f, world.y + 70.0f), glm::vec3(world.x, altitude, world.y));
 	// The main room's camera fades the temple out to white, and the room leaves once it is
 	if (_interface != nullptr)
@@ -1167,22 +1200,23 @@ void TempleInterior::UpdateMapMarkers(float seconds)
 	}
 	using namespace ecs::components;
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto land = registry.Context().mapScriptGlobals.landNumber;
 	if (_toggles.IsShown(TempleToggles::Display::Temples))
 	{
 		// Every player's temple
-		registry.Each<const Temple, const Transform>([this](const Temple& temple, const Transform& transform) {
+		registry.Each<const Temple, const Transform>([this, land](const Temple& temple, const Transform& transform) {
 			_mapMarkers.push_back({.kind = TempleMapMarkerKind::Temple,
 			                       .position = _map.MarkerPosition(glm::vec2(transform.position.x, transform.position.z)),
-			                       .colour = TempleMap::MarkerColour(temple.owner)});
+			                       .colour = TempleMap::MarkerColour(temple.owner, land)});
 		});
 	}
 	if (_toggles.IsShown(TempleToggles::Display::Creatures))
 	{
 		// Every creature, in its player's colour
-		registry.Each<const Creature, const Transform>([this](const Creature& creature, const Transform& transform) {
+		registry.Each<const Creature, const Transform>([this, land](const Creature& creature, const Transform& transform) {
 			_mapMarkers.push_back({.kind = TempleMapMarkerKind::Creature,
 			                       .position = _map.MarkerPosition(glm::vec2(transform.position.x, transform.position.z)),
-			                       .colour = TempleMap::MarkerColour(creature.owner)});
+			                       .colour = TempleMap::MarkerColour(creature.owner, land)});
 		});
 	}
 	if (_toggles.IsShown(TempleToggles::Display::Challenges))
@@ -1579,7 +1613,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			}
 		}
 
-		UpdateOptionsAndFutureRooms(milliseconds / 1000.0f);
+		UpdateOptionsAndFutureRooms(milliseconds);
 
 		// The glow of the control under the cursor runs out each frame, and drawing the room sets it off
 		// again as the cursor moves onto another submesh, while no control is held

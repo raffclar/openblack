@@ -402,7 +402,7 @@ private:
 	/// Draws a submesh, with a texture in place of its skins when given one. The offset moves the submesh in its mesh.
 	void DrawSubMesh(const L3DMesh& mesh, const L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc, bool preserveState,
 	                 const TextureHandle* texture = nullptr, glm::vec3 glow = glm::vec3(0.0f),
-	                 glm::vec3 offset = glm::vec3(0.0f)) const;
+	                 glm::vec3 offset = glm::vec3(0.0f), bool picture = false, bool control = false) const;
 	/// What a primitive cut at a height in its model's own space shows: whether anything of it is drawn below the cut,
 	/// and the cap over its cut walls. Made once for each cut.
 	struct Cap

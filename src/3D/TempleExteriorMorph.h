@@ -31,6 +31,13 @@ constexpr float k_Step = 0.016f;
 constexpr float k_Near = 0.001f;
 [[nodiscard]] float Step(float current, float target);
 
+/// The share of the influence a player has when the land is the first land of the story, or when nobody has any
+constexpr float k_ShareOfNoInfluence = 0.01f;
+/// The size a temple grows toward: twice its player's share of the influence. On the first land of the story the game
+/// gives every player the share of no influence.
+/// @param share The player's share of the influence, nothing when nobody has any
+[[nodiscard]] float SizeTarget(int32_t landNumber, std::optional<float> share);
+
 /// Whether the temple's mesh is to be blended again: its look changed, it was never blended, or its mesh is not loaded.
 /// A loaded game keeps the look that the mesh was blended for, but the blended mesh itself is made again.
 [[nodiscard]] bool NeedsBlend(std::optional<glm::vec2> blendedFor, glm::vec2 look, bool meshLoaded);

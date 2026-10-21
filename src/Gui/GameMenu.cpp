@@ -114,28 +114,6 @@ constexpr std::array<std::string_view, openblack::input::k_KeyBindingCount> k_Ac
     "HELP_TEXT_ACTIONS_NEXT_LEASH",
 };
 
-/// The name of a mouse input, empty for none
-std::string_view MouseText(openblack::input::MouseInput mouse)
-{
-	using openblack::input::MouseInput;
-	switch (mouse)
-	{
-	case MouseInput::LeftButton:
-		return "HELP_TEXT_ACTIONS_LEFTMOUSEBUTTON";
-	case MouseInput::RightButton:
-		return "HELP_TEXT_ACTIONS_RIGHTMOUSEBUTTON";
-	case MouseInput::MiddleButton:
-		return "HELP_TEXT_ACTIONS_MIDDLEMOUSEBUTTON";
-	case MouseInput::WheelUp:
-		return "HELP_TEXT_ACTIONS_WHEEL_UP";
-	case MouseInput::WheelDown:
-		return "HELP_TEXT_ACTIONS_WHEEL_DOWN";
-	case MouseInput::None:
-		break;
-	}
-	return {};
-}
-
 /// The mouse that the Controls page draws beside a row: the row's own mouse input. A zoom action with no mouse input
 /// shows both buttons while the move and the action are on the left and the right buttons, either way round.
 Mouse ShownMouse(std::span<const openblack::input::KeyBinding> bindings, size_t row)
@@ -790,7 +768,7 @@ void GameMenu::RefreshControls()
 	{
 		const auto& binding = _bindings.at(i);
 		auto text = _actionNames.at(i) + u" : " + input::rebinding::ChordName(binding.key) + u" ";
-		if (const auto mouseName = MouseText(binding.mouse); !mouseName.empty())
+		if (const auto mouseName = input::rebinding::MouseTextName(binding.mouse); !mouseName.empty())
 		{
 			text += MouseWords(_texts.Get(mouseName));
 		}
@@ -894,7 +872,7 @@ void GameMenu::PollCapture(bool left, bool right, bool middle, glm::ivec2 point)
 		_pendingMouse = *mouse;
 		_mouseChosen = true;
 	}
-	ShowCapture(MouseWords(_texts.Get(MouseText(_pendingMouse))));
+	ShowCapture(MouseWords(_texts.Get(input::rebinding::MouseTextName(_pendingMouse))));
 }
 
 void GameMenu::KeepCapture()

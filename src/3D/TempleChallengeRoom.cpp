@@ -215,7 +215,7 @@ std::vector<TempleSubMeshTexture> TempleChallengeRoom::GetTextures() const
 		const auto& texture = place.full.has_value() ? place.full : place.small;
 		if (texture.has_value())
 		{
-			textures.push_back({.subMesh = part.subMesh, .texture = *texture});
+			textures.push_back({.subMesh = part.subMesh, .texture = *texture, .picture = true});
 		}
 	}
 	return textures;

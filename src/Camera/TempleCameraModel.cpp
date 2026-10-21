@@ -1260,17 +1260,11 @@ void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
 		picture.heightTarget = _pressHit->height - input.hit->height + picture.height.GetValue();
 	}
 
-	// Under a dialog the room turns slowly by itself, speeding up over a second, rather than with the arrow keys. The
-	// library keeps still and the player's.
-	// TODO(raffclar): in the multiplayer room while it shows the sessions, the room turns slowly by itself too
-	const float turnSpeedUp = _pictureOrbitTime > 0.0f ? std::min(_pictureOrbitTime, 1.0f) : 0.0f;
-	_pictureOrbitTime += dt;
-	if (_dialogOpen)
+	if (const auto turn = PictureTurnByItself(_pictureOrbitTime, dt, _dialogOpen, pictureRoom.aroundPathEnd,
+	                                          room == Room::Multi && _futureWordsShown);
+	    turn.has_value())
 	{
-		if (!pictureRoom.aroundPathEnd)
-		{
-			picture.yawTarget += turnSpeedUp * dt * k_PictureDialogTurnSpeed;
-		}
+		picture.yawTarget += *turn;
 	}
 	else
 	{
@@ -1288,6 +1282,25 @@ void TempleCameraModel::UpdatePictureOrbit(float dt, const Input& input)
 		WalkBackThrough(pictureRoom.door);
 	}
 	// TODO(raffclar): a room of pictures can also look at its pictures
+}
+
+std::optional<float> TempleCameraModel::PictureTurnByItself(float& turnTime, float dt, bool dialogOpen, bool aroundPathEnd,
+                                                            bool futureWordsShown)
+{
+	// Under a dialog the room turns slowly by itself, speeding up over a second from when it starts, rather than with
+	// the arrow keys. The library keeps still. With no dialog, the future room turns by itself in the same way while
+	// it shows its words.
+	if (!dialogOpen && !futureWordsShown)
+	{
+		return std::nullopt;
+	}
+	const float speedUp = std::clamp(turnTime, 0.0f, 1.0f);
+	turnTime += dt;
+	if (dialogOpen && aroundPathEnd)
+	{
+		return 0.0f;
+	}
+	return speedUp * dt * k_PictureDialogTurnSpeed;
 }
 
 void TempleCameraModel::UpdatePictureKeys(float dt, PictureCamera& picture)

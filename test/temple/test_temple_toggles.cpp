@@ -44,7 +44,11 @@ constexpr uint32_t k_Scroll = 11;
 struct Toggles
 {
 	std::vector<entt::id_type> sounds;
-	TempleToggles toggles {[this](entt::id_type sound) { sounds.push_back(sound); }};
+	std::vector<uint32_t> pitches;
+	TempleToggles toggles {[this](entt::id_type sound, uint32_t pitch) {
+		sounds.push_back(sound);
+		pitches.push_back(pitch);
+	}};
 	Toggles() { toggles.Find(k_Names); }
 };
 } // namespace
@@ -120,4 +124,19 @@ TEST(TempleToggles, SayWhatTheyShowWhenHovered)
 	input.lookingAtScroll = true;
 	UpdateTempleToolTip(toolTip, input);
 	EXPECT_EQ(toolTip.index, 0xE8B - 0xE73);
+}
+
+TEST(TempleToggles, EachButtonClicksAtItsOwnPitch)
+{
+	Toggles t;
+	// Each button off, then on again, in the order of the main room's names
+	for (uint32_t button = 0; button < TempleToggles::k_Count; ++button)
+	{
+		const uint32_t checked = 1 + button * 2;
+		t.toggles.Hold(true, checked);
+		t.toggles.Hold(false, checked);
+		t.toggles.Hold(true, checked + 1);
+		t.toggles.Hold(false, checked + 1);
+	}
+	EXPECT_EQ(t.pitches, (std::vector<uint32_t> {100, 100, 110, 100, 95, 95, 105, 105, 108, 108}));
 }

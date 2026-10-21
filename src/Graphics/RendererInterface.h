@@ -149,6 +149,12 @@ public:
 		float environmentOnlyAlpha {0.0f};
 		/// Textures some of the submeshes are drawn with in place of their skins, by submesh
 		std::span<const std::pair<uint32_t, TextureHandle>> subMeshTextures;
+		/// The submeshes of subMeshTextures that are the temple's pictures: each is drawn in one colour, fogged once at
+		/// its first vertex, with no lightmap and no light
+		std::span<const uint32_t> pictureSubMeshes;
+		/// The submeshes that are the temple's controls: the game multiplies their colour by their control's white, in
+		/// whole steps, so 255 becomes 254
+		std::span<const uint32_t> controlSubMeshes;
 		/// Colours added to some of the submeshes, by submesh, after everything else
 		std::span<const std::pair<uint32_t, glm::vec3>> subMeshGlows;
 		/// Movements of some of the submeshes in the mesh, by submesh, before the mesh's own matrix

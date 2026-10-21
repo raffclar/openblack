@@ -30,6 +30,7 @@
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
+#include "Input/KeyRebinding.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -490,6 +491,16 @@ std::optional<std::u16string> TempleScrolls::Write(Content content, const gui::T
 {
 	TempleScrollText text(font);
 	const auto get = [&texts](std::string_view name) { return texts.Get(name); };
+	// The help that names one of the game's controls tells its key and mouse input
+	std::vector<std::u16string> controlWords;
+	controlWords.reserve(facts.bindings.size());
+	for (const auto& binding : facts.bindings)
+	{
+		const auto mouse = input::rebinding::MouseTextName(binding.mouse);
+		controlWords.push_back(TempleScrollText::ControlWords(input::rebinding::ChordName(binding.key),
+		                                                      mouse.empty() ? std::u16string_view() : get(mouse)));
+	}
+	text.SetControlWords(std::move(controlWords));
 	// A help text by its number, empty when there is none
 	const auto helpText = [&texts, &get](uint32_t number) {
 		const auto names = texts.GetHelpNames();
