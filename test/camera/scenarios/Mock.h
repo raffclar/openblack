@@ -83,8 +83,6 @@ class MockTerrain final: public openblack::LandIslandInterface
 	[[nodiscard]] const openblack::graphics::Texture2D& GetLuminosityMap() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetCellColourMap() const final { assert(false); }
 	[[nodiscard]] const openblack::graphics::Texture2D& GetBlockTextures() const final { assert(false); }
-	[[nodiscard]] const openblack::graphics::FrameBuffer& GetFootprintFramebuffer() const final { assert(false); }
-	[[nodiscard]] const openblack::graphics::FrameBuffer& GetLandAlphaFramebuffer() const final { assert(false); }
 	[[nodiscard]] openblack::U16Extent2 GetIndexExtent() const final { assert(false); }
 	[[nodiscard]] glm::mat4 GetOrthoView() const final { assert(false); }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const final { assert(false); }

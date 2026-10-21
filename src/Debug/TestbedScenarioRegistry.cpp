@@ -3317,6 +3317,21 @@ void AddFootprints(std::vector<Scenario>& all)
 	    .commands = {Go(Kind::WalkTo, 0, {-110.0f, 0.0f}, 0.5f, true), Go(Kind::RunTo, 0, {110.0f, 0.0f}, 0.0f, true)},
 	    .repeatFrom = 0,
 	});
+
+	all.push_back({
+	    .id = "footprints.buildings_overlap_and_go",
+	    .name = "Building footprints overlap, and one goes",
+	    .facet = Facet::Footprints,
+	    .description = "Two Celtic huts stand so close that their footprints overlap. An Egyptian well stands to the "
+	                   "side. After eight seconds the well is taken away.",
+	    .expected = "The footprints show crisp texels of the land's own size. Where the two huts' footprints overlap, the "
+	                "second is painted over the first. The well's footprint goes with the well.",
+	    .framing = {.shot = Shot::Placed, .eye = {12.0f, 45.0f, -30.0f}, .look = {-6.0f, 0.0f, 2.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {7.0f, 5.0f}, .yawDegrees = 30.0f},
+	                {.type = FeatureInfo::EgptWell, .offset = {-25.0f, 0.0f}}},
+	    .commands = {OnObject(Kind::RemoveObject, 0, 2, 8.0f, false)},
+	});
 }
 
 void AddAudio(std::vector<Scenario>& all)

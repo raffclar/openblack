@@ -20,6 +20,7 @@
 #include <glm/common.hpp>
 #include <glm/vec2.hpp>
 
+#include "3D/BlockTexture.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/SharedIndexLists.h"
 
@@ -72,6 +73,7 @@ private:
 	/// What the blocks' textures are painted from, kept to paint them again when the land changes height
 	std::vector<uint16_t> _materialTexels;
 	std::vector<uint8_t> _bump;
+	[[nodiscard]] block_texture::Sources TextureSources() const;
 	/// A rectangle of cells or corners, empty until something is added to it
 	struct ChangedArea
 	{
@@ -105,8 +107,9 @@ public:
 	{
 		return block < _coarsePageSlots.size() ? _coarsePageSlots[block] : glm::vec4(0.0f);
 	}
-	[[nodiscard]] const graphics::FrameBuffer& GetFootprintFramebuffer() const override { return *_footprintFrameBuffer; }
-	[[nodiscard]] const graphics::FrameBuffer& GetLandAlphaFramebuffer() const override { return *_landAlphaFrameBuffer; }
+	void PaintBlockTexels(size_t block, std::span<uint16_t> texels) const override;
+	void SetBlockTexels(size_t block, std::span<const uint16_t> texels) override;
+	[[nodiscard]] std::vector<size_t> TakeRepaintedBlocks() override;
 
 	[[nodiscard]] glm::mat4 GetOrthoView() const override { return _view; }
 	[[nodiscard]] glm::mat4 GetOrthoProj() const override { return _proj; }
@@ -127,8 +130,8 @@ private:
 	/// The blocks' triangle sets, each made once and shared by every block drawing the same triangles
 	std::unique_ptr<SharedIndexLists<graphics::IndexBuffer>> _blockTriangles;
 
-	std::unique_ptr<graphics::FrameBuffer> _footprintFrameBuffer;
-	std::unique_ptr<graphics::FrameBuffer> _landAlphaFrameBuffer;
+	/// The blocks whose textures were painted again with no footprints since the footprints last caught up
+	std::vector<size_t> _repaintedBlocks;
 	glm::mat4 _proj;
 	glm::mat4 _view;
 	glm::u16vec2 _extentIndexMin;

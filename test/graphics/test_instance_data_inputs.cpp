@@ -32,8 +32,6 @@
 
 #if defined(_WIN32)
 // The instanced shaders as the game embeds them, compiled for Direct3D
-#include "generated/shaders/dx11/vs_footprint_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_footprint_paint_instanced.sc.bin.h"
 #include "generated/shaders/dx11/vs_object_hm_instanced.sc.bin.h"
 #include "generated/shaders/dx11/vs_object_instanced.sc.bin.h"
 #include "generated/shaders/dx11/vs_object_lightmap_instanced.sc.bin.h"
@@ -195,8 +193,6 @@ bool Takes(const std::vector<uint16_t>& attributes, uint16_t attribute)
 TEST(InstanceDataInputs, CompiledForDirect3DEveryInstanceColumnIsInstanceData)
 {
 	const std::map<std::string, std::span<const uint8_t>> binaries {
-	    {"vs_footprint_instanced", vs_footprint_instanced_dx11},
-	    {"vs_footprint_paint_instanced", vs_footprint_paint_instanced_dx11},
 	    {"vs_object_hm_instanced", vs_object_hm_instanced_dx11},
 	    {"vs_object_instanced", vs_object_instanced_dx11},
 	    {"vs_object_lightmap_instanced", vs_object_lightmap_instanced_dx11},

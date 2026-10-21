@@ -15,7 +15,6 @@
 #include "3D/LandIslandInterface.h"
 #include "Debug/ImGuiUtils.h"
 #include "EngineConfig.h"
-#include "Graphics/FrameBuffer.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Locator.h"
 
@@ -75,18 +74,6 @@ void LandIsland::Draw() noexcept
 		ImGui::Text("Resolution: %ux%u", dim.x, dim.y);
 		const float scaling = 512.0f / static_cast<float>(dim.x);
 		ImGui::Image(toBgfx(texture.GetNativeHandle()), ImVec2(dim.x * scaling, dim.y * scaling));
-		ImGui::TreePop();
-	}
-
-	if (ImGui::TreeNodeEx("Footprints", ImGuiTreeNodeFlags_DefaultOpen))
-	{
-		const auto& frameBuffer = landIsland.GetFootprintFramebuffer();
-		uint16_t width;
-		uint16_t height;
-		frameBuffer.GetSize(width, height);
-		ImGui::Text("Resolution: %ux%u", width, height);
-		const float scaling = 512.0f / static_cast<float>(width);
-		ImGui::Image(toBgfx(frameBuffer.GetColorAttachment().GetNativeHandle()), ImVec2(width * scaling, height * scaling));
 		ImGui::TreePop();
 	}
 

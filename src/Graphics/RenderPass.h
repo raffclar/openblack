@@ -28,9 +28,6 @@ enum class RenderPass : uint8_t
 	LandColour,
 	/// The sky's dome for each alignment, blended for the time of day a band of rows at a time
 	SkyDome,
-	Footprint,
-	/// The rivers' channels, into the land's alpha
-	LandAlpha,
 	ObjectShadow,
 	/// The land seen from above, which the map in the temple's pool is textured with
 	TempleMap,
@@ -97,8 +94,6 @@ static constexpr std::array<std::string_view, static_cast<uint8_t>(RenderPass::_
     "Land Luminosity Pass",        //
     "Land Colour Pass",            //
     "Sky Dome Pass",               //
-    "Footprint Pass",              //
-    "Land Alpha Pass",             //
     "Object Shadow Pass",          //
     "Temple Map Pass",             //
     "Reflection Sky Pass",         //

@@ -54,8 +54,8 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -382,6 +382,18 @@ std::span<const entt::entity> MapProduction::GetFixedInGridCell(const CellId& ce
 std::span<const entt::entity> MapProduction::GetFixedInGridCell(const glm::vec3& pos) const
 {
 	return GetFixedInGridCell(GetGridCell(pos));
+}
+
+std::span<const entt::entity> MapProduction::GetFiledFixedInGridCell(const CellId& cellId) const
+{
+	const auto index = _lists.IndexOf({cellId.x, cellId.y});
+	return index.has_value() ? _lists.Fixed(*index) : std::span<const entt::entity> {};
+}
+
+std::span<const entt::entity> MapProduction::GetFiledMobileInGridCell(const CellId& cellId) const
+{
+	const auto index = _lists.IndexOf({cellId.x, cellId.y});
+	return index.has_value() ? _lists.Mobile(*index) : std::span<const entt::entity> {};
 }
 
 std::span<const entt::entity> MapProduction::GetMobileInGridCell(const CellId& cellId) const
