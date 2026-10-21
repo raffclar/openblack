@@ -149,7 +149,6 @@ void BuildingHurt(entt::entity abode, float before, float after)
 	{
 		return;
 	}
-	// TODO(villagers): a building that stops working is also marked so for its owner (the building phase)
 	const float stops = info->thresholdForStopBeingFunctional;
 	// A storage pit that stops working lets the people near it take from its piles
 	if (before > stops && after <= stops && info->abodeType == AbodeType::StoragePit &&
