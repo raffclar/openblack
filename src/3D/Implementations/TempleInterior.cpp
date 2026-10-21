@@ -89,6 +89,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
 #include "Resources/ResourcesInterface.h"
+#include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
 #include "Temple/TempleRoomAccess.h"
 #include "Windowing/WindowingInterface.h"
@@ -397,6 +398,23 @@ void TempleInterior::CreateScrolls()
 		}
 	}
 	_toggles.Find(names);
+
+	// Each room finds its controls
+	_controlSubMeshes.clear();
+	for (const auto& [room, name] : k_TempleInteriorGlows)
+	{
+		const entt::id_type meshId = entt::hashed_string(fmt::format("temple/interior/{}_l3d", name).c_str()).value();
+		if (!meshes.Contains(meshId))
+		{
+			continue;
+		}
+		std::vector<std::string> roomNames;
+		for (const auto& subMesh : meshes.Handle(meshId)->GetSubMeshes())
+		{
+			roomNames.push_back(subMesh->GetName());
+		}
+		_controlSubMeshes[room] = temple::controls::SubMeshes(room, roomNames);
+	}
 
 	// The challenge room finds its pictures, frames and buttons
 	_challengeRoom = std::make_unique<TempleChallengeRoom>();
@@ -746,6 +764,12 @@ std::vector<TempleSubMeshTexture> TempleInterior::GetScrollTextures(TempleRoom r
 		std::ranges::copy(_saveGameRoom->GetTextures(), std::back_inserter(textures));
 	}
 	return textures;
+}
+
+std::span<const uint32_t> TempleInterior::GetControlSubMeshes(TempleRoom room) const
+{
+	const auto found = _controlSubMeshes.find(room);
+	return found != _controlSubMeshes.end() ? std::span<const uint32_t>(found->second) : std::span<const uint32_t>();
 }
 
 std::vector<TempleSubMeshGlow> TempleInterior::GetControlGlows(TempleRoom room) const

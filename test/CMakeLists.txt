@@ -1616,3 +1616,4 @@ openblack_setup_and_add_test(test_clear_view_hand camera/test_clear_view_hand.cp
 openblack_setup_and_add_test(test_mouse_moves help/test_mouse_moves.cpp)
 openblack_setup_and_add_test(test_players_symbols test_players_symbols.cpp)
 openblack_setup_and_add_test(test_future_room temple/test_future_room.cpp)
+openblack_setup_and_add_test(test_temple_controls temple/test_temple_controls.cpp)

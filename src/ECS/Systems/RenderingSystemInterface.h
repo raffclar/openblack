@@ -110,6 +110,8 @@ struct RenderContext
 		std::vector<std::pair<uint32_t, graphics::TextureHandle>> subMeshTextures;
 		/// The submeshes of subMeshTextures that are pictures, which are drawn in one colour with no lightmap and no light
 		std::vector<uint32_t> pictureSubMeshes;
+		/// The submeshes that are the temple's controls, drawn with the white colour of their control
+		std::vector<uint32_t> controlSubMeshes;
 		/// Colours added to some of the submeshes, by submesh: the temple's controls glowing under the cursor
 		std::vector<std::pair<uint32_t, glm::vec3>> subMeshGlows;
 		/// Movements of some of the submeshes in the mesh, by submesh: the temple's held buttons

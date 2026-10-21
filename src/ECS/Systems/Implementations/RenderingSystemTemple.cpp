@@ -291,6 +291,8 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 				drawDesc->second.subMeshOffsets.emplace_back(moved.subMesh, moved.offset);
 			}
 			drawDesc->second.hiddenSubMeshes = temple.GetHiddenSubMeshes(room->second);
+			const auto controls = temple.GetControlSubMeshes(room->second);
+			drawDesc->second.controlSubMeshes.assign(controls.begin(), controls.end());
 		}
 		// The creature's room draws its water by the materials' alpha, sliding its texture down it
 		if (waterMeshIds.contains(meshId))

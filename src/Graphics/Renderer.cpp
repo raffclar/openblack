@@ -1044,7 +1044,7 @@ bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
 
 void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc,
                            bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow, glm::vec3 offset,
-                           bool picture) const
+                           bool picture, bool control) const
 {
 	assert(&subMesh.GetMesh());
 	// Physics meshes aren't drawn, nor the parts of other statuses (building stages, graves) or of another detail than
@@ -1233,7 +1233,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (has(MeshUniform::Darkening))
 			{
-				const glm::vec4 u_darkening {1.0f - desc.lightMultiply, 0.0f};
+				// w: 1 for a control, whose colour the white of its control takes down a step
+				const glm::vec4 u_darkening {1.0f - desc.lightMultiply, control ? 1.0f : 0.0f};
 				setUniform(MeshUniform::Darkening, &u_darkening);
 			}
 			if (desc.morphTargets != nullptr && has(MeshUniform::MorphWeights))
@@ -1498,8 +1499,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				                         : desc.objectLook.has_value()
 				                             ? glm::vec4(desc.objectLook->colour, desc.objectLook->alpha)
 				                             : glm::vec4(0.0f);
-				// A picture's white colour multiplies the object's colour in whole steps, so 255 becomes 254
-				if (picture && desc.objectLook.has_value())
+				// A control's white colour multiplies the object's colour in whole steps, so 255 becomes 254
+				if ((control || picture) && desc.objectLook.has_value())
 				{
 					u_objectLook = glm::vec4(glm::floor(desc.objectLook->colour * 255.0f / 256.0f), desc.objectLook->alpha);
 				}
@@ -2545,7 +2546,8 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 		                     std::ranges::find(desc.pictureSubMeshes, index) != desc.pictureSubMeshes.end();
 		DrawSubMesh(mesh, subMesh, desc, index != lastDrawn, found != desc.subMeshTextures.end() ? &found->second : nullptr,
 		            glow != desc.subMeshGlows.end() ? glow->second : glm::vec3(0.0f),
-		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f), picture);
+		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f), picture,
+		            std::ranges::find(desc.controlSubMeshes, index) != desc.controlSubMeshes.end());
 	}
 }
 
@@ -6473,6 +6475,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.uvOffset = placers.uvOffset;
 				submitDesc.subMeshTextures = placers.subMeshTextures;
 				submitDesc.pictureSubMeshes = placers.pictureSubMeshes;
+				submitDesc.controlSubMeshes = placers.controlSubMeshes;
 				submitDesc.subMeshGlows = placers.subMeshGlows;
 				submitDesc.subMeshOffsets = placers.subMeshOffsets;
 				submitDesc.hiddenSubMeshes = placers.hiddenSubMeshes;
