@@ -5584,6 +5584,8 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	{
 		SetPlayerAlignmentFromProfile();
 	}
+	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
+	player_statistics::GameStarts(registry);
 	RenderLoadingFrame();
 	StartNewLand(land_change::Kind::SavedGame);
 	EndLoadingScreen();
@@ -5844,9 +5846,8 @@ void Game::StartPlayerAtProfileAlignment()
 		return;
 	}
 	SetPlayerAlignmentFromProfile();
-	// The player's statistics note the alignment they start the game at
-	auto& players = Locator::playerSystem::value();
-	player_statistics::Made(players.GetPlayer(players.GetLocalPlayer()));
+	// The players' statistics note the alignments they start the game at, and the towns on the land
+	player_statistics::GameStarts(Locator::entitiesRegistry::value());
 }
 
 void Game::SetPlayerAlignmentFromProfile()

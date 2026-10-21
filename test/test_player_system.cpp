@@ -14,6 +14,7 @@
 #include "ECS/Components/Alignment.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/PlayerStatistics.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -264,4 +265,53 @@ TEST_F(PlayerSystemLands, TheHandKeepsWhatItKeptPastTheBorderOnTheNextLand)
 	ASSERT_TRUE(virtualInfluence->state.anchor.has_value());
 	EXPECT_EQ(virtualInfluence->state.anchor->z, 20.0f);
 	EXPECT_TRUE(virtualInfluence->hum == entt::null);
+}
+
+TEST_F(PlayerSystemLands, OnTheNextLandTheStatisticsCountersStartAgainButTheHistoriesGoOn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	auto& statistics = registry.Assign<components::PlayerStatistics>(one);
+	statistics.births = 4;
+	statistics.startAlignment = 0.3f;
+	// One finished point of influence, of fifty samples, and part of the first point of population
+	for (int i = 0; i < 50; ++i)
+	{
+		statistics.influenceHistory.Add(2.0f);
+	}
+	statistics.populationHistory.Add(5.0f);
+	const float point = statistics.influenceHistory.Finished()[0];
+	_players.KeepForNextLand();
+	ClearLand();
+
+	// The player is made again on the next land with statistics that start from nothing
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	registry.Assign<components::PlayerStatistics>(again);
+	_players.TakeUpKept(again);
+	const auto& next = registry.Get<components::PlayerStatistics>(again);
+	EXPECT_EQ(next.births, 0u);
+	EXPECT_EQ(next.startAlignment, 0.0f);
+	ASSERT_EQ(next.influenceHistory.Finished().size(), 1u);
+	EXPECT_EQ(next.influenceHistory.Finished()[0], point);
+	EXPECT_EQ(next.populationHistory.samplesInPoint, 1u);
+	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 0u);
+}
+
+TEST_F(PlayerSystemLands, ANewGameStartsTheStatisticsHistoriesAgain)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto one = MakePlayer(PlayerNames::PLAYER_ONE);
+	auto& history = registry.Assign<components::PlayerStatistics>(one).influenceHistory;
+	for (int i = 0; i < 50; ++i)
+	{
+		history.Add(1.0f);
+	}
+	_players.KeepForNextLand();
+	_players.ForgetKept();
+	ClearLand();
+
+	const auto again = MakePlayer(PlayerNames::PLAYER_ONE);
+	registry.Assign<components::PlayerStatistics>(again);
+	_players.TakeUpKept(again);
+	EXPECT_TRUE(registry.Get<components::PlayerStatistics>(again).influenceHistory.Finished().empty());
 }

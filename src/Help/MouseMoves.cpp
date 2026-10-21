@@ -55,7 +55,7 @@ void MouseMoves::Wait(uint32_t milliseconds, glm::ivec2 position, bool stillMess
 uint32_t MouseMoves::TakeMoves()
 {
 	const auto moves = std::ranges::count_if(_sent, [this](glm::ivec2 place) {
-		const bool moved = _lastPlace.has_value() && *_lastPlace != place;
+		const bool moved = _lastPlace != place;
 		_lastPlace = place;
 		return moved;
 	});

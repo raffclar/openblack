@@ -27,9 +27,10 @@ class Registry;
 namespace openblack::player_statistics
 {
 
-/// A player is made, with their histories taken up from the last land they were on: their counters start from
-/// nothing, and their alignment and their creature's are noted as the land starts
-void Made(entt::entity player);
+/// A game starts: a new game, a saved game or a skirmish, but not the next land of a game. The game notes each player's
+/// alignment and their creature's alignment (nothing without a creature), and counts the towns on the land. On the next
+/// land of the same game, these stay at nothing, as the new land clears them.
+void GameStarts(ecs::Registry& registry);
 
 /// What the game's systems count, each in the registry its players are in. A child is born to one of the player's people
 void CountBirth(ecs::Registry& registry, PlayerNames player);
@@ -60,7 +61,7 @@ void CountChantsUsed(ecs::Registry& registry, PlayerNames player, float amount);
 void ProcessTurn(uint32_t turn);
 
 /// Every so many game turns the figures kept once for everyone change: the invented lines of code and the frame rate's
-/// highest and lowest. The towns on the land are counted the first time.
+/// highest and lowest
 void ProcessGlobalTurn(uint32_t turn, int32_t frameRate);
 
 /// Everything the Game Statistics box shows now, for the first four players. As in the game, when the box takes the figures, it

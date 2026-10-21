@@ -231,16 +231,15 @@ private:
 };
 
 /// The figures the game keeps once for everyone: an invented count of lines of code run, the most and fewest frames a
-/// second and the towns the land started with. A new land starts them again.
+/// second and the towns on the land as the game started. A new land starts them again.
 struct GlobalFigures
 {
 	uint32_t linesOfCode {0};
 	float maxFrameRate {0.0f};
 	/// Starts at nothing and is tested only when no new highest is set, so it stays at nothing
 	float minFrameRate {0.0f};
-	/// The towns on the land as it started, and whether they have been counted
+	/// The towns on the land as the game started, nothing on a later land of the same game
 	uint32_t townsAtStart {0};
-	bool townsCounted {false};
 };
 /// Every this many game turns the global figures change
 inline constexpr uint32_t k_GlobalFiguresEvery = 10;
