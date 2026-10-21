@@ -3567,6 +3567,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
 			                  result["end_turn"] = dialogue->GetEndTurn();
 			                  result["end_ms"] = dialogue->GetEndMs();
+			                  result["start_turn"] = dialogue->GetStartTurn();
+			                  result["takes_click"] = dialogue->TakesClick();
+			                  result["last_click_turn"] = dialogue->GetLastClickTurn();
 			                  result["drawn"] = dialogue->IsDrawn();
 			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
 		                  }
