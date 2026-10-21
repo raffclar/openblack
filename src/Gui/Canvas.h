@@ -13,6 +13,7 @@
 
 #include <array>
 #include <memory>
+#include <optional>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -68,6 +69,12 @@ public:
 	void SetDepth(float depth) noexcept { _depth = depth; }
 	/// How the frame's draws are tested against the scene's depth, from this frame on
 	void SetDepthTest(DepthTest depthTest) noexcept { _depthTest = depthTest; }
+	/// Puts the frame's draws into a view that the renderer sorts by depth, among the other draws of that view, rather
+	/// than into the canvas's own view. Without a view, they go into the canvas's own view again.
+	void SetSortedView(std::optional<graphics::RenderPass> view) noexcept { _sortedView = view; }
+	/// The depth by which what is drawn from now on is sorted in the sorted view. Draws of one depth stay in the order
+	/// they are drawn in. Back to 0 with each frame
+	void SetSortDepth(uint32_t depth) noexcept { _sortDepth = depth; }
 	/// A rectangle of a texture, tinted by colour (red, green, blue and alpha from 0 to 1). Without a texture it is
 	/// filled with the colour. Corners whose minimum is beyond the maximum flip the texture.
 	void DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -82,8 +89,9 @@ public:
 	/// Submits the frame's interface
 	void End();
 	/// Makes the renderer's pipelines for a canvas in a view before the canvas first draws there: a draw that covers no
-	/// pixel for each way that a canvas blends, with the depth test of the canvas
-	static void WarmUp(graphics::RenderPass view, DepthTest depthTest = DepthTest::Off);
+	/// pixel for each way that a canvas blends, with the depth test of the canvas. With sorted, for a canvas whose draws
+	/// go into the view as a sorted view (see SetSortedView).
+	static void WarmUp(graphics::RenderPass view, DepthTest depthTest = DepthTest::Off, bool sorted = false);
 
 	[[nodiscard]] glm::u16vec2 GetResolution() const noexcept { return _resolution; }
 
@@ -103,13 +111,19 @@ private:
 		Blend blend;
 		uint32_t firstVertex;
 		uint32_t vertexCount;
+		uint32_t sortDepth;
 	};
+
+	/// Starts a batch of a texture unless the last batch can take more of it
+	void StartBatch(const graphics::Texture2D* texture);
 
 	graphics::RenderPass _view;
 	glm::u16vec2 _resolution {0, 0};
 	Blend _blend {Blend::Alpha};
 	DepthTest _depthTest {DepthTest::Off};
 	float _depth {0.0f};
+	std::optional<graphics::RenderPass> _sortedView;
+	uint32_t _sortDepth {0};
 	glm::vec2 _origin {0.0f, 0.0f};
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;

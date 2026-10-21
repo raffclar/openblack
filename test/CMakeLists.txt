@@ -1656,3 +1656,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_land_footprint_rules test_land_footprint_rules.cpp)
 openblack_setup_and_add_test(test_script_real_time test_script_real_time.cpp)
+target_link_libraries(test_land_vertex PRIVATE lnd)

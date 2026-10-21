@@ -86,6 +86,19 @@ Canvas::Canvas(RenderPass view, DepthTest depthTest)
 
 Canvas::~Canvas() = default;
 
+void Canvas::StartBatch(const graphics::Texture2D* texture)
+{
+	if (_batches.empty() || _batches.back().texture != texture || _batches.back().blend != _blend ||
+	    _batches.back().sortDepth != _sortDepth || _batches.back().vertexCount + 6 > k_MaxBatchVertices)
+	{
+		_batches.push_back({.texture = texture,
+		                    .blend = _blend,
+		                    .firstVertex = static_cast<uint32_t>(_vertices.size()),
+		                    .vertexCount = 0,
+		                    .sortDepth = _sortDepth});
+	}
+}
+
 void Canvas::Begin(glm::u16vec2 resolution)
 {
 	_resolution = resolution;
@@ -93,6 +106,7 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_batches.clear();
 	_blend = Blend::Alpha;
 	_depth = 0.0f;
+	_sortDepth = 0;
 	_origin = glm::vec2(0.0f);
 }
 
@@ -104,12 +118,7 @@ void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 u
 		return;
 	}
 	const auto* drawn = texture != nullptr ? texture : _white.get();
-	if (_batches.empty() || _batches.back().texture != drawn || _batches.back().blend != _blend ||
-	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
-	{
-		_batches.push_back(
-		    {.texture = drawn, .blend = _blend, .firstVertex = static_cast<uint32_t>(_vertices.size()), .vertexCount = 0});
-	}
+	StartBatch(drawn);
 	const auto abgr = ToAbgr(colour);
 	min += _origin;
 	max += _origin;
@@ -131,12 +140,7 @@ void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array
                        const std::array<glm::vec4, 4>& colours, const graphics::Texture2D* texture)
 {
 	const auto* drawn = texture != nullptr ? texture : _white.get();
-	if (_batches.empty() || _batches.back().texture != drawn || _batches.back().blend != _blend ||
-	    _batches.back().vertexCount + 6 > k_MaxBatchVertices)
-	{
-		_batches.push_back(
-		    {.texture = drawn, .blend = _blend, .firstVertex = static_cast<uint32_t>(_vertices.size()), .vertexCount = 0});
-	}
+	StartBatch(drawn);
 	std::array<Vertex, 4> vertices {};
 	for (size_t i = 0; i < 4; ++i)
 	{
@@ -174,7 +178,11 @@ void Canvas::End()
 		return;
 	}
 
-	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Interface");
+	// In a sorted view the view's own transform is the world camera's, so the draws take the canvas's projection with
+	// them
+	const auto& shaders = Locator::rendererInterface::value().GetShaderManager();
+	const auto* program = shaders.GetShader(_sortedView.has_value() ? "InterfaceSorted" : "Interface");
+	const auto target = _sortedView.has_value() ? static_cast<bgfx::ViewId>(*_sortedView) : view;
 	auto& layout = GetLayout();
 	for (const auto& batch : _batches)
 	{
@@ -188,17 +196,23 @@ void Canvas::End()
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
 		bgfx::setState(StateOf(batch.blend, _depthTest));
-		program->Submit(view);
+		if (_sortedView.has_value())
+		{
+			program->SetUniformValue("u_canvasProjection", projection.data());
+		}
+		program->Submit(target, batch.sortDepth);
 	}
 }
 
-void Canvas::WarmUp(RenderPass view, DepthTest depthTest)
+void Canvas::WarmUp(RenderPass view, DepthTest depthTest, bool sorted)
 {
 	// One triangle with its corners in one place, for each way to blend
 	constexpr std::array k_Blends {Blend::Alpha, Blend::Additive};
 	constexpr uint32_t k_Corners = 3;
-	const auto* program = Locator::rendererInterface::value().GetShaderManager().GetShader("Interface");
+	const auto* program =
+	    Locator::rendererInterface::value().GetShaderManager().GetShader(sorted ? "InterfaceSorted" : "Interface");
 	auto& layout = GetLayout();
+	const std::array<float, 16> noProjection {};
 	for (const auto blend : k_Blends)
 	{
 		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners)
@@ -210,6 +224,10 @@ void Canvas::WarmUp(RenderPass view, DepthTest depthTest)
 		std::fill_n(reinterpret_cast<Vertex*>(vertices.data), k_Corners, Vertex {});
 		bgfx::setVertexBuffer(0, &vertices);
 		bgfx::setState(StateOf(blend, depthTest));
+		if (sorted)
+		{
+			program->SetUniformValue("u_canvasProjection", noProjection.data());
+		}
 		program->Submit(static_cast<bgfx::ViewId>(view));
 	}
 }
