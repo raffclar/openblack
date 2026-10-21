@@ -66,8 +66,9 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	};
 	_voices.Add(voice, *sample, emitter, playback, TimedByLength(audio));
 	// Each spoken line goes into the log, so that you can examine a run that has no sound
-	SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Help text {} is said: bank {} sample {}, voice {}, {} ms", text,
-	                   static_cast<int>(sample->bank), sample->sample, static_cast<int>(voice), playback.lengthMs);
+	SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Help text {} is said at turn {}: bank {} sample {}, voice {}, {} ms", text,
+	                   Locator::time::value().GetTurn(), static_cast<int>(sample->bank), sample->sample,
+	                   static_cast<int>(voice), playback.lengthMs);
 }
 
 bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)

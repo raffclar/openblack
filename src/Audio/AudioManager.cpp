@@ -39,6 +39,7 @@
 #include "Common/StringUtils.h"
 #include "ECS/Registry.h"
 #include "ECS/SoundPoint.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "EmitterFollow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "HeaderOverrides.h"
@@ -151,6 +152,13 @@ std::string EmitterSoundName(const AudioEmitter& emitter)
 	                       : std::string());
 }
 
+/// The game turn for the log, so that you can compare the time of a sound with the turns of a script
+// Only the debug logging uses it. It gives 0 when no game clock is set (for example in a unit test).
+[[maybe_unused]] uint32_t LogTurn()
+{
+	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+}
+
 // The log lines below are left out of release builds, which would otherwise find these parameters unused
 void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] const AudioEmitter& emitter)
 {
@@ -165,15 +173,16 @@ void LogEmitterStart([[maybe_unused]] entt::entity entity, [[maybe_unused]] cons
 		return fmt::format(", heard {:.1f} m {}, {:.1f} m ahead, {:.1f} m up, distances {:.1f} to {:.1f} m", std::abs(at.x),
 		                   at.x < 0.0f ? "left" : "right", at.y, at.z, emitter.minDistance, emitter.maxDistance);
 	};
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts: volume {} pitch {}%{}{}", DescribeEmitter(entity, emitter),
-	                    emitter.volume, emitter.pitchPercent, emitter.loop == PlayType::Repeat ? ", looping" : "", heard());
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} starts at turn {}: volume {} pitch {}%{}{}",
+	                    DescribeEmitter(entity, emitter), LogTurn(), emitter.volume, emitter.pitchPercent,
+	                    emitter.loop == PlayType::Repeat ? ", looping" : "", heard());
 }
 
 void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const glm::vec3& position,
                    [[maybe_unused]] std::string_view why)
 {
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} at ({}, {}, {}) not started: {}", sound.name, position.x, position.y,
-	                    position.z, why);
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} at ({}, {}, {}) not started at turn {}: {}", sound.name, position.x,
+	                    position.y, position.z, LogTurn(), why);
 }
 
 /// The wave format tag of MPEG sample data
@@ -231,7 +240,8 @@ void AudioManager::Update()
 		emitter.state = _audioPlayer->GetStatus(emitter.sourceId);
 		if (emitter.state == AudioStatus::Stopped)
 		{
-			SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} has finished", DescribeEmitter(entity, emitter));
+			SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} has finished at turn {}", DescribeEmitter(entity, emitter),
+			                    LogTurn());
 			DestroyEmitter(entity);
 			return;
 		}
@@ -310,7 +320,8 @@ void AudioManager::StopOutOfRangeEmitters()
 	for (const auto entity : stopped)
 	{
 		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
-		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops: {}", DescribeEmitter(entity, emitter),
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops at turn {}: {}", DescribeEmitter(entity, emitter),
+		                    LogTurn(),
 		                    emitter.follows == Follows::Owner && !ecs::SoundPointOf(registry, emitter.owner).has_value()
 		                        ? std::string("its owner is gone or has no point")
 		                        : TooFar(emitter.position, emitter.maxDistance));
@@ -346,7 +357,7 @@ void AudioManager::StopEmitter(entt::entity emitter)
 	auto& registry = Locator::entitiesRegistry::value();
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stopped", DescribeEmitter(emitter, component));
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stopped at turn {}", DescribeEmitter(emitter, component), LogTurn());
 	_audioPlayer->StopSource(component.sourceId);
 }
 
@@ -378,7 +389,8 @@ void AudioManager::DestroyEmitter(entt::entity emitter)
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	if (component.state != AudioStatus::Stopped)
 	{
-		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stopped and removed", DescribeEmitter(emitter, component));
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stopped and removed at turn {}",
+		                    DescribeEmitter(emitter, component), LogTurn());
 	}
 	_audioPlayer->StopSource(component.sourceId);
 	_audioPlayer->DeleteSource(component.sourceId);
@@ -706,8 +718,8 @@ void AudioManager::ReleaseEmitterLoop(entt::entity emitter)
 		return;
 	}
 	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
-	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} let go: plays to the end of its pass",
-	                    DescribeEmitter(emitter, component));
+	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} let go at turn {}: plays to the end of its pass",
+	                    DescribeEmitter(emitter, component), LogTurn());
 	_audioPlayer->SetLooping(component.sourceId, false);
 	component.loop = PlayType::Once;
 }
