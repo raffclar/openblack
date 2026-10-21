@@ -1389,6 +1389,12 @@ void DefaultWorldCameraModel::FlyBack(glm::vec3 origin, glm::vec3 focus, bool wo
 	}
 }
 
+void DefaultWorldCameraModel::Restart(glm::vec3 origin, glm::vec3 focus, glm::vec3 returnOrigin, glm::vec3 returnFocus)
+{
+	PlaceAt(origin, focus);
+	SetFlight(returnOrigin, returnFocus, k_FlightHeightFactor);
+}
+
 void DefaultWorldCameraModel::PlaceAt(glm::vec3 origin, glm::vec3 focus)
 {
 	_currentOrigin = origin;

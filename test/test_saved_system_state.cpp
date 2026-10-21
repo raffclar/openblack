@@ -115,7 +115,8 @@ TEST(SavedSystemState, TheScriptsScreenComesBack)
 	EXPECT_EQ(loaded.GetFadeColour(), saved.GetFadeColour());
 	EXPECT_TRUE(loaded.IsWideScreenOn());
 	EXPECT_EQ(loaded.GetWideScreenOwner(), 7u);
-	EXPECT_TRUE(loaded.IsCloseClipping());
+	// The close clipping of the scripts is not kept: the game clears it when it loads a game
+	EXPECT_FALSE(loaded.IsCloseClipping());
 	ASSERT_EQ(loaded.GetTexts().size(), 1u);
 	EXPECT_EQ(loaded.GetTexts().front().words, u"Hello");
 }

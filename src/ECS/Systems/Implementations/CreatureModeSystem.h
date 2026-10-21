@@ -11,6 +11,8 @@
 
 #include <memory>
 
+#include <glm/vec3.hpp>
+
 #include "ECS/Systems/CreatureModeSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -52,11 +54,17 @@ private:
 	void ReleaseCamera();
 	/// Whether the creature can still be followed: it is there, and nothing else needs the camera
 	[[nodiscard]] bool StillValid() const;
+	/// Whether the creature is still there
+	[[nodiscard]] bool CreatureThere() const;
 
 	std::optional<entt::entity> _creature;
 	/// The camera's model while locked on, and the player's own, given back on leaving
 	CreatureCameraModel* _model {nullptr};
 	std::unique_ptr<CameraModel> _playerModel;
+	/// Where the player's camera was going when this mode took it. When the creature goes, the player's camera flies
+	/// back there.
+	glm::vec3 _returnOrigin {0.0f};
+	glm::vec3 _returnFocus {0.0f};
 	/// Leaving was asked for while another had the camera; it is given back once this mode has it again
 	bool _leaving {false};
 	/// Whether the hand gripped the land last frame, so that only a fresh grip counts

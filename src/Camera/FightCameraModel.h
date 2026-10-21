@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include "CameraModel.h"
 #include "FightView.h"
@@ -50,6 +51,8 @@ public:
 	void HandleActions(std::chrono::microseconds dt) override;
 	/// The player's camera reads its keys, for the next frame
 	void HandleKeys(std::chrono::microseconds dt) override;
+	/// A flight (such as a double tap of the temple key) goes through a point on the way, then the view of the fight takes
+	/// the camera back
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	[[nodiscard]] glm::vec3 GetTargetOrigin() const override { return _view.origin; }
 	[[nodiscard]] glm::vec3 GetTargetFocus() const override { return _view.focus; }
@@ -69,6 +72,13 @@ private:
 	bool _landHeld {false};
 	/// The first step starts the flight to the fight from where the camera is
 	bool _started {false};
+	/// A flight asked for before the first step, which the first step starts in place of the flight to the fight
+	struct FirstFlight
+	{
+		fight_view::View to;
+		float rise;
+	};
+	std::optional<FirstFlight> _firstFlight;
 	bool _zoomedOut {false};
 };
 

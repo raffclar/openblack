@@ -2697,6 +2697,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		auto explosions = Locator::profiler::value().BeginScoped(Profiler::Stage::ExplosionUpdate);
 		Locator::explosionSystem::value().Update(
 		    std::chrono::duration<float, std::milli>(Locator::time::value().GetFrameGameTime()).count());
+		// The camera keeps this view, with the shake of this frame, for its rays to the land on the next frame. A command
+		// of this frame that puts the camera does not change the view of these rays.
+		Locator::camera::value().KeepDrawnView();
 		break;
 	}
 	case Step::Temple:
@@ -2925,9 +2928,6 @@ void Game::UpdateCamera()
 		camera.SetOrigin(chase->origin).SetFocus(chase->focus);
 	}
 	FitNearClip();
-	// The camera keeps this view for its rays to the land on the next frame. A command of this frame that puts the camera
-	// does not change the view of these rays.
-	camera.KeepDrawnView();
 }
 
 void Game::UpdateTemple(std::chrono::microseconds deltaTime)

@@ -138,7 +138,9 @@ void CinematicDirectorSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _wideScreenOwner);
 	reflection::Save(out, _interfaceActive);
 	reflection::Save(out, _hideDialogs);
-	reflection::Save(out, _closeClipping);
+	// A loaded game starts with the near plane where it usually is: the close clipping of the scripts is not kept. The
+	// place in the save stays, always off.
+	reflection::Save(out, false);
 	reflection::Save(out, _texts);
 	reflection::Save(out, _textColour);
 }
@@ -150,7 +152,9 @@ bool CinematicDirectorSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _wideScreenOwner);
 	reflection::Load(in, _interfaceActive);
 	reflection::Load(in, _hideDialogs);
-	reflection::Load(in, _closeClipping);
+	bool closeClipping = false;
+	reflection::Load(in, closeClipping);
+	_closeClipping = false;
 	reflection::Load(in, _texts);
 	reflection::Load(in, _textColour);
 	return !in.Failed();
