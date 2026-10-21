@@ -71,6 +71,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellDispenser.h"
@@ -826,9 +827,12 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 	}
 }
 
-bool GameMagicWorld::CanBeDestroyedBySpell(entt::entity object) const
+bool GameMagicWorld::CanBeDestroyedBySpell(entt::entity object, entt::entity miracle) const
 {
-	return ecs::world_objects::CanBeDestroyedBySpell(object);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const bool miracleScriptControlled =
+	    miracle != entt::null && registry.Valid(miracle) && registry.AllOf<ecs::components::ScriptControlled>(miracle);
+	return ecs::world_objects::CanBeDestroyedBySpell(object, miracleScriptControlled);
 }
 
 void GameMagicWorld::PlantNear(entt::entity tree, const magic::WaterDrop& drop)
@@ -2582,7 +2586,8 @@ bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 	// The player's own fireball cannot go into the hand, so the press taps it at once: the help counts the tap, and the
 	// ball slips through the hand
 	const auto& fireBall = EntityRegistry().Get<const MagicFireBall>(*ball);
-	if (fireBall.hasPlayer && fireBall.player == PlayerNames::PLAYER_ONE)
+	if (hand_grab::PressOnFireBall(fireBall.hasPlayer && fireBall.player == PlayerNames::PLAYER_ONE) ==
+	    hand_grab::FireBallPress::TapAtOnce)
 	{
 		if (Locator::helpProfileSystem::has_value())
 		{
@@ -2599,7 +2604,7 @@ bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 void MagicSystem::HoldFireBall(uint32_t nowMs, uint32_t turn)
 {
 	if (!_fireBallPress.has_value() ||
-	    hand_grab::ElapsedMs(nowMs, _fireBallPress->pressMs, turn, _fireBallPress->pressTurn) < hand_grab::k_GrabWaitMs)
+	    !hand_grab::TakesFireBallAtHold(hand_grab::ElapsedMs(nowMs, _fireBallPress->pressMs, turn, _fireBallPress->pressTurn)))
 	{
 		return;
 	}
@@ -2620,7 +2625,7 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 	}
 	const auto press = *_fireBallPress;
 	_fireBallPress.reset();
-	const bool quick = hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn) <= hand_grab::k_GrabWaitMs;
+	const bool quick = hand_grab::TapsFireBallAtRelease(hand_grab::ElapsedMs(nowMs, press.pressMs, turn, press.pressTurn));
 	if (!quick || _held.has_value() || !EntityRegistry().Valid(press.ball) || !EmptyHandInInfluence())
 	{
 		return;

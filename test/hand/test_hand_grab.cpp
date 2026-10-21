@@ -480,3 +480,18 @@ TEST(HandGrab, TheCinemaBarsSilenceAGripOfTheLandButNotOfTheSea)
 	EXPECT_EQ(GripFeedbackOf(false, false), GripFeedback::Splash);
 	EXPECT_EQ(GripFeedbackOf(false, true), GripFeedback::Splash);
 }
+
+TEST(HandGrab, APressTapsThePlayersOwnFireBallAndWaitsOnAnothers)
+{
+	EXPECT_EQ(PressOnFireBall(true), FireBallPress::TapAtOnce);
+	EXPECT_EQ(PressOnFireBall(false), FireBallPress::Wait);
+}
+
+TEST(HandGrab, AFireBallIsTakenAtTheEndOfATapAndTappedUntilThen)
+{
+	EXPECT_FALSE(TakesFireBallAtHold(k_GrabWaitMs - 1));
+	EXPECT_TRUE(TakesFireBallAtHold(k_GrabWaitMs));
+	EXPECT_TRUE(TapsFireBallAtRelease(0));
+	EXPECT_TRUE(TapsFireBallAtRelease(k_GrabWaitMs));
+	EXPECT_FALSE(TapsFireBallAtRelease(k_GrabWaitMs + 1));
+}

@@ -68,7 +68,7 @@ public:
 	void CurePoison(entt::entity object) override;
 	void PlayerAffected(entt::entity object, MagicType type, PlayerNames player) override;
 	bool AddResource(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player) override;
-	[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object) const override;
+	[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object, entt::entity miracle) const override;
 
 	/// Once a game turn: the flames burn down, and the objects are filed by their cells afresh when next asked for
 	void ProcessTurn();

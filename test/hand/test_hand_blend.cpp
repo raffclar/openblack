@@ -117,3 +117,22 @@ TEST(HandBlend, AnotherThingInTheHandStartsABlend)
 	EXPECT_EQ(tracker.Step({.mode = HandMode::Normal}).count, 1);
 	EXPECT_EQ(tracker.Step({.mode = HandMode::Holding, .held = first}).count, 1);
 }
+
+TEST(HandBlend, TheCameraIconsShowForTheEmptyTheCameraAndTheHoldingHand)
+{
+	using openblack::hand_blend::AllowsCameraIcons;
+	using openblack::hand_blend::HandMode;
+	EXPECT_TRUE(AllowsCameraIcons(HandMode::Normal, false));
+	EXPECT_TRUE(AllowsCameraIcons(HandMode::Camera, false));
+	EXPECT_TRUE(AllowsCameraIcons(HandMode::Holding, false));
+	EXPECT_TRUE(AllowsCameraIcons(HandMode::Seed, false));
+	// Not while the hand scoops from a thing that it is locked onto
+	EXPECT_FALSE(AllowsCameraIcons(HandMode::Holding, true));
+	EXPECT_FALSE(AllowsCameraIcons(HandMode::Seed, true));
+	EXPECT_TRUE(AllowsCameraIcons(HandMode::Normal, true));
+	for (const auto mode :
+	     {HandMode::Hidden, HandMode::Pulling, HandMode::Totem, HandMode::Creature, HandMode::Knocking, HandMode::Temple})
+	{
+		EXPECT_FALSE(AllowsCameraIcons(mode, false));
+	}
+}

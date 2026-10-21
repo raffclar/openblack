@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
@@ -66,6 +67,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -86,6 +88,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
+#include "Magic/SpellSparing.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -673,10 +676,10 @@ bool world_objects::IsBuilding(entt::entity object)
 	return Locator::entitiesRegistry::value().AnyOf<Abode, SpellDispenser, Field>(object);
 }
 
-bool world_objects::CanBeDestroyedBySpell(entt::entity object)
+bool world_objects::CanBeDestroyedBySpell(entt::entity object, bool miracleScriptControlled)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto can = [&registry, object] {
+	const auto can = [&registry, object, miracleScriptControlled] {
 		// Nor anything a script made indestructible
 		if (!registry.Valid(object) ||
 		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible>(object))
@@ -684,6 +687,15 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object)
 			return false;
 		}
 		if (const auto* abode = registry.TryGet<const Abode>(object); abode != nullptr && abode->type == AbodeNumber::Totem)
+		{
+			return false;
+		}
+		// A script that owns the widescreen bars keeps the things that it holds for its scene
+		const bool scriptOwnsWideScreen = Locator::cinematicDirectorSystem::has_value() &&
+		                                  Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+		                                  Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
+		if (magic::spell_sparing::CutsceneSpares(registry.AllOf<InScript>(object), scriptOwnsWideScreen,
+		                                         miracleScriptControlled))
 		{
 			return false;
 		}

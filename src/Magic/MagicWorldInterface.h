@@ -115,8 +115,9 @@ public:
 	/// from it sparkles.
 	virtual bool AddResource(ResourceType type, glm::vec3 point, uint32_t amount, bool speedUp, PlayerNames player) = 0;
 	/// Whether a miracle may destroy an object, as a tornado does what it picks up and a blast's wave what it shatters:
-	/// anything but a creature, a field or a part of a citadel
-	[[nodiscard]] virtual bool CanBeDestroyedBySpell(entt::entity /*object*/) const { return false; }
+	/// anything but a creature, a field or a part of a citadel. The miracle is the spell entity, which a script can
+	/// control.
+	[[nodiscard]] virtual bool CanBeDestroyedBySpell(entt::entity /*object*/, entt::entity /*miracle*/) const { return false; }
 };
 
 } // namespace openblack::magic
