@@ -9,6 +9,8 @@
 
 #include "MeshViewer.h"
 
+#include <algorithm>
+
 #include <SDL_events.h>
 #include <bgfx/bgfx.h>
 #include <glm/gtc/matrix_transform.hpp>
@@ -219,15 +221,13 @@ void MeshViewer::Draw() noexcept
 
 	ImGui::NextColumn();
 
-	if (mesh->ContainsLandscapeFeature() && ImGui::TreeNodeEx("Footprint", ImGuiTreeNodeFlags_DefaultOpen))
+	if (mesh->ContainsLandscapeFeature() && !mesh->GetFootprints().empty() &&
+	    ImGui::TreeNodeEx("Footprint", ImGuiTreeNodeFlags_DefaultOpen))
 	{
 		ImGui::SliderInt("index", &_selectedFootprint, 0, static_cast<int>(mesh->GetFootprints().size() - 1));
-		if (_selectedFootprint > static_cast<int>(mesh->GetFootprints().size()))
-		{
-			_selectedFootprint = static_cast<int>(mesh->GetFootprints().size()) - 1;
-		}
+		_selectedFootprint = std::clamp(_selectedFootprint, 0, static_cast<int>(mesh->GetFootprints().size()) - 1);
 		const auto& footprint = mesh->GetFootprints().at(_selectedFootprint);
-		ImGui::Image(toBgfx(footprint.texture->GetNativeHandle()), ImVec2(128, 128));
+		ImGui::Text("Picture %dx%d, %zu triangles", footprint.width, footprint.height, footprint.triangles.size());
 		ImGui::TreePop();
 	}
 

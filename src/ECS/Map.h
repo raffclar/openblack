@@ -45,6 +45,16 @@ public:
 	/// The things that move in a cell, the last to come into it first
 	[[nodiscard]] virtual std::span<const entt::entity> GetMobileInGridCell(const CellId& cellId) const = 0;
 	[[nodiscard]] virtual std::span<const entt::entity> GetMobileInGridCell(const glm::vec3& pos) const = 0;
+	/// The things filed in a cell so far, for readers outside the game's turn, such as the renderer: these leave the
+	/// things made since the last look where they are, so that the game files them when it looks
+	[[nodiscard]] virtual std::span<const entt::entity> GetFiledFixedInGridCell(const CellId& cellId) const
+	{
+		return GetFixedInGridCell(cellId);
+	}
+	[[nodiscard]] virtual std::span<const entt::entity> GetFiledMobileInGridCell(const CellId& cellId) const
+	{
+		return GetMobileInGridCell(cellId);
+	}
 	/// Everything in a cell as a search meets it, none for a cell off the map
 	[[nodiscard]] virtual std::vector<entt::entity> GetAllInCell(glm::ivec2 cell) const = 0;
 	/// What stands on a land block (by its column and row), in the order the game keeps it for drawing; none for a

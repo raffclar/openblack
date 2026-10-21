@@ -35,6 +35,8 @@ public:
 	virtual void Update() = 0;
 	/// Once a game turn: the marks heal a little
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, as its body lives the turn: its marks heal a step
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 
 	/// The creature's slots change. The skin keeps the old tattoos until something paints them again (see PaintTattoos).
 	virtual void SetTattoos(entt::entity creature, const creature_tattoo::Slots& slots) = 0;

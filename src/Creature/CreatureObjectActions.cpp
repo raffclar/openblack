@@ -140,15 +140,6 @@ bool creature_object_actions::RefusesAloud(Failure failure)
 	return failure == Failure::NoRoute;
 }
 
-glm::vec2 creature_object_actions::LeanOf(float plusX, float minusX, float plusZ, float minusZ, float radius)
-{
-	const auto across = radius + radius;
-	const auto lean = [across](float plus, float minus) {
-		return std::clamp((plus - minus) * k_LeanShare / across, -k_MostLean, k_MostLean);
-	};
-	return {lean(plusX, minusX), lean(plusZ, minusZ)};
-}
-
 glm::vec3 creature_object_actions::KickDirection(glm::vec2 forward, glm::vec2 lean, float scale)
 {
 	// The game takes the creature's up row less its back row, from its turn, its lean and its scale. The forward way is

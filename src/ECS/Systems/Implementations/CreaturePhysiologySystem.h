@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -24,6 +26,8 @@ public:
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 	void ProcessTurn() override;
+	void BeginTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 
 	[[nodiscard]] float Eat(entt::entity creature, float foodValue) override;
 	void Drink(entt::entity creature) override;
@@ -39,9 +43,9 @@ public:
 	[[nodiscard]] bool IsFaintingEnabled() const override;
 
 private:
-	/// Count the game turns of each squat loop, once each game turn. On each fifth turn, a fart makes a cloud and a poo
-	/// drops a lump
-	void StepSquats();
+	/// Count the game turns of the creature's squat loop, once each game turn. On each fifth turn, a fart makes a cloud
+	/// and a poo drops a lump
+	void StepSquat(entt::entity creature);
 	/// Drop a lump of poo behind the creature. The bowels become empty and the desire to poo stops for a time
 	static void DropPooLump(entt::entity creature);
 	/// Make the cloud, the smoke and the fainting reaction of a creature fart
@@ -50,6 +54,8 @@ private:
 	float _timeScale {1.0f};
 	/// Turns of the body owed from a fractional time scale
 	float _owedTurns {0.0f};
+	/// The turns that each body lives in this game turn
+	uint32_t _turns {0};
 	bool _fainting {true};
 };
 

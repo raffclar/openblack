@@ -1646,4 +1646,16 @@ openblack_setup_and_add_test(test_text_database gui/test_text_database.cpp)
 openblack_setup_and_add_test(test_creature_files_draws test_creature_files_draws.cpp)
 openblack_setup_and_add_test(test_living_turn_order test_living_turn_order.cpp)
 openblack_setup_and_add_test(test_spell_sparing test_spell_sparing.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_land_tilt oracle/test_oracle_creature_land_tilt.cpp
+)
+set_tests_properties(
+  test_oracle_creature_land_tilt
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_land_footprint_rules test_land_footprint_rules.cpp)
+openblack_setup_and_add_test(test_script_real_time test_script_real_time.cpp)
+target_link_libraries(test_land_vertex PRIVATE lnd)
+openblack_setup_and_add_test(test_list_order test_list_order.cpp)
 openblack_setup_and_add_test(test_worker_pool test_worker_pool.cpp)

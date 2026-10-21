@@ -78,6 +78,7 @@ struct CreatureHandGlows;
 namespace graphics
 {
 class FrameBuffer;
+class LandFootprints;
 class LandShadowBake;
 class L3DSubMesh;
 class OffscreenScreenshots;
@@ -118,10 +119,9 @@ public:
 	void Reset(glm::u16vec2 resolution) const noexcept final;
 
 private:
-	void DrawFootprintPass(const DrawSceneDesc& drawDesc) const;
+	/// Paints the footprints into the blocks of the land where they changed
+	void PaintLandFootprints(const DrawSceneDesc& drawDesc) const;
 	/// The rivers' beds or channels, a footprint for each stretch of river
-	void DrawStreamFootprints(graphics::RenderPass viewId, entt::id_type meshId) const;
-	void DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const;
 	/// The land's luminosity this frame: as it was laid, shaded by the clouds and lit by the lights at night
 	void DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const;
 	[[nodiscard]] const Texture2D& GetLandLuminosity() const;
@@ -532,6 +532,7 @@ private:
 	/// The shadows baked into the land, as the game bakes them: the buildings', rocks' and other things', and the trees'
 	/// and big forests' unless they are drawn moving
 	mutable std::unique_ptr<LandShadowBake> _landShadowBake;
+	mutable std::unique_ptr<LandFootprints> _landFootprints;
 	/// Whether this frame's land takes the baked shadows
 	mutable bool _landShadowsBaked {false};
 	/// The land seen from above for the temple's map, and the visit to the temple it was drawn for
@@ -559,6 +560,9 @@ private:
 		std::vector<uint8_t> coarserSides;
 		/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1, -1 where there is none
 		std::vector<glm::vec4> neighbours;
+		/// Whether a part of the box over the block can be seen from the view's camera. Only those blocks are drawn,
+		/// on the land and mirrored under the sea.
+		std::vector<bool> inView;
 	};
 	mutable LandDetailFrame _landDetail;
 	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of

@@ -12,6 +12,7 @@
 #include "CreaturePenSystem.h"
 
 #include <utility>
+#include <vector>
 
 #include <glm/vec3.hpp>
 
@@ -98,9 +99,31 @@ void CreaturePenSystem::ProcessTurn()
 	ProcessTurn(Locator::entitiesRegistry::value());
 }
 
+void CreaturePenSystem::CreatureTurn(entt::entity creature)
+{
+	CreatureTurn(Locator::entitiesRegistry::value(), creature);
+}
+
 void CreaturePenSystem::ProcessTurn(ecs::Registry& registry) const
 {
-	registry.Each<Creature, Transform>([this, &registry](entt::entity entity, Creature& creature, Transform& transform) {
+	std::vector<entt::entity> creatures;
+	registry.Each<Creature, Transform>(
+	    [&creatures](entt::entity entity, Creature& /*creature*/, Transform& /*transform*/) { creatures.push_back(entity); });
+	for (const auto entity : creatures)
+	{
+		CreatureTurn(registry, entity);
+	}
+}
+
+void CreaturePenSystem::CreatureTurn(ecs::Registry& registry, entt::entity entity) const
+{
+	if (!registry.AllOf<Creature, Transform>(entity))
+	{
+		return;
+	}
+	auto& creature = registry.Get<Creature>(entity);
+	auto& transform = registry.Get<Transform>(entity);
+	{
 		std::optional<float> penSize;
 		if (const auto temple = TempleOf(registry, creature.owner))
 		{
@@ -137,5 +160,5 @@ void CreaturePenSystem::ProcessTurn(ecs::Registry& registry) const
 		creature.penSize = penSize;
 		const auto shown = ShownSize(creature);
 		transform.scale = glm::vec3(_world.drawnScale(creature.species, shown));
-	});
+	}
 }

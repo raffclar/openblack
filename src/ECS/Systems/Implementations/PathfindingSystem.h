@@ -26,5 +26,6 @@ public:
 	void WalkTo(entt::entity walker, glm::ivec2 goal) override;
 	void SetupWalkRound(entt::entity walker, glm::ivec2 goal) override;
 	bool WalkOne(entt::entity walker) override;
+	void WalkInOwnTurn(entt::entity walker) override;
 };
 } // namespace openblack::ecs::systems

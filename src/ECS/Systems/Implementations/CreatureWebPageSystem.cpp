@@ -139,6 +139,22 @@ CreatureWebPageSystem::CreatureWebPageSystem(PlayerOfFiles player)
 
 void CreatureWebPageSystem::ProcessTurn()
 {
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature, CreatureAnimation>(
+	    [&creatures](entt::entity entity, const Creature&, CreatureAnimation&) { creatures.push_back(entity); });
+	for (const auto entity : creatures)
+	{
+		CreatureTurn(entity);
+	}
+}
+
+void CreatureWebPageSystem::CreatureTurn(entt::entity entity)
+{
 	if (!Locator::entitiesRegistry::has_value() || !Locator::time::has_value())
 	{
 		return;
@@ -148,60 +164,57 @@ void CreatureWebPageSystem::ProcessTurn()
 	const auto local = LocalPlayer();
 	const auto player = _player ? _player() : std::nullopt;
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-
-	std::vector<entt::entity> creatures;
-	registry.Each<const Creature, CreatureAnimation>(
-	    [&creatures](entt::entity entity, const Creature&, CreatureAnimation&) { creatures.push_back(entity); });
-	for (const auto entity : creatures)
+	if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureAnimation>(entity))
 	{
-		const auto& creature = registry.Get<const Creature>(entity);
-		auto& animation = registry.Get<CreatureAnimation>(entity);
-		// The moment of the body's action counts for this turn only
-		const bool moment = std::exchange(animation.actionMoment, false);
-		// Only the player of a creature looks at it, so only the player's own creatures have pictures
-		const auto* at = registry.TryGet<const Transform>(entity);
-		if (creature.owner != local || at == nullptr || camera == nullptr)
-		{
-			continue;
-		}
-		auto& kept = registry.AllOf<CreaturePictures>(entity) ? registry.Get<CreaturePictures>(entity)
-		                                                      : registry.Assign<CreaturePictures>(entity);
-		const auto* mind = registry.TryGet<const CreatureMindState>(entity);
-		const auto plan = PlanOf(mind);
-		const creature_web_page::Chance chance {
-		    .lookedAt = creature_attention::IsLookingAt(camera->GetOrigin(), camera->GetFocus(), at->position),
-		    .seconds = creature_web_page::WholeSecondsBetween(kept.lastTurn, turn, k_TurnMilliseconds),
-		    .actionMoment = moment,
-		    .action = plan.action,
-		};
-		if (!creature_web_page::TakesPicture(kept.pictures, chance))
-		{
-			continue;
-		}
-		const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
-		const auto age = needs != nullptr ? needs->needs.age : 0u;
-		const auto score = creature_web_page::Score(PictureWorth(plan.action), plan.priority, age);
-		const auto slot = creature_web_page::Keep(kept.pictures, {.score = score, .age = age, .action = plan.action});
-		// The next picture waits ten seconds, whether the creature keeps this one or not
-		kept.lastTurn = turn;
-		if (!slot.has_value())
-		{
-			continue;
-		}
-		const auto text = creature_web_page::CaptionText(plan.desire);
-		_captions.at(*slot) = creature_web_page::Caption(
-		    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
-		                   entt::to_integral(entity), plan.action, score);
-		if (!player.has_value() || !Locator::rendererInterface::has_value())
-		{
-			continue;
-		}
-		auto name =
-		    fmt::format("{}creature-picture/{}/{}", graphics::ScreenPictures::k_Prefix, entt::to_integral(entity), _asked++);
-		Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
-		_waiting.push_back({.name = std::move(name), .player = *player, .slot = *slot});
+		return;
 	}
+	const auto& creature = registry.Get<const Creature>(entity);
+	auto& animation = registry.Get<CreatureAnimation>(entity);
+	// The moment of the body's action counts for this turn only
+	const bool moment = std::exchange(animation.actionMoment, false);
+	// Only the player of a creature looks at it, so only the player's own creatures have pictures
+	const auto* at = registry.TryGet<const Transform>(entity);
+	if (creature.owner != local || at == nullptr || camera == nullptr)
+	{
+		return;
+	}
+	auto& kept = registry.AllOf<CreaturePictures>(entity) ? registry.Get<CreaturePictures>(entity)
+	                                                      : registry.Assign<CreaturePictures>(entity);
+	const auto* mind = registry.TryGet<const CreatureMindState>(entity);
+	const auto plan = PlanOf(mind);
+	const creature_web_page::Chance chance {
+	    .lookedAt = creature_attention::IsLookingAt(camera->GetOrigin(), camera->GetFocus(), at->position),
+	    .seconds = creature_web_page::WholeSecondsBetween(kept.lastTurn, turn, k_TurnMilliseconds),
+	    .actionMoment = moment,
+	    .action = plan.action,
+	};
+	if (!creature_web_page::TakesPicture(kept.pictures, chance))
+	{
+		return;
+	}
+	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
+	const auto age = needs != nullptr ? needs->needs.age : 0u;
+	const auto score = creature_web_page::Score(PictureWorth(plan.action), plan.priority, age);
+	const auto slot = creature_web_page::Keep(kept.pictures, {.score = score, .age = age, .action = plan.action});
+	// The next picture waits ten seconds, whether the creature keeps this one or not
+	kept.lastTurn = turn;
+	if (!slot.has_value())
+	{
+		return;
+	}
+	const auto text = creature_web_page::CaptionText(plan.desire);
+	_captions.at(*slot) = creature_web_page::Caption(
+	    Locator::helpTextSystem::has_value() ? Locator::helpTextSystem::value().GetWords(text) : std::u16string {});
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game took picture {} of creature {}: action {}, score {}", *slot,
+	                   entt::to_integral(entity), plan.action, score);
+	if (!player.has_value() || !Locator::rendererInterface::has_value())
+	{
+		return;
+	}
+	auto name =
+	    fmt::format("{}creature-picture/{}/{}", graphics::ScreenPictures::k_Prefix, entt::to_integral(entity), _asked++);
+	Locator::rendererInterface::value().RequestScreenPicture(name, &creature_web_page::TakePicture);
+	_waiting.push_back({.name = std::move(name), .player = *player, .slot = *slot});
 }
 
 bool CreatureWebPageSystem::AnyPictureWaiting() const

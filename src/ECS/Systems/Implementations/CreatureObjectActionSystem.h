@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include "Creature/CreatureObjectActions.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 
@@ -30,6 +32,8 @@ class CreatureObjectActionSystem final: public CreatureObjectActionSystemInterfa
 {
 public:
 	void ProcessTurn() override;
+	void BeginTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	void LateUpdate(std::chrono::duration<float, std::milli> gameTime) override;
 
@@ -77,6 +81,9 @@ public:
 	[[nodiscard]] std::optional<float> PickUpStraightReach(entt::entity creature) const override;
 
 private:
+	/// What a creature held and no longer holds falls, or it swallows what it ate. With no creature: the things that
+	/// creatures that are gone held.
+	void LetGoHeldThings(std::optional<entt::entity> creature);
 	/// What the thing's kind says about a creature picking it up
 	[[nodiscard]] creature_object_actions::KindFacts KindFactsOf(entt::entity object) const;
 	/// What the rules for a creature picking the thing up depend on

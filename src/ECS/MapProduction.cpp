@@ -384,6 +384,18 @@ std::span<const entt::entity> MapProduction::GetFixedInGridCell(const glm::vec3&
 	return GetFixedInGridCell(GetGridCell(pos));
 }
 
+std::span<const entt::entity> MapProduction::GetFiledFixedInGridCell(const CellId& cellId) const
+{
+	const auto index = _lists.IndexOf({cellId.x, cellId.y});
+	return index.has_value() ? _lists.Fixed(*index) : std::span<const entt::entity> {};
+}
+
+std::span<const entt::entity> MapProduction::GetFiledMobileInGridCell(const CellId& cellId) const
+{
+	const auto index = _lists.IndexOf({cellId.x, cellId.y});
+	return index.has_value() ? _lists.Mobile(*index) : std::span<const entt::entity> {};
+}
+
 std::span<const entt::entity> MapProduction::GetMobileInGridCell(const CellId& cellId) const
 {
 	FileMade();

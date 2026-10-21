@@ -46,7 +46,6 @@
 #include "3D/ChimneySmoke.h"
 #include "3D/Clouds.h"
 #include "3D/DayNightClock.h"
-#include "3D/FootprintPaint.h"
 #include "3D/HandMorph.h"
 #include "3D/InfluenceCircle.h"
 #include "3D/L3DAnim.h"
@@ -162,6 +161,7 @@
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandWaterGlow.h"
 #include "Graphics/IndexBuffer.h"
+#include "Graphics/LandFootprints.h"
 #include "Graphics/LandShadowBake.h"
 #include "Graphics/LightBeams.h"
 #include "Graphics/LightShine.h"
@@ -619,6 +619,7 @@ Renderer::~Renderer() noexcept
 	_groundShadowData.reset();
 	_objectShadowFrameBuffer.reset();
 	_landShadowBake.reset();
+	_landFootprints.reset();
 	_templeMapFrameBuffer.reset();
 	if (_landLightTexture)
 	{
@@ -1811,7 +1812,6 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
 	terrainShader->SetTextureSampler("s10_landColour", 10, GetLandColour());
 	terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
-	terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 	SetObjectShadowUniforms(*terrainShader);
 	terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
 	// Nor any moving shadow
@@ -2555,143 +2555,20 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 	}
 }
 
-namespace
+void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 {
-// Footprints are laid over one another premultiplied: the land takes the colour they leave and how much of it they
-// cover, and mixes its own colour with them texel by texel as the game paints them in
-constexpr uint64_t k_FootprintPaintState =
-    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-
-void SetFootprintTexture(const ShaderProgram& program, const Texture2D& texture)
-{
-	program.SetTextureSampler("s_footprint", 0, texture);
-	const auto size = texture.GetResolution();
-	const glm::vec4 u_footprintSize {size.x, size.y, 0.0f, 0.0f};
-	program.SetUniformValue("u_footprintSize", &u_footprintSize);
-}
-
-// How the footprints are painted into the land's texels
-void SetFootprintPaint(const ShaderProgram& program)
-{
-	const glm::vec4 u_footprintPaint {footprint_paint::k_TexelsPerUnit, 0.0f, 0.0f, 0.0f};
-	program.SetUniformValue("u_footprintPaint", &u_footprintPaint);
-}
-} // namespace
-
-void Renderer::DrawFootprintPass(const DrawSceneDesc& drawDesc) const
-{
-	const auto viewId = graphics::RenderPass::Footprint;
 	auto section = Locator::profiler::value().BeginScoped(Profiler::Stage::FootprintPass);
-	if (drawDesc.drawIsland)
-	{
-		const auto& island = Locator::terrainSystem::value();
-		island.GetFootprintFramebuffer().Bind(viewId);
-		// The island's own size, as each land loaded has its own
-		uint16_t width = 0;
-		uint16_t height = 0;
-		island.GetFootprintFramebuffer().GetSize(width, height);
-		bgfx::setViewRect(static_cast<bgfx::ViewId>(viewId), 0, 0, width, height);
-		bgfx::setViewClear(static_cast<bgfx::ViewId>(viewId), BGFX_CLEAR_COLOR, 0x00000000);
-
-		// This dummy draw call is here to make sure that view is cleared if no
-		// other draw calls are submitted to view
-		bgfx::touch(static_cast<bgfx::ViewId>(viewId));
-
-		// _shaderManager->SetCamera(viewId, *drawDesc.camera); // TODO
-
-		auto view = island.GetOrthoView();
-		auto proj = island.GetOrthoProj();
-		bgfx::setViewTransform(static_cast<bgfx::ViewId>(viewId), &view, &proj);
-
-		const auto& meshManager = Locator::resources::value().GetMeshes();
-		const auto& renderCtx = Locator::rendereringSystem::value().GetContext();
-		const auto* footprintShaderInstanced = _shaderManager->GetShader("FootprintInstanced");
-		// Every thing leaves its footprint however far off it is: those drawn this frame, those fading out and those too
-		// far off to be drawn
-		const auto paintFootprints = [&](entt::id_type meshId, uint32_t first, uint32_t count) {
-			auto mesh = meshManager.Handle(meshId);
-			if (count == 0 || !mesh->ContainsLandscapeFeature() || mesh->GetFootprints().empty())
-			{
-				return;
-			}
-			const auto& footprint = mesh->GetFootprints()[0];
-			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
-			SetFootprintPaint(*footprintShaderInstanced);
-			footprint.mesh->GetVertexBuffer().Bind();
-			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.instanceUniformBuffer), first, count);
-			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
-			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
-		};
-		for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-		{
-			paintFootprints(meshId, placers.offset, placers.filled);
-			paintFootprints(meshId, placers.offset + placers.count - placers.gone, placers.gone);
-		}
-		for (const auto& [meshId, placers] : renderCtx.fadingDrawDescs)
-		{
-			paintFootprints(meshId, placers.offset, placers.filled);
-		}
-
-		for (const auto& [meshId, placers] : renderCtx.treeInstancedDrawDescs)
-		{
-			auto mesh = meshManager.Handle(meshId);
-			if (!mesh->ContainsLandscapeFeature() || mesh->GetFootprints().empty())
-			{
-				continue;
-			}
-			const auto& footprint = mesh->GetFootprints()[0];
-			SetFootprintTexture(*footprintShaderInstanced, *footprint.texture);
-			SetFootprintPaint(*footprintShaderInstanced);
-			footprint.mesh->GetVertexBuffer().Bind();
-			bgfx::setInstanceDataBuffer(toBgfx(renderCtx.treeInstanceUniformBuffer), placers.offset, placers.count);
-			bgfx::setState(k_FootprintPaintState | BGFX_STATE_CULL_CW);
-			footprintShaderInstanced->Submit(static_cast<bgfx::ViewId>(viewId));
-		}
-
-		// The rivers' beds are laid after the land's other footprints, blended into its colour like them
-		DrawStreamFootprints(viewId, ecs::components::StreamSegment::k_BedMeshId);
-	}
-}
-
-void Renderer::DrawStreamFootprints(RenderPass viewId, entt::id_type meshId) const
-{
-	const auto& segments = Locator::rendereringSystem::value().GetContext().streamSegments;
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	if (segments.empty() || !meshes.Contains(meshId))
+	if (!drawDesc.drawIsland)
 	{
 		return;
 	}
-	const auto mesh = meshes.Handle(meshId);
-	if (mesh->GetFootprints().empty())
+	// The footprints of the buildings, the features and the rivers are painted into the blocks' textures when they
+	// change, as the game paints them
+	if (!_landFootprints)
 	{
-		return;
+		_landFootprints = std::make_unique<LandFootprints>();
 	}
-	const auto count = static_cast<uint32_t>(segments.size());
-	constexpr uint16_t k_Stride = sizeof(glm::mat4);
-	if (bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
-	{
-		return;
-	}
-	bgfx::InstanceDataBuffer instances;
-	bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
-	std::memcpy(instances.data, segments.data(), segments.size() * sizeof(glm::mat4));
-
-	const auto& footprint = mesh->GetFootprints()[0];
-	const bool channel = meshId == ecs::components::StreamSegment::k_ChannelMeshId;
-	const auto* program = _shaderManager->GetShader(channel ? "LandAlphaInstanced" : "FootprintInstanced");
-	SetFootprintTexture(*program, *footprint.texture);
-	if (!channel)
-	{
-		SetFootprintPaint(*program);
-	}
-	footprint.mesh->GetVertexBuffer().Bind();
-	bgfx::setInstanceDataBuffer(&instances);
-	// A channel leaves the land's alpha at the lower of the two
-	const uint64_t state = channel ? BGFX_STATE_WRITE_R | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
-	                                     BGFX_STATE_BLEND_EQUATION(BGFX_STATE_BLEND_EQUATION_MIN)
-	                               : k_FootprintPaintState;
-	bgfx::setState(state);
-	program->Submit(static_cast<bgfx::ViewId>(viewId));
+	_landFootprints->Update();
 }
 
 void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const
@@ -4810,29 +4687,6 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 	});
 }
 
-void Renderer::DrawLandAlphaPass(const DrawSceneDesc& drawDesc) const
-{
-	if (!drawDesc.drawIsland)
-	{
-		return;
-	}
-	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::LandAlpha);
-	const auto& island = Locator::terrainSystem::value();
-	const auto& frameBuffer = island.GetLandAlphaFramebuffer();
-	frameBuffer.Bind(RenderPass::LandAlpha);
-	uint16_t width = 0;
-	uint16_t height = 0;
-	frameBuffer.GetSize(width, height);
-	bgfx::setViewRect(viewId, 0, 0, width, height);
-	// The land is opaque but where a channel runs
-	bgfx::setViewClear(viewId, BGFX_CLEAR_COLOR, 0xFFFFFFFF);
-	bgfx::touch(viewId);
-	const auto view = island.GetOrthoView();
-	const auto proj = island.GetOrthoProj();
-	bgfx::setViewTransform(viewId, &view, &proj);
-	DrawStreamFootprints(RenderPass::LandAlpha, ecs::components::StreamSegment::k_ChannelMeshId);
-}
-
 void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 {
 	const auto viewId = static_cast<bgfx::ViewId>(RenderPass::ObjectShadow);
@@ -4842,11 +4696,12 @@ void Renderer::DrawObjectShadowPass(const DrawSceneDesc& drawDesc) const
 		return;
 	}
 
-	// The same texels as the footprints, so that the land finds both at the same coordinates
+	// A texel for each texel of the blocks' textures, over the whole island
 	const auto& island = Locator::terrainSystem::value();
-	uint16_t width = 0;
-	uint16_t height = 0;
-	island.GetFootprintFramebuffer().GetSize(width, height);
+	const auto indexExtent = island.GetIndexExtent();
+	const auto blocks = indexExtent.maximum - indexExtent.minimum + glm::u16vec2(1, 1);
+	const auto width = static_cast<uint16_t>(blocks.x * lnd::LNDMaterial::k_Width);
+	const auto height = static_cast<uint16_t>(blocks.y * lnd::LNDMaterial::k_Height);
 	uint16_t shadowWidth = 0;
 	uint16_t shadowHeight = 0;
 	if (_objectShadowFrameBuffer)
@@ -4934,7 +4789,7 @@ void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
 	}
 	program.SetTextureSampler("s5_objectShadows", 5,
 	                          _objectShadowFrameBuffer ? _objectShadowFrameBuffer->GetColorAttachment()
-	                                                   : island.GetFootprintFramebuffer().GetColorAttachment());
+	                                                   : island.GetHeightMap());
 	const auto* baked = _landShadowsBaked && _landShadowBake ? _landShadowBake->GetTexture() : nullptr;
 	if (baked != nullptr)
 	{
@@ -4943,7 +4798,8 @@ void Renderer::SetObjectShadowUniforms(const ShaderProgram& program) const
 	}
 	else
 	{
-		program.SetTextureSampler("s14_landShadows", 14, island.GetFootprintFramebuffer().GetColorAttachment());
+		// Not read without the baked shadows
+		program.SetTextureSampler("s14_landShadows", 14, island.GetHeightMap());
 	}
 	program.SetUniformValue("u_objectShadows", &u_objectShadows);
 }
@@ -5844,6 +5700,18 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 	frame.blocks.resize(blocks.size());
 	frame.coarserSides.assign(blocks.size(), 0);
+	// The blocks that the view can see: the same test as the list of the things that are drawn. With the land mirrored
+	// in the sea, the box reaches as far under the water as it stands over it, so it holds the block's reflection too.
+	const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
+	const auto nearPlane = drawDesc.camera->GetNearClip();
+	const bool reflected = detail_level::For(config.detailLevel).landReflection;
+	frame.inView.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		frame.inView[i] = object_draw_list::BlockInView(
+		    viewProjection, nearPlane,
+		    {.corner = blocks[i].GetMapPosition(), .highestAltitude = blocks[i].GetHighestAltitude(), .reflected = reflected});
+	}
 	// The blocks by where they are on the map's 32 by 32 grid of blocks
 	constexpr int k_BlocksPerSide = 32;
 	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
@@ -5953,12 +5821,10 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	CollectParticles();
 	// The land's light of the frame that ended, before this frame makes its own
 	KeepLightOfFrameBefore();
-	// TODO(bwrsandman): Footprint framebuffer doesn't need to be updated each frame
 	DrawLandLuminosityPass(drawDesc);
 	DrawLandColourPass(drawDesc);
 	DrawSkyDomePass(drawDesc);
-	DrawFootprintPass(drawDesc);
-	DrawLandAlphaPass(drawDesc);
+	PaintLandFootprints(drawDesc);
 	UpdateLandLight();
 	UpdateLandDetail(drawDesc);
 	DrawObjectShadowPass(drawDesc);
@@ -6280,7 +6146,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				terrainShader->SetTextureSampler("s9_landLuminosity", 9, GetLandLuminosity());
 				terrainShader->SetTextureSampler("s10_landColour", 10, GetLandColour());
 				terrainShader->SetTextureSampler("s1_smallBumpAlpha", 1, *smallBumpAlpha);
-				terrainShader->SetTextureSampler("s8_landAlpha", 8, island.GetLandAlphaFramebuffer().GetColorAttachment());
 				terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 				terrainShader->SetUniformValue("u_smallBumpLine", &u_smallBumpLine);
 				terrainShader->SetUniformValue("u_smallBump", &u_smallBump);
@@ -6291,7 +6156,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				const auto* coarsePages = island.GetCoarsePages();
 				terrainShader->SetTextureSampler("s15_coarsePages", 15,
 				                                 coarsePages != nullptr ? *coarsePages : island.GetBlockTextures());
-				terrainShader->SetTextureSampler("s3_footprints", 3, island.GetFootprintFramebuffer().GetColorAttachment());
 				SetObjectShadowUniforms(*terrainShader);
 				terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
 				terrainShader->SetUniformValue("u_haze", &_haze[0]);
@@ -6393,9 +6257,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				std::iota(order.begin(), order.end(), size_t {0});
 				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
 				setTerrainUniforms();
+				// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
+				const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
 				for (const auto index : order)
 				{
-					submitBlock(index);
+					if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
+					{
+						submitBlock(index);
+					}
 				}
 			}
 			_shaderManager->DiscardBindings();
@@ -7627,14 +7496,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			// Debug
 			if (desc.viewId == graphics::RenderPass::Main)
 			{
-				for (const auto& [meshId, placers] : renderCtx.instancedDrawDescs)
-				{
-					auto mesh = meshManager.Handle(meshId);
-					if (!mesh->ContainsLandscapeFeature() || mesh->GetFootprints().empty())
-					{
-						continue;
-					}
-				}
 				if (renderCtx.boundingBox)
 				{
 					const auto boundBoxOffset = static_cast<uint32_t>(renderCtx.instanceUniforms.size() / 2);

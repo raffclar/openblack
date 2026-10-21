@@ -112,10 +112,6 @@
 #define SHADER_NAME fs_sprite
 #include "ShaderIncluder.h"
 
-#define SHADER_NAME vs_footprint_instanced
-#include "ShaderIncluder.h"
-#define SHADER_NAME vs_footprint_paint_instanced
-#include "ShaderIncluder.h"
 #define SHADER_NAME vs_particle_instanced
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_particle_chain
@@ -127,10 +123,6 @@
 #define SHADER_NAME vs_volume_glow
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_particle_surface
-#include "ShaderIncluder.h"
-#define SHADER_NAME fs_footprint
-#include "ShaderIncluder.h"
-#define SHADER_NAME fs_land_alpha
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_celestial
 #include "ShaderIncluder.h"
@@ -193,6 +185,8 @@
 
 #define SHADER_NAME vs_interface
 #include "ShaderIncluder.h"
+#define SHADER_NAME vs_interface_sorted
+#include "ShaderIncluder.h"
 #define SHADER_NAME vs_text3d
 #include "ShaderIncluder.h"
 #define SHADER_NAME fs_interface
@@ -212,7 +206,7 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 71> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 68> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
@@ -241,16 +235,12 @@ const std::array<bgfx::EmbeddedShader, 71> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(fs_water), //
     BGFX_EMBEDDED_SHADER(vs_sprite),
     BGFX_EMBEDDED_SHADER(fs_sprite), //
-    BGFX_EMBEDDED_SHADER(vs_footprint_instanced),
-    BGFX_EMBEDDED_SHADER(vs_footprint_paint_instanced),
     BGFX_EMBEDDED_SHADER(vs_particle_instanced),
     BGFX_EMBEDDED_SHADER(vs_particle_chain),
     BGFX_EMBEDDED_SHADER(fs_particle), //
     BGFX_EMBEDDED_SHADER(vs_particle_surface),
     BGFX_EMBEDDED_SHADER(vs_volume_glow),
     BGFX_EMBEDDED_SHADER(fs_particle_surface),
-    BGFX_EMBEDDED_SHADER(fs_footprint),       //
-    BGFX_EMBEDDED_SHADER(fs_land_alpha),      //
     BGFX_EMBEDDED_SHADER(vs_celestial),       //
     BGFX_EMBEDDED_SHADER(fs_celestial),       //
     BGFX_EMBEDDED_SHADER(vs_mist),            //
@@ -280,6 +270,7 @@ const std::array<bgfx::EmbeddedShader, 71> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_beam),
     BGFX_EMBEDDED_SHADER(fs_beam), //
     BGFX_EMBEDDED_SHADER(vs_interface),
+    BGFX_EMBEDDED_SHADER(vs_interface_sorted),
     BGFX_EMBEDDED_SHADER(vs_text3d),
     BGFX_EMBEDDED_SHADER(fs_interface), //
     BGFX_EMBEDDED_SHADER(fs_video),     //
@@ -307,12 +298,10 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"Sky", "vs_object", "fs_sky"},
     ShaderDefinition {"Water", "vs_water", "fs_water"},
     ShaderDefinition {"Sprite", "vs_sprite", "fs_sprite"},
-    ShaderDefinition {"FootprintInstanced", "vs_footprint_paint_instanced", "fs_footprint"},
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},
     ShaderDefinition {"ParticleChain", "vs_particle_chain", "fs_particle"},
     ShaderDefinition {"ParticleSurface", "vs_particle_surface", "fs_particle_surface"},
     ShaderDefinition {"VolumeGlow", "vs_volume_glow", "fs_particle_surface"},
-    ShaderDefinition {"LandAlphaInstanced", "vs_footprint_instanced", "fs_land_alpha"},
     ShaderDefinition {"Celestial", "vs_celestial", "fs_celestial"},
     ShaderDefinition {"Mist", "vs_mist", "fs_mist"},
     ShaderDefinition {"LandColour", "vs_land_luminosity", "fs_land_colour"},
@@ -334,6 +323,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ObjectShadowStaticInstanced", "vs_object_shadow_static_instanced", "fs_object_shadow"},
     ShaderDefinition {"Beam", "vs_beam", "fs_beam"},
     ShaderDefinition {"Interface", "vs_interface", "fs_interface"},
+    ShaderDefinition {"InterfaceSorted", "vs_interface_sorted", "fs_interface"},
     ShaderDefinition {"Video", "vs_interface", "fs_video"},
     ShaderDefinition {"Text3D", "vs_text3d", "fs_interface"},
 };

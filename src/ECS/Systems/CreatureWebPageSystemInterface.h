@@ -40,6 +40,8 @@ public:
 	/// Once a game turn, after the creatures act: the game can take a picture of each creature of the player that the
 	/// player looks at. Each creature's moment of action for this turn is then used up.
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, after what a land keeps of it: the same for this creature
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Writes the page of a creature of the player from the game's template. The game does this each time that it
 	/// writes the creature's files as the creature lives. The files go to the disk on a thread of their own.
 	virtual void WritePage(entt::entity creature) = 0;

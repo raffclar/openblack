@@ -61,6 +61,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
@@ -788,51 +789,97 @@ HeadLook HeadLookOfCopy(const CreatureAnimation& animation, const Transform& tra
 void CreatureAnimationSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const Creature, CreatureMorph>([](const Creature& creature, CreatureMorph& morph) {
-		morph.shownFatness = creature_morph::EaseFatness(morph.shownFatness, creature.fatness);
-	});
-	// Each game turn the breath goes back to the resting period of the size that the creature shows, before its mind
-	// starts a walk that makes it breathe faster
-	registry.Each<const Creature, CreatureAnimation>([](const Creature& creature, CreatureAnimation& animation) {
-		const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
-		animation.breathPeriod = resting;
-		animation.breathTarget = resting;
-	});
-	StepSway();
-	AddAlignmentMotes();
+	std::vector<entt::entity> creatures;
+	registry.Each<const Creature>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/) { creatures.push_back(entity); });
+	for (const auto creature : creatures)
+	{
+		BodyTurn(creature);
+	}
+	for (const auto creature : creatures)
+	{
+		BreathTurn(creature);
+	}
+	for (const auto creature : creatures)
+	{
+		SwayTurn(creature);
+	}
+	for (const auto creature : creatures)
+	{
+		MotesTurn(creature);
+	}
 }
 
-void CreatureAnimationSystem::StepSway()
+void CreatureAnimationSystem::BodyTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
+	{
+		if (auto* morph = registry.TryGet<CreatureMorph>(creature); morph != nullptr)
+		{
+			morph->shownFatness = creature_morph::EaseFatness(morph->shownFatness, body->fatness);
+		}
+	}
+}
+
+void CreatureAnimationSystem::BreathTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Each game turn the breath goes back to the resting period of the size that the creature shows, before its mind
+	// starts a walk that makes it breathe faster
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	if (body != nullptr && animation != nullptr)
+	{
+		const auto resting = creature_animation::BreathPeriod(ShownSize(*body));
+		animation->breathPeriod = resting;
+		animation->breathTarget = resting;
+	}
+}
+
+void CreatureAnimationSystem::SwayTurn(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	// Each game turn the body sways from what kicked it, by the seconds that the creature lived in the turn
-	registry.Each<const Creature, const CreatureMorph, CreatureAnimation>(
-	    [&registry](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation) {
-		    auto& sway = animation.sway;
-		    sway.turnSeconds = creature_sway::TurnSeconds(animation.playbackScale);
-		    creature_sway::Step(sway, sway.turnSeconds, MassOf(creature, &morph));
-		    sway.heading.reset();
-		    const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
-		    if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
-		        walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
-		    {
-			    sway.heading =
-			        creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
-		    }
-		    else if (walk != nullptr)
-		    {
-			    sway.heading = walk->heading;
-		    }
-	    });
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	if (creature == nullptr || morph == nullptr || animation == nullptr)
+	{
+		return;
+	}
+	auto& sway = animation->sway;
+	sway.turnSeconds = creature_sway::TurnSeconds(animation->playbackScale);
+	creature_sway::Step(sway, sway.turnSeconds, MassOf(*creature, morph));
+	sway.heading.reset();
+	const auto* walk = registry.TryGet<const CreatureLocomotion>(entity);
+	if (walk != nullptr && walk->motion == CreatureLocomotion::Motion::Turning && walk->move.has_value() &&
+	    walk->move->animations.has_value() && walk->move->durationMs > 0.0f)
+	{
+		sway.heading =
+		    creature_sway::TurnHeading(walk->heading, walk->targetHeading, walk->move->timeMs, walk->move->durationMs);
+	}
+	else if (walk != nullptr)
+	{
+		sway.heading = walk->heading;
+	}
 }
 
-void CreatureAnimationSystem::AddAlignmentMotes()
+void CreatureAnimationSystem::MotesTurn(entt::entity entity)
 {
 	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	const auto* transform = registry.TryGet<const Transform>(entity);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
+	{
+		return;
+	}
 	auto& liquids = Locator::liquidParticleSystem::value();
 	auto& random = Locator::gameRandom::value();
 	const creature_alignment_motes::LocalRandom localRandom = [&random](int32_t n) { return random.LocalRand(n); };
@@ -840,29 +887,25 @@ void CreatureAnimationSystem::AddAlignmentMotes()
 	const bool fallingSpell = Locator::videoSystem::has_value() && Locator::videoSystem::value().HidesWorld();
 	// Each game turn, a creature whose body is to look good or evil makes motes or smoke near the bones of the pose of the
 	// turn before. The body takes the pose of this turn after the motes. Then a creature that pukes brings up its sick.
-	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
-	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
-	        const Transform& transform) {
-		    const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
-		    std::vector<glm::vec3> bones(animation.boneMatrices.size());
-		    for (uint32_t bone = 0; bone < bones.size(); ++bone)
-		    {
-			    bones[bone] = glm::vec3(creature::PosedBone(bone, animation.boneMatrices, placement)[3]);
-		    }
-		    // Before the first turn ends, the bones of this frame are the only pose there is
-		    const auto& last = animation.lastTurnBones.size() == bones.size() ? animation.lastTurnBones : bones;
-		    const auto alignment = TargetMorph(creature, morph).evilGood;
-		    if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
-		    {
-			    const creature_alignment_motes::BonePoint bonePoint = [&last](uint32_t bone) { return last.at(bone); };
-			    for (const auto& puff : creature_alignment_motes::PuffsOf(
-			             alignment, ShownSize(creature), static_cast<uint32_t>(last.size()), bonePoint, localRandom))
-			    {
-				    liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
-			    }
-		    }
-		    AddPukeDrops(entity);
-	    });
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	std::vector<glm::vec3> bones(animation->boneMatrices.size());
+	for (uint32_t bone = 0; bone < bones.size(); ++bone)
+	{
+		bones[bone] = glm::vec3(creature::PosedBone(bone, animation->boneMatrices, placement)[3]);
+	}
+	// Before the first turn ends, the bones of this frame are the only pose there is
+	const auto& last = animation->lastTurnBones.size() == bones.size() ? animation->lastTurnBones : bones;
+	const auto alignment = TargetMorph(*creature, *morph).evilGood;
+	if (!fallingSpell && creature_alignment_motes::MakesAny(alignment))
+	{
+		const creature_alignment_motes::BonePoint bonePoint = [&last](uint32_t bone) { return last.at(bone); };
+		for (const auto& puff : creature_alignment_motes::PuffsOf(alignment, ShownSize(*creature),
+		                                                          static_cast<uint32_t>(last.size()), bonePoint, localRandom))
+		{
+			liquids.Add(puff.position, puff.velocity, puff.size, puff.argb, puff.kind);
+		}
+	}
+	AddPukeDrops(entity);
 }
 
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -1021,9 +1064,10 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	{
 		return;
 	}
-	// The pose of the last turn becomes the older pose. The first pose is both poses.
-	auto pose = creature_turn_pose::ToWorld(
-	    animation->boneMatrices, creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	// The pose of the last turn becomes the older pose. The first pose is both poses. The body of the turn leans with the
+	// slope of the land under it.
+	auto pose = creature_turn_pose::ToWorld(animation->boneMatrices,
+	                                        ecs::creature_placement::PlacementOf(registry, entity, *transform));
 	animation->olderTurnPose = animation->newerTurnPose.empty() ? pose : std::move(animation->newerTurnPose);
 	animation->newerTurnPose = std::move(pose);
 	animation->lastTurnBones.resize(animation->newerTurnPose.size());
@@ -1062,6 +1106,18 @@ void CreatureAnimationSystem::PoseTurns()
 		PoseTurn(entity);
 	}
 	registry.Each<CreatureAnimation>([](CreatureAnimation& animation) { animation.posedThisTurn = false; });
+}
+
+void CreatureAnimationSystem::EndPoseTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.AllOf<Creature, CreatureAnimation>(creature))
+	{
+		return;
+	}
+	PoseTurn(creature);
+	// The next turn of the creature starts with no pose
+	registry.Get<CreatureAnimation>(creature).posedThisTurn = false;
 }
 
 void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)

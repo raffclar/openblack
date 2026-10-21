@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <LNDFile.h>
 #include <gtest/gtest.h>
 
 #include "3D/LandBlock.h"
@@ -38,4 +39,17 @@ TEST(LandVertex, HigherLandRisesByItsAltitude)
 		EXPECT_FLOAT_EQ(vertex.position.z, 160.0f);
 		EXPECT_FLOAT_EQ(vertex.altitude, static_cast<float>(altitude));
 	}
+}
+
+TEST(LandBlock, ItsHighestAltitudeIsTheHighestCellWhenItWasLoaded)
+{
+	openblack::lnd::LNDBlock loaded {};
+	loaded.cells.at(5).altitude = 40;
+	loaded.cells.at(200).altitude = 90;
+	openblack::LandBlock block;
+	block.SetLndBlock(loaded);
+	EXPECT_EQ(block.GetHighestAltitude(), 90);
+	// A cell raised later does not change it, and the view test of the block keeps the box of the land as it was
+	block.SetCellAltitude(7, 200);
+	EXPECT_EQ(block.GetHighestAltitude(), 90);
 }

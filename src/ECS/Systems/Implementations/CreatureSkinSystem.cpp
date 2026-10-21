@@ -270,6 +270,15 @@ void CreatureSkinSystem::ProcessTurn()
 	});
 }
 
+void CreatureSkinSystem::CreatureTurn(entt::entity creature)
+{
+	if (auto* marks = Locator::entitiesRegistry::value().TryGet<CreatureMarks>(creature);
+	    marks != nullptr && creature_marks::Heal(marks->marks, creature_marks::k_CountsPerTurn))
+	{
+		++marks->revision;
+	}
+}
+
 void CreatureSkinSystem::SetTattoos(entt::entity creature, const creature_tattoo::Slots& slots)
 {
 	if (auto* tattoos = Locator::entitiesRegistry::value().TryGet<CreatureTattoos>(creature); tattoos != nullptr)

@@ -2855,6 +2855,32 @@ void AddMovement(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A tiger walks down the bank of the lake and up again, then along the bank, seen from the side
+	const glm::vec2 aboveBank {k_Lake.x, k_NearShallows - 34.0f};
+	const glm::vec2 belowBank {k_Lake.x, k_NearShallows - 2.0f};
+	const glm::vec2 alongBank {k_Lake.x - 30.0f, k_NearShallows - 16.0f};
+	const glm::vec2 alongBankEnd {k_Lake.x + 30.0f, k_NearShallows - 16.0f};
+	all.push_back({
+	    .id = "movement.land_tilt",
+	    .name = "The body leans with the slope of the land",
+	    .facet = Facet::Movement,
+	    .description = "A tiger walks down the steep bank of the lake to the shallows and back up to the grass. Then it "
+	                   "walks along the middle of the bank and back. The camera looks at it from the side.",
+	    .expected = "On the flat grass the tiger stands level. On the bank its body leans with the slope: its head is "
+	                "lower than its tail when it walks down, and higher when it walks up. Along the bank, the side of "
+	                "the body that is up the slope is higher. Its legs and its neck stay upright, and do not lean over "
+	                "with the land. The lean changes smoothly as the slope under it changes.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.05f)},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Lake.x + 55.0f, 14.0f, k_NearShallows - 20.0f},
+	                .look = {k_Lake.x, 2.0f, k_NearShallows - 18.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, aboveBank, 180.0f)},
+	    .commands = {Go(Kind::WalkTo, 0, belowBank, 1.0f), Go(Kind::WalkTo, 0, aboveBank, 1.0f),
+	                 Go(Kind::WalkTo, 0, alongBank, 1.0f), Go(Kind::WalkTo, 0, alongBankEnd, 1.0f),
+	                 Go(Kind::WalkTo, 0, aboveBank, 1.0f)},
+	    .repeatFrom = 0,
+	});
+
 	all.push_back({
 	    .id = "movement.footstep_dust_snow",
 	    .name = "Dust from the footsteps in the snow",
@@ -3316,6 +3342,21 @@ void AddFootprints(std::vector<Scenario>& all)
 	    .creatures = {Posed(CreatureType::Tiger, {110.0f, 0.0f}, 90.0f)},
 	    .commands = {Go(Kind::WalkTo, 0, {-110.0f, 0.0f}, 0.5f, true), Go(Kind::RunTo, 0, {110.0f, 0.0f}, 0.0f, true)},
 	    .repeatFrom = 0,
+	});
+
+	all.push_back({
+	    .id = "footprints.buildings_overlap_and_go",
+	    .name = "Building footprints overlap, and one goes",
+	    .facet = Facet::Footprints,
+	    .description = "Two Celtic huts stand so close that their footprints overlap. An Egyptian well stands to the "
+	                   "side. After eight seconds the well is taken away.",
+	    .expected = "The footprints show crisp texels of the land's own size. Where the two huts' footprints overlap, the "
+	                "second is painted over the first. The well's footprint goes with the well.",
+	    .framing = {.shot = Shot::Placed, .eye = {12.0f, 45.0f, -30.0f}, .look = {-6.0f, 0.0f, 2.0f}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 0.0f}},
+	                {.type = AbodeInfo::CelticHut, .offset = {7.0f, 5.0f}, .yawDegrees = 30.0f},
+	                {.type = FeatureInfo::EgptWell, .offset = {-25.0f, 0.0f}}},
+	    .commands = {OnObject(Kind::RemoveObject, 0, 2, 8.0f, false)},
 	});
 }
 
@@ -9981,6 +10022,46 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
 	    .objects = walkers,
+	});
+	// A villager that sits at the end of each walk stands up before the next walk starts
+	all.push_back({
+	    .id = "movement.villager_stands_up_then_walks",
+	    .name = "A villager stands up before it walks",
+	    .facet = Facet::Movement,
+	    .description = "A villager walks 20 metres east and sits down there. Every twenty seconds it walks to the other "
+	                   "point and sits down again.",
+	    .expected = "At the start of each walk, the villager plays its clip to stand up where it sits. It does not move "
+	                "until the clip ends. Then it walks. The villager walks in its own turn, and it does not walk while "
+	                "a clip into or out of a state plays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {10.0f, 2.5f, -7.0f}, .look = {9.0f, 1.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-10.0f, 0.0f},
+	                 .walkTo = glm::vec2(10.0f, 0.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 20.0f,
+	                 .walkFinal = VillagerStates::SitAndChillout}},
+	});
+	// Two creatures, each with its own turn in the list of the living
+	all.push_back({
+	    .id = "mind.two_creatures_own_turns",
+	    .name = "Two creatures each take their turn at their own place",
+	    .facet = Facet::Mind,
+	    .description = "A tiger and a cow stand 30 metres apart with nothing to do, and a villager walks between them. "
+	                   "With the game's log at the debug level, each creature writes the synced random numbers of its "
+	                   "turn.",
+	    .expected = "Each creature thinks, walks and acts as it does alone. In the log, the numbers that each creature "
+	                "draws come together in its own turn, the newer creature first. No numbers of the other creature come "
+	                "between them.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Content(CreatureType::Tiger, {-15.0f, 0.0f}, 90.0f, "older"),
+	                  Content(CreatureType::Cow, {15.0f, 0.0f}, 270.0f, "newer")},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {0.0f, -10.0f},
+	                 .walkTo = glm::vec2(0.0f, 10.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 20.0f}},
 	});
 
 	// The tutorial's interface levels, as a lesson's script steps through them

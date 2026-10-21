@@ -87,9 +87,14 @@ public:
 	/// Where a block's coarse texture is on the pages: x the layer, yz where its square starts (0 to 1 across the
 	/// page), w 1; all 0 when there are no pages
 	[[nodiscard]] virtual glm::vec4 GetCoarsePageSlot(size_t /*block*/) const { return glm::vec4(0.0f); }
-	[[nodiscard]] virtual const graphics::FrameBuffer& GetFootprintFramebuffer() const = 0;
-	/// What of the land's alpha the rivers' channels leave, laid out as the footprints are
-	[[nodiscard]] virtual const graphics::FrameBuffer& GetLandAlphaFramebuffer() const = 0;
+	/// Paints a block's own texture again into ARGB texels at 4 bits a channel, with no footprints (see block_texture).
+	/// The texels are k_Side by k_Side, a row for each texel along x.
+	virtual void PaintBlockTexels(size_t /*block*/, std::span<uint16_t> /*texels*/) const {}
+	/// Puts ARGB texels at 4 bits a channel in place of a block's texture, for example with its footprints painted in
+	virtual void SetBlockTexels(size_t /*block*/, std::span<const uint16_t> /*texels*/) {}
+	/// The blocks whose textures the land painted again with no footprints since the last call: each block after a land
+	/// loads, and the blocks that change height
+	[[nodiscard]] virtual std::vector<size_t> TakeRepaintedBlocks() { return {}; }
 
 	[[nodiscard]] virtual U16Extent2 GetIndexExtent() const = 0;
 	[[nodiscard]] virtual glm::mat4 GetOrthoView() const = 0;

@@ -53,6 +53,15 @@ public:
 	/// Once a game turn, after the creatures have moved: fights start and end, moves are chosen and made, stamina comes
 	/// back, and creatures knocked out come round
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, with its action: a fight that its leash asks for starts, its fight moves to the next
+	/// stage, and a creature that is knocked out comes round
+	virtual void FightTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, as its body lives the turn: the blood of its wounds runs down its skin
+	virtual void BloodTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, as its body lives the turn: a fighter moves and strikes, and its body takes its pose
+	virtual void MovesTurn(entt::entity /*creature*/) {}
+	/// At the end of the creature's own turn: a fighter in a duel gets back a little stamina
+	virtual void StaminaTurn(entt::entity /*creature*/) {}
 	/// A new land: it forgets the press it held, the fight the camera watched and how long it looked at an arena, and
 	/// lets the player leave fights again; the creatures and their fights went with the old land
 	virtual void Reset() = 0;

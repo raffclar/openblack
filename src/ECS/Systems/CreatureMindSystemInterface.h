@@ -56,6 +56,19 @@ public:
 	virtual void PlanTurn() = 0;
 	/// Once a game turn after PlanTurn: what the leash taught, and copying the player, step on
 	virtual void LearnTurn() = 0;
+	/// Once a game turn, before the creatures' own turns: the feedback of a release reaches each mind when its wait is
+	/// over
+	virtual void BeginTurn() {}
+	/// The first part of the mind in the creature's own turn: it looks about and sees to its emergencies
+	virtual void MindTurn(entt::entity /*creature*/) {}
+	/// The second part of the mind in the creature's own turn: its desires change, and it decides when it has no plan
+	virtual void DesiresTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn, before it does its agenda: it plans and changes what it does for a pressing plan
+	virtual void PlanCreatureTurn(entt::entity /*creature*/) {}
+	/// The last part of the mind in the creature's own turn: it does the step of its agenda
+	virtual void AgendaTurn(entt::entity /*creature*/) {}
+	/// In the creature's own turn: what the leash taught it, and what it found of other creatures
+	virtual void LearnCreatureTurn(entt::entity /*creature*/) {}
 
 	/// Takes up a mind file's learning, desires and stage of growing up at once, over the mind that the creature has
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;

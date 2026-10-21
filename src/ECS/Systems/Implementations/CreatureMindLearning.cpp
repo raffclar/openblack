@@ -4139,6 +4139,22 @@ void CreatureMindSystem::PlanTurn()
 	}
 }
 
+void CreatureMindSystem::PlanCreatureTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature) || !registry.AllOf<Creature>(creature))
+	{
+		return;
+	}
+	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
+	const auto held =
+	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetCreature() : std::nullopt;
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && held != creature)
+	{
+		PlanCreature(creature, *mind);
+	}
+}
+
 void CreatureMindSystem::LearnFromFeedback(entt::entity creature, CreatureMindState& mind, float feedback)
 {
 	namespace sources = creature_desires::sources;
@@ -4335,56 +4351,66 @@ void CreatureMindSystem::LearnTurn()
 	    [&creatures](entt::entity entity, const Creature&, CreatureMindState&) { creatures.push_back(entity); });
 	for (const auto creature : creatures)
 	{
-		auto* mind = registry.TryGet<CreatureMindState>(creature);
-		if (mind == nullptr || !mind->learnt.has_value() || !mind->desires.has_value())
+		LearnCreatureTurn(creature);
+	}
+}
+
+void CreatureMindSystem::LearnCreatureTurn(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* tables = GetTables();
+	if (tables == nullptr || !registry.Valid(creature) || !registry.AllOf<Creature>(creature))
+	{
+		return;
+	}
+	auto* mind = registry.TryGet<CreatureMindState>(creature);
+	if (mind == nullptr || !mind->learnt.has_value() || !mind->desires.has_value())
+	{
+		return;
+	}
+	auto& learnt = *mind->learnt;
+	// What the player showed it on a leash: anger or compassion towards such things
+	for (const auto& shown : mind->leash.shown)
+	{
+		// It comes across the thing first, so the lesson has the thing as it is now. The lesson is about the whole
+		// thing that the thing is part of (the town of a villager); a creature is its own whole thing. A thing that is
+		// part of nothing teaches nothing.
+		const auto thing = static_cast<entt::entity>(shown.object);
+		ComeAcross(creature, *mind, thing);
+		const auto whole = registry.AllOf<Creature>(thing) ? std::optional(thing) : WholeOfShownThing(creature, *mind, thing);
+		const auto wholeBelief = whole.has_value() ? BeliefOf(registry, *whole, creature) : std::nullopt;
+		const auto belief = BeliefOf(registry, thing, creature);
+		if (!wholeBelief.has_value() || !belief.has_value())
 		{
 			continue;
 		}
-		auto& learnt = *mind->learnt;
-		// What the player showed it on a leash: anger or compassion towards such things
-		for (const auto& shown : mind->leash.shown)
+		for (const auto& lesson : shown.lessons)
 		{
-			// It comes across the thing first, so the lesson has the thing as it is now. The lesson is about the whole
-			// thing that the thing is part of (the town of a villager); a creature is its own whole thing. A thing that is
-			// part of nothing teaches nothing.
-			const auto thing = static_cast<entt::entity>(shown.object);
-			ComeAcross(creature, *mind, thing);
-			const auto whole =
-			    registry.AllOf<Creature>(thing) ? std::optional(thing) : WholeOfShownThing(creature, *mind, thing);
-			const auto wholeBelief = whole.has_value() ? BeliefOf(registry, *whole, creature) : std::nullopt;
-			const auto belief = BeliefOf(registry, thing, creature);
-			if (!wholeBelief.has_value() || !belief.has_value())
-			{
-				continue;
-			}
-			for (const auto& lesson : shown.lessons)
-			{
-				creature_mind_model::LearnSpread(learnt, TreeKind::Activity, lesson.desire, *wholeBelief, lesson.change,
-				                                 tables->dependencies, tables->attributes);
-				creature_mind_model::Think(
-				    learnt, creature_learning::ObjectLessonText(lesson.change, ObjectName(belief),
-				                                                tables->texts.at(static_cast<size_t>(lesson.desire)).trying));
-			}
+			creature_mind_model::LearnSpread(learnt, TreeKind::Activity, lesson.desire, *wholeBelief, lesson.change,
+			                                 tables->dependencies, tables->attributes);
+			creature_mind_model::Think(
+			    learnt, creature_learning::ObjectLessonText(lesson.change, ObjectName(belief),
+			                                                tables->texts.at(static_cast<size_t>(lesson.desire)).trying));
 		}
-		mind->leash.shown.clear();
-		// Leashed to another creature, it comes to find it nicer or nastier, and learns about creatures like it
-		for (const auto& change : mind->leash.attitudes)
-		{
-			auto& attitude = creature_learning::AttitudeTo(learnt.creatures, change.creature);
-			const auto lessons = creature_learning::ChangeHowNice(attitude, change.change);
-			// It comes across the other creature first, so the lessons have that creature as it is now
-			ComeAcross(creature, *mind, static_cast<entt::entity>(change.creature));
-			if (const auto belief = BeliefOf(registry, static_cast<entt::entity>(change.creature), creature))
-			{
-				for (const auto& [desire, amount] : lessons)
-				{
-					creature_mind_model::LearnSpread(learnt, TreeKind::Activity, desire, *belief, amount, tables->dependencies,
-					                                 tables->attributes);
-				}
-			}
-		}
-		mind->leash.attitudes.clear();
 	}
+	mind->leash.shown.clear();
+	// Leashed to another creature, it comes to find it nicer or nastier, and learns about creatures like it
+	for (const auto& change : mind->leash.attitudes)
+	{
+		auto& attitude = creature_learning::AttitudeTo(learnt.creatures, change.creature);
+		const auto lessons = creature_learning::ChangeHowNice(attitude, change.change);
+		// It comes across the other creature first, so the lessons have that creature as it is now
+		ComeAcross(creature, *mind, static_cast<entt::entity>(change.creature));
+		if (const auto belief = BeliefOf(registry, static_cast<entt::entity>(change.creature), creature))
+		{
+			for (const auto& [desire, amount] : lessons)
+			{
+				creature_mind_model::LearnSpread(learnt, TreeKind::Activity, desire, *belief, amount, tables->dependencies,
+				                                 tables->attributes);
+			}
+		}
+	}
+	mind->leash.attitudes.clear();
 }
 
 namespace

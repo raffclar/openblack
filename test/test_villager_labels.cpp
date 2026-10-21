@@ -319,3 +319,13 @@ TEST(VillagerLabels, PointerFadesWithTheBoxButKeepsItsSize)
 	EXPECT_FLOAT_EQ(fullHead[2].position.x - fullHead[0].position.x, 12.0f);
 	EXPECT_FLOAT_EQ(smallHead[2].position.y - smallHead[0].position.y, 16.0f);
 }
+
+TEST(VillagerLabels, ALabelKeepsItsPointInTheWorldForTheSort)
+{
+	Board board;
+	auto request = At(400, 300, u"abc");
+	request.point = {12.5f, 3.0f, -7.25f};
+	ASSERT_TRUE(board.Add(request, 800.0f, TenPixelsEach, 1.0f));
+	const auto& label = board.GetLabels().front();
+	EXPECT_EQ(label.point, request.point);
+}

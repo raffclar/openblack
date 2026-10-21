@@ -104,6 +104,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/Graveyards.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
@@ -730,14 +731,8 @@ void KickAway(entt::entity creature, const Creature& body, const Transform& tran
 		return;
 	}
 	// It kicks the way it faces, leaning with the land under it
-	const glm::vec2 at {transform.position.x, transform.position.z};
-	const auto radius = object_measures::TwoDRadius(registry, creature);
-	const auto height = [](glm::vec2 point) {
-		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
-	};
-	const auto lean =
-	    creature_object_actions::LeanOf(height(at + glm::vec2(radius, 0.0f)), height(at - glm::vec2(radius, 0.0f)),
-	                                    height(at + glm::vec2(0.0f, radius)), height(at - glm::vec2(0.0f, radius)), radius);
+	const auto tilt = ecs::creature_placement::TiltOf(registry, creature, transform);
+	const glm::vec2 lean {tilt.alongX, tilt.alongZ};
 	// Its heading, or the way its rotation faces when it does not walk
 	const auto* walk = registry.TryGet<const CreatureLocomotion>(creature);
 	const auto ahead = glm::xz(transform.rotation * glm::vec3(0.0f, 0.0f, -1.0f));
@@ -1078,9 +1073,25 @@ float AboveGround(const glm::vec3& point)
 	                                                             map_coords::FtoL(point.z * 65536.0f * 0.1f));
 }
 
-/// A villager or an animal as a thing that a creature aims ahead of. None for anything else.
+/// A villager, an animal or a creature as a thing that a creature aims ahead of. None for anything else.
 std::optional<creature_lead::Living> LivingOf(const ecs::Registry& registry, entt::entity thing)
 {
+	if (const auto* other = registry.TryGet<const Creature>(thing))
+	{
+		// Another creature on its way is led by the speed of its species' table
+		const auto* transform = registry.TryGet<const Transform>(thing);
+		if (transform == nullptr || !Locator::infoConstants::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& info = Locator::infoConstants::value();
+		const auto row = creature::InfoRow(other->species);
+		const auto speed = row < info.creature.size() ? static_cast<int32_t>(info.creature.at(row).speedGroup.speedDefault) : 0;
+		return creature_lead::CreatureAsLiving(
+		    {map_coords::ToFixed(transform->position.x), map_coords::ToFixed(transform->position.z)}, transform->position.y,
+		    speed,
+		    Locator::creatureLocomotionSystem::has_value() && Locator::creatureLocomotionSystem::value().IsMoving(thing));
+	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
 		// The animal's place at the end of its last turn, not the place where it is drawn between two turns
@@ -1558,7 +1569,9 @@ bool StepAccepted(entt::entity creature, const Transform& transform, bool mirror
 	{
 		step.x = -step.x;
 	}
-	const auto end = transform.position + (transform.rotation * (step * transform.scale));
+	// The step leans with the slope of the land, as the body does
+	const auto placement = ecs::creature_placement::PlacementOf(Locator::entitiesRegistry::value(), creature, transform);
+	const auto end = glm::vec3(placement * glm::vec4(step, 1.0f));
 	// The circles of the land it may not stand on and of the things it walks round in the block's cells. They give way to
 	// where the creature's route last left it, which is where it stands.
 	const auto circles = creature_route::StepBlockCircles(
@@ -2689,12 +2702,23 @@ std::optional<float> CreatureObjectActionSystem::PickUpStraightReach(entt::entit
 
 void CreatureObjectActionSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value())
 	{
 		return;
 	}
+	BeginTurn();
+	std::vector<entt::entity> creatures;
+	Locator::entitiesRegistry::value().Each<const Creature>(
+	    [&creatures](entt::entity entity, const Creature& /*creature*/) { creatures.push_back(entity); });
+	for (const auto creature : creatures)
+	{
+		CreatureTurn(creature);
+	}
+}
 
+void CreatureObjectActionSystem::LetGoHeldThings(std::optional<entt::entity> creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	// What is held by a creature that is gone, or no longer holds it, falls. What left its hand to be eaten stays out of
 	// sight until the creature swallows it. If the eat stopped some other way, the creature swallows it now, and if the
 	// creature is gone, it comes back into sight and falls.
@@ -2702,6 +2726,12 @@ void CreatureObjectActionSystem::ProcessTurn()
 	std::vector<entt::entity> stoppedEats;
 	registry.Each<const HeldByCreature>([&](entt::entity entity, const HeldByCreature& by) {
 		const bool creatureExists = registry.Valid(by.creature);
+		// The creature's own turn sees to the things that it held. The start of the turn sees to the things of creatures
+		// that are gone.
+		if (creature.has_value() ? by.creature != *creature : creatureExists)
+		{
+			return;
+		}
 		const auto* held = creatureExists ? registry.TryGet<const CreatureHeldObject>(by.creature) : nullptr;
 		if (held != nullptr && held->object == entity)
 		{
@@ -2728,9 +2758,9 @@ void CreatureObjectActionSystem::ProcessTurn()
 	});
 	for (const auto entity : stoppedEats)
 	{
-		const auto creature = registry.Get<const HeldByCreature>(entity).creature;
+		const auto eater = registry.Get<const HeldByCreature>(entity).creature;
 		CreatureObjectAction ended {.kind = Kind::Eat, .eaten = entity};
-		Swallow(creature, ended, FoodValueOf(entity));
+		Swallow(eater, ended, FoodValueOf(entity));
 	}
 	for (const auto entity : loose)
 	{
@@ -2738,30 +2768,45 @@ void CreatureObjectActionSystem::ProcessTurn()
 		registry.Remove<HeldByCreature>(entity);
 		LetGo(entt::null, entity, glm::vec3(0.0f));
 	}
-	std::vector<entt::entity> emptyHanded;
-	registry.Each<const CreatureHeldObject>([&](entt::entity entity, const CreatureHeldObject& held) {
-		if (!registry.Valid(held.object))
-		{
-			emptyHanded.push_back(entity);
-		}
-	});
-	for (const auto entity : emptyHanded)
+}
+
+void CreatureObjectActionSystem::BeginTurn()
+{
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value())
+	{
+		return;
+	}
+	LetGoHeldThings(std::nullopt);
+}
+
+void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::creatureLocomotionSystem::has_value() || !Locator::creatureAnimationSystem::has_value() ||
+	    !registry.Valid(entity))
+	{
+		return;
+	}
+	LetGoHeldThings(entity);
+	if (const auto* held = registry.TryGet<const CreatureHeldObject>(entity); held != nullptr && !registry.Valid(held->object))
 	{
 		registry.Remove<CreatureHeldObject>(entity);
 	}
 
-	registry.Each<const Creature, const Transform, CreatureAnimation, CreatureObjectAction>(
-	    [&](entt::entity entity, const Creature& body, const Transform& transform, CreatureAnimation& animation,
-	        CreatureObjectAction& action) {
-		    if (action.status == Status::Running && action.phase == Phase::Approach)
-		    {
-			    Approach(entity, action, body, transform, animation, registry.TryGet<const CreatureHeldObject>(entity), true);
-		    }
-	    });
+	if (registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(entity))
+	{
+		auto& action = registry.Get<CreatureObjectAction>(entity);
+		if (action.status == Status::Running && action.phase == Phase::Approach)
+		{
+			Approach(entity, action, registry.Get<const Creature>(entity), registry.Get<const Transform>(entity),
+			         registry.Get<CreatureAnimation>(entity), registry.TryGet<const CreatureHeldObject>(entity), true);
+		}
+	}
 
 	// Carrying something heavy makes it stronger as it walks about
-	registry.Each<const Creature, CreatureNeeds>([&](entt::entity entity, const Creature&, CreatureNeeds& needs) {
-		needs.carriedWeight.reset();
+	if (auto* needs = registry.TryGet<CreatureNeeds>(entity); needs != nullptr && registry.AllOf<Creature>(entity))
+	{
+		needs->carriedWeight.reset();
 		const auto held = GetHeld(entity);
 		if (!held.has_value())
 		{
@@ -2771,9 +2816,9 @@ void CreatureObjectActionSystem::ProcessTurn()
 		const auto own = WeightOf(registry, entity);
 		if (weight.has_value() && own.has_value() && *own > 0.0f)
 		{
-			needs.carriedWeight = std::clamp(*weight / *own, 0.0f, 1.0f);
+			needs->carriedWeight = std::clamp(*weight / *own, 0.0f, 1.0f);
 		}
-	});
+	}
 }
 
 void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli> gameTime)
