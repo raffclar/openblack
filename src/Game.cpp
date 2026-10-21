@@ -3910,6 +3910,12 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				// The eyes of the villagers in high detail blink and turn by the game time of the frame, once each frame
 				Locator::highDetailSystem::value().PlaceEyes(static_cast<uint32_t>(clock.GetFrameGameTime().count()),
 				                                             Locator::camera::value().GetViewProjectionMatrix());
+				// The villagers that swim in high detail leave rings on the water, on a frame that draws the land
+				if (!Locator::temple::has_value() || !Locator::temple::value().Active())
+				{
+					Locator::highDetailSystem::value().LeaveSwimmingRings(
+					    static_cast<uint32_t>(clock.GetFrameGameTime().count()));
+				}
 				// The trees out of the land are drawn with their roots, as each now is
 				ecs::tree_roots::Show(Locator::entitiesRegistry::value());
 				// The land's draw list, from the camera the frame is drawn from, is made again when it is due: what stands

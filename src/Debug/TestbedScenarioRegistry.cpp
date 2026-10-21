@@ -2408,6 +2408,31 @@ void AddAppearance(std::vector<Scenario>& all)
 	               {k_Lake.x + 4.0f, k_FarShallows - 22.0f},
 	               {k_Lake.x + 22.0f, k_FarShallows - 2.0f}},
 	});
+	// A villager drawn in high detail swims in the shallows, as the boy swims in the opening
+	all.push_back({
+	    .id = "appearance.swimmer_under_sea",
+	    .name = "A swimmer in high detail under the sea",
+	    .facet = Facet::Appearance,
+	    .description = "At noon, the clock stopped, the camera looks across the lake of the testbed to its far shallows. "
+	                   "The cinema bars come in. A villager in the shallows changes to high detail and plays the clip of "
+	                   "the swimmer.",
+	    .expected = "The part of the villager that is under the water shows dark blue through the water. The part above "
+	                "the water shows as usual. No rings come on the water near the villager.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{k_Lake.x, k_FarShallows - 4.0f}}, .distance = 0.08f},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {k_Lake.x, k_FarShallows - 4.0f}}},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.5f,
+	                  .script = "SET_HIGH_GRAPHICS_DETAIL",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 1.0f},
+	                                      {.kind = ScriptArgument::Kind::Object, .index = 0}}},
+	                 {.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "OVERRIDE_STATE_ANIMATION",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Object, .index = 0},
+	                                      {.kind = ScriptArgument::Kind::Integer, .number = 390.0f}}}},
+	});
 	// The eyes close up by day and at night, with the glass environment map added over each eyeball
 	const auto eyesClose = [&all, &headMoves](std::string_view id, std::string_view name, float hour,
 	                                          std::string_view description, std::string_view expected) {
