@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <vector>
 
 #include <LNDFile.h>
 
@@ -165,12 +166,41 @@ void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Source
 void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,
                                glm::ivec2 cellCount, std::span<uint8_t> rgba)
 {
+	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * k_TexelsPerCell *
+	                             k_TexelsPerCell);
+	PaintCellTexels(cells, sources, firstCell, cellCount, texels);
 	std::ranges::fill(rgba, uint8_t {0});
+	ToRgba(texels, rgba.first(std::min(rgba.size(), texels.size() * 4)));
+}
+
+void block_texture::BuildBlockTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint16_t> texels)
+{
+	PaintCellTexels(cells, sources, {0, 0}, {k_BlockCells, k_BlockCells}, texels);
+}
+
+void block_texture::ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba)
+{
+	const auto count = std::min(texels.size(), rgba.size() / 4);
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto texel = texels[i];
+		const auto out = rgba.subspan(i * 4, 4);
+		out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
+		out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
+		out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
+		out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
+	}
+}
+
+void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,
+                                    glm::ivec2 cellCount, std::span<uint16_t> texels)
+{
+	std::ranges::fill(texels, uint16_t {0});
 	const auto rows = cellCount.x * k_TexelsPerCell;
 	const auto columns = cellCount.y * k_TexelsPerCell;
 	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 ||
 	    firstCell.x < 0 || firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells ||
-	    firstCell.y + cellCount.y > k_BlockCells || rgba.size() < static_cast<size_t>(rows) * columns * 4 ||
+	    firstCell.y + cellCount.y > k_BlockCells || texels.size() < static_cast<size_t>(rows) * columns ||
 	    sources.countries.empty())
 	{
 		return;
@@ -220,11 +250,7 @@ void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Source
 				texel = BlendCorners(painted, weights);
 			}
 
-			const auto out = rgba.subspan(static_cast<size_t>(((x - firstX) * columns) + (z - firstZ)) * 4, 4);
-			out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
-			out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
-			out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
-			out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
+			texels[static_cast<size_t>(((x - firstX) * columns) + (z - firstZ))] = texel;
 		}
 	}
 }

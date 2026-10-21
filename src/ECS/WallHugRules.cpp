@@ -21,6 +21,8 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/X87Angle.h"
+#include "Creature/CreatureCastMoves.h"
 #include "ECS/MapCells.h"
 
 namespace openblack::ecs::wall_hug
@@ -678,6 +680,20 @@ std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing)
 		const glm::vec3 xAxis = thing.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
 		return TempleRingCircles({map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
 		                         std::atan2(xAxis.z, xAxis.x));
+	}
+	case ThingShape::WorshipSiteBalls:
+	{
+		// The balls of the site at its place on the map, turned and scaled as its model is. The walkers take only their
+		// places on the ground and their widths, in the order of the site's list.
+		const glm::vec3 place {map_coords::Quantise(thing.position.x), thing.position.y,
+		                       map_coords::Quantise(thing.position.z)};
+		const auto angles = x87::GameAnglesYxz(thing.rotation[0], thing.rotation[2]);
+		std::vector<BlockingCircle> circles;
+		for (const auto& ball : creature_cast_moves::WorshipSiteSpheres(place, angles.y, thing.scale))
+		{
+			circles.push_back(blocking({.centre = {ball.centre.x, ball.centre.z}, .radius = ball.radius}));
+		}
+		return circles;
 	}
 	case ThingShape::ModelBox:
 		break;

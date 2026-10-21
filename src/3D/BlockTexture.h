@@ -68,6 +68,14 @@ constexpr size_t k_BlockBytes = static_cast<size_t>(k_Side) * k_Side * 4;
 /// Paints a block from its 17 by 17 cells ([x * 17 + z]) into rgba, k_BlockBytes long: each 4-bit channel times 17, a
 /// row for each texel along x. The open sea's cells, which aren't drawn, are left clear.
 void BuildBlock(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint8_t> rgba);
+/// Paints a block as BuildBlock does, into texels as ARGB words at 4 bits a channel, k_Side by k_Side, a row for each
+/// texel along x
+void BuildBlockTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint16_t> texels);
+/// Paints the texels of a rectangle of a block's cells as PaintCells does, into ARGB words at 4 bits a channel
+void PaintCellTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell, glm::ivec2 cellCount,
+                     std::span<uint16_t> texels);
+/// ARGB words at 4 bits a channel as RGBA8 texels, each 4-bit channel times 17
+void ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
 /// Paints the texels of a rectangle of a block's cells, cellCount (along x, along z) from firstCell, as BuildBlock
 /// would, into rgba: a row for each texel along x, each row the rectangle's texels along z, so the rectangle can replace
 /// that part of the block's texture

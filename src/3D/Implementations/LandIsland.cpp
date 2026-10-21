@@ -16,8 +16,10 @@
 
 #include <algorithm>
 #include <iterator>
+#include <numeric>
 #include <span>
 #include <stdexcept>
+#include <utility>
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
@@ -34,7 +36,6 @@
 #include "3D/LandNormal.h"
 #include "3D/MapCoords.h"
 #include "FileSystem/FileSystemInterface.h"
-#include "Graphics/FrameBuffer.h"
 #include "Graphics/IndexBuffer.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/Texture2D.h"
@@ -220,12 +221,6 @@ void LandIsland::Build(const LandData& data)
 	                       Wrapping::ClampEdge, Filter::Nearest,
 	                       bgfx::copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
 
-	const auto res = indexSize * glm::u16vec2(lnd::LNDMaterial::k_Width, lnd::LNDMaterial::k_Height);
-	// The footprints are kept premultiplied at 16 bits a channel, enough for the land to mix them into its 4-bit colour
-	// exactly as the game does
-	_footprintFrameBuffer = std::make_unique<FrameBuffer>("Footprints", res.x, res.y, graphics::TextureFormat::RGBA16);
-	_landAlphaFrameBuffer = std::make_unique<FrameBuffer>("LandAlpha", res.x, res.y, graphics::TextureFormat::R8);
-
 	_proj = glm::ortho(_extentMin.x, _extentMax.x, _extentMin.y, _extentMax.y);
 	_view = glm::rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
@@ -247,12 +242,7 @@ void LandIsland::Build(const LandData& data)
 
 	// Paint each block's texture from the countries, the materials, the noise and the bump map. The texture is made
 	// empty and its layers filled after, so a block can be painted again when the land under it changes height.
-	const block_texture::Sources sources {
-	    .countries = _countries,
-	    .materials = _materialTexels,
-	    .noise = _noiseMap,
-	    .bump = _bump,
-	};
+	const auto sources = TextureSources();
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
 	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
 	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
@@ -262,6 +252,9 @@ void LandIsland::Build(const LandData& data)
 		block_texture::BuildBlock(_landBlocks[i].GetLndBlock()->cells, sources, blockTexels);
 		_blockTextures->UpdateLayer(static_cast<uint16_t>(i), blockTexels.data(), static_cast<uint32_t>(blockTexels.size()));
 	}
+	// The footprints are painted into the blocks after
+	_repaintedBlocks.resize(_landBlocks.size());
+	std::iota(_repaintedBlocks.begin(), _repaintedBlocks.end(), size_t {0});
 
 	// The coarse texture pages the landscape file keeps, a layer each, and where each block's square of them is. A block
 	// naming a page the file doesn't have takes the first.
@@ -456,12 +449,7 @@ void LandIsland::CommitAltitudeChanges()
 	{
 		return;
 	}
-	const block_texture::Sources sources {
-	    .countries = _countries,
-	    .materials = _materialTexels,
-	    .noise = _noiseMap,
-	    .bump = _bump,
-	};
+	const auto sources = TextureSources();
 	std::vector<uint8_t> texels;
 	for (size_t i = 0; i < _landBlocks.size(); ++i)
 	{
@@ -485,6 +473,8 @@ void LandIsland::CommitAltitudeChanges()
 		                 changed.minimum.x * block_texture::k_TexelsPerCell),
 		    glm::u16vec2(cellCount.y * block_texture::k_TexelsPerCell, cellCount.x * block_texture::k_TexelsPerCell),
 		    texels.data(), static_cast<uint32_t>(texels.size()));
+		// The game paints the whole block again, with its footprints, when the land under it changes height
+		_repaintedBlocks.push_back(i);
 		changed = {};
 	}
 	// The height map's changed corners, a texel each, two bytes a texel: its altitude and its cell's split
@@ -612,4 +602,39 @@ void LandIsland::DumpMaps() const
 	FILE* fptr = fopen("dump.raw", "wb");
 	fwrite(data.data(), data.size() * sizeof(data[0]), 1, fptr);
 	fclose(fptr);
+}
+
+block_texture::Sources LandIsland::TextureSources() const
+{
+	return {
+	    .countries = _countries,
+	    .materials = _materialTexels,
+	    .noise = _noiseMap,
+	    .bump = _bump,
+	};
+}
+
+void LandIsland::PaintBlockTexels(size_t block, std::span<uint16_t> texels) const
+{
+	if (block >= _landBlocks.size())
+	{
+		return;
+	}
+	block_texture::BuildBlockTexels(_landBlocks[block].GetLndBlock()->cells, TextureSources(), texels);
+}
+
+void LandIsland::SetBlockTexels(size_t block, std::span<const uint16_t> texels)
+{
+	if (block >= _landBlocks.size() || _blockTextures == nullptr)
+	{
+		return;
+	}
+	std::vector<uint8_t> rgba(block_texture::k_BlockBytes);
+	block_texture::ToRgba(texels, rgba);
+	_blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
+}
+
+std::vector<size_t> LandIsland::TakeRepaintedBlocks()
+{
+	return std::exchange(_repaintedBlocks, {});
 }

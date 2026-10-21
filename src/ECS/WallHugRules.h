@@ -115,6 +115,9 @@ enum class ThingShape : uint8_t
 	/// A temple: a wide circle over its middle and seven spokes of small circles round it, the outer ends of the first
 	/// two bent towards each other, the same whatever its model and size
 	TempleRing,
+	/// A worship site: ten balls round the inside of its walls, each as wide as 1.3 times its height in the model, at
+	/// their places on the ground
+	WorshipSiteBalls,
 };
 
 /// The radius of a tree's trunk to the walkers, in metres

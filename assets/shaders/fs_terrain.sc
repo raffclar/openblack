@@ -12,18 +12,15 @@ SAMPLER2DARRAY(s0_blockTextures, 0);
 // The small bump detail's colour and alpha, 12 times across a block
 SAMPLER2D(s1_smallBumpAlpha, 1);
 SAMPLER2D(s2_smallBump, 2);
-SAMPLER2D(s3_footprints, 3);
 // The moving shadows' data (see ground_shadow.sh)
 SAMPLER2D(s4_groundShadowData, 4);
 #define GROUND_SHADOW_DATA s4_groundShadowData
 #include "ground_shadow.sh"
-// Where the trees' shadows cover the island when they are drawn moving, laid out as the footprints are
+// Where the trees' shadows cover the island when they are drawn moving, a texel for each texel of the blocks
 SAMPLER2D(s5_objectShadows, 5);
 // The shadows baked into the land, of the buildings, rocks and other things and of the trees and big forests: what each
-// texel's 4-bit colour is scaled by, over 256, laid out as the footprints are
+// texel's 4-bit colour is scaled by, over 256, a texel for each texel of the blocks
 SAMPLER2D(s14_landShadows, 14);
-// What of the land's alpha the rivers' channels leave, laid out as the footprints are
-SAMPLER2D(s8_landAlpha, 8);
 
 // The noise that makes the snow's edges ragged, once across each land block of 160 units
 SAMPLER2D(s12_snowNoise, 12);
@@ -111,18 +108,14 @@ uniform vec4 u_blockPositionAndSize;
 // xy: the island's lowest corner, zw: its highest, in units
 uniform vec4 u_islandExtent;
 
-// A texel of the block's texture with the footprints, the snow and the shadows painted into it, in that order, as the
-// game paints them. The footprints' colour mixes into the block's 4-bit colour by how much they cover it, and each
-// channel is rounded down to 4 bits again. The block keeps its coast alpha. blockOrigin is the lowest x and z of the
-// block. blockTexel is the texel along the block texture's axes (z, then x). islandUv is the same point on the
-// footprints.
+// A texel of the block's texture, which holds the footprints, with the snow and the shadows painted into it, in that
+// order, as the game paints them. Each 4-bit channel is rounded down again after each step. blockOrigin is the lowest x
+// and z of the block. blockTexel is the texel along the axes of the block's texture (z, then x). islandUv is the same
+// point on the island's textures.
 vec4 PaintedTexelOf(float layer, vec2 blockOrigin, vec2 blockTexel, vec2 islandUv)
 {
 	vec4 land = texture2DArrayLod(s0_blockTextures, vec3((blockTexel + 0.5f) / BLOCK_TEXELS, layer), 0.0f);
-	vec4 footprints = texture2DLod(s3_footprints, islandUv, 0.0f);
-	// The mix's exact result is a whole number of 255ths of a level: a thousandth of a level absorbs the rounding of
-	// what is stored without lifting any result to the next level
-	vec3 levels = floor((land.rgb * (1.0f - footprints.a) + footprints.rgb) * 15.0f + 0.001f);
+	vec3 levels = floor(land.rgb * 15.0f + 0.5f);
 	if (u_snow.x > 0.5f)
 	{
 		levels = SnowOverTexel(levels, blockOrigin, blockTexel);
@@ -145,7 +138,7 @@ vec4 PaintedTexel(vec2 blockTexel, vec2 islandUv)
 
 // The block's painted texture filtered across its texels: the four nearest texels, each painted, blended by distance
 // as the block's texture is filtered, each block on its own. blockUv is where the fragment is on the block's texture,
-// islandUv where it is on the footprints.
+// islandUv where it is on the textures over the whole island.
 vec4 PaintedBlock(vec2 blockUv, vec2 islandUv)
 {
 	vec2 position = blockUv * BLOCK_TEXELS - 0.5f;
@@ -348,8 +341,8 @@ void main()
 	}
 	vec3 land = min(col.rgb + v_haze.rgb, vec3_splat(1.0f));
 	vec3 detail = min(smallBump + v_haze.rgb, vec3_splat(1.0f));
-	// The rivers' channels lower the coast alpha where they run, so the sea shows through as their water
-	float landAlpha = min(block.a, texture2D(s8_landAlpha, v_texcoord1.xy).r);
+	// The coast alpha, which the rivers' channels lower where they run, so the sea shows through as their water
+	float landAlpha = block.a;
 	vec4 premultiplied = vec4(land * landAlpha * (1.0f - bumpAlpha) + detail * bumpAlpha,
 	                          1.0f - (1.0f - landAlpha) * (1.0f - bumpAlpha));
 	if (vortex)

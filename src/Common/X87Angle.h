@@ -131,6 +131,27 @@ inline constexpr double k_HalfTurn = static_cast<double>(3.1415927f);
 	};
 }
 
+/// The game's turn of a thing that does not lean, by its angle about y, with its scale in it, in the form of
+/// `GameUprightTurn`. The game starts from a matrix with the scale on its diagonal and turns its rows, so each product
+/// of the scale and the wide cosine or sine rounds to a float one time. The game uses no turn when the angle is 0 or
+/// when the angle is not a number.
+[[nodiscard]] inline glm::mat3 GameUprightTurnScaled(float yAngle, float scale)
+{
+	if (!(yAngle < 0.0f || yAngle > 0.0f))
+	{
+		return glm::mat3(scale);
+	}
+	const double c = Cos(yAngle);
+	const double s = Sin(yAngle);
+	const float cScaled = Mul(c, scale);
+	const float sScaled = Mul(s, scale);
+	return {
+	    glm::vec3(cScaled, 0.0f, sScaled),
+	    glm::vec3(0.0f, scale, 0.0f),
+	    glm::vec3(-sScaled, 0.0f, cScaled),
+	};
+}
+
 /// The game's turn of a placed thing with its scale in it. The game multiplies each value of the turn by the scale and
 /// keeps the product as a float.
 [[nodiscard]] inline glm::mat3 GameTurnMatrixScaled(float xAngle, float yAngle, float zAngle, float scale)

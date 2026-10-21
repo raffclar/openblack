@@ -21,6 +21,7 @@
 #include <glm/gtc/quaternion.hpp>
 
 #include "AxisAlignedBoundingBox.h"
+#include "FootprintPaint.h"
 #include "Graphics/LightBeams.h"
 #include "Graphics/Mesh.h"
 #include "Graphics/ShaderProgram.h"
@@ -88,10 +89,15 @@ inline l3d::L3DMeshFlags operator&(l3d::L3DMeshFlags a, l3d::L3DMeshFlags b)
 class L3DMesh
 {
 public:
+	/// A footprint that the model paints into the land under it (see footprint_paint)
 	struct Footprint
 	{
-		std::unique_ptr<graphics::Texture2D> texture;
-		std::unique_ptr<graphics::Mesh> mesh;
+		/// The picture, ARGB at 4 bits a channel, a row for each texel along v
+		int width {0};
+		int height {0};
+		std::vector<uint16_t> texels;
+		/// The triangles that lay the picture on the ground
+		std::vector<footprint_paint::Triangle> triangles;
 	};
 	/// The light a window submesh sheds, drawn with one of the mesh's skins
 	struct VolumeLight

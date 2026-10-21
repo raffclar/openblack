@@ -12,6 +12,7 @@
 #include <cctype>
 #include <cmath>
 #include <cstdint>
+#include <ctime>
 
 #include <algorithm>
 #include <array>
@@ -268,6 +269,7 @@
 #include "ScriptHeaders/ScriptNameLists.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
+#include "ScriptHeaders/ScriptRealTime.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Windowing/WindowingInterface.h"
@@ -4869,39 +4871,43 @@ void GetGameTime() // 113 GET_GAME_TIME
 	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
 }
 
+/// The local time of the player's computer now
+static std::tm RealLocalTime()
+{
+	const auto now = std::time(nullptr);
+	std::tm local {};
+#if defined(_WIN32)
+	localtime_s(&local, &now);
+#else
+	localtime_r(&now, &local);
+#endif
+	return local;
+}
+
 void GetRealTime() // 114 GET_REAL_TIME
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	Pushf(script::real_time::TimeOfDay(RealLocalTime()));
 }
 
 void GetRealDay115() // 115 GET_REAL_DAY
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	Pushf(script::real_time::DayOfMonth(RealLocalTime()));
 }
 
 void GetRealDay116() // 116 GET_REAL_DAY
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	// The second native of this name gives the day of the week
+	Pushf(script::real_time::DayOfWeek(RealLocalTime()));
 }
 
 void GetRealMonth() // 117 GET_REAL_MONTH
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	Pushf(script::real_time::Month(RealLocalTime()));
 }
 
 void GetRealYear() // 118 GET_REAL_YEAR
 {
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	Pushf(script::real_time::Year(RealLocalTime()));
 }
 
 void RunCameraPath() // 119 RUN_CAMERA_PATH
