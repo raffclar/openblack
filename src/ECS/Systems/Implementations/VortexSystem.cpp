@@ -731,8 +731,17 @@ void VortexSystem::SaveState(reflection::BinaryWriter& out) const
 	std::optional<std::vector<uint8_t>> copy;
 	if (const auto path = CrossingFilePath(); (writing || read) && path.has_value())
 	{
-		std::ifstream file(*path, std::ios::binary);
-		copy = file.is_open() ? std::optional(std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {})) : std::nullopt;
+		// The open file keeps what it put on the disk, so the save reads the disk only when the file is not open
+		if (const auto contents = _crossing.Contents(*path); contents.has_value())
+		{
+			copy = std::vector<uint8_t>(contents->begin(), contents->end());
+		}
+		else
+		{
+			std::ifstream file(*path, std::ios::binary);
+			copy =
+			    file.is_open() ? std::optional(std::vector<uint8_t>(std::istreambuf_iterator<char>(file), {})) : std::nullopt;
+		}
 	}
 	reflection::Save(out, writing);
 	reflection::Save(out, writing ? _crossing.Owner() : entt::entity {entt::null});

@@ -795,6 +795,26 @@ PackResult PackFile::ReadFile(std::istream& stream, const std::set<std::string>&
 	return PackResult::Success;
 }
 
+PackResult PackFile::ReadAudioHeaders(std::istream& stream) noexcept
+{
+	const auto result = ReadFile(stream, {"LHAudioWaveData"});
+	const auto waveData = GetUnreadBlock("LHAudioWaveData");
+	if (result != PackResult::Success || !waveData.has_value() || !HasBlock("LHAudioBankSampleTable"))
+	{
+		return result;
+	}
+	// The same checks as a read of the sample data: each sample lies within the sample data
+	for (const auto& sample : _audioSampleHeaders)
+	{
+		if (sample.offset > waveData->size || static_cast<uint32_t>(sample.offset + sample.size) > waveData->size)
+		{
+			_isLoaded = false;
+			return PackResult::ErrFileTooSmall;
+		}
+	}
+	return PackResult::Success;
+}
+
 PackResult PackFile::Open(const std::filesystem::path& filepath) noexcept
 {
 	std::ifstream stream(filepath, std::ios::binary);

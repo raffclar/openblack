@@ -10,7 +10,9 @@
 #include <filesystem>
 #include <fstream>
 #include <iterator>
+#include <optional>
 #include <string>
+#include <string_view>
 #include <system_error>
 
 #include <entt/entity/registry.hpp>
@@ -144,4 +146,35 @@ TEST_F(VortexCrossingFile, NoFileToOpenAgainLeavesItClosed)
 	EXPECT_FALSE(file.Resume(entt::entity {1}, _folder / "none.txt"));
 	EXPECT_FALSE(file.IsOpen());
 	EXPECT_FALSE(std::filesystem::exists(_folder / "none.txt"));
+}
+
+TEST_F(VortexCrossingFile, TheOpenFileKeepsWhatTheDiskHas)
+{
+	vortex::CrossingFile file;
+	EXPECT_FALSE(file.Contents(_path).has_value()) << "a closed file keeps nothing";
+	ASSERT_TRUE(file.Start(entt::entity {1}, _path));
+	EXPECT_EQ(file.Contents(_path), std::optional<std::string_view>(""));
+	file.Write("tree\n");
+	file.Write("pot 3\r\n");
+	ASSERT_TRUE(file.Contents(_path).has_value());
+	EXPECT_EQ(*file.Contents(_path), Contents());
+	// Another path is not this file
+	EXPECT_FALSE(file.Contents(_folder / "other.txt").has_value());
+	file.OwnerGone(entt::entity {1});
+	EXPECT_FALSE(file.Contents(_path).has_value());
+}
+
+TEST_F(VortexCrossingFile, AFileOpenedAgainKeepsItsOldLinesAndTheNewLines)
+{
+	{
+		std::ofstream old(_path, std::ios::binary);
+		old << "tree\nrock\n";
+	}
+	vortex::CrossingFile file;
+	ASSERT_TRUE(file.Resume(entt::entity {1}, _path));
+	EXPECT_EQ(file.Contents(_path), std::optional<std::string_view>("tree\nrock\n"));
+	file.Write("pot\n");
+	EXPECT_EQ(Contents(), "tree\nrock\npot\n");
+	ASSERT_TRUE(file.Contents(_path).has_value());
+	EXPECT_EQ(*file.Contents(_path), Contents());
 }
