@@ -26,7 +26,9 @@ namespace openblack::ecs::components
 /// with QSound's distance attenuation.
 struct AudioEmitter
 {
-	audio::SourceId sourceId;
+	/// The source of the audio device that plays the sound. This number names a source of this run only, so a save does
+	/// not keep it.
+	audio::SourceId sourceId {0};
 	entt::id_type soundId;
 	int priority = 0;
 	/// 3D audio, positioned in the world. 2D audio has no position.

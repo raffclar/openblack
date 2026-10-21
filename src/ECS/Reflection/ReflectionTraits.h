@@ -29,6 +29,25 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
 
+#include "Graphics/GraphicsHandle.h"
+
+// The handles of the graphics library. Each one is a number that names a resource of one run only.
+namespace bgfx
+{
+struct DynamicIndexBufferHandle;
+struct DynamicVertexBufferHandle;
+struct FrameBufferHandle;
+struct IndexBufferHandle;
+struct IndirectBufferHandle;
+struct OcclusionQueryHandle;
+struct ProgramHandle;
+struct ShaderHandle;
+struct TextureHandle;
+struct UniformHandle;
+struct VertexBufferHandle;
+struct VertexLayoutHandle;
+} // namespace bgfx
+
 /// Tests on the types that the fields of components hold, which the reflection writes and reads by their kind
 namespace openblack::ecs::reflection::detail
 {
@@ -132,6 +151,38 @@ template <typename>
 inline constexpr bool k_IsSharedValue = false;
 template <typename Type>
 inline constexpr bool k_IsSharedValue<std::shared_ptr<Type>> = MadeWhole<Type>();
+
+/// A value that means something only in the run that made it: a raw pointer, or a handle of a graphics resource. A save
+/// must not keep such a value, because the next run gives its resources other numbers. Keep a stable key, such as the
+/// id of a resource in its cache, and find the handle when it is necessary.
+template <typename Type>
+inline constexpr bool k_IsRunHandle = std::is_pointer_v<Type> || std::is_member_pointer_v<Type>;
+template <typename Type>
+inline constexpr bool k_IsRunHandle<const Type> = k_IsRunHandle<Type>;
+// clang-format off
+template <> inline constexpr bool k_IsRunHandle<graphics::IndexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::FrameBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::VertexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::VertexLayoutHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::DynamicVertexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::DynamicIndexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::TextureHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::UniformHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::ShaderHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<graphics::ProgramHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::DynamicIndexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::DynamicVertexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::FrameBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::IndexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::IndirectBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::OcclusionQueryHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::ProgramHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::ShaderHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::TextureHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::UniformHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::VertexBufferHandle> = true;
+template <> inline constexpr bool k_IsRunHandle<bgfx::VertexLayoutHandle> = true;
+// clang-format on
 
 /// A value that only points to data that is somewhere else: the binary archive cannot keep it
 template <typename Type>

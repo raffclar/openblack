@@ -241,6 +241,15 @@ private:
 	bool _steppedSinceRefresh {false};
 	/// How many steps the last Step took
 	uint32_t _steps {0};
+
+public:
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const HandSpring& self, Visitor&& visit)
+	{
+		visit(self._position, self._velocity, self._elapsedMs, self._steppedMs, self._sinceRefreshMs, self._steppedSinceRefresh,
+		      self._steps);
+	}
 };
 
 /// A countdown in game milliseconds: still to run, run out this frame, or used up without running out (it reached

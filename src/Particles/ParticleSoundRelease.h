@@ -35,6 +35,13 @@ struct SoundLetGo
 	bool stopNow {false};
 
 	bool operator==(const SoundLetGo&) const = default;
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const SoundLetGo& self, Visitor&& visit)
+	{
+		visit(self.releaseLoop, self.fadeStep, self.stopWhenSilent, self.stopNow);
+	}
 };
 
 /// How to let go of a sound: whether the effect file soft-releases it, whether its sample loops, and the fade step the
