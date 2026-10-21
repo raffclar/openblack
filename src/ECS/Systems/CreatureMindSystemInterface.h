@@ -330,6 +330,10 @@ public:
 		/// The plan counts as a walk back into the area that holds the creature, as a leash order does. Then the area
 		/// refuses none of its walks.
 		bool walksBack {false};
+		/// The walk that the creature makes now stops, and a pose, a dance or a point that it is in comes to its end.
+		/// Some orders of the leash keep one or both.
+		bool stopsWalk {true};
+		bool endsBody {true};
 	};
 	/// The creature has eaten a magic mushroom: once it is done with what it is doing it becomes high, unless it is
 	/// about to already
@@ -338,8 +342,10 @@ public:
 	/// whether it could be carried out.
 	virtual bool ForcePlan(entt::entity /*creature*/, const ForcedPlan& /*plan*/) { return false; }
 	/// The creature's desires choose something to do to a thing, as its planner would with that thing the only one
-	/// about, and it is made to do it. The desire it acts on, if its desires found anything.
-	virtual std::optional<creature_desires::Desire> ForcePlanOn(entt::entity /*creature*/, entt::entity /*object*/)
+	/// about, and it is made to do it. The desire it acts on, if its desires found anything. The walk that it makes now
+	/// stops, or continues.
+	virtual std::optional<creature_desires::Desire> ForcePlanOn(entt::entity /*creature*/, entt::entity /*object*/,
+	                                                            bool /*stopsWalk*/)
 	{
 		return std::nullopt;
 	}

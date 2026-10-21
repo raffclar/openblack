@@ -908,6 +908,8 @@ struct Commands
 	bool holdLoop {false};
 	/// The start replaces the action that the body plays now, as a faint does
 	bool cutBody {false};
+	/// The start, loop and end keep their pace when the creature is told to hurry, as a cast does
+	bool keepsPace {false};
 	bool endSit {false};
 	/// A dance to start, with the milliseconds of each move; the dance to stop; only a start, loop and end to stop
 	std::optional<float> startDance;

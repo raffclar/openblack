@@ -1330,6 +1330,33 @@ std::optional<creature_kiss::KissPoints> CreatureAnimationSystem::KissPointsOf(e
 	return creature_kiss::KissPoints {.high = lipsIn(creature_kiss::k_HighKiss), .low = lipsIn(creature_kiss::k_LowKiss)};
 }
 
+void CreatureAnimationSystem::Hurry(entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(creature))
+	{
+		return;
+	}
+	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	{
+		animation->body = creature_layers::Hurry(animation->body);
+	}
+	// An action on a thing hurries only while it plays its animations: the walk to the thing keeps its pace
+	if (auto* action = registry.TryGet<CreatureObjectAction>(creature);
+	    action != nullptr && action->phase == CreatureObjectAction::Phase::Playing &&
+	    (action->status == creature_object_actions::Status::Running ||
+	     action->status == creature_object_actions::Status::Contact) &&
+	    creature_object_actions::Hurries(action->kind))
+	{
+		action->hurried = true;
+	}
+	if (auto* fighting = registry.TryGet<CreatureFighting>(creature);
+	    fighting != nullptr && creature_fight::Hurries(fighting->fighter.state))
+	{
+		fighting->fighter.hurried = true;
+	}
+}
+
 void CreatureAnimationSystem::KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point)
 {
 	auto& registry = Locator::entitiesRegistry::value();

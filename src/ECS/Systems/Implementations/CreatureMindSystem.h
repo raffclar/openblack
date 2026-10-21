@@ -126,7 +126,7 @@ public:
 	void AteMagicMushroom(entt::entity creature) override;
 	bool SwapMinds(entt::entity from, entt::entity to) override;
 	void TakeUpMindFile(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> file) override;
-	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object) override;
+	std::optional<creature_desires::Desire> ForcePlanOn(entt::entity creature, entt::entity object, bool stopsWalk) override;
 	bool CarryOutForScript(entt::entity creature, std::vector<creature_mind::Step> agenda) override;
 	void SetScriptFocus(entt::entity creature, std::optional<creature_mind::Gaze> focus) override;
 	bool ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target, std::optional<entt::entity> with) override;
@@ -285,8 +285,10 @@ private:
 	[[nodiscard]] static creature_mind::HangAroundPlaces HangAroundPlacesOf(entt::entity creature);
 
 	/// Plans an activity in place of what the creature was doing: it stops walking and gets up out of a pose first, while
-	/// an action it is playing plays on and the new agenda waits for it
-	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda);
+	/// an action it is playing plays on and the new agenda waits for it. Some orders of the leash let the walk continue,
+	/// or also let the pose continue.
+	bool Replan(entt::entity creature, creature_mind::Activity activity, std::vector<creature_mind::Step> agenda,
+	            bool stopsWalk = true, bool endsBody = true);
 	/// The creature sees a miracle it reacted to, and learns from it
 	void WatchMiracle(entt::entity creature, size_t miracle);
 	/// The creature counts one sighting of the miracle, and the advisor tells what the sighting showed
@@ -542,6 +544,9 @@ private:
 	float _averageFeedback {0.0f};
 	/// The creature whose plan the player orders while the plan is made, if any
 	std::optional<entt::entity> _orderedPlanFor;
+	/// The creature whose walk continues while the plan is made, if any. The plan that the player orders on a thing does
+	/// this.
+	std::optional<entt::entity> _walkContinuesFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
 	/// The creatures whose minds continue to think after the first part of their own turns, until the second part

@@ -919,6 +919,20 @@ bool creature_fight::ActionEnds(float animationMs, int32_t advanceMs, float dura
 	return durationMs <= 0.0f || static_cast<int32_t>(animationMs) + advanceMs >= static_cast<int32_t>(durationMs);
 }
 
+bool creature_fight::Hurries(State state)
+{
+	switch (state)
+	{
+	case State::Start:
+	case State::Stance:
+	case State::Action:
+	case State::Finish:
+		return true;
+	default:
+		return false;
+	}
+}
+
 bool creature_fight::EndsByOwnTest(State state)
 {
 	switch (state)

@@ -2042,8 +2042,10 @@ void CreatureFightSystem::Faint(entt::entity creature)
 	}
 	// The action that its body plays ends at two times the usual speed. What its hands do goes on, and it keeps what it
 	// holds: before the faint starts, it lets go of the thing as before any action that needs empty hands.
-	auto& animation = registry.Get<CreatureAnimation>(creature);
-	animation.body = creature_layers::Hurry(animation.body);
+	if (Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().Hurry(creature);
+	}
 	// The faint stops what its mind does as a failure, an emergency too. Until it gets up, it looks at no emergency.
 	if (Locator::creatureMindSystem::has_value())
 	{
@@ -3203,7 +3205,9 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	// The start, the finish, and the start and end of a block or a cast test their end before their animation moves on.
 	// A fighter that was called off moves on from its stance, its block or its cast at once. The next state then makes
 	// its turn at once: its animation moves on in the same turn.
-	const auto spanMs = fight::TestSpanMs(static_cast<float>(stepMs), ShownSize(body), animation->realTime);
+	// A hurried fighter doubles the span
+	const auto spanMs = creature_layers::HurriedStep(
+	    fight::TestSpanMs(static_cast<float>(stepMs), ShownSize(body), animation->realTime), fighting->fighter.hurried);
 	bool entered = false;
 	{
 		auto& current = fighting->fighter;
@@ -3382,8 +3386,9 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto size = ShownSize(body);
 	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto spanMs =
-	    fight::TestSpanMs(static_cast<float>(TurnMsOf(animation)), size, animation != nullptr && animation->realTime);
+	const auto spanMs = creature_layers::HurriedStep(
+	    fight::TestSpanMs(static_cast<float>(TurnMsOf(animation)), size, animation != nullptr && animation->realTime),
+	    attacker.hurried);
 	const auto landMs = static_cast<int32_t>(fighting.hitTimesMs.at(blow));
 	const auto times = fight::BlowTestTimes(fromMs, spanMs, landMs);
 	if (times.empty())

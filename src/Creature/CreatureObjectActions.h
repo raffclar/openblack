@@ -51,6 +51,10 @@ enum class Kind : uint8_t
 	Kick,
 };
 [[nodiscard]] std::string_view Name(Kind kind);
+/// Whether an action that plays its animations doubles its pace when the creature is told to hurry. Picking up, letting
+/// go, eating, keeping hold, knocking down and pointing do. Throwing, catching, taking from the hand and kicking keep
+/// their pace.
+[[nodiscard]] bool Hurries(Kind kind);
 
 /// Whether the arm that holds a thing shows the hold pose over the body, while the body plays the animation of an
 /// action, or no action (none). The animations that move the held thing themselves replace the hold pose: picking up,

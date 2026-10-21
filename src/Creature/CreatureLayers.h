@@ -145,6 +145,9 @@ struct BodyAction
 	bool timedByPlayer {false};
 	/// The body plays at two times the usual speed until it stands again
 	bool hurried {false};
+	/// The body keeps its pace when it is told to hurry. A kiss, a cast and the confused look of a walk that waits for
+	/// its route do this.
+	bool keepsPace {false};
 	/// The body plays at the pace of real time, whatever the size of the creature
 	bool realTime {false};
 	/// Each move of a dance lasts this many milliseconds of real time, whatever the size of the creature
@@ -188,8 +191,18 @@ struct BodyAction
 /// to fill the length of the move.
 [[nodiscard]] float DanceMoveTime(const BodyAction& body, uint32_t duration);
 /// The action that the body plays continues at two times the usual speed until the body stands again. A catch and a
-/// gift from the hand do this when they start. A body that stands does not change, and a faint keeps its pace.
+/// gift from the hand do this when they start, and so do the orders of the leash. A body that stands does not change. A
+/// faint and a body that keeps its pace do not change.
 [[nodiscard]] BodyAction Hurry(BodyAction body);
+/// The step of the animation clock in one frame: a hurried creature doubles the step
+[[nodiscard]] constexpr float HurriedStep(float step, bool hurried)
+{
+	return hurried ? step * 2.0f : step;
+}
+[[nodiscard]] constexpr int32_t HurriedStep(int32_t step, bool hurried)
+{
+	return hurried ? step * 2 : step;
+}
 /// The body some milliseconds on, given how long the animation it plays now lasts, or nothing when the species has no
 /// such animation. Each animation starts from its beginning, without blending into the last. A body timed by what plays it
 /// stays where it was put.
