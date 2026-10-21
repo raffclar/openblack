@@ -90,6 +90,9 @@ public:
 	void SetLndBlock(const lnd::LNDBlock& block);
 	/// Sets the altitude of one of the block's 17 by 17 cells, [x * 17 + z]
 	void SetCellAltitude(size_t index, uint8_t altitude);
+	/// The highest altitude of the block's cells when the land was loaded. A later change of the cells' altitudes does
+	/// not change it.
+	[[nodiscard]] uint8_t GetHighestAltitude() const noexcept { return _highestAltitude; }
 
 private:
 	/// Every mesh, coarser sides and open-sea choice
@@ -101,6 +104,7 @@ private:
 	SharedIndexLists<graphics::IndexBuffer>* _triangleSets {nullptr};
 	const graphics::VertexBuffer* _vertices {nullptr};
 	uint32_t _firstVertex {0};
+	uint8_t _highestAltitude {0};
 
 	void BuildVertexList(std::span<LandVertex> vertices, LandIslandInterface& island);
 };

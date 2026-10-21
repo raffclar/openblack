@@ -26,6 +26,8 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "EngineConfig.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/LandDetail.h"
 #include "Locator.h"
 
@@ -94,12 +96,6 @@ void ObjectDrawListSystem::LoadBlocks()
 		{
 			continue;
 		}
-		// The highest of its cells, as the land had them when it was loaded
-		uint8_t highest = 0;
-		for (const auto& cell : lnd->cells)
-		{
-			highest = std::max(highest, cell.altitude);
-		}
 		// Its triangles as the game draws a near block: every cell, with the open sea left out
 		std::array<graphics::land_detail::CellFlags, graphics::land_detail::k_CornerCount> flags;
 		std::ranges::transform(lnd->cells, flags.begin(), [](const lnd::LNDCell& cell) {
@@ -107,7 +103,7 @@ void ObjectDrawListSystem::LoadBlocks()
 			                                         .openSea = (cell.flags & k_OpenSeaFlag) != 0};
 		});
 		_blocks.push_back(
-		    {.block = {.corner = block.GetMapPosition(), .highestAltitude = highest, .reflected = true},
+		    {.block = {.corner = block.GetMapPosition(), .highestAltitude = block.GetHighestAltitude()},
 		     .at = block.GetBlockPosition(),
 		     .landIndex = i,
 		     .triangles = graphics::land_detail::BlockTriangles(graphics::land_detail::Mesh::Full, 0, true, flags)});
@@ -137,10 +133,14 @@ void ObjectDrawListSystem::Update(uint32_t turn)
 	                                .focalHeight = projection[1][1],
 	                                .aspect = projection[0][0] != 0.0f ? projection[1][1] / projection[0][0] : 1.0f,
 	                                .eye = camera.GetOrigin()};
-	// A block in view that starts or stops to show triangles makes the list again
+	// A block in view that starts or stops to show triangles makes the list again. With the land mirrored in the sea,
+	// a block's box reaches as far under the water as it stands over it.
+	const bool reflected =
+	    !Locator::config::has_value() || graphics::detail_level::For(Locator::config::value().detailLevel).landReflection;
 	bool changed = false;
 	for (auto& block : _blocks)
 	{
+		block.block.reflected = reflected;
 		block.inView = object_draw_list::BlockInView(_view->viewProjection, _view->nearPlane, block.block);
 		if (block.inView)
 		{

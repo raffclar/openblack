@@ -556,6 +556,9 @@ private:
 		std::vector<uint8_t> coarserSides;
 		/// The indices of the blocks at x - 1, z - 1, z + 1 and x + 1, -1 where there is none
 		std::vector<glm::vec4> neighbours;
+		/// Whether a part of the box over the block can be seen from the view's camera. Only those blocks are drawn,
+		/// on the land and mirrored under the sea.
+		std::vector<bool> inView;
 	};
 	mutable LandDetailFrame _landDetail;
 	/// A counted part of a shadow's bodies: a submesh, its first point and whether it covers only every second row of

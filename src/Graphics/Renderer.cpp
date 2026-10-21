@@ -5800,6 +5800,18 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	const auto& blocks = Locator::terrainSystem::value().GetBlocks();
 	frame.blocks.resize(blocks.size());
 	frame.coarserSides.assign(blocks.size(), 0);
+	// The blocks that the view can see: the same test as the list of the things that are drawn. With the land mirrored
+	// in the sea, the box reaches as far under the water as it stands over it, so it holds the block's reflection too.
+	const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
+	const auto nearPlane = drawDesc.camera->GetNearClip();
+	const bool reflected = detail_level::For(config.detailLevel).landReflection;
+	frame.inView.resize(blocks.size());
+	for (size_t i = 0; i < blocks.size(); ++i)
+	{
+		frame.inView[i] = object_draw_list::BlockInView(
+		    viewProjection, nearPlane,
+		    {.corner = blocks[i].GetMapPosition(), .highestAltitude = blocks[i].GetHighestAltitude(), .reflected = reflected});
+	}
 	// The blocks by where they are on the map's 32 by 32 grid of blocks
 	constexpr int k_BlocksPerSide = 32;
 	std::array<int16_t, static_cast<size_t>(k_BlocksPerSide * k_BlocksPerSide)> grid {};
@@ -6349,9 +6361,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				std::iota(order.begin(), order.end(), size_t {0});
 				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
 				setTerrainUniforms();
+				// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
+				const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
 				for (const auto index : order)
 				{
-					submitBlock(index);
+					if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
+					{
+						submitBlock(index);
+					}
 				}
 			}
 			_shaderManager->DiscardBindings();
