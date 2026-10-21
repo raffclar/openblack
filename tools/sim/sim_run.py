@@ -29,11 +29,14 @@ the story's lessons do, up to the last; the run then continues as the creature g
     python tools/sim/sim_run.py run --testbed --scenario creature.young --turns 5000
     python tools/sim/sim_run.py match --turns 1500 --every 10      (the normal speed against the fast mode)
     python tools/sim/sim_run.py repeat --turns 3000 --every 1      (two fast runs with the same seed)
+    python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 20   (twenty runs, each against the first)
 """
 
 import argparse
+import glob
 import json
 import os
+import shutil
 import subprocess
 import sys
 import time
@@ -371,21 +374,69 @@ def command_match(options):
     return 0 if result["same"] else 1
 
 
+def keep_exit_save(options, name):
+    """A copy of the world that the run saved as it ended, beside its record; None when it saved none"""
+    saves = glob.glob(os.path.join(options.out, "Profiles", "**", "*.obsav"), recursive=True)
+    if not saves:
+        return None
+    kept = os.path.join(options.out, f"{name}.obsav")
+    shutil.copyfile(max(saves, key=os.path.getmtime), kept)
+    return kept
+
+
+def compare_exit_saves(first, other):
+    """How the worlds that two runs saved as they ended differ, by block; None when a run saved none"""
+    if first is None or other is None:
+        return None
+    with open(first, "rb") as file_a, open(other, "rb") as file_b:
+        return sim_report.compare_saves(file_a.read(), file_b.read())
+
+
+def repeat_result(records_first, records_other):
+    """How a repeat run compares with the first: where it parts, the counts of its records and its last count of
+    draws"""
+    result = sim_report.compare(records_first, records_other)
+    result["records"] = [len(records_first), len(records_other)]
+    result["draws_last"] = [(records_first or [{}])[-1].get("draws"), (records_other or [{}])[-1].get("draws")]
+    return result
+
+
 def command_repeat(options):
-    """The same run twice in the fast mode, with the same seed: their hashes, seeds and counts of draws must agree at
-    every record"""
+    """The same run several times in the fast mode, with the same seed: their hashes, seeds and counts of draws must
+    agree at every record. Each run is compared with the first, and every run that parts from it is reported with its
+    first record that differs."""
+    runs = max(options.runs, 2)
     first = run_once(options, "repeat-1", True, options.turns)
-    second = run_once(options, "repeat-2", True, options.turns)
+    first_save = keep_exit_save(options, "repeat-1")
     _, records_first, _ = sim_report.load(first[0])
-    _, records_second, _ = sim_report.load(second[0])
-    result = sim_report.compare(records_first, records_second)
-    result["records"] = [len(records_first), len(records_second)]
-    result["draws_last"] = [(records_first or [{}])[-1].get("draws"), (records_second or [{}])[-1].get("draws")]
-    result["exit_codes"] = [first[2], second[2]]
+    results = []
+    for index in range(2, runs + 1):
+        other = run_once(options, f"repeat-{index}", True, options.turns)
+        _, records_other, _ = sim_report.load(other[0])
+        result = repeat_result(records_first, records_other)
+        result["run"] = index
+        result["exit_codes"] = [first[2], other[2]]
+        # Information only: some saved fields follow the graphics card's handles, not the game (see the handover)
+        result["save_differs"] = compare_exit_saves(first_save, keep_exit_save(options, f"repeat-{index}"))
+        results.append(result)
+        shown = ("run", "same", "turn", "differs", "draws_last", "save_differs")
+        print(json.dumps({key: result.get(key) for key in shown}), flush=True)
+    divergences = [result for result in results if not result["same"]]
+    exit_ok = all(code == 0 for result in results for code in result["exit_codes"])
+    # With two runs the report keeps the form it had, the comparison of the second run with the first
+    summary = dict(results[0]) if runs == 2 else {}
+    summary.update({
+        "same": not divergences and exit_ok,
+        "runs": runs,
+        "divergences": len(divergences),
+        "diverged": [{key: result.get(key) for key in ("run", "turn", "frame", "differs", "seeds", "draws", "hash",
+                                                         "counts", "draws_last")} for result in divergences],
+        "results": results,
+    })
     with open(os.path.join(options.out, "repeat.json"), "w", encoding="utf-8") as file:
-        json.dump(result, file, indent=1)
-    print(json.dumps(result))
-    return 0 if result["same"] else 1
+        json.dump(summary, file, indent=1)
+    print(json.dumps({key: summary[key] for key in ("same", "runs", "divergences", "diverged")}))
+    return 0 if summary["same"] else 1
 
 
 def parse(argv):
@@ -415,6 +466,8 @@ def parse(argv):
         sub.add_argument("--game-path", default=DEFAULT_GAME_PATH)
         sub.add_argument("--out", default=os.path.join(os.getcwd(), "sim-runs"))
         sub.add_argument("--name")
+        sub.add_argument("--runs", type=int, default=2,
+                         help="repeat: how many runs to make; each is compared with the first (2 by default)")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     return parser.parse_args(argv)
 
