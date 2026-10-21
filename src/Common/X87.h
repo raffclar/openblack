@@ -117,12 +117,19 @@ struct Exact
 ///
 /// The double part rounds to the nearest float, except when it is exactly half-way between two floats. In that case
 /// the error part tells which float is nearer to the exact value.
-[[nodiscard]] inline float RoundOnce(double rounded, double error)
+/// Whether a double is exactly half-way between two floats. Only then can the error of an exact value change the
+/// float. Thus an operation calculates its error only for such a double.
+[[nodiscard]] inline bool HalfWay(double rounded)
 {
 	// The 29 low mantissa bits of the double are the bits that a float does not keep
 	constexpr uint64_t k_DroppedMask = (uint64_t {1} << 29) - 1;
 	constexpr uint64_t k_HalfWay = uint64_t {1} << 28;
-	if (error != 0.0 && (std::bit_cast<uint64_t>(rounded) & k_DroppedMask) == k_HalfWay)
+	return (std::bit_cast<uint64_t>(rounded) & k_DroppedMask) == k_HalfWay;
+}
+
+[[nodiscard]] inline float RoundOnce(double rounded, double error)
+{
+	if (error != 0.0 && HalfWay(rounded))
 	{
 		const double towards = error > 0.0 ? std::numeric_limits<double>::infinity() : -std::numeric_limits<double>::infinity();
 		rounded = std::nextafter(rounded, towards);
@@ -141,8 +148,13 @@ struct Exact
 /// a * b, rounded to a float one time. Two floats need no helper: write a * b in float
 [[nodiscard]] inline float Mul(double a, double b)
 {
-	const auto [product, error] = detail::TwoProduct(a, b);
-	return detail::RoundOnce(product, error);
+	const double product = a * b;
+	if (!detail::HalfWay(product))
+	{
+		return detail::Narrow(product);
+	}
+	const auto [rounded, error] = detail::TwoProduct(a, b);
+	return detail::RoundOnce(rounded, error);
 }
 
 /// a + b, rounded to a float one time
@@ -162,6 +174,10 @@ struct Exact
 [[nodiscard]] inline float Div(double a, double b)
 {
 	const double quotient = a / b;
+	if (!detail::HalfWay(quotient))
+	{
+		return detail::Narrow(quotient);
+	}
 	// The remainder a - quotient * b is exact, and its sign tells on which side of the true quotient the double is
 	const auto [product, error] = detail::TwoProduct(quotient, b);
 	const double remainder = (a - product) - error;
@@ -173,6 +189,10 @@ struct Exact
 [[nodiscard]] inline float Sqrt(double a)
 {
 	const double root = std::sqrt(a);
+	if (!detail::HalfWay(root))
+	{
+		return detail::Narrow(root);
+	}
 	const auto [square, error] = detail::TwoProduct(root, root);
 	return detail::RoundOnce(root, (a - square) - error);
 }
