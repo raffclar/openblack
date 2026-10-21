@@ -37,6 +37,7 @@
 #include "ECS/FootpathObstacles.h"
 #include "ECS/FootpathPlanning.h"
 #include "ECS/FootpathRules.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
@@ -460,6 +461,7 @@ void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 	const auto finder = registry.Create();
 	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(ArrivePlace(*pit), ArrivePlace(site)),
 	                                StartPlan(start, goal));
+	ecs::list_order::Join(registry, finder);
 }
 
 void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
@@ -665,9 +667,8 @@ void FootpathSystem::ProcessTurn()
 {
 	ProcessObstacleChanges();
 	auto& registry = Entities();
-	std::vector<entt::entity> finders;
-	registry.Each<const FootpathFinder>([&finders](entt::entity entity, const FootpathFinder&) { finders.push_back(entity); });
-	for (const auto entity : finders)
+	// The finders in the order of the game's list, the newest first
+	for (const auto entity : ecs::list_order::Walk<FootpathFinder>(registry))
 	{
 		auto& finder = registry.Get<FootpathFinder>(entity);
 		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath);

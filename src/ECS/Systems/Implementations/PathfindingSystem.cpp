@@ -574,22 +574,26 @@ bool Walk(ecs::Registry& registry, Walker& walker)
 	return false;
 }
 
+/// Whether a walker with a plain walk walks now. A walker that turns as an animal does walks in another way. A villager's
+/// walk waits while it is in a state that does not walk it.
+bool WalksNow(const ecs::Registry& registry, entt::entity entity)
+{
+	if (registry.AllOf<TurningWalker>(entity))
+	{
+		return false;
+	}
+	const auto* action = registry.TryGet<const LivingAction>(entity);
+	return action == nullptr || !registry.AllOf<Villager>(entity) ||
+	       villager_walk::Walks(static_cast<VillagerStates>(action->states.at(static_cast<size_t>(LivingAction::Index::Top))));
+}
+
 template <MoveState S>
 void CollectWalkers(ecs::Registry& registry, std::vector<Walker>& walkers)
 {
 	registry.Each<const MoveStateTagComponent<S>, WallHug, Transform>(
 	    [&walkers, &registry](entt::entity entity, const MoveStateTagComponent<S>& tag, WallHug& wallHug,
 	                          Transform& transform) {
-		    // A walker that turns as an animal does walks in its own turn
-		    if (registry.AllOf<TurningWalker>(entity))
-		    {
-			    return;
-		    }
-		    // A villager's walk waits while it is in a state that doesn't walk it
-		    if (const auto* action = registry.TryGet<const LivingAction>(entity);
-		        action != nullptr && registry.AllOf<Villager>(entity) &&
-		        !villager_walk::Walks(
-		            static_cast<VillagerStates>(action->states.at(static_cast<size_t>(LivingAction::Index::Top)))))
+		    if (!WalksNow(registry, entity))
 		    {
 			    return;
 		    }
@@ -637,6 +641,20 @@ void Retag(ecs::Registry& registry, const Walker& walker)
 	case MoveState::Arrived:
 		SetTag<MoveState::Arrived>(registry, walker);
 		break;
+	}
+}
+
+/// The walker takes its turn's walk, and gets the tag of the state that it is in after it
+void TakeWalk(ecs::Registry& registry, Walker& walker)
+{
+	HeldPosition(registry, walker.entity, walker.wallHug, walker.transform);
+	Walk(registry, walker);
+	Retag(registry, walker);
+	// One that came up against water, the land's edge or a fence waits for its trial of both ways round, unless it has
+	// had it
+	if (walker.needsLookahead && !registry.AllOf<WallHugLookahead>(walker.entity))
+	{
+		registry.Assign<WallHugLookahead>(walker.entity);
 	}
 }
 
@@ -784,16 +802,24 @@ void PathfindingSystem::Update()
 	CollectWalkers<MoveState::ExitCircle>(registry, walkers);
 	for (auto& walker : walkers)
 	{
-		HeldPosition(registry, walker.entity, walker.wallHug, walker.transform);
-		Walk(registry, walker);
-		Retag(registry, walker);
-		// One that came up against water, the land's edge or a fence waits for its trial of both ways round, unless it
-		// has had it
-		if (walker.needsLookahead && !registry.AllOf<WallHugLookahead>(walker.entity))
-		{
-			registry.Assign<WallHugLookahead>(walker.entity);
-		}
+		TakeWalk(registry, walker);
 	}
+}
+
+void PathfindingSystem::WalkInOwnTurn(entt::entity walker)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* wallHug = registry.Valid(walker) ? registry.TryGet<WallHug>(walker) : nullptr;
+	auto* transform = registry.TryGet<Transform>(walker);
+	// A walker with no walk state has no walk under way
+	if (wallHug == nullptr || transform == nullptr || !WalksNow(registry, walker) ||
+	    !registry.AnyOf<MoveStateLinearTag, MoveStateOrbitTag, MoveStateExitCircleTag, MoveStateStepThroughTag,
+	                    MoveStateFinalStepTag, MoveStateArrivedTag>(walker))
+	{
+		return;
+	}
+	auto walking = WalkerOf(registry, walker, *wallHug, *transform);
+	TakeWalk(registry, walking);
 }
 
 void PathfindingSystem::ProcessLookahead()

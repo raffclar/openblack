@@ -86,6 +86,9 @@ struct RegistryContext
 	/// How many living things (creatures, villagers and animals) the game made, the next one's place in the list of the
 	/// living
 	uint64_t livingMade {0};
+	/// How many listed things (as dances, forests, fireflies and rewards) the game made, the next one's place in the list
+	/// of its kind
+	uint64_t listedMade {0};
 	/// The Show Villager Names key has the named villagers' names up, and the Show Villager Details key every villager's
 	/// details; a new land starts with both down
 	bool villagerNamesShown {false};

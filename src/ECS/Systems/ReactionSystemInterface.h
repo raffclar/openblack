@@ -141,6 +141,13 @@ public:
 	[[nodiscard]] virtual bool IsAvailable(entt::entity /*living*/, Reaction /*type*/) const { return true; }
 	/// Once a game turn: the reactions age, and impress who is in their reach
 	virtual void ProcessTurn() = 0;
+	/// As the game turn starts, the count of the turns moves on
+	virtual void StartTurn() {}
+	/// At the start of the turn of a creature, villager or animal, it lets go of its reaction when one of these occurs:
+	/// - The reaction is gone.
+	/// - The thing that it reacts to is gone.
+	/// - Its time with the reaction is over.
+	virtual void EndReactionIfOver(entt::entity /*living*/) {}
 	/// The turns the reactions have aged on this land, the clock everything that waits between reactions counts by
 	[[nodiscard]] virtual uint32_t CurrentTurn() const { return 0; }
 	/// A new land: none going
