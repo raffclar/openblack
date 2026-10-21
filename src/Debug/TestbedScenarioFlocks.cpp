@@ -271,6 +271,27 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "animals.thrown_bird_lands",
+	    .name = "A bird thrown",
+	    .facet = Facet::Miracles,
+	    .description = "A dove is thrown from the west every ten seconds. Two more doves fly to the north, each in a "
+	                   "flock of its own.",
+	    .expected = "The thrown dove flies and comes down. Then it joins a dove flock near it if the flock has room, and it "
+	                "flies off on a leg of its own or follows its new leader.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 10.0f}, {30.0f, 70.0f}}, .distance = 0.7f},
+	    .objects = {{.type = AnimalInfo::Dove, .offset = {0.0f, 30.0f}, .living = true},
+	                {.type = AnimalInfo::Dove, .offset = {-6.0f, 60.0f}, .living = true},
+	                {.type = AnimalInfo::Dove, .offset = {6.0f, 60.0f}, .living = true}},
+	    .throws = {{.object = 0,
+	                .from = glm::vec2 {-30.0f, 30.0f},
+	                .height = 4.0f,
+	                .velocity = {14.0f, 9.0f, 0.0f},
+	                .delaySeconds = 1.0f,
+	                .repeatSeconds = 10.0f}},
+	});
+
+	all.push_back({
 	    .id = "miracles.flock_wolves_fade",
 	    .name = "Ground flock: wolves fade as it ends",
 	    .facet = Facet::Miracles,
