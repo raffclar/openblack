@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <map>
+#include <memory>
 #include <optional>
 #include <set>
 #include <span>
@@ -60,6 +61,10 @@ protected:
 	std::map<uint32_t, uint32_t> _resumeFrom;
 	/// The task that stopped itself during its run, which goes when the run ends
 	std::optional<uint32_t> _stoppedWhileRunning;
+	/// A copy of the program as a SAV file has it. A save shares the copy with the writer on another thread, so that a
+	/// save does not copy the program again. Only the thread of the game uses it. Each change of the program removes
+	/// the copy, and the next use makes it again.
+	mutable std::shared_ptr<const LHVMFile> _programFile;
 
 	const std::vector<NativeFunction>* _functions {nullptr};
 	std::function<void(const uint32_t func)> _nativeCallEnterCallback;
@@ -189,6 +194,26 @@ public:
 	[[nodiscard]] std::vector<uint8_t> SaveState() const;
 	/// The program and its running state, as a SAV file has them
 	[[nodiscard]] LHVMFile StateFile() const;
+
+	/// The running state of the scripts, as a SAV file keeps it after the program
+	struct RunningState
+	{
+		VMStack stack;
+		std::vector<VMVar> variables;
+		std::vector<VMTask> tasks;
+		uint32_t ticks {0};
+		uint32_t currentLineNumber {0};
+		uint32_t highestTaskId {0};
+		uint32_t highestScriptId {0};
+		uint32_t executedInstructions {0};
+	};
+	/// The program as a SAV file has it, with no running state. The VM keeps the copy until the program changes. Call
+	/// it only on the thread that runs the VM.
+	[[nodiscard]] std::shared_ptr<const LHVMFile> ProgramFile() const;
+	/// A copy of the running state of the scripts
+	[[nodiscard]] RunningState CopyRunningState() const;
+	/// The SAV file of a program and a running state. Any thread can call it.
+	[[nodiscard]] static LHVMFile StateFile(const LHVMFile& program, const RunningState& state);
 
 	void LookIn(ScriptType allowedScriptTypesMask);
 

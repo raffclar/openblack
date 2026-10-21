@@ -68,8 +68,9 @@ void AtmosAudio::Init()
 		}
 		const auto path = fileSystem.FindPath(relativePath);
 
+		// Only the headers of the samples are read now: each sample is read from the file when it is wanted
 		pack::PackFile soundPack;
-		const auto result = soundPack.ReadFile(*fileSystem.GetData(path));
+		const auto result = soundPack.ReadAudioHeaders(*fileSystem.GetData(path));
 		if (result != pack::PackResult::Success)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Unable to load atmosphere bank {}: {}", bank, pack::ResultToStr(result));

@@ -422,11 +422,14 @@ std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx
 	}
 	if (Locator::vm::has_value())
 	{
-		// The scripts' program and state are copied now, and written out as a script file on the thread of the writer
+		// The scripts' running state is copied now. The VM shares its copy of the program, which does not change. The
+		// thread of the writer puts them together into a script file.
+		const auto& vm = Locator::vm::value();
 		timed({.tag = gamesave::k_ScriptTag,
-		       .bytes = [file = std::make_shared<const lhvm::LHVMFile>(Locator::vm::value().StateFile())]() {
+		       .bytes = [program = vm.ProgramFile(),
+		                 state = std::make_shared<const lhvm::LHVM::RunningState>(vm.CopyRunningState())]() {
 			       std::ostringstream stream(std::ios::binary);
-			       file->Write(stream);
+			       lhvm::LHVM::StateFile(*program, *state).Write(stream);
 			       const auto text = stream.str();
 			       return std::vector<uint8_t>(text.begin(), text.end());
 		       }});

@@ -52,6 +52,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/VillagerAfterDeath.h"
@@ -1053,11 +1054,26 @@ uint32_t villager_home::DecideWhatToDo(LivingAction& action)
 	return SetupNothingToDo(action);
 }
 
+void villager_home::TakeWalkStep(entt::entity villager)
+{
+	if (Locator::pathfindingSystem::has_value())
+	{
+		Locator::pathfindingSystem::value().WalkInOwnTurn(villager);
+	}
+}
+
 uint32_t villager_home::MoveToPos(LivingAction& action)
 {
 	auto& registry = WorldRegistry();
 	const auto villager = EntityOf(action);
-	// The walk goes on until its last step has put the villager on its goal
+	// A villager that the hand holds does not walk and does not arrive
+	if (registry.AllOf<InHand>(villager))
+	{
+		return 0;
+	}
+	// The villager takes its step first. Then it looks at where the step put it.
+	TakeWalkStep(villager);
+	// The walk continues until its last step puts the villager on its goal
 	const auto goal = wall_hug::ToWhole(registry.Get<const WallHug>(villager).goal);
 	if (!walk_arrival::WalkIsOver(WalkStateOf(villager), WalkPositionOf(villager), goal))
 	{

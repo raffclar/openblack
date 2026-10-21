@@ -303,6 +303,10 @@ public:
 	/// data.
 	PackResult ReadFile(std::istream& stream, const std::set<std::string>& unreadBlocks) noexcept;
 
+	/// Read a sound pack as ReadFile does, with the same result and the same headers, but leave the sample data in the
+	/// file. The samples can then be read from the file one at a time.
+	PackResult ReadAudioHeaders(std::istream& stream) noexcept;
+
 	/// Read g3d file from the filesystem
 	PackResult Open(const std::filesystem::path& filepath) noexcept;
 
