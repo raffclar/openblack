@@ -207,3 +207,13 @@ TEST(ScriptWeather, ALandStormKeepsWhatItsListsLeaveOut)
 	EXPECT_EQ(storm.effect.windX, 0);
 	EXPECT_EQ(storm.effect.windZ, 0);
 }
+
+TEST(ScriptWeather, AWeatherThingFollowsItsStormThenStaysOnlyWhileAScriptHoldsIt)
+{
+	using weather::ThingAfterTurn;
+	EXPECT_EQ(weather::AfterTurn(true, true), ThingAfterTurn::FollowsItsStorm);
+	EXPECT_EQ(weather::AfterTurn(true, false), ThingAfterTurn::FollowsItsStorm);
+	// The storm ended at the end of its life
+	EXPECT_EQ(weather::AfterTurn(false, true), ThingAfterTurn::StaysWithoutStorm);
+	EXPECT_EQ(weather::AfterTurn(false, false), ThingAfterTurn::Goes);
+}

@@ -225,3 +225,12 @@ script_weather::LandStorm script_weather::ParseLandStorm(std::string_view shape,
 	effect.stamp = bytes[7];
 	return storm;
 }
+
+script_weather::ThingAfterTurn script_weather::AfterTurn(bool stormLives, bool heldByScript)
+{
+	if (stormLives)
+	{
+		return ThingAfterTurn::FollowsItsStorm;
+	}
+	return heldByScript ? ThingAfterTurn::StaysWithoutStorm : ThingAfterTurn::Goes;
+}
