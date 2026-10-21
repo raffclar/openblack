@@ -289,14 +289,20 @@ def drive(game, options, until_turn):
                 actions.append({"turn": turn, "did": f"stage {stage}"})
                 stage += 1
                 next_stage_turn = turn + options.stages
-        if options.style != "none" and turn > 0:
-            did = act(game, options.style, state)
-            if did:
-                actions.append({"turn": turn, "did": did})
-        step = min(options.act_every, until_turn - turn)
-        if not game.step_turns(step):
-            break
-        turn = game.call("game.state").get("turn", turn)
+        try:
+            if options.style != "none" and turn > 0:
+                did = act(game, options.style, state)
+                if did:
+                    actions.append({"turn": turn, "did": did})
+            step = min(options.act_every, until_turn - turn)
+            if not game.step_turns(step):
+                break
+            turn = game.call("game.state").get("turn", turn)
+        except (OSError, inspector.GameError):
+            # The game ends itself at its last turn, also in the middle of an input or just after a step
+            if game.process.poll() is not None or game.process.wait(timeout=30) is not None:
+                break
+            raise
     # The game ends itself at its last turn
     try:
         game.call("game.resume")
