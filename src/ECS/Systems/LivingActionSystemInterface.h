@@ -27,7 +27,10 @@ namespace openblack::ecs::systems
 class LivingActionSystemInterface
 {
 public:
+	/// A turn of every villager: VillagerTurn for each
 	virtual void Update() = 0;
+	/// The own turn of one villager, which the turn of the living gives it at its place in the list of the living
+	virtual void VillagerTurn(entt::entity villager) = 0;
 	/// As a turn begins, before anything moves: where each villager stands, from where its drawing glides through the
 	/// turn
 	virtual void StartTurnPlaces() = 0;

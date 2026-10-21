@@ -11,6 +11,8 @@
 
 #include "LivingActionSystem.h"
 
+#include <vector>
+
 #include <glm/common.hpp>
 #include <glm/gtc/constants.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
@@ -1230,38 +1232,53 @@ const static std::array<VillagerStateTableEntry, static_cast<size_t>(VillagerSta
 
 void LivingActionSystem::Update()
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> villagers;
+	Locator::entitiesRegistry::value().Each<const Villager, const LivingAction>(
+	    [&villagers](entt::entity entity, const Villager&, const LivingAction&) { villagers.push_back(entity); });
+	for (const auto entity : villagers)
+	{
+		VillagerTurn(entity);
+	}
+}
 
-	registry.Each<LivingAction>([](LivingAction& action) { ++action.turnsSinceStateChange; });
+void LivingActionSystem::VillagerTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity) || !registry.AllOf<Villager, LivingAction>(entity))
+	{
+		return;
+	}
+	auto& villager = registry.Get<Villager>(entity);
+	auto& action = registry.Get<LivingAction>(entity);
+	++action.turnsSinceStateChange;
 
 	// What flies in the physics does nothing of its own. Each villager in turn looks at whether its states still hold,
 	// then, unless a clip into or out of a state holds it, looks at its needs and acts. A villager in a hand does all of
 	// this too: its life goes down by what its hand state costs, and its hand state then does its part.
-	registry.Each<Villager, LivingAction>(
-	    [this, &registry](entt::entity entity, Villager& villager, LivingAction& action) {
-		    // Magic food wears off
-		    villager_food::ProcessFoodSpeedUp(entity);
-		    VillagerCallValidate(action, LivingAction::Index::Top);
-		    VillagerCallValidate(action, LivingAction::Index::Final);
-		    // A villager carried off by a tornado does nothing of its own
-		    if (registry.AnyOf<CarriedByTornado>(entity))
-		    {
-			    return;
-		    }
-		    if (villager.transitionPlaying)
-		    {
-			    if (villager_animate::IsReadyForNewAnimation(action))
-			    {
-				    villager_animate::FinishedIntoOutOfAnimation(action);
-			    }
-			    return;
-		    }
-		    // The life its state costs and the checks on its needs come before its state does its part
-		    villager_checks::CheckEveryTime(action);
-		    VillagerCallState(action, LivingAction::Index::Top);
-	    },
-	    entt::exclude<InPhysics>);
-	// TODO(#476): same calls but for other types of living
+	if (registry.AllOf<InPhysics>(entity))
+	{
+		return;
+	}
+	// Magic food wears off
+	villager_food::ProcessFoodSpeedUp(entity);
+	VillagerCallValidate(action, LivingAction::Index::Top);
+	VillagerCallValidate(action, LivingAction::Index::Final);
+	// A villager carried off by a tornado does nothing of its own
+	if (registry.AnyOf<CarriedByTornado>(entity))
+	{
+		return;
+	}
+	if (villager.transitionPlaying)
+	{
+		if (villager_animate::IsReadyForNewAnimation(action))
+		{
+			villager_animate::FinishedIntoOutOfAnimation(action);
+		}
+		return;
+	}
+	// The life its state costs and the checks on its needs come before its state does its part
+	villager_checks::CheckEveryTime(action);
+	VillagerCallState(action, LivingAction::Index::Top);
 }
 
 VillagerStates LivingActionSystem::VillagerGetState(const LivingAction& action, LivingAction::Index index) const

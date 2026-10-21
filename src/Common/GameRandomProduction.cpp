@@ -11,15 +11,27 @@
 
 #include "GameRandomProduction.h"
 
+#include <cmath>
+
 using namespace openblack;
 
 uint32_t GameRandomProduction::GameRand(uint32_t n)
 {
-	return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced);
+	if (n == 0)
+	{
+		return 0;
+	}
+	++_syncedDraws;
+	return game_random::LHRand(n, _seeds.synced);
 }
 
 float GameRandomProduction::GameFloatRand(float x)
 {
+	// A float of 0 or not a number gives 0 without a draw
+	if (x != 0.0f && !std::isnan(x))
+	{
+		++_syncedDraws;
+	}
 	return game_random::FloatRand(x, _seeds.synced);
 }
 

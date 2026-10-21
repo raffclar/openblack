@@ -28,6 +28,7 @@ the story's lessons do, up to the last; the run then continues as the creature g
     python tools/sim/sim_run.py run --turns 20000 --style good --out E:/runs/good1
     python tools/sim/sim_run.py run --testbed --scenario creature.young --turns 5000
     python tools/sim/sim_run.py match --turns 1500 --every 10      (the normal speed against the fast mode)
+    python tools/sim/sim_run.py repeat --turns 3000 --every 1      (two fast runs with the same seed)
 """
 
 import argparse
@@ -78,7 +79,8 @@ def game_arguments(options, record, log, until_turn, fast, driven):
     """The command line of the game for a run"""
     args = ["-g", options.game_path, "--skip-logos", "--seed", str(options.seed), "--inspect-port", "0",
             "--inspect-lock-input", "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(until_turn),
-            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000"]
+            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000",
+            "--background"]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
     if options.limits:
@@ -107,8 +109,10 @@ class Game:
         os.makedirs(cwd, exist_ok=True)
         environment = dict(os.environ)
         environment["OPENBLACK_WORKTREE"] = worktree_root()
+        # The game never opens a console window of its own, which would come to the front
+        flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
         self.process = subprocess.Popen([exe] + args, cwd=cwd, env=environment, stdout=subprocess.DEVNULL,
-                                        stderr=subprocess.DEVNULL)
+                                        stderr=subprocess.DEVNULL, creationflags=flags)
         self.connection = None
 
     def connect(self, timeout=START_TIMEOUT):
@@ -285,14 +289,20 @@ def drive(game, options, until_turn):
                 actions.append({"turn": turn, "did": f"stage {stage}"})
                 stage += 1
                 next_stage_turn = turn + options.stages
-        if options.style != "none" and turn > 0:
-            did = act(game, options.style, state)
-            if did:
-                actions.append({"turn": turn, "did": did})
-        step = min(options.act_every, until_turn - turn)
-        if not game.step_turns(step):
-            break
-        turn = game.call("game.state").get("turn", turn)
+        try:
+            if options.style != "none" and turn > 0:
+                did = act(game, options.style, state)
+                if did:
+                    actions.append({"turn": turn, "did": did})
+            step = min(options.act_every, until_turn - turn)
+            if not game.step_turns(step):
+                break
+            turn = game.call("game.state").get("turn", turn)
+        except (OSError, inspector.GameError):
+            # The game ends itself at its last turn, also in the middle of an input or just after a step
+            if game.process.poll() is not None or game.process.wait(timeout=30) is not None:
+                break
+            raise
     # The game ends itself at its last turn
     try:
         game.call("game.resume")
@@ -361,10 +371,27 @@ def command_match(options):
     return 0 if result["same"] else 1
 
 
+def command_repeat(options):
+    """The same run twice in the fast mode, with the same seed: their hashes, seeds and counts of draws must agree at
+    every record"""
+    first = run_once(options, "repeat-1", True, options.turns)
+    second = run_once(options, "repeat-2", True, options.turns)
+    _, records_first, _ = sim_report.load(first[0])
+    _, records_second, _ = sim_report.load(second[0])
+    result = sim_report.compare(records_first, records_second)
+    result["records"] = [len(records_first), len(records_second)]
+    result["draws_last"] = [(records_first or [{}])[-1].get("draws"), (records_second or [{}])[-1].get("draws")]
+    result["exit_codes"] = [first[2], second[2]]
+    with open(os.path.join(options.out, "repeat.json"), "w", encoding="utf-8") as file:
+        json.dump(result, file, indent=1)
+    print(json.dumps(result))
+    return 0 if result["same"] else 1
+
+
 def parse(argv):
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     commands = parser.add_subparsers(dest="command", required=True)
-    for command in ("run", "match"):
+    for command in ("run", "match", "repeat"):
         sub = commands.add_parser(command)
         sub.add_argument("--land", default="Land1.txt", help="the land's script (Land1.txt by default)")
         sub.add_argument("--opening", default="cow",
@@ -397,7 +424,8 @@ def main(argv=None):
     options.out = os.path.abspath(options.out)
     if options.limits:
         options.limits = os.path.abspath(options.limits)
-    return command_run(options) if options.command == "run" else command_match(options)
+    commands = {"run": command_run, "match": command_match, "repeat": command_repeat}
+    return commands[options.command](options)
 
 
 if __name__ == "__main__":

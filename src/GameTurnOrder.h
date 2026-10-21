@@ -128,9 +128,9 @@ enum class Step : uint8_t
 	CreatureFizz,
 	CreatureHelp,
 	CreaturePoses,
-	Villagers,
+	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
+	Living,
 	MapCellsAfterLiving,
-	Animals,
 	CreatureWebPage,
 	CreatureCarryOver,
 	Fires,
@@ -221,28 +221,10 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Footpaths, .stage = Stage::Lists},
     {.step = Step::ForestGrowth, .stage = Stage::Forests},
     {.step = Step::Pathfinding, .stage = Stage::Living},
-    {.step = Step::CreaturePhysiology, .stage = Stage::Living},
-    {.step = Step::CreaturePens, .stage = Stage::Living},
-    {.step = Step::CreatureBodies, .stage = Stage::Living},
-    {.step = Step::CreatureSkin, .stage = Stage::Living},
-    {.step = Step::Leashes, .stage = Stage::Living},
-    {.step = Step::CreatureMinds, .stage = Stage::Living},
-    {.step = Step::CreaturePlans, .stage = Stage::Living},
-    {.step = Step::CreatureLearning, .stage = Stage::Living},
-    {.step = Step::CreatureLocomotion, .stage = Stage::Living},
-    {.step = Step::CreatureObjectActions, .stage = Stage::Living},
-    {.step = Step::CreatureFights, .stage = Stage::Living},
-    {.step = Step::CreatureFizz, .stage = Stage::Living},
-    // The rest of each creature's own turn: what the last land kept of it, its picture for its web page, the help that
-    // tells of it, and the change of its alignment at the end
-    {.step = Step::CreatureCarryOver, .stage = Stage::Living},
-    {.step = Step::CreatureWebPage, .stage = Stage::Living},
-    {.step = Step::CreatureHelp, .stage = Stage::Living},
-    {.step = Step::CreatureAlignment, .stage = Stage::Living},
-    {.step = Step::CreaturePoses, .stage = Stage::Living},
-    {.step = Step::Villagers, .stage = Stage::Living},
+    // Each living thing takes its own turn in the order of the game's list of the living. The creatures do the steps of
+    // k_CreaturesTurn in it.
+    {.step = Step::Living, .stage = Stage::Living},
     {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
-    {.step = Step::Animals, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
     {.step = Step::Teleports, .stage = std::nullopt},
@@ -288,6 +270,29 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
 });
 
+/// The steps of the creatures' own turns, which the turn of the living does at the place of the creatures in its list
+inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
+    Step::CreaturePhysiology,
+    Step::CreaturePens,
+    Step::CreatureBodies,
+    Step::CreatureSkin,
+    Step::Leashes,
+    Step::CreatureMinds,
+    Step::CreaturePlans,
+    Step::CreatureLearning,
+    Step::CreatureLocomotion,
+    Step::CreatureObjectActions,
+    Step::CreatureFights,
+    Step::CreatureFizz,
+    // The rest of each creature's own turn: what the last land kept of it, its picture for its web page, the help that
+    // tells of it, and the change of its alignment at the end
+    Step::CreatureCarryOver,
+    Step::CreatureWebPage,
+    Step::CreatureHelp,
+    Step::CreatureAlignment,
+    Step::CreaturePoses,
+});
+
 /// True when no step of the turn comes before a step of an earlier stage. The steps with no stage are not checked.
 [[nodiscard]] constexpr bool InGameOrder(std::span<const Place> turn) noexcept
 {
@@ -317,7 +322,18 @@ void PlayTurn(Do&& step)
 	}
 }
 
-static_assert(k_Turn.size() == static_cast<size_t>(Step::_Count), "Each step has one place in the turn");
+/// Does each step of the creatures' turns, in their order
+template <typename Do>
+void PlayCreaturesTurn(Do&& step)
+{
+	for (const auto creatureStep : k_CreaturesTurn)
+	{
+		step(creatureStep);
+	}
+}
+
+static_assert(k_Turn.size() + k_CreaturesTurn.size() == static_cast<size_t>(Step::_Count),
+              "Each step has one place in the turn or in the creatures' turn");
 static_assert(InGameOrder(k_Turn), "The steps of the turn follow the game's stages");
 
 } // namespace openblack::game_turn

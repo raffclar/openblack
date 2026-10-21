@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureHome.h"
@@ -130,6 +131,8 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	                                            .strength = body.strength,
 	                                            .size = scale,
 	                                            .made = ++registry.Context().creaturesMade});
+	// It goes to the front of the list of the living
+	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	// The body is drawn with the base mesh's skins, its shape blended towards the other meshes
 	registry.Assign<Mesh>(entity, creature::GetIdFromType(creatureType, CreatureBody::Appearance::Base));
 	registry.Assign<CreatureMorph>(

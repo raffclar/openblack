@@ -91,6 +91,20 @@ class CompareTests(unittest.TestCase):
         self.assertTrue(result["creature_same"])
         self.assertEqual(result["parts"], ["Villager"])
 
+    def test_runs_with_other_draws_do_not_agree(self):
+        first = [record(100), record(200)]
+        second = [record(100), record(200)]
+        for item in first + second:
+            item["seeds"], item["draws"] = [7, 9], item["turn"] * 3
+        self.assertTrue(sim_report.compare(first, second)["same"])
+        second[1]["seeds"] = [8, 9]
+        result = sim_report.compare(first, second)
+        self.assertFalse(result["same"])
+        self.assertEqual(result["turn"], 200)
+        self.assertFalse(result["draws_same"])
+        second[1]["seeds"], second[1]["draws"] = [7, 9], 601
+        self.assertEqual(sim_report.compare(first, second)["draws"], [600, 601])
+
     def test_runs_with_no_turn_in_common_do_not_agree(self):
         self.assertFalse(sim_report.compare([record(100)], [record(200)])["same"])
 

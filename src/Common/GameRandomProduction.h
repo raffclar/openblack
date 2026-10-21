@@ -31,6 +31,7 @@ public:
 	void CrtSrand(uint32_t seed) override;
 
 	[[nodiscard]] std::optional<uint32_t> GetCrtSeed() const override { return _crtSeed; }
+	[[nodiscard]] uint64_t GetSyncedDraws() const override { return _syncedDraws; }
 	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
 	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
 
@@ -41,6 +42,7 @@ private:
 	GameRandomSeeds _seeds;
 	ParticleRandomStream _particleStream {ParticleRandomStream::None};
 	uint32_t _crtSeed {1};
+	uint64_t _syncedDraws {0};
 };
 
 } // namespace openblack

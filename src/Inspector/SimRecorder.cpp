@@ -27,6 +27,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
 #include "ComponentReflection.h"
 #include "Creature/CreatureFeedback.h"
@@ -674,6 +675,14 @@ void SimProvider::Frame(uint64_t frame)
 		}
 	}
 	record["type"] = "record";
+	// The seeds and the count of the synced draws: two runs with the same draws in the same order keep the same
+	if (Locator::gameRandom::has_value())
+	{
+		const auto& random = Locator::gameRandom::value();
+		const auto seeds = random.GetSeeds();
+		record["seeds"] = {seeds.synced, seeds.local};
+		record["draws"] = random.GetSyncedDraws();
+	}
 	record["flags"] = std::move(problems);
 	*_out << Dump(record) << '\n';
 	_out->flush();
