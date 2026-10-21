@@ -120,4 +120,21 @@ void CountHand(components::Dance& dance, bool near);
 /// The groups that started a move, whose dancers each play their clip again.
 std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn, bool handNear = false);
 
+/// How far east of a dance's place a walk to the dance ends, in the map's fixed units: 5 m
+inline constexpr int32_t k_ArriveEast = 0x8000;
+
+/// The place where a walk to the dance ends: 5 m east of the dance's place, at the same altitude
+[[nodiscard]] constexpr map_coords::MapCoords ArrivePlace(const map_coords::MapCoords& place)
+{
+	return place + map_coords::MapCoords {.x = k_ArriveEast, .z = 0, .altitude = 0.0f};
+}
+
+/// Whether a dancer of a reaction dance or an artefact dance walks to its own place before it dances. This occurs
+/// when the dancer is not on its own place but stands exactly on the place where a walk to the dance ends.
+[[nodiscard]] constexpr bool WalksToOwnPlace(const map_coords::MapCoords& at, const map_coords::MapCoords& own,
+                                             const map_coords::MapCoords& place)
+{
+	return at != own && at == ArrivePlace(place);
+}
+
 } // namespace openblack::ecs::dance_rules

@@ -148,6 +148,30 @@ uint32_t villager_dance::InDance(LivingAction& action)
 	return PerformDance(action, VillagerStates::InDance);
 }
 
+bool villager_dance::WalkToOwnPlace(LivingAction& action, VillagerStates danceState)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = registry.ToEntity(action);
+	const auto dance = ecs::dances::DanceOf(registry, villager);
+	const auto own = SlotOf(villager);
+	if (dance == entt::null || !own.has_value())
+	{
+		return false;
+	}
+	const auto slot = ecs::wall_hug::ToWhole(*own);
+	if (!ecs::dance_rules::WalksToOwnPlace(MapPositionOf(villager), {.x = slot.x, .z = slot.y},
+	                                       registry.Get<const Dance>(dance).place))
+	{
+		return false;
+	}
+	auto& living = Locator::livingActionSystem::value();
+	if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
+	{
+		villager_home::SetupMobileMoveTo(action, *own);
+	}
+	return true;
+}
+
 uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates danceState, std::optional<uint32_t> move)
 {
 	auto& registry = Locator::entitiesRegistry::value();

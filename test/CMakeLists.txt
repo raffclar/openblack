@@ -1658,3 +1658,12 @@ openblack_setup_and_add_test(test_land_footprint_rules test_land_footprint_rules
 openblack_setup_and_add_test(test_script_real_time test_script_real_time.cpp)
 target_link_libraries(test_land_vertex PRIVATE lnd)
 openblack_setup_and_add_test(test_list_order test_list_order.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_looks oracle/test_oracle_creature_looks.cpp
+)
+set_tests_properties(
+  test_oracle_creature_looks
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
