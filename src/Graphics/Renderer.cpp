@@ -178,6 +178,7 @@
 #include "Graphics/SeaRows.h"
 #include "Graphics/ShaderManager.h"
 #include "Graphics/ShadowTexture.h"
+#include "Graphics/SpriteTextures.h"
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
@@ -7666,8 +7667,10 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId));
 					}
 				}
+				// The sprites name their textures by their ids in the cache
+				const auto& textures = Locator::resources::value().GetTextures();
 				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, translucentViewId, cameraOrigin, &registry, bookmarksShown,
+				    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &registry, bookmarksShown,
 				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
 					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
 					    {
@@ -7691,6 +7694,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 							    return;
 						    }
 					    }
+					    // A sprite whose texture the cache does not have is not drawn
+					    const auto* texture = textures.Find(sprite.texture);
+					    const auto* alpha = textures.Find(sprite_textures::AlphaId(sprite));
+					    if (texture == nullptr || alpha == nullptr)
+					    {
+						    return;
+					    }
 					    glm::mat4 modelMatrix = glm::mat4(1.0f);
 					    modelMatrix = glm::translate(modelMatrix, transform.position);
 					    modelMatrix *= glm::mat4(transform.rotation);
@@ -7704,13 +7714,13 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                    sprite.alpha.has_value() ? 1.0f : 0.0f, sprite.additive ? 1.0f : 0.0f,
 					                                    0.0f};
 					    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-					    spriteShader->SetTextureSampler("s_alpha", 1, sprite.alpha.value_or(sprite.texture));
+					    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
 					    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
 					    // premultiplied by alpha when the tint is
 					    const auto tint =
 					        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
 					    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-					    spriteShader->SetTextureSampler("s_diffuse", 0, sprite.texture);
+					    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
 
 					    _plane->GetVertexBuffer().Bind();
 

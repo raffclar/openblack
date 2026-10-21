@@ -73,11 +73,6 @@ float Random(float min, float max)
 	return Locator::rng::value().NextValue(min, max);
 }
 
-const graphics::Texture2D& Texture(const char* name)
-{
-	return *Locator::resources::value().GetTextures().Handle(entt::hashed_string(name));
-}
-
 /// The cell of a frame of an 8 by 8 texture
 glm::vec2 Cell(uint32_t frame)
 {
@@ -128,8 +123,8 @@ entt::entity CreateSprite(const char* texture, const char* alpha, bool additive,
 	auto& registry = Locator::entitiesRegistry::value();
 	auto entity = registry.Create();
 	registry.Assign<TempleInteriorPart>(entity, TempleRoom::CreatureCave);
-	registry.Assign<Sprite>(entity, Texture(texture).GetNativeHandle(), glm::vec2(0.0f), glm::vec2(k_Cell), glm::vec4(1.0f),
-	                        additive, true, Texture(alpha).GetNativeHandle());
+	registry.Assign<Sprite>(entity, entt::hashed_string(texture).value(), glm::vec2(0.0f), glm::vec2(k_Cell), glm::vec4(1.0f),
+	                        additive, true, entt::hashed_string(alpha).value());
 	registry.Assign<Transform>(entity, position, glm::mat3(1.0f), glm::vec3(1.0f));
 	return entity;
 }

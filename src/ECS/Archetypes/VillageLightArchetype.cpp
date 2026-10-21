@@ -48,7 +48,6 @@ entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLig
 	    std::ranges::all_of(std::array {village_lights::k_FlameTextureId, village_lights::k_FlameAlphaTextureId,
 	                                    village_lights::k_GlowTextureId, village_lights::k_GlowAlphaTextureId},
 	                        [&textures](const entt::hashed_string& id) { return textures.Contains(id.value()); });
-	const auto texture = [&textures](entt::id_type id) { return textures.Handle(id)->GetNativeHandle(); };
 	const float height =
 	    kind == VillageLight::Kind::Town ? village_lights::k_TownSpriteHeight : village_lights::k_CountrySpriteHeight;
 	auto& starts = registry.Context().villageLightFlames.starts;
@@ -73,9 +72,9 @@ entt::entity VillageLightArchetype::Create(const glm::vec3& position, VillageLig
 		registry.Assign<VillageLightSprite>(sprite, light, static_cast<uint8_t>(i));
 		const auto cell = village_lights::SpriteCellUv(flame ? 0 : village_lights::k_GlowCell);
 		registry.Assign<Sprite>(
-		    sprite, texture(flame ? village_lights::k_FlameTextureId.value() : village_lights::k_GlowTextureId.value()), cell,
+		    sprite, flame ? village_lights::k_FlameTextureId.value() : village_lights::k_GlowTextureId.value(), cell,
 		    glm::vec2(village_lights::k_SpriteCell), glm::vec4(village_lights::k_SpriteColour, 0.0f), true, true,
-		    texture(flame ? village_lights::k_FlameAlphaTextureId.value() : village_lights::k_GlowAlphaTextureId.value()));
+		    flame ? village_lights::k_FlameAlphaTextureId.value() : village_lights::k_GlowAlphaTextureId.value());
 		registry.Assign<Transform>(sprite, position + glm::vec3(0.0f, height, 0.0f), glm::mat3(1.0f),
 		                           glm::vec3(size, size, 1.0f));
 	}
