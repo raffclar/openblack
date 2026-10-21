@@ -141,6 +141,9 @@ TEST(VortexCrossingLines, AVillagerIsWrittenByItsTribeAndJob)
 	data.tribe = Tribe::NONE;
 	data.town = entt::null;
 	EXPECT_EQ(LineText(registry, villager), "CREATE_SPECIAL_TOWN_VILLAGER(-1, \"10.00,20.00\", 42, 25)\n");
+	// One that keeps the row it was made from is written by that row
+	data.kind = VillagerInfo::Hermit;
+	EXPECT_EQ(LineText(registry, villager), "CREATE_SPECIAL_TOWN_VILLAGER(-1, \"10.00,20.00\", 66, 25)\n");
 }
 
 TEST(VortexCrossingLines, ATreeKeepsItsTurnAndSizes)

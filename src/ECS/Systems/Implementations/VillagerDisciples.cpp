@@ -198,7 +198,7 @@ const GVillagerInfo* VillagerInfoOf(const Villager& villager)
 		return nullptr;
 	}
 	const auto& infos = Locator::infoConstants::value().villager;
-	const auto row = static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number));
+	const auto row = static_cast<size_t>(RowOf(villager, GVillagerInfo::Find));
 	return row < infos.size() ? &infos.at(row) : nullptr;
 }
 
@@ -542,8 +542,7 @@ bool FarmerSetsAboutWork(LivingAction& action)
 		return false;
 	}
 	const auto& person = Entities().Get<const Villager>(EntityOf(action));
-	const auto& info =
-	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person.tribe, person.number)));
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(person, GVillagerInfo::Find)));
 	if (Locator::fieldSystem::value().GetActivity(best->field) == field_crop::Activity::Grown &&
 	    static_cast<int32_t>(person.foodHeld) > static_cast<int32_t>(static_cast<int16_t>(info.minFoodToShowGraphic)))
 	{

@@ -55,7 +55,7 @@ ecs::Registry& Entities()
 const GVillagerInfo& InfoOf(entt::entity villager)
 {
 	const auto& person = Entities().Get<const Villager>(villager);
-	return Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person.tribe, person.number)));
+	return Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(person, GVillagerInfo::Find)));
 }
 
 /// The villager walks to a point and goes on waiting there

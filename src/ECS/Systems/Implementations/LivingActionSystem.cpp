@@ -1486,8 +1486,7 @@ bool LivingActionSystem::PausesBefore(LivingAction& action, VillagerStates state
 		return false;
 	}
 	const auto& person = registry.Get<const Villager>(villager);
-	const auto& info =
-	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person.tribe, person.number)));
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(person, GVillagerInfo::Find)));
 	const float life = ecs::world_objects::LifeOf(villager);
 	const bool poisoned = registry.AllOf<Poisoned>(villager);
 	const float draw = Locator::gameRandom::value().GameFloatRand(1.0f);

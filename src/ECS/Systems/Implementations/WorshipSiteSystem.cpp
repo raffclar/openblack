@@ -940,7 +940,7 @@ float WorshipSiteSystem::DancersFoodNeed(entt::entity site) const
 			if (const auto* person = registry.TryGet<const Villager>(dancer))
 			{
 				bellies.push_back(person->food);
-				const auto& row = info.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+				const auto& row = info.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 				dinners.push_back(static_cast<int32_t>(row.foodReqiredForDinner));
 			}
 		}

@@ -106,11 +106,13 @@ std::optional<Line> ecs::vortex_crossing::LineFor(const Registry& registry, entt
 	{
 		const auto town = TownNumber(registry, villager->town);
 		const auto age = villager_age::AgeOf(world.turn, villager->birthTurn);
-		// One of no tribe is written by its row of the villagers' table
+		// One of no tribe is written by the row of the villagers' table that it keeps
 		if (villager->tribe == Tribe::NONE)
 		{
-			return SpecialVillagerLine {
-			    .town = town, .offset = offset, .row = world.villagerRow(villager->tribe, villager->number), .age = age};
+			const auto row = RowOf(*villager, [&world](Tribe tribe, VillagerNumber number) {
+				return static_cast<VillagerInfo>(world.villagerRow(tribe, number));
+			});
+			return SpecialVillagerLine {.town = town, .offset = offset, .row = static_cast<int32_t>(row), .age = age};
 		}
 		std::string type(k_TribeStrs.at(static_cast<size_t>(villager->tribe)));
 		type += '_';
