@@ -361,6 +361,14 @@ TEST(ReactionRules, ADifferentMoreUrgentKindTakesOverOnlyAfterAWhile)
 	EXPECT_FALSE(ChangesReaction(Reaction::LookAtNiceSpell, 120, 200, 1));
 }
 
+TEST(ReactionRules, AFightWatcherGoesBackAtOnceWhenTheFightReactionEnds)
+{
+	// The end of the fight's reaction sends each watcher back to what it did before, as with the other kinds
+	EXPECT_TRUE(ecs::systems::villager_reactions::ActsOut(Reaction::ReactToFight));
+	// A reaction that a villager only holds is let go
+	EXPECT_FALSE(ecs::systems::villager_reactions::ActsOut(Reaction::ReactToHandPickUp));
+}
+
 TEST(ReactionRules, VillagersFleeAwayOrAcrossTheWay)
 {
 	using namespace openblack::magic;
