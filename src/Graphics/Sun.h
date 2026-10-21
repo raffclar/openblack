@@ -56,4 +56,15 @@ inline constexpr float k_GlareLowestSample = 10.0f;
 /// each millisecond of game time; it stays put while the game is paused
 [[nodiscard]] float EaseGlare(float glare, int hiddenSamples, uint32_t frameMilliseconds);
 
+/// The opacity of the glare, a whole number from 0 to 255: the glare's strength times the sun's strength before the
+/// overcast, divided by 255 and cut to a whole number. Then the overcast dims it as it dims the sun.
+[[nodiscard]] float GlareAlpha(float glare, float sunAlpha, float overcast, bool fog);
+
+/// What is drawn hides a sample of the glare only at the detail levels 3, 4 and 6. At the other levels only the land and
+/// the horizon of the sea hide it.
+[[nodiscard]] constexpr bool GlareTestsDepth(uint8_t detailLevel)
+{
+	return detailLevel == 3 || detailLevel == 4 || detailLevel == 6;
+}
+
 } // namespace openblack::graphics::sun

@@ -47,3 +47,23 @@ TEST(Sun, GlareEasesTowardsWhatShows)
 	EXPECT_FLOAT_EQ(sun::EaseGlare(100.0f, 0, 199), 255.0f);
 	EXPECT_FLOAT_EQ(sun::EaseGlare(100.0f, 5, 199), 0.0f);
 }
+
+TEST(Sun, TheGlaresOpacityIsAWholeNumberThatTheOvercastDimsWithTheFog)
+{
+	// 200 x 255 / 255 = 200; half of it for a half strength sun, cut to a whole number
+	EXPECT_EQ(sun::GlareAlpha(200.0f, 255.0f, 0.0f, true), 200.0f);
+	EXPECT_EQ(sun::GlareAlpha(201.0f, 127.0f, 0.0f, true), 100.0f);
+	// With the fog option an overcast of 0.5 divides it by 5; without the option it does nothing
+	EXPECT_EQ(sun::GlareAlpha(200.0f, 255.0f, 0.5f, true), 40.0f);
+	EXPECT_EQ(sun::GlareAlpha(200.0f, 255.0f, 0.5f, false), 200.0f);
+	// An overcast above 1 counts as 1
+	EXPECT_EQ(sun::GlareAlpha(255.0f, 255.0f, 3.0f, true), 28.0f);
+}
+
+TEST(Sun, WhatIsDrawnHidesTheGlareOnlyAtDetailLevelsThreeFourAndSix)
+{
+	for (uint8_t level = 0; level < 7; ++level)
+	{
+		EXPECT_EQ(sun::GlareTestsDepth(level), level == 3 || level == 4 || level == 6) << static_cast<int>(level);
+	}
+}

@@ -3975,6 +3975,12 @@ void Renderer::DrawSun(RenderPass viewId) const
 	{
 		return;
 	}
+	// The sky of the temple has no sun, and the sea mirrors no sun: only the moon goes into the sea's sky
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (!_warmingUp && (inTemple || viewId == RenderPass::ReflectionSky))
+	{
+		return;
+	}
 	// In a warm colour, shown less through an overcast, added to the sky drawn before it, leaving no depth; the land
 	// drawn after it covers it
 	DrawCelestialMesh(viewId, {
@@ -4001,17 +4007,23 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	{
 		return;
 	}
+	// Inside the temple the sun has no glare, and the glare does not change
+	if (!_warmingUp && Locator::temple::has_value() && Locator::temple::value().Active())
+	{
+		return;
+	}
 	const auto& placement = sun->placement;
 	const auto model = placement.has_value() ? SunModel(placement->position) : glm::mat4(0.0f);
 
 	// Each sample of the sun hidden from the camera dims the glare by a fifth. The land hides it where the line from the
-	// camera to it meets the land; otherwise what is drawn at its pixel does, when it is nearer than the depth the game's
-	// depth buffer counts as hidden. That is asked of the drawing as it happens, and answered a frame or two later.
+	// camera to it meets the land. At some detail levels, what is drawn at its pixel also hides it, when it is nearer than
+	// the depth that the game's depth buffer counts as hidden. The drawing answers that a frame or two later.
 	int hidden = 0;
 	const auto origin = camera.GetOrigin();
 	const float near = camera.GetNearClip();
 	const auto samples = sun::GlareSamples(placement.has_value() ? placement->position : origin, origin, near);
-	const bool asksDrawing = (bgfx::getCaps()->supported & BGFX_CAPS_OCCLUSION_QUERY) != 0;
+	const bool asksDrawing = (bgfx::getCaps()->supported & BGFX_CAPS_OCCLUSION_QUERY) != 0 &&
+	                         sun::GlareTestsDepth(Locator::config::value().detailLevel);
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
@@ -4062,20 +4074,24 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 			return;
 		}
 	}
-	// Larger, in an orange colour, over everything in the view. The temple isn't among what the samples can hit, so inside
-	// it the glare is tested against the depth of what is drawn: its solid parts hide it, and it shows through its glass
-	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	DrawCelestialMesh(RenderPass::Main,
-	                  {
-	                      .meshId = body->meshId,
-	                      .textureId = body->textureId,
-	                      .alphaTextureId = body->alphaTextureId,
-	                      .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
-	                      .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f,
-	                                 placement.has_value() ? _sunGlare * placement->alpha / (255.0f * 255.0f) : 0.0f},
-	                      .celestial = glm::vec4(0.0f),
-	                      .state = k_AdditiveState | (inTemple ? BGFX_STATE_DEPTH_TEST_GREATER : 0),
-	                  });
+	// Larger, in an orange colour, over everything in the view. The overcast dims it as it dims the sun.
+	float alpha = 0.0f;
+	if (placement.has_value())
+	{
+		const auto* dome =
+		    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
+		alpha = sun::GlareAlpha(_sunGlare, placement->alpha, dome != nullptr ? dome->overcast : 0.0f,
+		                        detail_level::Fog(Locator::config::value().detailLevel));
+	}
+	DrawCelestialMesh(RenderPass::Main, {
+	                                        .meshId = body->meshId,
+	                                        .textureId = body->textureId,
+	                                        .alphaTextureId = body->alphaTextureId,
+	                                        .model = model * glm::scale(glm::vec3(sun::k_GlareScale)),
+	                                        .colour = {0xA0 / 255.0f, 0x6A / 255.0f, 0x35 / 255.0f, alpha / 255.0f},
+	                                        .celestial = glm::vec4(0.0f),
+	                                        .state = k_AdditiveState,
+	                                    });
 }
 
 void Renderer::AskGlareSampleDrawn(const Camera& camera, bgfx::OcclusionQueryHandle query, glm::vec2 topLeft,
@@ -7259,12 +7275,6 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			drawHeld(false);
 			DrawTempleUnderside(desc);
-			// In the temple, whose draws keep their order, the sun's glare comes after its solid parts, which hide it, and
-			// before its glass, which blends over it
-			if (inTemple && desc.viewId == RenderPass::Main && desc.drawSky)
-			{
-				DrawSunGlare(*desc.camera);
-			}
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
 			// The things fading out in the distance, each blended by its alpha in its own place in the sort: the
@@ -7812,8 +7822,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		DrawGestureHintCollars(desc);
 	}
 
-	// The sun's glare over everything else in the view; the temple's comes before its glass
-	if (desc.viewId == RenderPass::Main && desc.drawSky && !(Locator::temple::has_value() && Locator::temple::value().Active()))
+	// The sun's glare over everything else in the view
+	if (desc.viewId == RenderPass::Main && desc.drawSky)
 	{
 		DrawSunGlare(*desc.camera);
 	}
