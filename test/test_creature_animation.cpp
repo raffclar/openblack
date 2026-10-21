@@ -8,9 +8,13 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstring>
 
 #include <algorithm>
 #include <array>
+#include <iterator>
+#include <optional>
+#include <random>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -404,5 +408,201 @@ TEST(CreatureAnimation, TheDrawnBodyKeepsItsSizeTurningRound)
 		EXPECT_NEAR(glm::dot(axes[0], axes[2]), 0.0f, k_Tolerance);
 		EXPECT_NEAR(glm::determinant(axes), k_Scale * k_Scale * k_Scale, k_Tolerance);
 		EXPECT_NEAR(model[3].x, 10.0f, k_Tolerance);
+	}
+}
+
+namespace
+{
+/// The blend and the stand adjustment as they were before each joint found its fixed turns once: the oracle that the
+/// faster blend must give bit for bit
+namespace reference
+{
+using skeletal_animation::Matrix;
+
+std::optional<size_t> SlotOf(const std::vector<uint32_t>& joints, uint32_t joint)
+{
+	const auto found = std::ranges::find(joints, joint);
+	return found != joints.end() ? std::optional(static_cast<size_t>(std::distance(joints.begin(), found))) : std::nullopt;
+}
+
+std::optional<glm::vec3> StandEuler(const Animation* stand, uint32_t joint)
+{
+	const auto slot = stand != nullptr ? SlotOf(stand->rotatedJoints, joint) : std::nullopt;
+	return slot && !stand->frames.empty() ? std::optional(stand->frames.front().eulerAngles[*slot]) : std::nullopt;
+}
+
+std::optional<glm::vec3> StandTranslation(const Animation* stand, uint32_t joint)
+{
+	const auto slot = stand != nullptr ? SlotOf(stand->translatedJoints, joint) : std::nullopt;
+	return slot && !stand->frames.empty() ? std::optional(stand->frames.front().translations[*slot]) : std::nullopt;
+}
+
+Animation AdjustFromStand(const Animation& animation, const Animation& baseStand, const Animation& variantStand)
+{
+	using namespace skeletal_animation;
+	auto adjusted = animation;
+	for (auto& frame : adjusted.frames)
+	{
+		for (size_t i = 0; i < adjusted.rotatedJoints.size(); ++i)
+		{
+			const auto joint = adjusted.rotatedJoints[i];
+			const auto from = StandEuler(&baseStand, joint);
+			const auto to = StandEuler(&variantStand, joint);
+			const auto inverseFrom = from ? Transpose(RotationYXZ(*from)) : k_Identity;
+			const auto toRotation = to ? RotationYXZ(*to) : k_Identity;
+			frame.eulerAngles[i] = EulerYXZ(Multiply(Multiply(RotationYXZ(frame.eulerAngles[i]), inverseFrom), toRotation));
+		}
+		for (size_t i = 0; i < adjusted.translatedJoints.size(); ++i)
+		{
+			const auto joint = adjusted.translatedJoints[i];
+			frame.translations[i] += StandTranslation(&variantStand, joint).value_or(glm::vec3(0.0f)) -
+			                         StandTranslation(&baseStand, joint).value_or(glm::vec3(0.0f));
+		}
+	}
+	return adjusted;
+}
+
+Matrix SideRotation(const creature_animation::BlendTerm& term, uint32_t joint, size_t frame, const Matrix& base)
+{
+	const auto* animation = term.animation != nullptr && !term.animation->frames.empty() ? term.animation : nullptr;
+	if (const auto slot = animation != nullptr ? SlotOf(animation->rotatedJoints, joint) : std::nullopt)
+	{
+		return skeletal_animation::RotationYXZ(
+		    animation->frames[std::min(frame, animation->frames.size() - 1)].eulerAngles[*slot]);
+	}
+	if (const auto euler = StandEuler(term.stand, joint))
+	{
+		return skeletal_animation::RotationYXZ(*euler);
+	}
+	return base;
+}
+
+glm::vec3 SideTranslation(const creature_animation::BlendTerm& term, uint32_t joint, size_t frame, const glm::vec3& base)
+{
+	const auto* animation = term.animation != nullptr && !term.animation->frames.empty() ? term.animation : nullptr;
+	if (const auto slot = animation != nullptr ? SlotOf(animation->translatedJoints, joint) : std::nullopt)
+	{
+		return animation->frames[std::min(frame, animation->frames.size() - 1)].translations[*slot];
+	}
+	return StandTranslation(term.stand, joint).value_or(base);
+}
+
+Animation Blend(const Animation& base, const creature_animation::BlendTerm& a, const creature_animation::BlendTerm& b)
+{
+	auto blended = base;
+	if (a.weight == 0.0f && b.weight == 0.0f)
+	{
+		return blended;
+	}
+	for (size_t f = 0; f < blended.frames.size(); ++f)
+	{
+		auto& frame = blended.frames[f];
+		for (size_t i = 0; i < blended.rotatedJoints.size(); ++i)
+		{
+			const auto joint = blended.rotatedJoints[i];
+			const auto rotation = skeletal_animation::RotationYXZ(frame.eulerAngles[i]);
+			const auto towardsA = SideRotation(a, joint, f, rotation);
+			const auto towardsB = SideRotation(b, joint, f, rotation);
+			Matrix result {};
+			for (size_t r = 0; r < 3; ++r)
+			{
+				for (size_t c = 0; c < 3; ++c)
+				{
+					const auto value = rotation.at(r).at(c);
+					result.at(r).at(c) =
+					    value + (a.weight * (towardsA.at(r).at(c) - value)) + (b.weight * (towardsB.at(r).at(c) - value));
+				}
+			}
+			frame.eulerAngles[i] = skeletal_animation::EulerYXZ(result);
+		}
+		for (size_t i = 0; i < blended.translatedJoints.size(); ++i)
+		{
+			const auto joint = blended.translatedJoints[i];
+			const auto translation = frame.translations[i];
+			frame.translations[i] = translation + (a.weight * (SideTranslation(a, joint, f, translation) - translation)) +
+			                        (b.weight * (SideTranslation(b, joint, f, translation) - translation));
+		}
+	}
+	return blended;
+}
+} // namespace reference
+
+/// An animation of some of the joints 0 to 11, with random angles and moves, of the given number of frames
+Animation RandomAnimation(std::mt19937& random, size_t frames)
+{
+	std::uniform_real_distribution<float> angle(-3.2f, 3.2f);
+	std::uniform_real_distribution<float> move(-2.0f, 2.0f);
+	std::bernoulli_distribution uses(0.6);
+	Animation animation {};
+	animation.duration = static_cast<uint32_t>(frames * 33);
+	for (uint32_t joint = 0; joint < 12; ++joint)
+	{
+		if (uses(random))
+		{
+			animation.rotatedJoints.push_back(joint);
+		}
+		if (uses(random))
+		{
+			animation.translatedJoints.push_back(joint);
+		}
+	}
+	animation.frames.resize(frames);
+	for (auto& frame : animation.frames)
+	{
+		for (size_t i = 0; i < animation.rotatedJoints.size(); ++i)
+		{
+			frame.eulerAngles.emplace_back(angle(random), angle(random), angle(random));
+		}
+		for (size_t i = 0; i < animation.translatedJoints.size(); ++i)
+		{
+			frame.translations.emplace_back(move(random), move(random), move(random));
+		}
+	}
+	return animation;
+}
+
+/// Whether the two animations have the same bits in every angle and move
+bool SameBits(const Animation& a, const Animation& b)
+{
+	if (a.frames.size() != b.frames.size())
+	{
+		return false;
+	}
+	for (size_t f = 0; f < a.frames.size(); ++f)
+	{
+		const auto& x = a.frames[f];
+		const auto& y = b.frames[f];
+		if (x.eulerAngles.size() != y.eulerAngles.size() || x.translations.size() != y.translations.size() ||
+		    std::memcmp(x.eulerAngles.data(), y.eulerAngles.data(), x.eulerAngles.size() * sizeof(glm::vec3)) != 0 ||
+		    std::memcmp(x.translations.data(), y.translations.data(), x.translations.size() * sizeof(glm::vec3)) != 0)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+} // namespace
+
+TEST(CreatureAnimation, TheBlendAndTheStandAdjustmentGiveTheBitsOfTheOldWay)
+{
+	std::mt19937 random(1234);
+	std::uniform_real_distribution<float> weight(-1.0f, 1.0f);
+	std::bernoulli_distribution present(0.75);
+	for (int round = 0; round < 300; ++round)
+	{
+		const auto base = RandomAnimation(random, 1 + (round % 9));
+		const auto baseStand = RandomAnimation(random, 1);
+		const auto variantStand = RandomAnimation(random, 1);
+		const auto variant = RandomAnimation(random, 1 + (round % 5));
+		EXPECT_TRUE(SameBits(creature_animation::AdjustFromStand(base, baseStand, variantStand),
+		                     reference::AdjustFromStand(base, baseStand, variantStand)))
+		    << "round " << round;
+		const creature_animation::BlendTerm a {.animation = present(random) ? &variant : nullptr,
+		                                       .stand = present(random) ? &variantStand : nullptr,
+		                                       .weight = std::abs(weight(random))};
+		const creature_animation::BlendTerm b {.animation = present(random) ? &baseStand : nullptr,
+		                                       .stand = present(random) ? &baseStand : nullptr,
+		                                       .weight = round % 7 == 0 ? 0.0f : std::abs(weight(random))};
+		EXPECT_TRUE(SameBits(creature_animation::Blend(base, a, b), reference::Blend(base, a, b))) << "round " << round;
 	}
 }

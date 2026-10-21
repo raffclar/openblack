@@ -57,7 +57,7 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto& row = Locator::gestureSystem::value().GetHints();
-	if (row.hints.empty() || row.alpha <= 0.0f)
+	if (!_warmingUp && (row.hints.empty() || row.alpha <= 0.0f))
 	{
 		return;
 	}
@@ -69,6 +69,37 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 	}
 	const auto& mesh = *meshes.Handle(LeashPost::k_MeshId);
 	const auto skin = textures.Handle(LeashPost::k_TextureId)->GetNativeHandle();
+	const auto drawCollar = [&](RenderPass pass, const glm::mat4& model, LeashType leash) {
+		L3DMeshSubmitDesc submitDesc = {};
+		submitDesc.viewId = pass;
+		submitDesc.program = _shaderManager->GetShader("Object");
+		submitDesc.state = k_CollarState;
+		submitDesc.modelMatrices = &model;
+		submitDesc.matrixCount = 1;
+		// The leash's band of the leash texture, not slid round it
+		submitDesc.skinTexture = &skin;
+		submitDesc.uvOffset = glm::vec2(0.0f, temple_leashes::Band(leash));
+		submitDesc.useMaterialBlending = true;
+		submitDesc.useMaterialCulling = true;
+		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	};
+	// The warm-up draws a collar of no size in the view of each collar, so that the renderer has the pipelines before
+	// the first hint shows
+	if (_warmingUp)
+	{
+		for (const auto pass : k_CollarPasses)
+		{
+			const auto viewId = static_cast<bgfx::ViewId>(pass);
+			if (desc.frameBuffer != nullptr)
+			{
+				desc.frameBuffer->Bind(pass);
+			}
+			bgfx::setViewRect(viewId, 0, 0, 1, 1);
+			bgfx::touch(viewId);
+			drawCollar(pass, glm::mat4(0.0f), LeashType::Rope);
+		}
+		return;
+	}
 	const auto screen = static_cast<glm::vec2>(Locator::windowing::value().GetSize());
 	const float focal = hints::FocalPixels(hints::RowWidth(screen), desc.camera->GetHorizontalFieldOfView());
 	const auto view = hints::CollarView();
@@ -102,18 +133,6 @@ void Renderer::DrawGestureHintCollars(const DrawSceneDesc& desc) const
 		bgfx::setViewTransform(viewId, glm::value_ptr(view), glm::value_ptr(projection));
 		bgfx::touch(viewId);
 
-		const auto model = hints::CollarModel(row.collars.at(static_cast<size_t>(hint.leash)));
-		L3DMeshSubmitDesc submitDesc = {};
-		submitDesc.viewId = pass;
-		submitDesc.program = _shaderManager->GetShader("Object");
-		submitDesc.state = k_CollarState;
-		submitDesc.modelMatrices = &model;
-		submitDesc.matrixCount = 1;
-		// The leash's band of the leash texture, not slid round it
-		submitDesc.skinTexture = &skin;
-		submitDesc.uvOffset = glm::vec2(0.0f, temple_leashes::Band(hint.leash));
-		submitDesc.useMaterialBlending = true;
-		submitDesc.useMaterialCulling = true;
-		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+		drawCollar(pass, hints::CollarModel(row.collars.at(static_cast<size_t>(hint.leash))), hint.leash);
 	}
 }

@@ -41,8 +41,10 @@ public:
 	/// player looks at. Each creature's moment of action for this turn is then used up.
 	virtual void ProcessTurn() = 0;
 	/// Writes the page of a creature of the player from the game's template. The game does this each time that it
-	/// writes the creature's files as the creature lives.
+	/// writes the creature's files as the creature lives. The files go to the disk on a thread of their own.
 	virtual void WritePage(entt::entity creature) = 0;
+	/// Waits until the files of the pages and the pictures are on the disk
+	virtual void FlushWrites() = 0;
 	/// Whether a picture of the screen is asked for and not back yet. The game had no debug windows, so the frames for a
 	/// picture leave them out.
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;

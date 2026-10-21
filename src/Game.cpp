@@ -1178,6 +1178,8 @@ void Game::WarmUpFirstFrame()
 			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
 			// The villagers' labels test the depth of the scene
 			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
+			// The interface that the game draws over the scene, which the loading screen does not blend in each way
+			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
