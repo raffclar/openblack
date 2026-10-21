@@ -126,7 +126,7 @@ std::optional<script_find::Kind> script_find::KindOf(const Registry& registry, e
 	{
 		return Kind {.type =
 		                 villager->lifeStage == Villager::LifeStage::Child ? ScriptType::VillagerChild : ScriptType::Villager,
-		             .subtype = Row(GVillagerInfo::Find(villager->tribe, villager->number))};
+		             .subtype = Row(RowOf(*villager, GVillagerInfo::Find))};
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(entity))
 	{

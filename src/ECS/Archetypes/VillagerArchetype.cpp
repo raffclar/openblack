@@ -106,6 +106,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	// only villagers are counted yet, so each villager's own speed difference is drawn from the same spread but not the
 	// same one as the game gives that villager
 	person.creationIndex = registry.Context().thingsMade++;
+	person.kind = type;
 	registry.Assign<WallHug>(
 	    entity, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = GetSpeedStateSpeed(info.speedGroup.speedDefault)});
 	// A child made as a child wears its kind's child model; the rest their job's
