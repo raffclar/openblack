@@ -28,6 +28,7 @@
 #include "Common/GameRandom.h"
 #include "ECS/BuildingSiteRules.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/LivingAction.h"
@@ -179,10 +180,10 @@ bool LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 	return facesIt;
 }
 
-/// The villager's storage pit: its town's, else its home when that is a storage pit
+/// The store that the villager uses as a member of its own town
 std::optional<entt::entity> StoragePitOf(const Villager& villager)
 {
-	return construction::StoragePitOf(TownOf(villager));
+	return villager_build::StoreOf(villager, TownOf(villager));
 }
 
 bool IsFunctional(std::optional<entt::entity> pit)
@@ -882,13 +883,14 @@ uint32_t villager_build::GotoStoragePitForDropOff(LivingAction& action)
 
 uint32_t villager_build::ArrivesAtStoragePitForDropOff(LivingAction& action)
 {
-	return DropOffAtStoragePit(action, StoragePitOf(VillagerOf(action)));
+	return DropOffAtStoragePit(action, TownOf(VillagerOf(action)));
 }
 
-uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional<entt::entity> pit)
+uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, entt::entity town)
 {
 	const auto villager = EntityOf(action);
 	auto& person = VillagerOf(action);
+	const auto pit = StoreOf(person, town);
 	const auto type = villager_carry::HeldResource(person);
 	const auto held = type == ResourceType::Food ? person.foodHeld : person.woodHeld;
 	if (type != ResourceType::None && held != 0)
@@ -918,9 +920,9 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional
 			MoveOnPathsTo(action, *pit, door, VillagerStates::DecideWhatToDo);
 			return 1;
 		}
-		// Without a storage pit that works it leaves all its load in its town's temporary pile, at the pile's edge
+		// Without a storage pit that works it leaves all its load in the temporary pile of the town, at the pile's edge
 		// nearest it. The pile keeps what it can take; the villager has none left.
-		if (const auto store = TemporaryStoreOf(TownOf(person), GroundOf(villager), type); store.has_value())
+		if (const auto store = TemporaryStoreOf(town, GroundOf(villager), type); store.has_value())
 		{
 			if (!villager_home::AreWeThere(villager, store->edge))
 			{
@@ -942,13 +944,24 @@ uint32_t villager_build::DropOffAtStoragePit(LivingAction& action, std::optional
 
 glm::vec2 villager_build::ResourceDropoffPos(entt::entity villager, ResourceType type)
 {
-	const auto& person = Entities().Get<const Villager>(villager);
-	const auto pit = StoragePitOf(person);
+	return ResourceDropoffPos(villager, type, TownOf(Entities().Get<const Villager>(villager)));
+}
+
+glm::vec2 villager_build::ResourceDropoffPos(entt::entity villager, ResourceType type, entt::entity town)
+{
+	const auto pit = StoreOf(Entities().Get<const Villager>(villager), town);
 	if (IsFunctional(pit))
 	{
 		return villager_home::ArrivePosition(*pit);
 	}
 	const auto here = GroundOf(villager);
-	const auto store = TemporaryStoreOf(TownOf(person), here, type);
+	const auto store = TemporaryStoreOf(town, here, type);
 	return store.has_value() ? store->edge : here;
+}
+
+std::optional<entt::entity> villager_build::StoreOf(const Villager& villager, entt::entity town)
+{
+	const auto& registry = Entities();
+	const auto home = registry.Valid(villager.abode) && registry.AllOf<Abode>(villager.abode) ? villager.abode : entt::null;
+	return villager_carry::StoreOf(town != entt::null ? construction::StoragePitOf(town) : std::nullopt, home);
 }

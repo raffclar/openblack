@@ -145,6 +145,13 @@ enum class Shadow : uint8_t
 	return highDetail ? Shadow::Projected : Shadow::FootBlobs;
 }
 
+/// Whether a thing is drawn with its high mesh at every distance, with no detail bands, fade or far smudge: a thing
+/// with detail meshes that a script draws in high detail, unless the thing bends with the land
+[[nodiscard]] constexpr bool DrawsHighMeshAtAnyDistance(bool hasDetailMeshes, bool highDetail, bool morphsWithTerrain)
+{
+	return hasDetailMeshes && highDetail && !morphsWithTerrain;
+}
+
 /// Where a high-detail villager's body, and so its eyes, are drawn: in the opening hand's grip while it holds the
 /// villager, otherwise where the villager stands
 [[nodiscard]] constexpr glm::vec3 DrawnAt(const std::optional<glm::vec3>& heldAt, const glm::vec3& standsAt)

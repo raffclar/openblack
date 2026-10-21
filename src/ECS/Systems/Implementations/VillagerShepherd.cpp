@@ -45,6 +45,7 @@
 #include "ECS/WallHugRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "VillagerBuild.h"
 #include "VillagerHome.h"
 #include "VillagerMoveToObject.h"
 
@@ -224,12 +225,7 @@ entt::entity NearestAnimal(entt::entity villager, entt::entity flock, float reac
 /// The villager's town's store, when it works
 std::optional<entt::entity> WorkingStoreOf(entt::entity villager)
 {
-	const auto town = TownOf(villager);
-	if (town == entt::null)
-	{
-		return std::nullopt;
-	}
-	const auto pit = construction::StoragePitOf(town);
+	const auto pit = villager_build::StoreOf(Entities().Get<const Villager>(villager), TownOf(villager));
 	if (!pit.has_value() || !villager_home::IsFunctional(*pit))
 	{
 		return std::nullopt;

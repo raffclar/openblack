@@ -10,6 +10,9 @@
 #pragma once
 
 #include <cstdint>
+#include <optional>
+
+#include <entt/entity/entity.hpp>
 
 #include "ECS/Components/Villager.h"
 #include "Enums.h"
@@ -33,5 +36,17 @@ uint16_t PutDown(components::Villager& villager, ResourceType type, uint16_t amo
 /// Which of its loads it carries most of: food when it has more food than wood, else wood when it has any, else none.
 /// The loads are compared as the game compares them, unsigned.
 [[nodiscard]] ResourceType HeldResource(const components::Villager& villager);
+
+/// The store where a villager takes and leaves its loads: the storage pit of the town, else the home of the villager.
+/// The home is the store when the town has no storage pit or when there is no town. Each user of the store then
+/// checks that it works.
+[[nodiscard]] constexpr std::optional<entt::entity> StoreOf(std::optional<entt::entity> townPit, entt::entity home)
+{
+	if (townPit.has_value())
+	{
+		return townPit;
+	}
+	return home != entt::null ? std::optional(home) : std::nullopt;
+}
 
 } // namespace openblack::ecs::villager_carry

@@ -177,6 +177,11 @@ TEST(HighDetail, KeptOnlyWhileAScriptHoldsTheBars)
 TEST(HighDetail, CastsAProjectedShadowInPlaceOfFootBlobsUntilTheScriptLetsGo)
 {
 	namespace hd = openblack::ecs::high_detail_rules;
+	// A villager that a script draws in high detail keeps its high mesh at every distance
+	EXPECT_TRUE(hd::DrawsHighMeshAtAnyDistance(true, true, false));
+	EXPECT_FALSE(hd::DrawsHighMeshAtAnyDistance(true, false, false));
+	EXPECT_FALSE(hd::DrawsHighMeshAtAnyDistance(false, true, false));
+	EXPECT_FALSE(hd::DrawsHighMeshAtAnyDistance(true, true, true));
 	EXPECT_EQ(hd::ShadowOf(true), hd::Shadow::Projected);
 	EXPECT_EQ(hd::ShadowOf(false), hd::Shadow::FootBlobs);
 	// While the cinema bars are held the family keeps its projected shadow; when control comes back it has blobs again
