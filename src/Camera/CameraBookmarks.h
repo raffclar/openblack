@@ -15,6 +15,7 @@
 #include <array>
 #include <bit>
 #include <optional>
+#include <span>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -33,6 +34,14 @@ inline constexpr size_t k_SteppedSlots = 8;
 inline constexpr size_t k_AllSlots = 11;
 /// The slot of the go-back key: the camera's view before the last jump to a bookmark
 inline constexpr size_t k_BackSlot = 10;
+/// The slot of the town key: the Tab key keeps the place of the town that it flies to. Nothing draws this slot or flies
+/// to it.
+inline constexpr size_t k_TownSlot = 8;
+
+/// The Tab key flies the camera from the place of the town, less the first distance on x, plus the others on y and z
+inline constexpr float k_TownViewX = std::bit_cast<float>(0x41C3999Au);
+inline constexpr float k_TownViewY = std::bit_cast<float>(0x41E3075Fu);
+inline constexpr float k_TownViewZ = std::bit_cast<float>(0x423D999Au);
 
 /// A marker hangs this far above its place on the land, or above the thing that it is on
 inline constexpr float k_MarkerLift = 2.0f;
@@ -75,5 +84,23 @@ enum class FollowKey : uint8_t
 	Stop,
 };
 [[nodiscard]] FollowKey ShiftKey(bool onThing, std::optional<size_t> followed, size_t slot);
+
+/// A town of the player, as the Tab key sees it
+struct TownStop
+{
+	uint32_t id {0};
+	/// The town has a working storage pit or a village centre, which the camera can fly to
+	bool hasPlace {false};
+};
+
+/// The town that the Tab key flies to, from the towns of the player in the order that the player got them. The search
+/// starts at the last town and goes back through the list. At the town that the key flew to last, it takes the town
+/// before that one. Before the first town, it takes the last town. A town with no place is passed over. If no town
+/// before the last town of the key has a place, or the key flew to no town yet, the search takes the town before each
+/// town in turn, from the last town. None when no town has a place.
+[[nodiscard]] std::optional<size_t> NextTown(std::span<const TownStop> towns, std::optional<uint32_t> lastTown);
+
+/// The camera position from which the Tab key flies to the place of a town
+[[nodiscard]] glm::vec3 TownViewFrom(glm::vec3 place);
 
 } // namespace openblack::camera_bookmarks

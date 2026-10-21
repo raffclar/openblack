@@ -424,10 +424,29 @@ TEST(SavedSystemState, TheGoBackViewTheFollowAndTheBookmarkSwitchComeBack)
 	reflection::Save(out, size_t {3});
 	reflection::Save(out, std::optional(size_t {3}));
 	reflection::Save(out, false);
+	// The place that the town key keeps
+	reflection::Save(out, std::optional(glm::vec3 {300.0f, 8.0f, 400.0f}));
+	reflection::Save(out, std::optional(glm::vec3 {-24.0f, 28.0f, 47.0f}));
 	CameraBookmarkSystem bookmarks;
 	LoadInto(bookmarks, out.Bytes());
 	EXPECT_EQ(bookmarks.GetFollowed(), std::optional(size_t {3}));
 	EXPECT_FALSE(bookmarks.IsEnabled());
+}
+
+TEST(SavedSystemState, BookmarksSavedBeforeTheTownKeyComeBack)
+{
+	reflection::BinaryWriter out(Context());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, std::optional<glm::vec3>());
+	reflection::Save(out, size_t {2});
+	reflection::Save(out, std::optional<size_t>());
+	reflection::Save(out, true);
+	CameraBookmarkSystem bookmarks;
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(Context(), out.Bytes(), identity);
+	ASSERT_TRUE(bookmarks.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_TRUE(bookmarks.IsEnabled());
 }
 
 TEST(SavedSystemState, BookmarksWithNoGoBackViewAndNoFollowComeBack)
