@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <utility>
 
 using namespace openblack;
@@ -195,6 +196,23 @@ std::optional<size_t> creature_audio::SoundingSlot(std::span<const float> weight
 		}
 	}
 	return heaviest;
+}
+
+std::optional<size_t> creature_audio::BlendSoundingSlot(std::span<const size_t> slotAnimations, std::span<const size_t> blend,
+                                                        size_t sounding)
+{
+	if (slotAnimations.empty() || !std::ranges::all_of(slotAnimations, [blend](size_t animation) {
+		    return std::ranges::find(blend, animation) != blend.end();
+	    }))
+	{
+		return std::nullopt;
+	}
+	const auto found = std::ranges::find(slotAnimations, sounding);
+	if (found == slotAnimations.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(slotAnimations.begin(), found));
 }
 
 SoundSize creature_audio::SizeKey(float size)

@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <map>
+#include <span>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -382,4 +383,15 @@ TEST(CreatureAudio, SoundsDoNotDependOnTheFrameRate)
 		EXPECT_EQ(std::ranges::count(heard, 18), std::ranges::count(expected, 18)) << rate << " frames a second";
 		EXPECT_EQ(std::ranges::count(heard, 133), std::ranges::count(expected, 133)) << rate << " frames a second";
 	}
+}
+
+TEST(CreatureAudio, APointSoundsByItsFirstAnimationWhateverTheWeights)
+{
+	constexpr std::array<size_t, 4> k_Point {208, 209, 210, 211};
+	EXPECT_EQ(BlendSoundingSlot(std::array<size_t, 4> {208, 209, 210, 211}, k_Point, 208), 0u);
+	EXPECT_EQ(BlendSoundingSlot(std::array<size_t, 2> {211, 208}, k_Point, 208), 1u);
+	// Another blend, such as a walk into a run, goes by the weights
+	EXPECT_EQ(BlendSoundingSlot(std::array<size_t, 2> {208, 1}, k_Point, 208), std::nullopt);
+	EXPECT_EQ(BlendSoundingSlot(std::array<size_t, 1> {210}, k_Point, 208), std::nullopt);
+	EXPECT_EQ(BlendSoundingSlot(std::span<const size_t> {}, k_Point, 208), std::nullopt);
 }

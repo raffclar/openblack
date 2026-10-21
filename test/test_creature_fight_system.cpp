@@ -1007,3 +1007,27 @@ TEST_F(CreatureFightSystemTest, TheFinishMovesOnAtOnceAndEndsByTheSpan)
 	EXPECT_EQ(fighter.state, fight::State::Idle);
 	Locator::creatureAnimationSystem::reset();
 }
+
+// A frozen creature fights with fewer milliseconds in each turn: its animations move on by its own turn's time
+// NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
+TEST_F(CreatureFightSystemTest, AFrozenFighterMovesOnByItsOwnShorterTurn)
+{
+	Locator::creatureAnimationSystem::emplace<SecondLongAnimations>();
+	auto& registry = Locator::entitiesRegistry::value();
+	PutInStates(registry, first, fight::State::Stance, second);
+	registry.Get<CreatureAnimation>(first).playbackScale = 0.5f;
+	auto& fighter = registry.Get<CreatureFighting>(first).fighter;
+	auto& other = registry.Get<CreatureFighting>(second).fighter;
+	fighter.timeMs = 0.0f;
+	other.timeMs = 0.0f;
+	fights.ProcessTurn();
+	const auto speed = fight::PlaybackSpeed(fight::animations::k_Stance, 1.0f);
+	EXPECT_EQ(fighter.timeMs, static_cast<float>(fight::TurnAdvance(speed, 50)));
+	EXPECT_EQ(other.timeMs, static_cast<float>(fight::TurnAdvance(speed, 100)));
+	// Frozen through, it does not move on at all
+	registry.Get<CreatureAnimation>(first).playbackScale = 0.0f;
+	const auto before = fighter.timeMs;
+	fights.ProcessTurn();
+	EXPECT_EQ(fighter.timeMs, before);
+	Locator::creatureAnimationSystem::reset();
+}

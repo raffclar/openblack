@@ -113,6 +113,12 @@ bool creature_pointing::RoutePointOver(bool ready, bool ending, float timeMs, in
 	return ready && ending && static_cast<int32_t>(timeMs) + stepMs >= static_cast<int32_t>(endDurationMs);
 }
 
+std::pair<int32_t, int32_t> creature_pointing::RoutePointEndSounds(float timeMs, int32_t stepMs, float endDurationMs)
+{
+	const auto from = static_cast<int32_t>(timeMs);
+	return {from, std::min(static_cast<int32_t>(endDurationMs), from + stepMs)};
+}
+
 float creature_pointing::AdvanceTime(float timeMs, float stepMs, float pointMs, bool ending)
 {
 	if (ending || timeMs < pointMs)

@@ -10,6 +10,7 @@
 #include <cmath>
 
 #include <array>
+#include <utility>
 
 #include <gtest/gtest.h>
 
@@ -226,4 +227,12 @@ TEST(CreatureGesture, AGesturePastTheLastFails)
 	using namespace creature_gesture;
 	Drawing drawing {.drawn = 0.0f, .turns = 100};
 	EXPECT_EQ(Advance(drawing, k_LastGesture + 1, true, 0.1f), Outcome::Failed);
+}
+
+// In the turn that the point at the route ends, the events of the end animation from the arm's time to the end sound
+TEST(CreaturePointing, TheEndOfAPointAtTheRouteSoundsTheRestOfItsLastAnimation)
+{
+	using namespace creature_pointing;
+	EXPECT_EQ(RoutePointEndSounds(883.9f, 117, 1000.0f), std::pair(883, 1000));
+	EXPECT_EQ(RoutePointEndSounds(500.0f, 117, 1000.0f), std::pair(500, 617));
 }

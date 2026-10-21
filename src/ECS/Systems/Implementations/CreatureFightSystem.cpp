@@ -88,6 +88,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/CreatureScars.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
@@ -141,6 +142,15 @@ constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface
 constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
+
+/// The milliseconds of a game turn for the creature: a frozen creature has fewer, down to none. Its fight animations,
+/// its cast hold, the tests of its blows and the drips of its blood move on by these.
+int32_t TurnMsOf(const CreatureAnimation* animation)
+{
+	const float pace = animation != nullptr ? animation->playbackScale : 1.0f;
+	return creature_walk_planner::TurnMs(pace, static_cast<int32_t>(k_TurnMilliseconds));
+}
+
 /// A face is due again once its wait is within this much of over
 constexpr float k_FaceDue = 1e-3f;
 /// The stages before the duel give up waiting after this long
@@ -2972,7 +2982,8 @@ void CreatureFightSystem::AttemptBlow(entt::entity creature, fight::Band band, f
 	const auto bones = BonesOf(opponent);
 	const auto towards = opponentTransform.position - transform.position;
 	const auto unitTowards = glm::length(towards) > 0.0f ? glm::normalize(towards) : towards;
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The points of the blows lean with the slope of the land, as the body does
+	const auto placement = ecs::creature_placement::PlacementOf(registry, creature, transform);
 	const auto opponentSize = ShownSize(registry.Get<const Creature>(opponent));
 	std::vector<fight::BlowDepth> blows;
 	blows.reserve(fighting.reaches.size());
@@ -3049,10 +3060,10 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimation(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	constexpr auto k_StepMs = static_cast<int32_t>(k_TurnMilliseconds);
 	auto* fighting = registry.TryGet<CreatureFighting>(entity);
 	auto* locomotion = registry.TryGet<CreatureLocomotion>(entity);
 	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	const auto stepMs = TurnMsOf(animation);
 	if (fighting == nullptr || locomotion == nullptr || animation == nullptr || fighting->fighter.state == fight::State::Idle)
 	{
 		return std::nullopt;
@@ -3081,7 +3092,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	// moves on in this turn. The computer chooses its next move in its stance.
 	const auto endingState = fighting->fighter.state;
 	if ((endingState == fight::State::Action || endingState == fight::State::BlockRecoil) &&
-	    fight::ActionEnds(fighting->fighter.timeMs, fight::TurnAdvance(speed, k_StepMs), duration))
+	    fight::ActionEnds(fighting->fighter.timeMs, fight::TurnAdvance(speed, stepMs), duration))
 	{
 		fight::Enter(fighting->fighter, fight::AfterAnimation(endingState, hasOpponent));
 		if (endingState == fight::State::Action && fighting->fighter.control != fight::Control::Computer &&
@@ -3107,14 +3118,14 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	// The start, the finish, and the start and end of a block or a cast test their end before their animation moves on.
 	// A fighter that was called off moves on from its stance, its block or its cast at once. The next state then makes
 	// its turn at once: its animation moves on in the same turn.
-	const auto spanMs = fight::TestSpanMs(k_TurnMs, ShownSize(body), animation->realTime);
+	const auto spanMs = fight::TestSpanMs(static_cast<float>(stepMs), ShownSize(body), animation->realTime);
 	bool entered = false;
 	{
 		auto& current = fighting->fighter;
 		const auto ending = current.state;
 		const bool ends = fight::EndsByOwnTest(ending) &&
-		                  fight::OwnTestEnds(ending, current.timeMs, fight::EndTestMs(ending, speed, k_StepMs, spanMs),
-		                                     duration, current.stateMs, k_StepMs);
+		                  fight::OwnTestEnds(ending, current.timeMs, fight::EndTestMs(ending, speed, stepMs, spanMs), duration,
+		                                     current.stateMs, stepMs);
 		auto next = current.stopping ? fight::StopTransition(ending, ends) : std::nullopt;
 		if (!next.has_value() && ends)
 		{
@@ -3177,7 +3188,7 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 	if ((fighter.state == fight::State::Action || fighter.state == fight::State::BlockRecoil) && duration > 0.0f)
 	{
 		const auto scale = std::abs(registry.Get<const Transform>(entity).scale.x);
-		auto by = fight::TurnRootMove(DisplacementOf(body.species, fighter.animation), speed, k_StepMs, scale,
+		auto by = fight::TurnRootMove(DisplacementOf(body.species, fighter.animation), speed, stepMs, scale,
 		                              static_cast<int32_t>(duration), locomotion->heading.Radians());
 		const auto at = Flat(locomotion->toPosition);
 		const auto to =
@@ -3197,17 +3208,17 @@ std::optional<CreatureFightSystem::ActionStep> CreatureFightSystem::StepAnimatio
 		const auto durationMs = static_cast<int32_t>(duration);
 		fighter.timeMs = durationMs > 0 ? static_cast<float>(creature_walk_planner::AdvanceLoop(
 		                                      static_cast<int32_t>(fighter.timeMs),
-		                                      fight::StateAdvanceMs(fighter.state, speed, k_StepMs, spanMs), durationMs))
+		                                      fight::StateAdvanceMs(fighter.state, speed, stepMs, spanMs), durationMs))
 		                                : 0.0f;
 		if (!entered)
 		{
-			fighter.stateMs += static_cast<float>(k_StepMs);
+			fighter.stateMs += static_cast<float>(stepMs);
 		}
 	}
 	else
 	{
-		fighter.timeMs += static_cast<float>(fight::TurnAdvance(speed, k_StepMs));
-		fighter.stateMs += static_cast<float>(k_StepMs);
+		fighter.timeMs += static_cast<float>(fight::TurnAdvance(speed, stepMs));
+		fighter.stateMs += static_cast<float>(stepMs);
 	}
 
 	auto& current = fighting->fighter;
@@ -3286,7 +3297,8 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	const auto size = ShownSize(body);
 	const bool special = attacker.animation == fight::animations::k_AttackSpecial;
 	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto spanMs = fight::TestSpanMs(k_TurnMs, size, animation != nullptr && animation->realTime);
+	const auto spanMs =
+	    fight::TestSpanMs(static_cast<float>(TurnMsOf(animation)), size, animation != nullptr && animation->realTime);
 	const auto landMs = static_cast<int32_t>(fighting.hitTimesMs.at(blow));
 	const auto times = fight::BlowTestTimes(fromMs, spanMs, landMs);
 	if (times.empty())
@@ -3295,7 +3307,8 @@ void CreatureFightSystem::TestBlow(entt::entity creature, int32_t fromMs)
 	}
 	auto& animations = Locator::creatureAnimationSystem::value();
 	const auto& transform = registry.Get<const Transform>(creature);
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The bone that strikes leans with the slope of the land, as the body does
+	const auto placement = ecs::creature_placement::PlacementOf(registry, creature, transform);
 	const auto worldBone = [&](uint32_t which, int32_t timeMs) -> std::optional<glm::vec3> {
 		const auto point =
 		    animations.BoneInAnimation(creature, attacker.animation, static_cast<float>(timeMs), which, attacker.mirrored);
@@ -3621,7 +3634,7 @@ void CreatureFightSystem::ProcessDrips()
 			{
 				continue;
 			}
-			drip.ms += static_cast<int32_t>(k_TurnMilliseconds);
+			drip.ms += TurnMsOf(registry.TryGet<const CreatureAnimation>(creature));
 			const auto corners = drawn.has_value()
 			                         ? posed_model::CornersOnSkin(
 			                               registry, creature, *drawn->first, drawn->second,

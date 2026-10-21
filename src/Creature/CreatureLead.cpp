@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include <algorithm>
+
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/X87.h"
@@ -43,6 +45,16 @@ float creature_lead::SpeedOf(uint16_t speed)
 glm::vec3 creature_lead::PlaceOf(const Living& living)
 {
 	return {map_coords::ToMetres(living.mapPosition.x), living.height, map_coords::ToMetres(living.mapPosition.y)};
+}
+
+creature_lead::Living creature_lead::CreatureAsLiving(glm::ivec2 mapPosition, float height, int32_t tableSpeed, bool onItsWay)
+{
+	constexpr int32_t k_MostSpeed = 0xFFFF;
+	return {.mapPosition = mapPosition,
+	        .height = height,
+	        .speed = static_cast<uint16_t>(std::clamp(tableSpeed, 0, k_MostSpeed)),
+	        .gameAngle = 0,
+	        .moved = onItsWay};
 }
 
 glm::vec3 creature_lead::WhereAfter(const Living& living, float seconds)

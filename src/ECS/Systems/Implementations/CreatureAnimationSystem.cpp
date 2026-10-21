@@ -61,6 +61,7 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/CreaturePlacement.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
@@ -1009,9 +1010,10 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	{
 		return;
 	}
-	// The pose of the last turn becomes the older pose. The first pose is both poses.
-	auto pose = creature_turn_pose::ToWorld(
-	    animation->boneMatrices, creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	// The pose of the last turn becomes the older pose. The first pose is both poses. The body of the turn leans with the
+	// slope of the land under it.
+	auto pose = creature_turn_pose::ToWorld(animation->boneMatrices,
+	                                        ecs::creature_placement::PlacementOf(registry, entity, *transform));
 	animation->olderTurnPose = animation->newerTurnPose.empty() ? pose : std::move(animation->newerTurnPose);
 	animation->newerTurnPose = std::move(pose);
 	animation->lastTurnBones.resize(animation->newerTurnPose.size());

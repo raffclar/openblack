@@ -34,6 +34,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureAnimation.h"
+#include "Creature/CreatureAudio.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
@@ -89,6 +90,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -958,6 +960,19 @@ void RoutePointTurn(entt::entity creature, CreatureLocomotion& self, const WalkT
 	else if (creature_pointing::RoutePointOver(routePoint.ready, routePoint.ending, routePoint.timeMs, turn.spinMs,
 	                                           turn.moves.Duration(creature_pointing::k_Animations.at(2))))
 	{
+		// The events of the high animation to the left sound as the arm gets to its end
+		const auto end = creature_pointing::k_Animations.at(2);
+		if (turn.moves.rig != nullptr && end < turn.moves.rig->soundEvents.size() && Locator::creatureAudioSystem::has_value())
+		{
+			const auto durationMs = turn.moves.Duration(end);
+			const auto [fromMs, toMs] = creature_pointing::RoutePointEndSounds(routePoint.timeMs, turn.spinMs, durationMs);
+			for (const auto& fired :
+			     creature_audio::EventsPassed(turn.moves.rig->soundEvents.at(end), static_cast<float>(fromMs),
+			                                  static_cast<float>(toMs), static_cast<uint32_t>(durationMs), false))
+			{
+				Locator::creatureAudioSystem::value().PlayAction(creature, fired.event);
+			}
+		}
 		self.motion = Motion::Planning;
 		self.routePoint.reset();
 		self.tracks.clear();
