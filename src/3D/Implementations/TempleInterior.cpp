@@ -1170,22 +1170,23 @@ void TempleInterior::UpdateMapMarkers(float seconds)
 	}
 	using namespace ecs::components;
 	auto& registry = Locator::entitiesRegistry::value();
+	const auto land = registry.Context().mapScriptGlobals.landNumber;
 	if (_toggles.IsShown(TempleToggles::Display::Temples))
 	{
 		// Every player's temple
-		registry.Each<const Temple, const Transform>([this](const Temple& temple, const Transform& transform) {
+		registry.Each<const Temple, const Transform>([this, land](const Temple& temple, const Transform& transform) {
 			_mapMarkers.push_back({.kind = TempleMapMarkerKind::Temple,
 			                       .position = _map.MarkerPosition(glm::vec2(transform.position.x, transform.position.z)),
-			                       .colour = TempleMap::MarkerColour(temple.owner)});
+			                       .colour = TempleMap::MarkerColour(temple.owner, land)});
 		});
 	}
 	if (_toggles.IsShown(TempleToggles::Display::Creatures))
 	{
 		// Every creature, in its player's colour
-		registry.Each<const Creature, const Transform>([this](const Creature& creature, const Transform& transform) {
+		registry.Each<const Creature, const Transform>([this, land](const Creature& creature, const Transform& transform) {
 			_mapMarkers.push_back({.kind = TempleMapMarkerKind::Creature,
 			                       .position = _map.MarkerPosition(glm::vec2(transform.position.x, transform.position.z)),
-			                       .colour = TempleMap::MarkerColour(creature.owner)});
+			                       .colour = TempleMap::MarkerColour(creature.owner, land)});
 		});
 	}
 	if (_toggles.IsShown(TempleToggles::Display::Challenges))

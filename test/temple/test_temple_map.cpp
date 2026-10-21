@@ -116,10 +116,19 @@ TEST(TempleMap, MapsTheWorldBackAndForth)
 TEST(TempleMap, ColoursMarkersByTheirPlayersLightened)
 {
 	// Player one's red, a quarter of the way to white
-	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::PLAYER_ONE), glm::u8vec3(0xFF, 0x46 + 0x2E, 0x46 + 0x2E));
+	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::PLAYER_ONE, 0), glm::u8vec3(0xFF, 0x46 + 0x2E, 0x46 + 0x2E));
 	// The neutral player's black is white, as are the things of no player
-	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::NEUTRAL), glm::u8vec3(0xFF));
-	EXPECT_EQ(TempleMap::MarkerColour(std::nullopt), glm::u8vec3(0xFF));
+	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::NEUTRAL, 0), glm::u8vec3(0xFF));
+	EXPECT_EQ(TempleMap::MarkerColour(std::nullopt, 0), glm::u8vec3(0xFF));
+}
+
+TEST(TempleMap, SomeLandsGiveTheirComputerPlayersTheColoursOfOthers)
+{
+	// On the first land the second player takes the seventh colour, orange
+	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::PLAYER_TWO, 1), glm::u8vec3(0xFF, 0xA2 + 0x17, 0x47 + 0x2E));
+	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::PLAYER_TWO, 0), glm::u8vec3(0x47 + 0x2E, 0xFF, 0x54 + 0x2A));
+	// The first player keeps its colour
+	EXPECT_EQ(TempleMap::MarkerColour(PlayerNames::PLAYER_ONE, 1), glm::u8vec3(0xFF, 0x46 + 0x2E, 0x46 + 0x2E));
 }
 
 TEST(TempleMap, StandsMarkersOnTheCellOfTheirThings)
