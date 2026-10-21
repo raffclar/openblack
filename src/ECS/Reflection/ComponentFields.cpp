@@ -2107,7 +2107,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Villager::pregnancy>("pregnancy")
 	    .Field<&components::Villager::mother>("mother")
 	    .Field<&components::Villager::crechePath>("crechePath")
-	    .Field<&components::Villager::crecheLeg>("crecheLeg");
+	    .Field<&components::Villager::crecheLeg>("crecheLeg")
+	    .Field<&components::Villager::kind>("kind");
 	Reflect<components::VillagerCreatureInspection>(context)
 	    .Field<&components::VillagerCreatureInspection::keep>("keep")
 	    .Field<&components::VillagerCreatureInspection::lookTurns>("lookTurns");
