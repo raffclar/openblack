@@ -242,6 +242,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Hand/HandClickRules.h"
+#include "Hand/HandGrabRules.h"
 #include "Hand/ScriptHandState.h"
 #include "Help/DialogueText.h"
 #include "Help/HelpProfile.h"
@@ -596,6 +597,16 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	const auto player =
 	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	const auto seedType = static_cast<SpellSeedType>(subtype);
+	// The hand takes the miracle only when it is ready for an object
+	const bool holdsSomething =
+	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
+	    Locator::magicSystem::value().IsHandBusy();
+	const bool holdsCreature =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	if (!hand_grab::ReadyForObject(holdsSomething, holdsCreature))
+	{
+		return entt::null;
+	}
 	const auto seed = Locator::magicSystem::value().GiveSeedToHand(player, seedType, magic::k_BasePowerUpLevel, 1.0f);
 	if (seed == entt::null)
 	{

@@ -151,6 +151,13 @@ struct Gate
 /// How long a press has been held: by the clock, but no more than the game turns gone by allow
 [[nodiscard]] uint32_t ElapsedMs(uint32_t nowMs, uint32_t pressMs, uint32_t turn, uint32_t pressTurn);
 
+/// Whether the hand is ready to take an object that a script or a globe puts in it: it holds nothing (no thing, no
+/// handful and no miracle), and it does not hold a creature to stroke or slap it
+[[nodiscard]] constexpr bool ReadyForObject(bool holdsSomething, bool holdsCreature)
+{
+	return !holdsSomething && !holdsCreature;
+}
+
 /// What a press of the Action button does to a fireball under the empty hand, in the player's influence
 enum class FireBallPress : uint8_t
 {

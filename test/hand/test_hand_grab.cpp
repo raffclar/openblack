@@ -495,3 +495,10 @@ TEST(HandGrab, AFireBallIsTakenAtTheEndOfATapAndTappedUntilThen)
 	EXPECT_TRUE(TapsFireBallAtRelease(k_GrabWaitMs));
 	EXPECT_FALSE(TapsFireBallAtRelease(k_GrabWaitMs + 1));
 }
+
+TEST(HandGrab, TheHandIsReadyForAnObjectOnlyWhenItHoldsNothingAndNoCreature)
+{
+	EXPECT_TRUE(ReadyForObject(false, false));
+	EXPECT_FALSE(ReadyForObject(true, false));
+	EXPECT_FALSE(ReadyForObject(false, true));
+}

@@ -332,3 +332,11 @@ TEST(HandDemo, AStartTakesOffOnlyALeashOnAndNotTiedToAThing)
 	// A demonstration without hand modify keeps the leash on
 	EXPECT_FALSE(hand_demo::TakesOffLeash(true, true, false));
 }
+
+TEST(HandDemo, AFoundThingThatTheHandCannotClickTakesNoClick)
+{
+	EXPECT_TRUE(FoundThingTakesClick({}));
+	EXPECT_TRUE(FoundThingTakesClick({.building = true, .built = 0.25f}));
+	EXPECT_FALSE(FoundThingTakesClick({.building = true, .built = 0.0f}));
+	EXPECT_FALSE(FoundThingTakesClick({.dyingVillager = true}));
+}
