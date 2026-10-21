@@ -88,3 +88,22 @@ TEST(CreatureLead, TheMovingReachIsTheMiddleDepthOfTheCorners)
 	EXPECT_FLOAT_EQ(creature_reach::MovingReach(points, 1.0f), 2.0f);
 	EXPECT_FLOAT_EQ(creature_reach::MovingReach(points, 2.5f), 5.0f);
 }
+
+TEST(CreatureLead, ACreatureOnItsWayIsLedByItsTableSpeedAlongPlusX)
+{
+	// Every species' table gives 1475 units, about 2.25 metres a second
+	constexpr int32_t k_TableSpeed = 1475;
+	const glm::ivec2 at {map_coords::ToFixed(100.0f), map_coords::ToFixed(200.0f)};
+	const auto walking = lead::CreatureAsLiving(at, 3.0f, k_TableSpeed, true);
+	EXPECT_EQ(walking.speed, k_TableSpeed);
+	EXPECT_EQ(walking.gameAngle, 0);
+	EXPECT_TRUE(walking.moved);
+	// Game angle 0 is the way of +x, so the lead goes along +x whatever way the creature walks
+	const auto ahead = lead::WhereAfter(walking, 2.0f);
+	EXPECT_NEAR(ahead.x, lead::PlaceOf(walking).x + (2.0f * lead::SpeedOf(k_TableSpeed)), 1e-3f);
+	EXPECT_NEAR(ahead.z, lead::PlaceOf(walking).z, 1e-3f);
+	EXPECT_FALSE(lead::CreatureAsLiving(at, 3.0f, k_TableSpeed, false).moved);
+	// The game keeps the speed in 16 bits
+	EXPECT_EQ(lead::CreatureAsLiving(at, 3.0f, 70000, true).speed, 0xFFFF);
+	EXPECT_EQ(lead::CreatureAsLiving(at, 3.0f, -5, true).speed, 0);
+}

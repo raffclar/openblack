@@ -15,6 +15,7 @@
 #include <gtest/gtest.h>
 
 #include "Creature/CreatureKindAgendas.h"
+#include "Creature/CreatureLandTilt.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreaturePhysiology.h"
@@ -354,7 +355,8 @@ TEST(CreatureKindActions, KickingABallAboutWaitsAndDrawsTheCountAfreshEachKick)
 
 TEST(CreatureKindActions, AKickFliesHalfUpHalfAheadOnFlatLand)
 {
-	const auto lean = creature_object_actions::LeanOf(5.0f, 5.0f, 5.0f, 5.0f, 2.0f);
+	const auto tilt = creature_land_tilt::FromHeights({.plusX = 5.0f, .plusZ = 5.0f, .minusX = 5.0f, .minusZ = 5.0f}, 2.0f);
+	const glm::vec2 lean {tilt.alongX, tilt.alongZ};
 	EXPECT_EQ(lean, glm::vec2(0.0f));
 	const auto velocity = creature_object_actions::KickVelocity({0.0f, -1.0f}, lean, 2.0f, 2.0f);
 	const float component = 90.0f / std::sqrt(2.0f);
@@ -366,10 +368,11 @@ TEST(CreatureKindActions, AKickFliesHalfUpHalfAheadOnFlatLand)
 TEST(CreatureKindActions, AKickTipsUpWithTheLandAheadRisingAndTheLeanIsCapped)
 {
 	// The land rises 1 over 4 along x: 1 x 0.6 / 4 = 0.15; along z it rises 10, capped at 0.3
-	const auto lean = creature_object_actions::LeanOf(6.0f, 5.0f, 15.0f, 5.0f, 2.0f);
+	const auto tilt = creature_land_tilt::FromHeights({.plusX = 6.0f, .plusZ = 15.0f, .minusX = 5.0f, .minusZ = 5.0f}, 2.0f);
+	const glm::vec2 lean {tilt.alongX, tilt.alongZ};
 	EXPECT_NEAR(lean.x, 0.15f, 1e-6f);
 	EXPECT_NEAR(lean.y, 0.3f, 1e-6f);
-	EXPECT_NEAR(creature_object_actions::LeanOf(0.0f, 10.0f, 0.0f, 0.0f, 1.0f).x, -0.3f, 1e-6f);
+	EXPECT_NEAR(creature_land_tilt::FromHeights({.plusX = 0.0f, .minusX = 10.0f}, 1.0f).alongX, -0.3f, 1e-6f);
 	// Facing +x, the up part is 1 + 0.15
 	const auto velocity = creature_object_actions::KickVelocity({1.0f, 0.0f}, lean, 1.0f, 1.0f);
 	const auto length = std::sqrt(1.0f + (1.15f * 1.15f));

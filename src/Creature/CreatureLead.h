@@ -34,6 +34,11 @@ struct Living
 	bool moved {false};
 };
 
+/// A creature as a thing that another creature aims ahead of. A creature keeps the speed of its species' table from
+/// when it was made, cut to the 16 bits that the game keeps. Its walk never changes that speed or the way that the
+/// lead reads, which stays at game angle 0, the way of +x. The lead uses it while the creature is on its way.
+[[nodiscard]] Living CreatureAsLiving(glm::ivec2 mapPosition, float height, int32_t tableSpeed, bool onItsWay);
+
 /// A living thing slower than this, in metres a second, stays where it is in the lead
 constexpr float k_LeastLeadSpeed = 0.1f;
 /// The game's speed of a living thing in metres a second, from the speed that it keeps

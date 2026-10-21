@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <utility>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -81,4 +82,7 @@ inline constexpr float k_TurnLimit = 0.4712389409542084f;
 /// Whether the point at the route is over in this turn: the creature faces the point, the point ends, and the time of the
 /// arm with the clip step of the turn gets to the end of the high animation to the left, in whole milliseconds
 [[nodiscard]] bool RoutePointOver(bool ready, bool ending, float timeMs, int32_t stepMs, float endDurationMs);
+/// The stretch of the high animation to the left whose events sound in the turn that the point at the route ends:
+/// from the time of the arm to the time with the clip step, but not past the end, in whole milliseconds
+[[nodiscard]] std::pair<int32_t, int32_t> RoutePointEndSounds(float timeMs, int32_t stepMs, float endDurationMs);
 } // namespace openblack::creature_pointing

@@ -1640,3 +1640,11 @@ openblack_setup_and_add_test(test_camera_path_start camera/test_camera_path_star
 openblack_setup_and_add_test(test_creature_mode_hand_back camera/test_creature_mode_hand_back.cpp)
 openblack_setup_and_add_test(test_magic_tree_watch test_magic_tree_watch.cpp)
 openblack_setup_and_add_test(test_swimmer_rules test_swimmer_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_land_tilt oracle/test_oracle_creature_land_tilt.cpp
+)
+set_tests_properties(
+  test_oracle_creature_land_tilt
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

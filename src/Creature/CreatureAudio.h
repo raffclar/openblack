@@ -107,6 +107,10 @@ using InfoOf = std::function<std::optional<AnimationInfo>(size_t animation)>;
 /// Of the animations played together, each by its weight, the one whose events sound: the heaviest, so that a walk
 /// blending into a run steps once rather than twice. Nothing when none weighs anything.
 [[nodiscard]] std::optional<size_t> SoundingSlot(std::span<const float> weights);
+/// Of the animations of a blend that the game moves on as one animation, the one whose events sound: the slot that
+/// plays that animation. Nothing when a slot plays an animation that is not of the blend, or no slot plays it.
+[[nodiscard]] std::optional<size_t> BlendSoundingSlot(std::span<const size_t> slotAnimations, std::span<const size_t> blend,
+                                                      size_t sounding);
 
 /// Where each layer of the body is posed in a frame: its action, gesture and face, and the animations played together by
 /// weight, with the one among them whose events sound
