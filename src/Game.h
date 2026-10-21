@@ -736,6 +736,8 @@ private:
 	/// The tooltips that the hand submits this turn for what it holds and what is under the pointer
 	void SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed);
 	void ProcessTurnCheering();
+	/// The turn of the living: each creature, villager and animal takes its turn in the order of the list of the living
+	void ProcessLivingTurn();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
 	/// Hangs the hand's tooltip by the hand as drawn this frame
 	void UpdateHandToolTipAnchor();

@@ -118,6 +118,7 @@
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/InterfaceLimits.h"
 #include "ECS/Components/LearningMarker.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mist.h"
@@ -293,6 +294,7 @@
 #include "Input/KeyRebinding.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
+#include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
@@ -1911,6 +1913,58 @@ void Game::ProcessTurnCheering()
 	}
 }
 
+void Game::ProcessLivingTurn()
+{
+	using namespace ecs::components;
+	using living_turn::Kind;
+
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& profiler = Locator::profiler::value();
+	// The list as the turn starts. A living thing made in the turn goes to the front of the list, which the walk has
+	// passed, so its first turn is the next one.
+	std::vector<living_turn::Living<entt::entity>> list;
+	const auto add = [&registry, &list](entt::entity entity, Kind kind) {
+		const auto* place = registry.TryGet<const LivingListPlace>(entity);
+		list.push_back({.id = entity, .made = place != nullptr ? place->made : 0, .kind = kind});
+	};
+	registry.Each<const Villager>([&add](entt::entity entity, const Villager&) { add(entity, Kind::Villager); });
+	registry.Each<const Animal>([&add](entt::entity entity, const Animal&) { add(entity, Kind::Animal); });
+	// A creature that is not in the list (as the body that the tattoo menu shows) is not part of the walk
+	registry.Each<const Creature, const LivingListPlace>(
+	    [&add](entt::entity entity, const Creature&, const LivingListPlace&) { add(entity, Kind::Creature); });
+	living_turn::NewestFirst(list);
+
+	auto& villagers = Locator::livingActionSystem::value();
+	auto& animals = Locator::animalSystem::value();
+	bool animalsTurn = false;
+	{
+		auto animalsBegin = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
+		animalsTurn = animals.BeginTurn();
+	}
+	{
+		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
+		living_turn::Walk(
+		    std::span<const living_turn::Living<entt::entity>>(list),
+		    [this]() { game_turn::PlayCreaturesTurn([this](game_turn::Step step) { PlayTurnStep(step); }); },
+		    [&villagers, &animals, animalsTurn](const living_turn::Living<entt::entity>& living) {
+			    if (living.kind == Kind::Villager)
+			    {
+				    villagers.VillagerTurn(living.id);
+			    }
+			    else if (animalsTurn)
+			    {
+				    // The flocks fly and the wolves run and hunt
+				    animals.AnimalTurn(living.id);
+			    }
+		    });
+	}
+	if (animalsTurn)
+	{
+		auto animalsEnd = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
+		animals.EndTurn();
+	}
+}
+
 bool Game::GameLogicLoop() noexcept
 {
 	using namespace ecs::components;
@@ -2175,23 +2229,13 @@ void Game::PlayTurnStep(game_turn::Step step)
 		Locator::creatureAnimationSystem::value().PoseTurns();
 		break;
 	}
-	case Step::Villagers:
-	{
-		auto actions = profiler.BeginScoped(Profiler::Stage::LivingActionUpdate);
-		Locator::livingActionSystem::value().Update();
+	case Step::Living:
+		ProcessLivingTurn();
 		break;
-	}
 	case Step::MapCellsAfterLiving:
 		// The living that walked this turn go into their new map cells before anything searches them
 		Locator::entitiesMap::value().Sync();
 		break;
-	case Step::Animals:
-	{
-		// The flocks fly and the wolves run and hunt, in the turn of the living
-		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
-		Locator::animalSystem::value().ProcessTurn();
-		break;
-	}
 	case Step::CreatureWebPage:
 		// The game can take a picture of the player's creature for its web page
 		if (Locator::creatureWebPageSystem::has_value())

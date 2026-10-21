@@ -151,6 +151,9 @@ class FakeAnimals final: public ecs::systems::AnimalSystemInterface
 {
 public:
 	void ProcessTurn() override {}
+	bool BeginTurn() override { return true; }
+	void AnimalTurn(entt::entity) override {}
+	void EndTurn() override {}
 	void Update(std::chrono::milliseconds, float) override {}
 	void Reset() override {}
 	entt::entity CreateFlock(glm::vec2, float, float) override { return entt::null; }

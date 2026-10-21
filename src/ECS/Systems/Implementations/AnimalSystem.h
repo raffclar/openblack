@@ -26,6 +26,9 @@ class AnimalSystem final: public AnimalSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	bool BeginTurn() override;
+	void AnimalTurn(entt::entity animal) override;
+	void EndTurn() override;
 	void Update(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;

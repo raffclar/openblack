@@ -179,6 +179,7 @@
 #include "ECS/Components/LearningMarker.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/LivingAction.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/LivingPhysics.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -1471,6 +1472,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::LivingAction::states>("states", {k_EcsComponentsLivingActionIndexNames})
 	    .Field<&components::LivingAction::turnsUntilStateChange>("turnsUntilStateChange")
 	    .Field<&components::LivingAction::turnsSinceStateChange>("turnsSinceStateChange");
+	Reflect<components::LivingListPlace>(context).Field<&components::LivingListPlace::made>("made");
 	Reflect<components::VillagerClip>(context)
 	    .Field<&components::VillagerClip::state>("state")
 	    .Field<&components::VillagerClip::clip>("clip");
@@ -3057,6 +3059,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::creatureBoneReach>("creatureBoneReach")
 	    .Field<&openblack::ecs::RegistryContext::namedVillagersUsed>("namedVillagersUsed")
 	    .Field<&openblack::ecs::RegistryContext::thingsMade>("thingsMade")
+	    .Field<&openblack::ecs::RegistryContext::livingMade>("livingMade")
 	    .Field<&openblack::ecs::RegistryContext::villagerNamesShown>("villagerNamesShown")
 	    .Field<&openblack::ecs::RegistryContext::villagerDetailsShown>("villagerDetailsShown")
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
