@@ -847,8 +847,15 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			_actionPressTaken = true;
 		}
+		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
+		// fireball, which is not a highlight.
+		const auto picked =
+		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
+		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
 		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
-		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy())
+		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() && mayPress)
 		{
 			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
@@ -897,7 +904,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		    Locator::villageTotemSystem::has_value() && Locator::pickingSystem::has_value())
 		{
 			auto& totems = Locator::villageTotemSystem::value();
-			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			if (picked.has_value())
 			{
 				if (const auto totem = totems.TotemOf(*picked);
 				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
@@ -907,12 +914,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 			}
 		}
-		// Otherwise the hand takes hold of a thing under it. A lesson can let an empty hand act only on a highlight.
-		const auto picked =
-		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
-		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
-		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
-		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
+		// Otherwise the hand takes hold of a thing under it, if the lesson lets it
 		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr && mayPress)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
@@ -3869,8 +3871,20 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				}
 			}
 		}
+		// What the hand does in this frame, which starts its blends and decides whether the camera's icons show
+		const auto mode = hand_blend::ModeOf({
+		    .shown = IsHandDrawn(),
+		    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+		    .holds = heldThing.has_value(),
+		    .holdsSeed = heldSeed.has_value(),
+		    .pulls = pulls,
+		    .knocks = _handKnocking,
+		    .gripsTotem = gripsTotem,
+		    .touchesCreature = _handOnCreature.has_value(),
+		    .movesCamera = _handCameraState,
+		});
 		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
-		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(), mode);
 		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
@@ -3883,17 +3897,6 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), handTransform->position, heldThing.has_value()));
 				// Each change of what the hand does starts a blend of the drawn hand from how it looked before
 				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-				const auto mode = hand_blend::ModeOf({
-				    .shown = IsHandDrawn(),
-				    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
-				    .holds = heldThing.has_value(),
-				    .holdsSeed = heldSeed.has_value(),
-				    .pulls = pulls,
-				    .knocks = _handKnocking,
-				    .gripsTotem = gripsTotem,
-				    .touchesCreature = _handOnCreature.has_value(),
-				    .movesCamera = _handCameraState,
-				});
 				const auto changes = _handBlend.Step({
 				    .mode = mode,
 				    .cycle = handCycle,
@@ -7298,7 +7301,18 @@ float Game::HandDrawnScale(glm::vec3 eye, glm::vec3 handPosition, bool holding) 
 
 hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
 {
-	const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
+	std::optional<HoldType> held;
+	bool offers = false;
+	if (Locator::handGrabSystem::has_value())
+	{
+		const auto& grab = Locator::handGrabSystem::value();
+		if (const auto pose = grab.GetHeldPose())
+		{
+			held = pose->hold;
+		}
+		offers = grab.OffersToCreature();
+	}
+	const bool holding = hand_feel::HoldReachesLand(held, offers);
 	const auto overSea =
 	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 	return {
@@ -7376,7 +7390,7 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	_handPose = pose;
 }
 
-void Game::UpdateHandTricons(bool handDrawn, float seconds)
+void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode)
 {
 	if (!_interface)
 	{
@@ -7459,13 +7473,10 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	tricons.cursor = _mousePosition;
 	// The same size on the screen at any distance: a part of the focal length across
 	tricons.halfSize = hand_tricons::IconHalfSize(camera.GetProjectionMatrix()[0][0], glm::ivec2(screen));
-	// The hand's empty and camera states show them, not while it holds something or is on a creature
-	bool holds = magic::HandHoldPoser::Find().has_value();
-	if (!holds && Locator::handGrabSystem::has_value())
-	{
-		holds = Locator::handGrabSystem::value().GetHeld().has_value();
-	}
-	tricons.handStateShowsIcons = !holds && !_handOnCreature.has_value();
+	// The mode of the hand decides whether they show
+	const bool scoopsLockedThing =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn().has_value();
+	tricons.handStateShowsIcons = hand_blend::AllowsCameraIcons(mode, scoopsLockedThing);
 	_interface->SetHandTricons(tricons);
 }
 

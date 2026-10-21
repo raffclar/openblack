@@ -3275,8 +3275,10 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} is made to catch {}", entt::to_integral(creature),
 	                    entt::to_integral(object));
-	// It comes across the thing that it catches, and what it was doing stops as a failure
+	// It comes across the thing that it catches. A forced plan first stops the reaction that the creature has, then
+	// what it was doing stops as a failure.
 	ComeAcross(creature, *mind, object);
+	EndReaction(creature);
 	Abandon(*mind);
 	ReleaseCast(creature);
 	creature_mind::Step step {.kind = creature_mind::Step::Kind::Object};
@@ -3285,25 +3287,43 @@ void CreatureMindSystem::ForceCatch(entt::entity creature, entt::entity object)
 	{
 		return;
 	}
-	if (const auto action = creature_mind_tables::FindAction(*tables, k_CatchAction))
+	const auto action = creature_mind_tables::FindAction(*tables, k_CatchAction);
+	if (!action.has_value())
 	{
-		mind->planner.current = creature_planner::Plan {.desire = Desire::Play,
-		                                                .action = *action,
-		                                                .object = entt::to_integral(object),
-		                                                .goalUsefulness = creature_planner::k_CatchOrGiftScore,
-		                                                .actionPriority = creature_planner::k_CatchOrGiftScore,
-		                                                .priority = creature_planner::k_CatchOrGiftScore};
-		mind->planActive = true;
-		mind->planSerial = mind->idle.serial;
-		mind->agendaSeen = mind->idle.serial;
-		mind->satisfiedByEffect = false;
-		mind->desireSeenTo = false;
+		return;
+	}
+	mind->planner.current = creature_planner::Plan {.desire = Desire::Play,
+	                                                .action = *action,
+	                                                .object = entt::to_integral(object),
+	                                                .goalUsefulness = creature_planner::k_CatchOrGiftScore,
+	                                                .actionPriority = creature_planner::k_CatchOrGiftScore,
+	                                                .priority = creature_planner::k_CatchOrGiftScore};
+	mind->planActive = true;
+	mind->planSerial = mind->idle.serial;
+	mind->agendaSeen = mind->idle.serial;
+	mind->satisfiedByEffect = false;
+	mind->desireSeenTo = false;
+	if (!mind->desires.has_value())
+	{
+		return;
+	}
+	// The catch is remembered for the player's feedback, unless nothing says why the creature wants to play
+	if (const auto source = creature_learning::PlanSource((*mind->desires)[Desire::Play]); source.has_value())
+	{
+		const auto& info = tables->actions[*action];
+		RememberAction(creature, *mind,
+		               {
+		                   .action = *action,
+		                   .desire = Desire::Play,
+		                   .object = entt::to_integral(object),
+		                   .belief = ActedOnBeliefOf(registry, object, creature),
+		                   .learnable = info.learnable,
+		                   .windowSeconds = info.learningWindowSeconds,
+		                   .source = *source,
+		               });
 	}
 	// Having decided to play, the desires that go against it are held back
-	if (mind->desires.has_value())
-	{
-		creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
-	}
+	creature_learning::SuppressOpposed(*mind->desires, Desire::Play, tables->dependencies, k_TurnsPerSecond);
 }
 
 bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object, bool leftHand, glm::vec2 camera)

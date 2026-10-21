@@ -639,7 +639,7 @@ private:
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
 	/// while the hand is put away
-	void UpdateHandTricons(bool handDrawn, float seconds);
+	void UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests

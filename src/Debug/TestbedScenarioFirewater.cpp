@@ -194,6 +194,28 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::HandTakeFireBall, .delaySeconds = 2.6f}},
 	});
 
+	// Another player's fireball rises slowly before the camera, again and again, for the player's own press on it
+	all.push_back({
+	    .id = "hand.fireball_press",
+	    .name = "The Action button on another player's fireball",
+	    .facet = Facet::Hand,
+	    .description = "Every eight seconds another player throws a fireball straight up, slowly, in the middle of the "
+	                   "screen. Put the hand on the ball and hold the Action button, or tap it. Do this again after a "
+	                   "script sets interface level 8, which lets the hand act only on highlights.",
+	    .expected = "Held for a quarter of a second, or tapped, the press takes the ball: it goes, and a fireball seed is "
+	                "in the hand. At interface level 8 the press does nothing to the ball, which falls and bursts.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 10.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 7.0f, 0.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 8.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	});
+
 	all.push_back({
 	    .id = "miracles.fireball_absorb",
 	    .name = "A fire seed takes in a fireball",

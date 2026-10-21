@@ -71,6 +71,24 @@ struct ModeInputs
 /// ignores the inputs after these. A hand that knocks ignores the totem, the creature and the camera.
 [[nodiscard]] HandMode ModeOf(const ModeInputs& inputs);
 
+/// Whether the mode of the hand lets the camera's icons by the hand show. The empty hand and the camera mode let them
+/// show. A hand that holds a thing or a seed also lets them show, but not while it scoops from a pile, a field or a
+/// fish farm that it is locked onto. The other modes do not let them show.
+[[nodiscard]] constexpr bool AllowsCameraIcons(HandMode mode, bool scoopsLockedThing)
+{
+	switch (mode)
+	{
+	case HandMode::Normal:
+	case HandMode::Camera:
+		return true;
+	case HandMode::Holding:
+	case HandMode::Seed:
+		return !scoopsLockedThing;
+	default:
+		return false;
+	}
+}
+
 /// What the hand does in this frame, for the changes that start a blend
 struct Frame
 {
