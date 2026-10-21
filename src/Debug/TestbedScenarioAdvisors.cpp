@@ -27,7 +27,7 @@ constexpr size_t k_Good = 0;
 constexpr size_t k_Evil = 1;
 /// A message set of the help that says two texts through a help script
 constexpr size_t k_TwoTextsMessage = 97;
-/// The anim of an advisor that taps on the screen, and the anim of the evil advisor that shoots himself with his hand
+/// The anim of an advisor that taps on the screen, and the hand gun anim of the evil advisor
 constexpr uint32_t k_TapScreenAnim = 58;
 constexpr uint32_t k_HandGunAnim = 60;
 
@@ -148,10 +148,10 @@ void testbed_scenarios::AddAdvisorScenarios(std::vector<Scenario>& all)
 	    .name = "The advisors' anims make their sounds",
 	    .facet = Facet::Advisors,
 	    .description = "Both advisors come out. The good advisor taps on the screen, then the evil advisor taps on the "
-	                   "screen. Then the evil advisor shoots himself with his hand. The sounds come from the in-game "
+	                   "screen. Then the evil advisor plays his hand gun anim. The sounds come from the in-game "
 	                   "bank, as the anims pass their sound points.",
 	    .expected = "Each tap on the screen knocks on the glass two times for the good advisor and seven times for the "
-	                "evil advisor. The shot of the evil advisor makes the sound of a gun. The audio log names the samples "
+	                "evil advisor. The hand gun anim makes the sound of a gun. The audio log names the samples "
 	                "162 and 161 of InGame.sad.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = AdvisorsFraming(),
