@@ -17,8 +17,10 @@
 
 #include <gtest/gtest.h>
 
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/Town.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/StatisticsRules.h"
@@ -193,6 +195,24 @@ TEST(StatisticsMiracles, EachTypeCountsTowardsItsTotal)
 	EXPECT_EQ(MiraclesCast(casts, MiracleKind::Creature), 0u);
 }
 
+TEST(StatisticsMiracles, EachTotalHasAllItsTypesAndNoOthers)
+{
+	std::array<uint32_t, 42> casts {};
+	casts.fill(1);
+	// Aggressive: three powers each of fireball, lightning and explosion, the two storms, the tornado and the ground
+	// flock
+	EXPECT_EQ(MiraclesCast(casts, MiracleKind::Aggressive), 13u);
+	// Nice: the two heals, teleport, forest, the two foods, the two shields, wood, the two waters and the flying flock
+	EXPECT_EQ(MiraclesCast(casts, MiracleKind::Nice), 12u);
+	// Creature: freeze, small, big, weak, strong, fat, thin, invisible, compassion, angry and itchy
+	EXPECT_EQ(MiraclesCast(casts, MiracleKind::Creature), 11u);
+	EXPECT_EQ(MiracleKindOf(MagicType::ExplosionOnePuTwo), MiracleKind::Aggressive);
+	EXPECT_EQ(MiracleKindOf(MagicType::StormWindRainLightning), MiracleKind::Aggressive);
+	EXPECT_EQ(MiracleKindOf(MagicType::PhysicalShield), MiracleKind::Nice);
+	EXPECT_EQ(MiracleKindOf(MagicType::WaterPowerUpOne), MiracleKind::Nice);
+	EXPECT_EQ(MiracleKindOf(MagicType::CreatureSpellCompassion), MiracleKind::Creature);
+}
+
 TEST(StatisticsSatisfaction, FoodWeighsTwiceAndTheGreaterOfEachPair)
 {
 	const SatisfactionDesires desires {
@@ -294,4 +314,28 @@ TEST(PlayerStatistics, CountsGoToTheNamedPlayer)
 	EXPECT_FLOAT_EQ(stats.chantsUsed, 2.5f);
 	// The death was put down to nobody: the neutral player
 	EXPECT_EQ(registry.Get<const ecs::components::PlayerStatistics>(neutral).peopleKilled, 1u);
+}
+
+TEST(PlayerStatistics, AGameStartNotesTheAlignmentsAndCountsTheTowns)
+{
+	ecs::Registry registry;
+	const auto one = registry.Create();
+	registry.Assign<ecs::components::Player>(one, ecs::components::Player {.name = PlayerNames::PLAYER_ONE});
+	registry.Assign<ecs::components::PlayerStatistics>(one);
+	registry.Assign<ecs::components::Alignment>(one, ecs::components::Alignment {.value = 0.4f, .pending = 0.0f});
+	const auto two = registry.Create();
+	registry.Assign<ecs::components::Player>(two, ecs::components::Player {.name = PlayerNames::PLAYER_TWO});
+	for (int i = 0; i < 3; ++i)
+	{
+		registry.Assign<ecs::components::Town>(registry.Create());
+	}
+
+	player_statistics::GameStarts(registry);
+
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::PlayerStatistics>(one).startAlignment, 0.4f);
+	// No creature: its alignment is noted as nothing
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::PlayerStatistics>(one).startCreatureAlignment, 0.0f);
+	// A player without an alignment starts at nothing, and gets their statistics
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::PlayerStatistics>(two).startAlignment, 0.0f);
+	EXPECT_EQ(registry.Context().globalStatistics.townsAtStart, 3u);
 }

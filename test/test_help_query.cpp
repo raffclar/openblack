@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <optional>
 #include <variant>
 
 #include <gtest/gtest.h>
@@ -179,4 +180,24 @@ TEST(HelpQuery, InsideTheTempleOnlyAMousePressOfTheHelpKeyAsks)
 	EXPECT_TRUE(help_query::HelpPressAsks(false, true));
 	EXPECT_FALSE(help_query::HelpPressAsks(true, false));
 	EXPECT_TRUE(help_query::HelpPressAsks(true, true));
+}
+
+TEST(HelpQuery, TheHeldThingComesFirstThenTheThingUnderTheHandThenTheGround)
+{
+	const auto both = help_query::TargetOf<int, float>(1, 2, 3.0f, false);
+	EXPECT_EQ(both.thing, 1);
+	EXPECT_EQ(both.ground, 3.0f);
+	const auto under = help_query::TargetOf<int, float>(std::nullopt, 2, 3.0f, false);
+	EXPECT_EQ(under.thing, 2);
+}
+
+TEST(HelpQuery, InsideTheTempleTheHandIsOverNothing)
+{
+	const auto empty = help_query::TargetOf<int, float>(std::nullopt, 2, 3.0f, true);
+	EXPECT_FALSE(empty.thing.has_value());
+	EXPECT_FALSE(empty.ground.has_value());
+	EXPECT_EQ(SetOf(help_query::AboutGround({})), messages::k_NotInterested);
+	const auto held = help_query::TargetOf<int, float>(1, 2, 3.0f, true);
+	EXPECT_EQ(held.thing, 1);
+	EXPECT_FALSE(held.ground.has_value());
 }

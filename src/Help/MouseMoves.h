@@ -23,7 +23,8 @@ namespace openblack::help
 /// mouse moves. While the mouse is still, it also sends a message after each period without one, with the pointer
 /// where it is. The messages add up the time from each message to the next. When this time is more than a limit, the
 /// time starts again and the interface gets the place of the pointer. At each frame, the interface compares each
-/// place that it got with the place before it, and the help counts each place that is different.
+/// place that it got with the place before it, and the help counts each place that is different. Before the first place,
+/// the place before is the top left corner.
 class MouseMoves
 {
 public:
@@ -47,7 +48,9 @@ private:
 	std::optional<uint32_t> _lastWake;
 	uint32_t _sum {0};
 	std::vector<glm::ivec2> _sent;
-	std::optional<glm::ivec2> _lastPlace;
+	/// The interface starts with its last place at the top left corner, so its first place counts unless the pointer is
+	/// there
+	glm::ivec2 _lastPlace {0, 0};
 };
 
 } // namespace openblack::help
