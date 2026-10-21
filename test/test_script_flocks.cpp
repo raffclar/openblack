@@ -281,3 +281,29 @@ TEST(ScriptFlocks, ADetachWithNoMemberGivenTakesTheLastMemberAlsoWhenItIsTheLead
 	EXPECT_EQ(asked, 1u);
 	EXPECT_EQ(picked, a);
 }
+
+TEST(ScriptFlocks, ASeparatedLivingGetsAFlockOfItsOwnAndTheOldFlockStays)
+{
+	Registry registry;
+	const auto old = script_flocks::Create(registry, Metres(0, 0));
+	auto& oldData = registry.Get<components::Flock>(old);
+	oldData.domainRadius = 12;
+	oldData.flockDistance = 5;
+	const auto living = Living(registry, 30, 40);
+	script_flocks::AddLiving(registry, old, living);
+	const auto own = script_flocks::SeparateIntoNewFlock(registry, living);
+	ASSERT_TRUE(script_flocks::IsFlock(registry, own));
+	EXPECT_NE(own, old);
+	// The old flock stays, also when it is empty now
+	EXPECT_TRUE(script_flocks::IsFlock(registry, old));
+	EXPECT_EQ(script_flocks::Size(registry, old), 0u);
+	EXPECT_EQ(script_flocks::FlockOf(registry, living), own);
+	const auto& ownData = registry.Get<const components::Flock>(own);
+	EXPECT_EQ(ownData.members, std::vector {living});
+	EXPECT_EQ(ownData.domainRadius, 12);
+	EXPECT_EQ(ownData.flockDistance, 5);
+	EXPECT_EQ(ownData.place, Metres(30, 40));
+	// A living in no flock is not separated
+	const auto alone = Living(registry, 1, 1);
+	EXPECT_EQ(script_flocks::SeparateIntoNewFlock(registry, alone), static_cast<entt::entity>(entt::null));
+}

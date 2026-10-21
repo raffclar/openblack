@@ -3056,6 +3056,18 @@ void FlockAttach() // 037 FLOCK_ATTACH
 }
 
 /// A living leaves a flock, keeping its state, the flock staying when it is left empty
+/// A member that a script takes out of a flock: an animal goes into a new flock of its own, anything else is in no flock
+/// after it. The flock stays, also when it is empty.
+static void LeaveFlockForScript(ecs::Registry& registry, entt::entity member)
+{
+	if (registry.AllOf<ecs::components::Animal>(member))
+	{
+		ecs::script_flocks::SeparateIntoNewFlock(registry, member);
+		return;
+	}
+	ecs::script_flocks::Remove(registry, member, false);
+}
+
 static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity flock)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -3069,8 +3081,7 @@ static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity
 			Pusho(0);
 			return;
 		}
-		// TODO(opening): an animal is split off into a flock of its own
-		ecs::script_flocks::Remove(registry, object, false);
+		LeaveFlockForScript(registry, object);
 		scripts.RemoveReference(object);
 		Pusho(objectId);
 		return;
@@ -3085,7 +3096,7 @@ static void DetachFromFlock(uint32_t objectId, entt::entity object, entt::entity
 		Pusho(0);
 		return;
 	}
-	ecs::script_flocks::Remove(registry, member, false);
+	LeaveFlockForScript(registry, member);
 	scripts.Register(member, false);
 	scripts.RemoveReference(member);
 	Pusho(static_cast<uint32_t>(member));
@@ -3245,6 +3256,11 @@ void FlockMember() // 041 FLOCK_MEMBER
 
 void GetHandPosition() // 042 GET_HAND_POSITION
 {
+	// The hand's position is given also in the temple, with a message
+	if (PlayerInsideTemple())
+	{
+		ScriptMessage("Hand in citadel");
+	}
 	const auto handEntity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
 
@@ -7573,7 +7589,6 @@ void SetHighGraphicsDetail() // 290 SET_HIGH_GRAPHICS_DETAIL
 		return;
 	}
 	// The thing is drawn in high detail for the script's cinema, or as usual again
-	// TODO(opening): the high-detail body's eased turning and its blending between clips
 	auto& highDetail = Locator::highDetailSystem::value();
 	if (enable)
 	{

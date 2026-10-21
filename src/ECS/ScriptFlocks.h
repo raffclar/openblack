@@ -62,6 +62,10 @@ void MoveTo(Registry& registry, entt::entity flock, const map_coords::MapCoords&
 [[nodiscard]] entt::entity MemberToDetach(const Registry& registry, entt::entity flock,
                                           const std::function<uint32_t(uint32_t)>& random);
 
+/// A living leaves its flock for a new flock of its own, made where it stands, as wide and as close as the flock it
+/// left. The flock it left stays, also when it is empty. The new flock, or none when the living was in no flock.
+entt::entity SeparateIntoNewFlock(Registry& registry, entt::entity living);
+
 /// The position of a living as the flocks measure it
 [[nodiscard]] map_coords::MapCoords PositionOf(const Registry& registry, entt::entity living);
 
