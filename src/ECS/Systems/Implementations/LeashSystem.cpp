@@ -79,6 +79,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -404,11 +405,37 @@ bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
-/// An order on the leash: the player makes the creature do the plan
-bool Force(entt::entity creature, ForcedPlan plan)
+/// An order on the leash: the player makes the creature do the plan. The order stops the walk and ends what the body
+/// does, or keeps them.
+bool Force(entt::entity creature, ForcedPlan plan, const orders::Interruption& interruption)
 {
 	plan.ordered = true;
+	plan.stopsWalk = interruption.stopsWalk;
+	plan.endsBody = interruption.endsBody;
 	return Locator::creatureMindSystem::has_value() && Locator::creatureMindSystem::value().ForcePlan(creature, plan);
+}
+
+/// The order tells the creature to hurry, when it does
+void HurryFor(entt::entity creature, const orders::Interruption& interruption)
+{
+	if (interruption.hurries && Locator::creatureAnimationSystem::has_value())
+	{
+		Locator::creatureAnimationSystem::value().Hurry(creature);
+	}
+}
+
+/// Whether the creature walks to a point now, as the step of a forced plan
+bool WalksToPointWhenForced(const Registry& registry, entt::entity creature)
+{
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planForced || mind->idle.step >= mind->idle.agenda.size())
+	{
+		return false;
+	}
+	const auto& step = mind->idle.agenda[mind->idle.step];
+	return step.kind == creature_mind::Step::Kind::Move && !step.movement.object.has_value() &&
+	       (step.movement.kind == creature_mind::Movement::Kind::ToPoint ||
+	        step.movement.kind == creature_mind::Movement::Kind::Nearby);
 }
 
 /// The village a leash is tied to: by its centre, or by the totem standing on its centre
@@ -1332,8 +1359,10 @@ void LeashSystem::WalkBack(entt::entity creature)
 	walk.gaze = creature_mind::Gaze {.point = glm::vec3(centre.x, 0.0f, centre.y), .whileGoing = true};
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} walks back to ({:.1f}, {:.1f}), {:.1f} away",
 	                   entt::to_integral(creature), centre.x, centre.y, distance);
+	HurryFor(creature, orders::k_WalkBackInterrupts);
 	Force(creature,
-	      {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}, .walksBack = true});
+	      {.desire = Desire::ObeyPlayer, .action = orders::k_MoveAction, .agenda = std::vector {walk}, .walksBack = true},
+	      orders::k_WalkBackInterrupts);
 	// While the leash is on, the leash leads the walk back
 	if (auto* led = MindOf(registry, creature))
 	{
@@ -1931,11 +1960,13 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	}
 	const auto home = CitadelHome(registry, creature);
 	const auto field = FieldAt(registry, at);
+	const bool carrying = HeldBy(creature).has_value();
+	const auto interruption = orders::OnGroundInterrupts(carrying, WalksToPointWhenForced(registry, creature));
 	const bool wantsWater = mind != nullptr && mind->desires.has_value() && (*mind->desires)[Desire::Water].activated;
 	const auto order = orders::OnGround(
 	    at,
 	    {
-	        .carrying = HeldBy(creature).has_value(),
+	        .carrying = carrying,
 	        .reachable = reachable,
 	        .placeReachable = placeReachable,
 	        .water = IsWater(at),
@@ -1964,13 +1995,14 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	{
 		return false;
 	}
+	HurryFor(creature, interruption);
 	if (order.acknowledged)
 	{
 		Acknowledge(creature);
 	}
 	// Told to go somewhere with empty hands, the creature counts it as the player dealing with it
-	const bool carrying = order.kind == Kind::PutDownAt || order.kind == Kind::ThrowAt;
-	if (!carrying && Locator::creatureMindSystem::has_value())
+	const bool delivers = order.kind == Kind::PutDownAt || order.kind == Kind::ThrowAt;
+	if (!delivers && Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().NoteLeashOrder(creature);
 	}
@@ -1989,15 +2021,16 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	case Kind::Drink:
 		PromptKnown(creature, creature_help::Prompt::Drink);
 		desire = Desire::Water;
-		taken = Force(creature, {.desire = *desire, .action = orders::k_DrinkAction});
+		taken = Force(creature, {.desire = *desire, .action = orders::k_DrinkAction}, interruption);
 		break;
 	case Kind::LookAtReflection:
 		desire = Desire::Water;
-		taken = Force(creature, {.desire = *desire, .action = orders::k_ReflectionAction});
+		taken = Force(creature, {.desire = *desire, .action = orders::k_ReflectionAction}, interruption);
 		break;
 	case Kind::SleepAtHome:
 		taken = Force(creature,
-		              {.desire = Desire::Tiredness, .action = orders::k_SleepAction, .point = glm::vec2(home->x, home->z)});
+		              {.desire = Desire::Tiredness, .action = orders::k_SleepAction, .point = glm::vec2(home->x, home->z)},
+		              interruption);
 		break;
 	case Kind::MoveTo:
 	{
@@ -2009,10 +2042,12 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		const auto extra =
 		    Locator::gameRandom::has_value() ? Locator::gameRandom::value().GameFloatRand(orders::k_RunWaitExtraSeconds) : 0.0f;
 		const auto wait = orders::RunWaitSeconds(extra, k_TurnsPerSecond);
-		taken = Force(creature, {.desire = Desire::ObeyPlayer,
-		                         .action = orders::k_MoveAction,
-		                         .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait),
-		                         .walksBack = true});
+		taken = Force(creature,
+		              {.desire = Desire::ObeyPlayer,
+		               .action = orders::k_MoveAction,
+		               .agenda = orders::MoveTo(order.point, order.arrival, order.runAndWait, wait),
+		               .walksBack = true},
+		              interruption);
 		// Sent far, it says which desire it acts on
 		if (gutils::GetDistanceInMetres(at, position) > orders::k_TellDesireDistance)
 		{
@@ -2022,17 +2057,21 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 	}
 	case Kind::PutDownAt:
 		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
-		taken = Force(creature, {.desire = Desire::ObeyPlayer,
-		                         .action = orders::k_MoveAction,
-		                         .agenda = orders::PutDownAt(order.point, height),
-		                         .walksBack = true});
+		taken = Force(creature,
+		              {.desire = Desire::ObeyPlayer,
+		               .action = orders::k_MoveAction,
+		               .agenda = orders::PutDownAt(order.point, height),
+		               .walksBack = true},
+		              interruption);
 		break;
 	case Kind::ThrowAt:
 		PromptKnown(creature, creature_help::Prompt::DropAtFeet);
-		taken = Force(creature, {.desire = Desire::ObeyPlayer,
-		                         .action = orders::k_MoveAction,
-		                         .agenda = orders::ThrowAt(order.point, height),
-		                         .walksBack = true});
+		taken = Force(creature,
+		              {.desire = Desire::ObeyPlayer,
+		               .action = orders::k_MoveAction,
+		               .agenda = orders::ThrowAt(order.point, height),
+		               .walksBack = true},
+		              interruption);
 		break;
 	case Kind::Inaccessible:
 	case Kind::ActOnField:
@@ -2055,7 +2094,7 @@ bool LeashSystem::TakeGroundOrder(entt::entity creature, const glm::vec3& place)
 		TellHelp(creature, {.kind = creature_help::Kind::CurrentDesire, .parameter = static_cast<uint32_t>(*desire)});
 	}
 	// Carrying, the place itself is marked; otherwise where it goes
-	MarkOrder(creature, std::nullopt, carrying ? glm::vec3(at.x, GroundAt(at), at.y) : markAt, false);
+	MarkOrder(creature, std::nullopt, delivers ? glm::vec3(at.x, GroundAt(at), at.y) : markAt, false);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is told to go to ({:.1f}, {:.1f})", entt::to_integral(creature),
 	                   order.point.x, order.point.y);
 	return true;
@@ -2106,9 +2145,11 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 	    .leash = type,
 	    .height = height,
 	});
+	const auto interruption = orders::OnThingInterrupts(attempts);
 	if (orders::Acknowledges(attempts))
 	{
 		Acknowledge(creature);
+		HurryFor(creature, interruption);
 		// Told to do something to a thing, the creature counts it as the player dealing with it. Sent to a forest, it
 		// counts the order to go there instead.
 		if (!attempts.empty() && attempts.front() != orders::Attempt::GoToForest && Locator::creatureMindSystem::has_value())
@@ -2128,7 +2169,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 		case orders::Attempt::FishAndEat:
 			// The game counts this order as a sign that the player knows how to make the creature drink
 			PromptKnown(creature, creature_help::Prompt::Drink);
-			if (Force(creature, {.desire = Desire::Hunger, .action = orders::k_FishAction, .object = object}))
+			if (Force(creature, {.desire = Desire::Hunger, .action = orders::k_FishAction, .object = object}, interruption))
 			{
 				desire = Desire::Hunger;
 			}
@@ -2136,7 +2177,7 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 		case orders::Attempt::Desires:
 			if (Locator::creatureMindSystem::has_value())
 			{
-				desire = Locator::creatureMindSystem::value().ForcePlanOn(creature, object);
+				desire = Locator::creatureMindSystem::value().ForcePlanOn(creature, object, interruption.stopsWalk);
 			}
 			break;
 		case orders::Attempt::Fight:
@@ -2150,9 +2191,11 @@ bool LeashSystem::TakeThingOrder(entt::entity creature, entt::entity object)
 			break;
 		case orders::Attempt::Hold:
 		case orders::Attempt::Look:
-			if (Force(creature, {.desire = Desire::Curiosity,
-			                     .action = attempt == orders::Attempt::Hold ? orders::k_HoldAction : orders::k_LookAction,
-			                     .object = object}))
+			if (Force(creature,
+			          {.desire = Desire::Curiosity,
+			           .action = attempt == orders::Attempt::Hold ? orders::k_HoldAction : orders::k_LookAction,
+			           .object = object},
+			          interruption))
 			{
 				desire = Desire::Curiosity;
 			}

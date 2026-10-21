@@ -47,6 +47,7 @@
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
@@ -188,9 +189,9 @@ void CreatureMindSystem::CastOnLeash(entt::entity creature, CreatureMindState& m
 	const auto whole =
 	    registry.AllOf<Creature>(cast->thing) ? std::optional(cast->thing) : WholeOfShownThing(creature, mind, cast->thing);
 	// The action that its body plays ends at two times the usual speed
-	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		body->body = creature_layers::Hurry(body->body);
+		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Creature {} casts miracle {} at {} for the leash", entt::to_integral(creature),
 	                    cast->miracle, entt::to_integral(cast->thing));

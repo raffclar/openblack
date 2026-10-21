@@ -543,6 +543,9 @@ constexpr float k_CastHoldMs = 2.0f;
 /// start and the end of a block, and the start, the hold and the end of a cast. When such a state ends, the next state
 /// makes its turn at once: its animation moves on in the same turn.
 [[nodiscard]] bool EndsByOwnTest(State state);
+/// Whether a fighter that is told to hurry starts to hurry in this state: in the start, the stance, an action and the
+/// finish. A block, a cast, a faint and a fighter that gets up or lies keep their pace.
+[[nodiscard]] bool Hurries(State state);
 /// How far the animation of a state moves on in one game turn. The start moves on by the span of the turn (see
 /// TestSpanMs). Every other state moves on by the turn's advance at its speed.
 [[nodiscard]] int32_t StateAdvanceMs(State state, float speed, int32_t turnMs, int32_t spanMs);
@@ -598,6 +601,8 @@ struct Fighter
 	std::optional<uint32_t> spell;
 	/// Its fight was called off: it finishes the move under way, then finishes and stands
 	bool stopping {false};
+	/// It was told to hurry: the span of each turn is two times as long until the fight ends (see TestSpanMs)
+	bool hurried {false};
 	MoveQueue queue;
 	/// The sparkles marking the moves the player queued, in step with the queue
 	marks::MarkList marks;

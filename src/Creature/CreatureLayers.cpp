@@ -25,8 +25,6 @@ namespace
 /// Every animation but the stand plays this fast at size 0, and this much more slowly for each size bigger
 constexpr float k_PlaybackRateAtSizeZero = 1.6f;
 constexpr float k_PlaybackSlowingPerSize = 0.425f;
-/// A hurried body plays its action at this many times the usual speed
-constexpr float k_HurriedRate = 2.0f;
 /// Faces run back to their start this much more slowly when no other face is wanted
 constexpr float k_FaceRelaxSlowing = 4.0f;
 /// A face pulled with no time given is held for an hour
@@ -251,7 +249,7 @@ float creature_layers::DanceMoveTime(const BodyAction& body, uint32_t duration)
 BodyAction creature_layers::Hurry(BodyAction body)
 {
 	// A faint, which lies where it fell, keeps its pace
-	if (IsPlaying(body) && !body.holdLoop)
+	if (IsPlaying(body) && !body.holdLoop && !body.keepsPace)
 	{
 		body.hurried = true;
 	}
@@ -265,10 +263,7 @@ bool creature_layers::ReachesActionMoment(const BodyAction& body, float millisec
 	{
 		return false;
 	}
-	if (body.hurried)
-	{
-		milliseconds *= k_HurriedRate;
-	}
+	milliseconds = HurriedStep(milliseconds, body.hurried);
 	const auto moment = static_cast<float>(body.animations[0] == animations::k_Kiss ? kissMs : duration.value_or(0) / 2);
 	return body.timeMs <= moment && body.timeMs + milliseconds > moment;
 }
@@ -289,10 +284,7 @@ BodyAction creature_layers::AdvanceBody(BodyAction body, float milliseconds, std
 	{
 		milliseconds = realMilliseconds.value_or(milliseconds);
 	}
-	if (body.hurried)
-	{
-		milliseconds *= k_HurriedRate;
-	}
+	milliseconds = HurriedStep(milliseconds, body.hurried);
 	const auto length = static_cast<float>(duration.value_or(0));
 	const auto stand = [] { return BodyAction {}; };
 	if (body.kind == BodyAction::Kind::Once)

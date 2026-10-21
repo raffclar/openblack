@@ -6152,6 +6152,21 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.order_hurries",
+	    .name = "An order with the leash hurries what the body does",
+	    .facet = Facet::Leash,
+	    .description = "Two tigers sit side by side. The left tiger is on the learning leash. After eight seconds, the "
+	                   "left tiger is told to go to a point to the east. At the same time, the right tiger is told to "
+	                   "stand up, with no order.",
+	    .expected = "The left tiger gets up at two times the usual speed, nods, and walks east. The right tiger gets up "
+	                "at the usual speed. A kiss, a cast and a throw keep their usual speed when an order comes.",
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 20.0f}, {60.0f, 40.0f}}},
+	    .creatures = {Content(CreatureType::Tiger, {-15.0f, 20.0f}), Content(CreatureType::Tiger, {15.0f, 20.0f})},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), Act(Kind::SitDown, 0, 1.0f), Act(Kind::SitDown, 1, 0.0f),
+	                 Go(Kind::LeashOrderAt, 0, {60.0f, 40.0f}, 8.0f, false), Act(Kind::StandUp, 1, 0.0f)},
+	});
+
+	all.push_back({
 	    .id = "leash.marker_flat_and_slope",
 	    .name = "The marker of a leash order on flat land and on a slope",
 	    .facet = Facet::Leash,

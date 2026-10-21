@@ -1426,6 +1426,7 @@ Commands creature_mind::Think(IdleMind& mind, const Senses& senses, const Random
 			break;
 		case Step::Kind::Cast:
 			commands.startSequence = step.sequence;
+			commands.keepsPace = true;
 			commands.mirrored = PickStaticSide(gameRandom, senses.realTime);
 			mind.castDone = false;
 			mind.castTurns = 0;

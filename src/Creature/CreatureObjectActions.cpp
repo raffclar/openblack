@@ -49,6 +49,27 @@ std::string_view creature_object_actions::Name(Kind kind)
 	return "Nothing";
 }
 
+bool creature_object_actions::Hurries(Kind kind)
+{
+	switch (kind)
+	{
+	case Kind::PickUp:
+	case Kind::PutDown:
+	case Kind::Discard:
+	case Kind::Eat:
+	case Kind::Keep:
+	case Kind::Destroy:
+	case Kind::Point:
+		return true;
+	case Kind::Throw:
+	case Kind::Catch:
+	case Kind::TakeFromHand:
+	case Kind::Kick:
+		return false;
+	}
+	return false;
+}
+
 bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 {
 	if (!playing.has_value())

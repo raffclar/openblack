@@ -259,6 +259,27 @@ constexpr float k_FightReachHeights = 8.0f;
 /// Answering an order on a fish farm, the creature doesn't nod
 [[nodiscard]] bool Acknowledges(const std::vector<Attempt>& attempts);
 
+/// What an order does to what the creature does now, as it starts the plan of the order
+struct Interruption
+{
+	/// The creature is told to hurry (see CreatureAnimationSystemInterface::Hurry)
+	bool hurries {true};
+	/// The walk that it makes now stops
+	bool stopsWalk {true};
+	/// A pose, a dance, a fight move and a point come to their end
+	bool endsBody {true};
+};
+/// An order on the land. With empty hands, the creature hurries, stops its walk and ends what its body does. When it
+/// already walks to a point in a forced plan, it does none of these. When it carries something, it stops and ends what
+/// its body does, but does not hurry.
+[[nodiscard]] Interruption OnGroundInterrupts(bool carrying, bool forcedWalkToPoint);
+/// An order on a thing. The creature hurries and ends what its body does, and its walk continues. Told to fish, it does
+/// not hurry, and its walk stops.
+[[nodiscard]] Interruption OnThingInterrupts(const std::vector<Attempt>& attempts);
+/// The walk back into the area that the leash holds the creature in: it hurries and ends what its body does, and its
+/// walk continues
+constexpr Interruption k_WalkBackInterrupts {.hurries = true, .stopsWalk = false, .endsBody = true};
+
 /// The actions of the game's table the orders are carried out as
 constexpr std::string_view k_MoveAction = "MoveToPos";
 constexpr std::string_view k_DrinkAction = "DrinkFromTheSea";
