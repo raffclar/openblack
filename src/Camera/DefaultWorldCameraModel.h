@@ -58,6 +58,9 @@ public:
 	/// Flies back to where it was, as when the camera is given back after the hand lets go of a creature: as SetFlight
 	/// with a rise of 0.1, wooshing only when asked
 	void FlyBack(glm::vec3 origin, glm::vec3 focus, bool woosh);
+	/// Takes the camera again after another camera that had it is no longer valid: from where the camera now is, it flies
+	/// back to where it was going when the other camera took it, as SetFlight with a rise of 0.1
+	void Restart(glm::vec3 origin, glm::vec3 focus, glm::vec3 returnOrigin, glm::vec3 returnFocus);
 	void PlaceAt(glm::vec3 origin, glm::vec3 focus) final;
 	/// Finds again how far ahead the land is from the view that the camera shows, as a new press of the mouse does.
 	/// The single tap of the temple key looks that far ahead. Returns the distance.

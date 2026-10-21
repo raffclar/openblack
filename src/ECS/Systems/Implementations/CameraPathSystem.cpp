@@ -23,6 +23,8 @@
 
 #include "Camera/Camera.h"
 #include "Camera/CameraPathControl.h"
+#include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -91,6 +93,11 @@ void CameraPathSystem::FollowPlaced(std::unique_ptr<CameraPath> path, const glm:
 		return;
 	}
 	auto& camera = Locator::camera::value();
+	// A camera that cannot be left, such as a script's camera, keeps the camera: the path does not start
+	if (!camera.GetModel().CanBeLeft())
+	{
+		return;
+	}
 	_placed = Placed {.path = std::move(path),
 	                  .placement = placement,
 	                  .pauseSeconds = pauseSeconds,
@@ -99,7 +106,9 @@ void CameraPathSystem::FollowPlaced(std::unique_ptr<CameraPath> path, const glm:
 	                  .spell = spell,
 	                  .seconds = 0.0f,
 	                  .origin = {},
-	                  .focus = {}};
+	                  .focus = {},
+	                  .returnOrigin = camera.GetModel().GetTargetOrigin(),
+	                  .returnFocus = camera.GetModel().GetTargetFocus()};
 	auto& placed = *_placed;
 	const auto origin = camera.GetOrigin();
 	const auto focus = camera.GetFocus();
@@ -132,7 +141,7 @@ void CameraPathSystem::UpdatePlaced(float seconds)
 	    (!Locator::entitiesRegistry::has_value() || !Locator::entitiesRegistry::value().Valid(placed.spell)))
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path ended with its miracle");
-		_placed.reset();
+		EndPlaced();
 		return;
 	}
 	auto& camera = Locator::camera::value();
@@ -149,7 +158,7 @@ void CameraPathSystem::UpdatePlaced(float seconds)
 		if (pathMs >= placed.animationMs * (k_AnimationFrames - 1.0f) / k_AnimationFrames)
 		{
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Camera: a miracle's path ended after {:.1f} s", placed.seconds);
-			_placed.reset();
+			EndPlaced();
 			return;
 		}
 	}
@@ -160,6 +169,29 @@ void CameraPathSystem::UpdatePlaced(float seconds)
 	}
 	camera.SetOrigin(ValueOf(placed.origin));
 	camera.SetFocus(ValueOf(placed.focus));
+}
+
+void CameraPathSystem::EndPlaced()
+{
+	const auto placed = std::exchange(_placed, std::nullopt);
+	if (!placed.has_value() || !Locator::camera::has_value())
+	{
+		return;
+	}
+	// The player's camera starts again from where the camera now is. The fight view flies back to where it last was;
+	// the world camera flies back to where it was going.
+	auto& camera = Locator::camera::value();
+	const auto origin = camera.GetOrigin();
+	const auto focus = camera.GetFocus();
+	if (auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()); world != nullptr)
+	{
+		world->Restart(origin, focus, placed->returnOrigin, placed->returnFocus);
+	}
+	else if (auto* fight = dynamic_cast<FightCameraModel*>(&camera.GetModel()); fight != nullptr)
+	{
+		fight->Return({.origin = origin, .focus = focus},
+		              {.origin = camera.GetOriginVelocity(), .focus = camera.GetFocusVelocity()});
+	}
 }
 
 void CameraPathSystem::Update(const std::chrono::microseconds& dt)
@@ -211,6 +243,8 @@ void CameraPathSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _placed->seconds);
 	reflection::Save(out, _placed->origin);
 	reflection::Save(out, _placed->focus);
+	reflection::Save(out, _placed->returnOrigin);
+	reflection::Save(out, _placed->returnFocus);
 }
 
 bool CameraPathSystem::LoadState(reflection::BinaryReader& in)
@@ -240,6 +274,8 @@ bool CameraPathSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, loaded.seconds);
 	reflection::Load(in, loaded.origin);
 	reflection::Load(in, loaded.focus);
+	reflection::Load(in, loaded.returnOrigin);
+	reflection::Load(in, loaded.returnFocus);
 	if (in.Failed())
 	{
 		return false;

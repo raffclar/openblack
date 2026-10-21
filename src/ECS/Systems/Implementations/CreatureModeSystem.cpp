@@ -77,14 +77,19 @@ void CreatureModeSystem::ReleaseCamera()
 	_held = {};
 }
 
-bool CreatureModeSystem::StillValid() const
+bool CreatureModeSystem::CreatureThere() const
 {
 	if (!_creature.has_value() || !Locator::entitiesRegistry::has_value())
 	{
 		return false;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(*_creature) || !registry.AllOf<components::Creature, components::Transform>(*_creature))
+	return registry.Valid(*_creature) && registry.AllOf<components::Creature, components::Transform>(*_creature);
+}
+
+bool CreatureModeSystem::StillValid() const
+{
+	if (!CreatureThere())
 	{
 		return false;
 	}
@@ -120,6 +125,8 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
 	                                                   creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
+	_returnOrigin = camera.GetModel().GetTargetOrigin();
+	_returnFocus = camera.GetModel().GetTargetFocus();
 	_playerModel = camera.SetModel(std::move(model));
 	_creature = creature;
 	_leaving = false;
@@ -225,12 +232,24 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 	if (!StillValid() || _model->WantsToLeave() || gripped)
 	{
 		// Stopped at the fence, the player's camera starts afresh from where it is
+		auto& camera = Locator::camera::value();
 		if (_model->StoppedAtFence())
 		{
-			const auto& camera = Locator::camera::value();
 			_playerModel = std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus());
 		}
+		// When the creature has gone, the player's camera takes the camera again and flies back to where it was going.
+		// The keys and the grip start the player's camera from where the camera is.
+		const bool gone = !CreatureThere();
+		const auto returnOrigin = _returnOrigin;
+		const auto returnFocus = _returnFocus;
 		Leave();
+		if (gone)
+		{
+			if (auto* world = dynamic_cast<DefaultWorldCameraModel*>(&camera.GetModel()); world != nullptr)
+			{
+				world->Restart(camera.GetOrigin(), camera.GetFocus(), returnOrigin, returnFocus);
+			}
+		}
 		return;
 	}
 
