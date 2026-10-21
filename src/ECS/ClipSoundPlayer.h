@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Audio/HearingRange.h"
 #include "Creature/CreatureAudio.h"
 
 namespace openblack
@@ -65,6 +66,9 @@ public:
 	/// rules, only when the sample picked may be heard now
 	virtual void PlaySound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
 	                       bool bySampleRules) = 0;
+	/// Ends the sample of a bank's animation effect for keys that an owner plays, as an animation's sound effect does
+	virtual void EndSound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
+	                      audio::AnimEffectEnd end) = 0;
 };
 
 /// The screen refreshes the game drew its frames at: at most 60 a second, as it waited for the display's refresh.

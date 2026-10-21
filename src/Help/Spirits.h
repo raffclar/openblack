@@ -27,6 +27,7 @@
 #include <glm/vec3.hpp>
 
 #include "3D/SkeletalAnimation.h"
+#include "Audio/AnimEffectKeys.h"
 #include "Common/Zoomer.h"
 #include "Help/SpiritScreen.h"
 #include "Help/SpiritVoice.h"
@@ -282,15 +283,31 @@ struct PuffParticle
 };
 constexpr size_t k_PuffParticles = 16;
 
-/// A sound effect request (anim, phase, in-game bank): the call, not its effect ((pending) the crossing rule)
+/// A sound of an advisor's anim whose point the anim passed in this frame
 struct AnimSound
 {
 	uint32_t anim {0};
-	/// The in-game bank's sample
+	/// The sound of the point, which is the action key of the in-game bank's animation effects
 	uint32_t sample {0};
-	/// Played through the animation sound path rather than as a plain sample
-	bool filtered {true};
+	/// The point starts its sample. Otherwise, the point ends the sample that the advisor plays for the same keys.
+	bool starts {true};
+	/// The advisor's place when its anim passed the point
+	glm::vec3 position {0.0f};
 };
+
+/// The in-game bank that the advisors' anim sounds come from
+constexpr std::string_view k_AnimSoundBank = "InGame.sad";
+
+/// The animation effect keys of an advisor's anim sound. Both advisors use the same keys, and the sound of the point
+/// is the action key. The size key and the surface key are both 1.
+[[nodiscard]] constexpr audio::AnimEffectKeys AnimSoundKeys(uint32_t sample)
+{
+	return {.size = audio::SoundSize::Large,
+	        .alignment = 1,
+	        .object = audio::SoundObject::Advisor,
+	        .surface = audio::SoundSurface::Grass,
+	        .action = static_cast<audio::SoundAction>(sample)};
+}
 
 /// The inputs of one frame
 struct FrameInput

@@ -113,4 +113,8 @@ TEST(ClipSounds, ASoundsRouteFollowsTheGamesRules)
 	// Elsewhere the ordinary ones are heard only as their samples allow
 	EXPECT_TRUE(RouteOf({.soundType = 3, .mode = 0}).bySampleRules);
 	EXPECT_FALSE(RouteOf({.soundType = 3, .mode = 1}).bySampleRules);
+	// Mode 0 starts a sample, mode 1 stops it and another mode releases its loop
+	EXPECT_FALSE(RouteOf({.soundType = 3, .mode = 0}).end.has_value());
+	EXPECT_EQ(RouteOf({.soundType = 3, .mode = 1}).end, audio::AnimEffectEnd::Stop);
+	EXPECT_EQ(RouteOf({.soundType = 3, .mode = 2}).end, audio::AnimEffectEnd::ReleaseLoop);
 }

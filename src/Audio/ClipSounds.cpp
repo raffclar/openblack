@@ -84,6 +84,10 @@ clip_sounds::SoundRoute clip_sounds::RouteOf(const SoundSource& source)
 		return {.outcome = Outcome::Skip};
 	}
 	route.bySampleRules = source.mode == 0;
+	if (source.mode != 0)
+	{
+		route.end = source.mode == 1 ? AnimEffectEnd::Stop : AnimEffectEnd::ReleaseLoop;
+	}
 	return route;
 }
 

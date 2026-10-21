@@ -889,6 +889,43 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 	return {.outcome = AnimEffectPlay::Outcome::Played, .emitter = entity, .sample = sample};
 }
 
+void AudioManager::EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+                                 const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure)
+{
+	// Only the hearing limit applies here. The maximum distance of each sample has no effect.
+	if (AnimEffectDistance(GetListener().origin, position, measure) > k_AnimEffectHearingLimit)
+	{
+		return;
+	}
+	const auto effects = _animEffects.find(bankName);
+	if (effects == _animEffects.end())
+	{
+		return;
+	}
+	auto& sounds = Locator::resources::value().GetSounds();
+	for (const auto sample : effects->second.Find(keys))
+	{
+		const auto id = entt::hashed_string(fmt::format("{}/{}", bankName, sample).c_str()).value();
+		if (!sounds.Contains(id))
+		{
+			continue;
+		}
+		const auto emitter = FindPlaying(owner, sounds.Handle(id)->bank, id, 0);
+		if (emitter == entt::null)
+		{
+			continue;
+		}
+		if (end == AnimEffectEnd::Stop)
+		{
+			StopEmitter(emitter);
+		}
+		else
+		{
+			ReleaseEmitterLoop(emitter);
+		}
+	}
+}
+
 entt::entity AudioManager::FindPlaying(entt::entity owner, entt::id_type bank, entt::id_type id, uint16_t group) const
 {
 	auto found = entt::entity {entt::null};
