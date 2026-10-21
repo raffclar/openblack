@@ -56,6 +56,10 @@ struct BuildingToolTips
 /// What a village centre's stone hand or a worship site's icon offers: its miracle's name, at once
 [[nodiscard]] std::optional<Offer> SpellIconOf(entt::entity object);
 
+/// What a one-shot globe offers, as the hand is over it: the name of the miracle that it gives, at once. A globe of no
+/// miracle gives the name of its seed.
+[[nodiscard]] std::optional<Offer> GlobeOf(entt::entity object);
+
 /// What the hand can do with the thing that it holds at the thing under the pointer
 [[nodiscard]] HeldUse UseAt(entt::entity held, std::optional<entt::entity> target);
 

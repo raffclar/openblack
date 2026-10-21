@@ -323,3 +323,12 @@ TEST(HandDemo, TheClickMovesToAThingOfTheKindWithinThreeMetres)
 	EXPECT_TRUE(TakesRecordedClick(any, Store(2), At(1830.0f, 2642.0f)));
 	EXPECT_TRUE(TakesRecordedClick(any, {.type = script::ObjectType::Store}, At(1830.0f, 2642.0f)));
 }
+
+TEST(HandDemo, AStartTakesOffOnlyALeashOnAndNotTiedToAThing)
+{
+	EXPECT_TRUE(hand_demo::TakesOffLeash(false, true, false));
+	EXPECT_FALSE(hand_demo::TakesOffLeash(false, true, true));
+	EXPECT_FALSE(hand_demo::TakesOffLeash(false, false, false));
+	// A demonstration without hand modify keeps the leash on
+	EXPECT_FALSE(hand_demo::TakesOffLeash(true, true, false));
+}

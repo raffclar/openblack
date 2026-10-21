@@ -119,4 +119,11 @@ private:
 	int64_t _startTime {0};
 };
 
+/// Whether a demonstration that starts takes the leash off the player's creature. It does so unless the demonstration
+/// keeps the hand as it is, and only when the leash is on and not tied to a thing.
+[[nodiscard]] constexpr bool TakesOffLeash(bool withoutHandModify, bool leashOn, bool tiedToAThing)
+{
+	return !withoutHandModify && leashOn && !tiedToAThing;
+}
+
 } // namespace openblack::hand_demo

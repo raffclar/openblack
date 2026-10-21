@@ -129,16 +129,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		const auto* progress = registry.TryGet<const BuildProgress>(entity);
 		if (progress == nullptr || progress->built >= 1.0f)
 		{
-			++in.abodeCount;
-			const auto number = static_cast<size_t>(abode.type);
-			if (number < stats.abodesByNumber.size())
-			{
-				++stats.abodesByNumber.at(number);
-			}
-			if (info != nullptr && openblack::statistics::IsCivicBuilding(info->abodeType))
-			{
-				++stats.civicBuildings;
-			}
+			ecs::town_desire::CountBuiltBuilding(in, abode.type, info != nullptr ? info->abodeType : AbodeType {});
 			if (info != nullptr && info->maxVillagersInAbode + info->maxChildrenInAbode != 0)
 			{
 				++stats.abodesWithPlaces;
@@ -183,6 +174,9 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 			return;
 		}
 		const auto* info = ecs::world_objects::AbodeInfoOf(entity);
+		// It is always built, thus it counts among the town's buildings, by its number, and among its civic buildings
+		ecs::town_desire::CountBuiltBuilding(in, info != nullptr ? info->abodeNumber : AbodeNumber::SpellDispenser,
+		                                     info != nullptr ? info->abodeType : AbodeType::SpellDispenser);
 		in.abodes.push_back({
 		    .life = ecs::world_objects::LifeOf(entity),
 		    .livingQuarters = false,
