@@ -119,6 +119,25 @@ CreatureWebPageSystem::CreatureWebPageSystem(PlayerOfFiles player)
 {
 }
 
+CreatureWebPageSystem::~CreatureWebPageSystem() = default;
+
+ecs::save_files::BackgroundWriter& CreatureWebPageSystem::Writer() const
+{
+	if (_writer == nullptr)
+	{
+		_writer = std::make_unique<ecs::save_files::BackgroundWriter>();
+	}
+	return *_writer;
+}
+
+void CreatureWebPageSystem::FinishWrites() const
+{
+	if (_writer != nullptr)
+	{
+		_writer->Flush();
+	}
+}
+
 void CreatureWebPageSystem::ProcessTurn()
 {
 	if (!Locator::entitiesRegistry::has_value())
@@ -206,16 +225,17 @@ bool CreatureWebPageSystem::AnyPictureWaiting() const
 
 void CreatureWebPageSystem::CollectPictures(const Screens& screens)
 {
-	std::erase_if(_waiting, [&screens](const Waiting& waiting) {
+	std::erase_if(_waiting, [this, &screens](const Waiting& waiting) {
 		if (auto picture = screens.take ? screens.take(waiting.name) : std::nullopt; picture.has_value())
 		{
-			const auto jpeg =
-			    creature_web_page::EncodeJpeg(*picture, creature_web_page::k_PictureWidth, creature_web_page::k_PictureHeight);
-			if (!jpeg.empty() && Locator::profileFolderSystem::has_value())
-			{
-				Locator::profileFolderSystem::value().WritePlayerFile(waiting.player,
-				                                                      creature_web_page::PictureFile(waiting.slot), jpeg);
-			}
+			// The writer makes the picture file after the files that came before it, so a page reads the new picture
+			Writer().Queue(waiting.name, [player = waiting.player, slot = waiting.slot, picture = std::move(*picture)] {
+				const auto jpeg = creature_web_page::EncodeJpeg(picture, creature_web_page::k_PictureWidth,
+				                                                creature_web_page::k_PictureHeight);
+				return jpeg.empty() || !Locator::profileFolderSystem::has_value() ||
+				       Locator::profileFolderSystem::value().WritePlayerFile(player, creature_web_page::PictureFile(slot),
+				                                                             jpeg);
+			});
 			return true;
 		}
 		return screens.failed && screens.failed(waiting.name);
@@ -302,20 +322,34 @@ void CreatureWebPageSystem::WritePage(entt::entity creature)
 	}
 	const auto values = creature_web_page::PageValues(facts);
 
-	auto& profiles = Locator::profileFolderSystem::value();
-	WritePageFile(*player, body->name, values);
-
-	// The game packs the values and the pictures for the upload tool even when it could not write the page
-	std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
-	for (size_t slot = 0; slot < pictures.size(); ++slot)
-	{
-		pictures.at(slot) = profiles.ReadPlayerFile(*player, creature_web_page::PictureFile(static_cast<uint32_t>(slot)));
-	}
+	// The stamp of the package comes from the game's random numbers now, in the order of the game
 	const auto stamp = Locator::gameRandom::has_value()
 	                       ? static_cast<uint16_t>(Locator::gameRandom::value().LocalRand(creature_web_page::k_StampRange))
 	                       : uint16_t {0};
+	Writer().Queue("creature web page", [player = *player, name = body->name, values, stamp] {
+		WritePageFiles(player, name, values, stamp);
+		return true;
+	});
+}
+
+void CreatureWebPageSystem::WritePageFiles(std::u16string_view player, std::u16string_view name,
+                                           std::span<const creaturehtml::Value> values, uint16_t stamp)
+{
+	if (!Locator::profileFolderSystem::has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	WritePageFile(player, name, values);
+
+	// The game packs the values and the pictures for the upload tool even when it could not write the page
+	auto& profiles = Locator::profileFolderSystem::value();
+	std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
+	for (size_t slot = 0; slot < pictures.size(); ++slot)
+	{
+		pictures.at(slot) = profiles.ReadPlayerFile(player, creature_web_page::PictureFile(static_cast<uint32_t>(slot)));
+	}
 	const auto package = lhp::Write(creature_web_page::UploadPackage(values, pictures, stamp));
-	if (!profiles.WritePlayerFile(*player, creature_web_page::k_UploadFile, package))
+	if (!profiles.WritePlayerFile(player, creature_web_page::k_UploadFile, package))
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write {}", creature_web_page::k_UploadFile);
 	}

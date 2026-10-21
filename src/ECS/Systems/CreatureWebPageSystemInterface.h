@@ -52,6 +52,9 @@ public:
 	virtual void CollectPictures(const Screens& screens) = 0;
 	/// The captions of the five slots of pictures, which the page also gets
 	[[nodiscard]] virtual std::span<const std::u16string> GetCaptions() const = 0;
+	/// The page and the pictures go to the disk on a thread of their own, so that a write does not delay the frames of
+	/// the game. This waits until every file that the system wrote before is on the disk.
+	virtual void FinishWrites() const = 0;
 };
 
 } // namespace openblack::ecs::systems

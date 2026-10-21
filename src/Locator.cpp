@@ -529,6 +529,16 @@ void openblack::InitializeLevel(const LandData& land)
 
 void openblack::ShutDownServices()
 {
+	// The files of the creature that wait go to the disk while the services that write them are still there
+	if (Locator::creatureCarryOverSystem::has_value())
+	{
+		Locator::creatureCarryOverSystem::value().FinishWrites();
+	}
+	if (Locator::creatureWebPageSystem::has_value())
+	{
+		Locator::creatureWebPageSystem::value().FinishWrites();
+	}
+
 	// Stop all sounds
 	if (Locator::audio::has_value())
 	{

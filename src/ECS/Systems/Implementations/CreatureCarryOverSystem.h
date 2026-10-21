@@ -11,6 +11,7 @@
 
 #include <filesystem>
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
@@ -21,6 +22,11 @@
 namespace openblack::creaturemind
 {
 struct PhysiqueFileData;
+}
+
+namespace openblack::ecs::save_files
+{
+class BackgroundWriter;
 }
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -38,6 +44,12 @@ public:
 
 	/// The creature kept is written to and read from the profile's file in the folder, when there are both
 	explicit CreatureCarryOverSystem(std::optional<std::filesystem::path> folder = std::nullopt, ProfileFile profileFile = {});
+	/// Writes every file that waits, then stops the thread of the writer
+	~CreatureCarryOverSystem() override;
+	CreatureCarryOverSystem(const CreatureCarryOverSystem&) = delete;
+	CreatureCarryOverSystem& operator=(const CreatureCarryOverSystem&) = delete;
+	CreatureCarryOverSystem(CreatureCarryOverSystem&&) = delete;
+	CreatureCarryOverSystem& operator=(CreatureCarryOverSystem&&) = delete;
 
 	void KeepPlayersCreature() override;
 	void KeepCreature(entt::entity creature) override;
@@ -52,6 +64,7 @@ public:
 	void EndGame() override;
 	void Reset() override;
 	void StartGame() override;
+	void FinishWrites() const override;
 
 private:
 	struct Arriving
@@ -60,8 +73,9 @@ private:
 		creature_carry_over::Fizz fizz;
 	};
 
-	/// The creature kept as written to its files, or read from them when none was kept since the game started
-	void Write(const creaturemind::MindFileData& mind, const creaturemind::PhysiqueFileData& physique) const;
+	/// The creature kept goes to its files on the thread of the writer. The system reads the files when it kept no
+	/// creature since the game started.
+	void Write(std::shared_ptr<const creaturemind::MindFileData> mind, creaturemind::PhysiqueFileData physique) const;
 	void ReadIfNoneKept();
 	/// The player's creatures that have lived another 600 turns are written to the player's files
 	void SaveAsTheyLive();
@@ -80,6 +94,8 @@ private:
 	std::shared_ptr<const creaturemind::MindFileData> _kept;
 	std::vector<Arriving> _arriving;
 	bool _landKeepsCreatures {true};
+	/// The writer starts with the first file to write. It is the last member, so that it stops first.
+	mutable std::unique_ptr<save_files::BackgroundWriter> _writer;
 };
 
 } // namespace openblack::ecs::systems

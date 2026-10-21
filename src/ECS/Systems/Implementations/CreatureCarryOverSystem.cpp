@@ -32,6 +32,7 @@
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveFileWriter.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -70,8 +71,20 @@ CreatureCarryOverSystem::CreatureCarryOverSystem(std::optional<std::filesystem::
 {
 }
 
+CreatureCarryOverSystem::~CreatureCarryOverSystem() = default;
+
+void CreatureCarryOverSystem::FinishWrites() const
+{
+	if (_writer != nullptr)
+	{
+		_writer->Flush();
+	}
+}
+
 std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfilePhysique() const
 {
+	// The caller reads the file, so the files that the system wrote before go to the disk first
+	FinishWrites();
 	if (!_folder.has_value() || !_profileFile)
 	{
 		return std::nullopt;
@@ -82,6 +95,8 @@ std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfilePhysique() 
 
 std::optional<std::filesystem::path> CreatureCarryOverSystem::ProfileMind() const
 {
+	// The caller reads the file, so the files that the system wrote before go to the disk first
+	FinishWrites();
 	if (!_folder.has_value() || !_profileFile)
 	{
 		return std::nullopt;
@@ -136,36 +151,45 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 	const auto saved = spells != nullptr ? creature_spells::ValuesToSave(spells->spells, nowValues) : nowValues;
 	const auto physique = creature_mind_body::ToPhysiqueFile(now, file->speciesRow, saved.alignment);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Kept the player's creature {} for the next land", entt::to_integral(creature));
-	Write(*file, physique);
-	Keep(std::make_shared<const creaturemind::MindFileData>(std::move(*file)));
+	auto kept = std::make_shared<const creaturemind::MindFileData>(std::move(*file));
+	Write(kept, physique);
+	Keep(std::move(kept));
 }
 
-void CreatureCarryOverSystem::Write(const creaturemind::MindFileData& mind,
-                                    const creaturemind::PhysiqueFileData& physique) const
+void CreatureCarryOverSystem::Write(std::shared_ptr<const creaturemind::MindFileData> mind,
+                                    creaturemind::PhysiqueFileData physique) const
 {
 	const auto kept = Files();
 	if (!kept.has_value())
 	{
 		return;
 	}
-	const auto& files = *kept;
-	std::error_code error;
-	std::filesystem::create_directories(*_folder, error);
-	const auto written = creaturemind::WriteFile(files.mind, mind);
-	if (written != creaturemind::MindResult::Success)
+	if (_writer == nullptr)
 	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature could not be written to {}: {}", files.mind.string(),
-		                   creaturemind::ResultToStr(written));
-		return;
+		_writer = std::make_unique<ecs::save_files::BackgroundWriter>();
 	}
-	if (!creaturemind::WritePhysiqueFile(files.physique, physique))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature's physique could not be written to {}",
-		                   files.physique.string());
-		return;
-	}
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the player's creature to {} and its physique beside it",
-	                   files.mind.string());
+	// The game makes the contents now. The writer puts them on the disk later, in the order that they came.
+	_writer->Queue(
+	    kept->mind.string(), [folder = *_folder, files = *kept, mind = std::move(mind), physique = std::move(physique)] {
+		    std::error_code error;
+		    std::filesystem::create_directories(folder, error);
+		    const auto written = creaturemind::WriteFile(files.mind, *mind);
+		    if (written != creaturemind::MindResult::Success)
+		    {
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature could not be written to {}: {}",
+			                       files.mind.string(), creaturemind::ResultToStr(written));
+			    return false;
+		    }
+		    if (!creaturemind::WritePhysiqueFile(files.physique, physique))
+		    {
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature's physique could not be written to {}",
+			                       files.physique.string());
+			    return false;
+		    }
+		    SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the player's creature to {} and its physique beside it",
+		                       files.mind.string());
+		    return true;
+	    });
 }
 
 void CreatureCarryOverSystem::ReadIfNoneKept()
@@ -174,6 +198,7 @@ void CreatureCarryOverSystem::ReadIfNoneKept()
 	{
 		return;
 	}
+	FinishWrites();
 	const auto files = Files();
 	if (!files.has_value())
 	{
@@ -372,6 +397,8 @@ void CreatureCarryOverSystem::EndGame()
 	{
 		KeepPlayersCreature();
 	}
+	// The files are on the disk before the next game or the menu reads them
+	FinishWrites();
 }
 
 void CreatureCarryOverSystem::StartGame()

@@ -44,10 +44,11 @@ public:
 	/// The creature kept, if any
 	[[nodiscard]] virtual std::shared_ptr<const creaturemind::MindFileData> Kept() const = 0;
 	/// The physique file of the profile picked now, from which the main menu's tattoo editor shows the body of the
-	/// profile's creature. None without a profile or a folder for the files.
+	/// profile's creature. None without a profile or a folder for the files. The files that the system wrote before are
+	/// on the disk when it returns.
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ProfilePhysique() const = 0;
 	/// The file that keeps the mind of the current profile's creature. A load of a saved game gives the local player's
-	/// creature the mind of this file.
+	/// creature the mind of this file. The files that the system wrote before are on the disk when it returns.
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ProfileMind() const = 0;
 
 	/// A script loads the player's creature at a place on the land. Nothing happens when the player has a creature
@@ -73,6 +74,9 @@ public:
 	/// the last game's creature is always kept for the profile it was played as. A creature kept for another profile is
 	/// forgotten, for the new profile's own file to be read when a script loads its creature.
 	virtual void StartGame() = 0;
+	/// The creature's files go to the disk on a thread of their own, so that a write does not delay the frames of the
+	/// game. This waits until every file that the system wrote before is on the disk. Call it before a read of the files.
+	virtual void FinishWrites() const = 0;
 };
 
 } // namespace openblack::ecs::systems
