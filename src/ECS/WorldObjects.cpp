@@ -88,7 +88,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
-#include "Magic/SpellRules.h"
+#include "Magic/SpellSparing.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -676,14 +676,23 @@ bool world_objects::IsBuilding(entt::entity object)
 	return Locator::entitiesRegistry::value().AnyOf<Abode, SpellDispenser, Field>(object);
 }
 
-bool world_objects::HeldDuringCutscene(entt::entity object)
+namespace
 {
-	if (!Locator::entitiesRegistry::value().AllOf<InScript>(object) || !Locator::cinematicDirectorSystem::has_value())
+/// Whether a script owns the widescreen bars of a cutscene
+[[nodiscard]] bool ScriptOwnsWideScreen()
+{
+	if (!Locator::cinematicDirectorSystem::has_value())
 	{
 		return false;
 	}
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+}
+} // namespace
+
+bool world_objects::HeldDuringCutscene(entt::entity object)
+{
+	return Locator::entitiesRegistry::value().AllOf<InScript>(object) && ScriptOwnsWideScreen();
 }
 
 bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spell)
@@ -707,7 +716,8 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spel
 		// A thing that a script holds while its cutscene runs is spared, unless a script controls the miracle
 		const bool spellScriptControlled =
 		    spell != entt::null && registry.Valid(spell) && registry.AllOf<ScriptControlled>(spell);
-		return !magic::SparedAsHeldInCutscene(HeldDuringCutscene(object), spellScriptControlled);
+		return !magic::spell_sparing::CutsceneSpares(registry.AllOf<InScript>(object), ScriptOwnsWideScreen(),
+		                                             spellScriptControlled);
 	}();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "World: #{} {} be destroyed by a miracle", entt::to_integral(object),
 	                    can ? "may" : "may not");

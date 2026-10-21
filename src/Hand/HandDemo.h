@@ -91,6 +91,23 @@ constexpr float k_RetargetReach = 3.0f;
 [[nodiscard]] bool TakesRecordedClick(const hnd::HNDRecord& record, const ecs::script_find::Kind& kind,
                                       const map_coords::MapCoords& at);
 
+/// What a thing that a recorded click found near its place is, for whether the click can land on it
+struct FoundThing
+{
+	/// It is a building, and how much of it is built
+	bool building {false};
+	float built {0.0f};
+	/// It is a villager that dies now
+	bool dyingVillager {false};
+};
+
+/// Whether the hand can click a thing that a recorded click found. A building with nothing built and a villager that dies
+/// now cannot take the click, so the click lands on no thing.
+[[nodiscard]] constexpr bool FoundThingTakesClick(const FoundThing& thing)
+{
+	return !(thing.building && thing.built == 0.0f) && !thing.dyingVillager;
+}
+
 /// The camera hints are hidden for this many records at each end of the recording
 constexpr size_t k_HintlessRecords = 20;
 
