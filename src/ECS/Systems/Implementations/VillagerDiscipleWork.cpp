@@ -89,7 +89,7 @@ std::optional<entt::entity> ValidTown(entt::entity town)
 const GVillagerInfo* VillagerInfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
-	const auto row = static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number));
+	const auto row = static_cast<size_t>(RowOf(villager, GVillagerInfo::Find));
 	return row < infos.size() ? &infos.at(row) : nullptr;
 }
 

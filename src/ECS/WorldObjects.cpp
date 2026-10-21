@@ -88,7 +88,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
-#include "Magic/SpellRules.h"
+#include "Magic/SpellSparing.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -222,7 +222,7 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	const auto& info = Locator::infoConstants::value();
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{
-		return Row(info.villager, GVillagerInfo::Find(villager->tribe, villager->number));
+		return Row(info.villager, RowOf(*villager, GVillagerInfo::Find));
 	}
 	if (const auto* creature = registry.TryGet<const Creature>(object))
 	{
@@ -676,14 +676,23 @@ bool world_objects::IsBuilding(entt::entity object)
 	return Locator::entitiesRegistry::value().AnyOf<Abode, SpellDispenser, Field>(object);
 }
 
-bool world_objects::HeldDuringCutscene(entt::entity object)
+namespace
 {
-	if (!Locator::entitiesRegistry::value().AllOf<InScript>(object) || !Locator::cinematicDirectorSystem::has_value())
+/// Whether a script owns the widescreen bars of a cutscene
+[[nodiscard]] bool ScriptOwnsWideScreen()
+{
+	if (!Locator::cinematicDirectorSystem::has_value())
 	{
 		return false;
 	}
 	const auto& director = Locator::cinematicDirectorSystem::value();
 	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+}
+} // namespace
+
+bool world_objects::HeldDuringCutscene(entt::entity object)
+{
+	return Locator::entitiesRegistry::value().AllOf<InScript>(object) && ScriptOwnsWideScreen();
 }
 
 bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spell)
@@ -707,7 +716,8 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spel
 		// A thing that a script holds while its cutscene runs is spared, unless a script controls the miracle
 		const bool spellScriptControlled =
 		    spell != entt::null && registry.Valid(spell) && registry.AllOf<ScriptControlled>(spell);
-		return !magic::SparedAsHeldInCutscene(HeldDuringCutscene(object), spellScriptControlled);
+		return !magic::spell_sparing::CutsceneSpares(registry.AllOf<InScript>(object), ScriptOwnsWideScreen(),
+		                                             spellScriptControlled);
 	}();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "World: #{} {} be destroyed by a miracle", entt::to_integral(object),
 	                    can ? "may" : "may not");
@@ -845,6 +855,24 @@ void world_objects::Remove(entt::entity object)
 			{
 				std::erase(abode->inhabitants, object);
 			}
+		}
+	}
+	// A storage pit that goes removes its piles. When it is the storage pit of its town, the town looks for another storage
+	// pit and lets go of its temporary piles.
+	if (const auto* pit = registry.TryGet<const StoragePit>(object))
+	{
+		std::vector<entt::entity> piles(pit->woodPiles.begin(), pit->woodPiles.end());
+		piles.insert(piles.begin(), pit->foodPile);
+		const auto& towns = registry.Context().towns;
+		const auto* abode = registry.TryGet<const Abode>(object);
+		if (const auto town = abode != nullptr ? towns.find(abode->townId) : towns.end();
+		    town != towns.end() && construction::StoragePitOf(town->second) == object && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().SetStoragePit(town->second);
+		}
+		for (const auto pile : piles)
+		{
+			world_objects::Remove(pile);
 		}
 	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards

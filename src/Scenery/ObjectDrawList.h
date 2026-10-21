@@ -220,6 +220,22 @@ struct Frame
 {
 	return listed && (frame.drawAll || lastOnScreen);
 }
+/// What a thing is, for whether the game draws it outside the list
+struct OwnDraw
+{
+	/// A temple: the game draws its heart and its parts every frame
+	bool temple {false};
+	/// A villager that a script draws in high detail
+	bool highDetail {false};
+	/// A thing that a script walks along a track: the game keeps it on a list of its own while it walks, and draws all of
+	/// that list after the land's list
+	bool walkingTrack {false};
+};
+/// Whether the game draws a thing on its own, whatever the land's list says
+[[nodiscard]] constexpr bool DrawnOnItsOwn(const OwnDraw& thing)
+{
+	return thing.temple || thing.highDetail || thing.walkingTrack;
+}
 /// Whether a listed thing stays drawn on the next frames that do not draw all of the list. A full frame decides it:
 /// - A villager or a creature stays drawn, on the screen or not.
 /// - Another thing stays drawn when its sphere was on the screen and it did not fade out completely.

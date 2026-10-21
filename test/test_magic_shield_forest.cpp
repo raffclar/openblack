@@ -183,13 +183,14 @@ TEST(ShieldRules, VillagersShelterWellInsideOnTheirOwnSide)
 	EXPECT_FALSE(shield::IsUnder({10.0f, 0.0f}, {0.0f, 0.0f}, 30.0f, 25.0f));
 }
 
-TEST(ShieldRules, ASheltersAnimationIsPointingLookingOrStanding)
+TEST(ShieldRules, ASheltersClipPlaysTwentyToThirtySecondsBeforeANewOne)
 {
-	EXPECT_EQ(shield::AmazedAnimation(0), 286u);
-	EXPECT_EQ(shield::AmazedAnimation(1), 311u);
-	EXPECT_EQ(shield::AmazedAnimation(2), 311u);
-	EXPECT_EQ(shield::AmazedAnimation(3), 385u);
-	EXPECT_EQ(shield::AmazedAnimation(4), 385u);
+	// 25 seconds of a clip of two and a half seconds is ten times through
+	EXPECT_EQ(shield::AmazedClipTimes(25.0f, 2500, false), 10);
+	// The times are cut to whole times
+	EXPECT_EQ(shield::AmazedClipTimes(20.5f, 3000, false), 6);
+	// After the clip that points up, the next clip comes at once
+	EXPECT_EQ(shield::AmazedClipTimes(25.0f, 2500, true), 1);
 }
 
 TEST(ShieldRules, VillagersOfATownReactOnlyWhenItWasAttackedLately)

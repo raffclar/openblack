@@ -1119,6 +1119,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Dance::dancers>("dancers")
 	    .Field<&components::Dance::onTheirWay>("onTheirWay")
 	    .Field<&components::Dance::firstDancerTurn>("firstDancerTurn")
+	    .Field<&components::Dance::handNearTurns>("handNearTurns")
+	    .Field<&components::Dance::cameraWanted>("cameraWanted")
+	    .Field<&components::Dance::cameraMade>("cameraMade")
+	    .Field<&components::Dance::cameraAsked>("cameraAsked")
 	    .Field<&components::Dance::groups>("groups")
 	    .Field<&components::Dance::file>("file");
 	Reflect<components::Dancer>(context).Field<&components::Dancer::dance>("dance").Field<&components::Dancer::group>("group");
@@ -1539,8 +1543,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::VillagerShieldReaction::reaction>("reaction")
 	    .Field<&components::VillagerShieldReaction::type>("type")
 	    .Field<&components::VillagerShieldReaction::shield>("shield")
-	    .Field<&components::VillagerShieldReaction::lookAt>("lookAt")
-	    .Field<&components::VillagerShieldReaction::animation>("animation");
+	    .Field<&components::VillagerShieldReaction::lookAt>("lookAt");
 	Reflect<components::VillagerReactionMemory>(context).Field<&components::VillagerReactionMemory::memory>("memory");
 	Reflect<components::MagicTreeWatch>(context)
 	    .Field<&components::MagicTreeWatch::tree>("tree")
@@ -2112,7 +2115,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Villager::pregnancy>("pregnancy")
 	    .Field<&components::Villager::mother>("mother")
 	    .Field<&components::Villager::crechePath>("crechePath")
-	    .Field<&components::Villager::crecheLeg>("crecheLeg");
+	    .Field<&components::Villager::crecheLeg>("crecheLeg")
+	    .Field<&components::Villager::kind>("kind");
 	Reflect<components::VillagerCreatureInspection>(context)
 	    .Field<&components::VillagerCreatureInspection::keep>("keep")
 	    .Field<&components::VillagerCreatureInspection::lookTurns>("lookTurns");

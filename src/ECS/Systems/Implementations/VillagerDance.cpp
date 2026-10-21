@@ -127,8 +127,7 @@ uint32_t villager_dance::DanceSex(entt::entity villager)
 	{
 		return ecs::components::DanceGroup::k_AnySex;
 	}
-	const auto& info =
-	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 	return info.sex == SexType::Male ? ecs::components::DanceGroup::k_Men : ecs::components::DanceGroup::k_Women;
 }
 

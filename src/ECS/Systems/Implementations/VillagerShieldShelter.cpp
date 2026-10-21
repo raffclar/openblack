@@ -27,13 +27,17 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/VillagerClips.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ShieldRules.h"
+#include "VillagerAnimate.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
 namespace villager_shield = openblack::ecs::villager_shield;
+namespace villager_animate = openblack::ecs::villager_animate;
+namespace villager_clips = openblack::ecs::villager_clips;
 namespace shield = openblack::magic::shield;
 
 namespace
@@ -117,15 +121,26 @@ uint32_t villager_shield::AmazedByMagicShield(LivingAction& action)
 			    shield::LookOut(centre, glm::xz(transform.position), random.GameFloatRand(shield::k_ShelterTurnRange));
 		}
 		registry.SetDirty();
-		// A new animation every 20 to 30 seconds, talking and pointing after pointing up: chosen as the game chooses it,
-		// though villagers play no animations yet
-		static_cast<void>(random.GameFloatRand(shield::k_AnimationSecondsRange));
-		auto animation = shield::AmazedAnimation(random.GameRand(5));
-		if (reacting->animation == shield::k_PointingAnimation)
+		// The state chooses its clip each turn. It takes up the clip after 20 to 30 seconds of the clip that plays, or at
+		// once after the clip that points up, which talking and pointing follows.
+		const float seconds = random.GameFloatRand(shield::k_AnimationSecondsRange) + shield::k_AnimationSecondsLeast;
+		const auto current = villager_animate::CurrentClip(villager);
+		const auto length = villager_clips::ClipMilliseconds(current);
+		auto clip = villager_animate::StateClip(villager);
+		const bool pointing = static_cast<uint32_t>(current) == shield::k_PointingAnimation;
+		if (pointing)
 		{
-			animation = shield::k_TalkingAndPointingAnimation;
+			clip = static_cast<int32_t>(shield::k_TalkingAndPointingAnimation);
 		}
-		reacting->animation = animation;
+		if (length.has_value() || pointing)
+		{
+			const auto times = shield::AmazedClipTimes(seconds, static_cast<int32_t>(length.value_or(0.0f)), pointing);
+			if (villager_animate::IsReadyForNewAnimation(action, static_cast<uint32_t>(times)))
+			{
+				villager_animate::SetAnim(villager, clip, true);
+				action.turnsSinceStateChange = 0;
+			}
+		}
 		return 1;
 	}
 	// The shield has gone, or the town no longer wants protection: it waits a while, then decides what to do

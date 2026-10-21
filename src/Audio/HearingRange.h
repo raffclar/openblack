@@ -35,6 +35,15 @@ namespace openblack::audio
 /// An animation effect (a knock, a crash, a footstep) never starts further than this from the camera, in metres
 inline constexpr float k_AnimEffectHearingLimit = 800.0f;
 
+/// How an animation effect that does not start a sample ends the samples of its keys that its owner plays
+enum class AnimEffectEnd : uint8_t
+{
+	/// The sample stops at once
+	Stop,
+	/// A looping sample stops at the end of the pass that it plays
+	ReleaseLoop,
+};
+
 /// How the thing that plays an animation effect measures its distance from the camera
 enum class AnimEffectMeasure : uint8_t
 {

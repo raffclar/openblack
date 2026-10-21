@@ -42,8 +42,8 @@ std::array<entt::id_type, 3> ModelsFor(entt::entity villager, bool child)
 	std::array<MeshId, 3> own {MeshId::Dummy, MeshId::Dummy, MeshId::Dummy};
 	if (person != nullptr && Locator::infoConstants::has_value())
 	{
-		const auto& info = Locator::infoConstants::value().villager.at(
-		    static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+		const auto& info =
+		    Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 		own = child ? std::array {info.childMeshHigh, info.childMeshMedium, info.childMeshLow}
 		            : std::array {info.highDetail, info.stdDetail, info.lowDetail};
 	}

@@ -134,16 +134,12 @@ std::optional<VillagerInfo> VillagerInfoOf(const Villager& villager)
 	{
 		return std::nullopt;
 	}
+	// The row that the villager keeps, so that a copy of a special villager is the same special villager
 	const auto& villagers = Locator::infoConstants::value().villager;
-	for (size_t i = 0; i < villagers.size(); ++i)
-	{
-		const auto& info = villagers.at(i);
-		if (info.tribeType == villager.tribe && info.villagerNumber == villager.number)
-		{
-			return static_cast<VillagerInfo>(i);
-		}
-	}
-	return std::nullopt;
+	const auto row = RowOf(villager, [&villagers](Tribe tribe, VillagerNumber number) {
+		return GVillagerInfo::FindIn(villagers, tribe, number).value_or(VillagerInfo::None);
+	});
+	return row != VillagerInfo::None ? std::optional(row) : std::nullopt;
 }
 
 /// The town a building goes to: the nearest, or a new one of its tribe where it stands

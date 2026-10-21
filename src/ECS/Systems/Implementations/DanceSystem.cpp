@@ -27,13 +27,21 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
+#include "Camera/Camera.h"
+#include "Camera/CreatureInteractCameraModel.h"
+#include "Camera/DanceCameraModel.h"
+#include "Camera/DefaultWorldCameraModel.h"
+#include "Camera/FightCameraModel.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -188,16 +196,109 @@ void DanceSystem::ProcessTurn()
 	auto& registry = Locator::entitiesRegistry::value();
 	// The dances in the order of the game's list, the newest first
 	const auto all = ecs::list_order::Walk<Dance>(registry);
+	// The dances measure the distance to the player's hand, as the interface last put it on the land
+	if (Locator::handSystem::has_value())
+	{
+		const auto hand =
+		    Locator::handSystem::value().GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
+		if (hand.has_value())
+		{
+			_hand = hand;
+		}
+	}
+	const auto handNear = [this](const Dance& dance) {
+		if (!_hand.has_value() || !Locator::terrainSystem::has_value())
+		{
+			return false;
+		}
+		const float ground = Locator::terrainSystem::value().GetAltitude(dance.place.x, dance.place.z);
+		return ecs::dance_rules::HandNear(ecs::dance_rules::HandPoint(dance.place, ground), *_hand);
+	};
 	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
 	                                   .available = &Available,
 	                                   .finished = &FinishedDancing,
-	                                   .playClipAgain = &ecs::villager_dance::PlayClipAgain};
+	                                   .playClipAgain = &ecs::villager_dance::PlayClipAgain,
+	                                   .handNear = handNear,
+	                                   .cameraAsked = &StartCamera};
 	for (const auto entity : all)
 	{
 		if (dances::IsDance(registry, entity))
 		{
 			dances::ProcessTurn(registry, entity, context);
 		}
+	}
+}
+
+void DanceSystem::StartCamera(entt::entity dance)
+{
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	if (!camera.GetModel().CanBeLeft())
+	{
+		return;
+	}
+	auto model = std::make_unique<DanceCameraModel>(dance, camera.GetOrigin(Camera::Interpolation::Target),
+	                                                camera.GetFocus(Camera::Interpolation::Target));
+	auto* held = model.get();
+	held->SetPlayerModel(camera.SetModel(std::move(model)));
+}
+
+void DanceSystem::ProcessCameraKeys(bool gripsLand)
+{
+	if (!gripsLand || !Locator::camera::has_value())
+	{
+		return;
+	}
+	if (auto* model = dynamic_cast<DanceCameraModel*>(&Locator::camera::value().GetModel()); model != nullptr)
+	{
+		model->End();
+	}
+}
+
+void DanceSystem::CheckCamera()
+{
+	if (!Locator::camera::has_value())
+	{
+		return;
+	}
+	auto& camera = Locator::camera::value();
+	auto* model = dynamic_cast<DanceCameraModel*>(&camera.GetModel());
+	if (model == nullptr)
+	{
+		return;
+	}
+	if (!model->Ended() && dances::IsDance(Locator::entitiesRegistry::value(), model->GetDance()))
+	{
+		return;
+	}
+	auto player = model->TakePlayerModel();
+	const auto origin = camera.GetOrigin();
+	const auto focus = camera.GetFocus();
+	if (player == nullptr)
+	{
+		player = std::make_unique<DefaultWorldCameraModel>(origin, focus);
+	}
+	auto* world = dynamic_cast<DefaultWorldCameraModel*>(player.get());
+	auto* fight = dynamic_cast<FightCameraModel*>(player.get());
+	const auto returnOrigin = player->GetTargetOrigin();
+	const auto returnFocus = player->GetTargetFocus();
+	// The time of the camera continues from when the dance took the camera
+	const auto seconds = camera.GetModelSeconds();
+	camera.SetModel(std::move(player));
+	camera.SetModelSeconds(seconds);
+	// The player's camera starts again from where the camera is now, and flies back to where it was going
+	if (world != nullptr)
+	{
+		world->PlaceAt(origin, focus);
+		world->FlyBack(returnOrigin, returnFocus, creature_interact::WooshesFlyingBack(origin, returnOrigin));
+	}
+	// The fight view starts again from where the camera is now, and the camera does not move
+	else if (fight != nullptr)
+	{
+		fight->Return({.origin = origin, .focus = focus}, {.origin = glm::vec3(0.0f), .focus = glm::vec3(0.0f)});
 	}
 }
 

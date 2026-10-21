@@ -45,7 +45,7 @@ entt::entity villager_dropped_log::Drop(systems::DynamicsSystemInterface& dynami
 		return entt::null;
 	}
 	const auto& constants = Locator::infoConstants::value();
-	const auto& info = constants.villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+	const auto& info = constants.villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 	if (!villager_held::DropsLog(person->carried, person->woodHeld, info.minWoodToShowGraphic))
 	{
 		return entt::null;

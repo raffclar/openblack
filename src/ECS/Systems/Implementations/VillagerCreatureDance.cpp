@@ -63,8 +63,7 @@ ecs::Registry& Entities()
 
 const GVillagerInfo& InfoOf(const Villager& villager)
 {
-	return Locator::infoConstants::value().villager.at(
-	    static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 /// Where the villager stands, in whole map units: where its walk holds it, unless something else moved it since

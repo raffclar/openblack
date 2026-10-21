@@ -102,6 +102,8 @@ public:
 	AnimEffectPlay PlayAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
 	                              const glm::vec3& position, const std::optional<SoundEffectConditions>& heardUnder,
 	                              AnimEffectMeasure measure) override;
+	void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                   const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) override;
 	void SetGlobalVolume(float volume) override { _globalVolume = volume; }
 	void SetSfxVolume(float volume) override { _sfxVolume = volume; }
 	void SetMusicVolume(float volume) override { _musicVolume = volume; }
@@ -110,6 +112,7 @@ public:
 	[[nodiscard]] float GetMusicVolume() override { return _musicVolume; }
 	void Stop() override;
 	void Update() override;
+	void ProcessTurn() override;
 	void StopOutOfRangeEmitters() override;
 	[[nodiscard]] Listener GetListener() const override { return _listenerOverride.value_or(CameraListener()); }
 	void SetListenerOverride(std::optional<Listener> listener) override { _listenerOverride = listener; }
@@ -187,13 +190,19 @@ private:
 	/// its chunks left in its file. Null if it couldn't be read.
 	[[nodiscard]] std::shared_ptr<const MusicBank> LoadMusicBank(const std::string& bankPath);
 	/// LHAudio's listener frame (x right, y forward, z up) for a world position
-	[[nodiscard]] static glm::vec3 ToListenerFrame(glm::vec3 worldPosition);
+	/// Where the sound device hears from, which moves only once a game turn
+	[[nodiscard]] Listener HeardListener() const;
+	[[nodiscard]] glm::vec3 ToListenerFrame(glm::vec3 worldPosition) const;
+	/// Puts the device's listener and every placed sound where the heard listener says
+	void PlaceListenerAndSounds();
 
 	std::unique_ptr<AudioPlayerInterface> _audioPlayer;
 	/// A tool acts as if the machine lost the sound device
 	bool _simulatedLoss {false};
 	/// The listener while it is put somewhere other than the camera
 	std::optional<Listener> _listenerOverride;
+	/// Where the camera was at the end of the last game turn
+	std::optional<Listener> _turnListener;
 	/// All sounds are loaded
 	std::map<std::string, SoundGroup> _soundGroups;
 	/// Animation effects of the sound banks, by bank name

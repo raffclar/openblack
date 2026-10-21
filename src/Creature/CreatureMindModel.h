@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <span>
@@ -150,6 +151,13 @@ struct LoadedMind
 /// - The leash words are kept as the file has them. A file without them keeps the words of the mind under it.
 [[nodiscard]] LoadedMind FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                   const Learnt& freshLearnt);
+/// The game reads a mind file over a mind that has sources of its own. It makes each source of the file as a new source
+/// of its kind first, so it draws the spread value and then the spread threshold of each source, in the order of the
+/// file. The numbers of the file then replace the two values. spreadOf gives the spreads of a kind of source, and upTo
+/// is a draw from 0 up to a most (GameFloatRand in the game).
+void DrawAsSourcesAreRead(const creaturemind::MindFileData& file,
+                          const std::function<creature_desires::DesireSetup::Spread(uint32_t type)>& spreadOf,
+                          const std::function<float(float)>& upTo);
 /// A mind written as a file of the current version, over the file it was loaded from when there was one, so that
 /// what the mind doesn't use is kept. For each desire, the activity tree goes first and the act-on tree second, each
 /// with the kind number and desire that a file gave it. A file of an older version gets, for the fields that it does

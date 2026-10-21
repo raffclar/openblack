@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <memory>
+
+#include "Camera/CameraModel.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -45,6 +48,8 @@ private:
 	void ReleaseCamera(Camera& camera);
 
 	uint32_t _cameraOwner {0};
+	/// The camera of a dance that the script's camera took over from. The script gives it back when it ends.
+	std::unique_ptr<CameraModel> _danceCamera;
 	uint32_t _gameSpeedOwner {0};
 	CameraDetails _cameraDetails;
 };

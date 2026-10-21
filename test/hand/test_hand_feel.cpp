@@ -13,6 +13,7 @@
 #include "Hand/HandFeel.h"
 
 namespace hand_feel = openblack::hand_feel;
+using openblack::HoldType;
 using openblack::Zoomer;
 
 TEST(HandFeel, VillagersAndAnimalsAreHoveredBeforeAndModelsFelt)
@@ -270,4 +271,13 @@ TEST(HandFeel, WatchingAFightOrOfferingTheHoverEasesOutOverTwoSeconds)
 	drifting.Carry(100.0f, -0.5f);
 	hand_feel::EaseHover(drifting, 150.0f, 0.016f, false, true);
 	EXPECT_FLOAT_EQ(drifting.GetDuration(), hand_feel::k_HoverSlowEaseOutSeconds);
+}
+
+TEST(HandFeel, OnlyAThingHeldOtherwiseThanByMagicAndNotOfferedReachesTheLand)
+{
+	EXPECT_TRUE(hand_feel::HoldReachesLand(HoldType::Above, false));
+	EXPECT_TRUE(hand_feel::HoldReachesLand(HoldType::Side, false));
+	EXPECT_FALSE(hand_feel::HoldReachesLand(HoldType::Magic, false));
+	EXPECT_FALSE(hand_feel::HoldReachesLand(HoldType::Above, true));
+	EXPECT_FALSE(hand_feel::HoldReachesLand(std::nullopt, false));
 }

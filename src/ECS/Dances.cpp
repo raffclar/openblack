@@ -132,7 +132,7 @@ void dances::Destroy(Registry& registry, entt::entity dance, const std::function
 			finished(dancer);
 		}
 	}
-	// TODO(opening): what it was danced about is told the dance has gone
+	// A creature or a worship site keeps the dance as an entity, and sees that the entity is no longer a dance
 	registry.Destroy(dance);
 }
 
@@ -144,8 +144,14 @@ void dances::ProcessTurn(Registry& registry, entt::entity entity, const TurnCont
 		Destroy(registry, entity, context.finished);
 		return;
 	}
-	// TODO(opening): a dance that follows what it is danced about moves with it; the scripts' dances don't
-	const auto moving = dance_rules::ProcessTurn(dance, context.turn);
+	// No dance follows what it is danced about: every maker of a dance in the game makes it stay at its place
+	const bool handNear = context.handNear && context.handNear(dance);
+	const auto moving = dance_rules::ProcessTurn(dance, context.turn, handNear);
+	if (dance.cameraAsked && context.cameraAsked)
+	{
+		dance.cameraAsked = false;
+		context.cameraAsked(entity);
+	}
 	if (!context.playClipAgain)
 	{
 		return;

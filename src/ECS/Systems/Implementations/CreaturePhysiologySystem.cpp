@@ -138,9 +138,7 @@ float TemperatureAt(const glm::vec3& position)
 
 bool IsMoving(const CreatureLocomotion* locomotion)
 {
-	using Motion = CreatureLocomotion::Motion;
-	return locomotion != nullptr && (locomotion->motion == Motion::Walking || locomotion->motion == Motion::Stepping ||
-	                                 locomotion->motion == Motion::Turning);
+	return locomotion != nullptr && InMove(*locomotion);
 }
 
 /// The creature's body as its needs see it, and back

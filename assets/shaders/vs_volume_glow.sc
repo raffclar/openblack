@@ -1,5 +1,5 @@
 $input a_position, a_normal, a_texcoord0
-$output v_texcoord0, v_color0
+$output v_texcoord0, v_color0, v_snowLight
 
 // Only the model matrix is used: a draw uploads every bone the shader declares
 #define BGFX_CONFIG_MAX_BONES 1
@@ -12,10 +12,13 @@ uniform vec4 u_glowShape;
 uniform vec4 u_glowColour;
 // xy: how far the texture has slid, zw: how much of it the shell spans across and up
 uniform vec4 u_glowTexture;
+// The colour added after the texture on the inner corners, 0 to 255
+uniform vec4 u_glowSpecular;
 
 // A corner of a glowing shell over a model: a_texcoord0.x is 0 on the model and 1 pushed out. The inner corners glow in
-// the shell's colour the more side on the camera sees them, scaled in whole bytes; the outer ones are dark and clear.
-// Across, the texture follows how much the normal points up as the camera sees it.
+// the shell's colour the more side on the camera sees them, scaled in whole bytes. An inner corner that the camera sees
+// too much from the front is dark and clear. Each inner corner adds the specular colour; the outer ones are dark and
+// clear and add nothing. Across, the texture follows how much the normal points up as the camera sees it.
 void main()
 {
 	float outer = a_texcoord0.x;
@@ -32,11 +35,12 @@ void main()
 
 	float sideOn = u_glowShape.y > 0.5f ? abs(normal.x) + abs(normal.y)
 	                                    : (normal.x * normal.x + normal.y * normal.y) / sqrt(2.0f);
-	float level = (sideOn - 0.57f) * (1.0f / (2.0f - 0.57f));
-	level = level > 0.0f ? min(floor(level * 255.0f + 0.5f), 255.0f) : 0.0f;
+	float edge = (sideOn - 0.57f) * (1.0f / (2.0f - 0.57f));
+	float level = min(floor(edge * 255.0f + 0.5f), 255.0f);
 	vec3 rgb = level >= 255.0f ? u_glowColour.rgb : floor(u_glowColour.rgb * level / 256.0f);
-	vec4 inner = vec4(rgb / 255.0f, u_glowColour.a / 255.0f);
+	vec4 inner = edge > 0.0f ? vec4(rgb / 255.0f, u_glowColour.a / 255.0f) : vec4_splat(0.0f);
 	v_color0 = inner * (1.0f - outer);
+	v_snowLight = u_glowSpecular.rgb / 255.0f * (1.0f - outer);
 
 	v_texcoord0 = vec4(normal.y * u_glowTexture.z + u_glowTexture.x, u_glowTexture.y - u_glowTexture.w * outer, 0.0f,
 	                   0.0f);

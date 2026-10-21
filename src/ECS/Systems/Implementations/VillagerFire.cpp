@@ -161,7 +161,7 @@ const GVillagerInfo* InfoOf(entt::entity villager)
 		return nullptr;
 	}
 	const auto& infos = Locator::infoConstants::value().villager;
-	const auto kind = static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number));
+	const auto kind = static_cast<size_t>(RowOf(*person, GVillagerInfo::Find));
 	return kind < infos.size() ? &infos[kind] : nullptr;
 }
 

@@ -130,7 +130,7 @@ auto GameInt()
 const GVillagerInfo& InfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
-	return infos.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return infos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 bool IsVillager(entt::entity entity)
@@ -366,7 +366,7 @@ entt::entity ChildBorn(entt::entity mother)
 {
 	auto& registry = Entities();
 	const auto& her = registry.Get<const Villager>(mother);
-	const auto motherRow = GVillagerInfo::Find(her.tribe, her.number);
+	const auto motherRow = RowOf(her, GVillagerInfo::Find);
 	auto row = motherRow;
 	if (const auto job = villager_breeding::NewbornJob(InfoOf(her).boyGirlChance, GameInt()); job.has_value())
 	{

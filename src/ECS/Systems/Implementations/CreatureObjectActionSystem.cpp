@@ -410,7 +410,7 @@ std::optional<float> WeightOf(const ecs::Registry& registry, entt::entity entity
 	const auto& info = Locator::infoConstants::value();
 	if (const auto* villager = registry.TryGet<const Villager>(entity))
 	{
-		const auto kind = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
+		const auto kind = static_cast<size_t>(RowOf(*villager, GVillagerInfo::Find));
 		return kind < info.villager.size() ? std::optional(info.villager.at(kind).weight) : std::nullopt;
 	}
 	if (const auto* object = registry.TryGet<const MobileObject>(entity))

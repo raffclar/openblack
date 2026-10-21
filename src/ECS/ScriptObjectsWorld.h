@@ -75,6 +75,8 @@ public:
 	virtual void VillagerDie(entt::entity villager) = 0;
 	/// A creature gives up what it is doing as a failure
 	virtual void AbandonCreatureAction(entt::entity creature) = 0;
+	/// An animal goes back to its own life: a flock of its own if it has none, then a leg of its own, or its death
+	virtual void ReleaseAnimal(entt::entity animal) = 0;
 	/// The object goes from the world at once
 	virtual void Delete(entt::entity object) = 0;
 	/// A flock, a dance or a town: something scripts fill with other things

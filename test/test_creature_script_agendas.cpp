@@ -188,7 +188,7 @@ TEST(CreatureScriptAgendas, PointingAtAThingOrTheCamera)
 // "force CreatureTiger CREATURE_SIT TigerBasePos": walks there, faces the place, then down the slope, and sits
 TEST(CreatureScriptAgendas, SittingWhereAScriptSays)
 {
-	const auto agenda = SitDownAt(4, {100.0f, 200.0f}, 3.0f, NoRandom);
+	const auto agenda = SitDownAt(4, {100.0f, 200.0f}, 3.0f, [](float /*most*/) { return 0.0f; });
 	ASSERT_EQ(agenda.size(), 4);
 	EXPECT_EQ(agenda[0].movement.kind, Movement::Kind::ToPoint);
 	EXPECT_EQ(agenda[0].movement.point, glm::vec2(100.0f, 200.0f));

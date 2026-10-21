@@ -244,15 +244,41 @@ TEST(GameClock, TheFrameRealTimeIsWholeMillisecondsOfTheWallClockAndNeverNone)
 	clock.time.Start();
 	clock.now += 16;
 	clock.time.Update();
+	clock.time.StartDraw();
 	EXPECT_EQ(clock.time.GetFrameRealTime().count(), 16);
 	// A frame within the same millisecond still takes one
 	clock.time.Update();
+	clock.time.StartDraw();
 	EXPECT_EQ(clock.time.GetFrameRealTime().count(), 1);
 	// Pausing the game doesn't stop it
 	clock.time.StartGameClock(true);
 	clock.now += 33;
 	clock.time.Update();
+	clock.time.StartDraw();
 	EXPECT_EQ(clock.time.GetFrameRealTime().count(), 33);
+}
+
+// While the window is minimised the game does not draw. The real time stays that of the last draw, and the first draw
+// after it takes all the time since then.
+TEST(GameClock, TheFrameRealTimeIsTheTimeSinceTheLastDraw)
+{
+	Clock clock;
+	clock.time.Start();
+	clock.now += 20;
+	clock.time.Update();
+	clock.time.StartDraw();
+	EXPECT_EQ(clock.time.GetFrameRealTime().count(), 20);
+	for (int frame = 0; frame < 3; ++frame)
+	{
+		clock.now += 500;
+		clock.time.Update();
+		EXPECT_EQ(clock.time.GetFrameRealTime().count(), 20);
+	}
+	clock.now += 10;
+	clock.time.Update();
+	clock.time.StartDraw();
+	EXPECT_EQ(clock.time.GetFrameRealTime().count(), 1510);
+	EXPECT_EQ(clock.time.GetElapsedTime().count(), 1530);
 }
 
 TEST(GameClock, TheHandAndCameraStepByRealTimeExceptInAScriptsCutScene)
@@ -277,6 +303,7 @@ TEST(GameClock, FixedFrameTimeIgnoresTheWallClock)
 	Clock clock;
 	clock.time.StartGameClock(false);
 	clock.time.Update();
+	clock.time.StartDraw();
 	clock.Frame();
 	EXPECT_EQ(clock.time.GetTurn(), 1);
 
@@ -286,6 +313,7 @@ TEST(GameClock, FixedFrameTimeIgnoresTheWallClock)
 	{
 		clock.now += (frame % 2 == 0) ? 1000 : 3;
 		clock.time.Update();
+		clock.time.StartDraw();
 		EXPECT_EQ(clock.time.GetFrameRealTime(), std::chrono::milliseconds(50));
 		clock.Frame();
 	}
@@ -295,6 +323,7 @@ TEST(GameClock, FixedFrameTimeIgnoresTheWallClock)
 	clock.time.SetFixedFrameTime(std::nullopt);
 	clock.now += 10;
 	clock.time.Update();
+	clock.time.StartDraw();
 	EXPECT_EQ(clock.time.GetFrameRealTime(), std::chrono::milliseconds(10));
 	EXPECT_FALSE(clock.Frame());
 	EXPECT_EQ(clock.time.GetTurn(), 6);

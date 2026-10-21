@@ -100,8 +100,7 @@ bool villager_flock::CanStandAt(entt::entity villager, const MapCoords& coords)
 	{
 		return true;
 	}
-	const auto& info =
-	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 	return (CellCollision(coords) & static_cast<uint32_t>(info.collideType)) == 0;
 }
 

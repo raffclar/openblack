@@ -16,16 +16,21 @@
 #include <entt/core/hashed_string.hpp>
 #include <spdlog/spdlog.h>
 
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/InjectedInput.h"
@@ -165,11 +170,23 @@ void RetargetClick(const hnd::HNDRecord& record)
 		    }
 		    return candidates;
 	    });
-	// None found near, the click stays on what is under the hand
-	// TODO(tutorial-polish): the game also passes over a thing it can't be clicked on (a building with nothing built yet,
-	// a dying villager), the click then landing on no thing; and it measures a worship site from its totem
+	// None found near, the click stays on what is under the hand. The game measures a worship site from its totem; the
+	// first land has no worship site.
 	if (found != entt::null)
 	{
+		const auto* action = registry.TryGet<const ecs::components::LivingAction>(found);
+		const bool dying =
+		    registry.AllOf<ecs::components::Villager>(found) && action != nullptr && Locator::livingActionSystem::has_value() &&
+		    Locator::livingActionSystem::value().VillagerGetState(*action, ecs::components::LivingAction::Index::Top) ==
+		        VillagerStates::Dying;
+		const bool building = registry.AllOf<ecs::components::Abode>(found);
+		// A thing that the hand cannot click takes the click away from the thing under the hand, onto no thing
+		if (!hand_demo::FoundThingTakesClick(
+		        {.building = building, .built = building ? ecs::construction::BuiltOf(found) : 0.0f, .dyingVillager = dying}))
+		{
+			picking.RetargetObject(std::nullopt, 0.0f);
+			return;
+		}
 		picking.RetargetObject(found, record.objectDistance);
 		if (const auto logger = spdlog::get("game"); logger != nullptr)
 		{

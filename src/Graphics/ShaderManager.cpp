@@ -311,7 +311,7 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"ParticleInstanced", "vs_particle_instanced", "fs_particle"},
     ShaderDefinition {"ParticleChain", "vs_particle_chain", "fs_particle"},
     ShaderDefinition {"ParticleSurface", "vs_particle_surface", "fs_particle_surface"},
-    ShaderDefinition {"VolumeGlow", "vs_volume_glow", "fs_particle"},
+    ShaderDefinition {"VolumeGlow", "vs_volume_glow", "fs_particle_surface"},
     ShaderDefinition {"LandAlphaInstanced", "vs_footprint_instanced", "fs_land_alpha"},
     ShaderDefinition {"Celestial", "vs_celestial", "fs_celestial"},
     ShaderDefinition {"Mist", "vs_mist", "fs_mist"},

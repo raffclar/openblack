@@ -1141,7 +1141,7 @@ void AdvisorSpirit::Sound(uint32_t anim, float phase, bool sfx)
 	}
 	for (const auto& event : CrossedSounds(_data.sounds[anim], _slotLast[anim], phase))
 	{
-		_sounds.push_back({.anim = anim, .sample = event.sample, .filtered = event.flag != 0});
+		_sounds.push_back({.anim = anim, .sample = event.sample, .starts = event.flag != 0, .position = _position});
 	}
 }
 

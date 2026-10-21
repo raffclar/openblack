@@ -859,6 +859,8 @@ struct Command
 		/// origin 80 metres back and 50 metres up from it. Then the camera flies to it, as the bookmark's number key does.
 		/// Needs no creature
 		FlyToBookmark,
+		/// The player presses the Tab key: the camera flies to the next town of the player. Needs no creature
+		TabToTown,
 		/// The player keeps the creature in a bookmark (value, 0 to 6), as Ctrl and the number key do with the hand over
 		/// it. Then the camera follows the bookmark, as Shift and the number key do.
 		BookmarkCreature,
@@ -933,6 +935,10 @@ struct Command
 		/// The player's teleport stone nearest to the point goes at once, with its pool, as when its miracle ends. Needs
 		/// no creature.
 		RemoveTeleportStone,
+		/// A script makes a dance (value, a row of the dance table) about the scenario's object (object), as
+		/// DANCE_CREATE does. Each other villager of the scenario's objects joins the dance. With ctrl, the hand was
+		/// near the dance for long enough, so the dance wants its camera. Needs no creature.
+		MakeDance,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

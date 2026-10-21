@@ -13,6 +13,9 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
+#include <stdexcept>
+#include <string>
 #include <string_view>
 
 #include <spdlog/spdlog.h>
@@ -32,27 +35,32 @@ bool EqualNoCase(std::string_view a, std::string_view b)
 }
 } // namespace
 
+std::optional<VillagerInfo> GVillagerInfo::FindIn(std::span<const GVillagerInfo> rows, Tribe tribe,
+                                                  VillagerNumber villagerNumber)
+{
+	// The search stops at the first row with the tribe and the kind of work. All the special villagers have no tribe
+	// and the same kind of work, so the search gives the first of them.
+	const auto found = std::ranges::find_if(rows, [tribe, villagerNumber](const GVillagerInfo& row) {
+		return row.tribeType == tribe && row.villagerNumber == villagerNumber;
+	});
+	if (found == rows.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<VillagerInfo>(std::distance(rows.begin(), found));
+}
+
 VillagerInfo GVillagerInfo::Find(Tribe tribe, VillagerNumber villagerNumber)
 {
-	bool found = false;
-	auto result = VillagerInfo::None;
-	// TODO (#749) use std::views::enumerate
-	for (size_t i = 0; const auto& villager : Locator::infoConstants::value().villager)
+	if (const auto row = FindIn(Locator::infoConstants::value().villager, tribe, villagerNumber); row.has_value())
 	{
-		if (villager.tribeType == tribe && villager.villagerNumber == villagerNumber)
-		{
-			result = static_cast<VillagerInfo>(i);
-			found = true;
-		}
-		++i;
+		return *row;
 	}
-	if (found)
-	{
-		return result;
-	}
-
-	throw std::runtime_error(std::string("Could not find info for ") + k_TribeStrs.at(static_cast<size_t>(tribe)).data() +
-	                         " + " + k_VillagerNumberStrs.at(static_cast<size_t>(villagerNumber)).data());
+	// A villager of no tribe has no tribe name
+	const auto tribeIndex = static_cast<size_t>(tribe);
+	const std::string tribeName = tribeIndex < k_TribeStrs.size() ? k_TribeStrs.at(tribeIndex).data() : "no tribe";
+	throw std::runtime_error(std::string("Could not find info for ") + tribeName + " + " +
+	                         k_VillagerNumberStrs.at(static_cast<size_t>(villagerNumber)).data());
 }
 
 AbodeInfo GAbodeInfo::Find(const std::string& name)

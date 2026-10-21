@@ -13,6 +13,8 @@
 #include <cstdint>
 
 #include <array>
+#include <optional>
+#include <span>
 
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
@@ -1323,6 +1325,9 @@ struct GVillagerInfo: GLivingInfo
 	float missionaryImpressiveValue;
 
 	static VillagerInfo Find(Tribe tribe, VillagerNumber villagerNumber);
+	/// The first row of the table with the tribe and the kind of work, or none
+	[[nodiscard]] static std::optional<VillagerInfo> FindIn(std::span<const GVillagerInfo> rows, Tribe tribe,
+	                                                        VillagerNumber villagerNumber);
 };
 
 struct CreatureDesireActionEntry

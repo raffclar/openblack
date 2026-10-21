@@ -286,6 +286,7 @@
 #include "Hand/HandReach.h"
 #include "Hand/HandTrace.h"
 #include "Hand/HandVisibility.h"
+#include "Hand/ScriptHandState.h"
 #include "Help/HelpProfile.h"
 #include "Help/SingAlong.h"
 #include "Help/Spirits.h"
@@ -846,8 +847,15 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		{
 			_actionPressTaken = true;
 		}
+		// A lesson can let an empty hand act only on a highlight that a script made. This limit also stops a press on a
+		// fireball, which is not a highlight.
+		const auto picked =
+		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
+		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
+		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
 		// With an empty hand, a fireball under it takes the press. A one-shot globe is taken hold of as any thing is.
-		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy())
+		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() && mayPress)
 		{
 			_actionPressTaken = magic.PressFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
 		}
@@ -896,7 +904,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		    Locator::villageTotemSystem::has_value() && Locator::pickingSystem::has_value())
 		{
 			auto& totems = Locator::villageTotemSystem::value();
-			if (const auto picked = Locator::pickingSystem::value().GetPick().object; picked.has_value())
+			if (picked.has_value())
 			{
 				if (const auto totem = totems.TotemOf(*picked);
 				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
@@ -906,12 +914,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 			}
 		}
-		// Otherwise the hand takes hold of a thing under it. A lesson can let an empty hand act only on a highlight.
-		const auto picked =
-		    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
-		const bool highlightUnderHand = picked.has_value() && Locator::entitiesRegistry::value().Valid(*picked) &&
-		                                Locator::entitiesRegistry::value().AllOf<ecs::components::ScriptHighlight>(*picked);
-		const bool mayPress = handHoldsThing || script::interface_levels::MayPress(interfaceLimits, highlightUnderHand);
+		// Otherwise the hand takes hold of a thing under it, if the lesson lets it
 		if (!_actionPressTaken && !magic.IsHandBusy() && handGrab != nullptr && mayPress)
 		{
 			_actionPressTaken = handGrab->Press(machine_clock::Ticks(), Locator::time::value().GetTurn());
@@ -975,6 +978,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	// A miracle in the hand doesn't stop the hand moving the land; the middle button, or both buttons, turn the camera
 	_handGripping = !inTemple && (middleMouseButton || (leftMouseButton && !onCreature && !fights.IsPressed()));
 	_handRotating = !inTemple && (middleMouseButton || (leftMouseButton && rightMouseButton));
+	_handSelectGrip = !inTemple && leftMouseButton && !onCreature && !fights.IsPressed();
+	_handOtherButton = rightMouseButton;
 
 	auto& window = Locator::windowing::value();
 	auto& camera = Locator::camera::value();
@@ -1085,7 +1090,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			break;
 		case SDLK_TAB:
-			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one
+			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one. Tab without them flies to
+			// the next town of the player.
 			if (BookmarkKeysAllowed())
 			{
 				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
@@ -1095,6 +1101,15 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
 				{
 					Locator::cameraBookmarkSystem::value().JumpToNext();
+				}
+				else
+				{
+					std::optional<entt::entity> thing;
+					if (Locator::pickingSystem::has_value())
+					{
+						thing = Locator::pickingSystem::value().GetPick().object;
+					}
+					Locator::cameraBookmarkSystem::value().FlyToNextTown(thing);
 				}
 			}
 			break;
@@ -2000,6 +2015,12 @@ bool Game::GameLogicLoop() noexcept
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			ProcessTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
+			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
+			// only when it is already due.
+			if (Locator::helpMessageSystem::has_value())
+			{
+				Locator::helpMessageSystem::value().ProcessTurn();
+			}
 			_lastGameLoopTime = currentTime;
 		}
 		return false;
@@ -2542,6 +2563,11 @@ void Game::PlayTurnStep(game_turn::Step step)
 		{
 			scriptCamera->LetGoOfGoneThings();
 		}
+		// The camera of a dance that ended, or whose dance went, gives the camera back
+		if (Locator::danceSystem::has_value())
+		{
+			Locator::danceSystem::value().CheckCamera();
+		}
 		break;
 	case Step::BuildingPieces:
 		// The pieces broken off buildings count down their time, and go when it runs out
@@ -2679,6 +2705,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	if (Locator::infoConstants::has_value())
 	{
 		const auto& sound = Locator::infoConstants::value().sound;
@@ -2784,7 +2811,8 @@ bool Game::DoesFrameGraphics() const
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 {
 	using game_frame::Step;
-	// While the window is minimised the turns and the keys continue, but the camera, the hand and the world's draw stop
+	// While the window is minimised the turns, the keys and the film's clock continue, but the camera, the start of the draw,
+	// the hand and the world's draw stop
 	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
 	{
 		return true;
@@ -2814,13 +2842,30 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		// The frame's game time: none while paused, quicker or slower with the game speed
 		Locator::time::value().UpdateFrame();
 		break;
+	case Step::FilmClock:
+		// The clock of a full-screen video counts the frames that are due by the real clock
+		Locator::videoSystem::value().CountDueFrames(std::chrono::steady_clock::now());
+		break;
+	case Step::DrawClock:
+		// The real time since the last draw, which the steps of the draw go by
+		Locator::time::value().StartDraw();
+		break;
 	case Step::Video:
-		// A full-screen video decodes the frames due by the real clock, fades, and ends
+		// A full-screen video shows the frames that are due, fades, and ends
 		Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
 		break;
 	case Step::PauseText:
-		// The words of the pause and the speed, after the frame's keys, turns and video
+		// The words of the pause and the speed, as the draw finishes
 		UpdatePauseText();
+		break;
+	case Step::ScreenFade:
+		// The colour over the screen fades by the real time of the draw
+		if (_interface)
+		{
+			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+			_interface->GetScreenFade().Update(static_cast<uint32_t>(Locator::time::value().GetFrameRealTime().count()),
+			                                   inTemple);
+		}
 		break;
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
@@ -3936,8 +3981,20 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				}
 			}
 		}
+		// What the hand does in this frame, which starts its blends and decides whether the camera's icons show
+		const auto mode = hand_blend::ModeOf({
+		    .shown = IsHandDrawn(),
+		    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+		    .holds = heldThing.has_value(),
+		    .holdsSeed = heldSeed.has_value(),
+		    .pulls = pulls,
+		    .knocks = _handKnocking,
+		    .gripsTotem = gripsTotem,
+		    .touchesCreature = _handOnCreature.has_value(),
+		    .movesCamera = _handCameraState,
+		});
 		// The camera's helper icons by the hand, where it is drawn this frame, now that it is posed
-		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+		UpdateHandTricons(IsHandDrawn(), std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(), mode);
 		// The tooltip by the drawn hand too, which stays with it while it is held still and the pointer moves on
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
@@ -3950,17 +4007,6 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    magic::hand_hold::DistanceFromView(camera.GetOrigin(), handTransform->position, heldThing.has_value()));
 				// Each change of what the hand does starts a blend of the drawn hand from how it looked before
 				const auto* grab = Locator::handGrabSystem::has_value() ? &Locator::handGrabSystem::value() : nullptr;
-				const auto mode = hand_blend::ModeOf({
-				    .shown = IsHandDrawn(),
-				    .insideTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
-				    .holds = heldThing.has_value(),
-				    .holdsSeed = heldSeed.has_value(),
-				    .pulls = pulls,
-				    .knocks = _handKnocking,
-				    .gripsTotem = gripsTotem,
-				    .touchesCreature = _handOnCreature.has_value(),
-				    .movesCamera = _handCameraState,
-				});
 				const auto changes = _handBlend.Step({
 				    .mode = mode,
 				    .cycle = handCycle,
@@ -4143,6 +4189,17 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	if (!pathHeld)
 	{
 		camera.HandleKeys(deltaTime);
+	}
+	// A grip of the land ends the camera of a dance. A zoom with the land held does not end it.
+	hand::script_state::Facts grip {.gripsLand = _handSelectGrip, .otherButton = _handOtherButton};
+	if (Locator::cameraHelpSystem::has_value())
+	{
+		grip.cameraFeatures = Locator::cameraHelpSystem::value().Get().features;
+	}
+	if (Locator::danceSystem::has_value())
+	{
+		Locator::danceSystem::value().ProcessCameraKeys(hand::script_state::StateOf(grip) ==
+		                                                hand::script_state::State::GripLandscape);
 	}
 }
 
@@ -7354,7 +7411,18 @@ float Game::HandDrawnScale(glm::vec3 eye, glm::vec3 handPosition, bool holding) 
 
 hand_feel::Hover Game::HandHoverInputs(glm::vec3 eye) const
 {
-	const bool holding = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldPose().has_value();
+	std::optional<HoldType> held;
+	bool offers = false;
+	if (Locator::handGrabSystem::has_value())
+	{
+		const auto& grab = Locator::handGrabSystem::value();
+		if (const auto pose = grab.GetHeldPose())
+		{
+			held = pose->hold;
+		}
+		offers = grab.OffersToCreature();
+	}
+	const bool holding = hand_feel::HoldReachesLand(held, offers);
 	const auto overSea =
 	    _cursorLand.has_value() && Locator::terrainSystem::value().GetHeightAt(glm::xz(*_cursorLand)) < k_HandSeaAltitude;
 	return {
@@ -7432,7 +7500,7 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	_handPose = pose;
 }
 
-void Game::UpdateHandTricons(bool handDrawn, float seconds)
+void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode)
 {
 	if (!_interface)
 	{
@@ -7515,13 +7583,10 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds)
 	tricons.cursor = _mousePosition;
 	// The same size on the screen at any distance: a part of the focal length across
 	tricons.halfSize = hand_tricons::IconHalfSize(camera.GetProjectionMatrix()[0][0], glm::ivec2(screen));
-	// The hand's empty and camera states show them, not while it holds something or is on a creature
-	bool holds = magic::HandHoldPoser::Find().has_value();
-	if (!holds && Locator::handGrabSystem::has_value())
-	{
-		holds = Locator::handGrabSystem::value().GetHeld().has_value();
-	}
-	tricons.handStateShowsIcons = !holds && !_handOnCreature.has_value();
+	// The mode of the hand decides whether they show
+	const bool scoopsLockedThing =
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn().has_value();
+	tricons.handStateShowsIcons = hand_blend::AllowsCameraIcons(mode, scoopsLockedThing);
 	_interface->SetHandTricons(tricons);
 }
 

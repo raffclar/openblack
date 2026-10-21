@@ -159,7 +159,7 @@ const GLivingInfo* LivingInfoOf(const ecs::Registry& registry, entt::entity enti
 	}
 	if (const auto* villager = registry.TryGet<const Villager>(entity))
 	{
-		const auto kind = static_cast<size_t>(GVillagerInfo::Find(villager->tribe, villager->number));
+		const auto kind = static_cast<size_t>(RowOf(*villager, GVillagerInfo::Find));
 		return kind < info.villager.size() ? &info.villager.at(kind) : nullptr;
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(entity))

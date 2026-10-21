@@ -243,6 +243,32 @@ constexpr std::array k_ToolTipArrows = {
 };
 /// The tooltips' mice for a wheel mouse, the third row of mousehelp.raw
 constexpr int k_ToolTipMouseRow = 2;
+
+/// What the depths of the boxes of words in the world come from: the camera's pitch, near plane and projection
+struct WorldTextView
+{
+	float pitch {0.0f};
+	float nearClip {0.0f};
+	glm::mat4 projection {1.0f};
+};
+
+/// Makes a canvas test its draws against the world's depth as the camera's projection keeps it, and gives the camera's
+/// values for the depths
+WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
+{
+	WorldTextView view;
+	if (Locator::camera::has_value())
+	{
+		const auto& camera = Locator::camera::value();
+		view.pitch = openblack::script_camera::HeadingAndPitchFromPoints(camera.GetOrigin(), camera.GetFocus()).pitch;
+		view.nearClip = camera.GetNearClip();
+		view.projection = camera.GetProjectionMatrix();
+		canvas.SetDepthTest(camera.GetCameraProjection() == openblack::Camera::Projection::ReversedZ
+		                        ? Canvas::DepthTest::NearerIsGreater
+		                        : Canvas::DepthTest::NearerIsLess);
+	}
+	return view;
+}
 } // namespace
 
 std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings,
@@ -948,7 +974,6 @@ void GameInterface::Update(float deltaSeconds)
 	_saveGameBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
-	_screenFade.Update(deltaSeconds);
 }
 
 void GameInterface::UpdateTattooEditor(float deltaSeconds)
@@ -1401,7 +1426,23 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 		return;
 	}
 
+	// The bubble is flat on the screen, but the world in front of it hides its box, its words and its gestures, as with
+	// the villagers' labels. The shadows of the words are one nearer than the box, and the words two nearer. The arrows
+	// and the pictures of the controls go over all of the world.
+	auto& canvas = _worldLabelsCanvas;
+	const auto view = PrepareWorldTextCanvas(canvas);
+	const float boxDepth = world_text::DrawnDepth(placement->depth, view.pitch, view.nearClip);
+	const float boxBuffer = world_text::BufferDepth(view.projection, boxDepth);
+	const float shadowBuffer = world_text::BufferDepth(view.projection, boxDepth - 1.0f);
+	const float wordsBuffer = world_text::BufferDepth(view.projection, boxDepth - 2.0f);
+	const float shadowWordsBuffer =
+	    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 1.0f, view.nearClip));
+	const float wordsWordsBuffer =
+	    world_text::BufferDepth(view.projection, world_text::WordsDepth(boxDepth - 2.0f, view.nearClip));
+	const float inFront = world_text::BufferDepth(view.projection, view.nearClip);
+
 	// The box and its tail
+	canvas.SetDepth(boxBuffer);
 	for (const auto& quad : tip::BoxShape(*placement, alpha))
 	{
 		std::array<glm::vec2, 4> corners {};
@@ -1413,17 +1454,18 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 			uvs.at(i) = quad.at(i).uv;
 			colours.at(i) = glm::vec4(tip::k_BoxColour, quad.at(i).alpha);
 		}
-		_canvas.DrawShape(corners, uvs, colours, _gatheringText.get());
+		canvas.DrawShape(corners, uvs, colours, _gatheringText.get());
 	}
 	// The arrows, blinking, when there is more to read
 	if (_atmos != nullptr && tip::ArrowsLit(machine_clock::Ticks()))
 	{
+		canvas.SetDepth(inFront);
 		for (const auto& [shown, arrow] :
 		     {std::pair {scroll.moreAbove, tip::UpArrow(*placement)}, std::pair {scroll.moreBelow, tip::DownArrow(*placement)}})
 		{
 			if (shown)
 			{
-				_canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
+				canvas.DrawQuad(arrow.min, arrow.max, arrow.uvMin, arrow.uvMax, tip::k_ArrowColour, _atmos.get());
 			}
 		}
 	}
@@ -1449,26 +1491,31 @@ void GameInterface::DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse)
 	const auto words = tip::LayOutWords(*placement, items, scroll.Pixels(), alpha, wrap, measure, controlShown);
 	scroll.contentHeight = words.contentHeight;
 	scroll.lineHeight = placement->sizes.lineHeight;
+	// Each gesture's shadow is at the depth of the words' shadows, and its picture at the depth of the words
 	for (const auto& gesture : words.gestures)
 	{
 		const auto sheet = static_cast<size_t>(gesture.sheet);
+		canvas.SetDepth(gesture.shadow ? shadowBuffer : wordsBuffer);
 		if (sheet < _gestureSheets.size() && _gestureSheets.at(sheet) != nullptr)
 		{
-			_canvas.DrawQuad(gesture.min, gesture.max, gesture.uvMin, gesture.uvMax, gesture.colour,
-			                 _gestureSheets.at(sheet).get());
+			canvas.DrawQuad(gesture.min, gesture.max, gesture.uvMin, gesture.uvMax, gesture.colour,
+			                _gestureSheets.at(sheet).get());
 		}
 	}
+	// The pictures of the controls go over the interface's canvas, in front of all of the world
 	for (const auto& control : words.controls)
 	{
 		DrawBubbleControl(control, bindings, placement->pixelScale);
 	}
+	canvas.SetDepth(shadowWordsBuffer);
 	for (const auto& line : words.shadows)
 	{
-		DrawBubbleLine(line, glm::vec3(0.0f));
+		DrawBubbleLine(canvas, line, glm::vec3(0.0f));
 	}
+	canvas.SetDepth(wordsWordsBuffer);
 	for (const auto& line : words.lines)
 	{
-		DrawBubbleLine(line, glm::vec3(1.0f));
+		DrawBubbleLine(canvas, line, glm::vec3(1.0f));
 	}
 	afterDrawing();
 }
@@ -1530,18 +1577,7 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	// The labels are flat on the screen, but the world in front of each one hides it. Each label is at a depth a little
 	// nearer to the camera than its point, and the more the camera looks down, the nearer it is.
 	auto& canvas = _worldLabelsCanvas;
-	float pitch = 0.0f;
-	float nearClip = 0.0f;
-	glm::mat4 projection {1.0f};
-	if (Locator::camera::has_value())
-	{
-		const auto& camera = Locator::camera::value();
-		pitch = script_camera::HeadingAndPitchFromPoints(camera.GetOrigin(), camera.GetFocus()).pitch;
-		nearClip = camera.GetNearClip();
-		projection = camera.GetProjectionMatrix();
-		canvas.SetDepthTest(camera.GetCameraProjection() == Camera::Projection::ReversedZ ? Canvas::DepthTest::NearerIsGreater
-		                                                                                  : Canvas::DepthTest::NearerIsLess);
-	}
+	const auto view = PrepareWorldTextCanvas(canvas);
 	const auto draw = [&canvas, this](const labels::Quad& quad, glm::vec4 colour) {
 		canvas.DrawShape({quad[0].position, quad[1].position, quad[2].position, quad[3].position},
 		                 {quad[0].uv, quad[1].uv, quad[2].uv, quad[3].uv}, {colour, colour, colour, colour},
@@ -1549,7 +1585,8 @@ void GameInterface::DrawVillagerLabels(glm::u16vec2 resolution)
 	};
 	for (const auto* label : board.DrawOrder())
 	{
-		canvas.SetDepth(world_text::BufferDepth(projection, world_text::DrawnDepth(label->depth, pitch, nearClip)));
+		canvas.SetDepth(
+		    world_text::BufferDepth(view.projection, world_text::DrawnDepth(label->depth, view.pitch, view.nearClip)));
 		// The see-through black box, then the see-through black pointer down to the head, then the words
 		const auto boxColour = glm::vec4(0.0f, 0.0f, 0.0f, static_cast<float>(label->boxAlpha) / 255.0f);
 		for (const auto& quad : labels::BoxShape(*label))

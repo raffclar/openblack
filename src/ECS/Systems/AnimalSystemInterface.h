@@ -91,6 +91,10 @@ public:
 	[[nodiscard]] virtual std::optional<uint8_t> FinalGameStateOf(entt::entity animal) const = 0;
 	/// A new size for an animal
 	virtual void SetScale(entt::entity animal, float scale) = 0;
+	/// A script lets an animal go. An animal out in the world that is in no flock gets a flock of its own, as wide and as
+	/// close as its kind keeps one. With life, it then joins a flock near it if it can and starts a leg of its own; with
+	/// no life, it starts to die. An animal in a hand or in the air is not changed.
+	virtual void ReleaseFromScript([[maybe_unused]] entt::entity animal) {}
 	/// An animal starts to wander, as one that a creature has healed does
 	virtual void StartWandering([[maybe_unused]] entt::entity animal) {}
 	/// An animal's radius across the ground: the larger half of its model's width and depth, scaled

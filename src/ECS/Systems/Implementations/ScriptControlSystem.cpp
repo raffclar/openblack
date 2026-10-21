@@ -23,6 +23,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -67,7 +68,13 @@ bool ScriptControlSystem::StartCameraControl(Camera& camera, const CameraRequest
 		ScriptMessage("Note-Camera control Failed");
 		return false;
 	}
-	camera.SetModel(std::make_unique<ScriptCameraModel>(camera.GetOrigin(), camera.GetFocus(), std::move(groundAt)));
+	auto previous =
+	    camera.SetModel(std::make_unique<ScriptCameraModel>(camera.GetOrigin(), camera.GetFocus(), std::move(groundAt)));
+	// The camera of a dance stays under the script's camera, and comes back when the script ends
+	if (dynamic_cast<DanceCameraModel*>(previous.get()) != nullptr)
+	{
+		_danceCamera = std::move(previous);
+	}
 	_cameraOwner = request.task;
 	return true;
 }
@@ -89,7 +96,12 @@ ScriptCameraModel* ScriptControlSystem::GetScriptCamera(Camera& camera) const
 
 void ScriptControlSystem::ReleaseCamera(Camera& camera)
 {
-	if (GetScriptCamera(camera) != nullptr)
+	if (GetScriptCamera(camera) != nullptr && _danceCamera != nullptr)
+	{
+		// The camera of a dance comes back and holds the view where the script left it
+		camera.SetModel(std::move(_danceCamera));
+	}
+	else if (GetScriptCamera(camera) != nullptr)
 	{
 		// The player gets a camera of their own, starting from where the script left it and looking the same way
 		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
@@ -100,6 +112,7 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 	{
 		ScriptMessage("We are in the wrong camera mode! - exception happened?");
 	}
+	_danceCamera.reset();
 	// The lens glides back to the normal one over half a second
 	if (Locator::config::has_value())
 	{
@@ -190,5 +203,6 @@ bool ScriptControlSystem::LoadState(reflection::BinaryReader& in)
 void ScriptControlSystem::Reset()
 {
 	_cameraOwner = 0;
+	_danceCamera.reset();
 	_gameSpeedOwner = 0;
 }

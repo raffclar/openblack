@@ -107,6 +107,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 	// only villagers are counted yet, so each villager's own speed difference is drawn from the same spread but not the
 	// same one as the game gives that villager
 	person.creationIndex = registry.Context().thingsMade++;
+	person.kind = type;
 	// It goes to the front of the list of the living
 	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	registry.Assign<WallHug>(

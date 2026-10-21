@@ -1861,7 +1861,8 @@ void AddStory(std::vector<Scenario>& all)
 	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
 	                "the land and the things behind it show through it, and its cut-out parts go first. From 16 seconds a "
 	                "faint shell of light in red covers the heart, reaching out with the heartbeat and growing at the "
-	                "end. It is not drawn after 23.8 seconds, just before it goes.",
+	                "end. Where the shell touches the heart it adds a faint grey. It is not drawn after 23.8 seconds, "
+	                "just before it goes.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
@@ -5983,6 +5984,25 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+	// A tree stands between the camera and the tip bubble of a sign
+	all.push_back({
+	    .id = "hand.bubble_behind_tree",
+	    .name = "A tree in front of a tip bubble hides it",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes to a \"did you know\" sign and taps it. An oak stands to its right, between the "
+	                   "camera and the bubble that comes up over the sign.",
+	    .expected = "The oak hides the part of the bubble's box and words that is behind its trunk and leaves. Between "
+	                "the leaves the bubble shows. The blinking arrows and the pictures of the controls show over the "
+	                "tree. Turn the camera to look down: more of the bubble then shows, because the bubble comes "
+	                "nearer to the camera as it looks down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, -14.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {5.0f, -2.0f}}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -9742,6 +9762,35 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
+	// A script's dance about a person, as the Pied Piper's dance of Land 1, which wants its camera at once
+	all.push_back({
+	    .id = "story.dance_camera",
+	    .name = "The camera of a dance holds the view until a grip of the land",
+	    .facet = Facet::Story,
+	    .description = "A leader stands in the middle with six villagers round him. After one second, a script makes the "
+	                   "dance about a person (the dance of the Pied Piper on Land 1) about the leader, and the six "
+	                   "villagers join it. The scenario says that the hand was near the dance for more than ten seconds, "
+	                   "so the dance wants its camera.",
+	    .expected = "The villagers walk to their places and dance. At the first key frame of the dance that asks for "
+	                "the camera, the camera holds its view. The keys, the wheel and the mouse do not move it. A grip of "
+	                "the land with the left button gives the camera back in the next game turn, and the drag of the land "
+	                "starts. The dance does not take the camera again. The log tells the number of dancers.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -15.0f}, {15.0f, 15.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {6.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-6.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 6.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, -6.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {4.0f, 4.0f}},
+	                {.type = VillagerInfo::CelticFishermanMale, .offset = {-4.0f, -4.0f}}},
+	    .commands = {{.kind = Kind::MakeDance,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
+	                  .object = 0,
+	                  .ctrl = true}},
+	});
+
 	all.push_back({
 	    .id = "script.set_target_throw",
 	    .name = "A script throws a villager to get to a place in a time",
@@ -9778,6 +9827,21 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::ConiferA, .offset = {-6.0f, 0.0f}, .dead = true, .leanDegrees = {2.2700f, 0.0694f}},
 	                {.type = TreeInfo::ConiferA, .offset = {6.0f, 0.0f}, .dead = true, .leanDegrees = {-0.4841f, 1.8931f}},
 	                {.type = TreeInfo::ConiferA, .offset = {18.0f, 0.0f}, .dead = true, .leanDegrees = {20.0f, 10.0f}}},
+	});
+
+	// Bonfires from a land script: the turn is the third number, and the second number is not used
+	all.push_back({
+	    .id = "nature.bonfire_land_script_turn",
+	    .name = "Bonfires from a land script take their turn from the third number",
+	    .facet = Facet::Nature,
+	    .description = "Two bonfires in a row from the west, made by land script lines. The first has the numbers of the "
+	                   "two bonfires on Land 1: 24.7, then 0. The second has 0, then a quarter turn.",
+	    .expected = "The first bonfire stands with no turn, as on Land 1, because the second number is not used. The "
+	                "second bonfire is turned by a quarter turn about the vertical.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -6.0f}, {12.0f, 6.0f}}},
+	    .landScript = "CREATE_BONFIRE(\"-6.0,0.0\", 24.700001, 0.000000, 1.000000)\n"
+	                  "CREATE_BONFIRE(\"6.0,0.0\", 0.000000, 1.570796, 1.000000)\n",
 	});
 
 	// Mobile statics that a land script turns and leans: the lean follows the way each one faces
@@ -10008,6 +10072,36 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {{.kind = Kind::FlyToBookmark, .delaySeconds = 2.0f, .point = {900.0f, 0.0f}, .value = 0},
 	                 {.kind = Kind::FlyToBookmark, .delaySeconds = 5.0f, .point = {0.0f, 0.0f}, .value = 1}},
+	});
+	all.push_back({
+	    .id = "tutorial.tab_town_flights",
+	    .name = "The Tab key flies to the player's towns",
+	    .facet = Facet::Tutorial,
+	    .description = "Lines of a land script make three towns of the player in this order: a town with a storage pit to "
+	                   "the west, a town with a village centre to the north, and a town with no building to the east. A "
+	                   "neutral town with a storage pit stands to the south. The player presses the Tab key four times, "
+	                   "eight seconds apart.",
+	    .expected = "The first press flies the camera to the village centre to the north. The second press flies it to the "
+	                "storage pit to the west. The town to the east has no place to fly to, so the third press flies to "
+	                "the north again, and the fourth to the west. The camera never goes to the neutral town. Each flight "
+	                "ends 24 metres west, 28 metres up and 47 metres north of the place, looking at it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .landScript = R"(CREATE_TOWN(60, "-70.0,0.0", "PLAYER_ONE", 0, "CELTIC")
+SET_TOWN_BELIEF(60, "PLAYER_ONE", 10.0)
+CREATE_ABODE(60, "-70.0,10.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
+CREATE_TOWN(61, "0.0,80.0", "PLAYER_ONE", 0, "NORSE")
+SET_TOWN_BELIEF(61, "PLAYER_ONE", 10.0)
+CREATE_TOWN_CENTRE(61, "0.0,90.0", "NORSE_ABODE_TOWN_CENTRE", 0, 990, 0)
+CREATE_TOWN(62, "70.0,0.0", "PLAYER_ONE", 0, "CELTIC")
+SET_TOWN_BELIEF(62, "PLAYER_ONE", 10.0)
+CREATE_TOWN(63, "0.0,-80.0", "NEUTRAL", 0, "CELTIC")
+CREATE_ABODE(63, "0.0,-70.0", "CELTIC_ABODE_STORAGE_PIT", 0, 1000, 100, 100)
+)",
+	    .commands = {{.kind = Kind::TabToTown, .delaySeconds = 3.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f},
+	                 {.kind = Kind::TabToTown, .delaySeconds = 8.0f}},
 	});
 	all.push_back({
 	    .id = "tutorial.bookmark_markers_follow",
@@ -10313,12 +10407,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 {
 	return kind == Kind::SetHour || kind == Kind::HoldSeed || kind == Kind::DrawGesture || kind == Kind::SummonSeed ||
 	       kind == Kind::PressKey || kind == Kind::HandTakeFireBall || kind == Kind::SetAlignment || kind == Kind::WideScreen ||
-	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::SetOpenClose ||
-	       kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor || kind == Kind::RunText ||
-	       kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple || kind == Kind::RunHelpMessage ||
-	       kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge || kind == Kind::EnterTemple ||
-	       kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm || kind == Kind::HandPour ||
-	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
+	       kind == Kind::SetInterfaceLevel || kind == Kind::FlyToBookmark || kind == Kind::TabToTown ||
+	       kind == Kind::SetOpenClose || kind == Kind::LayGateStone || kind == Kind::HandTapObject || kind == Kind::Advisor ||
+	       kind == Kind::RunText || kind == Kind::PlayHandDemo || kind == Kind::Reframe || kind == Kind::DestroyTemple ||
+	       kind == Kind::RunHelpMessage || kind == Kind::EndGuidanceWaits || kind == Kind::RecordChallenge ||
+	       kind == Kind::EnterTemple || kind == Kind::HandTake || kind == Kind::RunScript || kind == Kind::PlayBoatFilm ||
+	       kind == Kind::HandPour || kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
@@ -10327,7 +10421,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
 	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
 	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10355,7 +10449,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 172> k_Names {
+	constexpr std::array<std::string_view, 174> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10504,6 +10598,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "start script music",
 	    "write the web page",
 	    "fly to a bookmark",
+	    "press the Tab key",
 	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
 	    "give hand glows",
@@ -10528,6 +10623,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "set the game's speed",
 	    "force an action",
 	    "remove the teleport stone",
+	    "make a dance",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -10578,13 +10674,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() && scenario.highlights.empty() &&
+	    scenario.landStorms.empty() && scenario.highlights.empty() && scenario.landScript.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back(
-		    "no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		    "chests, crowd, fireflies' rewards, land storms, scrolls or signs, player's commands or alignment for the "
-		    "hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
+		                      "chests, crowd, fireflies' rewards, land storms, scrolls or signs, land script lines, player's "
+		                      "commands or alignment for the "
+		                      "hand");
 	}
 	for (const auto& storm : scenario.landStorms)
 	{

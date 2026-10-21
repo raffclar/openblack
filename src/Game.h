@@ -529,6 +529,9 @@ private:
 	bool _dialogueClick {false};
 	/// Gripping the land with the mouse, which the hand only does once a button is pressed: it starts out not gripping
 	bool _handGripping {false};
+	/// The select button holds the land, not on a creature and not for a fight, and the other button is held too or not
+	bool _handSelectGrip {false};
+	bool _handOtherButton {false};
 	/// Whether the last press of the Action button went to letting go of a miracle in the hand or to a creature, so it
 	/// taps nothing else for the leash
 	bool _actionPressTaken {false};
@@ -638,7 +641,7 @@ private:
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
 	/// while the hand is put away
-	void UpdateHandTricons(bool handDrawn, float seconds);
+	void UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode mode);
 	/// Places the hand on the line of sight through the cursor the way the game does
 	void PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds);
 	/// What sets how far from the camera the hand may hover this frame, without where it rests

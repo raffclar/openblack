@@ -126,7 +126,7 @@ ecs::Registry& EntityRegistry()
 const GVillagerInfo& InfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
-	return infos.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return infos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 /// The land balances of how fast villagers go and how belief speeds them

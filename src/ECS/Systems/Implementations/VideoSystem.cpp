@@ -58,6 +58,13 @@ VideoSystem::Hooks GameHooks()
 			        game->GetGameMusic()->StartScriptMusic(audio::MusicType::None);
 		        }
 	        },
+	    .forgetMusic =
+	        []() {
+		        if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		        {
+			        game->GetGameMusic()->ForgetPlaying();
+		        }
+	        },
 	    .openFile = [](const std::filesystem::path& path) -> std::shared_ptr<const bink::BinkFile> {
 		    auto& fileSystem = Locator::filesystem::value();
 		    if (!fileSystem.Exists(path))
@@ -127,6 +134,10 @@ bool VideoSystem::Play(const std::filesystem::path& path)
 	_alpha = 1.0f;
 	_previousPause = _hooks.isPaused();
 	_hooks.setPaused(true);
+	if (_hooks.forgetMusic)
+	{
+		_hooks.forgetMusic();
+	}
 
 	// A video exists even when its file can't be opened: with no frames it ends at the next update
 	_finishedPending = false;
@@ -244,6 +255,14 @@ void VideoSystem::Update(std::chrono::steady_clock::time_point now)
 	if (_fallingSpell)
 	{
 		UpdateFallingSpell(now);
+	}
+}
+
+void VideoSystem::CountDueFrames(std::chrono::steady_clock::time_point now)
+{
+	if (_video)
+	{
+		DecodeDue(now);
 	}
 }
 

@@ -9,6 +9,8 @@
 
 // LHAudioDLL's music player against a backend that plays a chunk per Advance()
 
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <array>
 #include <chrono>
 #include <map>
@@ -19,9 +21,14 @@
 #include <string_view>
 #include <vector>
 
+#include <Audio/AudioManagerNoOp.h>
 #include <Audio/GameMusic.h>
 #include <Audio/MusicPlayer.h>
 #include <gtest/gtest.h>
+#include <spdlog/sinks/null_sink.h>
+#include <spdlog/spdlog.h>
+
+#include "Locator.h"
 
 using namespace openblack::audio;
 
@@ -624,4 +631,94 @@ TEST(GameMusic, WithNoBanksLoadedNoMusicHasABank)
 	const GameMusic unloaded(false);
 	EXPECT_TRUE(unloaded.BankPath(MusicType::GenericNeutral).empty());
 	EXPECT_TRUE(unloaded.BankPath(MusicType::ScriptPiperTune).empty());
+}
+
+namespace
+{
+
+/// Counts the music that the game asks to play. Each bank has four chunks.
+class MusicCountingAudio final: public AudioManagerNoOp
+{
+public:
+	bool MusicPlay(const std::string& bankPath, const MusicPlayOptions& /*options*/) override
+	{
+		played.push_back(bankPath);
+		return true;
+	}
+	[[nodiscard]] std::optional<MusicBankInfo> GetMusicBankInfo(const std::string& /*bankPath*/) override
+	{
+		return MusicBankInfo {.groupId = 1, .chunkCount = 4};
+	}
+
+	std::vector<std::string> played;
+};
+
+/// The game music writes to the audio log, which the tests do not make
+void MakeAudioLog()
+{
+	if (spdlog::get("audio") == nullptr)
+	{
+		spdlog::create<spdlog::sinks::null_sink_st>("audio");
+	}
+}
+
+GameMusic::TurnInputs QuietLandTurn()
+{
+	return {
+	    .turn = 100,
+	    .camera = {3000.0f, 100.0f, 3000.0f},
+	    .groundHeight = 0.0f,
+	    .inCitadel = false,
+	    .alignment = 0.0f,
+	    .playerAlignment = 0.0f,
+	    .cinema = false,
+	    .towns = {},
+	    .thingPosition = {},
+	};
+}
+
+} // namespace
+
+TEST(GameMusic, AFilmLeavesTheMusicAndTheScriptMusicStartsAgainAfterIt)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		music.StartScriptMusic(MusicType::ScriptIntro);
+		auto inputs = QuietLandTurn();
+		music.ProcessTurn(inputs);
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.played.size(), 1U);
+		// The turns of a film play nothing and stop nothing
+		inputs.film = true;
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.played.size(), 1U);
+		EXPECT_EQ(music.GetPlaying(), MusicType::None);
+		// After the film, the script's music plays again from its start
+		inputs.film = false;
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.played.size(), 2U);
+		EXPECT_EQ(audio.played[1], audio.played[0]);
+	}
+	openblack::Locator::audio::reset();
+}
+
+TEST(GameMusic, AFilmThatStartsMakesTheLandsMusicStartAgain)
+{
+	MakeAudioLog();
+	openblack::Locator::audio::emplace<MusicCountingAudio>();
+	auto& audio = static_cast<MusicCountingAudio&>(openblack::Locator::audio::value());
+	{
+		GameMusic music;
+		const auto inputs = QuietLandTurn();
+		music.ProcessTurn(inputs);
+		music.ProcessTurn(inputs);
+		ASSERT_EQ(audio.played.size(), 1U);
+		music.ForgetPlaying();
+		music.ProcessTurn(inputs);
+		EXPECT_EQ(audio.played.size(), 2U);
+	}
+	openblack::Locator::audio::reset();
 }

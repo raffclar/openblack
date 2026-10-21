@@ -17,6 +17,7 @@
 #include <glm/vec3.hpp>
 
 #include "Common/Zoomer.h"
+#include "Enums.h"
 
 /// How the hand rests over what the interface picked under the cursor: a villager or an animal it hovers before, at the
 /// thing's distance; a model it feels the triangles of, standing up off the face it meets; anything else it rests over
@@ -150,6 +151,12 @@ struct HoverDistances
 [[nodiscard]] HoverDistances HoverDistancesOf(const Hover& hover);
 /// The furthest the hand may be (the limit of HoverDistancesOf), which does not need the resting point
 [[nodiscard]] float HoverLimit(const Hover& hover);
+/// Whether what the hand holds lets it go all the way to the land (Hover::holding). A thing held by the magic hold, and
+/// a thing that the hand offers to a creature, keep the hand its height short of the land, as the empty hand is.
+[[nodiscard]] constexpr bool HoldReachesLand(std::optional<HoldType> held, bool offersToCreature)
+{
+	return held.has_value() && *held != HoldType::Magic && !offersToCreature;
+}
 
 /// The way the hand stands up, one long, its squares added z, y, x; no way stays none
 [[nodiscard]] glm::vec3 UnitUp(glm::vec3 up);

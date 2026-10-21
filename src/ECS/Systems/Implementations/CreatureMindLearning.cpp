@@ -1186,6 +1186,11 @@ void CreatureMindSystem::StartMind(entt::entity creature)
 	if (body != nullptr && mind != nullptr)
 	{
 		SetUpMind(creature, *body, *mind);
+		// A creature that the game makes for a mind file reads the file at once, over the mind that it got
+		if (mind->pendingFile != nullptr)
+		{
+			TakeUpFile(creature, *mind);
+		}
 	}
 }
 
@@ -1277,6 +1282,8 @@ void CreatureMindSystem::TakeUpFile(entt::entity creature, CreatureMindState& mi
 	{
 		body->name = file->name;
 	}
+	// The game makes each source of the file as a new source before it reads the numbers of the file
+	creature_mind_model::DrawAsSourcesAreRead(*file, SourceSpreadOf, _random.GameFloat());
 	const auto* tables = GetTables();
 	// Over its own mind, the creature keeps what the file does not hold, and the examples of the file come after its
 	// own examples
@@ -4736,9 +4743,17 @@ void CreatureMindSystem::ProcessMimicry(entt::entity creature, CreatureMindState
 
 void CreatureMindSystem::LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind)
 {
-	if (auto* state = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature))
+	auto* state = Locator::entitiesRegistry::value().TryGet<CreatureMindState>(creature);
+	if (state == nullptr)
 	{
-		state->pendingFile = std::move(mind);
+		return;
+	}
+	state->pendingFile = std::move(mind);
+	// The game reads the file at once, over the mind that the creature has. A mind that is not ready yet reads it on
+	// its first turn.
+	if (state->desires.has_value() && state->learnt.has_value() && state->pendingFile != nullptr)
+	{
+		TakeUpFile(creature, *state);
 	}
 }
 
@@ -4815,7 +4830,7 @@ void CreatureMindSystem::RestoreMind(entt::entity creature, std::shared_ptr<cons
 	// The creature starts as a new creature, with the mind of its file
 	SetUpMind(creature, *body, *state);
 	state->pendingFile = std::move(mind);
-	TakeUpFile(creature, *state);
+	TakeUpFile(creature, *state, FileBase::Fresh);
 	const auto* tables = GetTables();
 	if (!plan.has_value() || tables == nullptr || plan->action >= tables->actions.size())
 	{

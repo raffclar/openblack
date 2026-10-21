@@ -151,6 +151,37 @@ struct Gate
 /// How long a press has been held: by the clock, but no more than the game turns gone by allow
 [[nodiscard]] uint32_t ElapsedMs(uint32_t nowMs, uint32_t pressMs, uint32_t turn, uint32_t pressTurn);
 
+/// Whether the hand is ready to take an object that a script or a globe puts in it: it holds nothing (no thing, no
+/// handful and no miracle), and it does not hold a creature to stroke or slap it
+[[nodiscard]] constexpr bool ReadyForObject(bool holdsSomething, bool holdsCreature)
+{
+	return !holdsSomething && !holdsCreature;
+}
+
+/// What a press of the Action button does to a fireball under the empty hand, in the player's influence
+enum class FireBallPress : uint8_t
+{
+	/// The press taps the player's own fireball at once. The tap cannot catch it, so the ball goes on.
+	TapAtOnce,
+	/// The press waits on another player's fireball. A quick release taps it, a long hold takes it.
+	Wait,
+};
+[[nodiscard]] constexpr FireBallPress PressOnFireBall(bool ownBall)
+{
+	return ownBall ? FireBallPress::TapAtOnce : FireBallPress::Wait;
+}
+/// Whether a press that waits on a fireball takes it now. A fireball cannot be tugged, so the hand takes it when the
+/// press lasts as long as a tap can.
+[[nodiscard]] constexpr bool TakesFireBallAtHold(uint32_t elapsedMs)
+{
+	return elapsedMs >= k_GrabWaitMs;
+}
+/// Whether the release of a press that waits on a fireball is a tap
+[[nodiscard]] constexpr bool TapsFireBallAtRelease(uint32_t elapsedMs)
+{
+	return elapsedMs <= k_GrabWaitMs;
+}
+
 /// How a kind of thing hangs in the hand
 struct HoldFacts
 {

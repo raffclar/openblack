@@ -44,6 +44,8 @@ enum class SoundObject : int32_t
 	PolarBear = 11,
 	Buffalo = 12,
 	Cow = 13,
+	/// The advisors use this value for their anim sounds. The in-game bank gives the same samples for it and for 16.
+	Advisor = 17,
 	/// A building: a crèche's children at play
 	Abode = 19,
 	Tree = 20,

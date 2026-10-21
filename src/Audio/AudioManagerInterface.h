@@ -123,6 +123,9 @@ public:
 	virtual void SimulateDeviceLoss(bool /*lost*/) {}
 	virtual void Stop() = 0;
 	virtual void Update() = 0;
+	/// Once a game turn, at its end: the listener takes the camera's place, and every placed sound is put where it is
+	/// now, as the game does
+	virtual void ProcessTurn() {}
 	/// The game's audio turn. Each 3D sound that follows moves to the point of its owner or to the listener. It stops
 	/// when its owner is gone or has no point, or when the camera is at or beyond the maximum distance of its voice.
 	virtual void StopOutOfRangeEmitters() = 0;
@@ -221,6 +224,11 @@ public:
 	{
 		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, AnimEffectMeasure::Straight);
 	}
+	/// Ends the samples that a bank's animation effects pick for keys, if owner plays them. For each of these samples,
+	/// the first emitter of owner that plays it stops or releases its loop. Nothing ends when the camera is further
+	/// than the hearing limit. The maximum distance of the sample has no effect.
+	virtual void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                           const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) = 0;
 	virtual const Sound& GetSound(entt::id_type id) = 0;
 	virtual void CreateSoundGroup(const std::string& name) = 0;
 	virtual void AddToSoundGroup(const std::string& name, entt::id_type id) = 0;

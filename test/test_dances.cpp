@@ -91,6 +91,33 @@ entt::entity Entity(uint32_t value)
 {
 	return static_cast<entt::entity>(value);
 }
+
+/// A dance of one group M that takes every dancer, with a key frame that asks for the camera at 150 and at 200
+std::vector<uint8_t> CameraDance()
+{
+	std::vector<uint8_t> bytes;
+	Put(bytes, 1); // version
+	Put(bytes, 3); // key frames
+	Put(bytes, std::bit_cast<uint32_t>(0.0f));
+	Put(bytes, 1);
+	Put(bytes, 1); // actions
+	PutAction(bytes, {0}, 6, 0, 100);
+	for (const float time : {150.0f, 200.0f})
+	{
+		Put(bytes, std::bit_cast<uint32_t>(time));
+		Put(bytes, 0);
+		Put(bytes, 1);
+		PutAction(bytes, {0}, 18, 0, 0);
+	}
+	Put(bytes, std::bit_cast<uint32_t>(0.0f)); // clock
+	Put(bytes, 1);                             // groups
+	Put(bytes, 14);
+	Put(bytes, 0);
+	Put(bytes, 1); // loops
+	Put(bytes, 1);
+	bytes.push_back(static_cast<uint8_t>('M'));
+	return bytes;
+}
 } // namespace
 
 TEST(DanceRules, TheRateGoesInStepsOfFourTenths)
@@ -449,4 +476,83 @@ TEST(Dances, AKeyFramesMoveSetsItsGroupGoingAndItsDancersClipsAgain)
 	// At a quarter speed (rate 0.8) over the 80 beats left: (15 - 20) * 0.01 a turn
 	EXPECT_FLOAT_EQ(group.radiusRate, -0.05f);
 	EXPECT_FLOAT_EQ(group.radius, 19.95f);
+}
+
+TEST(DanceRules, TheHandIsNearADanceWithinTenMetres)
+{
+	// The point is the place in metres, at the height of the land plus the height of the place
+	const map_coords::MapCoords place {.x = 65536 * 10, .z = 65536 * 20, .altitude = 0.5f};
+	const auto point = rules::HandPoint(place, 3.0f);
+	EXPECT_EQ(point, glm::vec3(100.0f, 3.5f, 200.0f));
+	EXPECT_TRUE(rules::HandNear(point, {100.0f, 3.5f, 209.99f}));
+	EXPECT_TRUE(rules::HandNear(point, {106.0f, 9.0f, 202.0f}));
+	// A distance of exactly 10 is not near
+	EXPECT_FALSE(rules::HandNear(point, {110.0f, 3.5f, 200.0f}));
+	EXPECT_FALSE(rules::HandNear(point, {100.0f, 14.0f, 200.0f}));
+}
+
+TEST(DanceRules, TheHandNearForMoreThanAHundredTurnsMakesTheDanceWantItsCamera)
+{
+	Dance dance;
+	for (uint32_t i = 0; i < rules::k_CameraTurns; ++i)
+	{
+		rules::CountHand(dance, true);
+	}
+	EXPECT_EQ(dance.handNearTurns, 100u);
+	EXPECT_FALSE(dance.cameraWanted);
+	rules::CountHand(dance, true);
+	EXPECT_TRUE(dance.cameraWanted);
+	// A turn with the hand away starts the count again, and the dance still wants its camera
+	rules::CountHand(dance, false);
+	EXPECT_EQ(dance.handNearTurns, 0u);
+	EXPECT_TRUE(dance.cameraWanted);
+}
+
+TEST(Dances, ADanceCountsTheHandOnlyWhileItDancesWithDancers)
+{
+	Registry registry;
+	auto file = std::make_shared<dance::DanceFile>();
+	ASSERT_EQ(file->Open(CameraDance()), dance::DanceResult::Success);
+	const auto entity = dances::Create(registry, {.type = DanceInfo::DanceAroundPerson, .autostart = true}, file);
+	dances::TurnContext context {.turn = 1,
+	                             .available = [](entt::entity) { return true; },
+	                             .finished = {},
+	                             .playClipAgain = {},
+	                             .handNear = [](const Dance&) { return true; }};
+	dances::ProcessTurn(registry, entity, context);
+	EXPECT_EQ(registry.Get<Dance>(entity).handNearTurns, 0u);
+	ASSERT_TRUE(dances::AddDancer(registry, entity, registry.Create(), DanceGroup::k_Men));
+	context.turn = 2;
+	dances::ProcessTurn(registry, entity, context);
+	EXPECT_EQ(registry.Get<Dance>(entity).handNearTurns, 1u);
+}
+
+TEST(Dances, AKeyFrameAsksForTheCameraOneTimeAfterTheHandStayedNear)
+{
+	Registry registry;
+	auto file = std::make_shared<dance::DanceFile>();
+	ASSERT_EQ(file->Open(CameraDance()), dance::DanceResult::Success);
+	const auto run = [&registry, &file](bool near) {
+		const auto entity = dances::Create(registry, {.type = DanceInfo::DanceAroundPerson, .autostart = true}, file);
+		EXPECT_TRUE(dances::AddDancer(registry, entity, registry.Create(), DanceGroup::k_Men));
+		uint32_t asked = 0;
+		dances::TurnContext context {.turn = 0,
+		                             .available = [](entt::entity) { return true; },
+		                             .finished = {},
+		                             .playClipAgain = {},
+		                             .handNear = [near](const Dance&) { return near; },
+		                             .cameraAsked = [&asked](entt::entity) { ++asked; }};
+		for (uint32_t turn = 1; turn <= 300; ++turn)
+		{
+			context.turn = turn;
+			dances::ProcessTurn(registry, entity, context);
+		}
+		EXPECT_EQ(registry.Get<Dance>(entity).cameraMade, near);
+		return asked;
+	};
+	// The hand stays near: the dance wants its camera at the 101st turn, and the key frame at 150 asks for it. The key
+	// frame at 200 does not ask again.
+	EXPECT_EQ(run(true), 1u);
+	// With the hand away, no key frame asks for it
+	EXPECT_EQ(run(false), 0u);
 }

@@ -98,7 +98,7 @@ villager_reaction::Distance DistanceOf(Reaction type)
 
 const GVillagerInfo& VillagerInfoOf(const Villager& villager)
 {
-	return Info().villager.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return Info().villager.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 /// Whether a villager's kind takes up a kind of reaction at all
@@ -525,8 +525,7 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 		watched = current->shield;
 	}
 	auto& reacting = registry.AssignOrReplace<VillagerShieldReaction>(
-	    villager,
-	    VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at, .animation = 0});
+	    villager, VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at});
 	reaction.reacting.push_back(villager);
 
 	if (reaction.type == Reaction::ReactToMagicShieldDestroyed)

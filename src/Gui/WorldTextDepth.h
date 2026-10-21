@@ -29,6 +29,13 @@ inline constexpr float k_LevelPull = 5.0f;
 /// pitch from its focus, 0 when it looks level, and its sign does not change the result.
 [[nodiscard]] float DrawnDepth(float pointDepth, float cameraPitch, float nearClip);
 
+/// The game draws words in the world at least half a unit beyond the near plane
+inline constexpr float k_WordsBeyondNear = 0.5f;
+
+/// The depth at which the game draws words that it asks for at a depth: never nearer than half a unit beyond the near
+/// plane
+[[nodiscard]] float WordsDepth(float depth, float nearClip);
+
 /// The value that a projection gives the depth buffer for a depth in front of the camera
 [[nodiscard]] float BufferDepth(const glm::mat4& projection, float depth);
 

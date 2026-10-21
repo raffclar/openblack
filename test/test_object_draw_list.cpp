@@ -336,3 +336,14 @@ TEST(ObjectDrawList, AStillCameraDrawsOnlyWhatTheLastFullFrameKept)
 	EXPECT_FALSE(frame.rebuilt);
 	EXPECT_TRUE(Drawn(frame, true, offScreenKept));
 }
+
+// The temples, the villagers in high detail and the things that a script walks along a track are drawn outside the
+// land's list
+TEST(ObjectDrawList, SomeThingsAreDrawnOnTheirOwn)
+{
+	using openblack::object_draw_list::DrawnOnItsOwn;
+	EXPECT_FALSE(DrawnOnItsOwn({}));
+	EXPECT_TRUE(DrawnOnItsOwn({.temple = true}));
+	EXPECT_TRUE(DrawnOnItsOwn({.highDetail = true}));
+	EXPECT_TRUE(DrawnOnItsOwn({.walkingTrack = true}));
+}

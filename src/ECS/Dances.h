@@ -30,6 +30,11 @@ namespace openblack::ecs
 class Registry;
 }
 
+namespace openblack::ecs::components
+{
+struct Dance;
+}
+
 /// The dances, the same for every dance (a worship site's, a town's or a script's): made about a place, joined and left by
 /// dancers, gone when what they are danced about goes
 namespace openblack::ecs::dances
@@ -82,6 +87,10 @@ struct TurnContext
 	std::function<void(entt::entity)> finished;
 	/// A dancer of a group that starts a move plays its clip again
 	std::function<void(entt::entity)> playClipAgain;
+	/// Whether the hand is near the dance in this turn
+	std::function<bool(const components::Dance&)> handNear;
+	/// A key frame of the dance asked for its camera
+	std::function<void(entt::entity)> cameraAsked;
 };
 
 /// A dance's turn: it ends once what it is danced about has gone; it starts once it has dancers, stops when its time is

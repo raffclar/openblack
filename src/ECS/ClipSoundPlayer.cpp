@@ -83,6 +83,13 @@ public:
 		const auto played = audio.PlayAnimEffect(std::string(bank), keys, owner, position, conditions);
 		audio.SetEmitterFollows(played.emitter, audio::Follows::Owner);
 	}
+
+	void EndSound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& position,
+	              audio::AnimEffectEnd end) override
+	{
+		Locator::audio::value().EndAnimEffect(std::string(bank), keys, owner, position, end,
+		                                      audio::AnimEffectMeasure::Straight);
+	}
 };
 
 } // namespace
@@ -157,7 +164,14 @@ void clip_sound_player::Play(World& world, entt::entity entity, AnimId clipId, C
 		// villager is
 		const auto owner = route.fromHome ? villager->abode : entity;
 		const auto bank = route.bank == clip_sounds::Bank::Banter ? k_BanterBank : k_EditorBank;
-		world.PlaySound(bank, keys.ToArray(), owner, position, route.bySampleRules);
+		if (route.end.has_value())
+		{
+			world.EndSound(bank, keys.ToArray(), owner, position, *route.end);
+		}
+		else
+		{
+			world.PlaySound(bank, keys.ToArray(), owner, position, route.bySampleRules);
+		}
 	}
 }
 

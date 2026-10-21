@@ -37,6 +37,7 @@ struct FakeGame
 	bool wideScreen {false};
 	int snaps {0};
 	int musicReleased {0};
+	int musicForgotten {0};
 	bool hasCreature {true};
 	bool whiteReached {false};
 	std::vector<video::FallingSpellCue> cues;
@@ -55,6 +56,7 @@ struct FakeGame
 		    .setWideScreen = [this](bool on) { wideScreen = on; },
 		    .snapWideScreen = [this]() { ++snaps; },
 		    .releaseScriptMusic = [this]() { ++musicReleased; },
+		    .forgetMusic = [this]() { ++musicForgotten; },
 		    .openFile = [this](const std::filesystem::path& path) -> std::shared_ptr<const bink::BinkFile> {
 			    const auto it = files.find(path);
 			    return it != files.end() ? it->second : nullptr;
@@ -109,6 +111,8 @@ TEST(VideoSystem, PlayPausesAndBringsTheBarsInAtOnce)
 	EXPECT_TRUE(game.paused);
 	EXPECT_TRUE(game.wideScreen);
 	EXPECT_EQ(game.snaps, 1);
+	// The music that plays is forgotten, so that the land's music starts again later
+	EXPECT_EQ(game.musicForgotten, 1);
 	EXPECT_TRUE(videos.CoversScreen());
 	EXPECT_FALSE(videos.HidesWorld());
 	// Before its first picture it draws black

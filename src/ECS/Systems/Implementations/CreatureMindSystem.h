@@ -160,15 +160,16 @@ private:
 	void SetUpMind(entt::entity creature, const components::Creature& body, components::CreatureMindState& mind);
 	/// Sets up what a creature has learnt the first time its mind thinks, from its mind file when it has one
 	void SetUpLearning(entt::entity creature, components::CreatureMindState& mind);
-	/// The mind that a mind file loads over: a fresh mind of the species with its starting lesson, or the creature's own
-	/// mind, which a swap of minds keeps
+	/// The mind that a mind file loads over. The game reads a file over the mind that the creature has: the mind that a
+	/// new creature got as the game made it, or the mind that a swap of minds keeps. A load of a saved game uses a fresh
+	/// mind of the species with its starting lesson.
 	enum class FileBase : uint8_t
 	{
 		Fresh,
 		Own,
 	};
 	/// Takes up a mind file waiting to be loaded
-	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind, FileBase base = FileBase::Fresh);
+	void TakeUpFile(entt::entity creature, components::CreatureMindState& mind, FileBase base = FileBase::Own);
 	/// Gives the creature the mind that a file loaded
 	void ApplyLoaded(entt::entity creature, components::CreatureMindState& mind, creature_mind_model::LoadedMind loaded,
 	                 const creaturemind::MindFileData& file);

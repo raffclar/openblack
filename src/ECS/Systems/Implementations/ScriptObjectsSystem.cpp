@@ -36,6 +36,7 @@
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
+#include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
@@ -230,6 +231,14 @@ public:
 		}
 	}
 
+	void ReleaseAnimal(entt::entity animal) override
+	{
+		if (Locator::animalSystem::has_value())
+		{
+			Locator::animalSystem::value().ReleaseFromScript(animal);
+		}
+	}
+
 	void Delete(entt::entity object) override
 	{
 		// A dance's dancers are told they have finished dancing, a flock's members are in no flock any more
@@ -265,8 +274,15 @@ public:
 			const auto members = registry.Get<const Flock>(container).members;
 			for (const auto member : members)
 			{
-				// TODO(opening): an animal is split off into a flock of its own
-				ecs::script_flocks::Remove(registry, member, false);
+				// An animal goes into a new flock of its own
+				if (registry.AllOf<Animal>(member))
+				{
+					ecs::script_flocks::SeparateIntoNewFlock(registry, member);
+				}
+				else
+				{
+					ecs::script_flocks::Remove(registry, member, false);
+				}
 				WaitForScript(member);
 				left.push_back(member);
 			}
@@ -476,8 +492,9 @@ void ScriptObjectsSystem::ReleaseIntoGame(entt::entity object)
 		_world->AbandonCreatureAction(object);
 		break;
 	case Kind::Animal:
-		// TODO(physics): an animal is set to wander, keeping that as its previous state while in the physics, and finds
-		// itself a flock; openblack's animals keep no previous state yet
+		// TODO(physics): an animal in the physics keeps wandering as the state it takes up after it lands; openblack's
+		// animals keep no such state yet
+		_world->ReleaseAnimal(object);
 		break;
 	case Kind::Other:
 		break;
