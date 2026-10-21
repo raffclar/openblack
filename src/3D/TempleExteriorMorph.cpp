@@ -41,6 +41,12 @@ float Step(float current, float target)
 	return current < target ? std::min(current + k_Step, target) : std::max(current - k_Step, target);
 }
 
+float SizeTarget(int32_t landNumber, std::optional<float> share)
+{
+	constexpr int32_t k_FirstLand = 1;
+	return 2.0f * (landNumber == k_FirstLand || !share.has_value() ? k_ShareOfNoInfluence : *share);
+}
+
 std::array<Corner, 4> Corners(float size, float alignment)
 {
 	// Each the index below and the one after, as far as there are, and how much of the one below
