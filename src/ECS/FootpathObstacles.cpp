@@ -10,10 +10,12 @@
 #include "FootpathObstacles.h"
 
 #include <cmath>
+#include <cstdint>
 
 #include <algorithm>
 #include <bit>
 #include <iterator>
+#include <limits>
 #include <list>
 
 #include "3D/MapCoords.h"
@@ -621,6 +623,21 @@ bool footpath_obstacles::StraightEnough(glm::vec3 first, glm::vec3 second, glm::
 	const float dot = (b2 * a2 + b0 * a0) + b1 * a1;
 	// A result that is not a number counts as straight, as the game's compare sees it
 	return !x87::GreaterEqual(cross / dot, k_StraightLimit);
+}
+
+bool footpath_obstacles::GoesClearOf(glm::ivec2 low, glm::ivec2 high, const Obstacle& obstacle)
+{
+	// The rules look only at the nodes in the square about the thing, and at the stretches that cross into it. When the
+	// square does not wrap, the unsigned and the signed compares of the rules agree, and a path outside it is clear.
+	const int64_t half = gutils::ConvertMetersToWholeDistance(obstacle.radius);
+	const int64_t x = obstacle.place.x;
+	const int64_t z = obstacle.place.y;
+	constexpr int64_t k_Largest = std::numeric_limits<int32_t>::max();
+	if (half < 0 || x - half < 0 || z - half < 0 || x + half > k_Largest || z + half > k_Largest)
+	{
+		return false;
+	}
+	return high.x < x - half || low.x > x + half || high.y < z - half || low.y > z + half;
 }
 
 void footpath_obstacles::GoRound(std::vector<KeyedNode>& nodes, const Obstacle& obstacle, const Hooks& hooks)

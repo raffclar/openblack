@@ -212,11 +212,13 @@ TOOLS = [
         "name": "ecs_hash",
         "description": "A hash of where every entity is (and of a component's fields when named), to compare runs. "
                        "exclude leaves out entities with those components: [\"HandGrab\"] for the hand, which eases "
-                       "towards the pointer every frame drawn, paused or not.",
+                       "towards the pointer every frame drawn, paused or not. ids false leaves out the entities' "
+                       "ids, to compare two loads of a land.",
         "inputSchema": schema({"component": {"type": "string"},
-                               "exclude": {"type": "array", "items": {"type": "string"}}}),
+                               "exclude": {"type": "array", "items": {"type": "string"}},
+                               "ids": {"type": "boolean"}}),
         "query": "ecs.hash",
-        "params": ["component", "exclude"],
+        "params": ["component", "exclude", "ids"],
     },
     {
         "name": "game_speed",

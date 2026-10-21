@@ -50,6 +50,10 @@ public:
 	/// The paths go round the things that came onto the map, and stop going round those that left it, in turn. A land's
 	/// things come onto the map before its footpaths load, so no path goes round them.
 	virtual void ProcessObstacleChanges() = 0;
+	/// The things made since the last frame go onto the map, and the paths that there are go round them. The game puts
+	/// each thing on the map when it makes it. Thus a path made next does not go round the things that came before it, and
+	/// its route goes round them.
+	virtual void CatchUpWithMap() = 0;
 	/// Once a turn: the obstacle changes are done; then the paths being found take a few more steps, and those found are
 	/// laid
 	virtual void ProcessTurn() = 0;
