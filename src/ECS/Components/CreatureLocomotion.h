@@ -174,4 +174,13 @@ struct CreatureLocomotion
 	std::vector<Track> tracks;
 };
 
+/// Whether the creature is in its move: from the wait for its route, through its fidgets, points, turns and steps, to
+/// its walk. A turn on the spot to face a point is not part of a move. The body's needs count a creature in its move as
+/// a creature that moves.
+[[nodiscard]] inline bool InMove(const CreatureLocomotion& self)
+{
+	using Motion = CreatureLocomotion::Motion;
+	return self.motion != Motion::Standing && !(self.motion == Motion::Turning && self.facingOnly);
+}
+
 } // namespace openblack::ecs::components

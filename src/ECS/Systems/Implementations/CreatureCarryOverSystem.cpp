@@ -231,17 +231,22 @@ std::optional<entt::entity> CreatureCarryOverSystem::LoadPlayersCreature(glm::ve
 	}
 	const auto position = map_coords::ToWorld(Locator::terrainSystem::value(), creature_carry_over::ArrivalCoords(place));
 	const auto species = body->species;
-	const auto creature = archetypes::CreatureArchetype::Create(
-	    position, LocalPlayer(), species, 0, glm::radians(k_ArrivalYawDegrees),
-	    body->size.value_or(archetypes::CreatureArchetype::StartScale(species)),
-	    {.alignment = body->alignment.value_or(0.0f), .fatness = body->fatness, .strength = body->strength});
+	// The game makes a new creature of the species first, so the body draws its spread strength and fatness. The
+	// numbers of the file then replace them.
+	auto start = archetypes::CreatureArchetype::StartBody(species);
+	start.alignment = body->alignment.value_or(0.0f);
+	start.fatness = body->fatness;
+	start.strength = body->strength;
+	const auto creature =
+	    archetypes::CreatureArchetype::Create(position, LocalPlayer(), species, 0, glm::radians(k_ArrivalYawDegrees),
+	                                          body->size.value_or(archetypes::CreatureArchetype::StartScale(species)), start);
 	auto& registry = Locator::entitiesRegistry::value();
 	// It keeps the exact map position where it arrives
 	ecs::thing_map_place::Keep(registry, creature, creature_carry_over::ArrivalCoords(place));
 	ecs::creature_body_file::Apply(registry, creature, *body);
 	if (Locator::creatureMindSystem::has_value())
 	{
-		// Its mind is taken up on its first turn of thought
+		// It reads its mind from the file at once, over the mind that it got as the game made it
 		Locator::creatureMindSystem::value().LoadMind(creature, _kept);
 	}
 

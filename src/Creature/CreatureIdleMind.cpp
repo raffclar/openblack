@@ -241,10 +241,11 @@ std::vector<Step> creature_mind::BeIdle(const Random& random)
 	return agenda;
 }
 
-Step creature_mind::SitDown(const Random& random)
+Step creature_mind::SitDown(const std::function<float(float)>& upTo)
 {
-	auto sit = Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit},
-	                  static_cast<float>(k_SitSeconds + random(k_SitExtraSeconds)));
+	// The game adds the ten seconds to the draw
+	auto sit =
+	    Static({animations::k_StartSit, animations::k_Sit, animations::k_EndSit}, upTo(k_SitExtraSeconds) + k_SitSeconds);
 	sit.face = creature_face::Cue::Idle;
 	return sit;
 }

@@ -732,8 +732,8 @@ TEST(CreatureIdleMind, SometimesItSitsForAWhile)
 {
 	creature_mind::IdleMind mind;
 	FakeBody body;
-	// Draws of 0: it sits for ten seconds
-	creature_mind::Plan(mind, creature_mind::Activity::Sit, {creature_mind::SitDown(Always(0))});
+	// A draw of 0: it sits for ten seconds
+	creature_mind::Plan(mind, creature_mind::Activity::Sit, {creature_mind::SitDown([](float /*most*/) { return 0.0f; })});
 	std::optional<int> stood;
 	for (int turn = 0; turn < 300 && !stood; ++turn)
 	{
