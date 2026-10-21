@@ -1633,3 +1633,4 @@ openblack_setup_and_add_test(test_temple_controls temple/test_temple_controls.cp
 openblack_setup_and_add_test(test_script_value_json test_script_value_json.cpp)
 target_link_libraries(test_script_value_json PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_path_case test_path_case.cpp)
+openblack_setup_and_add_test(test_villager_row test_villager_row.cpp)

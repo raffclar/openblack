@@ -219,7 +219,7 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	const auto& info = Locator::infoConstants::value();
 	if (const auto* villager = registry.TryGet<const Villager>(object))
 	{
-		return Row(info.villager, GVillagerInfo::Find(villager->tribe, villager->number));
+		return Row(info.villager, RowOf(*villager, GVillagerInfo::Find));
 	}
 	if (const auto* creature = registry.TryGet<const Creature>(object))
 	{

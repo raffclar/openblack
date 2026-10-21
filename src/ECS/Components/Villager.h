@@ -105,5 +105,16 @@ struct Villager
 	/// A child's stroll at the crèche: the path of the crèche's model it walks, and the legs it has gone along it
 	int16_t crechePath {0};
 	int16_t crecheLeg {0};
+	/// The row of the villager table that the game made it from. Villagers of no tribe have the same tribe and kind of
+	/// work, so only this row tells them apart. None for a villager made with no row.
+	VillagerInfo kind {VillagerInfo::None};
 };
+
+/// The row of the villager table that a villager uses: the row that it keeps, or else the row of its tribe and kind of
+/// work, which the finder gives
+template <typename FindByTribe>
+[[nodiscard]] VillagerInfo RowOf(const Villager& villager, FindByTribe&& findByTribe)
+{
+	return villager.kind != VillagerInfo::None ? villager.kind : findByTribe(villager.tribe, villager.number);
+}
 } // namespace openblack::ecs::components
