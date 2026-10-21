@@ -18,6 +18,7 @@
 #include "Animals/BirdRules.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/DetailMeshes.h"
+#include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -43,6 +44,8 @@ entt::entity AnimalArchetype::Create(AnimalInfo type, const glm::vec3& position,
 	                              std::array {resources::HashIdentifier(info.high), resources::HashIdentifier(info.std),
 	                                          resources::HashIdentifier(info.low)},
 	                              0.0f);
+	// It goes to the front of the list of the living
+	registry.Assign<LivingListPlace>(entity, LivingListPlace {.made = registry.Context().livingMade++});
 	auto& animal = registry.Assign<Animal>(entity);
 	animal.type = type;
 	animal.owner = owner;

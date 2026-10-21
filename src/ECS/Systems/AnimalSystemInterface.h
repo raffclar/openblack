@@ -34,8 +34,14 @@ class AnimalSystemInterface: public SavedStateInterface
 public:
 	virtual ~AnimalSystemInterface() = default;
 
-	/// A turn of every animal
+	/// A turn of every animal: BeginTurn, AnimalTurn for each animal, then EndTurn
 	virtual void ProcessTurn() = 0;
+	/// Before the animals' turns. False when the game has no info tables, and then the animals do nothing this turn.
+	virtual bool BeginTurn() = 0;
+	/// The own turn of one animal, which the turn of the living gives it at its place in the list of the living
+	virtual void AnimalTurn(entt::entity animal) = 0;
+	/// After the animals' turns: the miracle's animals fade, and the temples' flocks are seen to
+	virtual void EndTurn() = 0;
 	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip played on by the
 	/// frame's game time
 	virtual void Update(std::chrono::milliseconds frameGameTime, float turnFraction) = 0;

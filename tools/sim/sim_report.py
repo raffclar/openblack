@@ -178,7 +178,8 @@ def summary(start, records, end, log_lines=None, exit_code=None):
 
 
 def compare(records_a, records_b):
-    """Where two runs part: the first turn recorded in both whose hashes differ, and what differs there"""
+    """Where two runs part: the first turn recorded in both whose hashes, seeds or counts of draws differ, and what
+    differs there. Records from a game that does not write the seeds or the draws are compared by their hashes alone."""
     by_turn_b = {record["turn"]: record for record in records_b}
     compared = 0
     for record in records_a:
@@ -188,7 +189,8 @@ def compare(records_a, records_b):
         compared += 1
         state_a = (record.get("creature") or {}).get("state_hash")
         state_b = (other.get("creature") or {}).get("state_hash")
-        if record.get("hash") != other.get("hash") or state_a != state_b:
+        draws_same = record.get("seeds") == other.get("seeds") and record.get("draws") == other.get("draws")
+        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same:
             parts_a, parts_b = record.get("hash_parts", {}), other.get("hash_parts", {})
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {
@@ -197,6 +199,8 @@ def compare(records_a, records_b):
                 "turn": record["turn"],
                 "hash": [record.get("hash"), other.get("hash")],
                 "creature_same": state_a == state_b,
+                "draws_same": draws_same,
+                "draws": [record.get("draws"), other.get("draws")],
                 "parts": parts,
             }
     return {"same": compared > 0, "compared": compared, "turn": None}

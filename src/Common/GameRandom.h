@@ -98,6 +98,10 @@ public:
 	/// The seed of the C library's generator, for a saved world; none for a source that keeps none
 	[[nodiscard]] virtual std::optional<uint32_t> GetCrtSeed() const { return std::nullopt; }
 
+	/// How many numbers were drawn on the synced seed since the game started, for tools that compare two runs; 0 for a
+	/// source that does not count them
+	[[nodiscard]] virtual uint64_t GetSyncedDraws() const { return 0; }
+
 	[[nodiscard]] virtual GameRandomSeeds GetSeeds() const = 0;
 	/// Both are k_InitialSeed when the game starts and 0 from every map loaded, and saved games keep and restore them
 	virtual void SetSeeds(GameRandomSeeds seeds) = 0;

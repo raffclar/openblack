@@ -29,6 +29,7 @@ class LivingActionSystem final: public LivingActionSystemInterface
 {
 public:
 	void Update() override;
+	void VillagerTurn(entt::entity villager) override;
 	void StartTurnPlaces() override;
 	void UpdatePoses(std::chrono::milliseconds frameGameTime, float turnFraction) override;
 	void PoseVillagersInView(const glm::mat4& viewProjection) override;

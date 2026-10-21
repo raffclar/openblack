@@ -629,85 +629,104 @@ glm::ivec2 AnimalSystem::RandomPos(const Animal& animal, glm::ivec2 centre, floa
 
 void AnimalSystem::ProcessTurn()
 {
-	if (!Locator::infoConstants::has_value())
+	if (!BeginTurn())
 	{
 		return;
 	}
-	++_turn;
-	auto& registry = EntityRegistry();
 	std::vector<entt::entity> animals;
-	registry.Each<const Animal>([&animals](entt::entity entity, const Animal&) { animals.push_back(entity); });
+	EntityRegistry().Each<const Animal>([&animals](entt::entity entity, const Animal&) { animals.push_back(entity); });
 	for (const auto entity : animals)
 	{
-		if (!registry.Valid(entity))
-		{
-			continue;
-		}
-		// Carried off by a tornado, it is the tornado's until it lets go; held in the player's hand or flying, the hand's
-		// or the physics'. In a creature's hand it still dies and lies dead.
-		auto& animal = registry.Get<Animal>(entity);
-		if (!animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
-		                            .playersHand = registry.AllOf<InHand>(entity),
-		                            .creature = registry.AllOf<HeldByCreature>(entity),
-		                            .physics = registry.AllOf<InPhysics>(entity)},
-		                           animal.state == AnimalState::Dying || animal.state == AnimalState::Dead))
-		{
-			continue;
-		}
-		animal.previousPosition = animal.position;
-		animal.previousHeading = animal.heading;
-		++animal.turnsInState;
-		// Every kind is brought down, eaten and lands in the same way
-		if (CommonStateTurn(entity, animal))
-		{
-			continue;
-		}
-		if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
-		{
-			ProcessDeath(entity, animal);
-			continue;
-		}
-		// A grazer sees to its own needs as it goes
-		if (auto* grazer = registry.TryGet<Grazer>(entity))
-		{
-			GrazerTurn(entity, animal, *grazer);
-			continue;
-		}
-		// Hungrier each turn, up to its kind's hunger
-		const auto& info = InfoOf(animal.type);
-		if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
-		{
-			++animal.hunger;
-		}
-		// Its reaction comes before its own ways
-		if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
-		{
-			continue;
-		}
-		if (IsBird(animal.type))
-		{
-			// Seeing to its needs, a flock's leader counts the turns it has kept to its leg
-			if (auto* flockData = registry.TryGet<Flock>(animal.flock);
-			    flockData != nullptr && SeesToNeedsIn(animal.state) && LeaderOf(animal.flock) == entity)
-			{
-				++flockData->turnsOnLeg;
-			}
-			Bird(entity, animal);
-		}
-		else if (registry.AllOf<SpellWolf>(entity))
-		{
-			Wolf(entity, animal);
-		}
-		else if (animal.state == AnimalState::WaitForClip &&
-		         animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
-		{
-			// Any other kind goes into its next state when its clip ends
-			SetTopState(animal, animal.afterClip);
-		}
+		AnimalTurn(entity);
 	}
+	EndTurn();
+}
+
+bool AnimalSystem::BeginTurn()
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	++_turn;
+	return true;
+}
+
+void AnimalSystem::AnimalTurn(entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(entity) || !registry.AllOf<Animal>(entity))
+	{
+		return;
+	}
+	// Carried off by a tornado, it is the tornado's until it lets go; held in the player's hand or flying, the hand's or
+	// the physics'. In a creature's hand it still dies and lies dead.
+	auto& animal = registry.Get<Animal>(entity);
+	if (!animals::TakesOwnTurn({.tornado = registry.AllOf<CarriedByTornado>(entity),
+	                            .playersHand = registry.AllOf<InHand>(entity),
+	                            .creature = registry.AllOf<HeldByCreature>(entity),
+	                            .physics = registry.AllOf<InPhysics>(entity)},
+	                           animal.state == AnimalState::Dying || animal.state == AnimalState::Dead))
+	{
+		return;
+	}
+	animal.previousPosition = animal.position;
+	animal.previousHeading = animal.heading;
+	++animal.turnsInState;
+	// Every kind is brought down, eaten and lands in the same way
+	if (CommonStateTurn(entity, animal))
+	{
+		return;
+	}
+	if (animal.state == AnimalState::Dying || animal.state == AnimalState::Dead)
+	{
+		ProcessDeath(entity, animal);
+		return;
+	}
+	// A grazer sees to its own needs as it goes
+	if (auto* grazer = registry.TryGet<Grazer>(entity))
+	{
+		GrazerTurn(entity, animal, *grazer);
+		return;
+	}
+	// Hungrier each turn, up to its kind's hunger
+	const auto& info = InfoOf(animal.type);
+	if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
+	{
+		++animal.hunger;
+	}
+	// Its reaction comes before its own ways
+	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
+	{
+		return;
+	}
+	if (IsBird(animal.type))
+	{
+		// Seeing to its needs, a flock's leader counts the turns it has kept to its leg
+		if (auto* flockData = registry.TryGet<Flock>(animal.flock);
+		    flockData != nullptr && SeesToNeedsIn(animal.state) && LeaderOf(animal.flock) == entity)
+		{
+			++flockData->turnsOnLeg;
+		}
+		Bird(entity, animal);
+	}
+	else if (registry.AllOf<SpellWolf>(entity))
+	{
+		Wolf(entity, animal);
+	}
+	else if (animal.state == AnimalState::WaitForClip &&
+	         animal.turnsInState * k_TurnMilliseconds >= PlayTimeOf(animal.animation))
+	{
+		// Any other kind goes into its next state when its clip ends
+		SetTopState(animal, animal.afterClip);
+	}
+}
+
+void AnimalSystem::EndTurn()
+{
 	ProcessFading();
 	ProcessTempleBirds();
-	registry.SetDirty();
+	EntityRegistry().SetDirty();
 }
 
 // The birds

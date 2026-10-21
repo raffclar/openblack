@@ -42,10 +42,25 @@ private:
 	std::vector<Step> _steps;
 };
 
-TurnRecorder PlayOneTurn()
+/// The steps of the turn alone
+TurnRecorder PlayTurnSteps()
 {
 	TurnRecorder recorder;
 	PlayTurn([&recorder](Step step) { recorder(step); });
+	return recorder;
+}
+
+/// The turn with the creatures' turn in the turn of the living, as the game plays it with a creature
+TurnRecorder PlayOneTurn()
+{
+	TurnRecorder recorder;
+	PlayTurn([&recorder](Step step) {
+		recorder(step);
+		if (step == Step::Living)
+		{
+			PlayCreaturesTurn([&recorder](Step creatureStep) { recorder(creatureStep); });
+		}
+	});
 	return recorder;
 }
 
@@ -64,7 +79,7 @@ TEST(GameTurnOrder, EachStepHappensOnceInATurn)
 
 TEST(GameTurnOrder, TheTurnDoesItsStepsInTheOrderOfTheList)
 {
-	const auto recorder = PlayOneTurn();
+	const auto recorder = PlayTurnSteps();
 	ASSERT_EQ(recorder.Steps().size(), k_Turn.size());
 	for (size_t i = 0; i < k_Turn.size(); ++i)
 	{
@@ -133,8 +148,9 @@ TEST(GameTurnOrder, TheFieldsAndFishFarmsComeBeforeTheTracksAndTheFootpaths)
 TEST(GameTurnOrder, TheAnimalsTakeTheirTurnWithTheLivingBeforeTheFires)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::Villagers, Step::Animals));
-	EXPECT_TRUE(recorder.Before(Step::Animals, Step::Fires));
+	EXPECT_TRUE(recorder.Before(Step::Pathfinding, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::MapCellsAfterLiving));
+	EXPECT_TRUE(recorder.Before(Step::MapCellsAfterLiving, Step::Fires));
 	EXPECT_TRUE(recorder.Before(Step::Fires, Step::Reactions));
 	EXPECT_TRUE(recorder.Before(Step::Reactions, Step::Miracles));
 }
@@ -179,7 +195,7 @@ TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 	EXPECT_TRUE(recorder.Before(Step::Ambience, Step::Autosave));
 	EXPECT_TRUE(recorder.Before(Step::Autosave, Step::GameOver));
 	EXPECT_TRUE(recorder.Before(Step::GameOver, Step::WalkerLookahead));
-	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(k_Turn.size()) - 1);
+	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 1);
 }
 
 TEST(GameTurnOrder, TheHandSpeedForTheSmokeIsPartOfTheInput)
@@ -219,4 +235,18 @@ TEST(GameTurnOrder, TheAdvisorsCheerTheTurningAfterTheGuidance)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Guidance, Step::TurnCheering));
 	EXPECT_TRUE(recorder.Before(Step::TurnCheering, Step::CameraChecks));
+}
+
+TEST(GameTurnOrder, TheCreaturesTurnIsPartOfTheTurnOfTheLiving)
+{
+	const auto turn = PlayTurnSteps();
+	for (const auto step : k_CreaturesTurn)
+	{
+		EXPECT_EQ(std::ranges::count(turn.Steps(), step), 0) << "a creature step is not a step of the turn alone";
+	}
+	TurnRecorder creatures;
+	PlayCreaturesTurn([&creatures](Step step) { creatures(step); });
+	ASSERT_EQ(creatures.Steps().size(), k_CreaturesTurn.size());
+	EXPECT_EQ(creatures.Steps().front(), Step::CreaturePhysiology);
+	EXPECT_EQ(creatures.Steps().back(), Step::CreaturePoses);
 }
