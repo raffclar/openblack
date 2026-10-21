@@ -307,6 +307,8 @@ uint32_t villager_footpath::MoveOnPath(LivingAction& action)
 {
 	auto& registry = Entities();
 	const auto villager = registry.ToEntity(action);
+	// The villager takes its step first. Then it looks at where the step put it on the footpath.
+	villager_home::TakeWalkStep(villager);
 	auto* walk = registry.TryGet<FootpathWalk>(villager);
 	if (walk == nullptr || !registry.AllOf<WallHug>(villager))
 	{

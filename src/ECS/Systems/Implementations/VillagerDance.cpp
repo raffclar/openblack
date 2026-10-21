@@ -191,14 +191,15 @@ uint32_t villager_dance::PerformDance(LivingAction& action, VillagerStates dance
 	if (distance > 0.0f)
 	{
 		// It walks to its place, and dances again there; a place more than 4 m off is walked to round what is in the way
-		// TODO(opening): the game's walk round things for places more than 4 m off, and the walk's first step taken this
-		// turn rather than on the next
+		// TODO(opening): the game's walk round things for places more than 4 m off
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, danceState))
 		{
 			villager_home::SetupMobileMoveTo(action, map_coords::ToMetres(slot));
 		}
 		living.VillagerSetState(action, LivingAction::Index::Top, VillagerStates::MoveToDancePos, true);
+		// The dancer takes the first step of this walk in this turn, after the move of the dance
+		villager_home::MoveToPos(action);
 	}
 	// TODO(opening): it remembers it was dancing, to go back to the script's state after reacting
 	return 1;
@@ -213,7 +214,7 @@ uint32_t villager_dance::MoveToDancePos(LivingAction& action)
 	{
 		return 0;
 	}
-	// A group that moved this turn moves its dancers' places with it
+	// A group that moved this turn moves its dancers' places with it. The dancer then takes its step to the new place.
 	if (placed->dance->groups.all[placed->group].moved)
 	{
 		const auto slot = moves::SlotPosition(*placed->dance, placed->group, placed->slot, DanceShapes());
