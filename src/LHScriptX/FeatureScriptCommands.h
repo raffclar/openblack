@@ -107,7 +107,7 @@ public:
 	static void CreateFootpath(int32_t footpathId);
 	static void CreateFootpathNode(int footpathId, glm::vec3 position);
 	static void LinkFootpath(int32_t footpathId);
-	static void CreateBonfire(glm::vec3 position, float rotation, float param3, float scale);
+	static void CreateBonfire(glm::vec3 position, float unused, float yRotation, float scale);
 	static void CreateBase(glm::vec3 position, int32_t);
 	static void CreateNewFeature(glm::vec3 position, const std::string& type, int32_t rotation, int32_t scale, int32_t param5);
 	static void SetInteractDesire(float);

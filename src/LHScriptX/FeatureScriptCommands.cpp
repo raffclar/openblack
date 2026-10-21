@@ -1003,9 +1003,10 @@ void FeatureScriptCommands::LinkFootpath(int32_t footpathId)
 	registry.Assign<FootpathLink>(thing, transform.position, std::vector<Footpath::Id> {footpath});
 }
 
-void FeatureScriptCommands::CreateBonfire(glm::vec3 position, float rotation, [[maybe_unused]] float param3, float scale)
+void FeatureScriptCommands::CreateBonfire(glm::vec3 position, [[maybe_unused]] float unused, float yRotation, float scale)
 {
-	CreateMobileStatic(position, MobileStaticInfo::Bonfire, rotation, scale);
+	// The game takes the bonfire's turn from the third number and does not use the second
+	CreateMobileStatic(position, MobileStaticInfo::Bonfire, yRotation, scale);
 }
 
 void FeatureScriptCommands::CreateBase([[maybe_unused]] glm::vec3 position, int32_t)
