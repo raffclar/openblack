@@ -1858,8 +1858,9 @@ void AddStory(std::vector<Scenario>& all)
 	                   "starts, as when its heart loses the last of its life.",
 	    .expected = "From 5.5 seconds the temple glows in red, the player's colour, and the glow beats with the heartbeat. "
 	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
-	                "the land and the things behind it show through it, and its cut-out parts go first. It is not drawn "
-	                "after 23.8 seconds, just before it goes.",
+	                "the land and the things behind it show through it, and its cut-out parts go first. From 16 seconds a "
+	                "faint shell of light in red covers the heart, reaching out with the heartbeat and growing at the "
+	                "end. It is not drawn after 23.8 seconds, just before it goes.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
