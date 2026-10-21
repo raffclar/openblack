@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -51,6 +52,12 @@ inline constexpr float k_TurnsPerTree = 1.307692289f;
 
 /// The kinds of tree the ground's material grows by magic, one picked by a roll of 0 to 3
 [[nodiscard]] TreeInfo SpeciesFor(const std::array<TreeInfo, 4>& kinds, uint32_t roll);
+/// The row of the ground materials' table that gives a forest miracle its kinds of tree: the row of the ground's
+/// material, or the first row for a material past the end of the table
+[[nodiscard]] constexpr size_t MaterialRow(uint16_t material, size_t rows)
+{
+	return material < rows ? material : 0;
+}
 
 /// A tree grows by an amount, never past its size
 [[nodiscard]] float Grow(float scale, float amount, float target);

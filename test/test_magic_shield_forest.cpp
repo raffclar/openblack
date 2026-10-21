@@ -425,3 +425,12 @@ TEST(CameraZoomer, AGlideArrivesStillAtItsDestinationAfterItsTime)
 	zoomer.SetDestination(0.0f, 0.0f, 0.0005f);
 	EXPECT_FLOAT_EQ(zoomer.Value(), 0.0f);
 }
+
+TEST(ForestRules, AMaterialPastTheTableTakesTheFirstRow)
+{
+	EXPECT_EQ(forest::MaterialRow(0, 43), 0u);
+	EXPECT_EQ(forest::MaterialRow(27, 43), 27u);
+	EXPECT_EQ(forest::MaterialRow(42, 43), 42u);
+	EXPECT_EQ(forest::MaterialRow(43, 43), 0u);
+	EXPECT_EQ(forest::MaterialRow(500, 43), 0u);
+}

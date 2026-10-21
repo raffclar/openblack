@@ -168,7 +168,8 @@ bool FreeForAddedTree(const map_coords::MapCoords& spot)
 	return !Locator::fixedOutlineSystem::has_value() || Locator::fixedOutlineSystem::value().IsOkToCreateAt(spot);
 }
 
-/// The ground's material at a point, as the trees see it: deep snow is snow whatever lies under it
+/// The ground's material at a point, as the trees see it: deep snow is snow whatever lies under it. Else it is the
+/// material of the cell's country at the cell's altitude, also on a cell with water.
 uint16_t MaterialAt(glm::vec3 point)
 {
 	std::optional<uint16_t> type;
@@ -178,10 +179,6 @@ uint16_t MaterialAt(glm::vec3 point)
 		const auto& land = Locator::terrainSystem::value();
 		if (const auto* found = land.FindCell(*cell); found != nullptr)
 		{
-			if (found->properties.hasWater != 0)
-			{
-				return static_cast<uint16_t>(TerrainMaterialType::ShallowWater);
-			}
 			const auto& countries = land.GetCountries();
 			const auto types = land.GetMaterialTypes();
 			if (found->properties.country < countries.size())
@@ -325,7 +322,7 @@ uint32_t ForestSystem::Plant(entt::entity spell, Spell& miracle, float tribalPow
 	// The event that plants it has just been paid for, so it has strength
 	const auto count = forest::TreesWeCanAfford(miracle.maxObjectsToCreate, trees->finalNoTrees, 1.0f);
 	const auto centre = miracle.castPosition;
-	const auto& kinds = info.terrainMaterial.at(std::min<size_t>(MaterialAt(centre), info.terrainMaterial.size() - 1));
+	const auto& kinds = info.terrainMaterial.at(forest::MaterialRow(MaterialAt(centre), info.terrainMaterial.size()));
 	const auto& effect = magic::GetMagicEffectInfo(info, miracle.magicType);
 
 	entt::entity forestEntity = entt::null;
