@@ -303,6 +303,21 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "hand.fish_tooltips",
+	    .name = "The hand's tooltips over a fish farm",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests over the farm's shoal for three seconds. Then the Action button is pressed and "
+	                   "held for four seconds, and let go.",
+	    .expected = "Over the fish the hand offers \"Pick Up\" with the Action button and no arrows. While the button is "
+	                "held the hand shows \"Amount:\" with the food it holds, larger each turn. As the button is let go "
+	                "it shows the amount once more.",
+	    .environment = PointerOnTheShoal(),
+	    .framing = OverTheShoal(),
+	    .objects = FarmAndTown(),
+	    .commands = {Press(k_Action, 3.0f), Release(k_Action, 4.0f)},
+	});
+
+	all.push_back({
 	    .id = "hand.fish_scare",
 	    .name = "Scaring a fish farm's fish",
 	    .facet = Facet::Hand,

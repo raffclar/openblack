@@ -65,6 +65,19 @@ TEST(HandToolTips, ZoomOutNearTheLandWithTheCameraPointedDown)
 	EXPECT_EQ(OverNothing({.features = k_AllFeatures, .centreDistance = std::nullopt, .pitch = 1.0f}).index, k_Move);
 }
 
+TEST(HandToolTips, OverTheFishOfAFarmTheHandOffersToPickThemUp)
+{
+	const Offer pickUp {.index = k_PickUp, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_None};
+	// It comes after the tilt and the turn of the camera, and before the zoom
+	EXPECT_EQ(OverNothing({.features = k_AllFeatures, .centreDistance = 14.9f, .pitch = 0.6f}, true), pickUp);
+	EXPECT_EQ(OverNothing({.features = k_AllFeatures, .centreDistance = 100.0f}, true), pickUp);
+	EXPECT_EQ(OverNothing({.tricons = k_PitchHint, .features = k_AllFeatures}, true).index, k_Pitch);
+	EXPECT_EQ(OverNothing({.tricons = k_RotateHint, .features = k_AllFeatures}, true).index, k_Rotate);
+	// It sets off no help event
+	EXPECT_FALSE(OverNothingHelpEvent({.features = k_AllFeatures, .centreDistance = 100.0f}, true).has_value());
+	EXPECT_EQ(OverNothingHelpEvent({.features = k_AllFeatures, .centreDistance = 100.0f}, false), k_CameraOnLandEvent);
+}
+
 TEST(HandToolTips, ZoomOutShowsTheZoomInControlsMouse)
 {
 	EXPECT_EQ(BindableActionOf(ToolTipAction::ZoomIn), 4);

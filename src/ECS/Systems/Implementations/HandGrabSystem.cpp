@@ -465,9 +465,15 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
-		// Letting go of the button ends a scoop; the hand holds its handful
+		// Letting go of the button ends a scoop; the hand holds its handful. After a pile or a fish farm, but not a field,
+		// the hand shows the amount it holds.
 		if (grab->scoopSource != entt::null)
 		{
+			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
+			    handful != nullptr && Exists(grab->scoopSource) && !_world->FieldFactsOf(grab->scoopSource).has_value())
+			{
+				_amountToolTip = handful->amount;
+			}
 			EndScoop(*grab);
 		}
 		break;
@@ -513,7 +519,6 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 		return false;
 	}
 	Take(grab, handful, false);
-	_amountToolTip = first;
 	if (grab.state != HandGrab::State::Holding)
 	{
 		return false;
@@ -600,6 +605,7 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	}
 	_world->TakeFromField(grab.scoopSource, taken);
 	handful->amount += taken;
+	_amountToolTip = handful->amount;
 	_world->ResizePot(grab.object);
 	return true;
 }
@@ -660,6 +666,7 @@ bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
 		return false;
 	}
 	handful->amount += wanted;
+	_amountToolTip = handful->amount;
 	_world->ResizePot(grab.object);
 	return true;
 }
