@@ -96,7 +96,7 @@ entt::entity TownOf(entt::entity villager)
 
 std::optional<entt::entity> StoragePitOf(entt::entity villager)
 {
-	return construction::StoragePitOf(TownOf(villager));
+	return villager_build::StoreOf(Entities().Get<const Villager>(villager), TownOf(villager));
 }
 
 bool IsFunctional(std::optional<entt::entity> pit)

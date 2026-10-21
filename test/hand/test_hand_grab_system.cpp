@@ -964,6 +964,28 @@ TEST_F(HandGrabSystemWithWorld, AVillagerPulledFreeMakesTheDrawListAgain)
 	EXPECT_EQ(world->drawListFrames, std::vector<uint32_t> {1u});
 }
 
+TEST_F(HandGrabSystemWithWorld, AVillagerInTheHandKeepsItsWoodAndFood)
+{
+	const auto villager = world->registry.Create();
+	world->registry.Assign<Transform>(villager, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& person = world->registry.Assign<Villager>(villager);
+	person.woodHeld = 250;
+	person.foodHeld = 120;
+	person.woodGraphic = 2;
+	world->sizes[villager] = {.radius = 0.5f, .height = 2.0f};
+	world->underCursor = villager;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	const auto& held = world->registry.Get<const Villager>(villager);
+	EXPECT_EQ(held.woodHeld, 250);
+	EXPECT_EQ(held.foodHeld, 120);
+	EXPECT_EQ(held.woodGraphic, 2);
+}
+
 TEST_F(HandGrabSystemWithWorld, AVillagerLetGoBeforeItComesFreeMakesTheDrawListAgainForTwoFrames)
 {
 	const auto villager = world->registry.Create();

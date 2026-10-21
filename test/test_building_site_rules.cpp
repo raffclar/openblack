@@ -226,9 +226,22 @@ TEST(VillagerCarry, PickingUpAndPuttingDown)
 	// Putting down none, or more than it has, puts down all
 	EXPECT_EQ(ecs::villager_carry::PutDown(villager, ResourceType::Wood, 0), 148);
 	EXPECT_EQ(villager.woodHeld, 0);
+	// The log stays with the villager until the next wood that it picks up
+	EXPECT_EQ(villager.woodGraphic, 2);
 	EXPECT_EQ(ecs::villager_carry::PutDown(villager, ResourceType::Food, 500), 148);
 	EXPECT_EQ(ecs::villager_carry::PutDown(villager, ResourceType::Food, 0), 0);
 	EXPECT_EQ(ecs::villager_carry::HeldResource(villager), ResourceType::None);
+}
+
+TEST(VillagerCarry, TheStoreIsTheStoragePitOfTheTownElseTheHome)
+{
+	const auto pit = static_cast<entt::entity>(4);
+	const auto home = static_cast<entt::entity>(9);
+	EXPECT_EQ(ecs::villager_carry::StoreOf(pit, home), pit);
+	EXPECT_EQ(ecs::villager_carry::StoreOf(pit, entt::null), pit);
+	// A town with no storage pit, or no town, gives the home
+	EXPECT_EQ(ecs::villager_carry::StoreOf(std::nullopt, home), home);
+	EXPECT_EQ(ecs::villager_carry::StoreOf(std::nullopt, entt::null), std::nullopt);
 }
 
 TEST(BuildingSiteRules, AFinishedTemplesEmptyPilesGoAndThoseWithWoodCallTheVillagers)
