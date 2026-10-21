@@ -6489,6 +6489,26 @@ void AddLeash(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "leash.key_next_turn",
+	    .name = "The leash key acts at the start of the next turn",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows the learning leash. The scenario presses the leash key through the game's "
+	                   "controls, as a player does, and three seconds later presses it again. The key makes a command "
+	                   "of the player, and the world does the command at the start of the next game turn.",
+	    .expected = "The rope goes on one or two game turns after the press (a tenth to a fifth of a second), not on the "
+	                "frame of the press, and comes off again after the second press. The players.commands query shows "
+	                "the command that waits.",
+	    .framing = {.shot = Shot::Testbed},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 60.0f})},
+	    .commands = {{.kind = Kind::PressKey,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::LEASH_UNLEASH_CREATURE)},
+	                 {.kind = Kind::PressKey,
+	                  .delaySeconds = 3.0f,
+	                  .value = static_cast<size_t>(input::BindableActionMap::LEASH_UNLEASH_CREATURE)}},
+	});
+
+	all.push_back({
 	    .id = "leash.click_or_hold",
 	    .name = "Hold to stroke, right click to leash",
 	    .facet = Facet::Leash,

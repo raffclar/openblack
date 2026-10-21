@@ -1399,6 +1399,12 @@
   "query": "players.list"
  },
  {
+  "description": "The queue of the players' commands: the player of this computer, whose number the commands carry, and the commands that wait for the start of a turn",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.commands"
+ },
+ {
   "description": "Each player's heartbeat: danger, rate, beat and pulse",
   "kind": "list",
   "parameters": [],

@@ -1663,3 +1663,4 @@ openblack_setup_and_add_test(test_lhvm_program_copy lhvm/test_lhvm_program_copy.
 target_link_libraries(test_lhvm_program_copy PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_pack_audio_headers pack/test_pack_audio_headers.cpp)
 target_link_libraries(test_pack_audio_headers PRIVATE pack)
+openblack_setup_and_add_test(test_player_commands test_player_commands.cpp)

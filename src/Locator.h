@@ -157,6 +157,7 @@ class GuidanceSystemInterface;
 class HelpMessageSystemInterface;
 class TipBubbleSystemInterface;
 class HandDemoSystemInterface;
+class PlayerCommandSystemInterface;
 class AdvisorSystemInterface;
 class SoundTagSystemInterface;
 class RainSystemInterface;
@@ -335,6 +336,7 @@ struct Locator
 	using guidanceSystem = entt::locator<ecs::systems::GuidanceSystemInterface>;
 	using tipBubbleSystem = entt::locator<ecs::systems::TipBubbleSystemInterface>;
 	using handDemoSystem = entt::locator<ecs::systems::HandDemoSystemInterface>;
+	using playerCommandSystem = entt::locator<ecs::systems::PlayerCommandSystemInterface>;
 	using advisorSystem = entt::locator<ecs::systems::AdvisorSystemInterface>;
 	using soundTagSystem = entt::locator<ecs::systems::SoundTagSystemInterface>;
 	using rainSystem = entt::locator<ecs::systems::RainSystemInterface>;

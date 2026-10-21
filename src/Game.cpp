@@ -221,6 +221,7 @@
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -966,12 +967,13 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	    creatureHand.GetCreature().has_value())
 	{
 		const auto creature = *creatureHand.GetCreature();
-		const bool click = creatureHand.IsClick();
-		creatureHand.Release();
-		if (click)
+		// The click puts the leash on, and then the creature feels how the hand treated it. Both are commands of the
+		// player, which the world does at the start of the next turn.
+		if (creatureHand.IsClick())
 		{
-			Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, creature);
+			Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = creature});
 		}
+		creatureHand.Release();
 	}
 	const bool onCreature = creatureHand.GetCreature().has_value();
 
@@ -2218,6 +2220,10 @@ void Game::PlayTurnStep(game_turn::Step step)
 
 	switch (step)
 	{
+	case Step::PlayerCommands:
+		// The world does the commands that the players sent
+		Locator::playerCommandSystem::value().RunSent();
+		break;
 	case Step::HandStillness:
 		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
 		Locator::handSystem::value().ProcessTurn();
@@ -2827,6 +2833,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Input:
 		UpdateInput();
 		break;
+	case Step::KeyCommands:
+		SubmitKeyCommands();
+		break;
 	case Step::ScreenMarks:
 		UpdateScreenMarks();
 		break;
@@ -2840,6 +2849,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 		return PlayTurns();
+	case Step::SendCommands:
+		Locator::playerCommandSystem::value().SendOpenBlock();
+		break;
 	case Step::FrameTime:
 		// The frame's game time: none while paused, quicker or slower with the game speed
 		Locator::time::value().UpdateFrame();
@@ -3030,6 +3042,30 @@ void Game::UpdateInput()
 		    _mousePosition, actions.IsPointerKnown() ? std::optional(actions.GetPointerPosition()) : std::nullopt);
 		ProcessTempleRoomKeys();
 		_shortcutKeys.Update();
+	}
+}
+
+void Game::SubmitKeyCommands()
+{
+	// The keys do nothing in the temple. While the debug windows have the keyboard, the controls do not change, so a key
+	// that the player pressed would read as a new press on each frame.
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (inTemple || Locator::debugGui::value().StealsFocus() || !Locator::gameActionSystem::has_value())
+	{
+		return;
+	}
+	using input::BindableActionMap;
+	const auto& actions = Locator::gameActionSystem::value();
+	auto& commands = Locator::playerCommandSystem::value();
+	// The leash shortcuts
+	for (const auto action :
+	     {BindableActionMap::LEASH_UNLEASH_CREATURE, BindableActionMap::PREVIOUS_LEASH, BindableActionMap::NEXT_LEASH})
+	{
+		if (const auto key = creature_leash::KeyFor(action);
+		    key.has_value() && actions.GetChanged(action) && actions.Get(action))
+		{
+			commands.Submit(player_commands::LeashKey {.key = *key});
+		}
 	}
 }
 
@@ -6040,6 +6076,8 @@ void Game::PrepareNewLand(land_change::Kind change)
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
 	Locator::handDemoSystem::value().Reset();
+	// The commands that the players made on the old land do nothing on the new land
+	Locator::playerCommandSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);

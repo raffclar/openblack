@@ -1678,15 +1678,8 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto pressed = [&actions](BindableActionMap action) { return actions.GetChanged(action) && actions.Get(action); };
 
-	// The leash shortcuts
-	for (const auto action :
-	     {BindableActionMap::LEASH_UNLEASH_CREATURE, BindableActionMap::PREVIOUS_LEASH, BindableActionMap::NEXT_LEASH})
-	{
-		if (const auto key = leash::KeyFor(action); key.has_value() && pressed(action))
-		{
-			PressKey(player, *key);
-		}
-	}
+	// The leash shortcuts are commands of the player, which the world does at the start of the next turn (see
+	// Game::SubmitKeyCommands)
 
 	if (actionTaken || !pressed(BindableActionMap::ACTION) || glm::length(rayDirection) <= 0.0f)
 	{

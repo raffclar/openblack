@@ -55,10 +55,12 @@ enum class Step : uint8_t
 {
 	FrameClock,
 	Input,
+	KeyCommands,
 	DebugGui,
 	Interface,
 	GripEffect,
 	Turns,
+	SendCommands,
 	FrameTime,
 	CameraMouse,
 	CameraPaths,
@@ -100,10 +102,15 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::FrameClock, .stage = std::nullopt},
     // The keys, the mouse buttons and the pointer
     {.step = Step::Input, .stage = Stage::Input},
+    // The shortcut keys that change the world make the commands of the player, before the turns
+    {.step = Step::KeyCommands, .stage = Stage::Input},
     // The debug windows are openblack's own and have no place in the game's frame
     {.step = Step::DebugGui, .stage = std::nullopt},
     {.step = Step::Interface, .stage = Stage::FrameUpdates},
     {.step = Step::Turns, .stage = Stage::Turns},
+    // The commands that the player made go after the turns of this frame. Thus the next turn does them, and the turns of
+    // this frame do not.
+    {.step = Step::SendCommands, .stage = Stage::Turns},
     {.step = Step::FrameTime, .stage = Stage::FrameTime},
     // The movement of the mouse turns, tilts and zooms the camera in the same frame
     {.step = Step::CameraMouse, .stage = Stage::Camera},
