@@ -26,17 +26,19 @@ float DrawWeight(float turnFraction)
 	return x87::Less(turnFraction, static_cast<double>(k_MaxWeight)) ? turnFraction : k_MaxWeight;
 }
 
+// The weights and the numbers are floats. Thus each product and the sum round to a float one time, as the game rounds
+// them, and plain float operations give the same bits.
 float BlendNumber(float older, float newer, float weight)
 {
-	const auto newerPart = x87::Mul(weight, newer);
-	const auto olderWeight = x87::Sub(1.0f, weight);
-	return x87::Add(x87::Mul(olderWeight, older), newerPart);
+	const float newerPart = weight * newer;
+	const float olderWeight = 1.0f - weight;
+	return (olderWeight * older) + newerPart;
 }
 
 void Blend(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, float weight, std::span<glm::mat4> drawn)
 {
 	assert(older.size() == drawn.size() && newer.size() == drawn.size());
-	const auto olderWeight = x87::Sub(1.0f, weight);
+	const float olderWeight = 1.0f - weight;
 	for (size_t bone = 0; bone < drawn.size(); ++bone)
 	{
 		auto& out = drawn[bone];
@@ -44,8 +46,8 @@ void Blend(std::span<const glm::mat4> older, std::span<const glm::mat4> newer, f
 		{
 			for (glm::length_t row = 0; row < 3; ++row)
 			{
-				const auto newerPart = x87::Mul(weight, newer[bone][column][row]);
-				out[column][row] = x87::Add(x87::Mul(olderWeight, older[bone][column][row]), newerPart);
+				const float newerPart = weight * newer[bone][column][row];
+				out[column][row] = (olderWeight * older[bone][column][row]) + newerPart;
 			}
 			out[column][3] = column == 3 ? 1.0f : 0.0f;
 		}

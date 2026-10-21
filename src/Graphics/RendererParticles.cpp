@@ -113,6 +113,36 @@ bgfx::VertexLayout ChainLayout()
 	return layout;
 }
 
+/// The points of the particle surfaces: a position, a texture point, a colour and a light
+bgfx::VertexLayout SurfaceLayout()
+{
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	return layout;
+}
+
+/// The corners of the pieces of a broken model: a position, a texture point, a shade and a colour
+bgfx::VertexLayout FragmentLayout()
+{
+	bgfx::VertexLayout layout;
+	layout.begin()
+	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::TexCoord3, 2, bgfx::AttribType::Float)
+	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
+	    .end();
+	return layout;
+}
+
+/// The state of a fragment: blended over what is behind, and writing its depth
+constexpr uint64_t k_FragmentState =
+    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA;
+
 /// Where the hand is drawn this frame, which the miracle in it is drawn just after
 std::optional<glm::vec3> HandPoint()
 {
@@ -413,13 +443,7 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 		glm::vec2 shade;
 		uint32_t colour;
 	};
-	bgfx::VertexLayout layout;
-	layout.begin()
-	    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::TexCoord3, 2, bgfx::AttribType::Float)
-	    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-	    .end();
+	const auto layout = FragmentLayout();
 	const auto alpha = static_cast<uint32_t>(std::clamp(fragment.alpha, 0.0f, 1.0f) * 255.0f);
 	const uint32_t colour = (alpha << 24u) | (static_cast<uint32_t>(fragment.rgb[2]) << 16u) |
 	                        (static_cast<uint32_t>(fragment.rgb[1]) << 8u) | fragment.rgb[0];
@@ -486,8 +510,7 @@ void Renderer::DrawParticleFragment(const DrawSceneDesc& desc, const particles::
 		program->SetUniformValue("u_fragmentOrigin", &origin);
 		bgfx::setVertexBuffer(0, &buffer);
 		// Drawn from both sides, as a broken piece shows its inside
-		bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_Z | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA |
-		               BGFX_STATE_MSAA);
+		bgfx::setState(k_FragmentState);
 		program->Submit(viewId, depth);
 	}
 }
@@ -777,7 +800,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	}
 	if (_warmingUp)
 	{
-		WarmUpParticleSprites(desc);
+		WarmUpParticles(desc);
 	}
 	if (_particleFrame.items.empty())
 	{
@@ -871,13 +894,7 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	bool haveSurfaces = false;
 	if (!frame.surfaces.empty())
 	{
-		bgfx::VertexLayout layout;
-		layout.begin()
-		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
-		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
-		    .add(bgfx::Attrib::Color1, 4, bgfx::AttribType::Uint8, true)
-		    .end();
+		const auto layout = SurfaceLayout();
 		const auto vertexCount = static_cast<uint32_t>(frame.surfaceVertices.size());
 		const auto indexCount = static_cast<uint32_t>(frame.surfaceIndices.size());
 		haveSurfaces = bgfx::getAvailTransientVertexBuffer(vertexCount, layout) >= vertexCount &&
@@ -1002,9 +1019,9 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 	}
 }
 
-void Renderer::WarmUpParticleSprites(const DrawSceneDesc& desc) const
+void Renderer::WarmUpParticles(const DrawSceneDesc& desc) const
 {
-	// A sprite of no size and no colour for each way that sprites blend
+	// Each way that the particles blend
 	std::vector<uint64_t> states;
 	for (uint32_t mode = 0; mode < render_modes::k_ModeCount; ++mode)
 	{
@@ -1014,25 +1031,76 @@ void Renderer::WarmUpParticleSprites(const DrawSceneDesc& desc) const
 			states.push_back(state);
 		}
 	}
-	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	const bool reflection = desc.viewId == RenderPass::Reflection;
+	const auto translucent = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
+	// The sprites, the ribbons and the surfaces of what is drawn before the land go in the sky's pass of the main view
+	std::vector<bgfx::ViewId> views {translucent};
+	if (!reflection)
+	{
+		views.push_back(static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId)));
+	}
 	const auto count = static_cast<uint32_t>(states.size());
-	if (bgfx::getAvailInstanceDataBuffer(count, k_Stride) < count)
+
+	// A sprite of no size and no colour for each way that sprites blend
+	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
+	const auto sprites = count * static_cast<uint32_t>(views.size());
+	if (bgfx::getAvailInstanceDataBuffer(sprites, k_Stride) >= sprites)
 	{
-		return;
+		bgfx::InstanceDataBuffer instances {};
+		bgfx::allocInstanceDataBuffer(&instances, sprites, k_Stride);
+		std::fill_n(reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data), sprites,
+		            particles::sprites::SpriteInstance {});
+		const auto* program = _shaderManager->GetShader("ParticleInstanced");
+		uint32_t instance = 0;
+		for (const auto view : views)
+		{
+			for (const auto state : states)
+			{
+				bgfx::setState(state);
+				_plane->GetVertexBuffer().Bind();
+				bgfx::setInstanceDataBuffer(&instances, instance++, 1);
+				program->Submit(view);
+			}
+		}
 	}
-	bgfx::InstanceDataBuffer instances {};
-	bgfx::allocInstanceDataBuffer(&instances, count, k_Stride);
-	std::fill_n(reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data), count,
-	            particles::sprites::SpriteInstance {});
-	const auto* program = _shaderManager->GetShader("ParticleInstanced");
-	const auto viewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	for (uint32_t i = 0; i < count; ++i)
+
+	// A triangle of no size, with each layout that the ribbons, the surfaces and the fragments use
+	constexpr uint32_t k_Corners = 3;
+	const auto submitTriangle = [](const ShaderProgram& program, const bgfx::VertexLayout& layout, uint64_t state,
+	                               bgfx::ViewId view) {
+		if (bgfx::getAvailTransientVertexBuffer(k_Corners, layout) < k_Corners ||
+		    bgfx::getAvailTransientIndexBuffer(k_Corners, true) < k_Corners)
+		{
+			return;
+		}
+		bgfx::TransientVertexBuffer vertices {};
+		bgfx::TransientIndexBuffer indices {};
+		bgfx::allocTransientVertexBuffer(&vertices, k_Corners, layout);
+		std::fill_n(vertices.data, vertices.size, uint8_t {0});
+		bgfx::allocTransientIndexBuffer(&indices, k_Corners, true);
+		std::fill_n(indices.data, indices.size, uint8_t {0});
+		bgfx::setTransform(glm::value_ptr(glm::mat4(1.0f)));
+		bgfx::setVertexBuffer(0, &vertices);
+		bgfx::setIndexBuffer(&indices);
+		bgfx::setState(state);
+		program.Submit(view);
+	};
+	const auto* chainProgram = _shaderManager->GetShader("ParticleChain");
+	const auto* surfaceProgram = _shaderManager->GetShader("ParticleSurface");
+	const auto chainLayout = ChainLayout();
+	const auto surfaceLayout = SurfaceLayout();
+	// A surface with one side is culled as the pass mirrors it
+	const uint64_t oneSide = reflection ? BGFX_STATE_CULL_CW : BGFX_STATE_CULL_CCW;
+	for (const auto view : views)
 	{
-		bgfx::setState(states.at(i));
-		_plane->GetVertexBuffer().Bind();
-		bgfx::setInstanceDataBuffer(&instances, i, 1);
-		program->Submit(viewId);
+		for (const auto state : states)
+		{
+			submitTriangle(*chainProgram, chainLayout, state, view);
+			submitTriangle(*surfaceProgram, surfaceLayout, state, view);
+			submitTriangle(*surfaceProgram, surfaceLayout, state | oneSide, view);
+		}
 	}
+	submitTriangle(*_shaderManager->GetShader("Fragment"), FragmentLayout(), k_FragmentState, translucent);
 }
 
 void Renderer::DrawIntroLight(const DrawSceneDesc& desc) const

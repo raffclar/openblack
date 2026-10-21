@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <unordered_map>
 
 #include <glm/geometric.hpp>
 
@@ -720,8 +721,18 @@ std::span<const Executor> creature_plan_actions::All()
 
 const Executor* creature_plan_actions::For(std::string_view action)
 {
-	const auto found = std::ranges::find(k_Executors, action, &Executor::action);
-	return found != k_Executors.end() ? &*found : nullptr;
+	// The table does not change, so the names find their executors through an index made once. The first executor of
+	// a name is the one that the name finds.
+	static const auto k_ByName = [] {
+		std::unordered_map<std::string_view, const Executor*> byName;
+		for (const auto& executor : k_Executors)
+		{
+			byName.emplace(executor.action, &executor);
+		}
+		return byName;
+	}();
+	const auto found = k_ByName.find(action);
+	return found != k_ByName.end() ? found->second : nullptr;
 }
 
 bool creature_plan_actions::IsCast(const Executor& executor)

@@ -7,14 +7,18 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <array>
 #include <bit>
+#include <random>
 #include <vector>
 
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat4x4.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/X87.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureTurnPose.h"
 
@@ -116,4 +120,25 @@ TEST(CreatureTurnPose, WithoutATurnPoseForEachBoneGameRulesReadTheDrawnPose)
 	const auto rebuilt = creature::TurnPose(other, drawn, placement);
 	EXPECT_EQ(rebuilt.bones.data(), drawn.data());
 	EXPECT_EQ(glm::vec3(creature::PosedBone(1, rebuilt.bones, rebuilt.placement)[3]), glm::vec3(10.0f, 1.0f, -4.0f));
+}
+
+TEST(CreatureTurnPose, TheBlendGivesTheBitsOfTheWideMaths)
+{
+	// The wide maths rounds each product and the sum to a float one time
+	const auto wide = [](float older, float newer, float weight) {
+		const auto newerPart = x87::Mul(weight, newer);
+		return x87::Add(x87::Mul(x87::Sub(1.0f, weight), older), newerPart);
+	};
+	std::mt19937 random(77);
+	std::uniform_real_distribution<float> number(-500.0f, 500.0f);
+	std::uniform_real_distribution<float> part(0.0f, 1.0f);
+	for (int i = 0; i < 200000; ++i)
+	{
+		const float older = number(random);
+		const float newer = i % 5 == 0 ? older : number(random);
+		const float weight = i % 7 == 0 ? 0.0f : (i % 11 == 0 ? 1.0f : part(random));
+		ASSERT_EQ(std::bit_cast<uint32_t>(creature_turn_pose::BlendNumber(older, newer, weight)),
+		          std::bit_cast<uint32_t>(wide(older, newer, weight)))
+		    << older << " " << newer << " " << weight;
+	}
 }

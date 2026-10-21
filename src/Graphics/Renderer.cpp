@@ -2636,6 +2636,19 @@ void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& ca
 
 void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 {
+	// The glow lies flat. It uses its own alpha and adds its colour to the colour under the sea.
+	constexpr uint64_t k_State =
+	    BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
+	const auto* spriteShader = _shaderManager->GetShader("Sprite");
+	// The warm-up draws the glow with no size, so that the renderer has its pipeline before the first night
+	if (_warmingUp)
+	{
+		bgfx::setTransform(glm::value_ptr(glm::mat4(0.0f)));
+		_plane->GetVertexBuffer().Bind();
+		bgfx::setState(k_State);
+		spriteShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
+		return;
+	}
 	if (!_landLightTable || !Locator::handSystem::has_value() || !Locator::terrainSystem::has_value())
 	{
 		return;
@@ -2691,7 +2704,6 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 	model[2] = glm::vec4(0.0f, 1.0f, 0.0f, 0.0f);
 	model[3] = glm::vec4(centre.x, 0.0f, centre.y, 1.0f);
 
-	const auto* spriteShader = _shaderManager->GetShader("Sprite");
 	bgfx::setTransform(glm::value_ptr(model));
 	spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
 	spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
@@ -2699,8 +2711,7 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 	spriteShader->SetTextureSampler("s_diffuse", 0, *textures.Handle(atmos));
 	spriteShader->SetTextureSampler("s_alpha", 1, *textures.Handle(atmosAlpha));
 	_plane->GetVertexBuffer().Bind();
-	bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A |
-	               BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE));
+	bgfx::setState(k_State);
 	spriteShader->Submit(static_cast<bgfx::ViewId>(desc.viewId));
 }
 
@@ -4594,6 +4605,25 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		                                                       bgfx::copy(image.data(), static_cast<uint32_t>(image.size()))));
 		bgfx::setName(toBgfx(*_lightningGlowTexture), "Lightning Glow");
 	}
+	// An added stamp brightens the cells to at most white; another keeps the brighter colour
+	const auto stampState = [](land_colour_stamps::Combine combine) {
+		const auto equation =
+		    combine == land_colour_stamps::Combine::Brighter ? BGFX_STATE_BLEND_EQUATION_MAX : BGFX_STATE_BLEND_EQUATION_ADD;
+		return BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
+		       BGFX_STATE_BLEND_EQUATION(equation);
+	};
+	// The warm-up draws a stamp of no size for each way to combine, so that the renderer has the pipelines before the
+	// first light on the land
+	if (_warmingUp)
+	{
+		const glm::vec4 u_noStamp {1.0f, 0.0f, 0.0f, 0.0f};
+		for (const auto combine : {land_colour_stamps::Combine::Add, land_colour_stamps::Combine::Brighter})
+		{
+			program.SetTextureSampler("s_texture", 0, *_lightningGlowTexture);
+			program.SetUniformValue("u_landColourStamp", &u_noStamp);
+			SubmitLandQuad(viewId, program, {0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, {0.0f, 0.0f}, stampState(combine));
+		}
+	}
 	const glm::vec2 firstCell = island.GetExtent().minimum / LandIslandInterface::k_CellSize;
 	size_t stamps = 0;
 	// Each stamp takes a place in the game's list, also one with no strength
@@ -4622,12 +4652,7 @@ void Renderer::DrawLandColourPass(const DrawSceneDesc& drawDesc) const
 		program.SetTextureSampler("s_texture", 0, image);
 		program.SetUniformValue("u_landColourStamp", &u_landColourStamp);
 		program.SetUniformValue("u_landColourWeights", &u_landColourWeights);
-		// An added stamp brightens the cells to at most white; another keeps the brighter colour
-		const auto equation =
-		    combine == land_colour_stamps::Combine::Brighter ? BGFX_STATE_BLEND_EQUATION_MAX : BGFX_STATE_BLEND_EQUATION_ADD;
-		SubmitLandQuad(viewId, program, from, to, from - origin, to - origin,
-		               BGFX_STATE_WRITE_RGB | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_ONE) |
-		                   BGFX_STATE_BLEND_EQUATION(equation));
+		SubmitLandQuad(viewId, program, from, to, from - origin, to - origin, stampState(combine));
 	};
 
 	// The particles' light maps of the frame before light the ground under them. Their shadows darken the land's
@@ -7747,7 +7772,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	}
 
 	// The hand's glow lies on the water, under the sea that is blended over it
-	if (desc.viewId == RenderPass::Reflection && desc.drawHand)
+	if (desc.viewId == RenderPass::Reflection && (desc.drawHand || _warmingUp))
 	{
 		DrawHandWaterGlow(desc);
 	}

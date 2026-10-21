@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
+
 #include <Common/GameRandom.h>
 #include <gtest/gtest.h>
 
@@ -918,4 +920,15 @@ TEST(CreatureActionAgendas, ItPoosOnlyByATallThingThatIsNotAliveNorAFieldOrFishF
 	// Never by a living thing, a field or a fish farm, however tall
 	EXPECT_FALSE(plan_actions::CanPooBy(true, false, 6.0f));
 	EXPECT_FALSE(plan_actions::CanPooBy(false, true, 6.0f));
+}
+
+TEST(CreatureActionAgendas, EachActionNameFindsTheFirstExecutorOfThatName)
+{
+	const auto all = plan_actions::All();
+	for (const auto& executor : all)
+	{
+		const auto first = std::ranges::find(all, executor.action, &plan_actions::Executor::action);
+		EXPECT_EQ(plan_actions::For(executor.action), &*first) << executor.action;
+	}
+	EXPECT_EQ(plan_actions::For("NoSuchAction"), nullptr);
 }

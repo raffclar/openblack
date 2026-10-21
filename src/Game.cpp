@@ -1180,6 +1180,8 @@ void Game::WarmUpFirstFrame()
 			// outside the temple
 			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
 			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
+			// The interface that the game draws over the scene, which the loading screen does not blend in each way
+			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed

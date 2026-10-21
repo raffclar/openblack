@@ -64,13 +64,7 @@ void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 	// Each collar is drawn among the things that blend, by its distance from the camera, straight after its glow, which
 	// stands at the same place: the collar shows whole over the glow. Lit in white by the sun alone: no light or colour
 	// of the land reaches it, and no shadow falls on it.
-	const auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const LeashPost, const Transform>([&](const LeashPost& post, const Transform& transform) {
-		if (transform.scale == glm::vec3(0.0f))
-		{
-			return;
-		}
-		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+	const auto drawCollar = [&](const glm::mat4& model, float scroll, LeashType type, uint32_t sortDepth) {
 		L3DMeshSubmitDesc submitDesc = {};
 		submitDesc.viewId = translucent;
 		submitDesc.program = program;
@@ -82,11 +76,26 @@ void Renderer::DrawTempleLeashes(const DrawSceneDesc& desc) const
 		submitDesc.useMaterialCulling = true;
 		// Its band of the leash texture, slid round it
 		submitDesc.skinTexture = &skin;
-		submitDesc.uvOffset = glm::vec2(post.look.scroll, temple_leashes::Band(post.type));
+		submitDesc.uvOffset = glm::vec2(scroll, temple_leashes::Band(type));
 		submitDesc.objectLook = L3DMeshSubmitDesc::ObjectLook {.colour = glm::vec3(k_White), .alpha = 1.0f};
 		submitDesc.landColourAdded = false;
 		submitDesc.groundShadows = false;
-		submitDesc.sortDepth = std::max(zsort::Depth(transform.position, eye), 1u) - 1;
+		submitDesc.sortDepth = sortDepth;
 		DrawMesh(mesh, submitDesc, std::numeric_limits<uint8_t>::max());
+	};
+	// The warm-up draws a collar of no size, so that the renderer has its pipelines before the first leash post shows
+	if (_warmingUp)
+	{
+		drawCollar(glm::mat4(0.0f), 0.0f, LeashType::Rope, 0);
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const LeashPost, const Transform>([&](const LeashPost& post, const Transform& transform) {
+		if (transform.scale == glm::vec3(0.0f))
+		{
+			return;
+		}
+		const auto model = glm::translate(transform.position) * glm::mat4(transform.rotation) * glm::scale(transform.scale);
+		drawCollar(model, post.look.scroll, post.type, std::max(zsort::Depth(transform.position, eye), 1u) - 1);
 	});
 }
