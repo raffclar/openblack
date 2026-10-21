@@ -11,6 +11,8 @@
 
 #include <algorithm>
 #include <chrono>
+#include <fstream>
+#include <optional>
 #include <utility>
 #include <vector>
 
@@ -21,8 +23,12 @@
 #ifdef _WIN32
 #include <intrin.h>
 #include <windows.h>
+// psapi.h needs windows.h first
+#include <psapi.h>
 #else
 #include <ctime>
+
+#include <unistd.h>
 #endif
 
 namespace
@@ -57,6 +63,49 @@ double ThreadCpuMilliseconds()
 	clock_gettime(CLOCK_THREAD_CPUTIME_ID, &time);
 	return static_cast<double>(time.tv_sec) * 1000.0 + static_cast<double>(time.tv_nsec) / 1.0e6;
 #endif
+}
+
+/// How much memory the process holds, in megabytes: in physical memory, and of its own (private) where the system
+/// tells it
+struct ProcessMemory
+{
+	double resident {0.0};
+	std::optional<double> own;
+};
+
+constexpr double k_BytesPerMegabyte = 1024.0 * 1024.0;
+
+std::optional<ProcessMemory> MemoryOfProcess()
+{
+#ifdef _WIN32
+	PROCESS_MEMORY_COUNTERS_EX counters {};
+	if (GetProcessMemoryInfo(GetCurrentProcess(), reinterpret_cast<PROCESS_MEMORY_COUNTERS*>(&counters), sizeof(counters)) == 0)
+	{
+		return std::nullopt;
+	}
+	return ProcessMemory {.resident = static_cast<double>(counters.WorkingSetSize) / k_BytesPerMegabyte,
+	                      .own = static_cast<double>(counters.PrivateUsage) / k_BytesPerMegabyte};
+#elif defined(__linux__)
+	// The second number of the file is the pages in physical memory
+	std::ifstream statm("/proc/self/statm");
+	long pages = 0;
+	long resident = 0;
+	if (!(statm >> pages >> resident))
+	{
+		return std::nullopt;
+	}
+	return ProcessMemory {.resident =
+	                          static_cast<double>(resident) * static_cast<double>(sysconf(_SC_PAGESIZE)) / k_BytesPerMegabyte,
+	                      .own = std::nullopt};
+#else
+	return std::nullopt;
+#endif
+}
+
+/// A graphics memory amount that the renderer may not know, which it then gives as a negative number
+std::string Megabytes(int64_t bytes)
+{
+	return bytes < 0 ? std::string("unknown") : fmt::format("{:.0f} MB", static_cast<double>(bytes) / k_BytesPerMegabyte);
 }
 
 } // namespace
@@ -148,6 +197,15 @@ void FrameStatsLog::Report()
 	                   _reports, frames.count, frames.average, frames.p95, frames.max, 1000.0f / frames.average, gpu.average,
 	                   gpu.p95, _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count,
 	                   std::exchange(_pipelinesSinceReport, 0u));
+
+	// How much memory the game holds, and the graphics memory that the renderer knows of
+	const auto* stats = bgfx::getStats();
+	const auto memory = MemoryOfProcess();
+	SPDLOG_LOGGER_INFO(logger, "Frame stats #{} memory: process {}{}; textures {}, render targets {}, graphics card {} of {}",
+	                   _reports, memory.has_value() ? fmt::format("{:.0f} MB", memory->resident) : "unknown",
+	                   memory.has_value() && memory->own.has_value() ? fmt::format(" ({:.0f} MB its own)", *memory->own) : "",
+	                   Megabytes(stats->textureMemoryUsed), Megabytes(stats->rtMemoryUsed), Megabytes(stats->gpuMemoryUsed),
+	                   Megabytes(stats->gpuMemoryMax));
 
 	// The stages that took the longest, nested ones among them
 	std::vector<std::pair<double, size_t>> stages;

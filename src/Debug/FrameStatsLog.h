@@ -24,7 +24,7 @@ namespace openblack::debug
 
 /// Logs how long the frames take every so many frames: the average, 95th percentile and slowest frame, what the
 /// renderer reports of the CPU and GPU, the average of each profiler stage and, when the renderer profiles its views,
-/// the GPU time of each view
+/// the GPU time of each view, and how much memory the process and the graphics hold
 class FrameStatsLog
 {
 public:
