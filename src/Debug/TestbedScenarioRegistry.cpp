@@ -10012,7 +10012,7 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                "takes the first step. When the group moves, each dancer takes its step to the new place in the "
 	                "turn that the group moves. A dancer on its place takes no step.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -12.0f}, {12.0f, 12.0f}}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -18.0f}, .look = {0.0f, 0.0f, 0.0f}},
 	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
 	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {8.0f, 0.0f}},
 	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 0.0f}},
