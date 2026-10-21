@@ -3385,6 +3385,7 @@ void Runner::Give(const Command& command)
 		if (Locator::creatureWebPageSystem::has_value())
 		{
 			Locator::creatureWebPageSystem::value().WritePage(*entity);
+			Locator::creatureWebPageSystem::value().FlushWrites();
 			result = "written";
 		}
 		else
