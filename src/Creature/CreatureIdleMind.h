@@ -46,9 +46,9 @@ constexpr uint32_t k_FaceVarietyStep = 7;
 constexpr float k_IdleWaitSeconds = 1.0f;
 /// Being idle is waiting then yawning, this many times
 constexpr int k_IdleRepeats = 2;
-/// Sitting lasts ten seconds and up to four more
-constexpr uint32_t k_SitSeconds = 10;
-constexpr uint32_t k_SitExtraSeconds = 5;
+/// A sit lasts ten seconds and a draw of up to five more, as the sit of the game's actions
+constexpr float k_SitSeconds = 10.0f;
+constexpr float k_SitExtraSeconds = 5.0f;
 /// Hanging around at home, the creature walks home and stops at its height from home, or at this distance when the
 /// creature is taller
 constexpr float k_HangAroundHomeReach = 5.0f;
@@ -1053,8 +1053,8 @@ constexpr float k_WatchFlyingExtraSeconds = 2.0f;
 
 /// Being idle: wait a second or two looking about, then a tired yawn with sleepy eyes, twice
 [[nodiscard]] std::vector<Step> BeIdle(const Random& random);
-/// Sitting for ten to fourteen seconds
-[[nodiscard]] Step SitDown(const Random& random);
+/// A sit for ten seconds and a draw of up to five more. upTo is a draw from 0 up to a most (GameFloatRand in the game).
+[[nodiscard]] Step SitDown(const std::function<float(float)>& upTo);
 /// Hanging around at home. The creature walks home and waits there while it looks about. Then it does one of these:
 /// - With no temple, or one time in ten, it yawns with sleepy eyes.
 /// - Seven times in ten, it walks out from home, away from the temple. It faces away from the temple and sits or

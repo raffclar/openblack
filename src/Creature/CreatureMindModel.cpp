@@ -190,6 +190,22 @@ void creature_mind_model::RebuildTrees(Learnt& learnt,
 	}
 }
 
+void creature_mind_model::DrawAsSourcesAreRead(
+    const creaturemind::MindFileData& file, const std::function<creature_desires::DesireSetup::Spread(uint32_t type)>& spreadOf,
+    const std::function<float(float)>& upTo)
+{
+	for (const auto& desire : file.desires)
+	{
+		for (const auto& source : desire.sources)
+		{
+			const auto spread = spreadOf(source.type);
+			// The results do not stay: the numbers of the file replace them
+			static_cast<void>(upTo(2.0f * spread.value));
+			static_cast<void>(upTo(2.0f * spread.threshold));
+		}
+	}
+}
+
 LoadedMind creature_mind_model::FromFile(const creaturemind::MindFileData& file, const creature_desires::Desires& fresh,
                                          const Learnt& freshLearnt)
 {

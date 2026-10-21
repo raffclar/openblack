@@ -801,7 +801,7 @@ bool IsMovingMotion(Motion motion)
 /// spot to face a point is not.
 bool IsOnItsWay(const CreatureLocomotion& self)
 {
-	return IsMovingMotion(self.motion) && !(self.motion == Motion::Turning && self.facingOnly);
+	return InMove(self);
 }
 
 /// Stops it at once where it is, as a new body action or a placement does

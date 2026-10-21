@@ -324,6 +324,20 @@ std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> Setup
 	return setup;
 }
 
+creature_desires::DesireSetup::Spread SourceSpreadOf(uint32_t type)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return {};
+	}
+	const auto& table = Locator::infoConstants::value().desireSourceTable;
+	if (type >= table.size())
+	{
+		return {};
+	}
+	return {.value = table.at(type).field0xc, .threshold = table.at(type).field0x10};
+}
+
 /// The desires of the body, from the game's table of desires
 std::array<bool, creature_desires::k_DesireCount> BodyDesires()
 {
@@ -2734,9 +2748,8 @@ bool CreatureMindSystem::SitDown(entt::entity creature)
 		    *creature_layers::PlaySequence(body->body, animations::k_StartSit, animations::k_Sit, animations::k_EndSit);
 		return true;
 	}
-	const auto random = [this](uint32_t range) { return _random.GameRand(range); };
 	Abandon(*mind);
-	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(random)});
+	creature_mind::Plan(mind->idle, creature_mind::Activity::Told, {creature_mind::SitDown(_random.GameFloat())});
 	return true;
 }
 

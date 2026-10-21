@@ -57,7 +57,7 @@ public:
 	/// Once a game turn after PlanTurn: what the leash taught, and copying the player, step on
 	virtual void LearnTurn() = 0;
 
-	/// Takes up a mind file's learning, desires and stage of growing up at the next turn
+	/// Takes up a mind file's learning, desires and stage of growing up at once, over the mind that the creature has
 	virtual void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) = 0;
 	/// The creature's mind as a mind file of the current version, over the file it was loaded from, if it has a mind
 	[[nodiscard]] virtual std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const = 0;

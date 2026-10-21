@@ -79,8 +79,9 @@ constexpr uint32_t k_CutSceneConfusedLots = 3;
 /// Pointing at the camera for a second, amazed, having turned to face it first when it has a player
 [[nodiscard]] std::vector<Step> PointAtCamera(bool hasPlayer, glm::vec3 camera);
 /// Sitting down where a script says: it walks there until within its own radius, turns to face the place, turns to
-/// face down the slope, then sits for ten seconds and up to five more
-[[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random);
+/// face down the slope, then sits for ten seconds and a draw of up to five more (upTo, GameFloatRand in the game)
+[[nodiscard]] std::vector<Step> SitDownAt(uint32_t place, glm::vec2 point, float radius,
+                                          const std::function<float(float)>& upTo);
 /// The numbers of the game's steps that a saved game keeps for a walk to a point and for a turn to face a point
 constexpr uint32_t k_SavedTurnToFacePoint = 7;
 constexpr uint32_t k_SavedMoveToPoint = 8;
