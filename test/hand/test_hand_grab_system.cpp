@@ -1715,7 +1715,6 @@ TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)
 	EXPECT_TRUE(world->given.empty());
 }
 
-<<<<<<< HEAD
 // The hand forgets the last thing it took and the last thing it let go of once that thing is gone
 TEST_F(HandGrabSystemWithWorld, TheLastThingsTakenAndLetGoAreForgottenWhenTheyGo)
 {
@@ -1736,7 +1735,8 @@ TEST_F(HandGrabSystemWithWorld, TheLastThingsTakenAndLetGoAreForgottenWhenTheyGo
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, entt::entity {entt::null});
 	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, entt::entity {entt::null});
-=======
+}
+
 TEST_F(HandGrabSystemWithWorld, TheHandShowsWhatItHoldsAfterEachTurnOfAScoopAndAtTheLetGoOfAPileOrAFishFarm)
 {
 	const auto pile = world->registry.Create();
@@ -1801,5 +1801,4 @@ TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextT
 	world->registry.Destroy(rock);
 	system->ProcessTurn();
 	EXPECT_FALSE(system->GetHeld().has_value());
->>>>>>> me/hand-gaps-4
 }
