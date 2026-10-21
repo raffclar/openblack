@@ -253,6 +253,10 @@ bool DialogueText::ShownLongEnough() const
 
 void DialogueText::ProcessClick(bool click, bool skipKey)
 {
+	if (click)
+	{
+		_lastClickTurn = Turn();
+	}
 	if (_noClick || (!click && !skipKey))
 	{
 		return;

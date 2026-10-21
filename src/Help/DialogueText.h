@@ -184,6 +184,12 @@ public:
 	[[nodiscard]] bool IsWaitingForClick() const { return _waitClick; }
 	[[nodiscard]] uint32_t GetEndTurn() const { return _endTurn; }
 	[[nodiscard]] int32_t GetEndMs() const { return _endMs; }
+	[[nodiscard]] uint32_t GetStartTurn() const { return _startTurn; }
+	/// Whether a click now ends the wait for it or cuts the text short: not for a text that takes no click, nor before
+	/// the text has shown for long enough
+	[[nodiscard]] bool TakesClick() const { return !_noClick && ShownLongEnough(); }
+	/// The turn of the last click that came to the dialogue, 0 before the first
+	[[nodiscard]] uint32_t GetLastClickTurn() const { return _lastClickTurn; }
 	[[nodiscard]] const HelpTextDisplay& GetDisplay() const { return _display; }
 	[[nodiscard]] const Settings& GetSettings() const { return _settings; }
 	/// The player's choices in the options: which texts are shown, where the newest goes and how fast they read
@@ -216,6 +222,7 @@ private:
 	float _keyIconSeconds {0.0f};
 	float _actionIconSeconds {0.0f};
 	uint32_t _startTurn {0};
+	uint32_t _lastClickTurn {0};
 	uint32_t _endTurn {0};
 	int32_t _startMs {0};
 	/// Moved on while the narration is still sounding
