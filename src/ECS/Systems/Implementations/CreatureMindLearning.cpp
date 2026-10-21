@@ -3037,6 +3037,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 	}
 
+	// The lists of the actions of each desire keep their memory from one desire to the next
+	std::vector<creature_planner::ActionCandidate> candidates;
+	std::vector<const creature_plan_actions::Executor*> executors;
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -3098,8 +3101,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
-		std::vector<creature_planner::ActionCandidate> candidates;
-		std::vector<const creature_plan_actions::Executor*> executors;
+		candidates.clear();
+		executors.clear();
 		for (const auto action : actions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
