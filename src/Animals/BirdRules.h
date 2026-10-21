@@ -28,6 +28,10 @@ namespace openblack::animals::birds
 [[nodiscard]] bool IsBird(AnimalInfo type);
 /// The land's own birds, which the land scripts and the temples make: not the miracles' doves and bats
 [[nodiscard]] bool IsLandBird(AnimalInfo type);
+/// Whether a kind catches the eye of a creature as much as a dove does. The game makes every bird of the land, the
+/// vulture and the miracles' doves and bats as one kind of bird, and all of these share the interest of the dove. The
+/// game makes no bird for the temple's own rows of doves and bats.
+[[nodiscard]] bool InterestsACreatureAsADove(AnimalInfo type);
 
 /// The clip a land bird flies with, chosen afresh each time it changes what it does or how fast it goes: crows,
 /// doves, pigeons and seagulls flap or glide by an even chance, a swallow flaps or glides calmly or erratically by a

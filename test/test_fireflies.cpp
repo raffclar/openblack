@@ -10,6 +10,7 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <memory>
 #include <optional>
@@ -18,6 +19,7 @@
 #include <utility>
 #include <vector>
 
+#include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
@@ -26,6 +28,8 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "Enums.h"
 #include "Nature/Fireflies.h"
@@ -512,4 +516,31 @@ TEST_F(Fireflies, EachFrameCountsThoseOutInViewInReachAndDrawn)
 	frame = _system->GetLastFrame();
 	EXPECT_FALSE(frame.pictureReady);
 	EXPECT_EQ(frame.drawn, 0u);
+}
+
+TEST_F(Fireflies, ASavedWorldKeepsTheFirefliesTheRewardsTheLimitAndTheTopUp)
+{
+	_world->Add(FakeWorld::Kind::Tree, k_Here);
+	Turns(1);
+	_system->SetRewardWeight("HEAL", 1.0f);
+	ASSERT_EQ(_system->GetFireflies().size(), 49u);
+
+	entt::meta_ctx context;
+	ecs::reflection::RegisterComponents(context);
+	ecs::reflection::BinaryWriter out(context);
+	_system->SaveState(out);
+	EXPECT_TRUE(out.Unsaved().empty());
+	const auto bytes = out.Bytes();
+
+	// A new system takes the state back: it saves the same bytes again
+	ecs::systems::FireflySystem loaded(std::make_unique<FakeWorld>());
+	const ecs::reflection::EntityRemap identity;
+	ecs::reflection::BinaryReader in(context, bytes, identity);
+	ASSERT_TRUE(loaded.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_TRUE(std::ranges::equal(loaded.GetFireflies(), _system->GetFireflies()));
+	EXPECT_EQ(loaded.IsTopUpDue(), _system->IsTopUpDue());
+	ecs::reflection::BinaryWriter again(context);
+	loaded.SaveState(again);
+	EXPECT_EQ(again.Bytes(), bytes);
 }

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <bit>
 #include <string>
 #include <vector>
 
@@ -29,9 +30,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Registry.h"
+#include "ECS/SwimmerRules.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
+#include "ECS/Systems/WaterRingSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/MeshDetail.h"
 #include "Graphics/ViewFrustum.h"
@@ -257,5 +260,39 @@ void HighDetailSystem::PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProj
 		                                             [&random](float a, float b) { return random.CrtRandom(a, b); });
 		    detail.drawnEyes = villager_eyes::Place(*detail.face, *model, {bones[frames[0].bone], bones[frames[1].bone]},
 		                                            {frames[0].frame, frames[1].frame}, detail.eyes->roll, closed);
+	    });
+}
+
+void HighDetailSystem::LeaveSwimmingRings(uint32_t frameGameMs)
+{
+	if (!Locator::resources::has_value() || !Locator::waterRingSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& meshes = Locator::resources::value().GetMeshes();
+	// The ring turns by a random angle up to a full turn, from the random numbers of the C library
+	constexpr float k_FullTurn = std::bit_cast<float>(0x40C90FDBu);
+	const auto angle = [] { return Locator::gameRandom::value().CrtRandom(0.0f, k_FullTurn); };
+	registry.Each<const HighDetail, const VillagerPose, const Mesh>(
+	    [&](entt::entity, const HighDetail&, const VillagerPose& pose, const Mesh& mesh) {
+		    if (!ecs::swimmer_rules::Swims(true, pose.clip) || !meshes.Contains(mesh.id))
+		    {
+			    return;
+		    }
+		    // The place of the ring bone in the pose, or in the model's own pose before the villager has one
+		    const auto& rest = meshes.Handle(mesh.id)->GetBoneMatrices();
+		    const auto& bones = pose.bones.size() == rest.size() ? pose.bones : rest;
+		    if (ecs::swimmer_rules::k_RingBone >= bones.size())
+		    {
+			    return;
+		    }
+		    const auto ring = ecs::swimmer_rules::Ring(_ringTimer, static_cast<int32_t>(frameGameMs),
+		                                               glm::vec3(bones[ecs::swimmer_rules::k_RingBone][3]), angle);
+		    if (ring.has_value())
+		    {
+			    // A ring that does not fit among the many already on the water does not come
+			    static_cast<void>(Locator::waterRingSystem::value().Add(*ring));
+		    }
 	    });
 }

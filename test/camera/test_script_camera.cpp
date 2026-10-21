@@ -76,6 +76,7 @@ public:
 	bool Order(entt::entity, ecs::high_detail_rules::ThingSpecial, bool) override { return false; }
 	void Update() override {}
 	void PlaceEyes(uint32_t, const glm::mat4&) override {}
+	void LeaveSwimmingRings(uint32_t) override {}
 
 private:
 	int& _releases;

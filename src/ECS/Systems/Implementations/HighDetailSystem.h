@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/VillagerEyes.h"
 
@@ -29,10 +31,13 @@ public:
 	void Update() override;
 	void RemakeModelsAfterLoad() override;
 	void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) override;
+	void LeaveSwimmingRings(uint32_t frameGameMs) override;
 
 private:
 	/// What every villager's eyes share
 	villager_eyes::Shared _eyes;
+	/// The milliseconds of the frames that drew swimmers since the last ring on the water
+	int32_t _ringTimer {0};
 };
 
 } // namespace openblack::ecs::systems

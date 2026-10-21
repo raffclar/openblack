@@ -43,6 +43,9 @@ public:
 	/// Each frame, after the villagers in view get their poses: the eyes of those in view blink and turn. They move by
 	/// the game time of the frame, in whole milliseconds. Then the system puts the eyes on the heads.
 	virtual void PlaceEyes(uint32_t frameGameMs, const glm::mat4& viewProjection) = 0;
+	/// Each frame that draws the land, after the villagers get their poses: the villagers that swim in high detail leave
+	/// a ring on the water now and then. The time is the game time of the frame, in whole milliseconds.
+	virtual void LeaveSwimmingRings(uint32_t frameGameMs) = 0;
 };
 
 } // namespace openblack::ecs::systems

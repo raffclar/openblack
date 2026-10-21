@@ -121,6 +121,7 @@
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
+#include "ECS/SwimmerRules.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
@@ -7116,22 +7117,34 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					return;
 				}
 				const auto& [meshId, placers] = *holding;
-				// The villagers of a mesh are drawn together from the bone palette; in the reflection one is drawn alone,
-				// still with its bones from the palette
-				if (placers->bonePalette && renderCtx.bonePaletteTexture)
-				{
-					if (reflection)
-					{
-						const EntityPose palettePose {.bones = {}, .morphTargets = nullptr, .bonePalette = true};
-						drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &palettePose);
-					}
-					return;
-				}
+				const bool palette = placers->bonePalette && renderCtx.bonePaletteTexture;
 				const auto model = meshManager.Handle(meshId);
 				const bool posed = pose->bones.size() == model->GetBoneMatrices().size();
-				const EntityPose entityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
-				                                            : std::span<const glm::mat4>(model->GetBoneMatrices()),
-				                             .morphTargets = nullptr};
+				const EntityPose entityPose =
+				    palette ? EntityPose {.bones = {}, .morphTargets = nullptr, .bonePalette = true}
+				            : EntityPose {.bones = posed ? std::span<const glm::mat4>(pose->bones)
+				                                         : std::span<const glm::mat4>(model->GetBoneMatrices()),
+				                          .morphTargets = nullptr};
+				// A villager that swims in high detail is also drawn under the sea's surface, so the sea blends over it:
+				// in the dark blue of a swimmer, and nothing of it above the sea's level
+				if (desc.viewId == RenderPass::Main && desc.drawWater &&
+				    ecs::swimmer_rules::Swims(desc.entities.AllOf<ecs::components::HighDetail>(entity), pose->clip))
+				{
+					const auto view = std::exchange(submitDesc.viewId, RenderPass::UnderSea);
+					submitDesc.objectLook =
+					    L3DMeshSubmitDesc::ObjectLook {.colour = ecs::swimmer_rules::k_UnderSeaColour, .alpha = 1.0f};
+					submitDesc.cutAbove = 0.0f;
+					drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
+					submitDesc.cutAbove.reset();
+					submitDesc.objectLook.reset();
+					submitDesc.viewId = view;
+				}
+				// The villagers of a mesh are drawn together from the bone palette; in the reflection one is drawn alone,
+				// still with its bones from the palette
+				if (palette && !reflection)
+				{
+					return;
+				}
 				drawInstances(meshId, *placers, placers->materialBlending, instance, 1, &entityPose);
 			};
 			// Whether an instance is of a thing fading out in the distance (not a villager, which the palette draws)

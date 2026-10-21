@@ -43,6 +43,20 @@ TEST(BirdRules, OnlyTheLandsOwnKindsAreLandBirds)
 	}
 }
 
+TEST(BirdRules, EveryBirdTheGameMakesInterestsACreatureAsADove)
+{
+	for (const auto type : {AnimalInfo::Crow, AnimalInfo::Dove, AnimalInfo::Swallow, AnimalInfo::Pigeon, AnimalInfo::Seagull,
+	                        AnimalInfo::Bat, AnimalInfo::Vulture, AnimalInfo::SpellDove, AnimalInfo::SpellBat})
+	{
+		EXPECT_TRUE(InterestsACreatureAsADove(type));
+	}
+	// The game makes no bird for the temple's own rows, and the other animals have the interest of an animal
+	for (const auto type : {AnimalInfo::CitadelDove, AnimalInfo::CitadelBat, AnimalInfo::Sheep, AnimalInfo::SpellWolf})
+	{
+		EXPECT_FALSE(InterestsACreatureAsADove(type));
+	}
+}
+
 TEST(BirdRules, MostKindsFlapOnAZeroAndGlideOtherwise)
 {
 	EXPECT_EQ(FlyingClip(AnimalInfo::Crow, Always(0)), AnimId::CrowFlap);
