@@ -151,7 +151,8 @@ std::vector<Step> openblack::creature_mind::PointAtCamera(bool hasPlayer, glm::v
 	return agenda;
 }
 
-std::vector<Step> openblack::creature_mind::SitDownAt(uint32_t place, glm::vec2 point, float radius, const Random& random)
+std::vector<Step> openblack::creature_mind::SitDownAt(uint32_t place, glm::vec2 point, float radius,
+                                                      const std::function<float(float)>& upTo)
 {
 	return {
 	    {.kind = Step::Kind::Move,
@@ -159,7 +160,7 @@ std::vector<Step> openblack::creature_mind::SitDownAt(uint32_t place, glm::vec2 
 	     .gaze = GoingLook()},
 	    FaceThing(place, k_FacePlaceSeconds),
 	    {.kind = Step::Kind::Move, .movement = {.kind = Movement::Kind::FaceDownSlope}},
-	    SitDown(random),
+	    SitDown(upTo),
 	};
 }
 

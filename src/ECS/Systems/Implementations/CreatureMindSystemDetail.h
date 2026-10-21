@@ -55,6 +55,8 @@ struct GWorshipSiteInfo;
 namespace openblack::ecs::systems::mind_detail
 {
 [[nodiscard]] std::array<creature_desires::DesireSetup, creature_desires::k_DesireCount> SetupFor(CreatureType species);
+/// How far the game spreads a new source of a kind at random either way: its value, then its threshold
+[[nodiscard]] creature_desires::DesireSetup::Spread SourceSpreadOf(uint32_t type);
 /// The personality a species is born with, from the game's creature table, before it is spread for a creature
 [[nodiscard]] creature_desire_sources::InnateTraits InnateTraitsOf(CreatureType species);
 [[nodiscard]] std::optional<float> FoodValueOf(entt::entity entity);
