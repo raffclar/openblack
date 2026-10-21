@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <optional>
+
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/mat3x3.hpp>
@@ -43,6 +45,19 @@ struct Listener
 	const auto right = glm::normalize(glm::cross(above, ahead));
 	const auto offset = point - eye;
 	return {glm::dot(offset, right), glm::dot(offset, ahead), glm::dot(offset, above)};
+}
+
+/// Where the sound device hears from: a tool's listener when one is put there, else where the camera was at the end of
+/// the last game turn, else (before the first turn ends) where the camera is now. The game moves the listener only once
+/// a game turn.
+[[nodiscard]] inline Listener HeardFrom(const std::optional<Listener>& override, const std::optional<Listener>& turnEnd,
+                                        const Listener& now)
+{
+	if (override.has_value())
+	{
+		return *override;
+	}
+	return turnEnd.value_or(now);
 }
 
 } // namespace openblack::audio

@@ -81,3 +81,16 @@ TEST(ListenerFrame, AListenerLookingAtAPointIsPlacedAsTheCameraWouldBe)
 		EXPECT_NEAR(heard.z, 0.0f, 1e-2f);
 	}
 }
+
+TEST(ListenerFrame, TheDeviceHearsFromWhereTheCameraWasAtTheEndOfTheLastTurn)
+{
+	const openblack::audio::Listener now {.origin = {1.0f, 2.0f, 3.0f}};
+	const openblack::audio::Listener turnEnd {.origin = {4.0f, 5.0f, 6.0f}};
+	const openblack::audio::Listener tool {.origin = {7.0f, 8.0f, 9.0f}};
+	// Before the first turn ends, the camera as it is now
+	EXPECT_EQ(openblack::audio::HeardFrom(std::nullopt, std::nullopt, now).origin, now.origin);
+	// Between the ends of turns, where the camera was at the last end, wherever the camera is now
+	EXPECT_EQ(openblack::audio::HeardFrom(std::nullopt, turnEnd, now).origin, turnEnd.origin);
+	// A tool's listener comes first
+	EXPECT_EQ(openblack::audio::HeardFrom(tool, turnEnd, now).origin, tool.origin);
+}

@@ -123,6 +123,9 @@ public:
 	virtual void SimulateDeviceLoss(bool /*lost*/) {}
 	virtual void Stop() = 0;
 	virtual void Update() = 0;
+	/// Once a game turn, at its end: the listener takes the camera's place, and every placed sound is put where it is
+	/// now, as the game does
+	virtual void ProcessTurn() {}
 	/// The game's audio turn. Each 3D sound that follows moves to the point of its owner or to the listener. It stops
 	/// when its owner is gone or has no point, or when the camera is at or beyond the maximum distance of its voice.
 	virtual void StopOutOfRangeEmitters() = 0;
