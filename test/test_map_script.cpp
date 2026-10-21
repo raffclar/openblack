@@ -18,15 +18,15 @@ namespace map_script = openblack::lhscriptx::map_script;
 TEST(MapScript, TheShippedMapScriptNamesTheFirstLand)
 {
 	// The whole of the game's own map script
-	const std::string source = "LOAD_FEATURE_SCRIPT(\".\scripts\land1.txt\")\r\n";
-	EXPECT_EQ(map_script::FeatureScripts(source), std::vector<std::string> {".\scripts\land1.txt"});
+	const std::string source = "LOAD_FEATURE_SCRIPT(\".\\scripts\\land1.txt\")\r\n";
+	EXPECT_EQ(map_script::FeatureScripts(source), std::vector<std::string> {".\\scripts\\land1.txt"});
 }
 
 TEST(MapScript, OtherCommandsAndRemarksGiveNoLand)
 {
 	const std::string source = "REM LOAD_FEATURE_SCRIPT(\"rem.txt\")\n"
 	                           "SET_DATE(1, 2, 3)\n"
-	                           "LOAD_LANDSCAPE(\".\data\landscape\land1.lnd\")\n"
+	                           "LOAD_LANDSCAPE(\".\\data\\landscape\\land1.lnd\")\n"
 	                           "PAUSE_GAME()\n";
 	EXPECT_TRUE(map_script::FeatureScripts(source).empty());
 }
