@@ -30,6 +30,12 @@ uint32_t NowMs()
 {
 	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
 }
+
+/// Whether the length of its sample times a spoken line, not the sound device
+bool TimedByLength(const audio::AudioManagerInterface& audio)
+{
+	return audio::TimedByLength(audio.IsDeviceLost(), Locator::time::value().GetFixedFrameTime().has_value());
+}
 } // namespace
 
 void HelpSpeechSystem::SetTable(audio::HelpSpeechTable table)
@@ -58,7 +64,7 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	    .startMs = NowMs(),
 	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
 	};
-	_voices.Add(voice, *sample, emitter, playback, audio.IsDeviceLost());
+	_voices.Add(voice, *sample, emitter, playback, TimedByLength(audio));
 	// Each spoken line goes into the log, so that you can examine a run that has no sound
 	SPDLOG_LOGGER_INFO(spdlog::get("audio"), "Help text {} is said: bank {} sample {}, voice {}, {} ms", text,
 	                   static_cast<int>(sample->bank), sample->sample, static_cast<int>(voice), playback.lengthMs);
@@ -72,7 +78,7 @@ bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
 		return false;
 	}
 	auto& audio = Locator::audio::value();
-	const bool lost = audio.IsDeviceLost();
+	const bool lost = TimedByLength(audio);
 	const auto now = NowMs();
 	return _voices.IsSaying(voice, *sample, [&audio, lost, now](entt::entity emitter, const audio::SilentPlayback& playback) {
 		// Not yet started or paused with the game is still saying it
