@@ -29,10 +29,12 @@ enum class GraphicsBackend : uint8_t
 	Direct3D12,
 	Metal,
 	Vulkan,
+	/// OpenGL ES 3, which is WebGL 2 in a web browser
+	OpenGLES,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
-static constexpr std::array<std::pair<std::string_view, GraphicsBackend>, 10> k_GraphicsBackendNames {{
+static constexpr std::array<std::pair<std::string_view, GraphicsBackend>, 13> k_GraphicsBackendNames {{
     {"Noop", GraphicsBackend::Noop},
     {"Null", GraphicsBackend::Noop},
     {"Direct3D12", GraphicsBackend::Direct3D12},
@@ -43,6 +45,9 @@ static constexpr std::array<std::pair<std::string_view, GraphicsBackend>, 10> k_
     {"MTL", GraphicsBackend::Metal},
     {"Vulkan", GraphicsBackend::Vulkan},
     {"VK", GraphicsBackend::Vulkan},
+    {"OpenGLES", GraphicsBackend::OpenGLES},
+    {"GLES", GraphicsBackend::OpenGLES},
+    {"WebGL", GraphicsBackend::OpenGLES},
 }};
 
 /// The backend a command line names, by any of its names in any case

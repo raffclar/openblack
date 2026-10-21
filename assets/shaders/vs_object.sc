@@ -78,7 +78,10 @@ SAMPLER2D(s_bonePalette, 2);
 
 vec4 PaletteTexel(uint texel)
 {
-	return texelFetch(s_bonePalette, ivec2(int(texel % BONE_PALETTE_WIDTH), int(texel / BONE_PALETTE_WIDTH)), 0);
+	// The column is the remainder of the division. The GLSL ES shader compiler changes the % operator into a call that
+	// WebGL does not have for whole numbers, so the remainder is calculated here.
+	uint row = texel / BONE_PALETTE_WIDTH;
+	return texelFetch(s_bonePalette, ivec2(int(texel - row * BONE_PALETTE_WIDTH), int(row)), 0);
 }
 
 mat4 PaletteBone(uint bone)

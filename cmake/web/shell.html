@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>openblack web</title>
+<style>
+  :root { color-scheme: dark; }
+  body { margin: 0; background: #000; color: #ccc; font: 14px sans-serif; }
+  canvas { display: block; width: 100vw; height: 80vh; background: #000; }
+  #log { height: 20vh; overflow: auto; white-space: pre-wrap; margin: 0; padding: 4px 8px; font: 12px monospace; }
+</style>
+</head>
+<body>
+<canvas id="canvas" tabindex="-1" oncontextmenu="event.preventDefault()"></canvas>
+<pre id="log"></pre>
+<script>
+  // This page sends nothing out. It only shows the game's log under the canvas.
+  const logElement = document.getElementById('log');
+  function show(text) { logElement.textContent += text + '\n'; logElement.scrollTop = logElement.scrollHeight; }
+  var Module = {
+    canvas: document.getElementById('canvas'),
+    arguments: (new URLSearchParams(location.search).get('args') || '').split(' ').filter(Boolean),
+    print: show,
+    printErr: show,
+  };
+</script>
+{{{ SCRIPT }}}
+</body>
+</html>

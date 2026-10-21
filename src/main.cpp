@@ -164,7 +164,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 
 		// pick a sane renderer based on the user os
 		openblack::GraphicsBackend graphicsBackend;
-#ifdef _APPLE_
+#if defined(__EMSCRIPTEN__)
+		// A web browser has WebGL 2 only
+		graphicsBackend = openblack::GraphicsBackend::OpenGLES;
+#elif defined(_APPLE_)
 		graphicsBackend = openblack::GraphicsBackend::Metal;
 #else
 		graphicsBackend = openblack::GraphicsBackend::Vulkan;
@@ -180,8 +183,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			else
 			{
-				throw cxxopts::exceptions::parsing("Unknown backend '" + name +
-				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop");
+				throw cxxopts::exceptions::parsing(
+				    "Unknown backend '" + name +
+				    "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Metal, OpenGLES (GLES, WebGL) or Noop");
 			}
 		}
 

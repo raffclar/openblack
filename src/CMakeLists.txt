@@ -384,20 +384,30 @@ else ()
   endif ()
 
   if (EMSCRIPTEN)
-    # Must be run from project root using `emrun --no_browser --serve_after_close --serve_after_exit .`
-    # Browser should point to http://localhost:6931/emscripten-vcpkg/bin/Debug/openblack.html?-g&relative/path/to/game/files
-    set_target_properties(
+    # The web build. The game runs on a worker thread of its own (PROXY_TO_PTHREAD), so its blocking loops, its
+    # threads and its synchronous file reads work as on the desktop. The page's main thread only gives it the input
+    # and shows the canvas, which the game draws into with WebGL 2.
+    target_link_options(
       openblack
-      PROPERTIES
-        COMPILE_FLAGS_DEBUG "-g3 -gsource-map"
-        LINK_FLAGS_DEBUG "-g3 -gsource-map"
-        COMPILE_FLAGS "-s USE_SDL=2 -fexceptions"
-        #COMPILE_FLAGS "-s USE_SDL=2 -s USE_PTHREADS=1"
-        LINK_FLAGS
-        "-s USE_SDL=2 -s FULL_ES3=1 -s GL_ASSERTIONS=1 -s USE_WEBGL2=1 -s TOTAL_MEMORY=128MB -fexceptions --emrun"
-        #LINK_FLAGS "-s USE_SDL=2 -s FULL_ES3=1 -s GL_ASSERTIONS=1 -s USE_WEBGL2=1 -s USE_PTHREADS=1 -s TOTAL_MEMORY=128MB --emrun"
-        SUFFIX ".html"
+      PRIVATE
+      -pthread
+      -fwasm-exceptions
+      -sPROXY_TO_PTHREAD=1
+      -sPTHREAD_POOL_SIZE=16
+      -sOFFSCREENCANVAS_SUPPORT=1
+      -sMIN_WEBGL_VERSION=2
+      -sMAX_WEBGL_VERSION=2
+      -sFULL_ES3=1
+      -sINITIAL_MEMORY=1024MB
+      -sALLOW_MEMORY_GROWTH=1
+      -sMAXIMUM_MEMORY=4GB
+      -sSTACK_SIZE=8MB
+      -sDEFAULT_PTHREAD_STACK_SIZE=2MB
+      -sEXIT_RUNTIME=1
+      -sENVIRONMENT=web,worker
+      --shell-file=${CMAKE_SOURCE_DIR}/cmake/web/shell.html
     )
+    set_target_properties(openblack PROPERTIES SUFFIX ".html")
   elseif (APPLE)
     set(OPENBLACK_ICON_SOURCE_DIR ${CMAKE_SOURCE_DIR}/assets/resource/icon)
     set(OPENBLACK_ICON_BINARY_DIR ${CMAKE_BINARY_DIR}/assets/resource/icon)

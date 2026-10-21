@@ -502,6 +502,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	case GraphicsBackend::Vulkan:
 		init.type = bgfx::RendererType::Vulkan;
 		break;
+	case GraphicsBackend::OpenGLES:
+		init.type = bgfx::RendererType::OpenGLES;
+		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
 		return nullptr;
