@@ -152,7 +152,7 @@ bool TakeShape(Creature& creature, CreatureMorph* morph, Transform* transform, c
 {
 	creature.fatness = shape.fatness;
 	creature.strength = shape.strength;
-	// The body shows a change of its strength by an amount, but not how the strength goes down each turn
+	// The body shows a change of its strength by an amount at once. It shows the fade at the end of the turn.
 	if (morph != nullptr && shape.shownStrength.has_value())
 	{
 		morph->strengthLook = creature_morph::StrengthLook(

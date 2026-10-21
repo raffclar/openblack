@@ -90,12 +90,10 @@ void creature_body_file::Apply(Registry& registry, entt::entity creature, const 
 	if (auto* morph = registry.TryGet<CreatureMorph>(creature))
 	{
 		morph->shownFatness = body.shownFatness;
-		// A body brought back from a file shows the strength it has now
-		if (const auto* self = registry.TryGet<const Creature>(creature))
-		{
-			morph->strengthLook =
-			    creature_morph::StrengthLook(self->strength, archetypes::CreatureArchetype::SpeciesStrength(self->species));
-		}
+		// The load of a mind file gives the body its looks two times: after the body and after the whole mind. So the
+		// shown fatness moves two steps.
+		archetypes::CreatureArchetype::TakeLooks(registry, creature);
+		archetypes::CreatureArchetype::TakeLooks(registry, creature);
 		++morph->revision;
 	}
 	if (auto* needs = registry.TryGet<CreatureNeeds>(creature); needs != nullptr && body.needs.has_value())

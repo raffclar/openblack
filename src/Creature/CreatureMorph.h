@@ -83,6 +83,23 @@ constexpr float k_MaxFatnessStep = 0.01f;
 /// The fatness a body shows, a turn on: towards the creature's fatness, but by no more than k_MaxFatnessStep
 [[nodiscard]] float EaseFatness(float shown, float fatness);
 
+/// The looks that the body takes from the creature
+struct Looks
+{
+	/// The fatness that the body shows, a step nearer to the fatness of the creature
+	float shownFatness;
+	/// The evil to good look, -1 to 1
+	float evilGood;
+	/// The weak to strong look, -1 to 1
+	float weakStrong;
+
+	bool operator==(const Looks&) const = default;
+};
+
+/// The looks that the body takes from the creature: the shown fatness moves one step, and the body shows the alignment
+/// and the strength as they are now. The creature's turn does this at its end, also when the strength only fades.
+[[nodiscard]] Looks TakeLooks(float shownFatness, float fatness, float alignment, float strength, float speciesStrength);
+
 /// What changes when the body is brought up to date with what the creature has become
 struct Refresh
 {

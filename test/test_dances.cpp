@@ -556,3 +556,26 @@ TEST(Dances, AKeyFrameAsksForTheCameraOneTimeAfterTheHandStayedNear)
 	// With the hand away, no key frame asks for it
 	EXPECT_EQ(run(false), 0u);
 }
+
+TEST(DanceArrival, AWalkToTheDanceEndsFiveMetresEastOfItsPlace)
+{
+	const map_coords::MapCoords place {.x = 0x1230000, .z = 0x4560000, .altitude = 0.0f};
+	const auto arrive = rules::ArrivePlace(place);
+	EXPECT_EQ(arrive.x, 0x1238000);
+	EXPECT_EQ(arrive.z, 0x4560000);
+	EXPECT_EQ(arrive.altitude, 0.0f);
+}
+
+TEST(DanceArrival, ADancerOnTheArrivePlaceWalksToItsOwnPlace)
+{
+	const map_coords::MapCoords place {.x = 0x1230000, .z = 0x4560000};
+	const auto arrive = rules::ArrivePlace(place);
+	const map_coords::MapCoords own {.x = 0x1250000, .z = 0x4570000};
+	EXPECT_TRUE(rules::WalksToOwnPlace(arrive, own, place));
+	// On its own place, it dances
+	EXPECT_FALSE(rules::WalksToOwnPlace(arrive, arrive, place));
+	// On the dance's own place, or one unit off the arrive place, it does not walk first
+	EXPECT_FALSE(rules::WalksToOwnPlace(place, own, place));
+	EXPECT_FALSE(rules::WalksToOwnPlace({.x = arrive.x + 1, .z = arrive.z}, own, place));
+	EXPECT_FALSE(rules::WalksToOwnPlace({.x = arrive.x, .z = arrive.z, .altitude = 1.0f}, own, place));
+}
