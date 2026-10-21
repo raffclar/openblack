@@ -224,6 +224,11 @@ public:
 	{
 		return PlayAnimEffect(bankName, keys, owner, position, std::nullopt, AnimEffectMeasure::Straight);
 	}
+	/// Ends the samples that a bank's animation effects pick for keys, if owner plays them. For each of these samples,
+	/// the first emitter of owner that plays it stops or releases its loop. Nothing ends when the camera is further
+	/// than the hearing limit. The maximum distance of the sample has no effect.
+	virtual void EndAnimEffect(const std::string& bankName, std::span<const int32_t> keys, entt::entity owner,
+	                           const glm::vec3& position, AnimEffectEnd end, AnimEffectMeasure measure) = 0;
 	virtual const Sound& GetSound(entt::id_type id) = 0;
 	virtual void CreateSoundGroup(const std::string& name) = 0;
 	virtual void AddToSoundGroup(const std::string& name, entt::id_type id) = 0;

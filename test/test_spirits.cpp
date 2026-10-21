@@ -522,6 +522,14 @@ TEST(Spirits, AnimSoundsPlayAsTheirPointsArePassed)
 	EXPECT_EQ(CrossedSounds(events, last, 0.5f).size(), 1u);
 }
 
+TEST(Spirits, AnimSoundsAskTheInGameBankWithTheSameKeysForBothAdvisors)
+{
+	// The size, alignment, object and surface keys are fixed. The sound of the point is the action key.
+	EXPECT_EQ(AnimSoundKeys(155).ToArray(), (std::array<int32_t, 5> {1, 1, 17, 1, 155}));
+	EXPECT_EQ(AnimSoundKeys(154).ToArray(), (std::array<int32_t, 5> {1, 1, 17, 1, 154}));
+	EXPECT_EQ(k_AnimSoundBank, "InGame.sad");
+}
+
 TEST(Spirits, TrailStartsFullAndItsSparksAtStaggeredAges)
 {
 	Fixture f;

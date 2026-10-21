@@ -48,6 +48,7 @@ public:
 		std::vector<int32_t> keys;
 		entt::entity owner;
 		bool bySampleRules;
+		std::optional<audio::AnimEffectEnd> end;
 	};
 
 	[[nodiscard]] const Registry& Entities() const override { return registry; }
@@ -67,6 +68,15 @@ public:
 	{
 		played.push_back(
 		    {.bank = std::string(bank), .keys = {keys.begin(), keys.end()}, .owner = owner, .bySampleRules = bySampleRules});
+	}
+	void EndSound(std::string_view bank, std::span<const int32_t> keys, entt::entity owner, const glm::vec3& /*position*/,
+	              audio::AnimEffectEnd end) override
+	{
+		played.push_back({.bank = std::string(bank),
+		                  .keys = {keys.begin(), keys.end()},
+		                  .owner = owner,
+		                  .bySampleRules = false,
+		                  .end = end});
 	}
 
 	/// A woman with a home, standing still
@@ -183,6 +193,10 @@ TEST(ClipSoundPlayer, OnlySoundsPlayedTheOrdinaryWayAreHeardAsTheirSamplesAllow)
 	EXPECT_TRUE(f.world.played[0].bySampleRules);
 	EXPECT_FALSE(f.world.played[1].bySampleRules);
 	EXPECT_TRUE(f.world.played[2].bySampleRules);
+	// A sound with mode 1 stops the sample of its keys
+	EXPECT_FALSE(f.world.played[0].end.has_value());
+	EXPECT_EQ(f.world.played[1].end, audio::AnimEffectEnd::Stop);
+	EXPECT_FALSE(f.world.played[2].end.has_value());
 }
 
 TEST(ClipSoundPlayer, AClipPlayedOnceIsQuietOnceFinishedAndALoopingOneComesRound)

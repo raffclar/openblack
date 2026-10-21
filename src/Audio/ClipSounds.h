@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <string>
 #include <string_view>
@@ -21,6 +22,7 @@
 #include <entt/core/hashed_string.hpp>
 
 #include "AnimEffectKeys.h"
+#include "HearingRange.h"
 
 /// The sounds placed on the frames of the people's, animals' and birds' clips, and which of them a clip passes as it
 /// plays on
@@ -74,6 +76,9 @@ struct SoundRoute
 	/// The sample picked for it is heard only when its user parameter allows, as for the scripts' sound effects: one
 	/// marked quiet in cut scenes isn't heard while a script holds the widescreen bars, for instance
 	bool bySampleRules {false};
+	/// A sound with a mode that is not 0 does not start a sample. Mode 1 stops the sample of its keys that the owner
+	/// plays. Another mode releases the loop of that sample.
+	std::optional<AnimEffectEnd> end;
 };
 
 /// What is known of the thing whose clip plays one of its sounds
