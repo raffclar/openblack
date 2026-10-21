@@ -1613,18 +1613,6 @@ static bool CanLean(entt::entity object)
 	return ecs::placed_turn::CanLean(Locator::entitiesRegistry::value(), object);
 }
 
-/// Whether a script holds the thing while it owns the widescreen bars
-static bool HeldDuringCutscene(entt::entity object)
-{
-	if (!Locator::entitiesRegistry::value().AllOf<ecs::components::InScript>(object) ||
-	    !Locator::cinematicDirectorSystem::has_value())
-	{
-		return false;
-	}
-	const auto& director = Locator::cinematicDirectorSystem::value();
-	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
-}
-
 /// How tall an object stands to the scripts: a creature by its size, anything else by its model as it is scaled, none
 /// without a model
 static float ScriptHeightOf(entt::entity object)
@@ -2039,7 +2027,7 @@ void SetProperty() // 022 SET_PROPERTY
 		// A thing a script holds in a cutscene, or made indestructible, can't be brought to nearly no life
 		ecs::world_objects::SetLife(
 		    object, value,
-		    script::property_rules::CanSetLife(value, HeldDuringCutscene(object),
+		    script::property_rules::CanSetLife(value, ecs::world_objects::HeldDuringCutscene(object),
 		                                       registry.AllOf<ecs::components::Indestructible>(object)));
 		return;
 	case script::ObjectPropertyType::Angle:

@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/StoragePit.h"
@@ -66,6 +67,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -86,6 +88,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/ResourcePiles.h"
+#include "Magic/SpellRules.h"
 #include "Physics/DamageMesh.h"
 #include "Physics/LivingRules.h"
 #include "Resources/ResourcesInterface.h"
@@ -674,10 +677,20 @@ bool world_objects::IsBuilding(entt::entity object)
 	return Locator::entitiesRegistry::value().AnyOf<Abode, SpellDispenser, Field>(object);
 }
 
-bool world_objects::CanBeDestroyedBySpell(entt::entity object)
+bool world_objects::HeldDuringCutscene(entt::entity object)
+{
+	if (!Locator::entitiesRegistry::value().AllOf<InScript>(object) || !Locator::cinematicDirectorSystem::has_value())
+	{
+		return false;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	return director.IsWideScreenOn() && director.GetWideScreenOwner() != 0;
+}
+
+bool world_objects::CanBeDestroyedBySpell(entt::entity object, entt::entity spell)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto can = [&registry, object] {
+	const auto can = [&registry, object, spell] {
 		// Nor anything a script made indestructible
 		if (!registry.Valid(object) ||
 		    registry.AnyOf<Creature, Field, Temple, TeleportStone, OneOffSpellSeed, Indestructible>(object))
@@ -688,11 +701,14 @@ bool world_objects::CanBeDestroyedBySpell(entt::entity object)
 		{
 			return false;
 		}
-		if (const auto* pot = registry.TryGet<const Pot>(object))
+		if (const auto* pot = registry.TryGet<const Pot>(object); pot != nullptr && pot->amount == 0)
 		{
-			return pot->amount != 0;
+			return false;
 		}
-		return true;
+		// A thing that a script holds while its cutscene runs is spared, unless a script controls the miracle
+		const bool spellScriptControlled =
+		    spell != entt::null && registry.Valid(spell) && registry.AllOf<ScriptControlled>(spell);
+		return !magic::SparedAsHeldInCutscene(HeldDuringCutscene(object), spellScriptControlled);
 	}();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "World: #{} {} be destroyed by a miracle", entt::to_integral(object),
 	                    can ? "may" : "may not");

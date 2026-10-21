@@ -165,4 +165,12 @@ inline constexpr float k_WaterReach = 2.5f;
 /// A drop leaves a ring once this many seconds have passed since the last
 inline constexpr float k_RippleEvery = 0.1f;
 
+/// Whether a miracle that destroys things spares a thing because a script holds it while a cutscene runs. A script
+/// holds the thing, and a script owns the widescreen bars of the cutscene. A miracle that a script controls does not
+/// spare it.
+[[nodiscard]] constexpr bool SparedAsHeldInCutscene(bool heldDuringCutscene, bool spellScriptControlled)
+{
+	return heldDuringCutscene && !spellScriptControlled;
+}
+
 } // namespace openblack::magic

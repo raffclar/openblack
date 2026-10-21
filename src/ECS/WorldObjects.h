@@ -76,11 +76,13 @@ float ReduceLife(entt::entity object, float damage, std::optional<PlayerNames> b
 /// Whether a building, a field, a wonder, a spell dispenser and the like: what a miracle that destroys things leaves
 /// standing at no life
 [[nodiscard]] bool IsBuilding(entt::entity object);
+/// Whether a script holds the thing while the script owns the widescreen bars of a cutscene
+[[nodiscard]] bool HeldDuringCutscene(entt::entity object);
 /// Whether a miracle may destroy an object, as the blast's wave shatters what it reaches and the tornado carries off
 /// what it picks up. Not a creature, a field, the temple, a teleport stone, a totem or a one-off spell seed, nor a pot
-/// with nothing in it, nor something a script made indestructible. (Nor, in the game, something a script holds while the
-/// advisors speak: openblack has no advisors' hold yet.)
-[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object);
+/// with nothing in it, nor something a script made indestructible. Nor a thing that a script holds while its cutscene
+/// runs, unless a script controls the miracle (spell).
+[[nodiscard]] bool CanBeDestroyedBySpell(entt::entity object, entt::entity spell = entt::null);
 [[nodiscard]] bool IsVillager(entt::entity object);
 [[nodiscard]] bool IsCreature(entt::entity object);
 
