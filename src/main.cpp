@@ -12,7 +12,9 @@
 #include <map>
 #include <memory>
 #include <span>
+#include <string>
 #include <typeinfo>
+#include <vector>
 
 #include <SDL_messagebox.h>
 #include <cxxopts.hpp>
@@ -22,6 +24,7 @@
 // can't sort these includes
 #include <wtypes.h>
 #include <winreg.h>
+#include <processenv.h>
 // clang-format on
 #endif
 
@@ -30,6 +33,31 @@
 #include "Creature/BonusCreatures.h"
 #include "EngineConfig.h"
 #include "Game.h"
+#include "LaunchSwitches.h"
+
+namespace
+{
+/// The text of the whole command line, as the original game reads it
+std::string CommandLineText(int argc, char** argv)
+{
+#ifdef _WIN32
+	if (const char* line = GetCommandLineA(); line != nullptr)
+	{
+		return line;
+	}
+#endif
+	std::string text;
+	for (const auto* argument : std::span(argv, static_cast<size_t>(argc)))
+	{
+		if (!text.empty())
+		{
+			text += ' ';
+		}
+		text += argument;
+	}
+	return text;
+}
+} // namespace
 
 bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& returnCode)
 {
@@ -115,7 +143,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 
 	try
 	{
-		auto result = options.parse(argc, argv);
+		// The switches of the original game, such as -NEWGAME, are read from the whole command line. They are then taken
+		// out, so that only openblack's own options are left for the parse.
+		args.launchSwitches = openblack::launch_switches::Scan(CommandLineText(argc, argv));
+		std::vector<char*> ownArguments;
+		for (auto* argument : std::span(argv, static_cast<size_t>(argc)))
+		{
+			if (ownArguments.empty() || !openblack::launch_switches::IsSwitchArgument(argument))
+			{
+				ownArguments.push_back(argument);
+			}
+		}
+		auto result = options.parse(static_cast<int>(ownArguments.size()), ownArguments.data());
 		if (result["help"].as<bool>())
 		{
 			std::cout << options.help() << std::endl;

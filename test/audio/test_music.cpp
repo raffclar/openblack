@@ -615,3 +615,13 @@ TEST(GameMusic, FightsOnTheFirstLandsHaveTheirOwnMusicAndLaterOnesTheBigFight)
 	EXPECT_EQ(GameMusic::SelectFightType(-1, false), MusicType::CreatureBigFight);
 	EXPECT_EQ(GameMusic::SelectFightType(1, true), MusicType::CreatureBigFight);
 }
+
+TEST(GameMusic, WithNoBanksLoadedNoMusicHasABank)
+{
+	const GameMusic loaded;
+	EXPECT_EQ(loaded.BankPath(MusicType::GenericNeutral), "audio/music/align/neutral.sad");
+	// The -NOLOADMUSIC switch: the game loads no music bank, so no music can play
+	const GameMusic unloaded(false);
+	EXPECT_TRUE(unloaded.BankPath(MusicType::GenericNeutral).empty());
+	EXPECT_TRUE(unloaded.BankPath(MusicType::ScriptPiperTune).empty());
+}

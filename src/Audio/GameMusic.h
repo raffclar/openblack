@@ -203,7 +203,11 @@ public:
 		std::optional<MusicType> creatureFight;
 	};
 
-	GameMusic() = default;
+	/// With no banks loaded (the -NOLOADMUSIC switch), no music of the game plays
+	explicit GameMusic(bool banksLoaded = true)
+	    : _banksLoaded(banksLoaded)
+	{
+	}
 	/// Stops the music, which would otherwise call back into it when it ends
 	~GameMusic() override;
 	GameMusic(const GameMusic&) = delete;
@@ -289,6 +293,9 @@ public:
 	/// holds the cinema bars nor are they sliding
 	[[nodiscard]] bool LandMusicAllowed(const TurnInputs& inputs) const;
 
+	/// The bank of a type of music, none when the banks are not loaded
+	[[nodiscard]] std::string_view BankPath(MusicType type) const;
+
 private:
 	void ProcessMusic(const TurnInputs& inputs);
 	bool ProcessCitadel(const TurnInputs& inputs);
@@ -311,6 +318,7 @@ private:
 	MusicType _scriptType {MusicType::None};
 	bool _scriptStarted {false};
 	bool _alignmentMusicEnabled {true};
+	bool _banksLoaded {true};
 	/// Whether the land's music could play last turn, for logging when that changes
 	std::optional<bool> _landMusicWasAllowed;
 	std::optional<uint32_t> _rememberedTown;

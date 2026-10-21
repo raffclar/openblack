@@ -35,6 +35,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/EditorSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -137,6 +138,12 @@ const std::vector<ComponentView>& ComponentViews()
 		               return fmt::format("id {}, player {}, {} homeless", town.id, static_cast<int>(town.owner) + 1,
 		                                  town.homelessVillagers.size());
 	               }),
+	    View<WorshipSite>("Worship site",
+	                      [](const WorshipSite& site) {
+		                      return fmt::format("player {}, place {}, {} towns, {} worshippers",
+		                                         static_cast<int>(site.player) + 1, site.place, site.towns.size(),
+		                                         site.worshippers.size());
+	                      }),
 	    View<Tree>("Tree",
 	               [](const Tree& tree) {
 		               return fmt::format("type {}, grows to {:.2f}", static_cast<int>(tree.type), tree.maxSize);

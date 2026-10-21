@@ -49,6 +49,7 @@
 #include "Input/InputLock.h"
 #include "Input/ShortcutKeys.h"
 #include "LandChange.h"
+#include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
@@ -180,6 +181,8 @@ struct Arguments
 	bool newGame {false};
 	/// Start as a plain start does, a run of a developer or a tool too: continue from the save on exit
 	bool continueGame {false};
+	/// The switches of the original game's command line, such as -NEWGAME
+	launch_switches::Switches launchSwitches;
 	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
 	/// the player's profiles, or with it answered at once; as the game decides when none
 	std::optional<new_game_choice::NewGameStart> newGameStart;
@@ -478,6 +481,9 @@ private:
 	/// The command line asked for a new game, or to continue as a plain start does
 	bool _newGameAsked {false};
 	bool _continueAsked {false};
+	/// The switches of the original game's command line
+	launch_switches::Switches _launchSwitches;
+	std::optional<std::filesystem::path> _challengePath;
 	/// The screens drawn as the game starts and while a land loads, none without a window
 	std::unique_ptr<gui::LoadingScreen> _loadingScreen;
 	/// What is drawn at the loading's redraw points, nothing while not loading
@@ -646,6 +652,9 @@ private:
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
 	/// Starts the story's scripts of a new game on the first land, and asks the player what to skip
 	void StartStoryScripts();
+	/// The challenge file: in its usual folder, or in the folder that the settings file of the -SETTINGS: switch names.
+	/// The game reads the settings file one time, at the first call.
+	[[nodiscard]] const std::filesystem::path& ChallengePath();
 	/// As a new game starts: asks the player what to skip. Whether the question was put (or answered at once by the
 	/// developers' start), which leaves the land as it is rather than black at its start
 	bool AskNewGameChoice();
