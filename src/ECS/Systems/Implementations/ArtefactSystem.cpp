@@ -40,6 +40,7 @@
 #include "ECS/RelaxationRules.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/DanceSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -468,10 +469,10 @@ bool ArtefactSystem::JoinDance(entt::entity object, TownArtefact& artefact, entt
 	const auto position = PositionOf(object);
 	if (DanceOf(artefact) == nullptr && Locator::danceSystem::has_value())
 	{
-		// Its dance is chosen by how wide it is, made where it stands, lasting the dance's length
+		// Its dance is chosen by how wide it is, made where it stands for its town, lasting the dance's length
 		const auto type = rules::DanceForRadius(world_objects::SizeOf(object).radius);
 		const auto& info = Locator::infoConstants::value().dance.at(static_cast<size_t>(type));
-		artefact.dance = Locator::danceSystem::value().Create(type, position, object, info.duration, false, entt::null);
+		artefact.dance = Locator::danceSystem::value().Create(type, position, object, info.duration, false, artefact.town);
 	}
 	auto* dance = DanceOf(artefact);
 	if (dance == nullptr)
@@ -483,7 +484,11 @@ bool ArtefactSystem::JoinDance(entt::entity object, TownArtefact& artefact, entt
 	if (dance->place.x != place.x || dance->place.z != place.z || dance->place.altitude != place.altitude)
 	{
 		dance->place = place;
-		// TODO(footpaths): footpaths are laid to it from the storage pit of the nearest town; openblack lays none yet
+		// A path goes to it from the storage pit of the town nearest it
+		if (Locator::footpathSystem::has_value())
+		{
+			Locator::footpathSystem::value().DanceMoved(artefact.dance);
+		}
 	}
 	if (!dances::AddDancer(registry, artefact.dance, villager, villager_dance::DanceSex(villager)))
 	{

@@ -495,6 +495,12 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	AddFootpath(dance, footpath);
 }
 
+void FootpathSystem::DanceMoved(entt::entity dance)
+{
+	// The game lays the path of a moved dance as it lays that of a new dance with no town
+	DanceMade(dance, entt::null);
+}
+
 void FootpathSystem::ThingPut(entt::entity thing)
 {
 	auto& registry = Entities();
