@@ -169,6 +169,11 @@ std::string_view openblack::audio::GetMusicTypeName(MusicType type)
 	return index < k_MusicTypes.size() ? k_MusicTypes.at(index).name : std::string_view {};
 }
 
+std::string_view GameMusic::BankPath(MusicType type) const
+{
+	return _banksLoaded ? GetMusicBankPath(type) : std::string_view {};
+}
+
 int32_t GameMusic::GetAlignmentIndex(float alignment)
 {
 	const auto discrete = static_cast<int32_t>(
@@ -296,7 +301,7 @@ void GameMusic::AttachMusic(uint32_t thing, MusicType type)
 	}
 	if (Locator::audio::has_value())
 	{
-		if (const auto path = GetMusicBankPath(type); !path.empty())
+		if (const auto path = BankPath(type); !path.empty())
 		{
 			Locator::audio::value().MusicStopBank(std::string(path), false);
 		}
@@ -330,7 +335,7 @@ void GameMusic::RestartAttachedMusic(uint32_t thing)
 	{
 		return;
 	}
-	if (const auto path = GetMusicBankPath(found->type); !path.empty())
+	if (const auto path = BankPath(found->type); !path.empty())
 	{
 		Locator::audio::value().MusicStopBank(std::string(path), false);
 	}
@@ -459,7 +464,7 @@ bool GameMusic::ProcessCitadel(const TurnInputs& inputs)
 		return false;
 	}
 	const auto type = SelectCitadelType(inputs);
-	const auto path = std::string(GetMusicBankPath(type));
+	const auto path = std::string(BankPath(type));
 	auto& audio = Locator::audio::value();
 	const auto info = audio.GetMusicBankInfo(path);
 	if (!info)
@@ -495,7 +500,7 @@ bool GameMusic::ProcessScript()
 	{
 		return true;
 	}
-	const auto path = std::string(GetMusicBankPath(_scriptType));
+	const auto path = std::string(BankPath(_scriptType));
 	if (path.empty() || !audio.GetMusicBankInfo(path))
 	{
 		return false;
@@ -534,7 +539,7 @@ bool GameMusic::ProcessCreatureFight(const TurnInputs& inputs)
 		return false;
 	}
 	const auto type = *inputs.creatureFight;
-	const auto path = std::string(GetMusicBankPath(type));
+	const auto path = std::string(BankPath(type));
 	auto& audio = Locator::audio::value();
 	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 	if (!info)
@@ -559,7 +564,7 @@ bool GameMusic::ProcessCreatureDance(const TurnInputs& inputs)
 		return false;
 	}
 	const auto& dance = *inputs.creatureDance;
-	const auto path = std::string(GetMusicBankPath(dance.type));
+	const auto path = std::string(BankPath(dance.type));
 	auto& audio = Locator::audio::value();
 	const auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 	if (!info)
@@ -597,7 +602,7 @@ bool GameMusic::ProcessAttached(const TurnInputs& inputs)
 	candidates.reserve(_attached.size());
 	for (const auto& music : _attached)
 	{
-		auto path = std::string(GetMusicBankPath(music.type));
+		auto path = std::string(BankPath(music.type));
 		auto info = path.empty() ? std::nullopt : audio.GetMusicBankInfo(path);
 		const auto position = inputs.thingPosition(music.thing);
 		candidates.push_back({
@@ -648,7 +653,7 @@ bool GameMusic::ProcessLand(const TurnInputs& inputs)
 	_blockedType = MusicType::None;
 
 	auto& audio = Locator::audio::value();
-	const auto path = std::string(GetMusicBankPath(type));
+	const auto path = std::string(BankPath(type));
 	const auto info = audio.GetMusicBankInfo(path);
 	if (!info)
 	{

@@ -575,12 +575,13 @@ Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
     , _playVideo(args.playVideo)
-    , _preIntro(args.preIntro)
+    , _preIntro(args.preIntro || args.launchSwitches.preIntroVideo)
     , _skipLogos(args.skipLogos)
     , _logoEffectAsked(args.logoEffect)
     , _newGameStart(args.newGameStart)
-    , _newGameAsked(args.newGame)
+    , _newGameAsked(args.newGame || launch_switches::FirstGameOf(args.launchSwitches) == launch_switches::FirstGame::NewGame)
     , _continueAsked(args.continueGame)
+    , _launchSwitches(args.launchSwitches)
     , _startTestbed(args.startTestbed || args.scenario.has_value())
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
@@ -4964,9 +4965,55 @@ void Game::ShowSavingBox(bool loading, bool darken)
 	Locator::rendererInterface::value().Frame();
 }
 
+const std::filesystem::path& Game::ChallengePath()
+{
+	if (_challengePath.has_value())
+	{
+		return *_challengePath;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	_challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+	if (!_launchSwitches.settingsFile.has_value())
+	{
+		return *_challengePath;
+	}
+	// The game opens the settings file from its own folder. When the file does not open, the usual folder stays.
+	const std::filesystem::path settingsFile(*_launchSwitches.settingsFile);
+	if (!fileSystem.Exists(settingsFile))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Settings file {} not found", settingsFile.generic_string());
+		return *_challengePath;
+	}
+	const auto bytes = fileSystem.ReadAll(settingsFile);
+	const auto folder =
+	    launch_switches::QuestFolderOf(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+	if (folder.has_value())
+	{
+		_challengePath = std::filesystem::path(launch_switches::ChallengePath(*folder));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Settings file {}: the challenge file is {}", settingsFile.generic_string(),
+		                   _challengePath->generic_string());
+	}
+	return *_challengePath;
+}
+
 bool Game::Run() noexcept
 {
 	auto& config = Locator::config::value();
+
+	// The game has no skirmish box and no network game yet, so these switches start the game as with no switch. The
+	// network game does the same when its library does not start.
+	switch (launch_switches::FirstGameOf(_launchSwitches))
+	{
+	case launch_switches::FirstGame::Skirmish:
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: the skirmish box is not available yet");
+		break;
+	case launch_switches::FirstGame::Multiplayer:
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -MULTIPLAYER switch: the network game is not available");
+		break;
+	case launch_switches::FirstGame::Plain:
+	case launch_switches::FirstGame::NewGame:
+		break;
+	}
 
 	auto start = game_session::Start::NewGame;
 	if (_startTestbed)
@@ -5005,7 +5052,7 @@ bool Game::Run() noexcept
 
 	auto& fileSystem = Locator::filesystem::value();
 
-	auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+	const auto challengePath = ChallengePath();
 	if (fileSystem.Exists(challengePath))
 	{
 		auto& chlapi = Locator::chlapi::value();
@@ -5065,6 +5112,13 @@ bool Game::Run() noexcept
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step("story scripts");
+	}
+	// The -CONVERT switch: the game loads its first land and then closes before the first frame of play. The logo
+	// effect does not play.
+	if (_launchSwitches.convert && !_startTestbed)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -CONVERT switch: the land is loaded, the game closes");
+		return true;
 	}
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
@@ -5448,7 +5502,7 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_chang
 			Locator::chlapi::value().ResetSwitches();
 		}
 		auto& fileSystem = Locator::filesystem::value();
-		const auto challengePath = fileSystem.GetPath<filesystem::Path::Quests>() / "challenge.chl";
+		const auto challengePath = ChallengePath();
 		try
 		{
 			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
@@ -5905,8 +5959,12 @@ void Game::StartNewLand(land_change::Kind change)
 	_atmosAudio->Init();
 	if (!_gameMusic)
 	{
-		_gameMusic = std::make_unique<audio::GameMusic>();
-		audio::GameMusic::RegisterBanks();
+		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
+		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
+		if (!_launchSwitches.noLoadMusic)
+		{
+			audio::GameMusic::RegisterBanks();
+		}
 	}
 	_gameMusic->Reset();
 }
