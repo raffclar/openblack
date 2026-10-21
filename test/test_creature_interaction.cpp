@@ -710,6 +710,8 @@ TEST(CreatureObjectActions, AMealWithTooLittleFoodComesBackUp)
 	// A magic mushroom and a pile of food stay down
 	EXPECT_FALSE(BringsMealBackUp(0.0f, true, false, false));
 	EXPECT_FALSE(BringsMealBackUp(0.0f, false, true, true));
+	// A toadstool is a mushroom and poisoned food (150 food): it stays down
+	EXPECT_FALSE(BringsMealBackUp(150.0f, true, false, true));
 	// Poisoned food does not stop the creature from eating that sort of thing
 	EXPECT_TRUE(creature_object_actions::RefusesSortAfter(false));
 	EXPECT_FALSE(creature_object_actions::RefusesSortAfter(true));

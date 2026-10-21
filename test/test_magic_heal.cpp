@@ -28,10 +28,10 @@ namespace
 class FakeCells
 {
 public:
-	void Add(entt::entity entity, glm::vec3 position, bool healable = true)
+	void Add(entt::entity entity, glm::vec3 position, bool healable = true, bool living = true)
 	{
 		_cells[{static_cast<int>(std::floor(position.x / 10.0f)), static_cast<int>(std::floor(position.z / 10.0f))}].push_back(
-		    {.entity = entity, .position = position, .living = true, .healable = healable});
+		    {.entity = entity, .position = position, .living = living, .healable = healable});
 	}
 	[[nodiscard]] CellContents Contents() const
 	{
@@ -106,6 +106,17 @@ TEST(HealTargets, TakesTheHealableWithinTheRadiusInCellOrder)
 	cells.Add(Id(4), {5.0f, 30.0f, 5.0f}); // far above, but heights don't count
 	const auto found = FindHealTargets(point, 10.0f, 20, cells.Contents());
 	EXPECT_EQ(found, (std::vector {Id(1), Id(3), Id(4)}));
+}
+
+TEST(HealTargets, NeverTakesAPileOrAnotherThingThatIsNotLiving)
+{
+	// A poisoned pile in the middle of the heal stays poisoned: the heal cures only the living things it reaches
+	FakeCells cells;
+	const glm::vec3 point(5.0f, 0.0f, 5.0f);
+	cells.Add(Id(1), {5.0f, 0.0f, 5.0f}, true, false);
+	cells.Add(Id(2), {6.0f, 0.0f, 6.0f});
+	const auto found = FindHealTargets(point, 10.0f, 20, cells.Contents());
+	EXPECT_EQ(found, (std::vector {Id(2)}));
 }
 
 TEST(HealTargets, StopsAtItsMost)
