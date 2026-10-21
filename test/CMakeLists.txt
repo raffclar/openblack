@@ -1674,3 +1674,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
 openblack_setup_and_add_test(test_creature_hurry test_creature_hurry.cpp)
+openblack_setup_and_add_test(test_buffered_log_sink test_buffered_log_sink.cpp)

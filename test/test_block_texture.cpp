@@ -12,12 +12,14 @@
 #include <algorithm>
 #include <array>
 #include <numeric>
+#include <span>
 #include <vector>
 
 #include <LNDFile.h>
 #include <gtest/gtest.h>
 
 #include "3D/BlockTexture.h"
+#include "Common/WorkerPool.h"
 
 namespace block_texture = openblack::block_texture;
 using openblack::lnd::LNDCell;
@@ -194,4 +196,40 @@ TEST(BlockTexture, PaintCellsPaintsARectangleAsTheWholeBlockWould)
 			    << "texel x " << x << " z " << z;
 		}
 	}
+}
+
+TEST(BlockTexture, BuildBlocksPaintsEachBlockAsBuildBlockInOrder)
+{
+	const std::array countries = {SingleMaterialCountry(0), SingleMaterialCountry(1)};
+	std::vector<uint16_t> materials(k_MapTexels * 2);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x70);
+	const block_texture::Sources sources {countries, materials, noise, bump};
+	// Blocks of other slopes and countries, more than a batch of the lanes
+	std::vector<std::vector<LNDCell>> blocks;
+	for (size_t block = 0; block < 11; ++block)
+	{
+		auto cells = FlatCells(0);
+		for (size_t i = 0; i < cells.size(); ++i)
+		{
+			cells[i].altitude = static_cast<uint8_t>(1 + ((i + block * 7) % 29));
+			cells[i].properties.country = static_cast<uint8_t>((i / 5 + block) % 2);
+		}
+		blocks.push_back(std::move(cells));
+	}
+	openblack::WorkerPool pool(2);
+	std::vector<size_t> order;
+	block_texture::BuildBlocks(
+	    blocks.size(), [&blocks](size_t block) { return std::span<const LNDCell>(blocks[block]); }, sources, pool,
+	    [&](size_t block, std::span<const uint8_t> rgba) {
+		    order.push_back(block);
+		    std::vector<uint8_t> expected(block_texture::k_BlockBytes, 0);
+		    block_texture::BuildBlock(blocks[block], sources, expected);
+		    EXPECT_TRUE(std::ranges::equal(rgba, expected)) << "block " << block;
+	    });
+	std::vector<size_t> inOrder(blocks.size());
+	std::iota(inOrder.begin(), inOrder.end(), size_t {0});
+	EXPECT_EQ(order, inOrder);
 }

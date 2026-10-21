@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <span>
 
 #include <LNDFile.h>
@@ -19,6 +20,7 @@
 
 namespace openblack
 {
+class WorkerPool;
 
 /// The texture Black & White paints each block of land with: 16 by 16 texels a cell, 4 bits a channel. Each texel
 /// takes the materials of its country for its height, lifted by the land's noise, shaded by its bump map, and an alpha
@@ -81,5 +83,14 @@ void ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba);
 /// that part of the block's texture
 void PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell, glm::ivec2 cellCount,
                 std::span<uint8_t> rgba);
+
+/// The cells of a block by its index
+using CellsOfBlock = std::function<std::span<const lnd::LNDCell>(size_t block)>;
+/// Takes the texture of a block, k_BlockBytes RGBA8 bytes, as BuildBlock paints it
+using TakeBlock = std::function<void(size_t block, std::span<const uint8_t> rgba)>;
+
+/// Paints the blocks as BuildBlock does, and shares the work among the pool's lanes. The calling thread takes each
+/// block's texture in the order of the blocks.
+void BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool, const TakeBlock& take);
 } // namespace block_texture
 } // namespace openblack
