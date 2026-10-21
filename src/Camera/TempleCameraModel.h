@@ -141,7 +141,8 @@ public:
 	[[nodiscard]] const std::optional<RoomHit>& GetCursorHit() const { return _cursorHit; }
 	/// The line from the camera through the cursor, which the game picks the room's mesh along
 	[[nodiscard]] const std::optional<Pose>& GetCursorRay() const { return _cursorRay; }
-	/// Walks through the main room's door to a room, as clicking it does, while the player has the main room's camera
+	/// Walks through the main room's door to a room, as clicking it does, while the player has the main room's camera.
+	/// The room Unknown is the way out of the temple.
 	/// @return Whether the camera is on its way
 	bool GoThroughDoorTo(Room room);
 	/// Looks at a scroll from close by, from position at lookAt, with a woosh as it starts. A press elsewhere, or the
@@ -163,6 +164,11 @@ public:
 	[[nodiscard]] bool IsOverWayBack() const { return _overWayBack; }
 	/// Whether the camera looks at a scroll from close by
 	[[nodiscard]] bool IsLookingAtSubMesh() const { return _lookingAtSubMesh; }
+	/// How long the camera has walked to and through the main room's door out of the temple, while it does
+	[[nodiscard]] std::optional<float> GetWayOutSeconds() const
+	{
+		return _state == State::ThroughDoor && InMainRoom() && !_doorRoom.has_value() ? std::optional(_doorTime) : std::nullopt;
+	}
 	/// The creature's room's target the cursor is over, while the player has its camera
 	[[nodiscard]] std::optional<CreatureCaveTargets::Target> GetCaveTarget() const { return _caveTarget; }
 	/// Whether the camera is zooming to one of the creature's room's targets, or there

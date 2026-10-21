@@ -424,6 +424,10 @@ private:
 	/// The beams of the temple's spot lights and the light its windows shed, which the game draws in its
 	/// rooms but not in the reflection of the main room
 	void DrawLightBeams(const DrawSceneDesc& desc) const;
+	/// The sheet of white light at the main room's way out, while the camera walks through that door
+	void DrawTempleExitGlow(const DrawSceneDesc& desc) const;
+	/// The shell of the creed's light over each temple's heart late in its destruction
+	void DrawTempleCreedShells(const DrawSceneDesc& desc) const;
 	/// The temple's domes of mist, which the game draws facing the camera with a frame of the smoke texture
 	void DrawMistDomes(const DrawSceneDesc& desc) const;
 	/// The text the temple's rooms write in the world this frame: the signs' labels and the scroll the camera is close to

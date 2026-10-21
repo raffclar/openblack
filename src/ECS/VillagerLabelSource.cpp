@@ -15,6 +15,7 @@
 #include <string>
 
 #include <glm/geometric.hpp>
+#include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
@@ -104,6 +105,7 @@ std::vector<labels::Request> Gather(const Frame& frame)
 	const auto& living = Locator::livingActionSystem::value();
 	const auto& texts = *frame.texts;
 	const auto eye = camera.GetOrigin();
+	const auto viewProjection = camera.GetViewProjectionMatrix(Camera::Projection::Normal, Camera::Interpolation::Current);
 	const auto viewport = glm::vec4(0.0f, 0.0f, glm::vec2(frame.screen));
 	const labels::DetailWords words {.age = texts.GetHelpText(k_AgeText).text,
 	                                 .life = texts.GetHelpText(k_LifeText).text,
@@ -147,6 +149,8 @@ std::vector<labels::Request> Gather(const Frame& frame)
 		    }
 		    const auto owner = OwnerColour(registry, villager.town);
 		    labels::Request request {.pixel = pixel, .distance = glm::distance(eye, point), .size = choice.size};
+		    // The depth of the point in front of the camera places the label among the depths of the world
+		    request.depth = (viewProjection * glm::vec4(point, 1.0f)).w;
 		    if (choice.kind == labels::Kind::Name)
 		    {
 			    request.text = *name;

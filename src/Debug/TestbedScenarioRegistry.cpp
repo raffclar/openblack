@@ -1858,8 +1858,9 @@ void AddStory(std::vector<Scenario>& all)
 	                   "starts, as when its heart loses the last of its life.",
 	    .expected = "From 5.5 seconds the temple glows in red, the player's colour, and the glow beats with the heartbeat. "
 	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
-	                "the land and the things behind it show through it, and its cut-out parts go first. It is not drawn "
-	                "after 23.8 seconds, just before it goes.",
+	                "the land and the things behind it show through it, and its cut-out parts go first. From 16 seconds a "
+	                "faint shell of light in red covers the heart, reaching out with the heartbeat and growing at the "
+	                "end. It is not drawn after 23.8 seconds, just before it goes.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
@@ -9620,6 +9621,39 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.low_detail_rooms",
+	    .name = "At the lowest detail the temple's rooms have no light maps",
+	    .facet = Facet::Story,
+	    .description = "Start the game with --detail-level 0. The player has a temple and is put in its main room. Walk "
+	                   "through the doors into the other rooms.",
+	    .expected = "Each room, its floor and its pools are the rooms' low models: plainer walls with no light from "
+	                "light maps, each wall hazed as one piece. The domes are as at other levels. The doors, the "
+	                "scrolls and the clicks on them work as at other levels. With no --detail-level, or above 0, the "
+	                "rooms have their light maps.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.way_out_glow",
+	    .name = "A white light grows at the temple's way out as the player leaves",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple and is put in its main room. After ten seconds the camera walks to the "
+	                   "door out of the temple and through it, as a click on that door does.",
+	    .expected = "The camera turns to the door out. 2.2 seconds after the walk starts, a white sheet of light grows "
+	                "on the floor from the door towards the middle of the room, added over all of the room, its texture "
+	                "slowly drifting. It is brightest and widest at the door and fades to nothing towards the middle. "
+	                "Then the player leaves the temple.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
 	});
 }
 

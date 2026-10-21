@@ -256,6 +256,9 @@ public:
 	};
 	/// One step of the frame. It returns false when the game must stop.
 	bool PlayFrameStep(game_frame::Step step, FrameState& frame);
+	/// Whether this frame moves the camera, puts the hand under the cursor and draws the world: not while the window is
+	/// minimised, unless a picture of the frame is necessary
+	[[nodiscard]] bool DoesFrameGraphics() const;
 	/// The clock of the frame, the debug inspector and the time that the frame takes
 	void StartFrame(FrameState& frame);
 	/// The keys, the mouse buttons and the pointer of the frame

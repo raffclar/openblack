@@ -125,6 +125,7 @@ public:
 	                                              RenderPass::Land,
 	                                              RenderPass::Main,
 	                                              RenderPass::Translucent,
+	                                              RenderPass::WorldLabels,
 	                                              RenderPass::GestureHintCollar0,
 	                                              RenderPass::GestureHintCollar1,
 	                                              RenderPass::GestureHintCollar2,

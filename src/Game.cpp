@@ -65,6 +65,7 @@
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleRoomMeshes.h"
 #include "3D/WaterRings.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
@@ -1157,6 +1158,8 @@ void Game::WarmUpFirstFrame()
 			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
 			// The interface draws over the scene too, and the cinema bars are its first draw
 			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+			// The villagers' labels test the depth of the scene
+			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
@@ -2608,9 +2611,30 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
+bool Game::DoesFrameGraphics() const
+{
+	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
+	if (!minimised)
+	{
+		return true;
+	}
+	// The pictures that the debug inspector, a challenge, the creature's page or a saved game wait for
+	const bool pictureWanted =
+	    (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount) ||
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	return game_frame::DoesGraphics(minimised, pictureWanted);
+}
+
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 {
 	using game_frame::Step;
+	// While the window is minimised the turns and the keys continue, but the camera, the hand and the world's draw stop
+	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
+	{
+		return true;
+	}
 	switch (step)
 	{
 	case Step::FrameClock:
@@ -4230,21 +4254,24 @@ bool Game::Initialize() noexcept
 	_startupTimer->Step("physics materials, dust sheets and land palette");
 	fileSystem.Iterate( //
 	    fileSystem.GetPath<filesystem::Path::Citadel>() / "engine", false,
-	    [&meshManager, &glowManager](const std::filesystem::path& f) {
+	    [&meshManager, &glowManager, &fileSystem, &config](const std::filesystem::path& f) {
 		    if (f.extension() == ".zzz")
 		    {
-			    if (f.stem().string().ends_with("lo_l3d"))
+			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
+			    // the two is loaded: both together are more meshes than the renderer holds.
+			    const auto stem = f.stem().string();
+			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
+			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
+			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
+			    if (!name.has_value())
 			    {
-				    SPDLOG_LOGGER_WARN(
-				        spdlog::get("game"),
-				        "Skipping lo duplicate lo meshes. See https://github.com/openblack/openblack/issues/727");
 				    return;
 			    }
-			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {}", f.stem().string());
+			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {} as {}", stem, *name);
 			    try
 			    {
-				    RegisterFile(meshManager, fmt::format("temple/interior/{}", f.stem().string()), f,
-				                 resources::L3DLoader::FromDiskTag {}, f);
+				    RegisterFile(meshManager, fmt::format("temple/interior/{}", *name), f, resources::L3DLoader::FromDiskTag {},
+				                 f);
 			    }
 			    catch (std::runtime_error& err)
 			    {
@@ -5133,7 +5160,8 @@ bool Game::Run() noexcept
 		PlaceScreenLabels();
 		PlaceLearningTexts();
 		// In the fast simulation mode the game draws only some frames, or none
-		const bool drawsFrame = sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount);
+		const bool drawsFrame =
+		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount) && DoesFrameGraphics();
 		if (drawsFrame && _interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
