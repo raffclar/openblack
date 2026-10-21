@@ -349,7 +349,8 @@ constexpr int k_FaintestControl = 4;
 
 /// A gesture's picture centred between the bounds' margins from a top down, cut to their rows; none where it can't fit
 /// across or down, or lies wholly outside them
-void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float size, const WordBounds& bounds, glm::vec4 colour)
+void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float size, const WordBounds& bounds, glm::vec4 colour,
+                bool shadow)
 {
 	if (bounds.right - bounds.left < size || bounds.clipBottom - bounds.clipTop < size || bounds.clipBottom < top)
 	{
@@ -364,6 +365,7 @@ void AddGesture(std::vector<GestureIcon>& out, int gesture, float top, float siz
 	    .uvMin = {static_cast<float>(cell % 4) * k_GestureCell, static_cast<float>(cell / 4) * k_GestureCell},
 	    .uvMax = {},
 	    .colour = colour,
+	    .shadow = shadow,
 	};
 	icon.uvMax = icon.uvMin + glm::vec2(k_GestureCell);
 	const float above = (bounds.clipTop - top) / size;
@@ -489,9 +491,9 @@ Words LayOutWords(const Placement& placement, std::span<const std::u16string_vie
 					y -= iconSize;
 					words.contentHeight += iconSize;
 					AddGesture(words.gestures, piece.code.number, y + shadow, iconSize, shadowBounds,
-					           {0.0f, 0.0f, 0.0f, static_cast<float>(shadowAlpha) / 255.0f});
+					           {0.0f, 0.0f, 0.0f, static_cast<float>(shadowAlpha) / 255.0f}, true);
 					AddGesture(words.gestures, piece.code.number, y, iconSize, bounds,
-					           {1.0f, 1.0f, 1.0f, static_cast<float>(wordsAlpha) / 255.0f});
+					           {1.0f, 1.0f, 1.0f, static_cast<float>(wordsAlpha) / 255.0f}, false);
 					break;
 				}
 				if (!controlShown || !controlShown(piece.code.number))

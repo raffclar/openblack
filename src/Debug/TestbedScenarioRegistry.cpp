@@ -5957,6 +5957,25 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+	// A tree stands between the camera and the tip bubble of a sign
+	all.push_back({
+	    .id = "hand.bubble_behind_tree",
+	    .name = "A tree in front of a tip bubble hides it",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes to a \"did you know\" sign and taps it. An oak stands to its right, between the "
+	                   "camera and the bubble that comes up over the sign.",
+	    .expected = "The oak hides the part of the bubble's box and words that is behind its trunk and leaves. Between "
+	                "the leaves the bubble shows. The blinking arrows and the pictures of the controls show over the "
+	                "tree. Turn the camera to look down: more of the bubble then shows, because the bubble comes "
+	                "nearer to the camera as it looks down.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 3.0f, -14.0f}, .look = {0.0f, 2.0f, 6.0f}},
+	    .objects = {{.type = TreeInfo::Oak, .offset = {5.0f, -2.0f}}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)

@@ -59,3 +59,11 @@ TEST(WorldTextDepth, BufferDepthFollowsTheProjection)
 	EXPECT_NEAR(BufferDepth(projection, 2.0f), 1.0f, 1e-6f);
 	EXPECT_NEAR(BufferDepth(projection, 8.0f), 0.25f, 1e-6f);
 }
+
+// Words asked for nearer than half a unit beyond the near plane are drawn there
+TEST(WorldTextDepth, WordsAreNeverNearerThanHalfAUnitBeyondTheNearPlane)
+{
+	EXPECT_EQ(openblack::gui::world_text::WordsDepth(0.8f, 1.0f), 1.5f);
+	EXPECT_EQ(openblack::gui::world_text::WordsDepth(1.5f, 1.0f), 1.5f);
+	EXPECT_EQ(openblack::gui::world_text::WordsDepth(7.25f, 1.0f), 7.25f);
+}

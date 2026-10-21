@@ -177,6 +177,9 @@ struct GestureIcon
 	glm::vec2 uvMin {0.0f};
 	glm::vec2 uvMax {0.0f};
 	glm::vec4 colour {0.0f};
+	/// It is the shadow of the gesture, which the game draws one nearer than the bubble's box, where the picture is two
+	/// nearer
+	bool shadow {false};
 };
 
 /// A control's picture to draw: centred between the words' margins, a little above the two lines it takes, white,

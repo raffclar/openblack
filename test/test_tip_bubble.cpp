@@ -402,6 +402,9 @@ TEST(TipBubble, AGestureCodeShowsItsPictureWithAShadow)
 	EXPECT_NEAR(shadow.min.x, 433.0f, 1e-3f);
 	EXPECT_NEAR(shadow.min.y, bottomLine - 36.0f, 1e-3f);
 	EXPECT_EQ(shadow.colour, glm::vec4(0.0f, 0.0f, 0.0f, 128.0f / 255.0f));
+	// The shadow is drawn at the depth of the words' shadows, the picture at the depth of the words
+	EXPECT_TRUE(shadow.shadow);
+	EXPECT_FALSE(picture.shadow);
 	// The picture centred between the margins, the second cell of the first sheet
 	EXPECT_EQ(picture.sheet, 0);
 	EXPECT_NEAR(picture.min.x, 431.0f, 1e-3f);
