@@ -177,6 +177,31 @@ def summary(start, records, end, log_lines=None, exit_code=None):
     return result
 
 
+# The fields of a record that a run of the same seed and inputs must give again. The others (times, memory) change
+# from run to run.
+SAME_FIELDS = ("hash", "draws", "entities", "reactions", "counts", "creature", "flags")
+SEED_NAMES = ("synced", "local")
+
+
+def differing_fields(record_a, record_b):
+    """The names of the fields that two records of the same turn give differently, each seed by its name"""
+    fields = [key for key in SAME_FIELDS if record_a.get(key) != record_b.get(key)]
+    seeds_a, seeds_b = record_a.get("seeds") or [], record_b.get("seeds") or []
+    for index, name in enumerate(SEED_NAMES):
+        value_a = seeds_a[index] if index < len(seeds_a) else None
+        value_b = seeds_b[index] if index < len(seeds_b) else None
+        if value_a != value_b:
+            fields.append(f"seeds.{name}")
+    return fields
+
+
+def differing_counts(record_a, record_b):
+    """The component counts that two records give differently, as {name: [a, b]}"""
+    counts_a, counts_b = record_a.get("counts") or {}, record_b.get("counts") or {}
+    return {name: [counts_a.get(name), counts_b.get(name)] for name in sorted(set(counts_a) | set(counts_b))
+            if counts_a.get(name) != counts_b.get(name)}
+
+
 def compare(records_a, records_b):
     """Where two runs part: the first turn recorded in both whose hashes, seeds or counts of draws differ, and what
     differs there. Records from a game that does not write the seeds or the draws are compared by their hashes alone."""
@@ -197,13 +222,48 @@ def compare(records_a, records_b):
                 "same": False,
                 "compared": compared,
                 "turn": record["turn"],
+                "frame": [record.get("frame"), other.get("frame")],
                 "hash": [record.get("hash"), other.get("hash")],
                 "creature_same": state_a == state_b,
                 "draws_same": draws_same,
                 "draws": [record.get("draws"), other.get("draws")],
+                "seeds": [record.get("seeds"), other.get("seeds")],
+                "differs": differing_fields(record, other),
+                "counts": differing_counts(record, other),
                 "parts": parts,
             }
     return {"same": compared > 0, "compared": compared, "turn": None}
+
+
+# The blocks of a saved world, each after its four letter tag, in the order the game writes them
+SAVE_TAGS = (b"ECSW", b"RCTX", b"TIME", b"CAMR", b"LHVM", b"SOBJ", b"SYST")
+
+
+def save_blocks(data):
+    """Where each block of a saved world starts: [(start, tag)], by the first place of each tag in the file"""
+    places = []
+    for tag in SAVE_TAGS:
+        start = data.find(tag)
+        if start >= 0:
+            places.append((start, tag.decode()))
+    return sorted(places)
+
+
+def compare_saves(data_a, data_b):
+    """How two saved worlds differ: the count of bytes that differ in each block of the first, and whether the sizes
+    differ. Two runs of the same seed and inputs that write the same world give an empty result."""
+    result = {}
+    if len(data_a) != len(data_b):
+        result["size"] = [len(data_a), len(data_b)]
+    blocks = save_blocks(data_a)
+    for index in range(min(len(data_a), len(data_b))):
+        if data_a[index] != data_b[index]:
+            name = "head"
+            for start, tag in blocks:
+                if start <= index:
+                    name = tag
+            result[name] = result.get(name, 0) + 1
+    return result
 
 
 def markdown(result, title="Simulation run"):

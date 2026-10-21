@@ -105,8 +105,34 @@ class CompareTests(unittest.TestCase):
         second[1]["seeds"], second[1]["draws"] = [7, 9], 601
         self.assertEqual(sim_report.compare(first, second)["draws"], [600, 601])
 
+    def test_the_first_record_that_differs_names_its_fields(self):
+        first = [record(100), record(200)]
+        second = [record(100), record(200)]
+        for item in first + second:
+            item["seeds"], item["draws"], item["counts"] = [7, 9], 600, {"Villager": 3}
+        second[1]["seeds"] = [7, 10]
+        second[1]["counts"] = {"Villager": 4}
+        result = sim_report.compare(first, second)
+        self.assertEqual(result["differs"], ["counts", "seeds.local"])
+        self.assertEqual(result["seeds"], [[7, 9], [7, 10]])
+        self.assertEqual(result["counts"], {"Villager": [3, 4]})
+
     def test_runs_with_no_turn_in_common_do_not_agree(self):
         self.assertFalse(sim_report.compare([record(100)], [record(200)])["same"])
+
+
+class CompareSavesTests(unittest.TestCase):
+    def test_the_same_saves_agree(self):
+        data = b"headECSW1234RCTX5678"
+        self.assertEqual(sim_report.compare_saves(data, data), {})
+
+    def test_each_block_counts_its_bytes_that_differ(self):
+        first = b"headECSW1234RCTX5678"
+        second = b"headECSW1934RCTX5600"
+        self.assertEqual(sim_report.compare_saves(first, second), {"ECSW": 1, "RCTX": 2})
+
+    def test_saves_of_other_sizes_say_so(self):
+        self.assertEqual(sim_report.compare_saves(b"ECSW12", b"ECSW123"), {"size": [6, 7]})
 
 
 if __name__ == "__main__":

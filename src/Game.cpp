@@ -5530,10 +5530,9 @@ bool Game::Run() noexcept
 		}
 
 		_frameCount++;
-		_statisticsFrameRate.Frame(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-		                                                     std::chrono::steady_clock::now().time_since_epoch())
-		                                                     .count()),
-		                           _frameCount);
+		// The frame rate of the statistics uses the machine clock of the game. When each frame has a fixed time, each run
+		// gets the same rate.
+		_statisticsFrameRate.Frame(machine_clock::Ticks(), _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{
