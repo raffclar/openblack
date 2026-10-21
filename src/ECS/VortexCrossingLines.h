@@ -39,7 +39,7 @@ struct World
 	uint32_t turn {0};
 	/// The land's height at a point across it
 	std::function<float(glm::vec2)> ground;
-	/// The row of the villagers' table of a tribe's job
+	/// The row of the villagers' table of a tribe's job, for a villager that keeps no row
 	std::function<int32_t(Tribe, VillagerNumber)> villagerRow;
 	/// The kind of resource a kind of pot holds
 	std::function<int32_t(PotInfo)> potResource;

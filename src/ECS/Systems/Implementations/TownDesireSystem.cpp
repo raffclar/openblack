@@ -77,14 +77,15 @@ const GAbodeInfo* FindAbodeInfo(Tribe tribe, AbodeNumber number)
 	return found != abodes.end() ? &*found : nullptr;
 }
 
-/// The info of a tribe's villager of a number
-const GVillagerInfo* FindVillagerInfo(Tribe tribe, VillagerNumber number)
+/// The info of the row that a villager uses, or none when the table has no such row
+const GVillagerInfo* VillagerInfoOf(const Villager& villager)
 {
 	const auto& villagers = Locator::infoConstants::value().villager;
-	const auto found = std::ranges::find_if(villagers, [tribe, number](const GVillagerInfo& info) {
-		return info.tribeType == tribe && info.villagerNumber == number;
+	const auto row = RowOf(villager, [&villagers](Tribe tribe, VillagerNumber number) {
+		return GVillagerInfo::FindIn(villagers, tribe, number).value_or(VillagerInfo::None);
 	});
-	return found != villagers.end() ? &*found : nullptr;
+	const auto index = static_cast<size_t>(row);
+	return row != VillagerInfo::None && index < villagers.size() ? &villagers.at(index) : nullptr;
 }
 
 /// A town's people and buildings this turn, and what its desires read of them and the world
@@ -113,7 +114,7 @@ town_desire::DesireInputs GatherInputs(entt::entity townEntity, const Town& town
 		{
 			++stats.disciples.at(static_cast<size_t>(disciple->type));
 		}
-		if (const auto* info = FindVillagerInfo(villager.tribe, villager.number); info != nullptr)
+		if (const auto* info = VillagerInfoOf(villager); info != nullptr)
 		{
 			stats.foodForDinner += static_cast<float>(info->foodReqiredForDinner);
 		}

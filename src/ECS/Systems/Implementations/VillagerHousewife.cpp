@@ -72,7 +72,7 @@ void SetTopState(LivingAction& action, VillagerStates state)
 const GVillagerInfo& InfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
-	return infos.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return infos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 bool IsAtHome(entt::entity villager)

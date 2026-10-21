@@ -117,4 +117,11 @@ template <typename FindByTribe>
 {
 	return villager.kind != VillagerInfo::None ? villager.kind : findByTribe(villager.tribe, villager.number);
 }
+
+/// A villager that changes tribe takes the row of its kind of work in the new tribe, and keeps that row
+inline void TakeRow(Villager& villager, Tribe tribe, VillagerInfo row)
+{
+	villager.tribe = tribe;
+	villager.kind = row;
+}
 } // namespace openblack::ecs::components
