@@ -15,6 +15,7 @@
 
 #include <DanceFile.h>
 
+#include "Common/X87.h"
 #include "ECS/DanceMoves.h"
 
 using namespace openblack;
@@ -285,7 +286,35 @@ float dance_rules::NextClock(float clock, uint32_t loopLength)
 	return static_cast<uint32_t>(Truncate(next)) >= loopTurns ? 0.0f : next;
 }
 
-std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
+glm::vec3 dance_rules::HandPoint(const map_coords::MapCoords& place, float ground)
+{
+	return {map_coords::ToMetres(place.x), ground + place.altitude, map_coords::ToMetres(place.z)};
+}
+
+bool dance_rules::HandNear(const glm::vec3& point, const glm::vec3& hand)
+{
+	const float dx = point.x - hand.x;
+	const float dy = point.y - hand.y;
+	const float dz = point.z - hand.z;
+	const float squared = x87::Add(x87::Add(x87::Mul(dz, dz), x87::Mul(dy, dy)), x87::Mul(dx, dx));
+	return squared < k_HandNearSquared;
+}
+
+void dance_rules::CountHand(Dance& dance, bool near)
+{
+	if (!near)
+	{
+		dance.handNearTurns = 0;
+		return;
+	}
+	++dance.handNearTurns;
+	if (dance.handNearTurns > k_CameraTurns)
+	{
+		dance.cameraWanted = true;
+	}
+}
+
+std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn, bool handNear)
 {
 	if (dance.state == Dance::State::Stopped && dance.autostart && HasProperlyStarted(dance, turn))
 	{
@@ -294,14 +323,13 @@ std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
 	}
 	else if (dance.duration > 0 && turn - dance.startTurn > dance.duration)
 	{
-		// TODO(opening): its lights go out
 		dance.state = Dance::State::Stopped;
 	}
 	if (dance.state != Dance::State::Dancing || dance.dancers == 0)
 	{
 		return {};
 	}
-	// TODO(opening): a town's dance counts the turns the camera is near it
+	CountHand(dance, handNear);
 	std::vector<std::size_t> moving;
 	if (dance.file != nullptr)
 	{
@@ -316,7 +344,6 @@ std::vector<std::size_t> dance_rules::ProcessTurn(Dance& dance, uint32_t turn)
 	{
 		dance_moves::ProcessGroup(group, now);
 	}
-	// TODO(opening): the dance's lights
 	dance.clock = NextClock(dance.clock, dance.loopLength);
 	return moving;
 }

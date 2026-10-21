@@ -20,6 +20,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
+#include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/DoubleClickFlight.h"
 #include "Camera/FightCameraModel.h"
@@ -337,6 +338,11 @@ void CameraBookmarkSystem::JumpTo(size_t slot)
 		if (Locator::creatureModeSystem::has_value() && dynamic_cast<const CreatureCameraModel*>(&camera.GetModel()) != nullptr)
 		{
 			Locator::creatureModeSystem::value().Leave();
+		}
+		// From the camera of a dance, a new world camera starts from where the camera is, over the camera of the dance
+		else if (dynamic_cast<const DanceCameraModel*>(&camera.GetModel()) != nullptr)
+		{
+			camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
 		}
 		if (!isWorld())
 		{

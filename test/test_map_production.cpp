@@ -183,3 +183,24 @@ TEST_F(MapProductionFiling, AFieldIsInEachCellItsOutlineCoversAndLeavesThemWhenG
 	EXPECT_TRUE(map.GetAllInCell(middle).empty());
 	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
 }
+
+TEST_F(MapProductionFiling, AThingIsInTheMapUntilItLeavesTheCells)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	// A new villager goes into its cell when the map is asked
+	const auto villager = registry.Create();
+	registry.Assign<Transform>(villager, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mobile>(villager);
+	registry.Assign<Villager>(villager);
+	EXPECT_TRUE(map.InMap(villager));
+	// A creature that holds it takes it out of the cells
+	registry.Remove<MapCellResident>(villager);
+	EXPECT_FALSE(map.InMap(villager));
+	// A thing of a kind that the map does not keep in its cells counts as in the map. A thing that has gone does not.
+	const auto other = registry.Create();
+	registry.Assign<Transform>(other, glm::vec3(500.0f, 0.0f, 500.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	EXPECT_TRUE(map.InMap(other));
+	registry.Destroy(other);
+	EXPECT_FALSE(map.InMap(other));
+}

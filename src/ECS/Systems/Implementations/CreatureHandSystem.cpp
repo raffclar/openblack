@@ -28,6 +28,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CreatureCameraModel.h"
 #include "Camera/CreatureInteractCameraModel.h"
+#include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Common/X87.h"
@@ -270,15 +271,16 @@ void CreatureHandSystem::TakeCamera(entt::entity creature)
 	}
 	auto& camera = Locator::camera::value();
 	auto& current = camera.GetModel();
-	// Already on a creature it stays; only the player's own camera, its fight view or Creature Mode's camera gives way:
-	// not a script's, the temple's or the editor's
+	// Already on a creature it stays. Only these cameras give way: the player's own camera, its fight view, Creature
+	// Mode's camera and the camera of a dance. A script's camera, the temple's camera and the editor's camera do not.
 	if (dynamic_cast<CreatureInteractCameraModel*>(&current) != nullptr)
 	{
 		return;
 	}
 	auto* world = dynamic_cast<DefaultWorldCameraModel*>(&current);
 	auto* fight = dynamic_cast<FightCameraModel*>(&current);
-	if (world == nullptr && fight == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr)
+	if (world == nullptr && fight == nullptr && dynamic_cast<CreatureCameraModel*>(&current) == nullptr &&
+	    dynamic_cast<DanceCameraModel*>(&current) == nullptr)
 	{
 		return;
 	}

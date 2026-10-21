@@ -60,6 +60,9 @@ public:
 	virtual void Refile(entt::entity entity) = 0;
 	/// After the load of a saved world: each thing goes back into the cells that it keeps, in the order of the things
 	virtual void FileResidents() = 0;
+	/// Whether a thing is in the map's cells. A new thing goes into them first. A thing of a kind that the map does not
+	/// keep in its cells counts as in the map.
+	[[nodiscard]] virtual bool InMap(entt::entity /*entity*/) const { return true; }
 };
 
 } // namespace openblack::ecs

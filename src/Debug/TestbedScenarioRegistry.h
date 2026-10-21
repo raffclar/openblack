@@ -935,6 +935,10 @@ struct Command
 		/// The player's teleport stone nearest to the point goes at once, with its pool, as when its miracle ends. Needs
 		/// no creature.
 		RemoveTeleportStone,
+		/// A script makes a dance (value, a row of the dance table) about the scenario's object (object), as
+		/// DANCE_CREATE does. Each other villager of the scenario's objects joins the dance. With ctrl, the hand was
+		/// near the dance for long enough, so the dance wants its camera. Needs no creature.
+		MakeDance,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

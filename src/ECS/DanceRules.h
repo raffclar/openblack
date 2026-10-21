@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "ECS/Components/Dance.h"
 
@@ -96,10 +97,27 @@ void RemoveDancer(components::Dance& dance, std::size_t group, entt::entity danc
 /// The clock a turn on: one on, back to 0 once the dance's loop has gone by
 [[nodiscard]] float NextClock(float clock, uint32_t loopLength);
 
-/// One game turn of the dance: a stopped dance that starts by itself does once its dancers have come; one that lasts
-/// a while stops once that is over; while danced with dancers, the key frame due on its clock is done, each group's
-/// move goes on and its clock goes on, starting over at the end of its loop. The groups that started a move, whose
-/// dancers each play their clip again.
-std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn);
+/// The hand is near a dance when the square of its distance from the dance's point is less than this (10 metres)
+inline constexpr float k_HandNearSquared = 100.0f;
+/// The dance wants its camera when the hand stays near it for more turns in a row than this (10 seconds)
+inline constexpr uint32_t k_CameraTurns = k_TurnsPerSecond * 10;
+
+/// The point of a dance that the hand is measured from: its place, at the height of the land there plus the height of
+/// the place above the land
+[[nodiscard]] glm::vec3 HandPoint(const map_coords::MapCoords& place, float ground);
+/// Whether the hand is near the point of a dance. The squares add in the game's order: z, then y, then x.
+[[nodiscard]] bool HandNear(const glm::vec3& point, const glm::vec3& hand);
+/// The hand was near the dance in this turn, or it was not. A count of more than k_CameraTurns turns in a row makes the
+/// dance want its camera. A turn with the hand away sets the count to 0.
+void CountHand(components::Dance& dance, bool near);
+
+/// One game turn of the dance:
+/// - A stopped dance that starts by itself starts again when its dancers have come.
+/// - A dance that lasts a time stops when the time is over.
+/// - While it dances with dancers, it counts the turns that the hand is near.
+/// - While it dances with dancers, it does the key frame due on its clock, and each group's move continues.
+/// - Its clock goes forward, and it starts again at the end of the loop.
+/// The groups that started a move, whose dancers each play their clip again.
+std::vector<std::size_t> ProcessTurn(components::Dance& dance, uint32_t turn, bool handNear = false);
 
 } // namespace openblack::ecs::dance_rules

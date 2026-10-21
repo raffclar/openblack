@@ -54,8 +54,8 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
-#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FixedOutlineSystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -480,6 +480,16 @@ void MapProduction::FileResidents()
 			_lists.Insert(cell, entity, resident.placement);
 		}
 	});
+}
+
+bool MapProduction::InMap(entt::entity entity) const
+{
+	FileMade();
+	if (_registry == nullptr || !_registry->Valid(entity))
+	{
+		return false;
+	}
+	return !KindOf(*_registry, entity).has_value() || _registry->AllOf<MapCellResident>(entity);
 }
 
 void MapProduction::Refile(entt::entity entity)

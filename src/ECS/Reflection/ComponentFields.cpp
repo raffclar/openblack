@@ -1117,6 +1117,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Dance::dancers>("dancers")
 	    .Field<&components::Dance::onTheirWay>("onTheirWay")
 	    .Field<&components::Dance::firstDancerTurn>("firstDancerTurn")
+	    .Field<&components::Dance::handNearTurns>("handNearTurns")
+	    .Field<&components::Dance::cameraWanted>("cameraWanted")
+	    .Field<&components::Dance::cameraMade>("cameraMade")
+	    .Field<&components::Dance::cameraAsked>("cameraAsked")
 	    .Field<&components::Dance::groups>("groups")
 	    .Field<&components::Dance::file>("file");
 	Reflect<components::Dancer>(context).Field<&components::Dancer::dance>("dance").Field<&components::Dancer::group>("group");

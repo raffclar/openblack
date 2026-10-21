@@ -151,6 +151,14 @@ struct Dance
 	uint32_t onTheirWay {0};
 	/// The turn its first dancer came, once one has
 	std::optional<uint32_t> firstDancerTurn;
+	/// How many turns in a row the hand was near it while it danced with dancers
+	uint32_t handNearTurns {0};
+	/// The hand stayed near long enough, so the dance wants its camera. The flag stays on.
+	bool cameraWanted {false};
+	/// A key frame of the dance asked for its camera. The dance asks only one time.
+	bool cameraMade {false};
+	/// A key frame asked for the camera in this turn, and the camera did not start yet
+	bool cameraAsked {false};
 	/// Its groups, their order of choosing and its dancers
 	DanceGroups groups;
 	/// Its choreography; none when its file can't be read
