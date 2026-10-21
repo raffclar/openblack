@@ -102,6 +102,7 @@
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
@@ -586,6 +587,16 @@ entt::entity CreateScriptVillager(bool child, uint32_t subtype, const glm::vec3&
 	return villager;
 }
 
+/// Makes a thing show only as a print on the land, the newest of the prints
+void MarkGroundPrint(entt::entity thing)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	uint32_t made = 0;
+	registry.Each<const ecs::components::GroundPrint>(
+	    [&made](const ecs::components::GroundPrint& print) { made = std::max(made, print.made + 1); });
+	registry.AssignOrReplace<ecs::components::GroundPrint>(thing, ecs::components::GroundPrint {.made = made});
+}
+
 /// The point on the ground under where a script asks for a thing
 glm::vec3 OnGround(const glm::vec3& position)
 {
@@ -636,13 +647,22 @@ entt::entity CreateScriptObject(const ObjectType type, uint32_t subtype, const g
 	// TODO(Daniels118): handle all types
 	switch (type)
 	{
-	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. A mobile
-	// static keeps the height the script gave; a rock is made on the land under the place asked for.
+	// Asking for a mobile static or for a rock makes the same thing: whether it is a rock is up to its kind. The thing
+	// goes onto the land under the place asked for. Only a holder of a singing stone, a lantern and a bonfire keep the
+	// height that the script gave, because they can not move in the physics.
 	case ObjectType::MobileStatic:
 	case ObjectType::Rock:
-		return MobileStaticArchetype::Create(script::create_rules::KeepsScriptHeight(type) ? position : OnGround(position),
-		                                     static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians,
-		                                     zAngleRadians, scale);
+	{
+		const auto made = MobileStaticArchetype::Create(
+		    script::create_rules::KeepsScriptHeight(type, subtype) ? position : OnGround(position),
+		    static_cast<MobileStaticInfo>(subtype), altitude, xAngleRadians, yAngleRadians, zAngleRadians, scale);
+		// The holder of a singing stone shows only as a print of its model on the land
+		if (static_cast<MobileStaticInfo>(subtype) == MobileStaticInfo::SingingStoneBase)
+		{
+			MarkGroundPrint(made);
+		}
+		return made;
+	}
 	case ObjectType::Ball:
 		// On the land under the place asked for, even when that is the hand up in the air
 		return CreateScriptBall(OnGround(position));

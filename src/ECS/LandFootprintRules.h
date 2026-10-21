@@ -16,6 +16,7 @@
 #include <utility>
 #include <vector>
 
+#include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
 #include <glm/vec2.hpp>
@@ -77,6 +78,26 @@ struct RiverPrint
 
 	constexpr bool operator==(const RiverPrint&) const = default;
 };
+
+/// A thing that shows only as a print of its model on the land
+struct GroundPrintThing
+{
+	entt::id_type mesh {0};
+	/// The place of the thing
+	glm::vec3 position {0.0f};
+	/// The order in which the prints were made
+	uint32_t made {0};
+
+	bool operator==(const GroundPrintThing&) const = default;
+};
+
+/// Where the print of a thing lies: at the place of the thing on the map, with no turn and no scale. The x and z of the
+/// place go through the map's fixed point first, as the game keeps them.
+[[nodiscard]] footprint_paint::Placement GroundPrintPlacement(const glm::vec3& position);
+
+/// The prints of the things in the order that the game paints them, as indices into `prints`. The newest print comes
+/// first. The game does not make a print that has the model and the place of an older print.
+[[nodiscard]] std::vector<size_t> GroundPrintOrder(std::span<const GroundPrintThing> prints);
 
 /// The rivers' footprints in the order that the game paints them, from the number of points of each river in the order
 /// the land made them. The first river comes first. Each river's last stretch comes first, its bed and then its channel.
