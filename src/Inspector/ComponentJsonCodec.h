@@ -168,6 +168,14 @@ template <typename Type>
 		}
 		return Json {{"size", value.size()}, {"first", std::move(array)}};
 	}
+	else if constexpr (requires {
+		                   value.floatVal;
+		                   value.intVal;
+	                   })
+	{
+		// A script value holds a float or an integer in the same bits. The value does not tell which, so both are written.
+		return Json {{"float", detail::Shortest(value.floatVal)}, {"int", value.intVal}};
+	}
 	else
 	{
 		return std::nullopt;

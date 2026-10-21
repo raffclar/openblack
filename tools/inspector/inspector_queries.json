@@ -1749,9 +1749,15 @@
   "query": "script.vm"
  },
  {
-  "description": "The script tasks running: their scripts, where they are, whether they sleep and how many values are on their stack",
+  "description": "The script tasks running: their scripts, where they are, whether they sleep and how many values are on their stack; with a name, only the tasks whose names hold it (any case), each with its local variables",
   "kind": "list",
-  "parameters": [],
+  "parameters": [
+   {
+    "description": "Part of the task's name: only these tasks, with their local variables",
+    "name": "name",
+    "type": "string"
+   }
+  ],
   "query": "script.tasks"
  },
  {

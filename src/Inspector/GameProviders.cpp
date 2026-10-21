@@ -9,6 +9,7 @@
 
 #include "GameProviders.h"
 
+#include <cctype>
 #include <cmath>
 
 #include <algorithm>
@@ -3258,20 +3259,63 @@ std::unique_ptr<ProviderInterface> ScriptProvider(ScriptTargetInterface& scripts
 	provider->Add(
 	    Query("tasks",
 	          "The script tasks running: their scripts, where they are, whether they sleep and how many values are on their "
-	          "stack",
-	          {}, ResultKind::List),
-	    Serve<Locator::vm>("the script machine", [](const lhvm::LHVM& vm, const QueryContext& /*c*/) {
+	          "stack; with a name, only the tasks whose names hold it (any case), each with its local variables",
+	          {{.name = "name",
+	            .type = "string",
+	            .description = "Part of the task's name: only these tasks, with their local variables",
+	            .required = false}},
+	          ResultKind::List),
+	    Serve<Locator::vm>("the script machine", [](const lhvm::LHVM& vm, const QueryContext& context) {
+		    const auto upper = [](std::string text) {
+			    std::ranges::transform(text, text.begin(), [](unsigned char c) { return static_cast<char>(std::toupper(c)); });
+			    return text;
+		    };
+		    const bool filtered = context.params.is_object() && context.params.contains("name");
+		    const auto filter = filtered ? upper(context.params.value("name", std::string())) : std::string();
 		    Json items = Json::array();
 		    for (const auto& [number, task] : vm.GetTasks())
 		    {
-			    items.push_back({{"id", number},
-			                     {"name", task.name},
-			                     {"script", task.scriptId},
-			                     {"address", task.instructionAddress},
-			                     {"sleeping", task.sleeping},
-			                     {"waiting_for", task.waitingTaskId},
-			                     {"stack", task.stack.count},
-			                     {"held", vm.IsTaskHeld(number)}});
+			    if (filtered && upper(task.name).find(filter) == std::string::npos)
+			    {
+				    continue;
+			    }
+			    Json item {{"id", number},
+			               {"name", task.name},
+			               {"script", task.scriptId},
+			               {"address", task.instructionAddress},
+			               {"sleeping", task.sleeping},
+			               {"waiting_for", task.waitingTaskId},
+			               {"stack", task.stack.count},
+			               {"held", vm.IsTaskHeld(number)}};
+			    if (filtered)
+			    {
+				    // Each local variable by its type: a number, a truth, or the object's number in the script table
+				    Json locals = Json::array();
+				    for (const auto& variable : task.localVars)
+				    {
+					    Json value;
+					    switch (variable.type)
+					    {
+					    case lhvm::DataType::Int:
+						    value = variable.value.intVal;
+						    break;
+					    case lhvm::DataType::Object:
+						    value = variable.value.uintVal;
+						    break;
+					    case lhvm::DataType::Boolean:
+						    value = variable.value.floatVal != 0.0f;
+						    break;
+					    default:
+						    value = variable.value.floatVal;
+						    break;
+					    }
+					    locals.push_back({{"name", variable.name},
+					                      {"type", static_cast<uint32_t>(variable.type)},
+					                      {"value", std::move(value)}});
+				    }
+				    item["locals"] = std::move(locals);
+			    }
+			    items.push_back(std::move(item));
 		    }
 		    return items;
 	    }));
@@ -3567,6 +3611,9 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 			                  result["waiting_for_click"] = dialogue->IsWaitingForClick();
 			                  result["end_turn"] = dialogue->GetEndTurn();
 			                  result["end_ms"] = dialogue->GetEndMs();
+			                  result["start_turn"] = dialogue->GetStartTurn();
+			                  result["takes_click"] = dialogue->TakesClick();
+			                  result["last_click_turn"] = dialogue->GetLastClickTurn();
 			                  result["drawn"] = dialogue->IsDrawn();
 			                  result["box_shown"] = dialogue->GetDisplay().IsBoxShown();
 		                  }
