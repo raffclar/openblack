@@ -16,9 +16,9 @@
 #include <span>
 
 /// The order of the steps of one frame. The game does its frame in a fixed order of stages: the input, the turns, the
-/// camera, the hand, the draw and then the keys of the camera. What one stage changes, the next stages see in the same
-/// frame. Each step of openblack's frame has the stage of the game that it does. A step whose stage is not known keeps
-/// its place between its neighbours. The order keeps no game state, so that the game and the tests use it both.
+/// camera, the poses of the creatures, the hand, the draw and then the keys of the camera. What one stage changes, the next
+/// stages see in the same frame. Each step of openblack's frame has the stage of the game that it does. A step whose stage is
+/// not known keeps its place between its neighbours. The order keeps no game state, so that the game and the tests use it both.
 namespace openblack::game_frame
 {
 
@@ -35,11 +35,14 @@ enum class Stage : uint8_t
 	Turns,
 	/// The game time of the frame, which is zero while the game is paused
 	FrameTime,
-	/// The camera moves, with the movement of the mouse in this frame
+	/// The camera moves, with the movement of the mouse in this frame, and shakes
 	Camera,
+	/// The draw starts. A film shows its frames, and the creatures get their poses between their last two turns, before
+	/// the hand moves.
+	DrawStart,
 	/// The hand goes to the point under the cursor, as the camera now sees it
 	PreDraw,
-	/// The world is drawn
+	/// The world is drawn. The effects move on as the draw shows them, after the hand moved.
 	Draw,
 	/// The keys of the camera. Their steps move the camera in the next frame.
 	CameraKeys,
@@ -52,23 +55,25 @@ enum class Step : uint8_t
 {
 	FrameClock,
 	Input,
-	ScreenMarks,
 	DebugGui,
 	Interface,
 	GripEffect,
 	Turns,
 	FrameTime,
-	Video,
-	PauseText,
 	CameraMouse,
 	CameraPaths,
 	CameraControllers,
 	Camera,
+	CameraShake,
 	Temple,
-	Bookmarks,
 	HighDetail,
-	FrameEffects,
+	Video,
+	PauseText,
+	CreaturePoses,
 	Hand,
+	Bookmarks,
+	FrameEffects,
+	ScreenMarks,
 	Entities,
 	Audio,
 	CameraKeys,
@@ -91,29 +96,35 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     {.step = Step::FrameClock, .stage = std::nullopt},
     // The keys, the mouse buttons and the pointer
     {.step = Step::Input, .stage = Stage::Input},
-    // The numbers and the marks that rise over things, by the real time
-    {.step = Step::ScreenMarks, .stage = std::nullopt},
     {.step = Step::DebugGui, .stage = std::nullopt},
     {.step = Step::Interface, .stage = Stage::FrameUpdates},
     {.step = Step::GripEffect, .stage = std::nullopt},
     {.step = Step::Turns, .stage = Stage::Turns},
     {.step = Step::FrameTime, .stage = Stage::FrameTime},
-    {.step = Step::Video, .stage = std::nullopt},
-    {.step = Step::PauseText, .stage = std::nullopt},
     // The movement of the mouse turns, tilts and zooms the camera in the same frame
     {.step = Step::CameraMouse, .stage = Stage::Camera},
     // A miracle's camera path, the editor's camera and the creature's camera
     {.step = Step::CameraPaths, .stage = Stage::Camera},
     {.step = Step::CameraControllers, .stage = Stage::Camera},
     {.step = Step::Camera, .stage = Stage::Camera},
+    // The camera shakes near a blast, before the hand looks through it
+    {.step = Step::CameraShake, .stage = Stage::Camera},
     // The temple's camera can take the player out of the temple
     {.step = Step::Temple, .stage = Stage::Camera},
-    // The markers of the bookmarks throb by the game time of this frame
-    {.step = Step::Bookmarks, .stage = std::nullopt},
     {.step = Step::HighDetail, .stage = std::nullopt},
-    // The effects of the frame. Each has its own place in the game, which is not known for all of them.
-    {.step = Step::FrameEffects, .stage = std::nullopt},
+    // A full-screen film decodes the frames that are due, as the draw starts
+    {.step = Step::Video, .stage = Stage::DrawStart},
+    // The words of the pause and the speed, after the frame's keys, turns and film
+    {.step = Step::PauseText, .stage = std::nullopt},
+    // The creatures' fights, walks, animations, hair and the sounds of their animations
+    {.step = Step::CreaturePoses, .stage = Stage::DrawStart},
     {.step = Step::Hand, .stage = Stage::PreDraw},
+    // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
+    {.step = Step::Bookmarks, .stage = Stage::Draw},
+    // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts
+    {.step = Step::FrameEffects, .stage = Stage::Draw},
+    // The numbers and the marks that rise over things, by the game time of the frame
+    {.step = Step::ScreenMarks, .stage = Stage::Draw},
     {.step = Step::Entities, .stage = Stage::Draw},
     {.step = Step::Audio, .stage = std::nullopt},
     // The keys of the camera act after the camera moved, so their steps move the camera in the next frame
@@ -138,6 +149,45 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
 		last = place.stage;
 	}
 	return true;
+}
+
+/// What the player can do with the camera keys in this frame
+struct CameraKeyState
+{
+	/// The player is in the temple
+	bool inTemple;
+	/// The interface takes the player's input, which a script can stop
+	bool interfaceActive;
+	/// A box of the menu or another dialog is on the screen
+	bool boxShows;
+};
+
+/// True when the camera reads its keys after its step. In the temple, without the interface or with a box on the screen,
+/// the camera does not read its keys and does not push. Its next step then gets no key steps.
+[[nodiscard]] constexpr bool CameraReadsKeys(const CameraKeyState& state)
+{
+	return !state.inTemple && state.interfaceActive && !state.boxShows;
+}
+
+/// Whether a step is part of the frame's graphics: it moves the camera, puts the hand under the cursor or draws the
+/// world. The game does none of these steps while its window is minimised. The turns, the keys and the other steps
+/// continue.
+[[nodiscard]] constexpr bool IsGraphics(Step step)
+{
+	for (const auto& place : k_Frame)
+	{
+		if (place.step == step)
+		{
+			return place.stage == Stage::Camera || place.stage == Stage::PreDraw || place.stage == Stage::Draw;
+		}
+	}
+	return false;
+}
+
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+{
+	return !minimised || pictureWanted;
 }
 
 /// Does each step of the frame, in the order of the frame. A step that returns false stops the frame.

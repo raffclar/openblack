@@ -45,7 +45,7 @@ constexpr float k_GlowScale = 1.5f;
 constexpr uint32_t k_GlowAlpha = 100;
 /// The glows' sheet and the players' symbols, four to a row
 constexpr std::string_view k_GlowTexture = "S_SpriteSheet3";
-constexpr std::string_view k_SymbolTexture = "ChooseSymbol";
+constexpr std::string_view k_SymbolTexture = "PlayersSymbols";
 constexpr int k_GlowCellsPerRow = 8;
 constexpr int k_SymbolCellsPerRow = 4;
 /// A mist's animation counts so many a millisecond up to 900, then starts again

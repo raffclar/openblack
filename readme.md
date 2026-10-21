@@ -1,5 +1,11 @@
 # openblack
 
+## Notice
+
+This is a heavily vibe-coded fork of openblack to gauge what development challenges lie ahead. If you wish to contribute, please help upstream.
+
+---
+
 [![VCPKG CI](https://github.com/openblack/openblack/actions/workflows/ci-vcpkg.yml/badge.svg?branch=master&event=push)](https://github.com/openblack/openblack/actions/workflows/ci-vcpkg.yml?query=branch%3Amaster+event%3Apush)
 [![Packaging CI](https://github.com/openblack/openblack/actions/workflows/packaging.yml/badge.svg?branch=master&event=push)](https://github.com/openblack/openblack/actions/workflows/packaging.yml?query=branch%3Amaster+event%3Apush)
 [![GitHub Stars](https://img.shields.io/github/stars/openblack/openblack?logo=github)](https://github.com/openblack/openblack/stargazers)

@@ -338,3 +338,16 @@ TEST(TownDesire, ALandScriptNamesADesire)
 	EXPECT_FALSE(td::DesireByName("Food ").has_value());
 	EXPECT_FALSE(td::DesireByName("").has_value());
 }
+
+TEST(TownDesire, ABuiltDispenserCountsAmongTheBuildingsAndTheCivicBuildings)
+{
+	td::DesireInputs in;
+	td::CountBuiltBuilding(in, AbodeNumber::SpellDispenser, AbodeType::SpellDispenser);
+	td::CountBuiltBuilding(in, AbodeNumber::Field, AbodeType::Field);
+	td::CountBuiltBuilding(in, AbodeNumber::Wonder, AbodeType::Wonder);
+	EXPECT_EQ(in.abodeCount, 3U);
+	EXPECT_EQ(in.stats.abodesByNumber.at(static_cast<size_t>(AbodeNumber::SpellDispenser)), 1U);
+	EXPECT_EQ(in.stats.abodesByNumber.at(static_cast<size_t>(AbodeNumber::Field)), 1U);
+	// A field is not a civic building
+	EXPECT_EQ(in.stats.civicBuildings, 2U);
+}

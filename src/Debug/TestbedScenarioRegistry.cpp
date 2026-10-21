@@ -1858,8 +1858,9 @@ void AddStory(std::vector<Scenario>& all)
 	                   "starts, as when its heart loses the last of its life.",
 	    .expected = "From 5.5 seconds the temple glows in red, the player's colour, and the glow beats with the heartbeat. "
 	                "From 16 seconds the temple fades out over four seconds. A little into the fade it writes no depth: "
-	                "the land and the things behind it show through it, and its cut-out parts go first. It is not drawn "
-	                "after 23.8 seconds, just before it goes.",
+	                "the land and the things behind it show through it, and its cut-out parts go first. From 16 seconds a "
+	                "faint shell of light in red covers the heart, reaching out with the heartbeat and growing at the "
+	                "end. It is not drawn after 23.8 seconds, just before it goes.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview,
 	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
@@ -1922,6 +1923,22 @@ void AddStory(std::vector<Scenario>& all)
 	                .include = {k_Temple - glm::vec2 {40.0f}, k_Temple + glm::vec2 {40.0f}},
 	                .distance = 1.0f},
 	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn, .life = 0.3f}},
+	});
+	all.push_back({
+	    .id = "audio.temple_heartbeat",
+	    .name = "The heartbeat heard from the player's temple",
+	    .facet = Facet::Story,
+	    .description = "The player's temple stands west of the middle, fully built, with no danger to the player's "
+	                   "people. The camera looks at it from less than 140 m.",
+	    .expected = "From the first turn a heartbeat sounds from the temple without a stop, heard to 500 m and fully to a "
+	                "third of that. It plays at 30% of its rate, as the heart is calm, and the temple's column of light "
+	                "throbs with the same beat. It starts only once: it is not heard twice over. It starts only with the "
+	                "camera within 140 m of the temple.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Temple - glm::vec2 {25.0f}, k_Temple + glm::vec2 {25.0f}},
+	                .distance = 1.0f},
+	    .temples = {{.offset = k_Temple, .angle = k_TempleTurn}},
 	});
 	AddBreederOffers(all);
 	AddOgreLair(all);
@@ -5876,6 +5893,37 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
+
+	// A dispenser floats a heal globe in front of the camera, in the player's influence, and the pointer rests on it
+	all.push_back({
+	    .id = "hand.globe_tooltip",
+	    .name = "The name of the miracle over a one-shot globe",
+	    .facet = Facet::Hand,
+	    .description = "The pointer rests on the land for three seconds, then on the dispenser's globe for six seconds.",
+	    .expected = "Over the land: \"Move\". Over the globe: the name of its miracle (the heal miracle) at once, with no "
+	                "mouse button, and no \"Pick Up\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.85f}},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 3.0f, .point = {0.5f, 0.31f}}},
+	});
+	// A "did you know" sign stands in front of the camera. The hand taps it, and its tip bubble comes up.
+	all.push_back({
+	    .id = "hand.bubble_scroll_tooltip",
+	    .name = "The tooltip over the tip bubble of a sign",
+	    .facet = Facet::Hand,
+	    .description = "The pointer goes to the sign and taps it with a quick press of the Action button. Then move the "
+	                   "pointer onto the tip bubble, and hold the Action button on it.",
+	    .expected = "Over the bubble, and while the hand grips it: \"Scroll\" with the Action button and the up and down "
+	                "arrows. Over the land: \"Move\".",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 3.0f, 6.0f}},
+	    .highlights = {{.kind = 1, .offset = {0.0f, 6.0f}, .challenge = 0, .tip = std::pair {4128u, 3u}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -9115,6 +9163,21 @@ void AddParticles(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "particles.profile_symbol",
+	    .name = "The symbol of the player's profile in the world",
+	    .facet = Facet::Particles,
+	    .description = "The player icon fountain of the first player and of the second player, side by side. The world "
+	                   "shows the tenth symbol for the first player, as when the player's profile has that symbol.",
+	    .expected = "The fountain on the left throws up the tenth symbol of the players' symbols page in the first "
+	                "player's colour. The fountain on the right throws up the second player's symbol as the file of the "
+	                "players' symbols has it.",
+	    .environment = {.profileSymbol = 9u},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, 0.0f}, {15.0f, 0.0f}}, .distance = 0.35f},
+	    .particles = {{.file = "SF_PlayerIconFountain", .offset = {-10.0f, 0.0f}, .magnitude = 2.0f, .player = 0},
+	                  {.file = "SF_PlayerIconFountain", .offset = {10.0f, 0.0f}, .magnitude = 2.0f, .player = 1}},
+	});
+
+	all.push_back({
 	    .id = "particles.draw_paths",
 	    .name = "Sorted and queued sprites",
 	    .facet = Facet::Particles,
@@ -9558,6 +9621,39 @@ void AddScriptTaskRelease(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview},
 	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
 	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 5.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.low_detail_rooms",
+	    .name = "At the lowest detail the temple's rooms have no light maps",
+	    .facet = Facet::Story,
+	    .description = "Start the game with --detail-level 0. The player has a temple and is put in its main room. Walk "
+	                   "through the doors into the other rooms.",
+	    .expected = "Each room, its floor and its pools are the rooms' low models: plainer walls with no light from "
+	                "light maps, each wall hazed as one piece. The domes are as at other levels. The doors, the "
+	                "scrolls and the clicks on them work as at other levels. With no --detail-level, or above 0, the "
+	                "rooms have their light maps.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "temple.way_out_glow",
+	    .name = "A white light grows at the temple's way out as the player leaves",
+	    .facet = Facet::Story,
+	    .description = "The player has a temple and is put in its main room. After ten seconds the camera walks to the "
+	                   "door out of the temple and through it, as a click on that door does.",
+	    .expected = "The camera turns to the door out. 2.2 seconds after the walk starts, a white sheet of light grows "
+	                "on the floor from the door towards the middle of the room, added over all of the room, its texture "
+	                "slowly drifting. It is brightest and widest at the door and fades to nothing towards the middle. "
+	                "Then the player leaves the temple.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 2.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 10.0f, .value = static_cast<size_t>(TempleRoom::Unknown)}},
 	});
 }
 
@@ -10084,13 +10180,13 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::HandRelease || kind == Kind::RemoveObject || kind == Kind::ReadTip ||
 	       kind == Kind::LookAtTempleScroll || kind == Kind::HandGripTotem || kind == Kind::ProfileFolderCheck ||
 	       kind == Kind::PlayCustomMusic || kind == Kind::ShowCustomMusicControls || kind == Kind::OwnTattooPicture ||
-	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox ||
-	       kind == Kind::OpenMenuPage || kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic ||
-	       kind == Kind::SaveGame || kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame ||
-	       kind == Kind::PlayLogoEffect || kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine ||
-	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
-	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
-	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
+	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
+	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
+	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
+	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
+	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
+	       kind == Kind::RemoveTeleportStone || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)

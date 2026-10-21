@@ -465,9 +465,15 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
-		// Letting go of the button ends a scoop; the hand holds its handful
+		// Letting go of the button ends a scoop; the hand holds its handful. After a pile or a fish farm, but not a field,
+		// the hand shows the amount it holds.
 		if (grab->scoopSource != entt::null)
 		{
+			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
+			    handful != nullptr && Exists(grab->scoopSource) && !_world->FieldFactsOf(grab->scoopSource).has_value())
+			{
+				_amountToolTip = handful->amount;
+			}
 			EndScoop(*grab);
 		}
 		break;
@@ -513,7 +519,6 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 		return false;
 	}
 	Take(grab, handful, false);
-	_amountToolTip = first;
 	if (grab.state != HandGrab::State::Holding)
 	{
 		return false;
@@ -600,6 +605,7 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 	}
 	_world->TakeFromField(grab.scoopSource, taken);
 	handful->amount += taken;
+	_amountToolTip = handful->amount;
 	_world->ResizePot(grab.object);
 	return true;
 }
@@ -660,6 +666,7 @@ bool HandGrabSystem::ScoopFishFarm(HandGrab& grab, const fish_farm::Type& type)
 		return false;
 	}
 	handful->amount += wanted;
+	_amountToolTip = handful->amount;
 	_world->ResizePot(grab.object);
 	return true;
 }
@@ -932,6 +939,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->CatchFirefly(object);
 	// The help counts each thing that the hand takes. A thing that the hand catches as it flies counts the same.
 	_world->CountHelpEvent(help::profile::k_PickUp);
+	// The hand starts the path of its gesture again
+	_world->ForgetGesturePath();
 
 	// The thing's own part of going into the hand
 	if (registry.AllOf<Villager>(object))
@@ -1001,6 +1010,8 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 	registry.Remove<InHand>(object);
 	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
 	_world->CountHelpEvent(help::profile::k_Throw);
+	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this.
+	_world->ForgetGesturePath();
 	if (!forced)
 	{
 		// It starts from where it is drawn in the hand, lifted out of the land, and laid along the slope when let go
@@ -1322,6 +1333,8 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	{
 		return false;
 	}
+	// The help counts the gift as the creature may take it, before the creature starts to take it
+	_world->CountHelpEvent(help::profile::k_Give);
 	if (!_world->GiveTo(*creature, held, !_world->RightHanded()))
 	{
 		return false;

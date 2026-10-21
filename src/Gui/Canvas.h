@@ -40,8 +40,19 @@ public:
 		/// Added, by its alpha, as the game's additive weather material is
 		Additive,
 	};
+	/// How what is drawn is tested against the depth that the scene leaves in the view
+	enum class DepthTest : uint8_t
+	{
+		/// It goes over all of the scene
+		Off,
+		/// It shows only where it is as near as the scene or nearer, with the depth buffer's near values above its far
+		/// values
+		NearerIsGreater,
+		/// The same, with the depth buffer's near values below its far values
+		NearerIsLess,
+	};
 
-	explicit Canvas(graphics::RenderPass view = graphics::RenderPass::Interface);
+	explicit Canvas(graphics::RenderPass view = graphics::RenderPass::Interface, DepthTest depthTest = DepthTest::Off);
 	~Canvas();
 	Canvas(const Canvas&) = delete;
 	Canvas& operator=(const Canvas&) = delete;
@@ -53,6 +64,10 @@ public:
 	void SetOrigin(glm::vec2 origin) noexcept { _origin = origin; }
 	/// How what is drawn from now on blends
 	void SetBlend(Blend blend) noexcept { _blend = blend; }
+	/// The depth buffer's value of what is drawn from now on. Back to 0 with each frame
+	void SetDepth(float depth) noexcept { _depth = depth; }
+	/// How the frame's draws are tested against the scene's depth, from this frame on
+	void SetDepthTest(DepthTest depthTest) noexcept { _depthTest = depthTest; }
 	/// A rectangle of a texture, tinted by colour (red, green, blue and alpha from 0 to 1). Without a texture it is
 	/// filled with the colour. Corners whose minimum is beyond the maximum flip the texture.
 	void DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 uvMax, glm::vec4 colour,
@@ -67,8 +82,8 @@ public:
 	/// Submits the frame's interface
 	void End();
 	/// Makes the renderer's pipelines for a canvas in a view before the canvas first draws there: a draw that covers no
-	/// pixel for each way that a canvas blends
-	static void WarmUp(graphics::RenderPass view);
+	/// pixel for each way that a canvas blends, with the depth test of the canvas
+	static void WarmUp(graphics::RenderPass view, DepthTest depthTest = DepthTest::Off);
 
 	[[nodiscard]] glm::u16vec2 GetResolution() const noexcept { return _resolution; }
 
@@ -77,6 +92,7 @@ private:
 	{
 		float x;
 		float y;
+		float z;
 		float u;
 		float v;
 		uint32_t abgr;
@@ -92,6 +108,8 @@ private:
 	graphics::RenderPass _view;
 	glm::u16vec2 _resolution {0, 0};
 	Blend _blend {Blend::Alpha};
+	DepthTest _depthTest {DepthTest::Off};
+	float _depth {0.0f};
 	glm::vec2 _origin {0.0f, 0.0f};
 	std::vector<Vertex> _vertices;
 	std::vector<Batch> _batches;

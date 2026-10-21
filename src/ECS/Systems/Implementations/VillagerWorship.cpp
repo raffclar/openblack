@@ -1007,7 +1007,7 @@ uint32_t villager_worship::GotoStoragePitForWorshipSupplies(LivingAction& action
 {
 	const auto villager = EntityOf(action);
 	const auto town = TownOf(villager);
-	const auto pit = construction::StoragePitOf(town);
+	const auto pit = villager_build::StoreOf(Entities().Get<const Villager>(villager), town);
 	if (!pit.has_value() || !villager_home::IsFunctional(*pit) || SiteOfTown(town) == entt::null)
 	{
 		return 0;

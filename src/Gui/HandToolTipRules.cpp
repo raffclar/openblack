@@ -14,7 +14,7 @@
 namespace openblack::gui::hand_tooltip
 {
 
-Offer OverNothing(const CameraFacts& camera)
+Offer OverNothing(const CameraFacts& camera, bool overFish)
 {
 	// The tilt comes before the turn
 	if ((camera.tricons & k_PitchHint) != 0 && (camera.features & k_PitchFeature) != 0)
@@ -25,6 +25,11 @@ Offer OverNothing(const CameraFacts& camera)
 	{
 		return {.index = k_Rotate, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_All};
 	}
+	// Over the fish of a fish farm the hand offers to take them, with the Action button
+	if (overFish)
+	{
+		return {.index = k_PickUp, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_None};
+	}
 	// The zoom tooltip shows the mouse of the zoom in control and no arrows
 	if (camera.centreDistance.has_value() && *camera.centreDistance < k_ZoomOutDistance && camera.pitch > k_ZoomOutPitch &&
 	    (camera.features & k_ZoomFeature) != 0)
@@ -34,10 +39,10 @@ Offer OverNothing(const CameraFacts& camera)
 	return {.index = k_Move, .action = ToolTipAction::Select, .arrows = ToolTipArrows::k_All};
 }
 
-std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera)
+std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera, bool overFish)
 {
-	const auto offer = OverNothing(camera);
-	if (offer.index == k_Pitch || offer.index == k_Rotate || !camera.centreDistance.has_value())
+	const auto offer = OverNothing(camera, overFish);
+	if (offer.index == k_Pitch || offer.index == k_Rotate || offer.index == k_PickUp || !camera.centreDistance.has_value())
 	{
 		return std::nullopt;
 	}
@@ -94,6 +99,16 @@ std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText)
 		return std::nullopt;
 	}
 	return Offer {.index = miracleToolTipText - k_FirstToolTipText};
+}
+
+Offer BubbleOffer()
+{
+	return {.index = k_Scroll, .action = ToolTipAction::Apply, .arrows = ToolTipArrows::k_UpDown};
+}
+
+std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText)
+{
+	return SpellIconOffer(givesAMiracle ? miracleToolTipText : seedToolTipText);
 }
 
 std::optional<std::vector<Offer>> Holding(bool handInInfluence, HeldUse use, bool tree)

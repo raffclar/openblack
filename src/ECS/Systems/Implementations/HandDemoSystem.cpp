@@ -22,7 +22,9 @@
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -180,11 +182,24 @@ void RetargetClick(const hnd::HNDRecord& record)
 void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrigger, bool withoutHandModify)
 {
 	// The hand lets go of what it holds first, unless the demonstration needs it (a miracle to cast)
-	// TODO(advisor-help): the game also cancels the player's spells being charged and takes off an idle creature's
-	// leash here; neither is reachable this way in openblack yet
+	// TODO(miracles-gaps-1): the game also cancels the player's miracles that charge at their worship site icons here.
+	// The first land has no worship site, thus no miracle charges there.
 	if (!withoutHandModify && Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value())
 	{
 		Locator::handGrabSystem::value().ForceDrop();
+	}
+	// A leash on the player's creature that is not tied to a thing comes off too
+	if (Locator::leashSystem::has_value())
+	{
+		auto& leash = Locator::leashSystem::value();
+		const auto player =
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		if (const auto creature = leash.PlayersCreature(player);
+		    creature.has_value() &&
+		    hand_demo::TakesOffLeash(withoutHandModify, leash.IsLeashed(*creature), leash.TiedTo(*creature).has_value()))
+		{
+			leash.TakeOff(*creature);
+		}
 	}
 	if (_playback)
 	{

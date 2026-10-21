@@ -145,6 +145,8 @@ public:
 	/// Whether a room is drawn whole: the room the player is in, the room the camera is on its way into, and the main
 	/// room from the others while one of its doors is open
 	[[nodiscard]] virtual bool IsRoomDrawn(TempleRoom room) const = 0;
+	/// How long the camera has walked to and through the main room's door out of the temple, while it does
+	[[nodiscard]] virtual std::optional<float> GetWayOutSeconds() const = 0;
 	/// The main room's doors, which swing open as the camera walks through them
 	[[nodiscard]] virtual TempleDoors& GetDoors() = 0;
 	[[nodiscard]] virtual const TempleDoors& GetDoors() const = 0;

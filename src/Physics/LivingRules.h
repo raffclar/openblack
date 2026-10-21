@@ -90,6 +90,10 @@ enum class LandedLair : uint8_t
 /// Most animals' flocks move their home to where the animal landed; lions, leopards and the wolf miracle's wolves only
 /// when it is the flock's leader; tigers and wolves pick a forest
 [[nodiscard]] LandedLair LairOnLanding(AnimalInfo kind, bool leader);
+/// Whether a landed animal, when its landing clip ends, joins a flock near it and then starts to wander as its kind does.
+/// The game does this for every kind. In openblack the wolves of the wolf miracle decide again instead (their wander
+/// after a landing is not known).
+[[nodiscard]] bool JoinsAFlockAfterLanding(AnimalInfo kind);
 
 /// A knock harder than this many times a living thing's own weight hurts it
 inline constexpr float k_HurtingKnock = 2.0f;

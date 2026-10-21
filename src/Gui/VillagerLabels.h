@@ -178,9 +178,11 @@ using WidthFn = std::function<float(std::u16string_view text, float lineHeight)>
 /// A label wanted this frame
 struct Request
 {
-	/// The whole pixel the point over the head falls in (on the screen), and its distance from the camera
+	/// The whole pixel the point over the head falls in (on the screen), its distance from the camera, and its depth in
+	/// front of the camera
 	glm::ivec2 pixel {0};
 	float distance {0.0f};
+	float depth {0.0f};
 	float size {1.0f};
 	std::u16string text;
 	glm::u8vec3 colour {255, 255, 255};
@@ -194,6 +196,8 @@ struct Label
 	float bottom {0.0f};
 	glm::vec2 pixel {0.0f};
 	float distance {0.0f};
+	/// The depth of the point in front of the camera
+	float depth {0.0f};
 	/// The screen's scale of the label's pixel sizes
 	float pixelScale {1.0f};
 	float lineHeight {0.0f};

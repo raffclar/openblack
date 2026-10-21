@@ -22,6 +22,7 @@
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
@@ -43,6 +44,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/MagicTables.h"
 
 namespace openblack::gui::hand_tooltip
 {
@@ -226,6 +228,26 @@ std::optional<Offer> SpellIconOf(entt::entity object)
 		return std::nullopt;
 	}
 	return SpellIconOffer(static_cast<uint32_t>(seeds.at(row).tooltip));
+}
+
+std::optional<Offer> GlobeOf(entt::entity object)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* globe = registry.Valid(object) ? registry.TryGet<const OneOffSpellSeed>(object) : nullptr;
+	if (globe == nullptr || registry.AllOf<CannotBePickedUp>(object) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& info = Locator::infoConstants::value();
+	if (static_cast<size_t>(globe->seedType) >= info.spellSeed.size())
+	{
+		return std::nullopt;
+	}
+	const auto& seed = magic::GetSpellSeedInfo(info, globe->seedType);
+	const auto type = magic::GetMagicTypeFromPowerUpLevel(seed, globe->powerUp);
+	return GlobeOffer(type != MagicType::None,
+	                  type != MagicType::None ? magic::GetHeldToolTipText(info, seed, globe->powerUp) : 0,
+	                  static_cast<uint32_t>(seed.tooltip));
 }
 
 HeldUse UseAt(entt::entity held, std::optional<entt::entity> target)

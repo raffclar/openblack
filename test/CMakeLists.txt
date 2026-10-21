@@ -1613,5 +1613,20 @@ openblack_setup_and_add_test(test_abode_door test_abode_door.cpp)
 openblack_setup_and_add_test(test_game_frame_order test_game_frame_order.cpp)
 openblack_setup_and_add_test(test_camera_keys_frame camera/test_camera_keys_frame.cpp)
 openblack_setup_and_add_test(test_clear_view_hand camera/test_clear_view_hand.cpp)
+openblack_setup_and_add_test(test_mouse_moves help/test_mouse_moves.cpp)
+openblack_setup_and_add_test(test_players_symbols test_players_symbols.cpp)
+openblack_setup_and_add_test(test_system_libraries test_system_libraries.cpp)
+openblack_setup_and_add_test(test_map_script test_map_script.cpp)
+openblack_setup_and_add_test(test_world_text_depth test_world_text_depth.cpp)
+openblack_setup_and_add_test(
+  test_oracle_world_text_depth oracle/test_oracle_world_text_depth.cpp
+)
+set_tests_properties(
+  test_oracle_world_text_depth
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_temple_exit_glow graphics/test_temple_exit_glow.cpp)
+openblack_setup_and_add_test(test_temple_room_meshes temple/test_temple_room_meshes.cpp)
 openblack_setup_and_add_test(test_script_value_json test_script_value_json.cpp)
 target_link_libraries(test_script_value_json PRIVATE ScriptLibrary)

@@ -1203,6 +1203,13 @@ void Runner::SetUpEnvironment(const Environment& environment)
 		Locator::config::value().pushScrolling = true;
 		Locator::config::value().testbedPushScrollInWindow = true;
 	}
+	if (environment.profileSymbol.has_value())
+	{
+		if (auto* game = Game::Instance(); game != nullptr)
+		{
+			game->MakePlayersSymbols(environment.profileSymbol);
+		}
+	}
 	if (environment.drawFootpaths && Locator::config::has_value())
 	{
 		Locator::config::value().drawFootpaths = true;
@@ -2778,7 +2785,12 @@ void Runner::Give(const Command& command)
 		if (Locator::temple::has_value())
 		{
 			auto& temple = Locator::temple::value();
-			if (temple.Active())
+			// In the temple, no room is a walk through the main room's way out
+			if (temple.Active() && room == TempleRoom::Unknown)
+			{
+				temple.EnterRoom(room);
+			}
+			else if (temple.Active())
 			{
 				temple.GoToRoom(room);
 			}

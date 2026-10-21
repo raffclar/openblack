@@ -92,7 +92,7 @@ constexpr uint32_t k_BeliefLeft = 89;
 /// "%3.0f Belief Needed": the words the belief tooltip shows instead while another player is ahead in the town, with
 /// how far behind the player is
 constexpr uint32_t k_BeliefNeeded = 109;
-/// "Amount: %3.0f", forced as the hand takes food or wood from a pile
+/// "Amount: %3.0f", forced as the hand takes food from a pile, a field or a fish farm
 constexpr uint32_t k_HeldAmount = 119;
 /// "Temple Health: %3.0f%%"
 constexpr uint32_t k_TempleHealth = 117;

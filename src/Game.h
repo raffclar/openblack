@@ -210,6 +210,9 @@ struct Arguments
 class Game
 {
 public:
+	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
+	/// testbed scenario can give another symbol in place of the profile's.
+	void MakePlayersSymbols(std::optional<uint32_t> symbol = std::nullopt);
 	static constexpr auto k_TurnDuration = std::chrono::milliseconds(100);
 	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
 	/// graphics card each frame, so no frame waits long for it: sixteen buffers or textures keep the renderer's share of a
@@ -253,6 +256,9 @@ public:
 	};
 	/// One step of the frame. It returns false when the game must stop.
 	bool PlayFrameStep(game_frame::Step step, FrameState& frame);
+	/// Whether this frame moves the camera, puts the hand under the cursor and draws the world: not while the window is
+	/// minimised, unless a picture of the frame is necessary
+	[[nodiscard]] bool DoesFrameGraphics() const;
 	/// The clock of the frame, the debug inspector and the time that the frame takes
 	void StartFrame(FrameState& frame);
 	/// The keys, the mouse buttons and the pointer of the frame
@@ -269,8 +275,12 @@ public:
 	void UpdateInterfaceFrame(std::chrono::microseconds deltaTime);
 	/// The turn of the game when one is due. It returns false when the game must stop.
 	bool PlayTurns();
-	/// The effects of the frame, by the frame's game time
+	/// The draw starts: the creatures get their poses, before the hand moves
+	void UpdateCreaturePoses();
+	/// The effects of the frame that the draw moves on, by the frame's game time, after the hand moved
 	void UpdateFrameEffects();
+	/// The numbers and the marks that rise over things
+	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// The things in view are made ready for the draw of this frame
@@ -314,6 +324,9 @@ public:
 	/// Starts a new game on the first land from scratch, as the game's new game does, the story's scripts starting
 	/// again; for developers and agents, `start` asks the start-of-game question or answers it at once
 	bool StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept;
+	/// The land script that a new game starts on: the first LOAD_FEATURE_SCRIPT of the map script in the Scripts folder,
+	/// as the game reads it. Gives nothing when the map script or its land script is not there.
+	[[nodiscard]] std::optional<std::filesystem::path> MapScriptLand() const;
 	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
 	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
 	bool ContinueFromExitSave() noexcept;

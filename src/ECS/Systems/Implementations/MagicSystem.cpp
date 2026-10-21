@@ -1556,6 +1556,11 @@ void MagicSystem::ProcessTurn()
 		else
 		{
 			auto& seed = registry.Get<SpellSeed>(*_held);
+			// In its first turn in the hand, the seed makes the hand start the path of its gesture again
+			if (seed.turnsInHand == 0 && Locator::gestureSystem::has_value())
+			{
+				Locator::gestureSystem::value().SeedFirstTurnInHand();
+			}
 			++seed.turnsInHand;
 			const bool wasReady = seed.ready;
 			seed.ready =
@@ -1963,6 +1968,11 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
 	_held = entity;
 	_input = {};
+	// A miracle that goes into the hand makes the hand start the path of its gesture again
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+	}
 	// The help counts the new seed in the hand, then the hand that took a thing
 	if (Locator::helpProfileSystem::has_value())
 	{
@@ -2386,6 +2396,13 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	after.hasCast = true;
 	after.storedChants = -1.0f;
 	AfterSeedCast(after, type);
+	// The help counts the cast of this computer's hand, a spell for creatures apart from the other miracles
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(spell.spellClass == magic::SpellClass::Creature
+		                                                ? help::profile::k_CastCreatureMiracle
+		                                                : help::profile::k_CastMiracle);
+	}
 	// Food and wood lift and tip the hand as they pour, keeping it where it began; the water raises it eight units and
 	// lowers it again over eight seconds, over and over as it rains, the hand free to move
 	if (spell.castFromHand && spell.spellClass == magic::SpellClass::Resource)
@@ -2418,6 +2435,11 @@ void MagicSystem::AfterCast(entt::entity spellEntity)
 	{
 		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellSucceedCast, spell->castPosition, std::nullopt,
 		                                                 entt::null);
+	}
+	// The hand lets go of the seed, so it starts the path of its gesture again. A seed kept in the hand does not do this.
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ForgetPath();
 	}
 	SeedOutOfHandWithSpell(fate == magic::SeedAfterCast::FollowsSpell);
 }
@@ -2741,15 +2763,10 @@ void MagicSystem::DiscardHeldSeed()
 		const auto& seed = registry.Get<const SpellSeed>(*_held);
 		ReturnFromSeed(seed, magic::SeedRefund(seed.hasIcon, seed.chantStore, seed.storedChants, seed.hasCast));
 	}
-	if (Locator::audio::has_value())
-	{
-		constexpr uint32_t k_ShakeVolume = 35;
-		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ShakeHand_01), {.volume = k_ShakeVolume});
-	}
-	// A band flies off the hand
+	// The hand shakes: its sound plays and a band flies off the hand
 	if (Locator::miracleFxSystem::has_value())
 	{
-		Locator::miracleFxSystem::value().SeedShakenOff();
+		Locator::miracleFxSystem::value().HandShaken();
 	}
 	LetGoOfSeed(true);
 	_lastHandResult = HandResult::Discarded;

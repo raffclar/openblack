@@ -139,7 +139,7 @@ constexpr float k_WindByteSpeed = 0.125f;
 constexpr float k_SpeedOfSound = 347.0f;
 
 /// The sheets the players' symbols are drawn with, whatever effect first shows one
-constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "ChooseSymbol"};
+constexpr std::array<std::string_view, 2> k_SymbolTextures {"S_SpriteSheet3", "PlayersSymbols"};
 } // namespace
 
 float GameParticleWorld::LandHeight(glm::vec2 xz) const
@@ -1356,6 +1356,7 @@ void ParticleSystem::Reset()
 	_pendingStormBolts.clear();
 	_gestureTrails = k_NoEffect;
 	_gestureChain = k_NoEffect;
+	_selectionEffect = k_NoEffect;
 	_world.Reset();
 }
 
@@ -1708,6 +1709,7 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _pendingStormBolts);
 	reflection::Save(out, _gestureTrails);
 	reflection::Save(out, _gestureChain);
+	reflection::Save(out, _selectionEffect);
 	reflection::Save(out, _handManaPath);
 	reflection::Save(out, _beliefWanted);
 	reflection::Save(out, _chainScrollPace);
@@ -1765,6 +1767,7 @@ bool ParticleSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _pendingStormBolts);
 	reflection::Load(in, _gestureTrails);
 	reflection::Load(in, _gestureChain);
+	reflection::Load(in, _selectionEffect);
 	reflection::Load(in, _handManaPath);
 	reflection::Load(in, _beliefWanted);
 	reflection::Load(in, _chainScrollPace);

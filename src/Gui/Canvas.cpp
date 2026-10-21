@@ -44,7 +44,7 @@ bgfx::VertexLayout& GetLayout()
 	static bgfx::VertexLayout layout = [] {
 		bgfx::VertexLayout result;
 		result.begin()
-		    .add(bgfx::Attrib::Position, 2, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::Position, 3, bgfx::AttribType::Float)
 		    .add(bgfx::Attrib::TexCoord0, 2, bgfx::AttribType::Float)
 		    .add(bgfx::Attrib::Color0, 4, bgfx::AttribType::Uint8, true)
 		    .end();
@@ -53,20 +53,30 @@ bgfx::VertexLayout& GetLayout()
 	return layout;
 }
 
-/// The state of a canvas's draws that blend in a way
-constexpr uint64_t StateOf(Canvas::Blend blend)
+/// The state of a canvas's draws that blend in a way and test the depth in a way. They never write the depth.
+constexpr uint64_t StateOf(Canvas::Blend blend, Canvas::DepthTest depthTest = Canvas::DepthTest::Off)
 {
+	uint64_t test = 0;
+	if (depthTest == Canvas::DepthTest::NearerIsGreater)
+	{
+		test = BGFX_STATE_DEPTH_TEST_GEQUAL;
+	}
+	else if (depthTest == Canvas::DepthTest::NearerIsLess)
+	{
+		test = BGFX_STATE_DEPTH_TEST_LEQUAL;
+	}
 	const auto mix = blend == Canvas::Blend::Additive
 	                     ? BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE,
 	                                                      BGFX_STATE_BLEND_ZERO, BGFX_STATE_BLEND_ONE)
 	                     : BGFX_STATE_BLEND_FUNC_SEPARATE(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_INV_SRC_ALPHA,
 	                                                      BGFX_STATE_BLEND_ONE, BGFX_STATE_BLEND_INV_SRC_ALPHA);
-	return BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | mix;
+	return BGFX_STATE_WRITE_RGB | BGFX_STATE_WRITE_A | mix | test;
 }
 } // namespace
 
-Canvas::Canvas(RenderPass view)
+Canvas::Canvas(RenderPass view, DepthTest depthTest)
     : _view(view)
+    , _depthTest(depthTest)
     , _white(std::make_unique<graphics::Texture2D>("InterfaceWhite"))
 {
 	static constexpr std::array<uint8_t, 4> k_White = {0xFF, 0xFF, 0xFF, 0xFF};
@@ -82,6 +92,7 @@ void Canvas::Begin(glm::u16vec2 resolution)
 	_vertices.clear();
 	_batches.clear();
 	_blend = Blend::Alpha;
+	_depth = 0.0f;
 	_origin = glm::vec2(0.0f);
 }
 
@@ -102,10 +113,10 @@ void Canvas::DrawQuad(glm::vec2 min, glm::vec2 max, glm::vec2 uvMin, glm::vec2 u
 	const auto abgr = ToAbgr(colour);
 	min += _origin;
 	max += _origin;
-	const Vertex topLeft {.x = min.x, .y = min.y, .u = uvMin.x, .v = uvMin.y, .abgr = abgr};
-	const Vertex topRight {.x = max.x, .y = min.y, .u = uvMax.x, .v = uvMin.y, .abgr = abgr};
-	const Vertex bottomLeft {.x = min.x, .y = max.y, .u = uvMin.x, .v = uvMax.y, .abgr = abgr};
-	const Vertex bottomRight {.x = max.x, .y = max.y, .u = uvMax.x, .v = uvMax.y, .abgr = abgr};
+	const Vertex topLeft {.x = min.x, .y = min.y, .z = _depth, .u = uvMin.x, .v = uvMin.y, .abgr = abgr};
+	const Vertex topRight {.x = max.x, .y = min.y, .z = _depth, .u = uvMax.x, .v = uvMin.y, .abgr = abgr};
+	const Vertex bottomLeft {.x = min.x, .y = max.y, .z = _depth, .u = uvMin.x, .v = uvMax.y, .abgr = abgr};
+	const Vertex bottomRight {.x = max.x, .y = max.y, .z = _depth, .u = uvMax.x, .v = uvMax.y, .abgr = abgr};
 	_vertices.insert(_vertices.end(), {topLeft, topRight, bottomRight, topLeft, bottomRight, bottomLeft});
 	_batches.back().vertexCount += 6;
 }
@@ -131,6 +142,7 @@ void Canvas::DrawShape(const std::array<glm::vec2, 4>& corners, const std::array
 	{
 		vertices.at(i) = {.x = corners.at(i).x + _origin.x,
 		                  .y = corners.at(i).y + _origin.y,
+		                  .z = _depth,
 		                  .u = uvs.at(i).x,
 		                  .v = uvs.at(i).y,
 		                  .abgr = ToAbgr(colours.at(i))};
@@ -175,12 +187,12 @@ void Canvas::End()
 		std::copy_n(_vertices.begin() + batch.firstVertex, batch.vertexCount, reinterpret_cast<Vertex*>(vertices.data));
 		bgfx::setVertexBuffer(0, &vertices);
 		program->SetTextureSampler("s_texture", 0, *batch.texture);
-		bgfx::setState(StateOf(batch.blend));
+		bgfx::setState(StateOf(batch.blend, _depthTest));
 		program->Submit(view);
 	}
 }
 
-void Canvas::WarmUp(RenderPass view)
+void Canvas::WarmUp(RenderPass view, DepthTest depthTest)
 {
 	// One triangle with its corners in one place, for each way to blend
 	constexpr std::array k_Blends {Blend::Alpha, Blend::Additive};
@@ -197,7 +209,7 @@ void Canvas::WarmUp(RenderPass view)
 		bgfx::allocTransientVertexBuffer(&vertices, k_Corners, layout);
 		std::fill_n(reinterpret_cast<Vertex*>(vertices.data), k_Corners, Vertex {});
 		bgfx::setVertexBuffer(0, &vertices);
-		bgfx::setState(StateOf(blend));
+		bgfx::setState(StateOf(blend, depthTest));
 		program->Submit(static_cast<bgfx::ViewId>(view));
 	}
 }

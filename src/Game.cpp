@@ -60,10 +60,12 @@
 #include "3D/LandLightTable.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
+#include "3D/PlayersSymbols.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
 #include "3D/TempleInteriorInterface.h"
+#include "3D/TempleRoomMeshes.h"
 #include "3D/WaterRings.h"
 #include "Audio/AtmosAudio.h"
 #include "Audio/AudioManagerInterface.h"
@@ -289,6 +291,7 @@
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyRebinding.h"
+#include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
 #include "Locator.h"
 #include "Parsers/InfoFile.h"
@@ -483,6 +486,28 @@ bool HandInInfluence()
 	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
 	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(PlayerNames::PLAYER_ONE, *point);
+}
+
+/// Whether the hand points at the water where the fish of a fish farm show, with the hand in the local player's
+/// influence: the hand can take fish there, though the farm has no model to point at
+bool HandOverFish()
+{
+	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
+	if (!point.has_value() || !Locator::fishFarmSystem::has_value() || !HandInInfluence())
+	{
+		return false;
+	}
+	// Water is a cell of the land with water in it, or a place off the land
+	const auto cell = map_coords::CellOf(*point);
+	if (map_coords::InBounds(cell) && Locator::terrainSystem::has_value())
+	{
+		const auto* land = Locator::terrainSystem::value().FindCell(glm::u16vec2(cell));
+		if (land != nullptr && land->properties.hasWater == 0)
+		{
+			return false;
+		}
+	}
+	return Locator::fishFarmSystem::value().FarmWithFishAt({point->x, point->z}).has_value();
 }
 
 /// Draws the player's creature in the falling spell's film, when the film shows it, and the film's effects
@@ -1133,6 +1158,8 @@ void Game::WarmUpFirstFrame()
 			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
 			// The interface draws over the scene too, and the cinema bars are its first draw
 			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+			// The villagers' labels test the depth of the scene
+			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
@@ -1633,11 +1660,22 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	// the middle of the screen shows the land, the help counts it.
 	const auto overNothing = [&submitAll]() {
 		const auto camera = tips::CameraNow();
-		if (const auto event = tips::OverNothingHelpEvent(camera); event.has_value() && Locator::helpProfileSystem::has_value())
+		const bool overFish = HandOverFish();
+		if (const auto event = tips::OverNothingHelpEvent(camera, overFish);
+		    event.has_value() && Locator::helpProfileSystem::has_value())
 		{
 			Locator::helpProfileSystem::value().Trigger(*event);
 		}
-		submitAll({tips::OverNothing(camera)});
+		submitAll({tips::OverNothing(camera, overFish)});
+	};
+	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
+	const auto leashTip = [pointed]() {
+		const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed);
+		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
+		}
+		return tip;
 	};
 	// While the hand grips the land, it shows "Zoom" when the Action button is held too. In other conditions it shows
 	// what a tap does with the leash, or how the drag moves the camera. The grip starts with a drag of the land and
@@ -1665,7 +1703,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 			submitAll({zoom});
 			return;
 		}
-		if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+		if (const auto tip = leashTip())
 		{
 			toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 			return;
@@ -1685,7 +1723,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 	}
 	// With the leash held, the hand says what a tap of the Action button does with it, before anything else
-	if (const auto tip = Locator::leashSystem::value().ToolTip(PlayerNames::PLAYER_ONE, pointed))
+	if (const auto tip = leashTip())
 	{
 		toolTips.Submit(*tip, gui::ToolTipAction::Apply, gui::ToolTipArrows::k_None);
 		return;
@@ -1743,6 +1781,17 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		}
 		overNothing();
 		return;
+	}
+	// While the hand grips the tip bubble of a sign, or the pointer is on the bubble and on nothing else, the hand offers
+	// to scroll its words
+	if (Locator::tipBubbleSystem::has_value())
+	{
+		const auto& bubble = Locator::tipBubbleSystem::value();
+		if (bubble.IsGripped() || (!pointed.has_value() && bubble.IsUnderHand()))
+		{
+			submitAll({tips::BubbleOffer()});
+			return;
+		}
 	}
 	if (!pointed.has_value() || !tips::IsInteractable(*pointed))
 	{
@@ -1813,6 +1862,19 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		const auto charge =
 		    Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().ShownCharge(*pointed) : std::nullopt;
 		toolTips.ForceWithCharge(icon->index, charge);
+		return;
+	}
+	// Over a one-shot globe at rest, the hand names its miracle at once. A globe in flight is caught as any thing is.
+	if (const auto globe = tips::GlobeOf(*pointed); globe.has_value())
+	{
+		if (tips::IsMoving(*pointed))
+		{
+			submitAll(tips::OverTakeable(true, std::nullopt));
+		}
+		else
+		{
+			toolTips.ForceWithCharge(globe->index, std::nullopt);
+		}
 		return;
 	}
 	// Over a thing that the hand can take: "Catch" while it moves, else "Pick Up" and what a tap does to it
@@ -2549,9 +2611,30 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
+bool Game::DoesFrameGraphics() const
+{
+	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
+	if (!minimised)
+	{
+		return true;
+	}
+	// The pictures that the debug inspector, a challenge, the creature's page or a saved game wait for
+	const bool pictureWanted =
+	    (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount) ||
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	return game_frame::DoesGraphics(minimised, pictureWanted);
+}
+
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 {
 	using game_frame::Step;
+	// While the window is minimised the turns and the keys continue, but the camera, the hand and the world's draw stop
+	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
+	{
+		return true;
+	}
 	switch (step)
 	{
 	case Step::FrameClock:
@@ -2561,10 +2644,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateInput();
 		break;
 	case Step::ScreenMarks:
-		// The numbers floating up from things rise and fade
-		UpdateFloatingNumbers(std::chrono::duration<float>(frame.deltaTime).count());
-		// The marks over creatures that learn rise, blink and fade
-		UpdateLearningMarks(std::chrono::duration<float, std::milli>(frame.deltaTime).count());
+		UpdateScreenMarks();
 		break;
 	case Step::DebugGui:
 		return UpdateDebugGui();
@@ -2604,6 +2684,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Camera:
 		UpdateCamera();
 		break;
+	case Step::CameraShake:
+	{
+		// The blasts' rubble lies and fades, their dust flies and the camera shakes
+		auto explosions = Locator::profiler::value().BeginScoped(Profiler::Stage::ExplosionUpdate);
+		Locator::explosionSystem::value().Update(
+		    std::chrono::duration<float, std::milli>(Locator::time::value().GetFrameGameTime()).count());
+		break;
+	}
 	case Step::Temple:
 		UpdateTemple(frame.deltaTime);
 		break;
@@ -2619,6 +2707,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::HighDetail:
 		// The villagers a script draws in high detail are drawn as usual once its cinema bars are gone
 		Locator::highDetailSystem::value().Update();
+		break;
+	case Step::CreaturePoses:
+		UpdateCreaturePoses();
 		break;
 	case Step::FrameEffects:
 		UpdateFrameEffects();
@@ -2850,6 +2941,15 @@ void Game::UpdateTemple(std::chrono::microseconds deltaTime)
 
 void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 {
+	// The interface reads the places of the pointer that came in, and the help counts each movement of the mouse
+	if (Locator::gameActionSystem::has_value())
+	{
+		const auto moves = Locator::gameActionSystem::value().TakeMouseMoves();
+		for (uint32_t i = 0; i < moves && Locator::helpProfileSystem::has_value(); ++i)
+		{
+			Locator::helpProfileSystem::value().Trigger(help::profile::k_MouseMoved);
+		}
+	}
 	if (_interface)
 	{
 		// The fighters' health and stamina while a fight is on, wanted afresh every frame whether or not the hand is out
@@ -2892,6 +2992,63 @@ bool Game::PlayTurns()
 	return true;
 }
 
+void Game::UpdateCreaturePoses()
+{
+	auto& profiler = Locator::profiler::value();
+	auto& clock = Locator::time::value();
+	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
+	// The static that the eyes of all the creatures fizz through continues to slide as the draw starts
+	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
+	{
+		// The fight animations play, blows land and the fighters move as their animations carry them
+		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
+		Locator::creatureFightSystem::value().Update(gameTime);
+	}
+	{
+		// The creatures are drawn moving between the last two turns
+		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
+		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
+	}
+	{
+		// What they do with things plays on their bodies
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().Update(gameTime);
+	}
+	{
+		// The creatures breathe, act, pull faces and look about
+		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
+		Locator::creatureAnimationSystem::value().Update(gameTime);
+	}
+	{
+		// Their hair swings from the posed bodies
+		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
+		Locator::creatureHairSystem::value().Update(gameTime);
+	}
+	{
+		// They make the sounds of the moments their animations have played past
+		auto creatureAudio = profiler.BeginScoped(Profiler::Stage::CreatureAudioUpdate);
+		Locator::creatureAudioSystem::value().Update(gameTime);
+	}
+}
+
+void Game::UpdateScreenMarks()
+{
+	// The numbers and the marks rise and fade only on a frame that draws the land, by the game time of the frame. They
+	// stand still while the game pauses.
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool landHidden = Locator::videoSystem::has_value() &&
+	                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+	if (inTemple || landHidden)
+	{
+		return;
+	}
+	const auto milliseconds = static_cast<float>(Locator::time::value().GetFrameGameTime().count());
+	// The marks over creatures that learn rise, blink and fade
+	UpdateLearningMarks(milliseconds);
+	// The numbers floating up from things rise and fade
+	UpdateFloatingNumbers(milliseconds * 0.001f);
+}
+
 void Game::UpdateFrameEffects()
 {
 	auto& profiler = Locator::profiler::value();
@@ -2910,8 +3067,6 @@ void Game::UpdateFrameEffects()
 	// The rain falls as the storm nearest the camera has it
 	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
 	                                    camera.GetOrigin());
-	// The static that the eyes of all the creatures fizz through continues to slide
-	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	// The rings on the water grow and fade
 	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
 	// The ribbons' textures slide on the frames that draw them
@@ -2934,11 +3089,6 @@ void Game::UpdateFrameEffects()
 	{
 		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
 	}
-	{
-		// The blasts' rubble lies and fades, their dust flies and the camera shakes
-		auto explosions = profiler.BeginScoped(Profiler::Stage::ExplosionUpdate);
-		Locator::explosionSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
-	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())
 	{
@@ -2959,12 +3109,15 @@ void Game::UpdateFrameEffects()
 		Locator::liquidParticleSystem::value().UpdateFrame(liquid_particles::FrameSeconds(milliseconds.count()), true);
 	}
 	{
-		// The fight animations play, blows land and the fighters move as their animations carry them
+		// The sparkles that mark the player's queued fight moves. The hand goes to a sparkle in the next frame.
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().Update(gameTime);
-		// The sparkles marking the player's queued fight moves
 		Locator::creatureFightSystem::value().DrawMarks(
 		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
+	}
+	{
+		// The creatures take hold of and let go of things with their hands as posed, and what they let go of flies
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().LateUpdate(gameTime);
 	}
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
@@ -2980,36 +3133,6 @@ void Game::UpdateFrameEffects()
 		Locator::boatLaunchSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
 		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
 		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
-	}
-	{
-		// The creatures are drawn moving between the last two turns
-		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
-		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
-	}
-	{
-		// What they do with things plays on their bodies
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().Update(gameTime);
-	}
-	{
-		// The creatures breathe, act, pull faces and look about
-		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
-		Locator::creatureAnimationSystem::value().Update(gameTime);
-	}
-	{
-		// They take hold of and let go of things with their hands as posed, and what they let go of flies
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().LateUpdate(gameTime);
-	}
-	{
-		// Their hair swings from the posed bodies
-		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
-		Locator::creatureHairSystem::value().Update(gameTime);
-	}
-	{
-		// They make the sounds of the moments their animations have played past
-		auto creatureAudio = profiler.BeginScoped(Profiler::Stage::CreatureAudioUpdate);
-		Locator::creatureAudioSystem::value().Update(gameTime);
 	}
 	{
 		// Their footprints fade away, only on a frame that draws the land
@@ -3727,7 +3850,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    {.position = handTransform->position,
 				     .size = handSize,
 				     .cameraPosition = camera.GetOrigin(),
-				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing()});
+				     .gesturing = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsGesturing(),
+				     .selecting = Locator::gestureSystem::has_value() && Locator::gestureSystem::value().IsSelecting()});
 			}
 			// The temples' leashes, the picked one round the wrist of the hand as it is drawn, after the blend of its pose
 			Locator::leashSystem::value().ShowPosts(IsHandDrawn());
@@ -3832,6 +3956,17 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 
 void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 {
+	// In the temple, without the interface or with a box on the screen, the camera does not read its keys
+	const bool interfaceActive =
+	    !Locator::cinematicDirectorSystem::has_value() || Locator::cinematicDirectorSystem::value().IsInterfaceActive();
+	if (!game_frame::CameraReadsKeys({
+	        .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	        .interfaceActive = interfaceActive,
+	        .boxShows = FrontEndBoxShows(),
+	    }))
+	{
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	// The keys of the camera act after the camera moved, so that their steps move it in the next frame
 	auto& actions = Locator::gameActionSystem::value();
@@ -3966,6 +4101,11 @@ bool Game::Initialize() noexcept
 		{
 			fileSystem.AddAdditionalPath(_startMap.parent_path());
 		}
+	}
+	else if (const auto land = _startMap == k_DefaultStartLevel ? MapScriptLand() : std::nullopt; land)
+	{
+		// With no land asked for, a new game starts on the land that the map script names
+		_startMap = *land;
 	}
 	else
 	{
@@ -4114,21 +4254,24 @@ bool Game::Initialize() noexcept
 	_startupTimer->Step("physics materials, dust sheets and land palette");
 	fileSystem.Iterate( //
 	    fileSystem.GetPath<filesystem::Path::Citadel>() / "engine", false,
-	    [&meshManager, &glowManager](const std::filesystem::path& f) {
+	    [&meshManager, &glowManager, &fileSystem, &config](const std::filesystem::path& f) {
 		    if (f.extension() == ".zzz")
 		    {
-			    if (f.stem().string().ends_with("lo_l3d"))
+			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
+			    // the two is loaded: both together are more meshes than the renderer holds.
+			    const auto stem = f.stem().string();
+			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
+			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
+			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
+			    if (!name.has_value())
 			    {
-				    SPDLOG_LOGGER_WARN(
-				        spdlog::get("game"),
-				        "Skipping lo duplicate lo meshes. See https://github.com/openblack/openblack/issues/727");
 				    return;
 			    }
-			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {}", f.stem().string());
+			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {} as {}", stem, *name);
 			    try
 			    {
-				    RegisterFile(meshManager, fmt::format("temple/interior/{}", f.stem().string()), f,
-				                 resources::L3DLoader::FromDiskTag {}, f);
+				    RegisterFile(meshManager, fmt::format("temple/interior/{}", *name), f, resources::L3DLoader::FromDiskTag {},
+				                 f);
 			    }
 			    catch (std::runtime_error& err)
 			    {
@@ -5017,7 +5160,8 @@ bool Game::Run() noexcept
 		PlaceScreenLabels();
 		PlaceLearningTexts();
 		// In the fast simulation mode the game draws only some frames, or none
-		const bool drawsFrame = sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount);
+		const bool drawsFrame =
+		    sim_run::DrawsFrame(Locator::simulation::value().GetSettings(), _frameCount) && DoesFrameGraphics();
 		if (drawsFrame && _interface && Locator::windowing::has_value())
 		{
 			const auto mouse = Locator::gameActionSystem::value().GetPointerPosition();
@@ -5252,6 +5396,8 @@ bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mod
 	{
 		StartPlayerAtProfileAlignment();
 	}
+	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
+	MakePlayersSymbols();
 	RenderLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -5802,13 +5948,52 @@ bool Game::AskNewGameChoice()
 	return true;
 }
 
+std::optional<std::filesystem::path> Game::MapScriptLand() const
+{
+	auto& fileSystem = Locator::filesystem::value();
+	const auto mapScript = fileSystem.GetPath<filesystem::Path::Scripts>() / lhscriptx::map_script::k_FileName;
+	if (!fileSystem.Exists(mapScript))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the map script {}", mapScript.generic_string());
+		return std::nullopt;
+	}
+	const auto data = fileSystem.ReadAll(mapScript);
+	std::vector<std::string> lands;
+	try
+	{
+		lands = lhscriptx::map_script::FeatureScripts(std::string(reinterpret_cast<const char*>(data.data()), data.size()));
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", mapScript.generic_string(), e.what());
+		return std::nullopt;
+	}
+	if (lands.empty())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} names no land script", mapScript.generic_string());
+		return std::nullopt;
+	}
+	const auto land = filesystem::FileSystemInterface::FixPath(lands.front());
+	if (!fileSystem.Exists(land))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the land script {}", lands.front());
+		return std::nullopt;
+	}
+	// The map script writes the path in lower case. Use the name of the file as it is on the disk where the system
+	// can give it.
+	const auto found = fileSystem.FindPath(land);
+	std::error_code error;
+	auto onDisk = std::filesystem::canonical(found, error);
+	return error ? found : onDisk;
+}
+
 bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
 {
 	_newGameStart = start;
 	_startTestbed = false;
-	// A new game always begins on the first land
-	const auto land = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "Land1.txt";
-	if (!LoadMapWithFreshScripts(land, land_change::Kind::NewGame))
+	// A new game begins on the land that the map script names
+	const auto land = MapScriptLand();
+	if (!land || !LoadMapWithFreshScripts(*land, land_change::Kind::NewGame))
 	{
 		return false;
 	}
@@ -5980,7 +6165,13 @@ void Game::HandleInterfaceAction()
 	case Action::DeletePlayer:
 	{
 		auto& profiles = Locator::playerProfileSystem::value();
-		profiles.DeleteProfile(_interface->GetMenu().GetPlayerToDelete());
+		// The player's folder is emptied first: its saved games, pictures and help record go, but the empty folder stays
+		const auto deleted = _interface->GetMenu().GetPlayerToDelete();
+		if (Locator::profileFolderSystem::has_value())
+		{
+			Locator::profileFolderSystem::value().EmptyPlayerFolder(deleted);
+		}
+		profiles.DeleteProfile(deleted);
 		const auto next = _interface->GetMenu().GetPickedPlayer();
 		const auto& list = profiles.GetProfiles().profiles;
 		if (next.has_value() && *next < list.size())
@@ -6196,6 +6387,68 @@ void Game::ReadTattooPictures()
 		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
 		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
 	}
+}
+
+void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
+{
+	using filesystem::Path;
+	if (!Locator::filesystem::has_value() || !Locator::playerProfileSystem::has_value())
+	{
+		return;
+	}
+	auto& fileSystem = Locator::filesystem::value();
+	const auto textures = fileSystem.GetPath<Path::Textures>();
+	const auto read = [&fileSystem](const std::filesystem::path& path) -> std::vector<uint8_t> {
+		try
+		{
+			return fileSystem.ReadAll(path);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+			return {};
+		}
+	};
+	players_symbols::Sheet players {.colours = read(textures / "PlayersSymbols.raw"),
+	                                .alpha = read(textures / "PlayersSymbolsa.raw")};
+	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
+	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
+	if (!players.Whole() || !designs.Whole())
+	{
+		return;
+	}
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	if (profile.has_value() || symbolInPlace.has_value())
+	{
+		const auto symbol = symbolInPlace.value_or(profile.has_value() ? static_cast<uint32_t>(profile->symbol) : 0u);
+		std::optional<std::span<const uint8_t>> ownPicture;
+		std::optional<creature_tattoo::Picture> picture;
+		if (Locator::tattooEditorSystem::has_value() && symbol < creature_tattoo::k_DesignCount)
+		{
+			picture = Locator::tattooEditorSystem::value().GetPictures().at(symbol);
+			if (picture.has_value())
+			{
+				ownPicture = std::span<const uint8_t>(*picture);
+			}
+		}
+		players_symbols::PutProfileSymbol(players, designs, symbol, static_cast<uint32_t>(PlayerNames::PLAYER_ONE), ownPicture);
+	}
+	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
+	auto& textureManager = Locator::resources::value().GetTextures();
+	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+		textureManager.Erase(name);
+		try
+		{
+			textureManager.Load(name, resources::Texture2DLoader::FromBufferTag {}, name, std::move(bytes),
+			                    graphics::texel_depth::Depth::FourBits);
+		}
+		catch (std::runtime_error& err)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
+		}
+	};
+	replace("raw/PlayersSymbols", std::move(players.colours));
+	replace("raw/PlayersSymbolsa", std::move(players.alpha));
 }
 
 void Game::LoadCreatureSkinArt()

@@ -114,3 +114,16 @@ TEST_F(CameraKeysFrame, TheFightViewGivesTheKeysToThePlayersCamera)
 	ASSERT_NE(player, nullptr);
 	EXPECT_GT(player->GetAsked().turn, 0.0f);
 }
+
+TEST_F(CameraKeysFrame, TheStepUsesTheKeyStepsOneTime)
+{
+	DefaultWorldCameraModel world(k_Origin, k_Focus);
+	_key->held = true;
+	world.HandleKeys(k_Frame);
+	world.HandleActions(k_Frame);
+	EXPECT_GT(world.GetAsked().turn, 0.0f);
+	// A frame that does not read the keys, as with a box on the screen, gives the next step no turn. The key is still
+	// held.
+	world.HandleActions(k_Frame);
+	EXPECT_EQ(world.GetAsked().turn, 0.0f);
+}

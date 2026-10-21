@@ -342,7 +342,7 @@ struct Store
 };
 Store StoreOf(entt::entity villager, const Villager& person)
 {
-	const auto pit = construction::StoragePitOf(TownOf(person));
+	const auto pit = villager_build::StoreOf(person, TownOf(person));
 	auto& stores = Locator::resourceStoreSystem::value();
 	if (pit.has_value() && villager_home::IsFunctional(*pit))
 	{

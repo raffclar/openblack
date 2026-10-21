@@ -634,7 +634,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    gone = true;
 			    _goneThings.insert(entity);
 		    }
-		    else if (detail != nullptr && registry.AllOf<HighDetail>(entity) && !registry.AllOf<MorphWithTerrain>(entity))
+		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
+		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
 		    {
 			    drawnMesh = detail->meshes.at(static_cast<size_t>(graphics::mesh_detail::Mesh::High));
 		    }

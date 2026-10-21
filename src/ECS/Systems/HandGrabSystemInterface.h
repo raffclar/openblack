@@ -116,8 +116,9 @@ public:
 	/// How far a thing hangs below a hand that holds it: the lowering of its kind times its height. A creature's hand
 	/// uses the same distance.
 	[[nodiscard]] virtual float HangOf(entt::entity object) const = 0;
-	/// The amount of food or wood the hand has just taken from a pile, which the hand shows for the player; it is given
-	/// once, and none until the hand takes some more
+	/// The amount of food or wood the hand holds, which the hand shows for the player: after each turn that a scoop from
+	/// a pile, a field or a fish farm takes some, and when the player lets go of a scoop from a pile or a fish farm. It is
+	/// given once, and none until the next time
 	[[nodiscard]] virtual std::optional<uint32_t> TakeAmountToolTip() { return std::nullopt; }
 	/// How what it holds hangs: its hold, how far below the hand its model hangs, and how far it spreads out of the hand
 	struct HeldPose

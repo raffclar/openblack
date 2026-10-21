@@ -181,3 +181,42 @@ TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 	EXPECT_TRUE(recorder.Before(Step::GameOver, Step::WalkerLookahead));
 	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(k_Turn.size()) - 1);
 }
+
+TEST(GameTurnOrder, TheHandSpeedForTheSmokeIsPartOfTheInput)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::HandStillness, Step::ChimneySmoke));
+	EXPECT_TRUE(recorder.Before(Step::ChimneySmoke, Step::Clock));
+}
+
+TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Players, Step::VillageTotems));
+	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
+}
+
+TEST(GameTurnOrder, TheCreaturesHelpPictureAndAlignmentArePartOfTheirOwnTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreaturePlans, Step::CreatureCarryOver));
+	EXPECT_TRUE(recorder.Before(Step::CreatureCarryOver, Step::CreatureWebPage));
+	EXPECT_TRUE(recorder.Before(Step::CreatureWebPage, Step::CreatureHelp));
+	EXPECT_TRUE(recorder.Before(Step::CreatureHelp, Step::CreatureAlignment));
+	// So the scripts and the miracles see the alignment of this turn
+	EXPECT_TRUE(recorder.Before(Step::CreatureAlignment, Step::Fires));
+}
+
+TEST(GameTurnOrder, TheTipBubbleClosesBetweenTheToolTipsAndTheBanter)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::HandToolTips, Step::TipBubble));
+	EXPECT_TRUE(recorder.Before(Step::TipBubble, Step::Banter));
+}
+
+TEST(GameTurnOrder, TheAdvisorsCheerTheTurningAfterTheGuidance)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Guidance, Step::TurnCheering));
+	EXPECT_TRUE(recorder.Before(Step::TurnCheering, Step::CameraChecks));
+}

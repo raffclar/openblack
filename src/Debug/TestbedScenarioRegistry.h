@@ -147,6 +147,8 @@ struct Environment
 	bool drawFootpaths {false};
 	/// Push scrolling is on, and works in the testbed's window as in full screen
 	bool pushScrolling {false};
+	/// The symbol that the world shows for the first player in place of the symbol of the player's profile
+	std::optional<uint32_t> profileSymbol;
 	/// The player's prayer power, for watching a maintained miracle run out of it; the testbed's plenty when not given
 	std::optional<float> prayer;
 	/// The player's alignment, -1 evil to 1 good, as the scenario starts; neutral when not given
@@ -758,7 +760,8 @@ struct Command
 		/// Needs no creature
 		RecordChallenge,
 		/// The player is put in a room of the temple (value, by the temple's rooms: 0 the challenge room). Needs no
-		/// creature
+		/// creature. In the temple, the value of no room (TempleRoom::Unknown) walks the camera out through the main
+		/// room's way out
 		EnterTemple,
 		/// The explorers' boat film plays as a script's PLAY_JC_SPECIAL 6 plays it on Land 1, moved to the testbed: its
 		/// dry dock at the point (from the middle of the map) on the land there, and its sailing starting in the lake's

@@ -38,6 +38,24 @@ float Share(float share, float rowWidth)
 {
 	return share * rowWidth;
 }
+
+/// Where the hint of a request goes in the row, none for a request that is not hinted
+std::optional<int> OrderOf(gesture::Purpose purpose, LeashType leash)
+{
+	switch (purpose)
+	{
+	case gesture::Purpose::LeashGesture:
+		return k_LeashGestureOrder;
+	case gesture::Purpose::PickLeash:
+		return static_cast<int>(leash) + k_LeashOrderBase;
+	case gesture::Purpose::FightSpecialMove:
+		return k_SpecialMoveOrder;
+	case gesture::Purpose::FightMiracle:
+		return k_FightMiracleOrder;
+	default:
+		return std::nullopt;
+	}
+}
 } // namespace
 
 std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requests, const ShapeOf& shapeOf)
@@ -46,8 +64,7 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 	std::map<GestureType, const gesture::Request*> byGesture;
 	for (const auto& request : requests)
 	{
-		if ((request.purpose == gesture::Purpose::PickLeash || request.purpose == gesture::Purpose::LeashGesture) &&
-		    request.gesture != GestureType::None)
+		if (OrderOf(request.purpose, request.leash).has_value() && request.gesture != GestureType::None)
 		{
 			byGesture[request.gesture] = &request;
 		}
@@ -56,11 +73,13 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 	std::vector<Hint> hints;
 	for (const auto& [gesture, request] : byGesture)
 	{
+		const bool fight =
+		    request->purpose == gesture::Purpose::FightMiracle || request->purpose == gesture::Purpose::FightSpecialMove;
 		Hint hint {
 		    .gesture = gesture,
-		    .order = request->purpose == gesture::Purpose::LeashGesture ? k_LeashGestureOrder
-		                                                                : static_cast<int>(request->leash) + k_LeashOrderBase,
-		    .leash = request->leash,
+		    .order = OrderOf(request->purpose, request->leash).value_or(0),
+		    .leash = fight ? LeashType::None : request->leash,
+		    .seed = request->purpose == gesture::Purpose::FightMiracle ? request->seed : SpellSeedType::None,
 		};
 		auto shape = shapeOf ? shapeOf(gesture) : std::nullopt;
 		if (!shape.has_value())
@@ -85,7 +104,7 @@ std::vector<Hint> gesture_hints::HintsFor(std::span<const gesture::Request> requ
 bool gesture_hints::Differs(std::span<const Hint> shown, std::span<const Hint> next)
 {
 	return !std::ranges::equal(shown, next, [](const Hint& a, const Hint& b) {
-		return a.gesture == b.gesture && a.order == b.order && a.leash == b.leash;
+		return a.gesture == b.gesture && a.order == b.order && a.leash == b.leash && a.seed == b.seed;
 	});
 }
 

@@ -86,6 +86,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
@@ -111,6 +112,16 @@ using creature_desires::Desire;
 
 namespace
 {
+/// The creature of the local player gets a leash, loses it, or its leash changes: the hand forgets the path of the
+/// gesture that it draws
+void ForgetLocalGesturePath(PlayerNames player)
+{
+	if (Locator::gestureSystem::has_value() && Locator::playerSystem::has_value() &&
+	    player == Locator::playerSystem::value().GetLocalPlayer())
+	{
+		Locator::gestureSystem::value().ForgetPath();
+	}
+}
 
 /// The advisor may tell the player of the creature's order, or of why it couldn't carry it out
 void TellHelp(entt::entity creature, const openblack::creature_help::Message& message)
@@ -604,6 +615,10 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	leashes->selected = type;
 	// The rope is laid afresh from the hand to the collar next frame
 	leashes->worn->ropeStarted = false;
+	if (const auto* body = registry.TryGet<const Creature>(creature))
+	{
+		ForgetLocalGesturePath(body->owner);
+	}
 	return true;
 }
 
@@ -617,6 +632,10 @@ void LeashSystem::TakeOff(entt::entity creature)
 	}
 	EndOrder(creature);
 	leashes = registry.TryGet<CreatureLeash>(creature);
+	if (leashes->worn.has_value())
+	{
+		ForgetLocalGesturePath(leashes->worn->holder);
+	}
 	leashes->worn.reset();
 	leashes->confinementRadius = 0.0f;
 	if (auto* mind = MindOf(registry, creature))
@@ -749,6 +768,10 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 	}
 	// Its player's posts show the leash picked
 	const auto* body = registry.TryGet<const Creature>(creature);
+	if (body != nullptr)
+	{
+		ForgetLocalGesturePath(body->owner);
+	}
 	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
 		if (body != nullptr && post.owner == body->owner)
 		{

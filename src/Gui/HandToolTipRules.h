@@ -38,6 +38,8 @@ constexpr uint32_t k_Catch = 13;
 /// "Activate", over a scroll that a script has not started; "Reminder" over a scroll that it started
 constexpr uint32_t k_Activate = 16;
 constexpr uint32_t k_Reminder = 45;
+/// "Scroll", over the tip bubble of a sign or while the hand grips it
+constexpr uint32_t k_Scroll = 17;
 /// "Give", while the hand holds a thing that a creature can take from it
 constexpr uint32_t k_Give = 20;
 /// "Zoom Out", with the camera near the land and pointed down
@@ -95,16 +97,18 @@ constexpr float k_ZoomOutPitch = 0.55f;
 /// What the empty hand offers over the land, or over a thing that it can do nothing with:
 /// - "Pitch" where a drag tilts the camera;
 /// - "Rotate" where a drag turns it;
+/// - "Pick Up" by the Action button, with no arrows, over the water where fish of a fish farm show, with the hand in
+///   the player's influence (overFish);
 /// - "Zoom Out" when the camera is near the land and looks down steeply;
 /// - "Move" in all other places.
 /// The scripts can stop each camera control, and then the hand does not offer it.
-[[nodiscard]] Offer OverNothing(const CameraFacts& camera);
+[[nodiscard]] Offer OverNothing(const CameraFacts& camera, bool overFish = false);
 
 /// The help event that the hand sets off as it shows its tooltip over the land. When the line from the middle of the
-/// screen touches the land, the hand sets off the camera's land event. It does not do this when it offers "Pitch" or
-/// "Rotate".
+/// screen touches the land, the hand sets off the camera's land event. It does not do this when it offers "Pitch",
+/// "Rotate" or "Pick Up".
 constexpr uint32_t k_CameraOnLandEvent = 44;
-[[nodiscard]] std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera);
+[[nodiscard]] std::optional<uint32_t> OverNothingHelpEvent(const CameraFacts& camera, bool overFish = false);
 
 /// What the hand offers while it grips the land. With the Action button held too, and with zoom permitted by the
 /// scripts, the hand offers "Zoom" with the up and down arrows. In other conditions it offers what it offers over the
@@ -135,6 +139,11 @@ enum class TapKind : uint8_t
 /// Over a miracle icon in the player's influence, the hand names the icon's miracle at once, in the words of the
 /// miracle's own tooltip text, with no mouse button. A text that is not one of the game's tooltips shows nothing.
 [[nodiscard]] std::optional<Offer> SpellIconOffer(uint32_t miracleToolTipText);
+/// What the tip bubble of a sign offers while the pointer is on it or the hand grips it: to scroll its words with the
+/// Action button, up and down
+[[nodiscard]] Offer BubbleOffer();
+/// What a one-shot globe offers: the name of the miracle that it gives, or of its seed when it gives no miracle
+[[nodiscard]] std::optional<Offer> GlobeOffer(bool givesAMiracle, uint32_t miracleToolTipText, uint32_t seedToolTipText);
 
 /// What the hand can do with the thing it holds, at the thing under the pointer
 enum class HeldUse : uint8_t

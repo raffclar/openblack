@@ -130,6 +130,7 @@ public:
 	void FireStartedMoving(entt::entity, bool) override {}
 	void CatchFirefly(entt::entity) override {}
 	void CountHelpEvent(uint32_t event) override { helpEvents.push_back(event); }
+	void ForgetGesturePath() override { ++pathsForgotten; }
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
@@ -380,6 +381,7 @@ public:
 	std::vector<ReactionRequest> reactions;
 	std::vector<entt::entity> heated;
 	std::vector<uint32_t> helpEvents;
+	int pathsForgotten {0};
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
 	std::vector<uint32_t> samples;
@@ -748,6 +750,36 @@ TEST_F(HandGrabSystemWithWorld, TheHelpCountsATakeAndALetGo)
 	EXPECT_EQ(world->helpEvents, (std::vector<uint32_t> {help::profile::k_PickUp, help::profile::k_Throw}));
 }
 
+// The hand starts the path of its gesture again when it takes a thing and when it lets go of it. A let-go that the
+// influence refuses does not.
+TEST_F(HandGrabSystemWithWorld, TheGesturePathStartsAgainOnATakeAndALetGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(world->pathsForgotten, 1);
+	world->underCursor.reset();
+	world->borderX = 10.0f;
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->pathsForgotten, 1);
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Press();
+	Frame(10, {12.0f, 0.0f, 0.0f}, {12.0f, 0.0f, 0.0f});
+	Release();
+	EXPECT_EQ(world->pathsForgotten, 2);
+}
+
 // The hand says why a press on a thing wouldn't take it, as the inspector shows it
 TEST_F(HandGrabSystemWithWorld, ItSaysWhyAThingWouldntBeTaken)
 {
@@ -930,6 +962,28 @@ TEST_F(HandGrabSystemWithWorld, AVillagerPulledFreeMakesTheDrawListAgain)
 	}
 	ASSERT_TRUE(system->GetHeld().has_value());
 	EXPECT_EQ(world->drawListFrames, std::vector<uint32_t> {1u});
+}
+
+TEST_F(HandGrabSystemWithWorld, AVillagerInTheHandKeepsItsWoodAndFood)
+{
+	const auto villager = world->registry.Create();
+	world->registry.Assign<Transform>(villager, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	auto& person = world->registry.Assign<Villager>(villager);
+	person.woodHeld = 250;
+	person.foodHeld = 120;
+	person.woodGraphic = 2;
+	world->sizes[villager] = {.radius = 0.5f, .height = 2.0f};
+	world->underCursor = villager;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	const auto& held = world->registry.Get<const Villager>(villager);
+	EXPECT_EQ(held.woodHeld, 250);
+	EXPECT_EQ(held.foodHeld, 120);
+	EXPECT_EQ(held.woodGraphic, 2);
 }
 
 TEST_F(HandGrabSystemWithWorld, AVillagerLetGoBeforeItComesFreeMakesTheDrawListAgainForTwoFrames)
@@ -1589,8 +1643,11 @@ TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWi
 	// Given once the button has been held more than 225 ms
 	Frame(200);
 	EXPECT_TRUE(world->given.empty());
+	world->helpEvents.clear();
 	Frame(30);
 	ASSERT_EQ(world->given.size(), 1u);
+	// The help counts the gift once
+	EXPECT_EQ(std::ranges::count(world->helpEvents, help::profile::k_Give), 1);
 	EXPECT_EQ(world->given.front().creature, creature);
 	EXPECT_EQ(world->given.front().held, rock);
 	EXPECT_TRUE(world->given.front().leftHand);
@@ -1656,4 +1713,92 @@ TEST_F(HandGrabSystemGiving, ACreatureThatCantPickItUpSaysSoAndIsNotOffered)
 	Press();
 	Frame(230);
 	EXPECT_TRUE(world->given.empty());
+}
+
+// The hand forgets the last thing it took and the last thing it let go of once that thing is gone
+TEST_F(HandGrabSystemWithWorld, TheLastThingsTakenAndLetGoAreForgottenWhenTheyGo)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	EXPECT_TRUE(Press());
+	Release();
+	auto& grab = world->registry.Get<HandGrab>(world->hand);
+	const auto taken = world->AddRock({2.0f, 0.0f, 0.0f});
+	const auto dropped = world->AddRock({4.0f, 0.0f, 0.0f});
+	grab.lastPickedUp = taken;
+	grab.lastDropped = dropped;
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, taken);
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, dropped);
+	world->registry.Destroy(taken);
+	world->registry.Destroy(dropped);
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastPickedUp, entt::entity {entt::null});
+	EXPECT_EQ(world->registry.Get<HandGrab>(world->hand).lastDropped, entt::entity {entt::null});
+}
+
+TEST_F(HandGrabSystemWithWorld, TheHandShowsWhatItHoldsAfterEachTurnOfAScoopAndAtTheLetGoOfAPileOrAFishFarm)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->underCursor = pile;
+	// Nothing as the scoop starts
+	EXPECT_TRUE(Press());
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	// Each turn that it takes some, what it holds now, once
+	system->ProcessTurn();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*handful).amount));
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	// At the let go too
+	Release();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*handful).amount));
+}
+
+TEST_F(HandGrabSystemWithWorld, AFieldAndAFishFarmShowWhatTheHandHoldsEachTurnButOnlyAFishFarmAtTheLetGo)
+{
+	const auto field = world->registry.Create();
+	world->registry.Assign<Transform>(field, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fields[field] = {.food = 1000, .ripe = false};
+	world->underCursor = field;
+	EXPECT_TRUE(Press());
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	const auto fromField = system->GetHeld();
+	ASSERT_TRUE(fromField.has_value());
+	system->ProcessTurn();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromField).amount));
+	Release();
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	system->HandOver(*fromField);
+
+	const auto farm = world->registry.Create();
+	world->registry.Assign<Transform>(farm, glm::vec3(5.0f, 0.0f, 5.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->fishFarms[farm] = 100.0f;
+	world->underCursor = farm;
+	EXPECT_TRUE(Press());
+	EXPECT_FALSE(system->TakeAmountToolTip().has_value());
+	const auto fromFarm = system->GetHeld();
+	ASSERT_TRUE(fromFarm.has_value());
+	system->ProcessTurn();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
+	Release();
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(world->registry.Get<const Pot>(*fromFarm).amount));
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextTurn)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	world->registry.Destroy(rock);
+	system->ProcessTurn();
+	EXPECT_FALSE(system->GetHeld().has_value());
 }

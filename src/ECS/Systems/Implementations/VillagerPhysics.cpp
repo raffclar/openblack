@@ -286,8 +286,12 @@ void villager_physics::Land(PhysicsEntry* entry, entt::entity villager)
 	}
 	const auto previous = Living().VillagerGetState(*action, LivingAction::Index::Previous);
 	SetTopState(*action, VillagerStates::Landed);
+	// The landing clip on its feet shows what it carries. The state holds nothing, so only a villager that a script
+	// holds keeps an object to carry.
+	villager_animate::SetStateCarriedObject(villager);
+	const bool carrying = registry.Get<const Villager>(villager).carried != CarriedObject::None;
 	const auto& landed = registry.AssignOrReplace<VillagerClip>(
-	    villager, VillagerClip {.state = VillagerStates::Landed, .clip = living::VillagerLandedClip(pose, false)});
+	    villager, VillagerClip {.state = VillagerStates::Landed, .clip = living::VillagerLandedClip(pose, carrying)});
 	villager_animate::SetAnim(villager, static_cast<int32_t>(landed.clip), true);
 	// A villager a script controls goes straight back to what it was doing, and so does one in some states
 	if (const auto* row = StateRowOf(previous);

@@ -18,6 +18,7 @@
 
 #include "Common/RuntimeQsort.h"
 #include "Common/X87.h"
+#include "ECS/StatisticsRules.h"
 #include "InfoConstants.h"
 
 namespace openblack::ecs::town_desire
@@ -690,6 +691,19 @@ std::optional<DoingNowStep> DoingNowChange(StateCount state, float sign)
 		return std::nullopt;
 	}
 	return DoingNowStep {.desire = static_cast<size_t>(state.desire), .amount = sign * state.weight, .count = sign};
+}
+
+void CountBuiltBuilding(DesireInputs& in, AbodeNumber number, AbodeType type)
+{
+	++in.abodeCount;
+	if (const auto index = static_cast<size_t>(number); index < in.stats.abodesByNumber.size())
+	{
+		++in.stats.abodesByNumber.at(index);
+	}
+	if (statistics::IsCivicBuilding(type))
+	{
+		++in.stats.civicBuildings;
+	}
 }
 
 } // namespace openblack::ecs::town_desire
