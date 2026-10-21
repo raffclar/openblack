@@ -202,7 +202,7 @@ void testbed_scenarios::AddStormScenarios(std::vector<Scenario>& all)
 	// explosion from its storm (radius 50, 5 seconds, no curl). The points and the storm keep their places about the guide
 	// from the challenge; the storm is the challenge's (inner 150, outer 500, rain at 15 degrees, 150 clouds of shade 1.5
 	// 250 up), placed as a land's script would, with the forks of lightning it has once the guide is struck.
-	constexpr glm::vec2 k_Guide {0.0f, 40.0f};
+	static constexpr glm::vec2 k_Guide {0.0f, 40.0f};
 	const auto strike = [](glm::vec2 from, float delay) {
 		return MiracleCast {.type = MagicType::LightningBoltPowerUpTwo,
 		                    .target = MiracleCast::Target::Creature,

@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- The page loads nothing from other sites and sends nothing to a server -->
+<meta http-equiv="Content-Security-Policy"
+      content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; connect-src 'self'; img-src 'self' data: blob:; style-src 'self'; object-src 'none'; base-uri 'none'; form-action 'none'">
+<title>openblack</title>
+<link rel="stylesheet" href="page.css">
+<link rel="icon" href="data:,">
+</head>
+<body>
+<main id="chooser">
+  <h1>openblack</h1>
+  <p>openblack plays Black &amp; White in this browser tab. It needs the folder of your own install of Black &amp; White.</p>
+  <p class="privacy">The game data stays on this computer. The page reads the files in this tab and sends nothing to a
+    server. The browser can show a message such as "Upload files to this site". That message is the standard text of the
+    browser: the page does not send the files.</p>
+
+  <section id="sources">
+    <button id="pick-folder" type="button">Choose the Black &amp; White folder</button>
+    <label id="folder-input-label" class="file-button">Choose the folder with the file dialog
+      <input id="folder-input" type="file" webkitdirectory multiple>
+    </label>
+    <div id="drop-zone">Or drop the Black &amp; White folder here</div>
+    <button id="use-last-folder" type="button" hidden></button>
+    <button id="use-copy" type="button" hidden>Use the copy of the game data in this browser</button>
+    <label id="keep-copy-label"><input id="keep-copy" type="checkbox"> Keep a copy of the game data in this browser
+      (about 720 MB), so that you do not choose the folder on each visit. This is for Firefox and Safari, which cannot
+      keep the choice of a folder.</label>
+  </section>
+
+  <section id="check" hidden>
+    <h2>Install check</h2>
+    <ul id="check-list"></ul>
+    <p id="check-version"></p>
+    <p id="copy-progress" hidden></p>
+    <button id="play" type="button" disabled>Play</button>
+  </section>
+</main>
+
+<div id="game" hidden>
+  <canvas id="screen"></canvas>
+  <canvas id="canvas" tabindex="-1"></canvas>
+</div>
+<section id="messages" aria-live="polite"></section>
+<details id="log-box">
+  <summary>Game log</summary>
+  <pre id="log"></pre>
+</details>
+<script src="launcher.js"></script>
+</body>
+</html>

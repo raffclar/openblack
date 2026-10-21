@@ -317,9 +317,24 @@ Texture2DLoader::result_type Texture2DLoader::operator()(FromBitmapLayersTag, co
 		std::copy_n(bitmap.Data(), count, texels.begin() + static_cast<std::ptrdiff_t>(layer * layerTexels));
 	}
 	auto texture = std::make_shared<graphics::Texture2D>(name);
-	texture->Create(side, side, static_cast<uint16_t>(layerPaths.size()), graphics::TextureFormat::BGR5A1,
-	                graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
-	                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+	const auto layers = static_cast<uint16_t>(layerPaths.size());
+	const auto* caps = bgfx::getCaps();
+	if (caps == nullptr || (caps->formats[bgfx::TextureFormat::BGR5A1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
+	{
+		texture->Create(side, side, layers, graphics::TextureFormat::BGR5A1, graphics::Wrapping::ClampEdge,
+		                graphics::Filter::Linear,
+		                bgfx::copy(texels.data(), static_cast<uint32_t>(texels.size() * sizeof(texels[0]))));
+		return texture;
+	}
+	// A device without the 16-bit format (WebGL 2) gets a byte for each channel
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The device has no 16-bit texture format: {} keeps a byte for each channel", name);
+	std::vector<uint8_t> bytes(texels.size() * 4);
+	for (size_t i = 0; i < texels.size(); ++i)
+	{
+		std::ranges::copy(Texel1555Bytes(texels[i]), bytes.begin() + static_cast<std::ptrdiff_t>(i * 4));
+	}
+	texture->Create(side, side, layers, graphics::TextureFormat::RGBA8, graphics::Wrapping::ClampEdge, graphics::Filter::Linear,
+	                bgfx::copy(bytes.data(), static_cast<uint32_t>(bytes.size())));
 	return texture;
 }
 

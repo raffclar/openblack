@@ -149,7 +149,7 @@ std::optional<Package> openblack::lhp::Read(std::span<const uint8_t> bytes)
 		return std::nullopt;
 	}
 
-	Package package {.stamp = static_cast<uint16_t>(bytes[k_StampOffset] | (bytes[k_StampOffset + 1] << 8))};
+	Package package {.stamp = static_cast<uint16_t>(bytes[k_StampOffset] | (bytes[k_StampOffset + 1] << 8)), .blocks = {}};
 	std::vector<uint8_t> plain(bytes.begin() + k_HeaderSize, bytes.end() - 4);
 	Decrypt(plain);
 	const std::span<const uint8_t> blocks {plain.data(), plainSize};
