@@ -14,6 +14,8 @@
 
 #include <algorithm>
 #include <functional>
+#include <iterator>
+#include <span>
 
 #include "CreatureDecisionTree.h"
 
@@ -153,18 +155,47 @@ std::vector<Belief> Store::PartsOf(entt::entity whole) const
 	return parts;
 }
 
+namespace
+{
+/// Every belief that the pools hold, the newest first. The sort moves pointers to the beliefs, not the beliefs. It
+/// compares the same values in the same sequence as a sort of the beliefs, thus it gives the same order.
+std::vector<const Belief*> HeldNewestFirst(const std::array<BeliefPool, k_KindCount>& pools, size_t count)
+{
+	std::vector<const Belief*> held;
+	held.reserve(count);
+	for (const auto& pool : pools)
+	{
+		for (const auto& slot : pool.slots)
+		{
+			if (slot.has_value())
+			{
+				held.push_back(&*slot);
+			}
+		}
+	}
+	std::ranges::sort(held, std::ranges::greater {}, [](const Belief* belief) { return belief->order; });
+	return held;
+}
+
+std::vector<Belief> Copies(std::span<const Belief* const> held)
+{
+	std::vector<Belief> copies;
+	copies.reserve(held.size());
+	std::ranges::transform(held, std::back_inserter(copies), [](const Belief* belief) { return *belief; });
+	return copies;
+}
+} // namespace
+
 std::vector<Belief> Store::NewestFirst() const
 {
-	auto all = All();
-	std::ranges::sort(all, std::ranges::greater {}, &Belief::order);
-	return all;
+	return Copies(HeldNewestFirst(_pools, _index.size()));
 }
 
 std::vector<Belief> Store::InListOrder() const
 {
-	auto all = NewestFirst();
-	std::ranges::stable_partition(all, [](const Belief& belief) { return InListOfWholeThings(belief.kind); });
-	return all;
+	auto held = HeldNewestFirst(_pools, _index.size());
+	std::ranges::stable_partition(held, [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
+	return Copies(held);
 }
 
 std::vector<Belief> Store::All() const

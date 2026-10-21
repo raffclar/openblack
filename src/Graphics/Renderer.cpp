@@ -70,6 +70,7 @@
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
 #include "Common/UserData.h"
+#include "Common/WorkerPool.h"
 #include "Creature/CreatureFizzLook.h"
 #include "Creature/CreatureHair.h"
 #include "Creature/CreatureMorph.h"
@@ -568,8 +569,10 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
     , _bgfxCallback(std::move(bgfxCallback))
     , _bgfxReset(bgfxReset)
     , _offscreenShots(std::make_unique<OffscreenScreenshots>())
+    , _workers(std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount()))
 {
 	_shaderManager->LoadShaders();
+	_groundShadowScratch.resize(_workers->GetLaneCount());
 	_plane = Primitive::CreatePlane();
 	_morphStreamLayouts = std::make_unique<MorphStreamLayouts>();
 	{
@@ -5149,11 +5152,12 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	});
 }
 
-void Renderer::AddGroundShadowBody(const GroundShadowBody& body) const
+void Renderer::AddGroundShadowBody(const GroundShadowBody& body, GroundShadowScratch& scratch)
 {
 	// Each bone's matrix in the world, once
-	_groundShadowBones.resize(body.pose.size());
-	std::ranges::transform(body.pose, _groundShadowBones.begin(), [&body](const glm::mat4& bone) { return body.model * bone; });
+	auto& bones = scratch.bones;
+	bones.resize(body.pose.size());
+	std::ranges::transform(body.pose, bones.begin(), [&body](const glm::mat4& bone) { return body.model * bone; });
 	const auto& subMeshes = body.mesh->GetSubMeshes();
 	for (size_t index = 0; index < subMeshes.size(); ++index)
 	{
@@ -5187,9 +5191,9 @@ void Renderer::AddGroundShadowBody(const GroundShadowBody& body) const
 		}
 		// A part moved by bones may dip below the level; one moved with the body whole is kept above it
 		const bool boned = subMesh.GetFlags().hasBones != 0U;
-		_groundShadowParts.push_back({.subMesh = &subMesh,
-		                              .first = static_cast<uint32_t>(_groundShadowPoints.size()),
-		                              .secondRowsOnly = body.secondRowsOnly});
+		scratch.parts.push_back({.subMesh = &subMesh,
+		                         .first = static_cast<uint32_t>(scratch.points.size()),
+		                         .secondRowsOnly = body.secondRowsOnly});
 		for (size_t i = 0; i < geometry.positions.size(); ++i)
 		{
 			auto local = geometry.positions[i];
@@ -5202,23 +5206,23 @@ void Renderer::AddGroundShadowBody(const GroundShadowBody& body) const
 			}
 			// Every vertex moved by its own bone alone
 			const auto bone = i < geometry.bones.size() ? geometry.bones[i] : L3DSubMesh::k_NoBone;
-			const auto world =
-			    (bone < _groundShadowBones.size() ? _groundShadowBones[bone] : body.model) * glm::vec4(local, 1.0f);
-			_groundShadowPoints.push_back({.position = glm::vec3(world), .keptAboveLevel = !boned});
+			const auto world = (bone < bones.size() ? bones[bone] : body.model) * glm::vec4(local, 1.0f);
+			scratch.points.push_back({.position = glm::vec3(world), .keptAboveLevel = !boned});
 		}
 	}
 }
 
 std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
-Renderer::GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha) const
+Renderer::GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t alpha, GroundShadowScratch& scratch)
 {
-	_groundShadowSamples.clear();
-	for (const auto& flat : _groundShadowFlattened)
+	auto& samples = scratch.samples;
+	samples.clear();
+	for (const auto& flat : scratch.flattened)
 	{
-		_groundShadowSamples.push_back(GroundShadow::Sample(flat, footprint));
+		samples.push_back(GroundShadow::Sample(flat, footprint));
 	}
-	_groundShadowCoverage = {};
-	for (const auto& part : _groundShadowParts)
+	scratch.coverage = {};
+	for (const auto& part : scratch.parts)
 	{
 		const auto& geometry = part.subMesh->GetBodyGeometry();
 		for (const auto& primitive : part.subMesh->GetPrimitives())
@@ -5228,18 +5232,16 @@ Renderer::GroundShadowLevels(const GroundShadow::Footprint& footprint, uint8_t a
 			{
 				const std::array<size_t, 3> corners {part.first + geometry.indices[i], part.first + geometry.indices[i + 1],
 				                                     part.first + geometry.indices[i + 2]};
-				if (std::ranges::any_of(corners, [this](size_t corner) { return corner >= _groundShadowSamples.size(); }))
+				if (std::ranges::any_of(corners, [&samples](size_t corner) { return corner >= samples.size(); }))
 				{
 					continue;
 				}
-				GroundShadow::Cover(
-				    _groundShadowCoverage,
-				    {_groundShadowSamples[corners[0]], _groundShadowSamples[corners[1]], _groundShadowSamples[corners[2]]},
-				    primitive.twoSided, part.secondRowsOnly);
+				GroundShadow::Cover(scratch.coverage, {samples[corners[0]], samples[corners[1]], samples[corners[2]]},
+				                    primitive.twoSided, part.secondRowsOnly);
 			}
 		}
 	}
-	return GroundShadow::Levels(_groundShadowCoverage, alpha);
+	return GroundShadow::Levels(scratch.coverage, alpha);
 }
 
 std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
@@ -5598,23 +5600,39 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 	std::vector<GroundShadow::Footprint> footprints;
 	footprints.reserve(casters.size());
 	decltype(_keptGroundShadows) kept;
-	for (const auto& caster : casters)
-	{
-		_groundShadowPoints.clear();
-		_groundShadowParts.clear();
+	// Each shadow uses only its caster, thus the workers make the shadows at the same time, each into its own place.
+	// Then the loop below hands them over in the order of the casters, the same as before. A shadow that the textures'
+	// alpha fills reads the texture cache, thus the main thread makes it.
+	_groundShadowMade.resize(casters.size());
+	const auto make = [this, &casters](size_t index, size_t lane) {
+		const auto& caster = casters[index];
+		auto& scratch = _groundShadowScratch[lane];
+		auto& made = _groundShadowMade[index];
+		scratch.points.clear();
+		scratch.parts.clear();
 		for (uint8_t i = 0; i < caster.bodyCount; ++i)
 		{
-			AddGroundShadowBody(caster.bodies.at(i));
+			AddGroundShadowBody(caster.bodies.at(i), scratch);
 		}
-		_groundShadowFlattened.resize(_groundShadowPoints.size());
-		const auto footprint = GroundShadow::Measure(_groundShadowPoints, caster.standsAt, caster.cast, _groundShadowFlattened);
+		scratch.flattened.resize(scratch.points.size());
+		made.footprint = GroundShadow::Measure(scratch.points, caster.standsAt, caster.cast, scratch.flattened);
+		if (made.footprint && !caster.throughAlpha)
+		{
+			made.levels = GroundShadowLevels(*made.footprint, caster.alpha, scratch);
+		}
+	};
+	_workers->ForEach(casters.size(), make);
+	for (size_t index = 0; index < casters.size(); ++index)
+	{
+		const auto& caster = casters[index];
+		const auto& footprint = _groundShadowMade[index].footprint;
 		if (!footprint)
 		{
 			continue;
 		}
-		const auto levels = caster.throughAlpha
-		                        ? ShadowTextureLevels(caster.bodies.at(0), *footprint, caster.cast, caster.alpha)
-		                        : GroundShadowLevels(*footprint, caster.alpha);
+		const auto& levels = caster.throughAlpha
+		                         ? ShadowTextureLevels(caster.bodies.at(0), *footprint, caster.cast, caster.alpha)
+		                         : _groundShadowMade[index].levels;
 		const auto first = _groundShadowTexels.size();
 		const auto way = GroundShadow::LightWay(caster.standsAt, caster.cast.light);
 		_groundShadowTexels.push_back(GroundShadow::Receiver(*footprint, caster.cast));
@@ -5663,9 +5681,10 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		for (size_t block = 0; _groundShadowCount > 0 && block < blocks.size(); ++block)
 		{
 			const auto first = static_cast<float>(_groundShadowTexels.size());
+			const auto position = blocks[block].GetMapPosition();
 			for (uint32_t shadow = 0; shadow < _groundShadowCount; ++shadow)
 			{
-				if (GroundShadow::ReachesBlock(footprints[shadow], blocks[block].GetMapPosition()))
+				if (GroundShadow::ReachesBlock(footprints[shadow], position))
 				{
 					_groundShadowTexels.emplace_back(static_cast<float>(shadow), 0.0f, 0.0f, 0.0f);
 				}
