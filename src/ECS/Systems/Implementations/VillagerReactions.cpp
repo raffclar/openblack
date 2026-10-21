@@ -81,6 +81,7 @@
 #include "VillagerFire.h"
 #include "VillagerForester.h"
 #include "VillagerHome.h"
+#include "VillagerMagicTree.h"
 #include "VillagerMourning.h"
 #include "VillagerPhysics.h"
 
@@ -561,6 +562,13 @@ villager_reactions::Taken villager_reactions::Start(entt::entity villager, React
 		// The fart of a creature makes the villager faint. It stays where it is and does nothing until the reaction ends
 		SetTop(*action, VillagerStates::FaintingReaction);
 		break;
+	case Reaction::ReactToMagicTree:
+		// It goes from tree to tree of the forest miracle and looks at them
+		if (const auto tree = ReactingTo(villager); tree.has_value())
+		{
+			ecs::villager_magic_tree::Setup(*action, *tree);
+		}
+		break;
 	case Reaction::ReactToFire:
 		// The fire's own states take over, from the object burning
 		if (Locator::reactionSystem::has_value())
@@ -602,6 +610,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToCreature:
 	case Reaction::Fainting:
 	case Reaction::FleeFromPredator:
+	case Reaction::ReactToMagicTree:
 		return true;
 	default:
 		return false;

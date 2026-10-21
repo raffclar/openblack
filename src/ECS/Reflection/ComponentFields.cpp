@@ -185,6 +185,7 @@
 #include "ECS/Components/MagicForest.h"
 #include "ECS/Components/MagicPile.h"
 #include "ECS/Components/MagicShield.h"
+#include "ECS/Components/MagicTreeWatch.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/MapPlace.h"
 #include "ECS/Components/MapScriptGlobals.h"
@@ -1537,6 +1538,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::VillagerShieldReaction::lookAt>("lookAt")
 	    .Field<&components::VillagerShieldReaction::animation>("animation");
 	Reflect<components::VillagerReactionMemory>(context).Field<&components::VillagerReactionMemory::memory>("memory");
+	Reflect<components::MagicTreeWatch>(context)
+	    .Field<&components::MagicTreeWatch::tree>("tree")
+	    .Field<&components::MagicTreeWatch::next>("next")
+	    .Field<&components::MagicTreeWatch::looked>("looked");
 	Reflect<components::MapCellResident>(context)
 	    .Field<&components::MapCellResident::placement>("placement")
 	    .Field<&components::MapCellResident::coversOutline>("coversOutline")
