@@ -129,6 +129,10 @@ public:
 	{
 		return {};
 	}
+	void EndAnimEffect(const std::string&, std::span<const int32_t>, entt::entity, const glm::vec3&, audio::AnimEffectEnd,
+	                   audio::AnimEffectMeasure) override
+	{
+	}
 	const audio::Sound& GetSound(entt::id_type) override { return _sound; }
 	void CreateSoundGroup(const std::string&) override {}
 	void AddToSoundGroup(const std::string&, entt::id_type) override {}

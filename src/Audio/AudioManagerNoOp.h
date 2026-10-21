@@ -73,6 +73,11 @@ public:
 	{
 		return {};
 	}
+	void EndAnimEffect([[maybe_unused]] const std::string& bankName, [[maybe_unused]] std::span<const int32_t> keys,
+	                   [[maybe_unused]] entt::entity owner, [[maybe_unused]] const glm::vec3& position,
+	                   [[maybe_unused]] AnimEffectEnd end, [[maybe_unused]] AnimEffectMeasure measure) override
+	{
+	}
 	void PlaySoundEffect([[maybe_unused]] entt::id_type id, [[maybe_unused]] std::optional<glm::vec3> worldPosition) override {}
 	void StopSoundEffect([[maybe_unused]] entt::id_type id) override {}
 	[[nodiscard]] bool IsSoundEffectPlaying([[maybe_unused]] entt::id_type id) const override { return false; }
