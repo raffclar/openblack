@@ -52,6 +52,9 @@ public:
 	/// The camera jumps to the next or the last set bookmark from the slot of the last jump or set
 	virtual void JumpToNext() = 0;
 	virtual void JumpToPrevious() = 0;
+	/// The Tab key: the camera flies to the next town of the player at this machine, to its storage pit or its village
+	/// centre. The town key keeps the place of the town, or of the thing under the hand. Any follow stops.
+	virtual void FlyToNextTown(std::optional<entt::entity> thingUnderHand) = 0;
 	/// Shift and a number key: a bookmark on a thing starts or stops a follow, and a bookmark on the land is a jump
 	virtual void ToggleFollow(size_t slot) = 0;
 	[[nodiscard]] virtual std::optional<size_t> GetFollowed() const = 0;

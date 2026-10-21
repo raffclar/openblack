@@ -39,6 +39,8 @@ public:
 	/// A dance is made: one that is not a worship site's or a temple's gets a path from the storage pit of its town, or
 	/// of the town nearest it
 	virtual void DanceMade(entt::entity dance, entt::entity town) = 0;
+	/// A dance moves to a new place: it gets one more path from the storage pit of the town nearest it
+	virtual void DanceMoved(entt::entity dance) = 0;
 	/// A thing that stays put comes onto the map: when the creatures' route rule makes them go round it, the paths go
 	/// round it from their next turn
 	virtual void ThingPut(entt::entity thing) = 0;

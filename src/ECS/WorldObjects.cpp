@@ -847,6 +847,24 @@ void world_objects::Remove(entt::entity object)
 			}
 		}
 	}
+	// A storage pit that goes removes its piles. When it is the storage pit of its town, the town looks for another storage
+	// pit and lets go of its temporary piles.
+	if (const auto* pit = registry.TryGet<const StoragePit>(object))
+	{
+		std::vector<entt::entity> piles(pit->woodPiles.begin(), pit->woodPiles.end());
+		piles.insert(piles.begin(), pit->foodPile);
+		const auto& towns = registry.Context().towns;
+		const auto* abode = registry.TryGet<const Abode>(object);
+		if (const auto town = abode != nullptr ? towns.find(abode->townId) : towns.end();
+		    town != towns.end() && construction::StoragePitOf(town->second) == object && Locator::townSystem::has_value())
+		{
+			Locator::townSystem::value().SetStoragePit(town->second);
+		}
+		for (const auto pile : piles)
+		{
+			world_objects::Remove(pile);
+		}
+	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);
 	// A crèche going hands its town's children over to another of the town's buildings

@@ -1083,7 +1083,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			}
 			break;
 		case SDLK_TAB:
-			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one
+			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one. Tab without them flies to
+			// the next town of the player.
 			if (BookmarkKeysAllowed())
 			{
 				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
@@ -1093,6 +1094,15 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
 				{
 					Locator::cameraBookmarkSystem::value().JumpToNext();
+				}
+				else
+				{
+					std::optional<entt::entity> thing;
+					if (Locator::pickingSystem::has_value())
+					{
+						thing = Locator::pickingSystem::value().GetPick().object;
+					}
+					Locator::cameraBookmarkSystem::value().FlyToNextTown(thing);
 				}
 			}
 			break;

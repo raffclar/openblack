@@ -25,6 +25,7 @@ public:
 	void BuildingWorking(entt::entity building) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void DanceMade(entt::entity dance, entt::entity town) override;
+	void DanceMoved(entt::entity dance) override;
 	void ThingPut(entt::entity thing) override;
 	void ThingRemoved(entt::entity thing, glm::vec3 position, bool filed) override;
 	void ProcessObstacleChanges() override;

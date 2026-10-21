@@ -175,14 +175,15 @@ struct Shelter
 /// Where a sheltering villager looks next: a step on from where it stands, away from the shield's middle, turned by the
 /// same spread
 [[nodiscard]] glm::vec2 LookOut(glm::vec2 centre, glm::vec2 villager, float turn);
-/// The animation a sheltering villager plays, by a roll of 0 to 4: pointing up, looking at its hand, or standing; after
-/// pointing up it talks and points
-[[nodiscard]] uint32_t AmazedAnimation(uint32_t roll);
+/// After the clip that points up, a sheltering villager talks and points
 inline constexpr uint32_t k_PointingAnimation = 286;
 inline constexpr uint32_t k_TalkingAndPointingAnimation = 395;
-/// A sheltering villager takes up a new animation after 20 to 30 seconds (10 times a roll of 0 to 1, and 20)
+/// A sheltering villager takes up a new clip after 20 to 30 seconds (10 times a roll of 0 to 1, and 20)
 inline constexpr float k_AnimationSecondsRange = 10.0f;
 inline constexpr float k_AnimationSecondsLeast = 20.0f;
+/// How many times the clip of a sheltering villager plays through before it takes up a new clip: the seconds over the
+/// length of the clip in milliseconds, in whole times. After the clip that points up, it takes up the next clip at once.
+[[nodiscard]] int32_t AmazedClipTimes(float seconds, int32_t clipMilliseconds, bool pointing);
 /// One whose shield has gone waits 20 and a roll of 0 to 59 turns before deciding what to do
 inline constexpr uint32_t k_GiveUpWaitLeast = 20;
 inline constexpr uint32_t k_GiveUpWaitRange = 60;

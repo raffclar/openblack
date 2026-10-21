@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <array>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -81,4 +82,47 @@ TEST(CameraBookmarks, ShiftAndANumberFollowsABookmarkOnAThing)
 	EXPECT_EQ(ShiftKey(true, std::nullopt, 2), FollowKey::Follow);
 	EXPECT_EQ(ShiftKey(true, 4U, 2), FollowKey::Follow);
 	EXPECT_EQ(ShiftKey(true, 2U, 2), FollowKey::Stop);
+}
+
+TEST(CameraBookmarks, TabFliesToTheTownBeforeTheLastTownOfTheKey)
+{
+	const std::vector<TownStop> towns = {{.id = 4, .hasPlace = true}, {.id = 7, .hasPlace = true}, {.id = 2, .hasPlace = true}};
+	// The first press takes the town before the last town
+	EXPECT_EQ(NextTown(towns, std::nullopt), 1U);
+	// Each press takes the town before the town of the last press, and the first town goes round to the last
+	EXPECT_EQ(NextTown(towns, 7U), 0U);
+	EXPECT_EQ(NextTown(towns, 4U), 2U);
+	EXPECT_EQ(NextTown(towns, 2U), 1U);
+	// A town that is no longer the player's starts the search again from the last town
+	EXPECT_EQ(NextTown(towns, 9U), 1U);
+	// One town flies to itself
+	EXPECT_EQ(NextTown(std::vector<TownStop> {{.id = 3, .hasPlace = true}}, 3U), 0U);
+	EXPECT_EQ(NextTown(std::vector<TownStop> {}, std::nullopt), std::nullopt);
+}
+
+TEST(CameraBookmarks, TabPassesOverATownWithNoPlace)
+{
+	const std::vector<TownStop> towns = {
+	    {.id = 4, .hasPlace = true}, {.id = 7, .hasPlace = false}, {.id = 2, .hasPlace = true}};
+	// The town before the town of the last press has no place. No other town is the town of the last press, so the
+	// second search starts at the last town and takes the first town.
+	EXPECT_EQ(NextTown(towns, 2U), 0U);
+	EXPECT_EQ(NextTown(towns, std::nullopt), 0U);
+	// Before the first town, the last town has no place: the second search takes the first town again
+	const std::vector<TownStop> onlyFirst = {
+	    {.id = 4, .hasPlace = true}, {.id = 7, .hasPlace = false}, {.id = 2, .hasPlace = false}};
+	EXPECT_EQ(NextTown(onlyFirst, 7U), 0U);
+	EXPECT_EQ(NextTown(onlyFirst, 4U), 0U);
+	const std::vector<TownStop> none = {{.id = 4, .hasPlace = false}, {.id = 7, .hasPlace = false}};
+	EXPECT_EQ(NextTown(none, 4U), std::nullopt);
+}
+
+TEST(CameraBookmarks, TabFliesFromAFixedPlaceAboveAndBehindTheTown)
+{
+	const auto from = TownViewFrom({100.0f, 10.0f, 200.0f});
+	EXPECT_EQ(from.x, 100.0f - k_TownViewX);
+	EXPECT_EQ(from.y, 10.0f + k_TownViewY);
+	EXPECT_EQ(from.z, 200.0f + k_TownViewZ);
+	EXPECT_EQ(k_TownViewX, 24.45f);
+	EXPECT_EQ(k_TownViewZ, 47.4f);
 }

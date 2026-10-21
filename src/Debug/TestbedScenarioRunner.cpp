@@ -2956,6 +2956,15 @@ void Runner::Give(const Command& command)
 		                focus.x, focus.y, focus.z));
 		return;
 	}
+	if (command.kind == Kind::TabToTown)
+	{
+		if (Locator::cameraBookmarkSystem::has_value())
+		{
+			Locator::cameraBookmarkSystem::value().FlyToNextTown(std::nullopt);
+		}
+		Log(fmt::format("{:.1f}s: the player presses the Tab key", _seconds));
+		return;
+	}
 	if (command.kind == Kind::SetInterfaceLevel)
 	{
 		if (Locator::cameraHelpSystem::has_value())
@@ -3393,6 +3402,7 @@ void Runner::Give(const Command& command)
 	case Kind::WideScreen:
 	case Kind::SetInterfaceLevel:
 	case Kind::FlyToBookmark:
+	case Kind::TabToTown:
 	case Kind::PlayFallingSpellFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
