@@ -372,7 +372,7 @@ bool spells::ApplyDefaultEffect(SpellServicesInterface& services, Spell& spell, 
 		{
 			if (event.target != entt::null)
 			{
-				return world.CanBeDestroyedBySpell(event.target);
+				return world.CanBeDestroyedBySpell(event.target, services.SpellEntity(spell));
 			}
 			acted = false;
 		}
