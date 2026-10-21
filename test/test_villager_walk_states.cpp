@@ -22,6 +22,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerWork.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/DanceRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/WallHugRules.h"
@@ -325,13 +326,14 @@ TEST_F(VillagerWalkStates, AWalkToAPlaceInADanceStepsToThePlaceOfAMovedGroup)
 	EXPECT_NEAR(_steps->steps.front().goal.y, slot->y, 0.01f);
 }
 
-// A dancer of an artefact dance that stands at the middle of the dance starts its walk to its place, with no step yet
+// A dancer of an artefact dance that stands where a walk to the dance ends starts its walk to its place, with no step yet
 // NOLINTNEXTLINE(cppcoreguidelines-avoid-non-const-global-variables): external macro
-TEST_F(VillagerWalkStates, AnArtefactDancerAtTheMiddleStartsItsWalkWithNoStep)
+TEST_F(VillagerWalkStates, AnArtefactDancerWhereTheWalkEndsStartsItsWalkWithNoStep)
 {
 	const auto dance = JoinDance();
-	const auto middle = map_coords::ToMetres(Locator::entitiesRegistry::value().Get<const Dance>(dance).place);
-	Locator::entitiesRegistry::value().Get<Transform>(_villager).position = glm::vec3(middle.x, 0.0f, middle.y);
+	const auto arrive = map_coords::ToMetres(
+	    ecs::dance_rules::ArrivePlace(Locator::entitiesRegistry::value().Get<const Dance>(dance).place));
+	Locator::entitiesRegistry::value().Get<Transform>(_villager).position = glm::vec3(arrive.x, 0.0f, arrive.y);
 	SetStates(VillagerStates::ArtifactDance, VillagerStates::InvalidState);
 	villager_artefact_dance::ArtefactDance(Action());
 	EXPECT_TRUE(_steps->steps.empty());

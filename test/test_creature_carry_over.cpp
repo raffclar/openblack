@@ -29,6 +29,7 @@
 #include "Creature/CreatureCarryOver.h"
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindFileBody.h"
+#include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePhysiology.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -356,7 +357,11 @@ TEST_F(CreatureBodyFile, ACreatureMadeFromAFileTakesUpTheBodyItKept)
 	EXPECT_EQ(kept.alignment, -0.5f);
 	EXPECT_EQ(kept.size, 1.8f);
 	EXPECT_EQ(kept.fatness, 0.8f);
-	EXPECT_EQ(kept.shownFatness, 0.6f);
+	// The load of the file moves the shown fatness two steps towards the fatness
+	const auto twoSteps = [](float shown) {
+		return creature_morph::EaseFatness(creature_morph::EaseFatness(shown, 0.8f), 0.8f);
+	};
+	EXPECT_EQ(kept.shownFatness, twoSteps(0.6f));
 	EXPECT_EQ(kept.needs, GrownBody().needs);
 	EXPECT_EQ(kept.wounds, GrownBody().wounds);
 
@@ -368,7 +373,7 @@ TEST_F(CreatureBodyFile, ACreatureMadeFromAFileTakesUpTheBodyItKept)
 	EXPECT_EQ(body.strength, 0.7f);
 	EXPECT_EQ(body.fatness, 0.8f);
 	EXPECT_EQ(body.size, 1.8f);
-	EXPECT_EQ(registry.Get<CreatureMorph>(loaded).shownFatness, 0.6f);
+	EXPECT_EQ(registry.Get<CreatureMorph>(loaded).shownFatness, twoSteps(twoSteps(0.6f)));
 	EXPECT_EQ(registry.Get<CreatureNeeds>(loaded).kept, GrownBody().needs);
 	EXPECT_EQ(registry.Get<CreatureTattoos>(loaded).slots.at(0), GrownBody().tattoos->at(0));
 	EXPECT_EQ(registry.Get<CreatureMarks>(loaded).marks.blood, GrownBody().blood);

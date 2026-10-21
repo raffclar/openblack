@@ -38,10 +38,15 @@ struct CreatureMorph
 	float shownFatness {0.5f};
 	/// How far along each axis the body is drawn
 	creature_morph::Morph drawn {};
-	/// The weak to strong look the body shows, -1 to 1. It takes the look of the strength only when the strength is set
-	/// or changed by an amount (a spell, a script, carrying, an action), not as the strength slowly goes down each turn.
-	/// A creature that a script makes from another takes the other's look. Without it, the body shows its strength.
+	/// The weak to strong look the body shows, -1 to 1. The body takes the look of the strength at the end of each game
+	/// turn that the hand does not hold the creature. A change of the strength by an amount (a spell, a script, carrying,
+	/// an action) also gives the look at once. A creature that a script makes from another takes the look of the other
+	/// until its first turn. Without it, the body shows its strength.
 	std::optional<float> strengthLook {};
+	/// The evil to good look the body shows, -1 to 1. The body takes the look of the alignment at the end of each game
+	/// turn that the hand does not hold the creature. The alignment moves after this, so the look shows the alignment of
+	/// the turn before. The evil tests of the fights read this look. Without it, the body shows its alignment.
+	std::optional<float> alignmentLook {};
 	/// Goes up each time the animations and rest pose have to follow the body anew
 	uint32_t revision {0};
 };

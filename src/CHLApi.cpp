@@ -2101,8 +2101,9 @@ void SetProperty() // 022 SET_PROPERTY
 	case script::ObjectPropertyType::Alignment:
 		if (auto* creature = registry.TryGet<ecs::components::Creature>(object); creature != nullptr)
 		{
-			// Its body shows it
+			// Its body takes its looks at once
 			creature->alignment = value;
+			ecs::archetypes::CreatureArchetype::TakeLooks(registry, object);
 			return;
 		}
 		// Only a creature (or a reward, which openblack doesn't keep an alignment for) takes one

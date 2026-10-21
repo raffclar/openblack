@@ -3779,7 +3779,10 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 	// order. After a knock out by a blow the plan is not forced: it has the low priority of the order.
 	if (Locator::creatureMindSystem::has_value() && registry.Valid(loser))
 	{
-		const auto alignment = registry.Get<const Creature>(winner).alignment;
+		// The test reads the evil to good look of the body, which shows the alignment of the turn before
+		const auto* look = registry.TryGet<const CreatureMorph>(winner);
+		const auto alignment = look != nullptr ? look->alignmentLook.value_or(registry.Get<const Creature>(winner).alignment)
+		                                       : registry.Get<const Creature>(winner).alignment;
 		const std::string_view action = fight::WinnerPoos(alignment) ? "Poo" : "ShowImpressiveAnimation";
 		const bool forced = fight::WinPlanForced(byBlow);
 		const auto unforcedPriority =

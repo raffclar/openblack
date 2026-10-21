@@ -665,6 +665,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureMorph::shownFatness>("shownFatness")
 	    .Field<&components::CreatureMorph::drawn>("drawn")
 	    .Field<&components::CreatureMorph::strengthLook>("strengthLook")
+	    .Field<&components::CreatureMorph::alignmentLook>("alignmentLook")
 	    .Field<&components::CreatureMorph::revision>("revision");
 	Reflect<components::CreatureAnimation>(context)
 	    .Field<&components::CreatureAnimation::body>("body")

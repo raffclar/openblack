@@ -63,6 +63,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreaturePlacement.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -138,6 +139,7 @@ creature_morph::Morph TargetMorph(const Creature& creature, const CreatureMorph&
 {
 	auto target = creature_morph::FromAttributes(creature.alignment, morph.shownFatness, creature.strength,
 	                                             ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
+	target.evilGood = morph.alignmentLook.value_or(target.evilGood);
 	target.weakStrong = morph.strengthLook.value_or(target.weakStrong);
 	return target;
 }
@@ -800,14 +802,13 @@ void CreatureAnimationSystem::ProcessTurn()
 
 void CreatureAnimationSystem::BodyTurn(entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
+	// While the player's hand holds the creature to interact with it, the body keeps its looks
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
 	{
-		if (auto* morph = registry.TryGet<CreatureMorph>(creature); morph != nullptr)
-		{
-			morph->shownFatness = creature_morph::EaseFatness(morph->shownFatness, body->fatness);
-		}
+		return;
 	}
+	// At the end of the turn the body takes the looks of what the creature is now, also of a strength that only fades
+	ecs::archetypes::CreatureArchetype::TakeLooks(Locator::entitiesRegistry::value(), creature);
 }
 
 void CreatureAnimationSystem::BreathTurn(entt::entity creature)

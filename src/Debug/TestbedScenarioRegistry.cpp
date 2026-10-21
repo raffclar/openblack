@@ -2023,6 +2023,27 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {goodTiger, evilTiger},
 	});
 
+	// A tiger as strong as it can be, whose strength only fades. A weak tiger beside it shows the weak look.
+	auto fading = Content(CreatureType::Tiger, {-12.0f, 0.0f}, 0.0f, "strength fades");
+	fading.strength = 1.0f;
+	fading.pauseMind = true;
+	auto weak = Content(CreatureType::Tiger, {12.0f, 0.0f}, 0.0f, "weak");
+	weak.strength = 0.0f;
+	weak.pauseMind = true;
+	all.push_back({
+	    .id = "appearance.strength_fades",
+	    .name = "The body follows a strength that fades",
+	    .facet = Facet::Appearance,
+	    .description = "Close up, a tiger with the most strength stands on the left, and a tiger with no strength stands "
+	                   "on the right. Nothing changes their strength by an amount.",
+	    .expected = "The strength of the left tiger fades a little each game turn, and at the end of each turn its body "
+	                "takes the look of that strength. Run the game fast: the left tiger becomes less muscular. Its "
+	                "strong look does not stay.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -15.0f}, {30.0f, 15.0f}}, .distance = 1.0f},
+	    .creatures = {fading, weak},
+	});
+
 	all.push_back({
 	    .id = "appearance.falling_spell_film",
 	    .name = "The falling spell's film",

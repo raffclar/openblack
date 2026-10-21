@@ -160,3 +160,25 @@ TEST(CreatureMorph, TheStrengthLookIsTheWeakStrongAxis)
 	EXPECT_FLOAT_EQ(creature_morph::FromAttributes(0.0f, 0.5f, 0.25f, 1.0f).weakStrong,
 	                creature_morph::StrengthLook(0.25f, 1.0f));
 }
+
+TEST(CreatureMorph, TheBodyTakesTheLooksOfTheCreatureAsItIsNow)
+{
+	const auto looks = creature_morph::TakeLooks(0.5f, 1.0f, -0.4f, 0.25f, 1.0f);
+	EXPECT_FLOAT_EQ(looks.shownFatness, creature_morph::EaseFatness(0.5f, 1.0f));
+	EXPECT_FLOAT_EQ(looks.evilGood, -0.4f);
+	EXPECT_FLOAT_EQ(looks.weakStrong, creature_morph::StrengthLook(0.25f, 1.0f));
+}
+
+TEST(CreatureMorph, TheLookOfAFadedStrengthIsWeaker)
+{
+	// A strength that only fades still gives a weaker look
+	const auto strong = creature_morph::TakeLooks(0.5f, 0.5f, 0.0f, 1.0f, 0.5f);
+	const auto faded = creature_morph::TakeLooks(0.5f, 0.5f, 0.0f, 0.9f, 0.5f);
+	EXPECT_LT(faded.weakStrong, strong.weakStrong);
+}
+
+TEST(CreatureMorph, TheLookOfTheAlignmentStaysOnItsAxis)
+{
+	EXPECT_EQ(creature_morph::TakeLooks(0.5f, 0.5f, -1.5f, 0.5f, 0.5f).evilGood, -1.0f);
+	EXPECT_EQ(creature_morph::TakeLooks(0.5f, 0.5f, 1.5f, 0.5f, 0.5f).evilGood, 1.0f);
+}
