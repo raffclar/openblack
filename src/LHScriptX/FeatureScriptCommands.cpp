@@ -63,6 +63,7 @@
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
+#include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -957,7 +958,11 @@ void FeatureScriptCommands::CreateArena(glm::vec3 position, float radius)
 void FeatureScriptCommands::CreateFootpath(int32_t)
 {
 	// The command does not use the number on the line. The new footpath becomes the script's number 0. The number
-	// of each older footpath increases by one.
+	// of each older footpath increases by one. The things that the script made before do not send the path round them.
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().CatchUpWithMap();
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 	registry.Assign<Footpath>(entity);

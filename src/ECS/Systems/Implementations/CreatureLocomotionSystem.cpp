@@ -1610,6 +1610,8 @@ void CreatureLocomotionSystem::CreatureTurn(entt::entity entity)
 					if (auto confused =
 					        creature_layers::PlayOnce(animation.body, creature_layers::animations::k_Confused, turn.mirrored))
 					{
+						// The confused look is a part of the walk, and keeps its pace when the creature is told to hurry
+						confused->keepsPace = true;
 						animation.body = *confused;
 						self.motion = Motion::Confused;
 					}

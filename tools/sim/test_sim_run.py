@@ -7,7 +7,7 @@
 #
 # openblack is licensed under the GNU General Public License version 3.
 # ******************************************************************************
-"""Tests of the feedback that the training style of the simulation driver gives"""
+"""Tests of the feedback that the training style of the simulation driver gives, and of its repeat comparison"""
 
 import os
 import sys
@@ -43,6 +43,26 @@ class TrainingFeedbackTests(unittest.TestCase):
         self.assertIsNone(sim_run.training_feedback(context("Compassion", 1.0, running=True)))
         self.assertIsNone(sim_run.training_feedback(context("Compassion", 1.0, learnable=False)))
         self.assertIsNone(sim_run.training_feedback(None))
+
+
+def repeat_record(turn, local=9, draws=None):
+    return {"type": "record", "turn": turn, "hash": "a", "seeds": [7, local], "draws": draws or turn * 3}
+
+
+class RepeatTests(unittest.TestCase):
+    def test_a_repeat_that_agrees_gives_its_last_draws(self):
+        result = sim_run.repeat_result([repeat_record(1), repeat_record(2)], [repeat_record(1), repeat_record(2)])
+        self.assertTrue(result["same"])
+        self.assertEqual(result["records"], [2, 2])
+        self.assertEqual(result["draws_last"], [6, 6])
+
+    def test_a_repeat_that_parts_gives_its_first_record_that_differs(self):
+        other = [repeat_record(1), repeat_record(2, local=10), repeat_record(3, draws=10)]
+        result = sim_run.repeat_result([repeat_record(1), repeat_record(2), repeat_record(3)], other)
+        self.assertFalse(result["same"])
+        self.assertEqual(result["turn"], 2)
+        self.assertEqual(result["differs"], ["seeds.local"])
+        self.assertEqual(result["draws_last"], [9, 10])
 
 
 if __name__ == "__main__":

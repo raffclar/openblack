@@ -9,11 +9,16 @@
 
 #pragma once
 
+#include <functional>
+#include <optional>
 #include <random>
 #include <span>
+#include <unordered_map>
 
+#include "3D/SkeletalAnimation.h"
 #include "Common/FramePace.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureRig.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -45,6 +50,7 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
+	void Hurry(entt::entity creature) override;
 	void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) override;
 	void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) override;
 	void LoadCreedPowers(entt::entity creature,
@@ -52,6 +58,33 @@ public:
 	void PlayCreedEvent(entt::entity creature, int32_t event) override;
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) override;
 	void AddAlignmentMotesOf(entt::entity copy) override;
+
+	/// A species' animation adjusted to the stand of a variant mesh that has no animation of its own, and the
+	/// animations that it comes from
+	struct AdjustedAnimation
+	{
+		const skeletal_animation::Animation* base;
+		const skeletal_animation::Animation* baseStand;
+		const skeletal_animation::Animation* stand;
+		skeletal_animation::Animation animation;
+	};
+	/// Which species, variant mesh and animation an adjusted animation is of
+	struct AdjustedKey
+	{
+		const creature::CreatureRig* rig;
+		creature::CreatureRig::Mesh mesh;
+		size_t index;
+		[[nodiscard]] bool operator==(const AdjustedKey&) const = default;
+	};
+	struct AdjustedKeyHash
+	{
+		[[nodiscard]] size_t operator()(const AdjustedKey& key) const noexcept
+		{
+			return std::hash<const void*> {}(key.rig) ^ (std::hash<size_t> {}(key.index) * 31u) ^
+			       (static_cast<size_t>(key.mesh) << 20u);
+		}
+	};
+	using AdjustedAnimations = std::unordered_map<AdjustedKey, std::optional<AdjustedAnimation>, AdjustedKeyHash>;
 
 private:
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
@@ -66,6 +99,8 @@ private:
 	GameRandomSource _random;
 	/// When the breaths move towards their target periods
 	frame_pace::Pace _breathPace;
+	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them
+	AdjustedAnimations _adjusted;
 };
 
 } // namespace openblack::ecs::systems

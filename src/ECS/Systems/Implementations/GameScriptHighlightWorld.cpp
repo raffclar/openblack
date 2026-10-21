@@ -261,13 +261,13 @@ std::optional<Sprite> GameScriptHighlightWorld::GlowLook() const
 	const auto column = static_cast<float>(rules::k_GlowPicture % rules::k_GlowSheetPictures);
 	const auto row = static_cast<float>(rules::k_GlowPicture / rules::k_GlowSheetPictures);
 	return Sprite {
-	    .texture = textures.Handle(k_Sheet.value())->GetNativeHandle(),
+	    .texture = k_Sheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,
 	    .uvExtent = glm::vec2(k_Cell),
 	    .tint = glm::vec4(1.0f),
 	    .additive = true,
 	    .facesCamera = true,
-	    .alpha = textures.Handle(k_SheetAlpha.value())->GetNativeHandle(),
+	    .alpha = k_SheetAlpha.value(),
 	};
 }
 
@@ -287,13 +287,13 @@ std::optional<Sprite> GameScriptHighlightWorld::SparkLook(uint32_t picture) cons
 	const auto column = static_cast<float>(picture % rules::k_SparkSheetPictures);
 	const auto row = static_cast<float>(picture / rules::k_SparkSheetPictures);
 	return Sprite {
-	    .texture = textures.Handle(k_SparkSheet.value())->GetNativeHandle(),
+	    .texture = k_SparkSheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,
 	    .uvExtent = glm::vec2(k_Cell),
 	    .tint = glm::vec4(1.0f),
 	    .additive = true,
 	    .facesCamera = true,
-	    .alpha = textures.Handle(k_SparkSheetAlpha.value())->GetNativeHandle(),
+	    .alpha = k_SparkSheetAlpha.value(),
 	};
 }
 

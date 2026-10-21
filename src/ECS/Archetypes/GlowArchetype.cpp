@@ -18,9 +18,7 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "Graphics/Texture2D.h"
 #include "Locator.h"
-#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
@@ -45,9 +43,8 @@ std::array<entt::entity, 2> GlowArchetype::Create(const LightEmitter& emitter, T
 	}
 
 	// As in the game, the glow is drawn additively from data/textures/atmos.raw with its alpha, atmosa.raw
-	const auto& textures = Locator::resources::value().GetTextures();
-	auto texture = textures.Handle(entt::hashed_string("raw/ATMOS"));
-	auto alpha = textures.Handle(entt::hashed_string("raw/ATMOSA"));
+	constexpr auto k_Texture = entt::hashed_string("raw/ATMOS");
+	constexpr auto k_Alpha = entt::hashed_string("raw/ATMOSA");
 	// The glow is frame 22 of the atmosphere texture's 8 by 8 frames
 	const auto uvMin = glm::vec2 {6.0f / 8.0f, 2.0f / 8.0f};
 	const auto extent = glm::vec2 {1.0f / 8.0f, 1.0f / 8.0f};
@@ -57,8 +54,8 @@ std::array<entt::entity, 2> GlowArchetype::Create(const LightEmitter& emitter, T
 	const auto createSprite = [&](const glm::vec4& tint, float size) {
 		auto entity = registry.Create();
 		registry.Assign<ecs::components::TempleInteriorPart>(entity, room);
-		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), uvMin, extent, tint, true, !glow.orientation.has_value(),
-		                        alpha->GetNativeHandle());
+		registry.Assign<Sprite>(entity, k_Texture.value(), uvMin, extent, tint, true, !glow.orientation.has_value(),
+		                        k_Alpha.value());
 		registry.Assign<ecs::components::Transform>(entity, glow.position, rotation, glm::vec3(size));
 		return entity;
 	};

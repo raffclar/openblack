@@ -112,30 +112,29 @@ std::vector<uint8_t> AsBytes(std::string_view text)
 	return {text.begin(), text.end()};
 }
 
+/// The bytes of the file, or nothing when the file is not there or the game cannot read it
+std::optional<std::vector<uint8_t>> ReadFileIfThere(filesystem::FileSystemInterface& files, const std::filesystem::path& path)
+{
+	try
+	{
+		if (!files.Exists(path))
+		{
+			return std::nullopt;
+		}
+		return files.ReadAll(path);
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not read {}: {}", path.generic_string(), error.what());
+		return std::nullopt;
+	}
+}
+
 } // namespace
 
 CreatureWebPageSystem::CreatureWebPageSystem(PlayerOfFiles player)
     : _player(std::move(player))
 {
-}
-
-CreatureWebPageSystem::~CreatureWebPageSystem() = default;
-
-ecs::save_files::BackgroundWriter& CreatureWebPageSystem::Writer() const
-{
-	if (_writer == nullptr)
-	{
-		_writer = std::make_unique<ecs::save_files::BackgroundWriter>();
-	}
-	return *_writer;
-}
-
-void CreatureWebPageSystem::FinishWrites() const
-{
-	if (_writer != nullptr)
-	{
-		_writer->Flush();
-	}
 }
 
 void CreatureWebPageSystem::ProcessTurn()
@@ -228,14 +227,20 @@ void CreatureWebPageSystem::CollectPictures(const Screens& screens)
 	std::erase_if(_waiting, [this, &screens](const Waiting& waiting) {
 		if (auto picture = screens.take ? screens.take(waiting.name) : std::nullopt; picture.has_value())
 		{
-			// The writer makes the picture file after the files that came before it, so a page reads the new picture
-			Writer().Queue(waiting.name, [player = waiting.player, slot = waiting.slot, picture = std::move(*picture)] {
-				const auto jpeg = creature_web_page::EncodeJpeg(picture, creature_web_page::k_PictureWidth,
-				                                                creature_web_page::k_PictureHeight);
-				return jpeg.empty() || !Locator::profileFolderSystem::has_value() ||
-				       Locator::profileFolderSystem::value().WritePlayerFile(player, creature_web_page::PictureFile(slot),
-				                                                             jpeg);
-			});
+			// The writer encodes and writes the picture after the pages and pictures that came before it
+			const auto folder = Locator::profileFolderSystem::has_value()
+			                        ? Locator::profileFolderSystem::value().GetPlayerFolder(waiting.player)
+			                        : std::nullopt;
+			if (folder.has_value() && Locator::filesystem::has_value())
+			{
+				Writer().Queue("a picture of the creature",
+				               [files = &Locator::filesystem::value(), folder = *folder,
+				                file = creature_web_page::PictureFile(waiting.slot), picture = std::move(*picture)]() {
+					               const auto jpeg = creature_web_page::EncodeJpeg(picture, creature_web_page::k_PictureWidth,
+					                                                               creature_web_page::k_PictureHeight);
+					               return jpeg.empty() || (files->MakeFolder(folder) && files->WriteAll(folder / file, jpeg));
+				               });
+			}
 			return true;
 		}
 		return screens.failed && screens.failed(waiting.name);
@@ -320,83 +325,113 @@ void CreatureWebPageSystem::WritePage(entt::entity creature)
 			facts.spellOn = static_cast<uint32_t>(std::distance(slots.begin(), on));
 		}
 	}
-	const auto values = creature_web_page::PageValues(facts);
+	auto values = creature_web_page::PageValues(facts);
 
-	// The stamp of the package comes from the game's random numbers now, in the order of the game
+	// The game draws the stamp of the upload package as it writes the page. The files go to the disk on the writer's
+	// thread, so that the frame does not wait for them.
 	const auto stamp = Locator::gameRandom::has_value()
 	                       ? static_cast<uint16_t>(Locator::gameRandom::value().LocalRand(creature_web_page::k_StampRange))
 	                       : uint16_t {0};
-	Writer().Queue("creature web page", [player = *player, name = body->name, values, stamp] {
-		WritePageFiles(player, name, values, stamp);
-		return true;
-	});
-}
-
-void CreatureWebPageSystem::WritePageFiles(std::u16string_view player, std::u16string_view name,
-                                           std::span<const creaturehtml::Value> values, uint16_t stamp)
-{
-	if (!Locator::profileFolderSystem::has_value() || !Locator::filesystem::has_value())
-	{
-		return;
-	}
-	WritePageFile(player, name, values);
-
-	// The game packs the values and the pictures for the upload tool even when it could not write the page
 	auto& profiles = Locator::profileFolderSystem::value();
-	std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
-	for (size_t slot = 0; slot < pictures.size(); ++slot)
-	{
-		pictures.at(slot) = profiles.ReadPlayerFile(player, creature_web_page::PictureFile(static_cast<uint32_t>(slot)));
-	}
-	const auto package = lhp::Write(creature_web_page::UploadPackage(values, pictures, stamp));
-	if (!profiles.WritePlayerFile(player, creature_web_page::k_UploadFile, package))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write {}", creature_web_page::k_UploadFile);
-	}
-}
-
-void CreatureWebPageSystem::WritePageFile(std::u16string_view player, std::u16string_view name,
-                                          std::span<const creaturehtml::Value> values)
-{
-	// The game reads the template each time that it writes the page
 	auto& files = Locator::filesystem::value();
-	const auto templatePath = files.GetPath<filesystem::Path::Scripts>() / creature_web_page::k_Template;
-	std::vector<uint8_t> page;
-	try
+	const auto folder = profiles.GetPlayerFolder(*player);
+	if (!folder.has_value())
 	{
-		if (!files.Exists(templatePath))
-		{
-			return;
-		}
-		page = files.ReadAll(templatePath);
-	}
-	catch (const std::exception& error)
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The creature's web page has no template: {}", error.what());
 		return;
 	}
-	const auto filled = creaturehtml::Fill(std::string_view(reinterpret_cast<const char*>(page.data()), page.size()), values);
-	// The template links to its decorations in the game folder by a path from the profile folder, which is not in the
-	// game folder here
 	std::error_code error;
 	auto gameFolder = std::filesystem::absolute(files.GetGamePath(), error);
 	if (error)
 	{
 		gameFolder = files.GetGamePath();
 	}
-	const auto linked = creature_web_page::PointLinksAtGameFolder(filled, gameFolder.lexically_normal());
+	PageJob job {
+	    .files = &files,
+	    .templatePath = files.GetPath<filesystem::Path::Scripts>() / creature_web_page::k_Template,
+	    .gameFolder = gameFolder.lexically_normal(),
+	    .playerFolder = *folder,
+	    .pageFile = fmt::format("{}/{}", creature_web_page::k_PageFolder, creature_web_page::PageFile(body->name)),
+	    .values = std::move(values),
+	    .stamp = stamp,
+	};
+	Writer().Queue("the web page of the creature", [job = std::move(job)]() {
+		WritePageFile(job);
+		// The game packs the values and the pictures for the upload tool even when it could not write the page
+		std::array<std::optional<std::vector<uint8_t>>, creature_web_page::k_MostPictures> pictures;
+		for (size_t slot = 0; slot < pictures.size(); ++slot)
+		{
+			pictures.at(slot) =
+			    ReadFileIfThere(*job.files, job.playerFolder / creature_web_page::PictureFile(static_cast<uint32_t>(slot)));
+		}
+		const auto package = lhp::Write(creature_web_page::UploadPackage(job.values, pictures, job.stamp));
+		if (!job.files->MakeFolder(job.playerFolder) ||
+		    !job.files->WriteAll(job.playerFolder / creature_web_page::k_UploadFile, package))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write {}", creature_web_page::k_UploadFile);
+			return false;
+		}
+		return true;
+	});
+}
 
-	auto& profiles = Locator::profileFolderSystem::value();
-	const auto folder = profiles.GetPlayerFolder(player);
-	const auto root = profiles.GetFolder();
-	if (!folder.has_value() || !root.has_value() ||
-	    !profiles.MakeFolder(folder->lexically_relative(*root) / creature_web_page::k_PageFolder).has_value())
+ecs::save_files::BackgroundWriter& CreatureWebPageSystem::Writer()
+{
+	if (!_writer)
 	{
+		_writer = std::make_unique<ecs::save_files::BackgroundWriter>(
+		    [](const std::string& name) { SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not write {}", name); });
+	}
+	return *_writer;
+}
+
+void CreatureWebPageSystem::FlushWrites()
+{
+	FinishWrites();
+}
+
+void CreatureWebPageSystem::FinishWrites() const
+{
+	if (_writer != nullptr)
+	{
+		_writer->Flush();
+	}
+}
+
+void CreatureWebPageSystem::WritePageFile(const PageJob& job)
+{
+	// The game reads the template each time that it writes the page
+	std::vector<uint8_t> page;
+	try
+	{
+		if (!job.files->Exists(job.templatePath))
+		{
+			return;
+		}
+		page = job.files->ReadAll(job.templatePath);
+	}
+	catch (const std::exception& error)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The creature's web page has no template: {}", error.what());
 		return;
 	}
-	const auto file = fmt::format("{}/{}", creature_web_page::k_PageFolder, creature_web_page::PageFile(name));
-	if (profiles.WritePlayerFile(player, file, AsBytes(linked)))
+	const auto filled =
+	    creaturehtml::Fill(std::string_view(reinterpret_cast<const char*>(page.data()), page.size()), job.values);
+	// The template links to its decorations in the game folder by a path from the profile folder, which is not in the
+	// game folder here
+	const auto linked = creature_web_page::PointLinksAtGameFolder(filled, job.gameFolder);
+	if (!job.files->MakeFolder(job.playerFolder / creature_web_page::k_PageFolder))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of the creature to {}", (*folder / file).generic_string());
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not make the folder {}",
+		                   (job.playerFolder / creature_web_page::k_PageFolder).generic_string());
+		return;
+	}
+	const auto path = job.playerFolder / job.pageFile;
+	if (job.files->WriteAll(path, AsBytes(linked)))
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Wrote the web page of the creature to {}", path.generic_string());
+	}
+	else
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game could not write {}", path.generic_string());
 	}
 }

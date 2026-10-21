@@ -15,6 +15,11 @@
 #include <algorithm>
 #include <utility>
 
+#if defined(_M_X64) || defined(__x86_64__) || defined(__SSE2__)
+#include <xmmintrin.h>
+#define OPENBLACK_FOOTPRINT_SSE 1
+#endif
+
 namespace openblack::footprint_paint
 {
 
@@ -59,11 +64,25 @@ struct Span
 	float vHigh {0.0f};
 };
 
-using Spans = std::array<Span, k_BlockTexels>;
+/// The spans of the rows of the block's texture, and the first and the last row that an edge reached
+struct Spans
+{
+	std::array<Span, k_BlockTexels> rows {};
+	int first {k_BlockTexels};
+	int last {-1};
+};
 
-/// A value to the nearest whole number, a half to the even one, as the game's processor rounds it
+/// A value to the nearest whole number, a half to the even one, as the game's processor rounds it. The processor's
+/// own conversion gives the same number as the library for each value that fits in an int with room to spare.
 [[nodiscard]] int Nearest(float value)
 {
+#if defined(OPENBLACK_FOOTPRINT_SSE)
+	constexpr float k_Fits = 1073741824.0f;
+	if (value > -k_Fits && value < k_Fits)
+	{
+		return _mm_cvt_ss2si(_mm_set_ss(value));
+	}
+#endif
 	return static_cast<int>(std::lrint(value));
 }
 
@@ -75,10 +94,12 @@ void Reach(Spans& spans, int row, int column, float u, float v)
 	{
 		return;
 	}
-	auto& span = spans.at(static_cast<size_t>(row));
+	auto& span = spans.rows.at(static_cast<size_t>(row));
 	if (!span.used)
 	{
 		span = {.used = true, .low = column, .high = column, .uLow = u, .uHigh = u, .vLow = v, .vHigh = v};
+		spans.first = std::min(spans.first, row);
+		spans.last = std::max(spans.last, row);
 		return;
 	}
 	if (column < span.low)
@@ -157,12 +178,12 @@ void WalkEdge(Spans& spans, Corner start, Corner end)
 
 /// Fills each row that the edges reached, from its low column to its high column, both ends too. The picture's
 /// coordinates step evenly from those at the low end to those at the high end. The columns outside the block are not
-/// painted. Each row is empty again after.
+/// painted. Each row is empty again after. Only the rows from the first to the last that an edge reached can be used.
 void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, Mix mix)
 {
-	for (int row = 0; row < k_BlockTexels; ++row)
+	for (int row = spans.first; row <= spans.last; ++row)
 	{
-		auto& span = spans.at(static_cast<size_t>(row));
+		auto& span = spans.rows.at(static_cast<size_t>(row));
 		if (!span.used)
 		{
 			continue;
@@ -194,6 +215,8 @@ void FillSpans(Spans& spans, std::span<uint16_t> block, const Picture& picture, 
 		}
 		span.used = false;
 	}
+	spans.first = k_BlockTexels;
+	spans.last = -1;
 }
 } // namespace
 

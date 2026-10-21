@@ -25,6 +25,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "Locator.h"
 
@@ -42,9 +43,9 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 		return;
 	}
 	// The action that its body plays ends at two times the usual speed
-	if (auto* animation = registry.TryGet<CreatureAnimation>(creature))
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		animation->body = creature_layers::Hurry(animation->body);
+		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
 	const auto random = [this](uint32_t range) { return Random(range); };
 	// It is made to look or point at the camera, or to be sad, and the reaction's steps take the place of the plan's

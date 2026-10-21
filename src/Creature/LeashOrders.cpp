@@ -219,6 +219,28 @@ bool creature_leash_orders::Acknowledges(const std::vector<Attempt>& attempts)
 	return attempts.empty() || attempts.front() != Attempt::FishAndEat;
 }
 
+Interruption creature_leash_orders::OnGroundInterrupts(bool carrying, bool forcedWalkToPoint)
+{
+	if (carrying)
+	{
+		return {.hurries = false, .stopsWalk = true, .endsBody = true};
+	}
+	if (forcedWalkToPoint)
+	{
+		return {.hurries = false, .stopsWalk = false, .endsBody = false};
+	}
+	return {.hurries = true, .stopsWalk = true, .endsBody = true};
+}
+
+Interruption creature_leash_orders::OnThingInterrupts(const std::vector<Attempt>& attempts)
+{
+	if (!Acknowledges(attempts))
+	{
+		return {.hurries = false, .stopsWalk = true, .endsBody = true};
+	}
+	return {.hurries = true, .stopsWalk = false, .endsBody = true};
+}
+
 std::vector<Step> creature_leash_orders::MoveTo(glm::vec2 point, float arrival, bool run, float waitSeconds)
 {
 	std::vector<Step> agenda {Walk(point, arrival, run)};

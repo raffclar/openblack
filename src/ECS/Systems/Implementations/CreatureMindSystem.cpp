@@ -1326,6 +1326,8 @@ void StartKiss(entt::entity creature, const creature_mind::Commands::KissOrder& 
 			body->blendedWith = creature_kiss::k_HighKiss;
 			body->blendWeight = highWeight;
 		}
+		// A kiss keeps its pace when the creature is told to hurry
+		body->keepsPace = true;
 		animation.body = *body;
 	}
 }
@@ -1384,6 +1386,7 @@ void Apply(const creature_mind::Commands& commands, CreatureAnimation& animation
 		if (auto body = creature_layers::PlaySequence(from, sequence[0], sequence[1], sequence[2], commands.holdLoop,
 		                                              commands.mirrored))
 		{
+			body->keepsPace = commands.keepsPace;
 			animation.body = *body;
 		}
 	}
@@ -3114,7 +3117,7 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 }
 
 bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity activity,
-                                std::vector<creature_mind::Step> agenda)
+                                std::vector<creature_mind::Step> agenda, bool stopsWalk, bool endsBody)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.TryGet<CreatureMindState>(creature);
@@ -3128,13 +3131,16 @@ bool CreatureMindSystem::Replan(entt::entity creature, creature_mind::Activity a
 	// TODO(physics): whether the game's stopping cuts short the turn a catch starts with wasn't traced
 	const bool catching =
 	    Locator::creatureObjectActionSystem::has_value() && Locator::creatureObjectActionSystem::value().IsCatching(creature);
-	if (Locator::creatureLocomotionSystem::has_value() && !catching)
+	if (Locator::creatureLocomotionSystem::has_value() && !catching && stopsWalk && _walkContinuesFor != creature)
 	{
 		Locator::creatureLocomotionSystem::value().Stop(creature);
 	}
 	// A sitting or lying pose goes on to its end, but an action it is playing, such as reeling from a slap, plays on: the
 	// new agenda waits for the body to be free. It lets go of any miracle it holds.
-	body->body = creature_layers::EndLoop(body->body);
+	if (endsBody)
+	{
+		body->body = creature_layers::EndLoop(body->body);
+	}
 	ReleaseCast(creature);
 	RestEyes(registry, creature, registry.TryGet<CreatureEyes>(creature));
 	Abandon(*mind);
@@ -3410,9 +3416,9 @@ bool CreatureMindSystem::TakeFromHand(entt::entity creature, entt::entity object
 		Locator::creatureObjectActionSystem::value().Cancel(creature);
 	}
 	// The action that its body plays continues at two times the usual speed
-	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		body->body = creature_layers::Hurry(body->body);
+		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
 	// Without a reaction, it keeps the plan that it does now. After it takes the thing, it can continue that
 	// plan. With a reaction, it keeps the plan from the start of the reaction.
@@ -3536,7 +3542,7 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		break;
 	}
 	case creature_giving::Use::AsLed:
-		ForcePlanOn(creature, object);
+		ForcePlanOn(creature, object, true);
 		break;
 	}
 }

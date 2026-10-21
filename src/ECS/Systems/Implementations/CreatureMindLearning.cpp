@@ -3037,6 +3037,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 	}
 
+	// The lists of the actions of each desire keep their memory from one desire to the next
+	std::vector<creature_planner::ActionCandidate> candidates;
+	std::vector<const creature_plan_actions::Executor*> executors;
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -3098,8 +3101,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 		}
 		const auto worth = [&](entt::entity thing) { return GoalWorth(creature, mind, desire, thing, activity); };
 		// The actions of the desire, in the order of its list
-		std::vector<creature_planner::ActionCandidate> candidates;
-		std::vector<const creature_plan_actions::Executor*> executors;
+		candidates.clear();
+		executors.clear();
 		for (const auto action : actions)
 		{
 			const auto* executor = creature_plan_actions::For(tables->actions.at(action).name);
@@ -3506,7 +3509,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 		                    plan.action);
 	}
 	mind->agendaRefused = refused;
-	if (!Replan(creature, activity, std::move(*agenda)))
+	if (!Replan(creature, activity, std::move(*agenda), plan.stopsWalk, plan.endsBody))
 	{
 		mind->agendaRefused = false;
 		return false;
@@ -4007,7 +4010,8 @@ std::optional<Desire> CreatureMindSystem::DesireForShownThing(entt::entity creat
 	return creature_planner::DesireForShownThing(aboutWhole, withoutWhole);
 }
 
-std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object)
+std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::entity creature, entt::entity object,
+                                                                        bool stopsWalk)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
@@ -4033,8 +4037,13 @@ std::optional<creature_desires::Desire> CreatureMindSystem::ForcePlanOn(entt::en
 		mind->plannedTurn = mind->turn + 1;
 		// The plan that it makes is one that the player made it make
 		_orderedPlanFor = creature;
+		if (!stopsWalk)
+		{
+			_walkContinuesFor = creature;
+		}
 		PlanCreature(creature, *mind, false, desire);
 		_orderedPlanFor.reset();
+		_walkContinuesFor.reset();
 		mind->leash.actOn.clear();
 		if (mind->planActive && mind->planner.current.has_value() && mind->planner.current->desire == *desire)
 		{

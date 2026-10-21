@@ -10,11 +10,14 @@
 #include "BlockTexture.h"
 
 #include <cmath>
+#include <cstddef>
 
 #include <algorithm>
 #include <vector>
 
 #include <LNDFile.h>
+
+#include "Common/WorkerPool.h"
 
 using namespace openblack;
 using namespace openblack::block_texture;
@@ -205,7 +208,9 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	{
 		return;
 	}
-	const auto coneWeights = ComputeConeWeights();
+	// The weights are the same for every cell of every block
+	static const ConeWeights k_ConeWeights = ComputeConeWeights();
+	const auto& coneWeights = k_ConeWeights;
 	const auto countryOf = [&sources](const lnd::LNDCell& cell) -> const lnd::LNDCountry& {
 		return sources.countries[std::min<size_t>(cell.properties.country, sources.countries.size() - 1)];
 	};
@@ -251,6 +256,24 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 			}
 
 			texels[static_cast<size_t>(((x - firstX) * columns) + (z - firstZ))] = texel;
+		}
+	}
+}
+
+void block_texture::BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool,
+                                const TakeBlock& take)
+{
+	// The lanes paint a few blocks each into their own memory. Then the calling thread takes them in order.
+	const size_t batch = pool.GetLaneCount() * 2;
+	std::vector<std::vector<uint8_t>> painted(std::min(batch, count), std::vector<uint8_t>(k_BlockBytes));
+	for (size_t first = 0; first < count; first += batch)
+	{
+		const size_t inBatch = std::min(batch, count - first);
+		pool.ForEach(inBatch,
+		             [&](size_t index, size_t /*lane*/) { BuildBlock(cellsOf(first + index), sources, painted[index]); });
+		for (size_t index = 0; index < inBatch; ++index)
+		{
+			take(first + index, painted[index]);
 		}
 	}
 }

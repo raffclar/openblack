@@ -58,6 +58,11 @@
     "description": "Leave out the entities with any of these components, e.g. [\"HandGrab\"]: the hand eases towards the pointer every frame drawn, paused or not",
     "name": "exclude",
     "type": "array"
+   },
+   {
+    "description": "false: leave out the ids, so that two loads of a land give the same hash although the registry gave the entities other ids (true by default)",
+    "name": "ids",
+    "type": "boolean"
    }
   ],
   "query": "ecs.hash"

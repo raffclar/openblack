@@ -23,10 +23,13 @@
 #include <variant>
 #include <vector>
 
+#include <entt/core/hashed_string.hpp>
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
 #include <entt/meta/resolve.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+#include <glm/vec4.hpp>
 #include <gtest/gtest.h>
 
 #include "Common/GameHeading.h"
@@ -34,12 +37,14 @@
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/Sprite.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "Enums.h"
 #include "PlayerSlots.h"
+#include "Graphics/SpriteTextures.h"
 
 using namespace openblack;
 using namespace openblack::ecs::reflection;
@@ -766,4 +771,42 @@ TEST(WorldArchive, ALongerSavedArrayFailsTheReader)
 	std::array<float, 4> fewer {};
 	Load(in, fewer);
 	EXPECT_TRUE(in.Failed());
+}
+
+// A saved world keeps the ids of a sprite's textures, which name the same textures in the next run. The handles of the
+// graphics card change from run to run, and a handle from an old run can name no texture.
+TEST(WorldArchive, ASpriteKeepsTheIdsOfItsTextures)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry original;
+	const auto glow = original.create();
+	constexpr auto k_Sheet = entt::hashed_string("raw/ATMOS");
+	constexpr auto k_SheetAlpha = entt::hashed_string("raw/ATMOSA");
+	original.emplace<ecs::components::Sprite>(glow, ecs::components::Sprite {.texture = k_Sheet.value(),
+	                                                                         .uvMin = glm::vec2(0.75f, 0.25f),
+	                                                                         .uvExtent = glm::vec2(0.125f),
+	                                                                         .tint = glm::vec4(1.0f),
+	                                                                         .additive = true,
+	                                                                         .facesCamera = true,
+	                                                                         .alpha = k_SheetAlpha.value()});
+	const auto lone = original.create();
+	original.emplace<ecs::components::Sprite>(
+	    lone, ecs::components::Sprite {
+	              .texture = k_Sheet.value(), .uvMin = glm::vec2(0.0f), .uvExtent = glm::vec2(1.0f), .tint = glm::vec4(1.0f)});
+
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	const auto& sprite = loaded.get<ecs::components::Sprite>(glow);
+	EXPECT_EQ(sprite.texture, k_Sheet.value());
+	ASSERT_TRUE(sprite.alpha.has_value());
+	EXPECT_EQ(*sprite.alpha, k_SheetAlpha.value());
+	EXPECT_EQ(graphics::sprite_textures::AlphaId(sprite), k_SheetAlpha.value());
+	// A sprite with no alpha texture takes its alpha from its own texture
+	const auto& alone = loaded.get<ecs::components::Sprite>(lone);
+	EXPECT_FALSE(alone.alpha.has_value());
+	EXPECT_EQ(graphics::sprite_textures::AlphaId(alone), k_Sheet.value());
 }

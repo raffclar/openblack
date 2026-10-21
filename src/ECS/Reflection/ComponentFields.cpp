@@ -282,7 +282,6 @@
 #include "Enums.h"
 #include "Fire/FireGraphic.h"
 #include "Fire/FireModel.h"
-#include "Graphics/GraphicsHandle.h"
 #include "Graphics/Moon.h"
 #include "Graphics/RenderModes.h"
 #include "Graphics/Sun.h"
@@ -971,6 +970,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureObjectAction::mirrored>("mirrored")
 	    .Field<&components::CreatureObjectAction::timeMs>("timeMs")
 	    .Field<&components::CreatureObjectAction::durationMs>("durationMs")
+	    .Field<&components::CreatureObjectAction::hurried>("hurried")
 	    .Field<&components::CreatureObjectAction::eventMs>("eventMs")
 	    .Field<&components::CreatureObjectAction::eventDone>("eventDone")
 	    .Field<&components::CreatureObjectAction::holdMs>("holdMs")
@@ -2449,6 +2449,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_fight::Fighter::special>("special")
 	    .Field<&openblack::creature_fight::Fighter::spell>("spell")
 	    .Field<&openblack::creature_fight::Fighter::stopping>("stopping")
+	    .Field<&openblack::creature_fight::Fighter::hurried>("hurried")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
 	    .Field<&openblack::creature_fight::Fighter::marks>("marks")
 	    .Field<&openblack::creature_fight::Fighter::health>("health")
@@ -2520,6 +2521,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_layers::BodyAction::holdLoop>("holdLoop")
 	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer")
 	    .Field<&openblack::creature_layers::BodyAction::hurried>("hurried")
+	    .Field<&openblack::creature_layers::BodyAction::keepsPace>("keepsPace")
 	    .Field<&openblack::creature_layers::BodyAction::realTime>("realTime")
 	    .Field<&openblack::creature_layers::BodyAction::danceMoveMs>("danceMoveMs")
 	    .Field<&openblack::creature_layers::BodyAction::blendedWith>("blendedWith")
@@ -3436,7 +3438,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::frame_pace::Pace>(context, ValueOnly {})
 	    .Field<&openblack::frame_pace::Pace::sinceStep>("sinceStep")
 	    .Field<&openblack::frame_pace::Pace::gameSinceStep>("gameSinceStep");
-	Reflect<openblack::graphics::TextureHandle>(context, ValueOnly {}).Field<&openblack::graphics::TextureHandle::id>("id");
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
 	    .Field<&openblack::graphics::moon::Placement::alpha>("alpha");

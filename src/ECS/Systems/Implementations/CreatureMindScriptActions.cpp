@@ -24,6 +24,7 @@
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -171,9 +172,9 @@ void CreatureMindSystem::ForceFinish(entt::entity creature)
 		return;
 	}
 	// The action that its body plays ends at two times the usual speed
-	if (auto* body = registry.TryGet<CreatureAnimation>(creature))
+	if (Locator::creatureAnimationSystem::has_value())
 	{
-		body->body = creature_layers::Hurry(body->body);
+		Locator::creatureAnimationSystem::value().Hurry(creature);
 	}
 	// What it was doing stops as a failure: it stops as the game stops a walk, drops what it does with a thing, and
 	// forgets its agenda

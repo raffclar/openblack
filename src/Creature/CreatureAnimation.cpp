@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
+#include <vector>
 
 #include <glm/geometric.hpp>
 
@@ -114,17 +116,30 @@ struct Side
 
 	[[nodiscard]] size_t Frame(size_t frame) const { return std::min(frame, animation->frames.size() - 1); }
 
-	[[nodiscard]] Matrix Rotation(uint32_t joint, size_t frame, const Matrix& base) const
+	/// The turn of a joint that this side does not animate: its stand's turn, the same in every frame, or the base's
+	/// turn of the frame when the stand does not turn the joint either. Nothing when the side animates the joint.
+	struct FixedTurn
 	{
-		if (const auto slot = animation != nullptr ? SlotOf(rotated, joint) : std::nullopt)
+		std::optional<Matrix> stand;
+	};
+	[[nodiscard]] std::optional<FixedTurn> Fixed(uint32_t joint) const
+	{
+		if (animation != nullptr && SlotOf(rotated, joint).has_value())
 		{
-			return RotationYXZ(animation->frames[Frame(frame)].eulerAngles[*slot]);
+			return std::nullopt;
 		}
-		if (const auto euler = stand.Euler(joint))
+		const auto euler = stand.Euler(joint);
+		return FixedTurn {.stand = euler ? std::optional(RotationYXZ(*euler)) : std::nullopt};
+	}
+
+	/// The turn of the joint in the frame: the side's own turn when it animates the joint, else the fixed turn
+	[[nodiscard]] Matrix Rotation(uint32_t joint, size_t frame, const Matrix& base, const std::optional<FixedTurn>& fixed) const
+	{
+		if (!fixed.has_value())
 		{
-			return RotationYXZ(*euler);
+			return RotationYXZ(animation->frames[Frame(frame)].eulerAngles[*SlotOf(rotated, joint)]);
 		}
-		return base;
+		return fixed->stand.value_or(base);
 	}
 
 	[[nodiscard]] glm::vec3 Translation(uint32_t joint, size_t frame, const glm::vec3& base) const
@@ -144,15 +159,20 @@ Animation creature_animation::AdjustFromStand(const Animation& animation, const 
 	const StandPose base(&baseStand);
 	const StandPose variant(&variantStand);
 	auto adjusted = animation;
+	// The turn from the base's stand to the variant's stand is the same in every frame, so each joint finds it once
+	std::vector<std::pair<Matrix, Matrix>> standTurns;
+	standTurns.reserve(adjusted.rotatedJoints.size());
+	for (const auto joint : adjusted.rotatedJoints)
+	{
+		const auto from = base.Euler(joint);
+		const auto to = variant.Euler(joint);
+		standTurns.emplace_back(from ? Transpose(RotationYXZ(*from)) : k_Identity, to ? RotationYXZ(*to) : k_Identity);
+	}
 	for (auto& frame : adjusted.frames)
 	{
 		for (size_t i = 0; i < adjusted.rotatedJoints.size(); ++i)
 		{
-			const auto joint = adjusted.rotatedJoints[i];
-			const auto from = base.Euler(joint);
-			const auto to = variant.Euler(joint);
-			const auto inverseFrom = from ? Transpose(RotationYXZ(*from)) : k_Identity;
-			const auto toRotation = to ? RotationYXZ(*to) : k_Identity;
+			const auto& [inverseFrom, toRotation] = standTurns[i];
 			frame.eulerAngles[i] = EulerYXZ(Multiply(Multiply(RotationYXZ(frame.eulerAngles[i]), inverseFrom), toRotation));
 		}
 		for (size_t i = 0; i < adjusted.translatedJoints.size(); ++i)
@@ -174,6 +194,13 @@ Animation creature_animation::Blend(const Animation& base, const BlendTerm& evil
 	{
 		return blended;
 	}
+	// The turns of the joints that a side does not animate are the same in every frame, so each joint finds them once
+	std::vector<std::pair<std::optional<Side::FixedTurn>, std::optional<Side::FixedTurn>>> fixed;
+	fixed.reserve(blended.rotatedJoints.size());
+	for (const auto joint : blended.rotatedJoints)
+	{
+		fixed.emplace_back(a.Fixed(joint), b.Fixed(joint));
+	}
 	for (size_t f = 0; f < blended.frames.size(); ++f)
 	{
 		auto& frame = blended.frames[f];
@@ -181,8 +208,8 @@ Animation creature_animation::Blend(const Animation& base, const BlendTerm& evil
 		{
 			const auto joint = blended.rotatedJoints[i];
 			const auto rotation = RotationYXZ(frame.eulerAngles[i]);
-			const auto towardsA = a.Rotation(joint, f, rotation);
-			const auto towardsB = b.Rotation(joint, f, rotation);
+			const auto towardsA = a.Rotation(joint, f, rotation, fixed[i].first);
+			const auto towardsB = b.Rotation(joint, f, rotation, fixed[i].second);
 			Matrix result {};
 			for (size_t r = 0; r < 3; ++r)
 			{

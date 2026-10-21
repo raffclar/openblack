@@ -40,7 +40,6 @@
 #include <glm/gtx/quaternion.hpp>
 #include <glm/gtx/transform.hpp>
 #include <glm/gtx/vec_swizzle.hpp>
-#include <spdlog/sinks/basic_file_sink.h>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
@@ -82,6 +81,7 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Common/BufferedLogSink.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
@@ -606,6 +606,7 @@ Game::Game(Arguments&& args) noexcept
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	std::function<std::shared_ptr<spdlog::logger>(const std::string&)> createLogger;
+	bool fileLog = false;
 #ifdef __ANDROID__
 	if (!args.logFile.empty() && args.logFile == "logcat")
 	{
@@ -617,8 +618,10 @@ Game::Game(Arguments&& args) noexcept
 		if (!args.logFile.empty() && args.logFile != "stdout")
 		{
 			// Every subsystem's logger writes through the one file: each opening the file for itself, their writes
-			// overwrote each other's and lines went missing
-			auto fileSink = std::make_shared<spdlog::sinks::basic_file_sink_mt>(args.logFile);
+			// overwrote each other's and lines went missing. The sink writes the file on its own thread each second, so
+			// that a thread that logs a line does not wait for the disk.
+			fileLog = true;
+			auto fileSink = logging::BufferedLogSink::ToFile(args.logFile, std::chrono::seconds(1));
 			createLogger = [fileSink](const std::string& name) {
 				auto logger = std::make_shared<spdlog::logger>(name, fileSink);
 				spdlog::register_logger(logger);
@@ -640,8 +643,11 @@ Game::Game(Arguments&& args) noexcept
 		logger->flush_on(spdlog::level::err);
 		++i;
 	}
-	// Everything else is written out within a second
-	spdlog::flush_every(std::chrono::seconds(1));
+	// Everything else is written out within a second. The file sink does this itself.
+	if (!fileLog)
+	{
+		spdlog::flush_every(std::chrono::seconds(1));
+	}
 	sInstance = this;
 
 	auto& config = Locator::config::emplace();
@@ -1182,6 +1188,8 @@ void Game::WarmUpFirstFrame()
 			// outside the temple
 			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
 			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
+			// The interface that the game draws over the scene, which the loading screen does not blend in each way
+			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
 		});
 	}
 	// The first frame makes the draw lists again from what the game's first update changed
@@ -5564,10 +5572,9 @@ bool Game::Run() noexcept
 		}
 
 		_frameCount++;
-		_statisticsFrameRate.Frame(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(
-		                                                     std::chrono::steady_clock::now().time_since_epoch())
-		                                                     .count()),
-		                           _frameCount);
+		// The frame rate of the statistics uses the machine clock of the game. When each frame has a fixed time, each run
+		// gets the same rate.
+		_statisticsFrameRate.Frame(machine_clock::Ticks(), _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{
@@ -6124,6 +6131,9 @@ void Game::PrepareNewLand(land_change::Kind change)
 
 	// The sky goes on as it was: it is kept while every entity goes, and made again after
 	Locator::skySystem::value().KeepForNextLand();
+	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
+	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
+	Locator::time::value().RestartTurns();
 	// Reset everything. Deletes all entities and their components
 	Locator::entitiesRegistry::value().Reset();
 	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:

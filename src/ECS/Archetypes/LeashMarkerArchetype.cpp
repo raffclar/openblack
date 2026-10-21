@@ -45,8 +45,8 @@ std::optional<std::pair<entt::entity, entt::entity>> LeashMarkerArchetype::Creat
 	{
 		return std::nullopt;
 	}
-	const auto sheet = textures.Handle(k_SheetId)->GetNativeHandle();
-	const auto alpha = textures.Handle(k_SheetAlphaId)->GetNativeHandle();
+	const auto sheet = k_SheetId.value();
+	const auto alpha = k_SheetAlphaId.value();
 	const auto make = [&](uint8_t cell) {
 		const auto entity = registry.Create();
 		const glm::vec2 uv {static_cast<float>(cell % 8) / k_CellsPerSide, static_cast<float>(cell / 8) / k_CellsPerSide};

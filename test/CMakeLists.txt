@@ -1673,4 +1673,6 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
+openblack_setup_and_add_test(test_creature_hurry test_creature_hurry.cpp)
+openblack_setup_and_add_test(test_buffered_log_sink test_buffered_log_sink.cpp)
 openblack_setup_and_add_test(test_player_commands test_player_commands.cpp)
