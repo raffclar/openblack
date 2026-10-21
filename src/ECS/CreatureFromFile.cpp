@@ -26,6 +26,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -58,6 +59,11 @@ Result Make(const Order& order)
 	entt::id_type mindId = 0;
 	if (Locator::resources::has_value() && Locator::filesystem::has_value())
 	{
+		// The file can be the file of the player's kept creature, so the files that wait go to the disk first
+		if (Locator::creatureCarryOverSystem::has_value())
+		{
+			Locator::creatureCarryOverSystem::value().FinishWrites();
+		}
 		auto& minds = Locator::resources::value().GetCreatureMinds();
 		const auto path = Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / order.fileName;
 		const auto loaded = minds.Load(order.fileName, resources::CreatureMindLoader::FromDiskTag {}, path);

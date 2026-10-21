@@ -613,6 +613,7 @@ TEST_F(CreatureCarryOverSaves, ThePlayersCreatureIsWrittenToItsFilesAsItLives)
 	carryOver.ProcessTurn();
 	// Only the player's own creature is written, its mind and its physique beside it
 	EXPECT_EQ(Saved(), 1);
+	carryOver.FinishWrites();
 	EXPECT_TRUE(std::filesystem::exists(files.mind));
 	EXPECT_TRUE(std::filesystem::exists(files.physique));
 	ASSERT_NE(carryOver.Kept(), nullptr);
@@ -649,4 +650,25 @@ TEST_F(CreatureCarryOverSaves, ALandThatKeepsNoCreaturesWritesNoneAsTheyLiveNorA
 	Locator::leashSystem::reset();
 	EXPECT_EQ(Saved(), 1);
 	EXPECT_TRUE(std::filesystem::exists(KeptFilesIn(folder.Path(), k_ProfileFile).mind));
+}
+
+TEST_F(CreatureCarryOverSaves, AReadOfTheProfilesFilesWaitsUntilTheWriterPutThemOnTheDisk)
+{
+	const TestFolder folder("carry_over_writer");
+	ecs::systems::CreatureCarryOverSystem carryOver(folder.Path(), ProfileFile);
+	const auto creature = MakeCreature(PlayerNames::PLAYER_ONE, 599);
+	carryOver.ProcessTurn();
+	Live(creature, 600);
+	carryOver.ProcessTurn();
+	ASSERT_EQ(Saved(), 1);
+
+	// The path of the profile's mind comes back only when the files that the system wrote before are on the disk
+	const auto mind = carryOver.ProfileMind();
+	ASSERT_TRUE(mind.has_value());
+	creaturemind::MindFileData read;
+	ASSERT_EQ(creaturemind::ReadFile(*mind, read), creaturemind::MindResult::Success);
+	EXPECT_EQ(read.name, u"Spot");
+	const auto physique = carryOver.ProfilePhysique();
+	ASSERT_TRUE(physique.has_value());
+	EXPECT_TRUE(std::filesystem::exists(*physique));
 }
