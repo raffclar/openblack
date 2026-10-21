@@ -22,6 +22,8 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Audio/AudioManagerInterface.h"
+#include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/Mesh.h"
@@ -256,6 +258,7 @@ void AdvisorSystem::Update(const Frame& frame)
 	input.tickMs = frame.tickMs;
 	input.wideScreen = frame.wideScreen;
 	_controller->Update(input);
+	PlayAnimSounds();
 
 	MakeDraws(frame.stepMs);
 	MakeTrails();
@@ -264,6 +267,44 @@ void AdvisorSystem::Update(const Frame& frame)
 void AdvisorSystem::ProcessTurn()
 {
 	_controller->ProcessTurn();
+}
+
+void AdvisorSystem::PlayAnimSounds()
+{
+	if (!Locator::audio::has_value())
+	{
+		return;
+	}
+	auto& audio = Locator::audio::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto bank = std::string(k_AnimSoundBank);
+	for (int i = 0; i < k_Dudes; ++i)
+	{
+		const auto& sounds = _controller->Dude(i).Sounds();
+		if (sounds.empty())
+		{
+			continue;
+		}
+		auto& owner = _soundOwners.at(static_cast<size_t>(i));
+		if (owner == entt::null || !registry.Valid(owner))
+		{
+			owner = registry.Create();
+		}
+		for (const auto& sound : sounds)
+		{
+			// The sound stays where the advisor was. A sound that starts obeys the rules of its sample.
+			const auto keys = AnimSoundKeys(sound.sample).ToArray();
+			if (sound.starts)
+			{
+				audio.PlayAnimEffect(bank, keys, owner, sound.position, audio::CurrentSoundEffectConditions());
+			}
+			else
+			{
+				audio.EndAnimEffect(bank, keys, owner, sound.position, audio::AnimEffectEnd::Stop,
+				                    audio::AnimEffectMeasure::Straight);
+			}
+		}
+	}
 }
 
 void AdvisorSystem::MakeDraws(int32_t stepMs)
