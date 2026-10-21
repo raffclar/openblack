@@ -203,7 +203,7 @@ std::vector<TempleSubMeshTexture> TempleSaveGameRoom::GetTextures() const
 		}
 		if (texture.has_value())
 		{
-			textures.push_back({.subMesh = part.subMesh, .texture = *texture});
+			textures.push_back({.subMesh = part.subMesh, .texture = *texture, .picture = true});
 		}
 	}
 	return textures;

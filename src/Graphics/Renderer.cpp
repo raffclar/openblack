@@ -1043,7 +1043,8 @@ bool Renderer::BindCap(const std::vector<partial_build_cap::CapVertex>& cap)
 }
 
 void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSubMesh& subMesh, const L3DMeshSubmitDesc& desc,
-                           bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow, glm::vec3 offset) const
+                           bool preserveState, const TextureHandle* subMeshTexture, glm::vec3 glow, glm::vec3 offset,
+                           bool picture) const
 {
 	assert(&subMesh.GetMesh());
 	// Physics meshes aren't drawn, nor the parts of other statuses (building stages, graves) or of another detail than
@@ -1072,8 +1073,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	const auto lightmapSkinID = subMesh.GetLightmapSkinID();
 	const Texture2D* lightmap = lightmapSkinID.has_value() ? GetTexture(*lightmapSkinID, skins) : nullptr;
 	// A cap has no lightmap coordinates of its own
+	// The temple's pictures have lightmaps, but the game draws them without
 	const auto* program =
-	    desc.lightmapProgram != nullptr && lightmap != nullptr && !desc.cap ? desc.lightmapProgram : desc.program;
+	    desc.lightmapProgram != nullptr && lightmap != nullptr && !desc.cap && !picture ? desc.lightmapProgram : desc.program;
 	if (desc.onlyJoints && !subMesh.GetJoint().has_value())
 	{
 		return;
@@ -1401,8 +1403,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool landLit =
 				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				// Below Medium detail the sun lights only the creatures and the hand
-				const bool unlit =
-				    desc.unlit || (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
+				const bool unlit = desc.unlit || picture ||
+				                   (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f,
 				                             desc.landColourAdded ? 0.0f : 1.0f};
 				// A held thing mirrored in the sea takes the land's light of the frame before
@@ -1492,10 +1494,15 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			{
 				// xyz: the object's own colour, w: its alpha; w 0 for none, which is lit by the land as usual
 				// A shining light's colour is its own
-				const glm::vec4 u_objectLook = shining ? glm::vec4(*desc.shineColour, 1.0f)
-				                               : desc.objectLook.has_value()
-				                                   ? glm::vec4(desc.objectLook->colour, desc.objectLook->alpha)
-				                                   : glm::vec4(0.0f);
+				glm::vec4 u_objectLook = shining ? glm::vec4(*desc.shineColour, 1.0f)
+				                         : desc.objectLook.has_value()
+				                             ? glm::vec4(desc.objectLook->colour, desc.objectLook->alpha)
+				                             : glm::vec4(0.0f);
+				// A picture's white colour multiplies the object's colour in whole steps, so 255 becomes 254
+				if (picture && desc.objectLook.has_value())
+				{
+					u_objectLook = glm::vec4(glm::floor(desc.objectLook->colour * 255.0f / 256.0f), desc.objectLook->alpha);
+				}
 				setUniform(MeshUniform::ObjectLook, &u_objectLook);
 			}
 			if (has(MeshUniform::Shine))
@@ -2534,9 +2541,11 @@ void Renderer::DrawMesh(const graphics::L3DMesh& mesh, const L3DMeshSubmitDesc& 
 		const auto found = std::ranges::find(desc.subMeshTextures, index, &std::pair<uint32_t, TextureHandle>::first);
 		const auto glow = std::ranges::find(desc.subMeshGlows, index, &std::pair<uint32_t, glm::vec3>::first);
 		const auto offset = std::ranges::find(desc.subMeshOffsets, index, &std::pair<uint32_t, glm::vec3>::first);
+		const bool picture = found != desc.subMeshTextures.end() &&
+		                     std::ranges::find(desc.pictureSubMeshes, index) != desc.pictureSubMeshes.end();
 		DrawSubMesh(mesh, subMesh, desc, index != lastDrawn, found != desc.subMeshTextures.end() ? &found->second : nullptr,
 		            glow != desc.subMeshGlows.end() ? glow->second : glm::vec3(0.0f),
-		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f));
+		            offset != desc.subMeshOffsets.end() ? offset->second : glm::vec3(0.0f), picture);
 	}
 }
 
@@ -6463,6 +6472,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				submitDesc.mirrored = desc.cullBack;
 				submitDesc.uvOffset = placers.uvOffset;
 				submitDesc.subMeshTextures = placers.subMeshTextures;
+				submitDesc.pictureSubMeshes = placers.pictureSubMeshes;
 				submitDesc.subMeshGlows = placers.subMeshGlows;
 				submitDesc.subMeshOffsets = placers.subMeshOffsets;
 				submitDesc.hiddenSubMeshes = placers.hiddenSubMeshes;

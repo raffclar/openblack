@@ -967,7 +967,7 @@ void TempleInterior::LeaveForMapPoint(glm::vec3 point)
 		return;
 	}
 	// Leaving the temple puts the camera 50 above the place and 70 along z from it, looking at it
-	// TODO(raffclar): the hand feels the click
+	// The game also starts a force-feedback effect here, which openblack leaves out (deviation 73)
 	_leaveTo = std::make_pair(glm::vec3(world.x, altitude + 50.0f, world.y + 70.0f), glm::vec3(world.x, altitude, world.y));
 	// The main room's camera fades the temple out to white, and the room leaves once it is
 	if (_interface != nullptr)

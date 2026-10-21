@@ -3673,6 +3673,39 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.future_room_turn",
+	    .name = "The temple's future room turns by itself under its words",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the future room. Press the arrow keys once "
+	                   "the words show.",
+	    .expected = "As the camera comes to the end of its path, \"The future is still uncertain...\" fades in to half "
+	                "over two seconds. From then on the room turns slowly by itself, speeding up over a second, and the "
+	                "arrow keys do not turn it.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 4}},
+	});
+
+	all.push_back({
+	    .id = "temple.pictures_unlit",
+	    .name = "The temple's pictures drawn in one colour with no lightmap",
+	    .facet = Facet::Story,
+	    .description = "The four challenges of the challenge room scenario are recorded with their pictures. Then the "
+	                   "player goes through the temple's main room into the challenge room.",
+	    .expected = "Each picture on the walls is drawn evenly in the temple's light, with no shadows of the room's "
+	                "lightmap on it, unlike the frames and the walls around it. A picture further away is fogged evenly "
+	                "over all of it.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        [&challengeRecords] {
+		        auto commands = challengeRecords;
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3});
+		        commands.push_back({.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 0});
+		        return commands;
+	        }(),
+	});
+
+	all.push_back({
 	    .id = "interface.pause_text",
 	    .name = "The words of the pause",
 	    .facet = Facet::Interface,

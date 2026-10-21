@@ -92,6 +92,9 @@ struct TempleSubMeshTexture
 {
 	uint32_t subMesh;
 	graphics::TextureHandle texture;
+	/// The submesh is a picture of the challenge room or the save game room. The game draws a picture in one colour,
+	/// fogged once at its first vertex, with no lightmap and no light.
+	bool picture {false};
 };
 
 /// A distance and direction that one of a room's submeshes moves in its mesh, as a held button moves into the wall

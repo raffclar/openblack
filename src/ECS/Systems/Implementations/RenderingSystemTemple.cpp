@@ -277,6 +277,10 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 			for (const auto& scroll : temple.GetScrollTextures(room->second))
 			{
 				drawDesc->second.subMeshTextures.emplace_back(scroll.subMesh, scroll.texture);
+				if (scroll.picture)
+				{
+					drawDesc->second.pictureSubMeshes.push_back(scroll.subMesh);
+				}
 			}
 			for (const auto& glow : temple.GetControlGlows(room->second))
 			{
