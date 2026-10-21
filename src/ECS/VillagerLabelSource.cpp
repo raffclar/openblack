@@ -149,6 +149,7 @@ std::vector<labels::Request> Gather(const Frame& frame)
 		    }
 		    const auto owner = OwnerColour(registry, villager.town);
 		    labels::Request request {.pixel = pixel, .distance = glm::distance(eye, point), .size = choice.size};
+		    request.point = point;
 		    // The depth of the point in front of the camera places the label among the depths of the world
 		    request.depth = (viewProjection * glm::vec4(point, 1.0f)).w;
 		    if (choice.kind == labels::Kind::Name)
