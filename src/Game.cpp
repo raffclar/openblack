@@ -1946,30 +1946,24 @@ void Game::ProcessLivingTurn()
 		auto& reactions = Locator::reactionSystem::value();
 		living_turn::Walk(
 		    std::span<const living_turn::Living<entt::entity>>(list),
-		    [this, &list, &reactions]() {
-			    // Each creature first lets go of a reaction that is over
-			    for (const auto& living : list)
-			    {
-				    if (living.kind == Kind::Creature)
-				    {
-					    reactions.EndReactionIfOver(living.id);
-				    }
-			    }
-			    // Each step of the creatures' turns, for each creature in the order of the list
-			    game_turn::PlayCreaturesTurn([this, &list](game_turn::Step step) {
-				    for (const auto& living : list)
-				    {
-					    if (living.kind == Kind::Creature)
-					    {
-						    PlayCreatureTurnStep(step, living.id);
-					    }
-				    }
-			    });
-		    },
-		    [&villagers, &animals, &reactions, animalsTurn](const living_turn::Living<entt::entity>& living) {
+		    [this, &list, &villagers, &animals, &reactions, animalsTurn](const living_turn::Living<entt::entity>& living) {
 			    // At the start of its turn, it lets go of a reaction that is over
 			    reactions.EndReactionIfOver(living.id);
-			    if (living.kind == Kind::Villager)
+			    if (living.kind == Kind::Creature)
+			    {
+				    // A creature does each step of its own turn, in the game's order
+				    [[maybe_unused]] const auto place = &living - list.data();
+				    [[maybe_unused]] const auto drawsBefore =
+				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0;
+				    game_turn::PlayCreaturesTurn(
+				        [this, &living](game_turn::Step step) { PlayCreatureTurnStep(step, living.id); });
+				    SPDLOG_LOGGER_DEBUG(
+				        spdlog::get("game"),
+				        "Creature {} took its turn at place {} of {} in the list of the living: synced draws {} to {}",
+				        entt::to_integral(living.id), place, list.size(), drawsBefore,
+				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0);
+			    }
+			    else if (living.kind == Kind::Villager)
 			    {
 				    villagers.VillagerTurn(living.id);
 			    }
