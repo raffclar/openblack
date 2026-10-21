@@ -9918,6 +9918,25 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-24.0f, -10.0f}, {24.0f, 10.0f}}},
 	    .objects = walkers,
 	});
+	// A villager that sits at the end of each walk stands up before the next walk starts
+	all.push_back({
+	    .id = "movement.villager_stands_up_then_walks",
+	    .name = "A villager stands up before it walks",
+	    .facet = Facet::Movement,
+	    .description = "A villager walks 20 metres east and sits down there. Every twenty seconds it walks to the other "
+	                   "point and sits down again.",
+	    .expected = "At the start of each walk, the villager plays its clip to stand up where it sits. It does not move "
+	                "until the clip ends. Then it walks. The villager walks in its own turn, and it does not walk while "
+	                "a clip into or out of a state plays.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-14.0f, -6.0f}, {14.0f, 6.0f}}},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = {-10.0f, 0.0f},
+	                 .walkTo = glm::vec2(10.0f, 0.0f),
+	                 .walkAfterSeconds = 1.0f,
+	                 .walkRepeatSeconds = 20.0f,
+	                 .walkFinal = VillagerStates::SitAndChillout}},
+	});
 
 	// The tutorial's interface levels, as a lesson's script steps through them
 	std::vector<Command> levels;
