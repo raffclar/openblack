@@ -1057,13 +1057,13 @@ void LeashSystem::PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& 
 		{
 			post.glow = registry.Create();
 			registry.Assign<Transform>(post.glow, points.at(i), glm::mat3(1.0f), glm::vec3(0.0f));
-			registry.Assign<Sprite>(post.glow, Sprite {.texture = textures.Handle(k_SmokeId)->GetNativeHandle(),
+			registry.Assign<Sprite>(post.glow, Sprite {.texture = k_SmokeId.value(),
 			                                           .uvMin = glm::vec2(0.0f),
 			                                           .uvExtent = glm::vec2(1.0f / k_SmokeCellsPerSide),
 			                                           .tint = glm::vec4(1.0f),
 			                                           .additive = false,
 			                                           .facesCamera = true,
-			                                           .alpha = textures.Handle(k_SmokeAlphaId)->GetNativeHandle()});
+			                                           .alpha = k_SmokeAlphaId.value()});
 		}
 		// The renderer draws its collar
 		registry.Assign<LeashPost>(entity, post);

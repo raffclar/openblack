@@ -214,12 +214,12 @@ std::optional<Sprite> GameFireflyWorld::Look() const
 	const auto column = static_cast<float>(fireflies::k_SpritePicture % fireflies::k_SheetPictures);
 	const auto row = static_cast<float>(fireflies::k_SpritePicture / fireflies::k_SheetPictures);
 	return Sprite {
-	    .texture = textures.Handle(k_Sheet.value())->GetNativeHandle(),
+	    .texture = k_Sheet.value(),
 	    .uvMin = glm::vec2(column, row) * k_Cell,
 	    .uvExtent = glm::vec2(k_Cell),
 	    .tint = glm::vec4(1.0f),
 	    .additive = true,
 	    .facesCamera = true,
-	    .alpha = textures.Handle(k_SheetAlpha.value())->GetNativeHandle(),
+	    .alpha = k_SheetAlpha.value(),
 	};
 }
