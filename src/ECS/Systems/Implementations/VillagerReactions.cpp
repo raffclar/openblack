@@ -591,6 +591,7 @@ bool villager_reactions::ActsOut(Reaction type)
 	case Reaction::ReactToImpressiveSpell:
 	case Reaction::ReactToTeleport:
 	case Reaction::ReactToFlyingObject:
+	case Reaction::ReactToFight:
 	case Reaction::ReactToFood:
 	case Reaction::ReactToWood:
 	case Reaction::ReactToVillagerInHand:
