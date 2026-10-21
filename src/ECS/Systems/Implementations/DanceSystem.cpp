@@ -31,6 +31,7 @@
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Dances.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -185,8 +186,8 @@ void DanceSystem::Destroy(entt::entity dance)
 void DanceSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> all;
-	registry.Each<const Dance>([&all](entt::entity entity, const Dance&) { all.push_back(entity); });
+	// The dances in the order of the game's list, the newest first
+	const auto all = ecs::list_order::Walk<Dance>(registry);
 	const dances::TurnContext context {.turn = Locator::time::value().GetTurn(),
 	                                   .available = &Available,
 	                                   .finished = &FinishedDancing,

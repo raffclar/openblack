@@ -15,6 +15,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <optional>
 #include <span>
 #include <string_view>
@@ -63,6 +64,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/FightWatchRules.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -745,6 +747,14 @@ void ReactionSystem::RemoveFrom(entt::entity initiator, Reaction type)
 	}
 }
 
+std::vector<uint32_t> ReactionSystem::Ids() const
+{
+	std::vector<uint32_t> ids;
+	ids.reserve(_reactions.size());
+	std::ranges::transform(_reactions, std::back_inserter(ids), &Active::id);
+	return ids;
+}
+
 bool ReactionSystem::IsActive(uint32_t id) const
 {
 	return std::ranges::any_of(_reactions, [id](const Active& reaction) { return reaction.id == id; });
@@ -771,6 +781,10 @@ void ReactionSystem::ShutDown(uint32_t id)
 	// It ends before those reacting to it are let go, so a state they go back to already finds it over
 	const auto found = std::ranges::find(_reactions, id, &Active::id);
 	const auto dance = found != _reactions.end() ? found->dance : entt::null;
+	// When it is the one that spread again last, the next older one takes its place
+	const auto ids = Ids();
+	const auto cursor = _cursor != 0 ? std::optional(static_cast<uint32_t>(_cursor)) : std::nullopt;
+	_cursor = ecs::list_order::CursorAfterLeave(std::span<const uint32_t>(ids), cursor, id).value_or(0);
 	std::erase_if(_reactions, [id](const Active& reaction) { return reaction.id == id; });
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1624,9 +1638,11 @@ void ReactionSystem::ProcessTurn()
 	// One reaction a turn, in turn, grows, ends once its time is up, or is spread again
 	if (!_reactions.empty())
 	{
-		_cursor %= _reactions.size();
-		auto& reaction = _reactions.at(_cursor);
-		++_cursor;
+		// The newest first, one a turn
+		const auto ids = Ids();
+		const auto cursor = _cursor != 0 ? std::optional(static_cast<uint32_t>(_cursor)) : std::nullopt;
+		auto& reaction = _reactions.at(*ecs::list_order::NextInTurn(std::span<const uint32_t>(ids), cursor));
+		_cursor = reaction.id;
 		const auto* info = InfoOf(reaction.source.type);
 		if (info != nullptr && info->whetherReactionGrows != 0 && !reaction.source.reach.has_value())
 		{

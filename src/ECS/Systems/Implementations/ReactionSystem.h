@@ -92,8 +92,11 @@ private:
 
 	std::vector<Active> _reactions;
 	uint32_t _nextId {1};
-	/// The next reaction spread again, in turn
+	/// The id of the reaction that spread again last, 0 for none. After that reaction goes, it is the id of the next older
+	/// reaction.
 	size_t _cursor {0};
+	/// The ids of the reactions, the oldest first
+	[[nodiscard]] std::vector<uint32_t> Ids() const;
 	uint32_t _turn {0};
 	/// How many times villagers have taken up a reaction, which orders those holding the same one
 	uint32_t _joins {0};

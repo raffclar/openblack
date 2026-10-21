@@ -16,6 +16,7 @@
 
 #include "ECS/Components/Dance.h"
 #include "ECS/DanceRules.h"
+#include "ECS/ListOrder.h"
 #include "ECS/Registry.h"
 
 using namespace openblack;
@@ -26,6 +27,7 @@ entt::entity dances::Create(Registry& registry, const DanceSetup& setup, std::sh
 {
 	const auto entity = registry.Create();
 	auto& dance = registry.Assign<Dance>(entity);
+	list_order::Join(registry, entity);
 	dance.type = setup.type;
 	dance.place = setup.place;
 	dance.owner = setup.owner;
