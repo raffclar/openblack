@@ -10,11 +10,13 @@
 // What bends the trees: the thing that the hand holds, the moving bodies and the creature write bend points into
 // slots, and each tree reads the point in the slot that marked it last
 
+#include <bit>
 #include <optional>
 
 #include <gtest/gtest.h>
 
 #include "Nature/TreeBend.h"
+#include "Nature/TreeSway.h"
 
 using namespace openblack::nature;
 
@@ -113,4 +115,26 @@ TEST(TreeBend, APointAtTheTrunkKeepsTheMarkButDoesNotBend)
 	const auto bend = tree_bend::ReadBend({.position = {2.0f, 0.0f, 2.0f}, .radius = 3.0f}, {2.0f, 0.0f, 2.0f}, 5.0f);
 	ASSERT_TRUE(bend.has_value());
 	EXPECT_EQ(bend->amount, 0.0f);
+}
+
+TEST(TreeSway, ASwayLeansThreeHundredthsOfTheHeightTowardsMinusZAtTheStart)
+{
+	EXPECT_EQ(tree_sway::Lean(0.0f), -0.03f);
+	EXPECT_NEAR(tree_sway::Lean(1.5707964f), 0.0f, 1e-7f);
+	EXPECT_EQ(tree_sway::Lean(3.1415927f), 0.03f);
+}
+
+TEST(TreeSway, ThePhaseMovesOnByTheFrameTimeTimesTheSpeed)
+{
+	// Each step rounds to a float: the time times the speed, then times the rate, then the add
+	const float rate = std::bit_cast<float>(0x3A8B0409u);
+	EXPECT_EQ(tree_sway::StepPhase(0.5f, 1.5f, 16), ((16.0f * 1.5f) * rate) + 0.5f);
+	EXPECT_EQ(tree_sway::StepPhase(0.5f, 0.0f, 16), 0.5f);
+	// At a speed of 1, a full sway takes about six seconds
+	float phase = 0.0f;
+	for (int frame = 0; frame < 5924; ++frame)
+	{
+		phase = tree_sway::StepPhase(phase, 1.0f, 1);
+	}
+	EXPECT_NEAR(phase, 6.2831855f, 1e-2f);
 }

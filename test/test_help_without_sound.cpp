@@ -203,6 +203,18 @@ TEST(HelpWithoutSound, ASilentLinePlaysForTheLengthOfItsSample)
 	EXPECT_FALSE(PlaysOn(true, true, playback, 9000));
 }
 
+TEST(HelpWithoutSound, AFixedFrameTimeTimesALineByTheLengthOfItsSample)
+{
+	EXPECT_FALSE(TimedByLength(false, false));
+	EXPECT_TRUE(TimedByLength(true, false));
+	EXPECT_TRUE(TimedByLength(false, true));
+	EXPECT_TRUE(TimedByLength(true, true));
+	// With a fixed frame time, the clock of the game ends the line, also when the device plays it
+	const SilentPlayback playback {.startMs = 1000, .lengthMs = 2500.0f};
+	EXPECT_FALSE(PlaysOn(true, TimedByLength(false, true), playback, 3500));
+	EXPECT_TRUE(PlaysOn(false, TimedByLength(false, true), playback, 3499));
+}
+
 TEST(HelpWithoutSound, ALostDeviceLeavesTheSoundInstalled)
 {
 	LostDeviceFixture f;
