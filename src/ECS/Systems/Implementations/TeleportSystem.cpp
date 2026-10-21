@@ -423,7 +423,7 @@ void TeleportSystem::ReactTo(entt::entity stone, entt::entity living, glm::vec3 
 		if (Locator::infoConstants::has_value())
 		{
 			const auto& info = Locator::infoConstants::value().villager;
-			const auto kind = static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number));
+			const auto kind = static_cast<size_t>(RowOf(villager, GVillagerInfo::Find));
 			if (kind < info.size())
 			{
 				// Against the third of its kind's speeds

@@ -151,7 +151,7 @@ VillagerStates FinalState(const LivingAction& action)
 const GVillagerInfo& InfoOf(const Villager& villager)
 {
 	const auto& infos = Locator::infoConstants::value().villager;
-	return infos.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return infos.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 const GVillagerInfo& InfoOf(entt::entity villager)
@@ -1436,7 +1436,7 @@ void villager_home::TakeOnTribe(entt::entity villager, Tribe tribe, bool showEff
 	// It becomes the same kind of villager of the new tribe, wearing that tribe's models: a child its child model at
 	// every distance, an adult its kind's model for each distance
 	const auto& info = infos.at(row);
-	person.tribe = tribe;
+	TakeRow(person, tribe, static_cast<VillagerInfo>(row));
 	const bool child = person.lifeStage == Villager::LifeStage::Child;
 	const auto high = resources::HashIdentifier(child ? info.childMeshHigh : info.highDetail);
 	if (auto* mesh = registry.TryGet<Mesh>(villager); mesh != nullptr)

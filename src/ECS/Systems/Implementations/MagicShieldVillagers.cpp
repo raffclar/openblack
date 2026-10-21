@@ -98,7 +98,7 @@ villager_reaction::Distance DistanceOf(Reaction type)
 
 const GVillagerInfo& VillagerInfoOf(const Villager& villager)
 {
-	return Info().villager.at(static_cast<size_t>(GVillagerInfo::Find(villager.tribe, villager.number)));
+	return Info().villager.at(static_cast<size_t>(RowOf(villager, GVillagerInfo::Find)));
 }
 
 /// Whether a villager's kind takes up a kind of reaction at all

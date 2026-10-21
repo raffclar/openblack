@@ -375,7 +375,7 @@ bool GameHandGrabWorld::IsSexuallyActive(entt::entity villager) const
 	{
 		return false;
 	}
-	const auto& kind = info->villager.at(static_cast<size_t>(GVillagerInfo::Find(data->tribe, data->number)));
+	const auto& kind = info->villager.at(static_cast<size_t>(RowOf(*data, GVillagerInfo::Find)));
 	const auto age = villager_age::AgeNow(*data);
 	return kind.startHavingSexAge <= age && age < kind.stopHavingSexAge;
 }

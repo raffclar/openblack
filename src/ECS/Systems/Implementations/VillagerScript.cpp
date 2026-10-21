@@ -237,8 +237,7 @@ void villager_script::SetAge(entt::entity villager, uint32_t age)
 	{
 		return;
 	}
-	const auto& info =
-	    Locator::infoConstants::value().villager.at(static_cast<size_t>(GVillagerInfo::Find(person->tribe, person->number)));
+	const auto& info = Locator::infoConstants::value().villager.at(static_cast<size_t>(RowOf(*person, GVillagerInfo::Find)));
 	const auto setting = villager_age::SetAge(age, villager_age::AgeNow(*person), info.grownUpAge);
 	person->lifeStage = setting.child ? Villager::LifeStage::Child : Villager::LifeStage::Adult;
 	if (setting.childModel.has_value())
