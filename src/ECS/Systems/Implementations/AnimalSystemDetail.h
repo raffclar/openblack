@@ -9,8 +9,12 @@
 
 #pragma once
 
+#include <algorithm>
 #include <array>
+#include <iterator>
 #include <optional>
+#include <tuple>
+#include <vector>
 
 #include <LNDFile.h>
 #include <glm/vec2.hpp>
@@ -31,6 +35,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptFind.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Physics/LivingRules.h"
@@ -396,21 +401,29 @@ inline bool CellCollides(glm::vec2 point, uint32_t mask)
 	return CellCollides(Fixed(point), mask);
 }
 
-/// The nearest town to a point (metres) within a distance, none for none
+/// The nearest town strictly nearer a point (metres) than the reach, none for none. The search takes the towns of each
+/// player in turn and the neutral towns last. The first town that it finds wins a tie.
 inline entt::entity NearestTown(glm::vec2 point, float reach)
 {
-	entt::entity nearest = entt::null;
-	float best = reach;
+	struct Entry
+	{
+		PlayerNames owner;
+		uint32_t id;
+		script_find::Candidate candidate;
+	};
+	std::vector<Entry> towns;
 	EntityRegistry().Each<const components::Town, const Transform>(
-	    [&](entt::entity entity, const components::Town&, const Transform& transform) {
-		    const float distance = gutils::GetDistanceInMetres(point, glm::vec2(transform.position.x, transform.position.z));
-		    if (!(distance > best))
-		    {
-			    best = distance;
-			    nearest = entity;
-		    }
+	    [&towns](entt::entity entity, const components::Town& town, const Transform& transform) {
+		    towns.push_back(
+		        {.owner = town.owner,
+		         .id = town.id,
+		         .candidate = {.entity = entity, .at = map_coords::FromMetres({transform.position.x, transform.position.z})}});
 	    });
-	return nearest;
+	std::ranges::sort(towns, [](const Entry& a, const Entry& b) { return std::tie(a.owner, a.id) < std::tie(b.owner, b.id); });
+	std::vector<script_find::Candidate> ordered;
+	ordered.reserve(towns.size());
+	std::ranges::transform(towns, std::back_inserter(ordered), &Entry::candidate);
+	return script_find::FindNearestTown(map_coords::FromMetres(point), reach, ordered);
 }
 
 } // namespace openblack::ecs::systems::animal_detail
