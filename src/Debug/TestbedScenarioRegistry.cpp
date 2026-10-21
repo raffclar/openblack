@@ -10006,6 +10006,26 @@ void AddStoreScenarios(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, 30.0f}, {0.0f, 50.0f}, {0.0f, 17.0f}}},
 	    .objects = std::move(objects),
 	});
+
+	// A toadstool, as Land 1's script puts nine on the land, let go above a storage pit
+	constexpr glm::vec2 k_Pit {-30.0f, 30.0f};
+	all.push_back({
+	    .id = "objects.toadstool_poisons_store",
+	    .name = "A toadstool poisons the food of a storage pit",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a storage pit with food and wood, and "
+	                   "a toadstool beside them. After one second the toadstool is lifted and let go above the "
+	                   "storage pit, as the hand drops one there.",
+	    .expected = "The storage pit takes the toadstool as 150 food. Its food pile becomes poisoned and shows a pale "
+	                "green tint. Its wood piles keep their usual colour. Villagers who take food or wood from the "
+	                "storage pit become poisoned.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Pit - glm::vec2 {12.0f}, k_Pit + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticStoragePit, .offset = k_Pit, .storedFood = 2000, .storedWood = 1000},
+	                {.type = MobileObjectInfo::Toadstool, .offset = k_Pit + glm::vec2 {15.0f, -15.0f}}},
+	    .throws = {{.object = 2, .from = k_Pit, .height = 6.0f, .velocity = {0.0f, -1.0f, 0.0f}, .delaySeconds = 1.0f}},
+	});
 }
 
 std::vector<Scenario> Build()

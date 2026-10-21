@@ -528,7 +528,9 @@ Meal MealOf(const ecs::Registry& registry, entt::entity food)
 	}
 	else
 	{
-		meal.poisoned = registry.AllOf<Poisoned>(food);
+		// A toadstool is always poisoned food. Because it is also a mushroom, the creature does not bring it back up.
+		const auto* mobile = registry.TryGet<const MobileObject>(food);
+		meal.poisoned = registry.AllOf<Poisoned>(food) || (mobile != nullptr && mobile->type == MobileObjectInfo::Toadstool);
 	}
 	return meal;
 }
