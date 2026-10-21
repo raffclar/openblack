@@ -18,8 +18,9 @@ namespace openblack::gui
 {
 
 /// A colour over the whole screen that fades towards an amount at a whole of it a second, as the temple's fade does.
-/// Fading up, it turns at the amount and fades back down; fading down to nothing, its colour goes back to black. Beyond
-/// a whole amount the screen stays covered, so a fade from more than one waits that long before it shows anything.
+/// Fading up, it turns when it goes past the amount and fades back down; fading down past nothing, its colour goes back
+/// to black. Beyond a whole amount the screen stays covered, so a fade from more than one waits that long before it
+/// shows anything. It steps once each frame that the game draws, by the real time of that draw.
 class ScreenFade
 {
 public:
@@ -29,9 +30,11 @@ public:
 	void FadeFrom(float amount, glm::vec3 colour);
 	/// Fades a colour over the screen, then back away
 	void FadeThrough(glm::vec3 colour);
-	void Update(float seconds);
+	/// Moves the fade on by the real milliseconds of the draw. Outside the temple, a fade that is at its amount does not
+	/// move. Inside the temple, it steps each draw: when it is at its amount, it turns again.
+	void Update(uint32_t realMilliseconds, bool inTemple);
 
-	/// The colour over the screen, its alpha how much of the screen it covers
+	/// The colour over the screen. Its alpha is how much of the screen it covers, in steps of 1/255 that round down.
 	[[nodiscard]] glm::vec4 GetColour() const;
 	/// How much the fade covers the screen, beyond a whole while it waits to show anything
 	[[nodiscard]] float GetAmount() const noexcept { return _amount; }

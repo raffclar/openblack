@@ -23,6 +23,7 @@
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Temple.h"
+#include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "Graphics/LandDetail.h"
@@ -40,7 +41,11 @@ constexpr uint8_t k_OpenSeaFlag = 0x02;
 /// Things drawn on their own, never by the list: the temple, and things the scripts draw in high detail
 bool DrawnOnTheirOwn(const openblack::ecs::Registry& registry, entt::entity entity)
 {
-	return registry.AnyOf<Temple, HighDetail>(entity);
+	return object_draw_list::DrawnOnItsOwn({
+	    .temple = registry.AllOf<Temple>(entity),
+	    .highDetail = registry.AllOf<HighDetail>(entity),
+	    .walkingTrack = registry.AllOf<WalkPath>(entity),
+	});
 }
 } // namespace
 

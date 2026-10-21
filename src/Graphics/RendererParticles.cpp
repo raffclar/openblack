@@ -563,6 +563,9 @@ void Renderer::SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm:
 	const glm::vec4 colour {static_cast<float>((shell.argb >> 16u) & 0xFFu), static_cast<float>((shell.argb >> 8u) & 0xFFu),
 	                        static_cast<float>(shell.argb & 0xFFu), static_cast<float>(shell.argb >> 24u)};
 	const glm::vec4 look {shell.uvOffset, shell.textureFraction};
+	const glm::vec4 specular {static_cast<float>((shell.specularRgb >> 16u) & 0xFFu),
+	                          static_cast<float>((shell.specularRgb >> 8u) & 0xFFu),
+	                          static_cast<float>(shell.specularRgb & 0xFFu), 0.0f};
 	const auto* program = _shaderManager->GetShader("VolumeGlow");
 	// How much the projection widens the camera's frame across and up, which weighs how side on the shell is seen
 	const auto& subMeshes = mesh->GetSubMeshes();
@@ -583,6 +586,7 @@ void Renderer::SubmitGlowShell(uint16_t viewId, entt::id_type meshId, const glm:
 		program->SetUniformValue("u_glowShape", &shape);
 		program->SetUniformValue("u_glowColour", &colour);
 		program->SetUniformValue("u_glowTexture", &look);
+		program->SetUniformValue("u_glowSpecular", &specular);
 		program->SetTextureSampler("s_diffuse", 0, *texture);
 		program->SetTextureSampler("s_alpha", 1, *alpha);
 		bgfx::setTransform(glm::value_ptr(model));

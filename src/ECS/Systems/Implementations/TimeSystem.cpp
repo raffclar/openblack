@@ -88,6 +88,7 @@ void TimeSystem::Start()
 {
 	_elapsedTime = std::chrono::milliseconds(0);
 	_lastFrameTicks = Ticks();
+	_lastDrawTicks = _lastFrameTicks;
 	_ticksEpoch = _lastFrameTicks;
 }
 
@@ -131,13 +132,20 @@ void TimeSystem::Update()
 	{
 		_fixedTicks += static_cast<uint32_t>(_fixedFrameTime->count());
 	}
-	// The frame's real time in whole milliseconds, never none
+	// The real time since the start, by the tick count, so that it follows a fixed frame time
 	const auto ticks = Ticks();
 	const auto step = static_cast<int32_t>(ticks - _lastFrameTicks);
-	_frameRealMs = step > 0 ? static_cast<uint32_t>(step) : 1u;
 	_lastFrameTicks = ticks;
-	// The real time since the start, by the same count, so that it too follows a fixed frame time
 	_elapsedTime += std::chrono::milliseconds(step > 0 ? step : 0);
+}
+
+void TimeSystem::StartDraw()
+{
+	// The draw's real time in whole milliseconds since the last draw, never none
+	const auto ticks = Ticks();
+	const auto step = static_cast<int32_t>(ticks - _lastDrawTicks);
+	_frameRealMs = step > 0 ? static_cast<uint32_t>(step) : 1u;
+	_lastDrawTicks = ticks;
 }
 
 std::chrono::milliseconds TimeSystem::GetElapsedTime() const

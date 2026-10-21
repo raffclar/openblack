@@ -103,21 +103,26 @@ glm::vec3 volume_glow::ViewNormal(glm::vec3 normal, const std::array<glm::vec3, 
 	        ((unit[2].z * normal.z) + (unit[1].z * normal.y)) + (unit[0].z * normal.x)};
 }
 
-uint32_t volume_glow::EdgeLevel(glm::vec2 viewNormal, bool boned)
+std::optional<uint32_t> volume_glow::EdgeLevel(glm::vec2 viewNormal, bool boned)
 {
 	const float sideOn = boned ? std::abs(viewNormal.x) + std::abs(viewNormal.y)
 	                           : (viewNormal.x * viewNormal.x + viewNormal.y * viewNormal.y) / std::numbers::sqrt2_v<float>;
 	const float level = (sideOn - k_EdgeStart) * (1.0f / (k_EdgeEnd - k_EdgeStart));
 	if (!(level > 0.0f))
 	{
-		return 0;
+		return std::nullopt;
 	}
 	const float scaled = std::nearbyint(level * static_cast<float>(k_ByteMax));
 	return scaled >= static_cast<float>(k_ByteMax) ? k_ByteMax : static_cast<uint32_t>(scaled);
 }
 
-uint32_t volume_glow::InnerArgb(uint32_t argb, uint32_t level)
+uint32_t volume_glow::InnerArgb(uint32_t argb, std::optional<uint32_t> edgeLevel)
 {
+	if (!edgeLevel.has_value())
+	{
+		return 0;
+	}
+	const uint32_t level = *edgeLevel;
 	if (level >= k_ByteMax)
 	{
 		return argb;

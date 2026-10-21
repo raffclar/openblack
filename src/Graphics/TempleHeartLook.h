@@ -93,7 +93,7 @@ inline constexpr float k_ShellTextureAcross = 0.7f;
 inline constexpr float k_ShellTextureUp = 0.1f;
 /// The number of the shell's texture in the list of the glowing shells' textures (S_TileLandscape)
 inline constexpr int k_ShellTexture = 6;
-/// The colour the game gives the shell's points as their specular. Whether the shell's draw adds it is not traced.
+/// The colour that the shell's corners on the model add after the texture
 inline constexpr uint32_t k_ShellSpecular = 0x141414u;
 [[nodiscard]] constexpr bool ShellShown(bool destroying, float clock) noexcept
 {

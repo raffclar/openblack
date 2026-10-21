@@ -73,6 +73,7 @@ public:
 	void StartFallingSpell() override;
 	void EndFallingSpell() override;
 	void Update(std::chrono::steady_clock::time_point now) override;
+	void CountDueFrames(std::chrono::steady_clock::time_point now) override;
 	bool Escape(bool shift, bool ctrl) override;
 	void Skip() override;
 	void Stop() override;

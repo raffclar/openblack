@@ -164,6 +164,7 @@ void Renderer::DrawTempleCreedShells(const DrawSceneDesc& desc) const
 		    .alphaTexture = alpha,
 		    .uvOffset = volume_glow::UvOffset({heart_look::k_ShellSlideAcross, heart_look::k_ShellSlideUp}, since),
 		    .textureFraction = {heart_look::k_ShellTextureAcross, heart_look::k_ShellTextureUp},
+		    .specularRgb = heart_look::k_ShellSpecular,
 		};
 		// Centred on the heart, the same size on each axis and not turned
 		const auto model =

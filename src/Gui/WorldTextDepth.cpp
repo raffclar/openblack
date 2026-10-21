@@ -51,6 +51,12 @@ float DrawnDepth(float pointDepth, float cameraPitch, float nearClip)
 	return drawn < nearest ? nearest : drawn;
 }
 
+float WordsDepth(float depth, float nearClip)
+{
+	const float nearest = nearClip + k_WordsBeyondNear;
+	return depth < nearest ? nearest : depth;
+}
+
 float BufferDepth(const glm::mat4& projection, float depth)
 {
 	const auto clip = projection * glm::vec4(0.0f, 0.0f, depth, 1.0f);

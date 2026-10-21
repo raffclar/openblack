@@ -247,6 +247,14 @@ void VideoSystem::Update(std::chrono::steady_clock::time_point now)
 	}
 }
 
+void VideoSystem::CountDueFrames(std::chrono::steady_clock::time_point now)
+{
+	if (_video)
+	{
+		DecodeDue(now);
+	}
+}
+
 void VideoSystem::UpdateFallingSpell(std::chrono::steady_clock::time_point now)
 {
 	if (!_video)

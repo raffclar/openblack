@@ -160,6 +160,9 @@ struct ShellDraw
 	/// How far its texture has slid
 	glm::vec2 uvOffset;
 	glm::vec2 textureFraction;
+	/// 0xRRGGBB: the colour added after the texture on each corner on the model, also where the shell does not glow. The
+	/// particles' shells add their atom's, which no rule of theirs sets.
+	uint32_t specularRgb {0};
 };
 
 /// A frame of a light map stamped on the land, centred on a point 10 units past its particle along x and z

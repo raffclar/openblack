@@ -2637,7 +2637,8 @@ bool Game::DoesFrameGraphics() const
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 {
 	using game_frame::Step;
-	// While the window is minimised the turns and the keys continue, but the camera, the hand and the world's draw stop
+	// While the window is minimised the turns, the keys and the film's clock continue, but the camera, the start of the draw,
+	// the hand and the world's draw stop
 	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
 	{
 		return true;
@@ -2667,13 +2668,30 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		// The frame's game time: none while paused, quicker or slower with the game speed
 		Locator::time::value().UpdateFrame();
 		break;
+	case Step::FilmClock:
+		// The clock of a full-screen video counts the frames that are due by the real clock
+		Locator::videoSystem::value().CountDueFrames(std::chrono::steady_clock::now());
+		break;
+	case Step::DrawClock:
+		// The real time since the last draw, which the steps of the draw go by
+		Locator::time::value().StartDraw();
+		break;
 	case Step::Video:
-		// A full-screen video decodes the frames due by the real clock, fades, and ends
+		// A full-screen video shows the frames that are due, fades, and ends
 		Locator::videoSystem::value().Update(std::chrono::steady_clock::now());
 		break;
 	case Step::PauseText:
-		// The words of the pause and the speed, after the frame's keys, turns and video
+		// The words of the pause and the speed, as the draw finishes
 		UpdatePauseText();
+		break;
+	case Step::ScreenFade:
+		// The colour over the screen fades by the real time of the draw
+		if (_interface)
+		{
+			const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+			_interface->GetScreenFade().Update(static_cast<uint32_t>(Locator::time::value().GetFrameRealTime().count()),
+			                                   inTemple);
+		}
 		break;
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
