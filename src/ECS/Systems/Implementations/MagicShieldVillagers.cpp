@@ -525,8 +525,7 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 		watched = current->shield;
 	}
 	auto& reacting = registry.AssignOrReplace<VillagerShieldReaction>(
-	    villager,
-	    VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at, .animation = 0});
+	    villager, VillagerShieldReaction {.reaction = id, .type = reaction.type, .shield = watched, .lookAt = at});
 	reaction.reacting.push_back(villager);
 
 	if (reaction.type == Reaction::ReactToMagicShieldDestroyed)

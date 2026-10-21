@@ -26,10 +26,6 @@ using namespace openblack::magic;
 namespace
 {
 constexpr float k_TwoPi = 2.0f * std::numbers::pi_v<float>;
-/// The animations a villager amazed by a shield plays: pointing up into it, looking at its hand, standing
-constexpr uint32_t k_IntoPointing = 286;
-constexpr uint32_t k_LookAtHand = 311;
-constexpr uint32_t k_Stand = 385;
 /// The sheltering villager's turn either side of its own side of the shield
 constexpr float k_ShelterTurnHalf = shield::k_ShelterTurnRange * 0.5f;
 
@@ -228,13 +224,16 @@ shield::Shelter shield::ShelterAt(glm::vec2 centre, glm::vec2 villager, float ra
 	return {.point = point, .faceTowards = face};
 }
 
-uint32_t shield::AmazedAnimation(uint32_t roll)
+int32_t shield::AmazedClipTimes(float seconds, int32_t clipMilliseconds, bool pointing)
 {
-	if (roll == 0)
+	if (pointing)
 	{
-		return k_IntoPointing;
+		return 1;
 	}
-	return roll <= 2 ? k_LookAtHand : k_Stand;
+	// The times in each second, then the times in all the seconds, each kept as a float and cut to whole times
+	const float perSecond = 1000.0f / static_cast<float>(clipMilliseconds);
+	const float times = perSecond * seconds;
+	return static_cast<int32_t>(times);
 }
 
 uint8_t shield::VillagerPriority(uint8_t priority, bool hasTown, float protectionSignificance, uint32_t sinceAttacked,
