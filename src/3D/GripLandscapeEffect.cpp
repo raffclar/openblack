@@ -72,8 +72,7 @@ glm::vec3 RandomInUnitSphere()
 
 void GripLandscapeEffect::Spawn(glm::vec3 groundPosition)
 {
-	auto texture = Locator::resources::value().GetTextures().Handle(k_SpriteSheetId);
-	if (!texture)
+	if (!Locator::resources::value().GetTextures().Contains(k_SpriteSheetId.value()))
 	{
 		return;
 	}
@@ -85,7 +84,7 @@ void GripLandscapeEffect::Spawn(glm::vec3 groundPosition)
 		const auto frame = static_cast<float>(Locator::rng::value().NextValue(0, k_FrameCount - 1));
 		const auto entity = registry.Create();
 		registry.Assign<GripLandscapeParticle>(entity, centre, RandomInUnitSphere() * k_SphereRadius, 0.0f, frame);
-		registry.Assign<Sprite>(entity, texture->GetNativeHandle(), FrameOrigin(frame),
+		registry.Assign<Sprite>(entity, k_SpriteSheetId.value(), FrameOrigin(frame),
 		                        glm::vec2(1.0f / static_cast<float>(k_SheetColumns)), glm::vec4(k_Colour, k_StartAlpha), false);
 		registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(0.0f));
 	}

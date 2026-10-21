@@ -681,17 +681,16 @@ std::optional<entt::entity> PersonShown()
 entt::entity MakeMark(entt::entity villager, bool symbol)
 {
 	auto& registry = Entities();
-	const auto& textures = Locator::resources::value().GetTextures();
 	const auto sheet = symbol ? k_SymbolSheet : k_GlowSheet;
 	const auto alpha = symbol ? k_SymbolSheetAlpha : k_GlowSheetAlpha;
 	const auto entity = registry.Create();
-	registry.Assign<Sprite>(entity, Sprite {.texture = textures.Handle(sheet)->GetNativeHandle(),
+	registry.Assign<Sprite>(entity, Sprite {.texture = sheet.value(),
 	                                        .uvMin = glm::vec2(0.0f),
 	                                        .uvExtent = glm::vec2(1.0f / k_SheetCells),
 	                                        .tint = symbol ? k_SymbolTint : k_GlowTint,
 	                                        .additive = !symbol,
 	                                        .facesCamera = true,
-	                                        .alpha = textures.Handle(alpha)->GetNativeHandle()});
+	                                        .alpha = alpha.value()});
 	registry.Assign<Transform>(entity, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(0.0f));
 	registry.Assign<DiscipleMark>(entity, DiscipleMark {.villager = villager, .symbol = symbol});
 	return entity;

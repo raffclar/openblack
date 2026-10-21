@@ -282,7 +282,6 @@
 #include "Enums.h"
 #include "Fire/FireGraphic.h"
 #include "Fire/FireModel.h"
-#include "Graphics/GraphicsHandle.h"
 #include "Graphics/Moon.h"
 #include "Graphics/RenderModes.h"
 #include "Graphics/Sun.h"
@@ -3435,7 +3434,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<openblack::frame_pace::Pace>(context, ValueOnly {})
 	    .Field<&openblack::frame_pace::Pace::sinceStep>("sinceStep")
 	    .Field<&openblack::frame_pace::Pace::gameSinceStep>("gameSinceStep");
-	Reflect<openblack::graphics::TextureHandle>(context, ValueOnly {}).Field<&openblack::graphics::TextureHandle::id>("id");
 	Reflect<openblack::graphics::moon::Placement>(context, ValueOnly {})
 	    .Field<&openblack::graphics::moon::Placement::offset>("offset")
 	    .Field<&openblack::graphics::moon::Placement::alpha>("alpha");

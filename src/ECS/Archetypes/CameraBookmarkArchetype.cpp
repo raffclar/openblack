@@ -23,8 +23,8 @@ using namespace openblack::ecs::components;
 entt::entity CameraBookmarkArchetype::Create(uint8_t number)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	auto texture = Locator::resources::value().GetTextures().Handle(entt::hashed_string("raw/misc0a"));
-	if (!texture)
+	constexpr auto k_Sheet = entt::hashed_string("raw/misc0a");
+	if (!Locator::resources::value().GetTextures().Contains(k_Sheet.value()))
 	{
 		throw std::runtime_error("Failed to get Camera Bookmark sprite: misc0a");
 	}
@@ -33,7 +33,7 @@ entt::entity CameraBookmarkArchetype::Create(uint8_t number)
 	const glm::vec2 extent = glm::vec2 {1.0f / 8.0f, 1.0f / 8.0f};
 	const glm::vec4 tint = glm::vec4 {1.0f, 1.0f, 0.0f, 1.0f};
 	const float u = static_cast<float>(number) / 8.0f;
-	registry.Assign<Sprite>(entity, texture->GetNativeHandle(), glm::vec2 {u, 3.0f / 8.0f}, extent, tint);
+	registry.Assign<Sprite>(entity, k_Sheet.value(), glm::vec2 {u, 3.0f / 8.0f}, extent, tint);
 	registry.Assign<CameraBookmark>(entity, CameraBookmark {.number = number});
 	return entity;
 }
