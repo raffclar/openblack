@@ -12,6 +12,9 @@
 #include <filesystem>
 #include <fstream>
 #include <ios>
+#include <iterator>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <unordered_set>
 
@@ -38,6 +41,8 @@ public:
 			return false;
 		}
 		_owner = owner;
+		_path = path;
+		_contents = std::string {};
 		return true;
 	}
 
@@ -51,8 +56,16 @@ public:
 		{
 			return false;
 		}
+		// The file keeps what the disk has, so that a save does not read the disk again
+		_contents = std::string(std::istreambuf_iterator<char>(_file), std::istreambuf_iterator<char>());
+		_file.clear();
 		_file.seekp(0, std::ios::end);
 		_owner = owner;
+		_path = path;
+		if (!_file.good())
+		{
+			_contents.reset();
+		}
 		return true;
 	}
 
@@ -65,6 +78,15 @@ public:
 		}
 		_file.write(text.data(), static_cast<std::streamsize>(text.size()));
 		_file.flush();
+		// After a failed write, what the disk has is not known
+		if (_file.good() && _contents.has_value())
+		{
+			_contents->append(text);
+		}
+		else
+		{
+			_contents.reset();
+		}
 	}
 
 	/// Record the thing as written. Returns false when the file is closed or the file has the thing already.
@@ -89,8 +111,21 @@ public:
 	[[nodiscard]] bool IsOpen() const { return _file.is_open(); }
 	[[nodiscard]] entt::entity Owner() const { return _owner; }
 
+	/// What the open file at the path has on the disk: the text since Start, or the file as Resume found it and the
+	/// text after it. Nothing when the file is closed, when the path is another path, or after a failed write.
+	[[nodiscard]] std::optional<std::string_view> Contents(const std::filesystem::path& path) const
+	{
+		if (!_file.is_open() || !_contents.has_value() || path != _path)
+		{
+			return std::nullopt;
+		}
+		return std::string_view(*_contents);
+	}
+
 private:
-	std::ofstream _file;
+	std::fstream _file;
+	std::filesystem::path _path;
+	std::optional<std::string> _contents;
 	entt::entity _owner {entt::null};
 	/// The things in the file. The file has each thing one time only. A static thing and the same static things at its
 	/// position count as one.
