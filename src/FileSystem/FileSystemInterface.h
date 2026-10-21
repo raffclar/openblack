@@ -16,6 +16,7 @@
 #include <functional>
 #include <iosfwd>
 #include <memory>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -45,6 +46,11 @@ class FileSystemInterface
 {
 public:
 	static std::filesystem::path FixPath(const std::filesystem::path& path);
+	/// Finds a file or folder under a root whatever the letter case of each part of the relative path, as the game's own
+	/// file system does. A "." part is passed over. Nothing is returned when a part has no match, or the path climbs up
+	/// out of the root.
+	[[nodiscard]] static std::optional<std::filesystem::path> FindIgnoringCase(const std::filesystem::path& root,
+	                                                                           const std::filesystem::path& relative);
 
 	virtual ~FileSystemInterface();
 

@@ -9,10 +9,13 @@
 
 #include "FileSystemInterface.h"
 
+#include <cctype>
+
 #include <algorithm>
 #include <array>
 #include <fstream>
 #include <ios>
+#include <string>
 #include <system_error>
 #include <vector>
 
@@ -45,6 +48,56 @@ std::filesystem::path FileSystemInterface::FixPath(const std::filesystem::path& 
 	}
 
 	return result;
+}
+
+namespace
+{
+bool SameIgnoringCase(const std::string& left, const std::string& right)
+{
+	return std::ranges::equal(left, right, [](char a, char b) {
+		return std::tolower(static_cast<unsigned char>(a)) == std::tolower(static_cast<unsigned char>(b));
+	});
+}
+} // namespace
+
+std::optional<std::filesystem::path> FileSystemInterface::FindIgnoringCase(const std::filesystem::path& root,
+                                                                           const std::filesystem::path& relative)
+{
+	std::error_code error;
+	auto found = root;
+	for (const auto& part : relative)
+	{
+		const auto name = part.generic_string();
+		if (name.empty() || name == ".")
+		{
+			continue;
+		}
+		if (name == "..")
+		{
+			return std::nullopt;
+		}
+		// The part as written first, then any entry of the folder that differs only in letter case
+		if (std::filesystem::exists(found / part, error))
+		{
+			found /= part;
+			continue;
+		}
+		std::optional<std::filesystem::path> match;
+		for (std::filesystem::directory_iterator it(found, error), end; !error && it != end; it.increment(error))
+		{
+			if (SameIgnoringCase(it->path().filename().generic_string(), name))
+			{
+				match = it->path();
+				break;
+			}
+		}
+		if (!match.has_value())
+		{
+			return std::nullopt;
+		}
+		found = *match;
+	}
+	return found;
 }
 
 bool FileSystemInterface::InGameFolder(const std::filesystem::path& path) const

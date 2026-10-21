@@ -70,6 +70,25 @@ std::filesystem::path DefaultFileSystem::FindPath(const std::filesystem::path& p
 				return p / path;
 			}
 		}
+
+#if !defined(_WIN32)
+		// The game's own scripts name files in any letter case, which a file system where case matters does not find
+		// as written. Windows finds them as written already.
+		for (const auto& root : {std::filesystem::current_path(), _gamePath})
+		{
+			if (const auto found = FindIgnoringCase(root, path); found.has_value())
+			{
+				return *found;
+			}
+		}
+		for (const auto& p : _additionalPaths)
+		{
+			if (const auto found = FindIgnoringCase(p, path); found.has_value())
+			{
+				return *found;
+			}
+		}
+#endif
 	}
 
 	throw std::runtime_error("File " + path.string() + " not found");
