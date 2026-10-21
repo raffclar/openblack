@@ -23,7 +23,7 @@
 namespace openblack::audio
 {
 
-class AudioManagerNoOp final: public AudioManagerInterface
+class AudioManagerNoOp: public AudioManagerInterface
 {
 public:
 	BufferId CreateBuffer([[maybe_unused]] ChannelLayout layout, [[maybe_unused]] const std::vector<int16_t>& buffer,

@@ -403,8 +403,21 @@ void GameMusic::ProcessTurn(const TurnInputs& inputs)
 	}
 }
 
+void GameMusic::ForgetPlaying()
+{
+	_playing = MusicType::None;
+	_landType = MusicType::None;
+}
+
 void GameMusic::ProcessMusic(const TurnInputs& inputs)
 {
+	// While a film plays, the music continues as it is. The script's music stops to count as started.
+	if (inputs.film)
+	{
+		_scriptStarted = false;
+		ForgetPlaying();
+		return;
+	}
 	if (ProcessCitadel(inputs))
 	{
 		// The script's music stops counting as playing, so it starts again from its beginning after the citadel

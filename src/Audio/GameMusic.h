@@ -201,6 +201,9 @@ public:
 		/// The music of the local player's creature's fight, heard while the player directs the fight or while the camera
 		/// is near the arena of the fight (see SelectFightType)
 		std::optional<MusicType> creatureFight;
+		/// A full-screen film plays. The music is not changed, and the script's music plays again from its start after
+		/// the film.
+		bool film {false};
 	};
 
 	GameMusic() = default;
@@ -226,6 +229,9 @@ public:
 
 	/// Music a script starts: MusicType::None stops it
 	void StartScriptMusic(MusicType type);
+	/// Forgets the music that plays, so that the next turn starts the land's music again. A film does this when it
+	/// starts.
+	void ForgetPlaying();
 	/// The script command that turns the alignment music on or off
 	void SetAlignmentMusicEnabled(bool enabled) { _alignmentMusicEnabled = enabled; }
 	/// A script attaches music to an object, or changes the music already attached to it. Music attached afresh stops

@@ -44,6 +44,8 @@ public:
 		std::function<void()> snapWideScreen;
 		/// Lets the scripts' music go, as Escape does
 		std::function<void()> releaseScriptMusic;
+		/// Forgets the music that plays, as each video does when it starts
+		std::function<void()> forgetMusic;
 		/// A video's file through the resource cache; none when it can't be read
 		std::function<std::shared_ptr<const bink::BinkFile>(const std::filesystem::path& path)> openFile;
 		/// Lets the resource cache drop a video that has ended

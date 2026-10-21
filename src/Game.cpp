@@ -2531,6 +2531,7 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	if (Locator::infoConstants::has_value())
 	{
 		const auto& sound = Locator::infoConstants::value().sound;
