@@ -9,8 +9,10 @@
 
 #include <ECS/Components/Abode.h>
 #include <ECS/Components/MiracleImpression.h>
+#include <ECS/Components/Mobile.h>
 #include <ECS/Components/Temple.h>
 #include <ECS/Components/Town.h>
+#include <ECS/Components/Transform.h>
 #include <ECS/Registry.h>
 #include <ECS/TempleHeartOf.h>
 #include <ECS/ThingMapPlace.h>
@@ -199,4 +201,23 @@ SET_LAND_NUMBER(9)
 )""""),
 	             std::runtime_error);
 	EXPECT_EQ(openblack::Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber, 3);
+}
+
+TEST_F(LoadScene, a_bonfire_takes_its_turn_from_the_third_number_and_not_the_second)
+{
+	LoadTestScene(R""""(
+VERSION(2.300000)
+LOAD_LANDSCAPE(".\Data\Landscape\Land1.lnd")
+CREATE_BONFIRE("1425.03,2331.89", 24.700001, 0.000000, 1.000000)
+)"""");
+	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	size_t bonfires = 0;
+	registry.Each<const openblack::ecs::components::MobileStatic, const openblack::ecs::components::Transform>(
+	    [&bonfires](const auto& mobileStatic, const auto& transform) {
+		    EXPECT_EQ(mobileStatic.type, openblack::MobileStaticInfo::Bonfire);
+		    // Land 1's bonfires stand with no turn: the second number is not used
+		    EXPECT_EQ(transform.rotation, glm::mat3(1.0f));
+		    ++bonfires;
+	    });
+	EXPECT_EQ(bonfires, 1u);
 }

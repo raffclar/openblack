@@ -9800,6 +9800,21 @@ void AddLandOneScriptStubScenarios(std::vector<Scenario>& all)
 	                {.type = TreeInfo::ConiferA, .offset = {18.0f, 0.0f}, .dead = true, .leanDegrees = {20.0f, 10.0f}}},
 	});
 
+	// Bonfires from a land script: the turn is the third number, and the second number is not used
+	all.push_back({
+	    .id = "nature.bonfire_land_script_turn",
+	    .name = "Bonfires from a land script take their turn from the third number",
+	    .facet = Facet::Nature,
+	    .description = "Two bonfires in a row from the west, made by land script lines. The first has the numbers of the "
+	                   "two bonfires on Land 1: 24.7, then 0. The second has 0, then a quarter turn.",
+	    .expected = "The first bonfire stands with no turn, as on Land 1, because the second number is not used. The "
+	                "second bonfire is turned by a quarter turn about the vertical.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-12.0f, -6.0f}, {12.0f, 6.0f}}},
+	    .landScript = "CREATE_BONFIRE(\"-6.0,0.0\", 24.700001, 0.000000, 1.000000)\n"
+	                  "CREATE_BONFIRE(\"6.0,0.0\", 0.000000, 1.570796, 1.000000)\n",
+	});
+
 	// Mobile statics that a land script turns and leans: the lean follows the way each one faces
 	all.push_back({
 	    .id = "nature.mobile_static_lean",
@@ -10558,13 +10573,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
 	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
 	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() && scenario.highlights.empty() &&
+	    scenario.landStorms.empty() && scenario.highlights.empty() && scenario.landScript.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
-		problems.emplace_back(
-		    "no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
-		    "chests, crowd, fireflies' rewards, land storms, scrolls or signs, player's commands or alignment for the "
-		    "hand");
+		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "
+		                      "chests, crowd, fireflies' rewards, land storms, scrolls or signs, land script lines, player's "
+		                      "commands or alignment for the "
+		                      "hand");
 	}
 	for (const auto& storm : scenario.landStorms)
 	{

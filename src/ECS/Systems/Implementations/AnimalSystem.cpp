@@ -304,6 +304,40 @@ void AnimalSystem::JoinFlock(entt::entity entity, entt::entity flockEntity)
 	JoinLine(registry.Get<Flock>(flockEntity), entity);
 }
 
+void AnimalSystem::ReleaseFromScript(entt::entity entity)
+{
+	auto& registry = EntityRegistry();
+	auto* animal = registry.TryGet<Animal>(entity);
+	if (animal == nullptr || registry.AnyOf<CarriedByTornado, InHand, InPhysics>(entity))
+	{
+		return;
+	}
+	// Alone, it is a flock of its own about where it is, as far as its kind wanders
+	if (!registry.Valid(animal->flock) || !registry.AllOf<Flock>(animal->flock))
+	{
+		const auto& info = InfoOf(animal->type);
+		const auto own =
+		    CreateFlock(Metres(animal->move.position), static_cast<float>(static_cast<uint16_t>(info.domainRadius)),
+		                static_cast<float>(static_cast<int32_t>(info.flockDistance)));
+		animal->flock = own;
+		JoinLine(registry.Get<Flock>(own), entity);
+	}
+	if (animal->life > 0.0f)
+	{
+		// As after a landing: it joins a flock near it if it can, then it starts on a leg of its own
+		MergeNearbyHerd(entity, *animal);
+		StartWander(entity, *animal);
+		return;
+	}
+	// With no life it dies. One that was already dying is dead at once.
+	const bool wasDying = animal->state == AnimalState::Dying;
+	SetDying(entity);
+	if (wasDying)
+	{
+		SetTopState(*animal, AnimalState::Dead);
+	}
+}
+
 void AnimalSystem::StartWandering(entt::entity animal)
 {
 	if (auto* living = Locator::entitiesRegistry::value().TryGet<Animal>(animal))

@@ -231,10 +231,13 @@ void AudioManager::Stop()
 
 void AudioManager::Update()
 {
-	const auto listener = GetListener();
-	_audioPlayer->UpdateListener(listener.origin, listener.forward, listener.up);
+	// Before the first game turn ends, the listener follows the camera each frame
+	if (!_turnListener.has_value())
+	{
+		PlaceListenerAndSounds();
+	}
 
-	// 3D emitters follow the listener, finished emitters are released
+	// Finished emitters are released
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<AudioEmitter>([this](entt::entity entity, AudioEmitter& emitter) {
 		emitter.state = _audioPlayer->GetStatus(emitter.sourceId);
@@ -244,10 +247,6 @@ void AudioManager::Update()
 			                    LogTurn());
 			DestroyEmitter(entity);
 			return;
-		}
-		if (emitter.spatial)
-		{
-			PositionSource(emitter.sourceId, ToListenerFrame(emitter.position));
 		}
 		_audioPlayer->SetVolume(emitter.sourceId, EmitterVolume(emitter));
 	});
@@ -271,16 +270,39 @@ void AudioManager::Update()
 	_musicPlayer->Update(std::chrono::duration_cast<std::chrono::microseconds>(now - _lastMusicUpdate));
 	_lastMusicUpdate = now;
 	_customMusic->Update();
-	// Positional music, like 3D emitters, is heard from where it is placed as the listener moves
-	_musicStreams->ForEachPlaced([this](SourceId source, const MusicPlacement& placement) {
-		PositionSource(source, ToListenerFrame(placement.position));
-	});
 
 	// Atmosphere voices are positioned relative to the listener and only follow the volume settings here
 	for (const auto& [handle, voice] : _atmosVoices)
 	{
 		_audioPlayer->SetVolume(voice.source, voice.gain * _globalVolume * _sfxVolume);
 	}
+}
+
+void AudioManager::ProcessTurn()
+{
+	_turnListener = CameraListener();
+	PlaceListenerAndSounds();
+}
+
+void AudioManager::PlaceListenerAndSounds()
+{
+	const auto listener = HeardListener();
+	_audioPlayer->UpdateListener(listener.origin, listener.forward, listener.up);
+	// Placed sounds and placed music are heard from where they are, as the listener sees them
+	Locator::entitiesRegistry::value().Each<AudioEmitter>([this](entt::entity, AudioEmitter& emitter) {
+		if (emitter.spatial)
+		{
+			PositionSource(emitter.sourceId, ToListenerFrame(emitter.position));
+		}
+	});
+	_musicStreams->ForEachPlaced([this](SourceId source, const MusicPlacement& placement) {
+		PositionSource(source, ToListenerFrame(placement.position));
+	});
+}
+
+Listener AudioManager::HeardListener() const
+{
+	return HeardFrom(_listenerOverride, _turnListener, CameraListener());
 }
 
 float AudioManager::EmitterVolume(const AudioEmitter& emitter) const
@@ -1176,9 +1198,9 @@ void AudioManager::PositionSource(SourceId source, std::optional<glm::vec3> list
 	_audioPlayer->SetPosition(source, glm::vec3(position.x, position.z, -position.y));
 }
 
-glm::vec3 AudioManager::ToListenerFrame(glm::vec3 worldPosition)
+glm::vec3 AudioManager::ToListenerFrame(glm::vec3 worldPosition) const
 {
-	const auto listener = Locator::audio::value().GetListener();
+	const auto listener = HeardListener();
 	return audio::ToListenerFrame(worldPosition, listener.origin, listener.forward, listener.up);
 }
 
