@@ -86,6 +86,16 @@ float creature_morph::EaseFatness(float shown, float fatness)
 	return shown + std::clamp(fatness - shown, -k_MaxFatnessStep, k_MaxFatnessStep);
 }
 
+creature_morph::Looks creature_morph::TakeLooks(float shownFatness, float fatness, float alignment, float strength,
+                                                float speciesStrength)
+{
+	return {
+	    .shownFatness = EaseFatness(shownFatness, fatness),
+	    .evilGood = Axis(alignment),
+	    .weakStrong = StrengthLook(strength, speciesStrength),
+	};
+}
+
 creature_morph::Refresh creature_morph::RefreshDrawn(const Morph& drawn, const Morph& target)
 {
 	if (std::abs(target.evilGood - drawn.evilGood) >= k_RefreshThreshold)

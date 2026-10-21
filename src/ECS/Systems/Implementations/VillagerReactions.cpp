@@ -846,6 +846,11 @@ uint32_t villager_reactions::DanceWhileReacting(LivingAction& action)
 {
 	auto& registry = EntityRegistry();
 	const auto villager = registry.ToEntity(action);
+	// One that stands where a walk to the dance ends walks to its own place first
+	if (ecs::villager_dance::WalkToOwnPlace(action, VillagerStates::DanceWhileReacting))
+	{
+		return 1;
+	}
 	if (ecs::dances::DanceOf(registry, villager) == entt::null)
 	{
 		// Out of the dance, it decides what to do at once

@@ -14,6 +14,11 @@
 
 #include "Enums.h"
 
+namespace openblack::ecs
+{
+class Registry;
+}
+
 namespace openblack::ecs::archetypes
 {
 class CreatureArchetype
@@ -38,6 +43,10 @@ public:
 	/// The creature's body takes the weak to strong look of its strength now, as when its strength is set or changed by an
 	/// amount
 	static void ShowStrength(entt::entity creature);
+	/// The creature's body takes its looks: its shown fatness moves one step, and it shows its alignment and strength as
+	/// they are now. This occurs at the end of each turn that the hand does not hold it, when a mind file loads into
+	/// it, and when a swap of minds changes it.
+	static void TakeLooks(Registry& registry, entt::entity creature);
 
 	static entt::entity Create(const glm::vec3& position, PlayerNames playerName, CreatureType creatureType,
 	                           entt::id_type creatureMindId, float yAngleRadians, float scale, const Body& body);

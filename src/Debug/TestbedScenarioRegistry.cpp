@@ -2023,6 +2023,27 @@ void AddAppearance(std::vector<Scenario>& all)
 	    .creatures = {goodTiger, evilTiger},
 	});
 
+	// A tiger as strong as it can be, whose strength only fades. A weak tiger beside it shows the weak look.
+	auto fading = Content(CreatureType::Tiger, {-12.0f, 0.0f}, 0.0f, "strength fades");
+	fading.strength = 1.0f;
+	fading.pauseMind = true;
+	auto weak = Content(CreatureType::Tiger, {12.0f, 0.0f}, 0.0f, "weak");
+	weak.strength = 0.0f;
+	weak.pauseMind = true;
+	all.push_back({
+	    .id = "appearance.strength_fades",
+	    .name = "The body follows a strength that fades",
+	    .facet = Facet::Appearance,
+	    .description = "Close up, a tiger with the most strength stands on the left, and a tiger with no strength stands "
+	                   "on the right. Nothing changes their strength by an amount.",
+	    .expected = "The strength of the left tiger fades a little each game turn, and at the end of each turn its body "
+	                "takes the look of that strength. Run the game fast: the left tiger becomes less muscular. Its "
+	                "strong look does not stay.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-30.0f, -15.0f}, {30.0f, 15.0f}}, .distance = 1.0f},
+	    .creatures = {fading, weak},
+	});
+
 	all.push_back({
 	    .id = "appearance.falling_spell_film",
 	    .name = "The falling spell's film",
@@ -10061,6 +10082,28 @@ void AddVillagerSizeAndReachScenarios(std::vector<Scenario>& all)
 	                 .walkAfterSeconds = 1.0f,
 	                 .walkRepeatSeconds = 20.0f,
 	                 .walkFinal = VillagerStates::SitAndChillout}},
+	});
+	// Dancers that walk to their places in a dance, each step at its point in the dance's state
+	all.push_back({
+	    .id = "movement.dancers_step_in_their_dance",
+	    .name = "Dancers take their steps in the dance",
+	    .facet = Facet::Movement,
+	    .description = "A leader stands in the middle with four villagers round him, 8 metres away. After one second, a "
+	                   "script makes the dance about a person about the leader, and the four villagers join it.",
+	    .expected = "Each dancer does the move of the dance first. In the same turn, it starts its walk to its place and "
+	                "takes the first step. When the group moves, each dancer takes its step to the new place in the "
+	                "turn that the group moves. A dancer on its place takes no step.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -18.0f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = VillagerInfo::CelticLeaderMale, .offset = {0.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {8.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = {-8.0f, 0.0f}},
+	                {.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, 8.0f}},
+	                {.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, -8.0f}}},
+	    .commands = {{.kind = Kind::MakeDance,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(DanceInfo::DanceAroundPerson),
+	                  .object = 0}},
 	});
 	// Two creatures, each with its own turn in the list of the living
 	all.push_back({

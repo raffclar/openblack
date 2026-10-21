@@ -29,6 +29,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/DanceRules.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -230,8 +231,8 @@ uint32_t villager_creature_dance::ControlledByCreature(LivingAction& action)
 	const auto place = villager_dance::SlotOf(villager);
 	const auto here = WholePositionOf(villager);
 	const auto slot = ecs::wall_hug::ToWhole(*place);
-	// Only a villager that stands right at the middle of the dance walks to its place
-	if (here != slot && here == glm::ivec2(dance->place.x, dance->place.z))
+	// Only a villager that stands exactly where a walk to the dance ends walks to its place
+	if (ecs::dance_rules::WalksToOwnPlace({.x = here.x, .z = here.y}, {.x = slot.x, .z = slot.y}, dance->place))
 	{
 		auto& living = Locator::livingActionSystem::value();
 		if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos,

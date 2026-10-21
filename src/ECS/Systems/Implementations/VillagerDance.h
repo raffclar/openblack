@@ -38,6 +38,9 @@ uint32_t InDance(components::LivingAction& action);
 /// The same in any dance state: walking off, it comes back to that state at its place. A move other than its group's
 /// can be given, by its number in the dance files.
 uint32_t PerformDance(components::LivingAction& action, VillagerStates danceState, std::optional<uint32_t> move = std::nullopt);
+/// A dancer that stands exactly where a walk to its dance ends, off its own place, starts a walk to its own place and
+/// comes back to `danceState` there. True when it started the walk: it then takes no step this turn.
+bool WalkToOwnPlace(components::LivingAction& action, VillagerStates danceState);
 /// Walking to its place in a dance: a place that moves this turn is walked to where it is now
 uint32_t MoveToDancePos(components::LivingAction& action);
 /// The clip a villager plays in its place in a dance, `walkClip` when its group's move has it walk

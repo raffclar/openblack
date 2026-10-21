@@ -228,6 +228,8 @@ bool CreatureMindSystem::SwapMinds(entt::entity from, entt::entity to)
 		self.size = kept.size;
 		self.alignment = kept.alignment;
 		self.pendingAlignment = kept.pendingAlignment;
+		// Then the body takes its looks again, with its own alignment back
+		archetypes::CreatureArchetype::TakeLooks(registry, creature);
 	};
 	takeUp(from, std::move(*fileTo), keptFrom);
 	takeUp(to, std::move(*fileFrom), keptTo);
@@ -366,6 +368,7 @@ void CreatureMindSystem::StepSwap(entt::entity creature, const creature_mind::Co
 		const auto shape = creature_swap::Ease({.size = body.size, .alignment = body.alignment}, swap->target);
 		body.size = shape.size;
 		body.alignment = shape.alignment;
+		archetypes::CreatureArchetype::TakeLooks(registry, creature);
 		if (auto* transform = registry.TryGet<Transform>(creature))
 		{
 			transform->scale = glm::vec3(archetypes::CreatureArchetype::DrawnScale(body.species, ShownSize(body)));

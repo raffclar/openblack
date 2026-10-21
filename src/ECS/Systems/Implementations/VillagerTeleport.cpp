@@ -41,6 +41,9 @@ uint32_t ecs::villager_teleport::GoTowardsTeleportReaction(LivingAction& action)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto villager = registry.ToEntity(action);
+	// TODO(teleport): the game takes no step in this state. It starts a plain walk to the stone, which ends in this
+	// state again. openblack keeps the villager in this state, and the villager takes its step here first.
+	ecs::villager_home::TakeWalkStep(villager);
 	auto* traveller = registry.TryGet<TeleportTraveller>(villager);
 	if (traveller == nullptr)
 	{

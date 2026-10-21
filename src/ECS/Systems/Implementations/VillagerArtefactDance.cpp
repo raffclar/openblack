@@ -140,24 +140,10 @@ bool ecs::villager_artefact_dance::EnterWaitForArtefactDance(LivingAction& actio
 
 uint32_t ecs::villager_artefact_dance::ArtefactDance(LivingAction& action)
 {
-	auto& registry = Entities();
-	const auto villager = registry.ToEntity(action);
-	const auto dance = dances::DanceOf(registry, villager);
-	if (dance != entt::null)
+	// One that stands where a walk to the dance ends walks to its own place first
+	if (villager_dance::WalkToOwnPlace(action, VillagerStates::ArtifactDance))
 	{
-		// One standing right at the dance's middle walks straight to its place
-		const auto& place = registry.Get<const Dance>(dance).place;
-		const auto at = map_coords::FromMetres(glm::xz(registry.Get<const Transform>(villager).position));
-		const auto slot = villager_dance::SlotOf(villager);
-		if (slot.has_value() && map_coords::FromMetres(*slot) != at && at.x == place.x && at.z == place.z)
-		{
-			auto& living = Locator::livingActionSystem::value();
-			if (living.VillagerSetCurrentAndDestinationState(action, VillagerStates::MoveToPos, VillagerStates::ArtifactDance))
-			{
-				villager_home::SetupMobileMoveTo(action, *slot);
-			}
-			return 1;
-		}
+		return 1;
 	}
 	return villager_dance::PerformDance(action, VillagerStates::ArtifactDance);
 }

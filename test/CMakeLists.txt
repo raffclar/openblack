@@ -1663,4 +1663,14 @@ openblack_setup_and_add_test(test_lhvm_program_copy lhvm/test_lhvm_program_copy.
 target_link_libraries(test_lhvm_program_copy PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_pack_audio_headers pack/test_pack_audio_headers.cpp)
 target_link_libraries(test_pack_audio_headers PRIVATE pack)
+openblack_setup_and_add_test(test_villager_walk_states test_villager_walk_states.cpp)
+openblack_setup_and_add_test(
+  test_oracle_creature_looks oracle/test_oracle_creature_looks.cpp
+)
+set_tests_properties(
+  test_oracle_creature_looks
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_creature_looks test_creature_looks.cpp)
 openblack_setup_and_add_test(test_player_commands test_player_commands.cpp)

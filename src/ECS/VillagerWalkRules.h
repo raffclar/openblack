@@ -14,7 +14,8 @@
 /// In which of its states a villager goes along its walk. The game moves a villager along its walk only while the
 /// state it is in walks it: going somewhere, or dancing at its place in a dance. In any other state the walk waits:
 /// the villager stands where it was, and goes on with the walk if it comes back to a walking state. So a villager
-/// called away mid-walk, to kiss, to look at something or to pause for a second, stops at once. Pure.
+/// called away mid-walk, to kiss, to look at something or to pause for a second, stops at once. Each walking state
+/// takes the step itself, at its own point among its checks. Pure.
 namespace openblack::ecs::villager_walk
 {
 
