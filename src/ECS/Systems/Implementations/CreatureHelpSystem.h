@@ -25,6 +25,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 	void Raise(entt::entity creature, const creature_help::Message& message) override;
 	void ProcessTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void PromptKnown(entt::entity creature, creature_help::Prompt prompt) override;
 	void Fainting(entt::entity creature) override;
 

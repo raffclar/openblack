@@ -36,6 +36,7 @@ public:
 	explicit CreatureWebPageSystem(PlayerOfFiles player);
 
 	void ProcessTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void WritePage(entt::entity creature) override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
 	void CollectPictures(const Screens& screens) override;

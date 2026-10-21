@@ -39,6 +39,10 @@ class CreatureFightSystem final: public CreatureFightSystemInterface
 {
 public:
 	void ProcessTurn() override;
+	void FightTurn(entt::entity creature) override;
+	void BloodTurn(entt::entity creature) override;
+	void MovesTurn(entt::entity creature) override;
+	void StaminaTurn(entt::entity creature) override;
 	void Reset() override;
 	void PrepareLand() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
@@ -102,7 +106,11 @@ private:
 	/// The turn's parts: fights started by the leash, the stages before and after the
 	/// duel, the duel's moves, and the creatures knocked out
 	void StartFightsFromMinds();
+	void StartFightFromMind(entt::entity creature);
 	void ProcessStages();
+	void StageTurn(entt::entity creature);
+	/// A fighter's animation, its move in the duel, its blow and its pose for the turn
+	void StepMoves(entt::entity creature);
 	/// A fighter's turn in the duel: it faces its opponent, keeps in the arena, moves apart from its opponent and
 	/// chooses or makes its next move
 	void DuelTurn(entt::entity creature);
@@ -119,6 +127,7 @@ private:
 	/// animation ends. Returns the action that moved on, if one did.
 	std::optional<ActionStep> StepAnimation(entt::entity creature);
 	void ProcessKnockedOut();
+	void KnockedOutTurn(entt::entity creature);
 	/// Makes the move at the front of a fighter's queue, if it can
 	void CheckQueue(entt::entity creature);
 	/// A blow at a band: struck, or a step taken towards where it would land
@@ -138,6 +147,7 @@ private:
 	void WoundSkin(entt::entity victim, const glm::vec3& point, const glm::vec3& vector, uint8_t kind, uint8_t column);
 	/// Each game turn the drips of blood run down the skins
 	void ProcessDrips();
+	void DripTurn(entt::entity creature);
 	/// One creature beat the other, by a blow or otherwise: the loser faints, and the winner is made to have a poo on
 	/// the loser or to show off
 	void Win(entt::entity winner, entt::entity loser, bool byBlow);
@@ -171,6 +181,7 @@ private:
 	/// The transcript of the fights, when the inspector keeps one. A record for each state that a fighter is in at the end
 	/// of a frame or a game turn, when it is new.
 	void NoteActions();
+	void NoteAction(entt::entity creature);
 	void NoteStage(entt::entity creature, components::CreatureFighting::Stage from, components::CreatureFighting::Stage to);
 	/// The fight of the creature is over, for a reason
 	void NoteFightOver(entt::entity creature, std::string_view reason);

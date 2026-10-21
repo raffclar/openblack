@@ -55,6 +55,8 @@ public:
 
 	/// Once a game turn: routes are planned and the creatures move
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, after its mind: it plans its route and walks, runs and turns
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame: the creatures are placed and their legs posed between the last two turns, by how far through the
 	/// turn the frame is, 0 to 1
 	virtual void Update(float turnFraction) = 0;

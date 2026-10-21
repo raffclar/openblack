@@ -287,36 +287,33 @@ void CreatureMindSystem::EndJointAction(entt::entity creature)
 	                    entt::to_integral(creature));
 }
 
-void CreatureMindSystem::KeepJointActions()
+void CreatureMindSystem::KeepJointAction(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> ended;
-	registry.Each<CreaturePartner>([&](entt::entity creature, CreaturePartner& link) {
-		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-		if (mind == nullptr || !registry.Valid(link.partner))
-		{
-			ended.push_back(creature);
-			return;
-		}
-		const auto& idle = mind->idle;
-		const auto turn = creature_friendship::JointTurnOf({
-		    .otherAgenda = idle.serial != link.agenda,
-		    .hadStepsLeft = link.agendaRunning,
-		    .hasStepsLeft = AgendaRunning(*mind),
-		    .endedWithOrder =
-		        !idle.gaveUp && !idle.agenda.empty() && idle.agenda.back().kind == creature_mind::Step::Kind::Order,
-		    .endSeen = link.endSeen,
-		});
-		if (turn == creature_friendship::JointTurn::EndsNextTurn)
-		{
-			link.endSeen = true;
-		}
-		else if (turn == creature_friendship::JointTurn::Ends)
-		{
-			ended.push_back(creature);
-		}
+	auto* link = registry.Valid(creature) ? registry.TryGet<CreaturePartner>(creature) : nullptr;
+	if (link == nullptr)
+	{
+		return;
+	}
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !registry.Valid(link->partner))
+	{
+		EndJointAction(creature);
+		return;
+	}
+	const auto& idle = mind->idle;
+	const auto turn = creature_friendship::JointTurnOf({
+	    .otherAgenda = idle.serial != link->agenda,
+	    .hadStepsLeft = link->agendaRunning,
+	    .hasStepsLeft = AgendaRunning(*mind),
+	    .endedWithOrder = !idle.gaveUp && !idle.agenda.empty() && idle.agenda.back().kind == creature_mind::Step::Kind::Order,
+	    .endSeen = link->endSeen,
 	});
-	for (const auto creature : ended)
+	if (turn == creature_friendship::JointTurn::EndsNextTurn)
+	{
+		link->endSeen = true;
+	}
+	else if (turn == creature_friendship::JointTurn::Ends)
 	{
 		EndJointAction(creature);
 	}

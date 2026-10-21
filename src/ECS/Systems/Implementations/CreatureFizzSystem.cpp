@@ -81,42 +81,43 @@ void CreatureFizzSystem::SetFizz(entt::entity creature, float target, float seco
 
 void CreatureFizzSystem::ProcessTurn()
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<entt::entity> settled;
-	std::vector<entt::entity> gone;
-	registry.Each<CreatureFizz>([&](entt::entity entity, CreatureFizz& component) {
-		component.fizz = creature_fizz::Step(component.fizz, k_TurnMilliseconds);
-		if (creature_fizz::Gone(component.fizz))
-		{
-			gone.push_back(entity);
-		}
-		else if (creature_fizz::Settled(component.fizz))
-		{
-			settled.push_back(entity);
-		}
-	});
-	for (const auto entity : settled)
+	std::vector<entt::entity> fizzing;
+	Locator::entitiesRegistry::value().Each<CreatureFizz>(
+	    [&fizzing](entt::entity entity, CreatureFizz& /*component*/) { fizzing.push_back(entity); });
+	for (const auto entity : fizzing)
 	{
-		Show(registry, entity, 0.0f);
-		registry.Remove<CreatureFizz>(entity);
+		CreatureTurn(entity);
 	}
-	registry.Each<const CreatureFizz>([&registry](entt::entity entity, const CreatureFizz& component) {
-		if (auto* spells = registry.TryGet<CreatureSpells>(entity))
-		{
-			spells->fizz = component.fizz.now;
-		}
-	});
+}
+
+void CreatureFizzSystem::CreatureTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* component = registry.Valid(entity) ? registry.TryGet<CreatureFizz>(entity) : nullptr;
+	if (component == nullptr)
+	{
+		return;
+	}
+	component->fizz = creature_fizz::Step(component->fizz, k_TurnMilliseconds);
 	// Fizzed right out for good, it leaves the game the way any deleted creature does
-	for (const auto entity : gone)
+	if (creature_fizz::Gone(component->fizz))
 	{
 		if (!ecs::creature_removal::RemoveFromGame(entity))
 		{
 			registry.Destroy(entity);
 		}
-	}
-	if (!gone.empty())
-	{
 		registry.SetDirty();
+		return;
+	}
+	if (creature_fizz::Settled(component->fizz))
+	{
+		Show(registry, entity, 0.0f);
+		registry.Remove<CreatureFizz>(entity);
+		return;
+	}
+	if (auto* spells = registry.TryGet<CreatureSpells>(entity))
+	{
+		spells->fizz = component->fizz.now;
 	}
 }
 

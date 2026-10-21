@@ -49,6 +49,12 @@ public:
 	void ProcessTurn() override;
 	void PlanTurn() override;
 	void LearnTurn() override;
+	void BeginTurn() override;
+	void MindTurn(entt::entity creature) override;
+	void DesiresTurn(entt::entity creature) override;
+	void PlanCreatureTurn(entt::entity creature) override;
+	void AgendaTurn(entt::entity creature) override;
+	void LearnCreatureTurn(entt::entity creature) override;
 
 	void LoadMind(entt::entity creature, std::shared_ptr<const creaturemind::MindFileData> mind) override;
 	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity creature) const override;
@@ -187,7 +193,8 @@ private:
 	void TakeOrder(entt::entity partner, entt::entity asker, const creature_mind::Step& ordered);
 	static void SetDemobilised(entt::entity partner, bool demobilised);
 	void EndJointAction(entt::entity creature);
-	void KeepJointActions();
+	/// The joint action of the creature stops when it or its partner stops what it does for it
+	void KeepJointAction(entt::entity creature);
 	/// As a creature sees another creature again, the attention that the other creature gives it goes up when the other
 	/// creature does something with it in mind
 	void NoteAttention(entt::entity creature, components::CreatureMindState& mind, entt::entity other);
@@ -537,6 +544,10 @@ private:
 	std::optional<entt::entity> _orderedPlanFor;
 	/// The game's tables for the minds, taken once the game's data is loaded
 	std::optional<creature_mind_tables::Tables> _tables;
+	/// The creatures whose minds continue to think after the first part of their own turns, until the second part
+	std::vector<entt::entity> _thinking;
+	/// The creatures whose minds do the step of their agendas after the second part, until the last part
+	std::vector<entt::entity> _acting;
 };
 
 } // namespace openblack::ecs::systems

@@ -58,6 +58,8 @@ public:
 	/// Once a game turn: the creatures loaded sparkle into sight. A creature of the player's own is written to the
 	/// player's creature files each time it has lived 600 more turns, when the land keeps creatures
 	virtual void ProcessTurn() = 0;
+	/// In the creature's own turn, after its body lived the turn: the same for this creature
+	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Whether the land played now keeps the player's creature in the player's files as it lives and when the game ends.
 	/// The testbed doesn't, so that its creatures never replace the player's own
 	virtual void SetLandKeepsCreatures(bool keeps) = 0;

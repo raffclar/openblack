@@ -217,10 +217,61 @@ TEST(GameTurnOrder, TheCreaturesHelpPictureAndAlignmentArePartOfTheirOwnTurn)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::CreaturePlans, Step::CreatureCarryOver));
 	EXPECT_TRUE(recorder.Before(Step::CreatureCarryOver, Step::CreatureWebPage));
-	EXPECT_TRUE(recorder.Before(Step::CreatureWebPage, Step::CreatureHelp));
-	EXPECT_TRUE(recorder.Before(Step::CreatureHelp, Step::CreatureAlignment));
+	EXPECT_TRUE(recorder.Before(Step::CreatureWebPage, Step::CreatureAlignment));
 	// So the scripts and the miracles see the alignment of this turn
 	EXPECT_TRUE(recorder.Before(Step::CreatureAlignment, Step::Fires));
+}
+
+TEST(GameTurnOrder, TheLeashPullsACreatureBeforeItsBodyLivesTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreaturePens, Step::CreatureBreath));
+	EXPECT_TRUE(recorder.Before(Step::CreatureBreath, Step::Leashes));
+	EXPECT_TRUE(recorder.Before(Step::Leashes, Step::CreaturePhysiology));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePhysiology, Step::CreatureMinds));
+}
+
+TEST(GameTurnOrder, TheAdvisorTellsOfACreatureBeforeItsDesiresChange)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureMinds, Step::CreatureHelp));
+	EXPECT_TRUE(recorder.Before(Step::CreatureHelp, Step::CreatureDesires));
+}
+
+TEST(GameTurnOrder, ACreatureDecidesBeforeItDoesTheStepOfItsAgenda)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureDesires, Step::CreaturePlans));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePlans, Step::CreatureAgendas));
+	EXPECT_TRUE(recorder.Before(Step::CreatureAgendas, Step::CreatureLocomotion));
+}
+
+TEST(GameTurnOrder, TheBodyOfACreatureFollowsItsFatnessAfterItsAction)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureFights, Step::CreatureBodies));
+	EXPECT_TRUE(recorder.Before(Step::CreatureBodies, Step::CreatureFizz));
+	// Then its body lives the turn, and takes its pose at the end
+	EXPECT_TRUE(recorder.Before(Step::CreatureFizz, Step::CreatureSkin));
+	EXPECT_TRUE(recorder.Before(Step::CreatureSkin, Step::CreatureMotes));
+	EXPECT_TRUE(recorder.Before(Step::CreatureMotes, Step::CreatureBlood));
+	EXPECT_TRUE(recorder.Before(Step::CreatureBlood, Step::CreatureSway));
+	EXPECT_TRUE(recorder.Before(Step::CreatureSway, Step::CreatureFightMoves));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFightMoves, Step::CreaturePoses));
+}
+
+TEST(GameTurnOrder, AFighterGetsBackStaminaAfterItsWebPage)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureWebPage, Step::CreatureFightStamina));
+	EXPECT_TRUE(recorder.Before(Step::CreatureFightStamina, Step::CreatureAlignment));
+}
+
+TEST(GameTurnOrder, ThePartsOfTheCreaturesTurnsForNoOneCreatureComeBeforeTheLiving)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreaturesTurnStart, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::ForestGrowth, Step::CreaturesTurnStart));
 }
 
 TEST(GameTurnOrder, TheTipBubbleClosesBetweenTheToolTipsAndTheBanter)
@@ -247,6 +298,6 @@ TEST(GameTurnOrder, TheCreaturesTurnIsPartOfTheTurnOfTheLiving)
 	TurnRecorder creatures;
 	PlayCreaturesTurn([&creatures](Step step) { creatures(step); });
 	ASSERT_EQ(creatures.Steps().size(), k_CreaturesTurn.size());
-	EXPECT_EQ(creatures.Steps().front(), Step::CreaturePhysiology);
-	EXPECT_EQ(creatures.Steps().back(), Step::CreaturePoses);
+	EXPECT_EQ(creatures.Steps().front(), Step::CreaturePens);
+	EXPECT_EQ(creatures.Steps().back(), Step::CreatureAlignment);
 }

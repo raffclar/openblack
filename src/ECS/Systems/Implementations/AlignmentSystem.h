@@ -32,6 +32,7 @@ public:
 	[[nodiscard]] float GetPendingAlignment(PlayerNames player) const override;
 	void UpdatePlayersTurn(const glm::vec3& eye) override;
 	void UpdateCreaturesTurn() override;
+	void CreatureTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 	[[nodiscard]] float GetCameraAlignment() const override { return _camera; }
 	[[nodiscard]] float GetSkyAlignment() const override { return _sky; }
