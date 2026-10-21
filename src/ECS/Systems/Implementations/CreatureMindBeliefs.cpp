@@ -29,6 +29,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Animals/BirdRules.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87.h"
@@ -231,7 +232,7 @@ creature_look::Interest LookInterestOf(const ecs::Registry& registry, entt::enti
 	}
 	if (const auto* animal = registry.TryGet<const Animal>(thing))
 	{
-		return animal->type == AnimalInfo::SpellDove ? Interest::Dove : Interest::Animal;
+		return animals::birds::InterestsACreatureAsADove(animal->type) ? Interest::Dove : Interest::Animal;
 	}
 	if (registry.AllOf<Abode>(thing))
 	{

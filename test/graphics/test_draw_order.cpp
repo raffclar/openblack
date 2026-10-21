@@ -18,6 +18,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/DrawOrder.h"
+#include "Graphics/RenderPass.h"
 
 using namespace openblack::graphics;
 
@@ -109,4 +110,14 @@ TEST(DrawOrder, SortingByGroupKeyBindsEachTextureOnce)
 	// bgfx sorts a program's draws by their depth, keeping the order they came in where it is the same
 	std::ranges::stable_sort(draws, {}, [](const draw_order::Bindings& draw) { return draw_order::GroupKey(draw); });
 	EXPECT_EQ(BindingChanges(draws), 13u);
+}
+
+TEST(DrawOrder, TheLandComesAfterTheSeaAndBeforeWhatStandsOnIt)
+{
+	// The views draw in the order of their numbers. The sea draws in the sky's view, over what is under the sea's
+	// surface. The land then writes its depth over the sea, so the land hides what is under the sea behind it. The
+	// things on the land draw after the land.
+	EXPECT_LT(static_cast<uint8_t>(RenderPass::UnderSea), static_cast<uint8_t>(RenderPass::Sky));
+	EXPECT_LT(static_cast<uint8_t>(RenderPass::Sky), static_cast<uint8_t>(RenderPass::Land));
+	EXPECT_LT(static_cast<uint8_t>(RenderPass::Land), static_cast<uint8_t>(RenderPass::Main));
 }
