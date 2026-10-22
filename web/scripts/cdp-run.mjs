@@ -160,7 +160,7 @@ while (Date.now() < end || taken < Math.min(shots, 1)) {
 if (option('--eval')) {
   console.log(`eval: ${JSON.stringify(await evaluate(option('--eval')))}`);
 }
-writeFileSync(path.join(out, 'page-log.txt'), (await evaluate("document.getElementById('log')?.textContent ?? ''")) ?? '');
+writeFileSync(path.join(out, 'page-log.txt'), (await evaluate("globalThis.openblackLogText?.() ?? document.getElementById('log')?.textContent ?? ''")) ?? '');
 await send('Browser.close');
 await sleep(1000);
 if (chrome.exitCode === null) {

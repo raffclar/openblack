@@ -7851,6 +7851,9 @@ void Renderer::Frame() noexcept
 		bgfx::setViewRect(cover, 0, 0, bgfx::BackbufferRatio::Equal);
 		bgfx::touch(cover);
 	}
+#if defined(__EMSCRIPTEN__)
+	web::BeforeFrame();
+#endif
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
 #if defined(__EMSCRIPTEN__)

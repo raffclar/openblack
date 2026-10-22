@@ -105,6 +105,11 @@ option(OPENBLACK_INSPECTOR
        "Build the debug inspector into the game (debug and development builds)"
        ${OPENBLACK_INSPECTOR_DEFAULT}
 )
+# The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
+# compiler uses them only where the results stay the same.
+if (EMSCRIPTEN)
+  add_compile_options(-msimd128)
+endif ()
 
 find_program(
   CLANG_TIDY NAMES clang-tidy-7 clang-tidy-6.0 clang-tidy-5.0 clang-tidy-4.0
