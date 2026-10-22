@@ -1688,3 +1688,9 @@ openblack_setup_and_add_test(test_token_store test_token_store.cpp)
 openblack_setup_and_add_test(test_real_weather test_real_weather.cpp)
 openblack_setup_and_add_test(test_creature_upload test_creature_upload.cpp)
 target_link_libraries(test_creature_upload PRIVATE lhp)
+openblack_setup_and_add_test(test_turn_codec online/test_turn_codec.cpp)
+openblack_setup_and_add_test(
+  test_websocket_push_channel online/test_websocket_push_channel.cpp
+)
+openblack_setup_and_add_test(test_turn_stream online/test_turn_stream.cpp)
+openblack_setup_and_add_test(test_curl_websocket online/test_curl_websocket.cpp)

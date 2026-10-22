@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "Online/Backoff.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
@@ -161,7 +162,7 @@ private:
 	bool _pushUnavailable {false};
 	bool _pushWanted {false};
 	std::optional<std::chrono::system_clock::time_point> _reconnectAt;
-	std::chrono::seconds _reconnectWait {lobby_times::k_FirstReconnectWait};
+	online::ReconnectBackoff _reconnectWait {lobby_times::k_FirstReconnectWait, lobby_times::k_MostReconnectWait};
 
 	std::vector<std::pair<uint32_t, LobbyEventListener>> _listeners;
 	uint32_t _nextListener {1};

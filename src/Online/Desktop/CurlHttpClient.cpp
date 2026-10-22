@@ -12,7 +12,6 @@
 #include <cctype>
 
 #include <algorithm>
-#include <mutex>
 #include <string>
 #include <utility>
 
@@ -33,44 +32,6 @@ struct ListDeleter
 {
 	void operator()(curl_slist* list) const { curl_slist_free_all(list); }
 };
-
-/// libcurl starts its global state one time for the program
-void StartLibrary()
-{
-	static std::once_flag started;
-	std::call_once(started, []() { curl_global_init(CURL_GLOBAL_DEFAULT); });
-}
-
-HttpError ErrorOf(CURLcode code)
-{
-	switch (code)
-	{
-	case CURLE_OK:
-		return HttpError::None;
-	case CURLE_UNSUPPORTED_PROTOCOL:
-	case CURLE_URL_MALFORMAT:
-		return HttpError::AddressRefused;
-	case CURLE_OPERATION_TIMEDOUT:
-		return HttpError::Timeout;
-	case CURLE_SSL_CONNECT_ERROR:
-	case CURLE_PEER_FAILED_VERIFICATION:
-	case CURLE_SSL_CERTPROBLEM:
-	case CURLE_SSL_CIPHER:
-	case CURLE_SSL_CACERT_BADFILE:
-	case CURLE_SSL_ENGINE_NOTFOUND:
-	case CURLE_SSL_ENGINE_SETFAILED:
-	case CURLE_SSL_ENGINE_INITFAILED:
-	case CURLE_SSL_SHUTDOWN_FAILED:
-	case CURLE_SSL_CRL_BADFILE:
-	case CURLE_SSL_ISSUER_ERROR:
-	case CURLE_SSL_PINNEDPUBKEYNOTMATCH:
-	case CURLE_SSL_INVALIDCERTSTATUS:
-	case CURLE_USE_SSL_FAILED:
-		return HttpError::Tls;
-	default:
-		return HttpError::Network;
-	}
-}
 
 const char* MethodName(HttpMethod method)
 {
@@ -175,7 +136,7 @@ struct CurlHttpClient::Transfer
 
 CurlHttpClient::CurlHttpClient()
 {
-	StartLibrary();
+	tls_settings::StartLibrary();
 	_multi = std::make_unique<Multi>();
 }
 
@@ -220,16 +181,8 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_PROTOCOLS_STR, "https");
 	curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 	curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
-	// TLS 1.2 at the oldest, AEAD cipher suites only, and the certificate and the host name are checked each time
-	curl_easy_setopt(easy, CURLOPT_SSLVERSION, static_cast<long>(CURL_SSLVERSION_TLSv1_2 | CURL_SSLVERSION_MAX_DEFAULT));
-	curl_easy_setopt(easy, CURLOPT_SSL_CIPHER_LIST, std::string(tls_settings::k_Tls12Ciphers).c_str());
-	curl_easy_setopt(easy, CURLOPT_TLS13_CIPHERS, std::string(tls_settings::k_Tls13Ciphers).c_str());
-	curl_easy_setopt(easy, CURLOPT_SSL_VERIFYPEER, 1L);
-	curl_easy_setopt(easy, CURLOPT_SSL_VERIFYHOST, 2L);
-#if defined(_WIN32)
-	// The certificates of the authorities come from the certificate store of Windows
-	curl_easy_setopt(easy, CURLOPT_SSL_OPTIONS, static_cast<long>(CURLSSLOPT_NATIVE_CA));
-#endif
+	// The TLS rules: TLS 1.2 at the oldest, AEAD cipher suites only, and a check of the certificate and the host name
+	tls_settings::Apply(easy);
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
@@ -325,7 +278,7 @@ void CurlHttpClient::Poll()
 			if (code != CURLE_OK)
 			{
 				auto& response = *transfer->finished;
-				response.error = transfer->tooLarge ? HttpError::Network : ErrorOf(code);
+				response.error = transfer->tooLarge ? HttpError::Network : tls_settings::ErrorOf(code);
 				response.status = 0;
 				if (const auto logger = spdlog::get("game"))
 				{
