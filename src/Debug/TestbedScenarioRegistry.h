@@ -939,6 +939,9 @@ struct Command
 		/// DANCE_CREATE does. Each other villager of the scenario's objects joins the dance. With ctrl, the hand was
 		/// near the dance for long enough, so the dance wants its camera. Needs no creature.
 		MakeDance,
+		/// The multiplayer front end opens over the temple's future room with the demonstration lobby, and goes to a
+		/// box or a page (value, by testbed_multiplayer::Stage). Needs no creature.
+		OpenMultiplayerBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1179,6 +1182,8 @@ struct Scenario
 
 /// A town centre's totem
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
+/// The boxes of the multiplayer front end over the temple's future room, with the demonstration lobby
+void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up

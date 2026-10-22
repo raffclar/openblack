@@ -29,11 +29,20 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const RefreshRequest& request);
 [[nodiscard]] std::string ToJson(const ClanCreature& creature);
 [[nodiscard]] std::string ToJson(const ClanCreatureReply& reply);
+[[nodiscard]] std::string ToJson(const ChatLineRequest& request);
+[[nodiscard]] std::string ToJson(const UseClanRequest& request);
 /// The frame that asks for the events of a channel, or stops them
 [[nodiscard]] std::string SubscribeFrame(bool subscribe, std::string_view channel);
 /// The frame that a client sends after it opens the channel again: the epoch and the number of the last event that it
 /// got, and the channels that it wants
 [[nodiscard]] std::string ResumeFrame(std::string_view epoch, int64_t seq, std::span<const std::string> channels);
+
+/// The first text frame on the game socket of a server: {"type": "room.join", ...}. On the internet it holds the
+/// lobby's ticket and the game's password, when the game needs one. On the local network there is no ticket, and it
+/// holds the name of the player's profile. The game server owns the protocol of its room; these frames follow its plan.
+[[nodiscard]] std::string RoomJoinFrame(std::string_view ticket, std::string_view gamePassword, std::string_view lanName);
+/// The text frame of the Ready box: {"type": "room.ready", "ready": true}
+[[nodiscard]] std::string RoomReadyFrame(bool ready);
 
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
@@ -49,6 +58,14 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<ClanCreatureReply> ParseClanCreatureReply(std::string_view text);
 [[nodiscard]] std::optional<Problem> ParseProblem(std::string_view text);
 [[nodiscard]] std::optional<PushEvent> ParsePushEvent(std::string_view text);
+[[nodiscard]] std::optional<AccountNameCheck> ParseAccountNameCheck(std::string_view text);
+[[nodiscard]] std::optional<UsedClan> ParseUsedClan(std::string_view text);
+/// The data of "chat.line"
+[[nodiscard]] std::optional<ChatLine> ParseChatLine(std::string_view data);
+/// The data of "room.changed"
+[[nodiscard]] std::optional<RoomChange> ParseRoomChange(std::string_view data);
+/// The data of "room.clan_chosen"
+[[nodiscard]] std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data);
 /// The data of "servers.changed" or of "servers.removed"
 [[nodiscard]] std::optional<ServerChange> ParseServerChange(std::string_view type, std::string_view data);
 [[nodiscard]] std::optional<PushPosition> ParsePushPosition(std::string_view data);

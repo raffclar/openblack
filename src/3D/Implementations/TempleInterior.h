@@ -112,6 +112,9 @@ public:
 	[[nodiscard]] bool TakeGameEnded() override { return _lock.TakeEnded(); }
 	void Deactivate() override;
 	void CloseForNewLand() override;
+	void EnterMultiplayerFrontEnd() override;
+	void LeaveMultiplayerFrontEnd() override;
+	[[nodiscard]] bool IsMultiplayerFrontEnd() const override { return _multiplayerFrontEnd; }
 	void ShowHelpAfterLoad() override { BringBackDialogue(); }
 	/// A save keeps the dialogue that the temple keeps for the world while the player is inside: its owner, its last six
 	/// texts and the click waits of the newest
@@ -251,6 +254,8 @@ private:
 	std::vector<OrientedTextVertex> _text;
 	/// Whether the options room has opened the game's options
 	bool _optionsShown {false};
+	/// The multiplayer front end is up over the future room
+	bool _multiplayerFrontEnd {false};
 	/// The submeshes of each room that are its controls, found as the rooms are set up
 	std::unordered_map<TempleRoom, std::vector<uint32_t>> _controlSubMeshes;
 	/// The future room's words in this visit, which fade in

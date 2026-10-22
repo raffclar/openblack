@@ -70,6 +70,7 @@ class HandAnimation;
 namespace gui
 {
 class GameInterface;
+class MultiplayerFrontEnd;
 class ToolTips;
 class LoadingScreen;
 } // namespace gui
@@ -84,6 +85,10 @@ class HandGrabSystemInterface;
 namespace help::profile
 {
 struct WorldCameraView;
+}
+namespace online
+{
+class LanDiscoveryInterface;
 }
 
 enum class LoggingSubsystem : uint8_t
@@ -402,6 +407,12 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// The multiplayer front end with the game's own services: the lobby client, the game socket and the search of
+	/// the local network
+	[[nodiscard]] std::unique_ptr<gui::MultiplayerFrontEnd> MakeMultiplayerFrontEnd();
+	/// Join Online Game: the player goes into the temple's future room, and the front end's first box shows over
+	/// it. Returns false when the game has no interface or no temple.
+	bool OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd);
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -694,6 +705,8 @@ private:
 	void HandleInterfaceAction();
 	/// The main menu's tattoo editor: its button shows while it may, and the creature it shows is posed each frame
 	void UpdateTattooMenu(float milliseconds);
+	/// The multiplayer front end ends when the player leaves its first box, or when the temple closes
+	void UpdateMultiplayerFrontEnd();
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.
@@ -801,6 +814,8 @@ private:
 	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
+	/// The search of the local network for game servers, for the multiplayer front end
+	std::unique_ptr<online::LanDiscoveryInterface> _lanDiscovery;
 	std::filesystem::path _landscapePath;
 	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open

@@ -813,7 +813,7 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 		menu.SetInsideTemple(_active);
 		if (_cameraModel != nullptr)
 		{
-			_cameraModel->SetDialogOpen(menu.IsOpen());
+			_cameraModel->SetDialogOpen(menu.IsOpen() || _multiplayerFrontEnd);
 		}
 		// The options room, while no dialog is up: once the camera has come into the room it opens the game's
 		// options, and once they are closed it goes back to the main room
@@ -849,7 +849,8 @@ void TempleInterior::UpdateOptionsAndFutureRooms(float milliseconds)
 	}
 	else
 	{
-		const bool dialogOpen = _interface != nullptr && _interface->GetMenu().IsOpen();
+		// The boxes of the multiplayer front end are always up, so the room never shows its words under them
+		const bool dialogOpen = (_interface != nullptr && _interface->GetMenu().IsOpen()) || _multiplayerFrontEnd;
 		const auto alpha = temple::future_room::Step(_futureWords, _cameraModel->IsInControl(), dialogOpen, milliseconds);
 		if (alpha.has_value() && _interface != nullptr)
 		{
@@ -1393,6 +1394,11 @@ bool TempleInterior::IsRoomDrawn(TempleRoom room) const
 
 bool TempleInterior::IsRoomAvailable(TempleRoom room) const
 {
+	// The multiplayer front end opens the future room, whether the story opened it or not
+	if (_multiplayerFrontEnd && room == TempleRoom::Multi)
+	{
+		return true;
+	}
 	const bool hasCreature =
 	    Locator::creatureModeSystem::has_value() && Locator::creatureModeSystem::value().PlayersCreature().has_value();
 	return temple::IsRoomAvailable(room, {.roomsOpened = _roomsOpened, .hasCreature = hasCreature, .keptIn = _lock.GetRoom()});
@@ -1557,6 +1563,11 @@ std::optional<TempleCursorHit> TempleInterior::GetCursorHit() const
 
 void TempleInterior::Escape()
 {
+	// The multiplayer front end keeps the player in the future room until its boxes end it
+	if (_multiplayerFrontEnd)
+	{
+		return;
+	}
 	if (_currentRoom != Indoors::Main)
 	{
 		GoToRoom(Indoors::Main);
@@ -1919,6 +1930,34 @@ void TempleInterior::Deactivate()
 		camera.SetFocus(_leaveTo->second);
 	}
 	_leaveTo.reset();
+}
+
+void TempleInterior::EnterMultiplayerFrontEnd()
+{
+	_multiplayerFrontEnd = true;
+	if (!_active)
+	{
+		Activate(TempleRoom::Multi);
+	}
+	else if (_currentRoom != TempleRoom::Multi)
+	{
+		FadeIntoRoom();
+	}
+	// The camera starts in the room, with no walk through the temple
+	if (_cameraModel != nullptr)
+	{
+		_cameraModel->GoToRoom(TempleRoom::Multi);
+	}
+}
+
+void TempleInterior::LeaveMultiplayerFrontEnd()
+{
+	if (!_multiplayerFrontEnd)
+	{
+		return;
+	}
+	_multiplayerFrontEnd = false;
+	Deactivate();
 }
 
 void TempleInterior::CloseForNewLand()

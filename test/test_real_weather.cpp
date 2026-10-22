@@ -119,6 +119,9 @@ public:
 	void WatchServers(bool) override {}
 	void WatchChannel(std::string, bool) override {}
 	void RequestJoinTicket(std::string, LobbyCallback<lobby_api::JoinTicket>) override {}
+	void SendChatLine(std::string, std::string, LobbyCallback<LobbyDone>) override {}
+	void UseClan(std::string, std::optional<int64_t>, LobbyCallback<lobby_api::UsedClan>) override {}
+	void CheckAccountName(std::string, LobbyCallback<lobby_api::AccountNameCheck>) override {}
 	void GetMyClans(LobbyCallback<lobby_api::ClanList>) override {}
 	void GetClan(int64_t, LobbyCallback<lobby_api::ClanDetails>) override {}
 	void GetClanLogo(int64_t, LobbyCallback<std::vector<uint8_t>>) override {}

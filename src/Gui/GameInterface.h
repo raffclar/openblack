@@ -34,6 +34,7 @@
 #include "Help/SingAlong.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
+#include "MultiplayerBoxes.h"
 #include "NewPlayerBox.h"
 #include "SaveGameBoxes.h"
 #include "ScreenFade.h"
@@ -138,8 +139,14 @@ public:
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
+	/// The boxes of the multiplayer front end over the temple's future room
+	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
+	[[nodiscard]] const MultiplayerBoxes& GetMultiplayerBoxes() const noexcept { return *_multiplayerBoxes; }
+	/// The multiplayer front end opens on its first box, and takes the mouse and the keyboard while it is up
+	void OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd);
+	bool ProcessMultiplayerEvent(const SDL_Event& event);
 
 	/// Asks a new player for their name, over the front end's swirling backdrop; Cancel shows only when someone has a
 	/// profile. checkName says whether a name may be taken
@@ -421,6 +428,7 @@ private:
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
+	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates

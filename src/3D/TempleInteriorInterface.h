@@ -247,6 +247,13 @@ public:
 	/// Closes the temple at once as its land goes, before the land's entities do: everything its rooms made goes with
 	/// it, and the island's camera and drawing come back, without the walk out to the island
 	virtual void CloseForNewLand() = 0;
+	/// The multiplayer front end starts: the player goes straight into the future room, open or not, with the camera
+	/// past the room's path. While the front end is up, the room shows no words and turns slowly by itself behind the
+	/// boxes.
+	virtual void EnterMultiplayerFrontEnd() = 0;
+	/// The multiplayer front end ends: the player leaves the temple at once
+	virtual void LeaveMultiplayerFrontEnd() = 0;
+	[[nodiscard]] virtual bool IsMultiplayerFrontEnd() const = 0;
 	/// After a load of a saved game: the temple gives back the dialogue that the save kept for it, if nobody has the
 	/// dialogue now. Then, kept or not, the box shows its texts again and the newest starts its reading time again.
 	virtual void ShowHelpAfterLoad() = 0;

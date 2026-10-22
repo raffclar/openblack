@@ -139,6 +139,13 @@ public:
 	virtual void WatchChannel(std::string channel, bool watch) = 0;
 	/// A ticket to join a game server. The address of the game socket must be a WSS address.
 	virtual void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) = 0;
+	/// Sends a chat line of 1 to 254 characters to a channel: "lobby", or "server-<id>" for the room of a server. The
+	/// line comes back to each player in the channel as a "chat.line" event.
+	virtual void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback) = 0;
+	/// "Use This Clan": the player plays for one of their clans in the room of a server, or for no clan
+	virtual void UseClan(std::string serverId, std::optional<int64_t> clanId, LobbyCallback<lobby_api::UsedClan> callback) = 0;
+	/// Whether a name can have a new account. This call needs no session.
+	virtual void CheckAccountName(std::string name, LobbyCallback<lobby_api::AccountNameCheck> callback) = 0;
 
 	virtual void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) = 0;
 	virtual void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) = 0;

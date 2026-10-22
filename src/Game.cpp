@@ -283,6 +283,8 @@
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
 #include "Gui/LoadingScreen.h"
+#include "Gui/MultiplayerFrontEnd.h"
+#include "Gui/OnlineMapTexts.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/WorldToolTips.h"
@@ -305,6 +307,8 @@
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/LanDiscoveryInterface.h"
+#include "Online/OpenPage.h"
 #include "Online/WebSocketInterface.h"
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
@@ -3303,6 +3307,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
+		UpdateMultiplayerFrontEnd();
 		if (const auto end = std::exchange(_gameEndAsked, std::nullopt); end.has_value())
 		{
 			EndGame(*end);
@@ -4397,6 +4402,12 @@ bool Game::Initialize() noexcept
 			}
 			// The tattoo editor's dialog takes the keyboard and mouse while it is open, Escape and Enter included
 			if (_interface && _interface->GetTattooEditor().IsOpen() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
+			// The multiplayer front end's boxes take the keyboard and the mouse while they are up, Escape too
+			if (_interface && _interface->GetMultiplayerBoxes().IsActive() && Locator::windowing::has_value() &&
 			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
 			{
 				return;
@@ -6668,13 +6679,104 @@ void Game::HandleInterfaceAction()
 			Locator::tattooMenuSystem::value().Open();
 		}
 		break;
-	case Action::StartSkirmish:
 	case Action::JoinOnline:
+		if (!OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+		}
+		break;
+	case Action::StartSkirmish:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
 	case Action::Continue:
 	case Action::None:
 		break;
+	}
+}
+
+std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
+{
+	if (_lanDiscovery == nullptr)
+	{
+		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
+	}
+	const auto start = std::chrono::steady_clock::now();
+	gui::MultiplayerFrontEnd::Services services {
+	    .lobby = Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr,
+	    .sockets = Locator::webSocketClient::has_value() ? &Locator::webSocketClient::value() : nullptr,
+	    .lan = _lanDiscovery.get(),
+	    .openPage =
+	        [](std::string_view url) {
+		        online::OpenPage(url);
+#if !defined(__EMSCRIPTEN__)
+		        // The game makes its window small, so that the browser's page is in front
+		        if (Locator::windowing::has_value())
+		        {
+			        SDL_MinimizeWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()));
+		        }
+#endif
+	        },
+	    .clock =
+	        [start] {
+		        const auto since = std::chrono::steady_clock::now() - start;
+		        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(since).count());
+	        },
+	    .owner = {},
+	    .poll = {},
+	};
+	gui::MultiplayerFrontEnd::Settings settings;
+	// The registration page is on the lobby's site: Register on the site, then log in in the game
+	const auto origin = Locator::config::value().lobbyOrigin.value_or(std::string());
+#if defined(__EMSCRIPTEN__)
+	settings.browser = true;
+	settings.registerPage = "/register/";
+#else
+	settings.registerPage = origin.empty() ? std::string() : origin + "/register/";
+#endif
+	// The internet connection's name in the list is the lobby's host
+	const auto host = origin.find("://");
+	settings.internetName = gui::ToUtf16(host == std::string::npos ? origin : origin.substr(host + 3));
+	if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
+	{
+		settings.profileName = gui::ToUtf16(profile->name);
+	}
+	settings.gameVersion = std::string(gui::multiplayer::k_GameVersion);
+	auto maps = gui::ReadOnlineMapTexts();
+	settings.localMaps = std::move(maps.localMaps);
+	settings.conditionTemplate = std::move(maps.conditionTemplate);
+	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
+}
+
+bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
+{
+	if (!_interface || !Locator::temple::has_value() || frontEnd == nullptr)
+	{
+		return false;
+	}
+	Locator::temple::value().EnterMultiplayerFrontEnd();
+	_interface->OpenMultiplayer(std::move(frontEnd));
+	return true;
+}
+
+void Game::UpdateMultiplayerFrontEnd()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	auto& boxes = _interface->GetMultiplayerBoxes();
+	if (!boxes.IsActive())
+	{
+		return;
+	}
+	const bool templeGone = !Locator::temple::has_value() || !Locator::temple::value().IsMultiplayerFrontEnd();
+	if (boxes.TakeLeft() || templeGone)
+	{
+		boxes.Close();
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().LeaveMultiplayerFrontEnd();
+		}
 	}
 }
 

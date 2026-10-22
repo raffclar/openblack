@@ -10448,6 +10448,7 @@ std::vector<Scenario> Build()
 	AddExplorersBoat(all);
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
+	AddMultiplayerFrontEndScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
@@ -10603,7 +10604,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
 	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
 	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || IsPointerCommand(kind);
+	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10631,7 +10633,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 174> k_Names {
+	constexpr std::array<std::string_view, 175> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10806,6 +10808,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "force an action",
 	    "remove the teleport stone",
 	    "make a dance",
+	    "open a multiplayer box",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
