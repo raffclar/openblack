@@ -866,7 +866,18 @@ void Runner::Start(const Scenario& scenario)
 	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it
 	if (auto* game = Game::Instance(); game != nullptr)
 	{
-		game->LoadTestbed();
+		if (scenario.environment.land == Land::GodsRingMap)
+		{
+			if (!game->LoadGodsRingMap())
+			{
+				_running = false;
+				return;
+			}
+		}
+		else
+		{
+			game->LoadTestbed();
+		}
 	}
 	if (!Locator::terrainSystem::has_value())
 	{
@@ -879,6 +890,7 @@ void Runner::Start(const Scenario& scenario)
 	SetUpEnvironment(scenario.environment);
 	// The testbed's lake has a water point at the middle of its south edge, as a land's script marks its places to
 	// drink. The creature drinks there.
+	if (scenario.environment.land == Land::Testbed)
 	{
 		const glm::vec2 drinkAt {flat_land::k_LakeCentre.x,
 		                         flat_land::k_LakeCentre.y - flat_land::k_LakeHalfExtent.y + (flat_land::k_CellSize * 0.5f)};
