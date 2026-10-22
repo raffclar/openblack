@@ -168,8 +168,9 @@ TEST(ScreenFit, TheFrontEndShrinksAsTheGameShrinksItOnSmallScreens)
 
 namespace
 {
-// The screens the front end is checked on: the default one, smaller windows, wide, ultrawide and super wide ones
-constexpr std::array<std::pair<int32_t, int32_t>, 11> k_Screens {{
+// The screens the front end is checked on: the default one, smaller windows, wide, ultrawide and super wide ones. The
+// last three are the real pixels of monitors that usually have a scale above 100%: a 4K monitor and two laptops
+constexpr std::array<std::pair<int32_t, int32_t>, 14> k_Screens {{
     {800, 600},
     {640, 480},
     {400, 300},
@@ -181,6 +182,9 @@ constexpr std::array<std::pair<int32_t, int32_t>, 11> k_Screens {{
     {3440, 1440},
     {5120, 1440},
     {1280, 1024},
+    {3840, 2160},
+    {2880, 1800},
+    {2256, 1504},
 }};
 
 // Boxes of the dialog space, from min up to but not including max: a button, a list's row, a thin line and a box at

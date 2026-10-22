@@ -1697,3 +1697,6 @@ openblack_setup_and_add_test(test_curl_websocket online/test_curl_websocket.cpp)
 openblack_setup_and_add_test(
   test_multiplayer_front_end test_multiplayer_front_end.cpp
 )
+openblack_setup_and_add_test(
+  test_display_scaling windowing/test_display_scaling.cpp
+)
