@@ -74,6 +74,11 @@ constexpr std::string_view k_Cave = "cave";
 constexpr std::string_view k_SkipBox = "skip_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
+constexpr std::string_view k_Multiplayer = "multiplayer";
+
+/// The names of the multiplayer front end's boxes, for gui.windows
+constexpr std::array<std::string_view, 6> k_MultiplayerBoxes = {"choose_connection", "find_games", "login",
+                                                                "game_list",         "room",       "conditions"};
 
 std::string Lower(std::string_view text)
 {
@@ -475,6 +480,21 @@ std::vector<WindowInfo> GameGui::Windows() const
 			player.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(player));
+
+		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
+		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
+		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
+		if (const auto* frontEnd = boxes.GetFrontEnd(); frontEnd != nullptr)
+		{
+			multiplayer.page = boxes.GetMessageText().empty()
+			                       ? std::string(k_MultiplayerBoxes.at(static_cast<size_t>(frontEnd->GetBox())))
+			                       : "message: " + gui::ToUtf8(boxes.GetMessageText());
+		}
+		for (const auto& control : DialogControls(boxes.GetNamedControls()))
+		{
+			multiplayer.buttons.push_back(control.name);
+		}
+		windows.push_back(std::move(multiplayer));
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -677,6 +697,21 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		}
 		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
 		return Send(ClickAt(interface.FromMusicControls(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
+	if (lower == k_Multiplayer)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetMultiplayerBoxes().IsActive())
+		{
+			return "the multiplayer front end isn't open: Join Online Game opens it";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetMultiplayerBoxes().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the multiplayer front end: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}
 	if (lower == k_Menu || lower == k_SkipBox || lower == k_TattooEditor)
 	{

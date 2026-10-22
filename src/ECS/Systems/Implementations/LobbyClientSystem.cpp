@@ -637,6 +637,101 @@ void LobbyClientSystem::RequestJoinTicket(std::string serverId, LobbyCallback<lo
 	});
 }
 
+void LobbyClientSystem::SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// The lobby refuses an empty line and a line of more than 254 characters
+	if (text.empty() || text.size() > lobby_api::k_MostChatCharacters)
+	{
+		Fail(callback, LobbyError {.kind = LobbyErrorKind::Refused, .status = 0});
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Post,
+	    .path = fmt::format("/chat/channels/{}/messages", channel),
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(lobby_api::ChatLineRequest {.text = std::move(text)})),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        Succeed(callback, LobbyDone {});
+	        },
+	});
+}
+
+void LobbyClientSystem::UseClan(std::string serverId, std::optional<int64_t> clanId,
+                                LobbyCallback<lobby_api::UsedClan> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	Authorized(Call {
+	    .method = HttpMethod::Put,
+	    .path = fmt::format("/servers/{}/clan", serverId),
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(lobby_api::UseClanRequest {.clan = clanId})),
+	    .done =
+	        [callback = std::move(callback)](HttpResponse&& response) {
+		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		        {
+			        Fail(callback, std::move(error));
+			        return;
+		        }
+		        auto used = lobby_api::ParseUsedClan(TextOf(response));
+		        if (!used.has_value())
+		        {
+			        Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			        return;
+		        }
+		        Succeed(callback, std::move(*used));
+	        },
+	});
+}
+
+void LobbyClientSystem::CheckAccountName(std::string name, LobbyCallback<lobby_api::AccountNameCheck> callback)
+{
+	if (!_config.has_value())
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
+		return;
+	}
+	// Only letters and digits can be in a name, so the name needs no escape in the path
+	if (!lobby_api::IsValidAccountName(name))
+	{
+		Fail(callback, ErrorOfKind(LobbyErrorKind::InvalidName));
+		return;
+	}
+	online::HttpRequest request {
+	    .method = HttpMethod::Get,
+	    .url = Address(fmt::format("/account-names/{}", name)),
+	    .headers = {{"Accept", std::string(k_JsonType)}},
+	};
+	_http.Send(std::move(request), [callback = std::move(callback)](HttpResponse&& response) {
+		if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)
+		{
+			Fail(callback, std::move(error));
+			return;
+		}
+		auto check = lobby_api::ParseAccountNameCheck(TextOf(response));
+		if (!check.has_value())
+		{
+			Fail(callback, LobbyError {.kind = LobbyErrorKind::BadAnswer, .status = response.status});
+			return;
+		}
+		Succeed(callback, std::move(*check));
+	});
+}
+
 void LobbyClientSystem::GetMyClans(LobbyCallback<lobby_api::ClanList> callback)
 {
 	CallFor<lobby_api::ClanList>(HttpMethod::Get, "/me/clans", std::move(callback),

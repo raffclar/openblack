@@ -380,6 +380,29 @@ std::string ResumeFrame(std::string_view epoch, int64_t seq, std::span<const std
 	return Dump(Json {{"type", "resume"}, {"epoch", std::string(epoch)}, {"seq", seq}, {"channels", std::move(list)}});
 }
 
+std::string RoomJoinFrame(std::string_view ticket, std::string_view gamePassword, std::string_view lanName)
+{
+	auto object = Json {{"type", "room.join"}};
+	if (!ticket.empty())
+	{
+		object["ticket"] = std::string(ticket);
+	}
+	if (!gamePassword.empty())
+	{
+		object["game_password"] = std::string(gamePassword);
+	}
+	if (!lanName.empty())
+	{
+		object["name"] = std::string(lanName);
+	}
+	return Dump(object);
+}
+
+std::string RoomReadyFrame(bool ready)
+{
+	return Dump(Json {{"type", "room.ready"}, {"ready", ready}});
+}
+
 std::optional<Session> ParseSession(std::string_view text)
 {
 	return ParseWith<Session>(text, [](const Json& object, Session& out) {
@@ -439,10 +462,126 @@ std::optional<ClanList> ParseClanList(std::string_view text)
 std::optional<ClanDetails> ParseClanDetails(std::string_view text)
 {
 	return ParseWith<ClanDetails>(text, [](const Json& object, ClanDetails& out) {
-		return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) &&
-		       ReadString(object, "description", out.description, false) && ReadString(object, "leader", out.leader, false) &&
-		       ReadString(object, "url", out.url, false) && ReadNumber(object, "points", out.points, false) &&
-		       ReadInteger(object, "members", out.members, false);
+		if (!ReadInteger(object, "id", out.id) || !ReadString(object, "name", out.name) ||
+		    !ReadNumber(object, "points", out.points, false))
+		{
+			return false;
+		}
+		// The contract of the lobby names the description "motto" and the web site "website". The leader is an account
+		// or null, and the members are a list. The older plan gave these as plain values.
+		if (!ReadString(object, "motto", out.description, false) ||
+		    !ReadString(object, "description", out.description, false) || !ReadString(object, "website", out.url, false) ||
+		    !ReadString(object, "url", out.url, false))
+		{
+			return false;
+		}
+		if (const auto* leader = Member(object, "leader"); leader != nullptr && leader->is_object())
+		{
+			AccountRef account;
+			if (!ReadAccountRef(*leader, account))
+			{
+				return false;
+			}
+			out.leader = std::move(account.name);
+		}
+		else if (!ReadString(object, "leader", out.leader, false))
+		{
+			return false;
+		}
+		if (const auto* members = Member(object, "members"); members != nullptr && members->is_array())
+		{
+			out.members = static_cast<int32_t>(members->size());
+		}
+		else if (!ReadInteger(object, "members", out.members, false))
+		{
+			return false;
+		}
+		return true;
+	});
+}
+
+std::string ToJson(const ChatLineRequest& request)
+{
+	return Dump(Json {{"text", request.text}});
+}
+
+std::string ToJson(const UseClanRequest& request)
+{
+	auto object = Json::object();
+	object["clan"] = request.clan.has_value() ? Json(*request.clan) : Json(nullptr);
+	return Dump(object);
+}
+
+std::optional<AccountNameCheck> ParseAccountNameCheck(std::string_view text)
+{
+	return ParseWith<AccountNameCheck>(text, [](const Json& object, AccountNameCheck& out) {
+		return ReadString(object, "name", out.name) && ReadBool(object, "valid", out.valid) &&
+		       ReadBool(object, "available", out.available);
+	});
+}
+
+std::optional<UsedClan> ParseUsedClan(std::string_view text)
+{
+	return ParseWith<UsedClan>(text, [](const Json& object, UsedClan& out) {
+		const auto* clan = Member(object, "clan");
+		if (clan == nullptr)
+		{
+			return false;
+		}
+		if (clan->is_null())
+		{
+			return true;
+		}
+		ClanRef ref;
+		if (!clan->is_object() || !ReadInteger(*clan, "id", ref.id) || !ReadString(*clan, "name", ref.name) ||
+		    !ReadString(*clan, "role", ref.role, false))
+		{
+			return false;
+		}
+		out.clan = std::move(ref);
+		return true;
+	});
+}
+
+std::optional<ChatLine> ParseChatLine(std::string_view data)
+{
+	return ParseWith<ChatLine>(data, [](const Json& object, ChatLine& out) {
+		const auto* from = Member(object, "from");
+		return from != nullptr && from->is_object() && ReadAccountRef(*from, out.from) &&
+		       ReadString(object, "channel", out.channel) && ReadString(object, "text", out.text);
+	});
+}
+
+std::optional<RoomChange> ParseRoomChange(std::string_view data)
+{
+	return ParseWith<RoomChange>(data, [](const Json& object, RoomChange& out) {
+		return ReadString(object, "server", out.server) && ReadString(object, "gamemode", out.gamemode, false) &&
+		       ReadArray(object, "players", out.players, ReadRoomPlayer);
+	});
+}
+
+std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data)
+{
+	return ParseWith<RoomClanChoice>(data, [](const Json& object, RoomClanChoice& out) {
+		const auto* account = Member(object, "account");
+		if (account == nullptr || !account->is_object() || !ReadAccountRef(*account, out.account) ||
+		    !ReadString(object, "server", out.server))
+		{
+			return false;
+		}
+		const auto* clan = Member(object, "clan");
+		if (clan == nullptr || clan->is_null())
+		{
+			return true;
+		}
+		ClanRef ref;
+		if (!clan->is_object() || !ReadInteger(*clan, "id", ref.id) || !ReadString(*clan, "name", ref.name) ||
+		    !ReadString(*clan, "role", ref.role, false))
+		{
+			return false;
+		}
+		out.clan = std::move(ref);
+		return true;
 	});
 }
 

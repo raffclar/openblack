@@ -70,6 +70,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
 #include "Debug/FightAutopilotInterface.h"
+#include "Debug/TestbedMultiplayer.h"
 #include "Debug/TownMiracles.h"
 #include "DebugGuiInterface.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
@@ -229,6 +230,7 @@
 #include "Game.h"
 #include "Gestures/GesturePaths.h"
 #include "Gui/GameInterface.h"
+#include "Gui/OnlineMapTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Help/HelpProfileFile.h"
 #include "Help/Spirits.h"
@@ -695,6 +697,24 @@ std::string OpenControlsBox(size_t row)
 		}
 	}
 	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
+}
+
+/// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
+std::string OpenMultiplayerBox(size_t stage)
+{
+	auto* game = Game::Instance();
+	if (game == nullptr || game->GetInterface() == nullptr || stage >= static_cast<size_t>(testbed_multiplayer::Stage::_Count))
+	{
+		return "failed: no interface";
+	}
+	auto maps = gui::ReadOnlineMapTexts();
+	auto frontEnd = testbed_multiplayer::MakeDemoFrontEnd(static_cast<testbed_multiplayer::Stage>(stage), u"Alice",
+	                                                      std::move(maps.localMaps), std::move(maps.conditionTemplate));
+	if (!game->OpenMultiplayerFrontEnd(std::move(frontEnd)))
+	{
+		return "failed: no temple";
+	}
+	return fmt::format("the front end goes to stage {}", stage);
 }
 
 /// The game's menu opens on a page. Without sound, the menu shows what a game with no sound shows.
@@ -2758,6 +2778,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::OpenMultiplayerBox)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
+		return;
+	}
 	if (command.kind == Kind::OpenMenuPage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
@@ -3435,6 +3460,7 @@ void Runner::Give(const Command& command)
 	case Kind::SetGameSpeed:
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
+	case Kind::OpenMultiplayerBox:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

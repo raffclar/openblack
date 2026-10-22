@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include <glm/common.hpp>
+
 using namespace openblack::gui;
 
 ScreenRect openblack::gui::FitInside(Aspect aspect, int32_t screenWidth, int32_t screenHeight) noexcept
@@ -64,4 +66,14 @@ LayoutSpace openblack::gui::FrontEndSpace(int32_t screenWidth, int32_t screenHei
 	return {.scale = scale,
 	        .offset = {std::floor((width - static_cast<float>(k_ReferenceWidth) * scale) * 0.5f),
 	                   std::floor((height - static_cast<float>(k_ReferenceHeight) * scale) * 0.5f)}};
+}
+
+glm::ivec2 LayoutSpace::PixelToLayout(glm::ivec2 pixel) const noexcept
+{
+	return glm::ivec2(glm::floor(ToLayout(glm::vec2(pixel) + 0.5f)));
+}
+
+glm::ivec2 LayoutSpace::LayoutToPixel(glm::ivec2 layout) const noexcept
+{
+	return glm::ivec2(glm::floor(ToScreen(glm::vec2(layout) + 0.5f)));
 }

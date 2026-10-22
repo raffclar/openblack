@@ -1,0 +1,472 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include "TestbedMultiplayer.h"
+
+#include <algorithm>
+#include <array>
+#include <deque>
+#include <functional>
+#include <map>
+#include <optional>
+#include <span>
+#include <utility>
+#include <vector>
+
+#include <LobbyApi.h>
+#include <LobbyApiJson.h>
+
+#include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "Gui/MultiplayerFrontEnd.h"
+#include "Online/LanDiscoveryInterface.h"
+#include "Online/WebSocketInterface.h"
+
+using namespace openblack;
+using namespace openblack::ecs::systems;
+using namespace openblack::testbed_multiplayer;
+using openblack::gui::MultiplayerFrontEnd;
+using openblack::gui::multiplayer::Box;
+using openblack::gui::multiplayer::LobbyKind;
+using openblack::gui::multiplayer::RoomTab;
+
+namespace
+{
+
+constexpr int64_t k_PlayerId = 7;
+
+lobby_api::RoomPlayer Player(int64_t id, std::string name, std::string role)
+{
+	return {.account = {.id = id, .name = std::move(name)}, .role = std::move(role), .clan = std::nullopt};
+}
+
+lobby_api::ServerEntry Server(std::string id, std::string name, std::string land, int32_t most)
+{
+	lobby_api::ServerEntry server;
+	server.id = std::move(id);
+	server.hostname = std::move(name);
+	server.land = std::move(land);
+	server.gamemode = "openstaging";
+	server.maxplayers = most;
+	server.gamever = std::string(gui::multiplayer::k_GameVersion);
+	server.url = "wss://demo.invalid/game/" + server.id;
+	return server;
+}
+
+std::vector<lobby_api::ServerEntry> DemoServers()
+{
+	auto bob = Server("w1", "Bob's game", "mpm_2p_1", 4);
+	bob.players = {Player(3, "Bob", "god"), Player(k_PlayerId, "Alice", "god"), Player(9, "Eve", "observer")};
+	auto fun = Server("w2", "Fun", "mpm_3p_1", 2);
+	fun.gamemode = "closedplaying";
+	fun.players = {Player(11, "Carol", "god")};
+	auto test = Server("w3", "Test", "mpm_4p_1", 4);
+	test.gamever = "older";
+	test.players = {Player(12, "Dan", "god")};
+	auto clans = Server("w4", "Clan war", "mpm_4p_1", 4);
+	clans.password = true;
+	clans.locked = true;
+	clans.players = {Player(13, "Fay", "god"), Player(14, "Gus", "god"), Player(15, "Hal", "god")};
+	auto big = Server("w5", "Thirty-two gods", "mpm_4p_1", 32);
+	for (int64_t i = 0; i < 20; ++i)
+	{
+		big.players.push_back(Player(100 + i, "God" + std::to_string(i + 1), "god"));
+	}
+	std::vector servers = {bob, fun, test, clans, big};
+	for (auto& server : servers)
+	{
+		server.numplayers =
+		    static_cast<int32_t>(std::ranges::count(server.players, std::string("god"), &lobby_api::RoomPlayer::role));
+	}
+	return servers;
+}
+
+/// A 64 by 64 grey BMP of 8 bits a pixel: a ring and a bar, in 16 greys
+std::vector<uint8_t> DemoLogo()
+{
+	constexpr int32_t k_Size = 64;
+	constexpr size_t k_Palette = 256 * 4;
+	constexpr size_t k_Offset = 54 + k_Palette;
+	std::vector<uint8_t> bmp(k_Offset + (k_Size * k_Size), 0);
+	const auto put32 = [&bmp](size_t at, uint32_t value) {
+		for (size_t i = 0; i < 4; ++i)
+		{
+			bmp[at + i] = static_cast<uint8_t>(value >> (i * 8));
+		}
+	};
+	bmp[0] = 'B';
+	bmp[1] = 'M';
+	put32(2, static_cast<uint32_t>(bmp.size()));
+	put32(10, static_cast<uint32_t>(k_Offset));
+	put32(14, 40);
+	put32(18, k_Size);
+	put32(22, k_Size);
+	bmp[26] = 1;
+	bmp[28] = 8;
+	put32(46, 256);
+	for (size_t i = 0; i < 256; ++i)
+	{
+		bmp[54 + (i * 4)] = static_cast<uint8_t>(i);
+		bmp[54 + (i * 4) + 1] = static_cast<uint8_t>(i);
+		bmp[54 + (i * 4) + 2] = static_cast<uint8_t>(i);
+	}
+	for (int32_t y = 0; y < k_Size; ++y)
+	{
+		for (int32_t x = 0; x < k_Size; ++x)
+		{
+			const auto dx = x - 32;
+			const auto dy = y - 32;
+			const auto distance = (dx * dx) + (dy * dy);
+			uint8_t grey = 0;
+			if (distance > 18 * 18 && distance < 28 * 28)
+			{
+				grey = static_cast<uint8_t>(255 - (y * 2));
+			}
+			if (x > 28 && x < 36 && y > 10 && y < 54)
+			{
+				grey = 255;
+			}
+			bmp[k_Offset + static_cast<size_t>((y * k_Size) + x)] = grey;
+		}
+	}
+	return bmp;
+}
+
+/// A lobby with no network: each call answers at once with the demonstration's data
+class DemoLobby final: public LobbyClientSystemInterface
+{
+public:
+	void Update() override {}
+	[[nodiscard]] bool IsConfigured() const override { return true; }
+	[[nodiscard]] LobbySessionState GetState() const override
+	{
+		return _account.has_value() ? LobbySessionState::LoggedIn : LobbySessionState::LoggedOut;
+	}
+	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return _account; }
+	[[nodiscard]] bool IsPushOpen() const override { return _account.has_value(); }
+	void Login(std::string name, std::string, LobbyCallback<lobby_api::AccountRef> callback) override
+	{
+		// Every name but the demonstration's has no account
+		if (name != "Alice")
+		{
+			callback({.value = std::nullopt, .error = {.kind = LobbyErrorKind::Refused, .status = 401}});
+			return;
+		}
+		_account = lobby_api::AccountRef {.id = k_PlayerId, .name = std::move(name)};
+		callback({.value = _account, .error = {}});
+	}
+	void ResumeSession(LobbyCallback<lobby_api::AccountRef>) override {}
+	void Logout(bool, LobbyCallback<LobbyDone>) override { _account.reset(); }
+	void GetMe(LobbyCallback<lobby_api::Me>) override {}
+	void GetServers(LobbyCallback<lobby_api::ServerList> callback) override
+	{
+		callback({.value = lobby_api::ServerList {.servers = _servers}, .error = {}});
+	}
+	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return _servers; }
+	void WatchServers(bool) override {}
+	void WatchChannel(std::string channel, bool watch) override
+	{
+		// The room of Bob's game has a few lines of chat when the player comes in
+		if (watch && channel == "server-w1")
+		{
+			_pending.push_back(Line(3, "Bob", "Hello, and welcome to the game."));
+			_pending.push_back(Line(9, "Eve", "I am only watching."));
+			_pending.push_back(Line(k_PlayerId, "Alice", "Hi, all!"));
+		}
+	}
+	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override
+	{
+		callback({.value = lobby_api::JoinTicket {.url = "wss://demo.invalid/game/" + serverId, .ticket = "demo", .expires = 0},
+		          .error = {}});
+	}
+	void SendChatLine(std::string, std::string text, LobbyCallback<LobbyDone> callback) override
+	{
+		// The line comes back on the room's channel, as the lobby sends it to everyone in the room
+		_pending.push_back(Line(k_PlayerId, "Alice", text));
+		callback({.value = LobbyDone {}, .error = {}});
+	}
+	void UseClan(std::string, std::optional<int64_t> clanId, LobbyCallback<lobby_api::UsedClan> callback) override
+	{
+		lobby_api::UsedClan used;
+		if (clanId.has_value())
+		{
+			used.clan = lobby_api::ClanRef {.id = *clanId, .name = ClanName(*clanId), .role = "leader"};
+		}
+		callback({.value = std::move(used), .error = {}});
+	}
+	void CheckAccountName(std::string name, LobbyCallback<lobby_api::AccountNameCheck> callback) override
+	{
+		callback(
+		    {.value = lobby_api::AccountNameCheck {.name = name, .valid = true, .available = name != "Alice"}, .error = {}});
+	}
+	void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) override
+	{
+		callback({.value = lobby_api::ClanList {.clans = {{.id = 4, .name = "The Clan", .points = 12.5},
+		                                                  {.id = 5, .name = "Other Clan", .points = 3.0}}},
+		          .error = {}});
+	}
+	void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) override
+	{
+		callback({.value = lobby_api::ClanDetails {.id = clanId,
+		                                           .name = ClanName(clanId),
+		                                           .description = "Our motto",
+		                                           .leader = "Alice",
+		                                           .url = "www.example.com",
+		                                           .points = clanId == 4 ? 12.5 : 3.0,
+		                                           .members = 3},
+		          .error = {}});
+	}
+	void GetClanLogo(int64_t, LobbyCallback<std::vector<uint8_t>> callback) override
+	{
+		callback({.value = DemoLogo(), .error = {}});
+	}
+	void GetPlayerRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetClanRanking(int32_t, LobbyCallback<lobby_api::RankingPage>) override {}
+	void GetPlayer(int64_t, LobbyCallback<lobby_api::PlayerDetails>) override {}
+	void GetWeather(lobby_api::Date, LobbyCallback<lobby_api::RealWeather>) override {}
+	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	uint32_t AddEventListener(LobbyEventListener listener) override
+	{
+		_listeners[++_nextListener] = std::move(listener);
+		return _nextListener;
+	}
+	void RemoveEventListener(uint32_t id) override { _listeners.erase(id); }
+
+	/// The events wait for the next frame, as they come on the push channel
+	void Poll()
+	{
+		auto pending = std::move(_pending);
+		_pending.clear();
+		for (const auto& event : pending)
+		{
+			for (auto& [id, listener] : _listeners)
+			{
+				listener(event);
+			}
+		}
+	}
+
+private:
+	static std::string ClanName(int64_t clanId) { return clanId == 4 ? "The Clan" : "Other Clan"; }
+
+	lobby_api::PushEvent Line(int64_t id, const std::string& name, const std::string& text)
+	{
+		// The text goes through the JSON writer, which escapes it: {"text":"..."} loses its first brace here
+		const auto textMember = lobby_api::ToJson(lobby_api::ChatLineRequest {.text = text}).substr(1);
+		const std::string data =
+		    R"({"channel":"server-w1","from":{"id":)" + std::to_string(id) + R"(,"name":")" + name + R"("},)" + textMember;
+		return {.seq = ++_seq, .type = std::string(lobby_api::events::k_ChatLine), .time = {}, .data = data};
+	}
+
+	std::optional<lobby_api::AccountRef> _account;
+	std::vector<lobby_api::ServerEntry> _servers = DemoServers();
+	std::map<uint32_t, LobbyEventListener> _listeners;
+	uint32_t _nextListener {0};
+	std::vector<lobby_api::PushEvent> _pending;
+	int64_t _seq {0};
+};
+
+/// A game socket with no network: each connection opens at the next frame
+class DemoSockets final: public online::WebSocketClientInterface
+{
+public:
+	online::WebSocketId Connect(online::WebSocketRequest, online::WebSocketHandlers handlers) override
+	{
+		const auto id = ++_nextId;
+		_sockets[id] = {.handlers = std::move(handlers), .open = false};
+		_opening.push_back(id);
+		return id;
+	}
+	bool SendText(online::WebSocketId id, std::string_view) override { return IsOpen(id); }
+	bool SendBinary(online::WebSocketId id, std::span<const uint8_t>) override { return IsOpen(id); }
+	void Close(online::WebSocketId id, uint16_t) override { _sockets.erase(id); }
+	void Poll() override
+	{
+		auto opening = std::move(_opening);
+		_opening.clear();
+		for (const auto id : opening)
+		{
+			const auto found = _sockets.find(id);
+			if (found == _sockets.end())
+			{
+				continue;
+			}
+			found->second.open = true;
+			if (found->second.handlers.opened)
+			{
+				found->second.handlers.opened();
+			}
+		}
+	}
+	[[nodiscard]] online::WebSocketState State(online::WebSocketId id) const override
+	{
+		const auto found = _sockets.find(id);
+		if (found == _sockets.end())
+		{
+			return online::WebSocketState::None;
+		}
+		return found->second.open ? online::WebSocketState::Open : online::WebSocketState::Connecting;
+	}
+	[[nodiscard]] size_t Count() const override { return _sockets.size(); }
+
+private:
+	struct Socket
+	{
+		online::WebSocketHandlers handlers;
+		bool open {false};
+	};
+	[[nodiscard]] bool IsOpen(online::WebSocketId id) const
+	{
+		const auto found = _sockets.find(id);
+		return found != _sockets.end() && found->second.open;
+	}
+
+	std::map<online::WebSocketId, Socket> _sockets;
+	std::vector<online::WebSocketId> _opening;
+	online::WebSocketId _nextId {0};
+};
+
+/// The servers on the demonstration's local network
+class DemoLan final: public online::LanDiscoveryInterface
+{
+public:
+	[[nodiscard]] bool IsAvailable() const override { return true; }
+	void Start() override
+	{
+		_servers = {Server("l1", "Office game", "mpm_2p_1", 4), Server("l2", "Upstairs", "mpm_3p_1", 32)};
+		_servers[0].players = {Player(21, "Ian", "god")};
+		_servers[0].numplayers = 1;
+	}
+	void Stop() override { _servers.clear(); }
+	void Poll() override {}
+	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetServers() const override { return _servers; }
+
+private:
+	std::vector<lobby_api::ServerEntry> _servers;
+};
+
+struct DemoServices
+{
+	DemoLobby lobby;
+	DemoSockets sockets;
+	DemoLan lan;
+	Stage stage {Stage::ChooseConnection};
+	/// The steps after the join wait for the game socket to open
+	bool staged {false};
+};
+
+/// The steps that go to a stage, from the first box
+void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
+{
+	const auto stage = demo.stage;
+	if (stage == Stage::ChooseConnection)
+	{
+		demo.staged = true;
+		return;
+	}
+	frontEnd.Next();
+	const bool lan = stage == Stage::LanGameList;
+	frontEnd.SetLobbyKind(lan ? LobbyKind::Lan : LobbyKind::Internet);
+	if (stage == Stage::FindGames)
+	{
+		demo.staged = true;
+		return;
+	}
+	frontEnd.Next();
+	if (stage == Stage::Login || stage == Stage::LanGameList)
+	{
+		demo.staged = true;
+		return;
+	}
+	if (stage == Stage::NotRegistered)
+	{
+		frontEnd.Login(u"Zed", u"secret");
+		demo.staged = true;
+		return;
+	}
+	frontEnd.Login(u"Alice", u"secret");
+	if (stage == Stage::GameList)
+	{
+		frontEnd.SelectGame(0);
+		demo.staged = true;
+		return;
+	}
+	frontEnd.SelectGame(0);
+	frontEnd.Join(u"");
+}
+
+/// Once the room is open: the tab or the page of the stage
+void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
+{
+	demo.staged = true;
+	switch (demo.stage)
+	{
+	case Stage::RoomLandscape:
+		frontEnd.SelectTab(RoomTab::Landscape);
+		break;
+	case Stage::RoomClans:
+		frontEnd.SelectTab(RoomTab::Clans);
+		frontEnd.ShowClan(0);
+		break;
+	case Stage::RoomPlayerDetails:
+		frontEnd.SelectTab(RoomTab::PlayerDetails);
+		frontEnd.ShowSeat(0);
+		break;
+	case Stage::Conditions:
+		frontEnd.Next();
+		break;
+	case Stage::WaitingForStart:
+		frontEnd.Next();
+		frontEnd.SetReady(true);
+		break;
+	default:
+		break;
+	}
+}
+
+} // namespace
+
+std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage stage, std::u16string profileName,
+                                                                           std::string localMaps, std::string conditionTemplate)
+{
+	auto demo = std::make_shared<DemoServices>();
+	demo->stage = stage;
+	bool begun = false;
+	MultiplayerFrontEnd::Services services {
+	    .lobby = &demo->lobby,
+	    .sockets = &demo->sockets,
+	    .lan = &demo->lan,
+	    .openPage = [](std::string_view) {},
+	    .clock = [] { return uint64_t {0}; },
+	    .owner = demo,
+	    .poll =
+	        [state = demo.get(), begun](MultiplayerFrontEnd& frontEnd) mutable {
+		        state->sockets.Poll();
+		        state->lobby.Poll();
+		        if (!begun)
+		        {
+			        begun = true;
+			        Begin(frontEnd, *state);
+		        }
+		        else if (!state->staged && frontEnd.IsJoined())
+		        {
+			        Finish(frontEnd, *state);
+		        }
+	        },
+	};
+	MultiplayerFrontEnd::Settings settings {
+	    .registerPage = {},
+	    .internetName = u"demo.invalid",
+	    .profileName = std::move(profileName),
+	    .gameVersion = std::string(gui::multiplayer::k_GameVersion),
+	    .browser = false,
+	    .localMaps = std::move(localMaps),
+	    .conditionTemplate = std::move(conditionTemplate),
+	};
+	return std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
+}

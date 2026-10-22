@@ -93,8 +93,11 @@ public:
 
 	/// Places the dialog space on a screen of a size
 	void Begin(glm::u16vec2 resolution);
-	/// Where a point of the screen is in the dialog space
+	/// The unit of the dialog space under a pixel of the screen, such as the pixel under the pointer. A pixel finds a
+	/// control exactly when the control's box fills that pixel (LayoutSpace::PixelToLayout)
 	[[nodiscard]] glm::ivec2 ToDialog(glm::ivec2 screen) const;
+	/// Where a point between the pixels of the screen, such as an edge of the screen, is in the dialog space
+	[[nodiscard]] glm::ivec2 EdgeToDialog(glm::ivec2 screen) const;
 	/// Where a point of the dialog space is on the screen
 	[[nodiscard]] glm::ivec2 ToScreenPoint(glm::ivec2 dialog) const { return glm::ivec2(ToScreen(glm::vec2(dialog))); }
 
