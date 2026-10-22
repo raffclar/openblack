@@ -29,6 +29,7 @@
 #include "InjectedInput.h"
 #include "Locator.h"
 #include "ScriptedMouse.h"
+#include "Web/WebPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
@@ -46,6 +47,11 @@ bool IsBackground()
 void WarpMouse(int x, int y)
 {
 	using openblack::Locator;
+	// A web page cannot move the pointer. There the game moves only its own pointer.
+	if constexpr (openblack::k_Platform == openblack::Platform::Web)
+	{
+		return;
+	}
 	if (IsBackground() || !Locator::windowing::has_value())
 	{
 		return;
@@ -107,7 +113,7 @@ void GameActionMap::SetKeyBinding(BindableActionMap action, std::optional<KeyCho
 
 void GameActionMap::ResetKeyBindings()
 {
-	_bindings = k_DefaultKeyBindings;
+	_bindings = DefaultKeyBindings();
 	ApplyMouseBindings();
 }
 
@@ -253,6 +259,17 @@ glm::uvec2 GameActionMap::GetMousePosition() const
 
 void GameActionMap::SetScriptedPointer(std::optional<ScriptedPointer> pointer)
 {
+	// On the web the page keeps the pointer lock while a script has the pointer. Then the player's pointer continues
+	// from the place where the script left it.
+	if constexpr (k_Platform == Platform::Web)
+	{
+		if (!pointer.has_value() && _scriptedPointer.has_value() && _pointerScaled)
+		{
+			_scaledPointer.Place(_scriptedPointer->position);
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The script gave the pointer back at {}, {}", _scriptedPointer->position.x,
+			                   _scriptedPointer->position.y);
+		}
+	}
 	_scriptedPointer = pointer;
 }
 
@@ -368,8 +385,56 @@ void GameActionMap::UpdateInputLock(bool clientConnected, float seconds)
 	LockChanged(was);
 }
 
+bool GameActionMap::EscapeFreesPointer(const SDL_Event& event)
+{
+	if (event.type != SDL_KEYDOWN || event.key.keysym.sym != SDLK_ESCAPE || event.key.repeat != 0 || IsInjected(event))
+	{
+		return false;
+	}
+	_pointerHold.SetLocked(web::PointerLocked());
+	if (platform_keys::EscapeOutcomeFor(k_Platform, _pointerHold.Held()) != platform_keys::EscapeOutcome::FreePointer)
+	{
+		return false;
+	}
+	_pointerHold.AskFree();
+	web::FreePointer();
+	FollowPagePointerLock();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Escape freed the pointer; a click on the game takes it again");
+	return true;
+}
+
+void GameActionMap::FollowPagePointerLock()
+{
+	_pointerHold.SetLocked(web::PointerLocked());
+	const bool held = _pointerHold.Held();
+	if (held && !_pointerScaled)
+	{
+		// The pointer starts at the click that took the pointer. When the page does not know the click, the pointer starts
+		// where the game's cursor was, or in the middle of the window before the game saw the cursor.
+		const auto start =
+		    web::PointerLockClick().value_or(_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
+		_scaledPointer.Place(start);
+		_pointerScaled = true;
+		_playerCursorSeen = true;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The page locked the pointer: the game moves its own pointer from {}, {}",
+		                   start.x, start.y);
+	}
+	else if (!held && _pointerScaled)
+	{
+		_pointerScaled = false;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game does not hold the pointer now");
+	}
+}
+
 bool GameActionMap::AdmitEvent(const SDL_Event& event)
 {
+	if constexpr (k_Platform == Platform::Web)
+	{
+		if (EscapeFreesPointer(event))
+		{
+			return false;
+		}
+	}
 	// A hand demonstration moves the hand: the player's own mouse is kept out, the demonstration's moves let in
 	if (_playerMouseBlocked && !IsInjected(event) &&
 	    (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
@@ -434,15 +499,24 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	{
 		return;
 	}
-	if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST && _pointerScaled)
+	// On the web the page takes and frees the pointer. The screens that take the events themselves call no frame of the
+	// action map, so the lock state is read here too.
+	if constexpr (k_Platform == Platform::Web)
 	{
-		StopScaledPointer();
-		return;
+		FollowPagePointerLock();
 	}
-	// The window takes the mouse as the player clicks in it
-	if (event.type == SDL_MOUSEBUTTONDOWN && !_pointerScaled && CanScalePointer())
+	else
 	{
-		StartScaledPointer({event.button.x, event.button.y});
+		if (event.type == SDL_WINDOWEVENT && event.window.event == SDL_WINDOWEVENT_FOCUS_LOST && _pointerScaled)
+		{
+			StopScaledPointer();
+			return;
+		}
+		// The window takes the mouse as the player clicks in it
+		if (event.type == SDL_MOUSEBUTTONDOWN && !_pointerScaled && CanScalePointer())
+		{
+			StartScaledPointer({event.button.x, event.button.y});
+		}
 	}
 	if (!_pointerScaled)
 	{
@@ -615,7 +689,11 @@ void GameActionMap::Frame()
 {
 	_keysDownThisFrame.reset();
 	_cursorWarp.reset();
-	if (_pointerScaled && !CanScalePointer())
+	if constexpr (k_Platform == Platform::Web)
+	{
+		FollowPagePointerLock();
+	}
+	else if (_pointerScaled && !CanScalePointer())
 	{
 		StopScaledPointer();
 	}
@@ -691,9 +769,13 @@ void GameActionMap::Frame()
 			// The pointer is held in the window while the mouse's movement still comes through, as the mouse's own
 			// movement without the system's acceleration
 			SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
-			if (!IsBackground())
+			// On the web the pointer lock of the page holds the pointer, when the page has it
+			if constexpr (k_Platform != Platform::Web)
 			{
-				SDL_SetRelativeMouseMode(SDL_TRUE);
+				if (!IsBackground())
+				{
+					SDL_SetRelativeMouseMode(SDL_TRUE);
+				}
 			}
 		}
 		if (cursor.warpTo.has_value() && _scriptedPointer.has_value())
@@ -703,9 +785,12 @@ void GameActionMap::Frame()
 		else if (cursor.warpTo.has_value())
 		{
 			// The window keeps the mouse if it had it before the turn
-			if (!_pointerScaled && !IsBackground())
+			if constexpr (k_Platform != Platform::Web)
 			{
-				SDL_SetRelativeMouseMode(SDL_FALSE);
+				if (!_pointerScaled && !IsBackground())
+				{
+					SDL_SetRelativeMouseMode(SDL_FALSE);
+				}
 			}
 			WarpPlayerCursor(*cursor.warpTo);
 		}

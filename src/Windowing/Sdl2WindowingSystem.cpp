@@ -17,6 +17,8 @@
 #include <SDL_syswm.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/Platform.h"
+#include "Web/WebPointer.h"
 #include "WindowFit.h"
 #include "WindowState.h"
 
@@ -145,6 +147,11 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 
 	_window = std::move(window);
+	// The window listens to the pointer lock of the page from now. Before this, a lock of the pointer would not reach it.
+	if constexpr (k_Platform == Platform::Web)
+	{
+		web::AllowPointerLock();
+	}
 	if (displayMode == DisplayMode::Windowed)
 	{
 		KeepInsideDesktop();
@@ -466,6 +473,12 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetBordered(bool b)
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetFullscreen(bool f)
 {
+	// In a web browser only the page can show the game on the full screen, from its main thread
+	if constexpr (k_Platform == Platform::Web)
+	{
+		web::RequestFullscreen(f);
+		return *this;
+	}
 	// todo: use DisplayMode
 	if (SDL_SetWindowFullscreen(_window.get(), f ? SDL_WINDOW_FULLSCREEN_DESKTOP : 0) != 0)
 	{

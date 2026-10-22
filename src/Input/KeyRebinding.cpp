@@ -342,7 +342,7 @@ std::map<uint32_t, player_profiles::KeptKey> ToKept(std::span<const KeyBinding> 
 
 KeyBindingTable FromKept(const std::map<uint32_t, player_profiles::KeptKey>& kept)
 {
-	auto bindings = k_DefaultKeyBindings;
+	auto bindings = DefaultKeyBindings();
 	for (const auto& [row, key] : kept)
 	{
 		if (row >= bindings.size())
