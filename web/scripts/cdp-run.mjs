@@ -12,8 +12,19 @@
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
 //   --eval <expression>      at the end, print the value of this expression on the page
+//   --actions <file.json>    after the click, send these steps of input to the page, as of a user. The file is a list of
+//                            steps, each with "at" (the seconds after the click) and "do":
+//                            {"do": "mouse", "type": "mouseMoved" | "mousePressed" | "mouseReleased", "x", "y", "button"}
+//                            {"do": "drag", "from": [x, y], "to": [x, y], "button", "steps", "ms"}
+//                            {"do": "wheel", "x", "y", "deltaY"}
+//                            {"do": "key", "key": "Escape", "code": "Escape", "keyCode": 27, "modifiers": 0}
+//                            {"do": "shot", "name": "grip"}    {"do": "eval", "expression": "..."}
+//                            {"do": "synth-move", "dx", "dy", "count", "ms", "buttons"}
+//                            {"do": "synth-button", "type": "mousedown" | "mouseup", "button": 0 | 1 | 2}
+//                            The synth steps send page events to the game canvas. Use them while the pointer is
+//                            locked: headless Chrome gives no movement for its own mouse events then.
 import { spawn } from 'node:child_process';
-import { appendFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 
 const [chromePath, url, secondsText, out, ...rest] = process.argv.slice(2);
@@ -93,6 +104,9 @@ await send('Log.enable');
 await send('Page.enable');
 await send('DOM.enable');
 await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFactor: 1, mobile: false });
+// A headless page has no focus of its own. The pointer lock and the keyboard lock need a page with the focus.
+await send('Emulation.setFocusEmulationEnabled', { enabled: true });
+await send('Page.bringToFront');
 await send('Page.navigate', { url });
 await sleep(1500);
 
@@ -137,6 +151,78 @@ if (click && await clickOn(click)) {
   clicked = Date.now();
 }
 
+// The mouse of the steps starts at the place of the click
+let mouse = { x: width / 2, y: height / 2 };
+const mouseEvent = (type, x, y, button = 'none', buttons = 0) => {
+  mouse = { x, y };
+  return send('Input.dispatchMouseEvent', { type, x, y, button, buttons, clickCount: type === 'mouseMoved' ? 0 : 1 });
+};
+const k_Buttons = { none: 0, left: 1, right: 2, middle: 4 };
+const shot = async (name) => {
+  const picture = await send('Page.captureScreenshot', { format: 'png' });
+  if (picture?.data) {
+    writeFileSync(path.join(out, `${name}.png`), Buffer.from(picture.data, 'base64'));
+    record(`[shot] ${name}.png`);
+  }
+};
+const runStep = async (step) => {
+  record(`[step] ${JSON.stringify(step)}`);
+  switch (step.do) {
+  case 'mouse':
+    await mouseEvent(step.type, step.x, step.y, step.button ?? 'none', k_Buttons[step.button ?? 'none']);
+    break;
+  case 'drag': {
+    const button = step.button ?? 'left';
+    const count = step.steps ?? 20;
+    await mouseEvent('mouseMoved', step.from[0], step.from[1]);
+    await mouseEvent('mousePressed', step.from[0], step.from[1], button, k_Buttons[button]);
+    for (let i = 1; i <= count; ++i) {
+      const x = step.from[0] + (step.to[0] - step.from[0]) * i / count;
+      const y = step.from[1] + (step.to[1] - step.from[1]) * i / count;
+      await mouseEvent('mouseMoved', x, y, button, k_Buttons[button]);
+      await sleep((step.ms ?? 500) / count);
+    }
+    await mouseEvent('mouseReleased', step.to[0], step.to[1], button, 0);
+    break;
+  }
+  case 'wheel':
+    await send('Input.dispatchMouseEvent', { type: 'mouseWheel', x: step.x ?? mouse.x, y: step.y ?? mouse.y, deltaX: 0,
+      deltaY: step.deltaY ?? 100 });
+    break;
+  case 'key': {
+    const key = { key: step.key, code: step.code ?? step.key, windowsVirtualKeyCode: step.keyCode ?? 0,
+      modifiers: step.modifiers ?? 0 };
+    await send('Input.dispatchKeyEvent', { type: step.key.length === 1 ? 'keyDown' : 'rawKeyDown', text: step.key.length === 1 ? step.key : undefined, ...key });
+    await sleep(step.hold ?? 60);
+    await send('Input.dispatchKeyEvent', { type: 'keyUp', ...key });
+    break;
+  }
+  case 'shot':
+    await shot(step.name ?? `step-${Date.now()}`);
+    break;
+  case 'synth-move':
+    for (let i = 0; i < (step.count ?? 1); ++i) {
+      await evaluate(`document.getElementById('canvas').dispatchEvent(new MouseEvent('mousemove', { bubbles: true,
+        movementX: ${step.dx ?? 0}, movementY: ${step.dy ?? 0}, buttons: ${step.buttons ?? 0} }))`);
+      await sleep((step.ms ?? 0) / (step.count ?? 1));
+    }
+    break;
+  case 'synth-button': {
+    const target = step.type === 'mouseup' ? 'document' : "document.getElementById('canvas')";
+    await evaluate(`${target}.dispatchEvent(new MouseEvent('${step.type}', { bubbles: true, button: ${step.button ?? 0},
+      buttons: ${step.type === 'mouseup' ? 0 : [1, 4, 2][step.button ?? 0]} }))`);
+    break;
+  }
+  case 'eval':
+    record(`[eval] ${step.expression} = ${JSON.stringify(await evaluate(step.expression))}`);
+    break;
+  default:
+    record(`[step] unknown step ${step.do}`);
+  }
+};
+const steps = option('--actions') ? JSON.parse(readFileSync(option('--actions'), 'utf8')) : [];
+steps.sort((a, b) => a.at - b.at);
+
 let taken = 0;
 const end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
@@ -151,11 +237,15 @@ while (Date.now() < end || taken < Math.min(shots, 1)) {
     next += shotEvery;
     continue;
   }
+  if (steps.length > 0 && Date.now() >= clicked + steps[0].at * 1000) {
+    await runStep(steps.shift());
+    continue;
+  }
   if (Date.now() >= end) {
     next = 0;
     continue;
   }
-  await sleep(50);
+  await sleep(10);
 }
 if (option('--eval')) {
   console.log(`eval: ${JSON.stringify(await evaluate(option('--eval')))}`);

@@ -91,7 +91,7 @@ const input::KeyBinding* ActionNamed(std::string_view name)
 	const auto wanted = Lower(name);
 	const auto& bindings = Locator::gameActionSystem::has_value()
 	                           ? Locator::gameActionSystem::value().GetKeyBindings()
-	                           : std::span<const input::KeyBinding>(input::k_DefaultKeyBindings);
+	                           : std::span<const input::KeyBinding>(input::DefaultKeyBindings());
 	const auto found = std::ranges::find_if(bindings, [&wanted](const auto& binding) { return Lower(binding.name) == wanted; });
 	return found != bindings.end() ? &*found : nullptr;
 }
@@ -414,7 +414,7 @@ bool GameInput::HasGesture(std::string_view name) const
 std::vector<std::string> GameInput::ActionNames() const
 {
 	std::vector<std::string> names;
-	for (const auto& binding : input::k_DefaultKeyBindings)
+	for (const auto& binding : input::DefaultKeyBindings())
 	{
 		names.emplace_back(binding.name);
 	}

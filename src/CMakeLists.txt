@@ -423,6 +423,7 @@ else ()
       -sENVIRONMENT=web,worker
       "--pre-js=${CMAKE_SOURCE_DIR}/web/page/pre.js"
       "--post-js=${CMAKE_SOURCE_DIR}/web/page/post.js"
+      "--post-js=${CMAKE_SOURCE_DIR}/web/page/input.js"
     )
     set_target_properties(openblack PROPERTIES SUFFIX ".js")
     set_property(
@@ -430,6 +431,7 @@ else ()
       APPEND
       PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/web/page/pre.js"
                "${CMAKE_SOURCE_DIR}/web/page/post.js"
+               "${CMAKE_SOURCE_DIR}/web/page/input.js"
     )
     # The page files go next to the game
     file(
