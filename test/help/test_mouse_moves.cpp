@@ -104,3 +104,27 @@ TEST(MouseMoves, TheFirstPlaceCountsNothingOnlyAtTheTopLeftCorner)
 	moves.Message(58, {0, 1});
 	EXPECT_EQ(moves.TakeMoves(), 1u);
 }
+
+TEST(MouseMoves, AStillMouseSendsNoMessagesWhileTheInputLockKeepsThePlayerOut)
+{
+	using openblack::help::SendsStillMessages;
+	EXPECT_TRUE(SendsStillMessages({.windowHasKeys = true}));
+	EXPECT_FALSE(SendsStillMessages({.windowHasKeys = false}));
+	// The desktop can give the keyboard to the window of a game that an agent drives. The lock keeps the messages out.
+	EXPECT_FALSE(SendsStillMessages({.windowHasKeys = true, .playerInputBlocked = true}));
+	EXPECT_FALSE(SendsStillMessages({.windowHasKeys = true, .cursorFrozen = true}));
+	EXPECT_FALSE(SendsStillMessages({.windowHasKeys = true, .playerMouseBlocked = true}));
+}
+
+TEST(MouseMoves, AWindowThatGetsTheKeysUnderTheLockCountsNoMove)
+{
+	// The pointer rests in the middle of the window. A still message would send that place, which is not the top left
+	// corner, so the help would count one move of the mouse.
+	MouseMoves moves;
+	const bool sends = openblack::help::SendsStillMessages({.windowHasKeys = true, .playerInputBlocked = true});
+	for (uint32_t ms = 0; ms <= 1000; ms += 17)
+	{
+		moves.Wait(ms, {640, 512}, sends);
+	}
+	EXPECT_EQ(moves.TakeMoves(), 0u);
+}

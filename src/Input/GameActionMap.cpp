@@ -715,12 +715,16 @@ void GameActionMap::Frame()
 		{
 			_cursorPinnedAt = glm::ivec2(_mousePosition);
 		}
-		// A still mouse sends its messages while the window has the keys, the camera does not hold the cursor and no
-		// hand demonstration plays
+		// A still mouse sends its messages while the window has the keys and the player's mouse reaches the game, the
+		// camera does not hold the cursor and no hand demonstration plays
 		const auto* window =
 		    Locator::windowing::has_value() ? static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()) : nullptr;
-		const bool stillMessages =
-		    window != nullptr && SDL_GetKeyboardFocus() == window && !_cursorFreeze.IsFrozen() && !_playerMouseBlocked;
+		const bool stillMessages = help::SendsStillMessages({
+		    .windowHasKeys = window != nullptr && SDL_GetKeyboardFocus() == window,
+		    .playerInputBlocked = _lock.Locked(),
+		    .cursorFrozen = _cursorFreeze.IsFrozen(),
+		    .playerMouseBlocked = _playerMouseBlocked,
+		});
 		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();
