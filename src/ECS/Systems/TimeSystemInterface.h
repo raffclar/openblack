@@ -84,9 +84,10 @@ public:
 	[[nodiscard]] virtual float GetSpeed() const = 0;
 
 	/// For stepping the game deterministically, as the debug inspector does: each frame takes this long, whatever the
-	/// wall clock says, until it is set back to none. The clock carries on from where it was either way.
-	virtual void SetFixedFrameTime([[maybe_unused]] std::optional<std::chrono::milliseconds> frameTime) {}
-	[[nodiscard]] virtual std::optional<std::chrono::milliseconds> GetFixedFrameTime() const { return std::nullopt; }
+	/// wall clock says, until it is set back to none. The clock carries on from where it was either way. A time with a
+	/// part of a millisecond adds that part up, and the tick count takes each whole millisecond when it is complete.
+	virtual void SetFixedFrameTime([[maybe_unused]] std::optional<std::chrono::microseconds> frameTime) {}
+	[[nodiscard]] virtual std::optional<std::chrono::microseconds> GetFixedFrameTime() const { return std::nullopt; }
 
 	/// The machine's millisecond count as the game reads it to time presses and pick among sounds: the wall clock's, or
 	/// one moved on by the fixed time each frame while frames take a fixed time. It counts from when the clock was last

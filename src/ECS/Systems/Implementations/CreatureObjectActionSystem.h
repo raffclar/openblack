@@ -34,8 +34,10 @@ public:
 	void ProcessTurn() override;
 	void BeginTurn() override;
 	void CreatureTurn(entt::entity creature) override;
-	void Update(std::chrono::duration<float, std::milli> gameTime) override;
-	void LateUpdate(std::chrono::duration<float, std::milli> gameTime) override;
+	void ActionTurn(entt::entity creature) override;
+	void AfterPoseTurn(entt::entity creature) override;
+	void UpdateHeld() override;
+	void ShowHeldAtTurnEnd() override;
 
 	bool PickUp(entt::entity creature, entt::entity object) override;
 	bool PutDown(entt::entity creature) override;
@@ -89,7 +91,10 @@ private:
 	/// What the rules for a creature picking the thing up depend on
 	[[nodiscard]] creature_object_actions::PickUpFacts PickUpFactsOf(entt::entity creature, entt::entity object) const;
 	/// Catches made to wait while a creature's body acted out something else start once it is free
-	void StartPendingCatches();
+	/// Starts the catches that waited, of one creature or of all
+	void StartPendingCatches(std::optional<entt::entity> only = std::nullopt);
+	/// Puts what each creature holds in its hand, as the frame draws the body or as the last turn posed it
+	static void PlaceHeld(bool drawn);
 	/// An eat that stops between the bite and the swallow: the creature swallows what left its hand at once
 	void SwallowStoppedEat(entt::entity creature);
 	/// Starts an action on the creature in place of any it was doing, or records why it can't

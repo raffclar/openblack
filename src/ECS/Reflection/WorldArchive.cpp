@@ -230,8 +230,9 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
-openblack::ecs::reflection::WorldHashes
-openblack::ecs::reflection::HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep)
+openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
+                                                                              const entt::meta_ctx& context,
+                                                                              const KeepInHash& keep, bool byField)
 {
 	// FNV-1a over the bytes of each part
 	constexpr uint64_t k_Offset = 14695981039346656037ull;
@@ -267,7 +268,22 @@ openblack::ecs::reflection::HashWorld(const entt::registry& registry, const entt
 		const auto* codec = ComponentCodec(component.type);
 		const auto fields = KeptFields(component.type);
 		uint64_t hash = k_Offset;
-		for (const auto row : LiveRows(*component.storage))
+		// The hash of each field on its own, when asked: the whole value of a component that saves as one value
+		std::vector<uint64_t> fieldHashes(byField ? std::max<size_t>(fields.size(), 1) : 0, k_Offset);
+		const auto mixField = [&](size_t index, std::span<const uint8_t> bytes) {
+			if (byField)
+			{
+				mix(fieldHashes.at(index), bytes);
+			}
+		};
+		// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
+		// takes its entities in the order of their numbers.
+		auto rows = LiveRows(*component.storage);
+		if (codec == nullptr && fields.empty())
+		{
+			std::ranges::sort(rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
+		}
+		for (const auto row : rows)
 		{
 			if (keep && !keep(component.name, {}, row))
 			{
@@ -280,17 +296,21 @@ openblack::ecs::reflection::HashWorld(const entt::registry& registry, const entt
 			{
 				if (!keep || keep(component.name, k_WholeComponent, row))
 				{
+					const auto start = out.Bytes().size();
 					codec->save(value, out);
+					mixField(0, std::span(out.Bytes()).subspan(start));
 				}
 			}
 			else
 			{
-				for (const auto& field : fields)
+				for (size_t index = 0; index < fields.size(); ++index)
 				{
+					const auto& field = fields.at(index);
 					if (keep && !keep(component.name, field.info->name, row))
 					{
 						continue;
 					}
+					const auto start = out.Bytes().size();
 					if (field.info->saveFrom != nullptr)
 					{
 						field.info->saveFrom(value, out);
@@ -300,11 +320,27 @@ openblack::ecs::reflection::HashWorld(const entt::registry& registry, const entt
 						auto instance = component.type.from_void(value);
 						field.info->save(field.data.get(instance), out);
 					}
+					mixField(index, std::span(out.Bytes()).subspan(start));
 				}
 			}
 			mix(hash, out.Bytes());
 		}
 		hashes.components.emplace_back(component.name, hash);
+		if (byField)
+		{
+			if (codec != nullptr || fields.empty())
+			{
+				hashes.fields.emplace_back(component.name + "." + std::string(k_WholeComponent), fieldHashes.front());
+			}
+			else
+			{
+				for (size_t index = 0; index < fields.size(); ++index)
+				{
+					hashes.fields.emplace_back(component.name + "." + std::string(fields.at(index).info->name),
+					                           fieldHashes.at(index));
+				}
+			}
+		}
 	}
 	return hashes;
 }

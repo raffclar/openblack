@@ -1694,7 +1694,7 @@ TEST_F(HandGrabSystemGiving, OverACreatureThatWouldTakeItTheHandOffersAndTurnsIt
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }
 
-TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWithTheMatchingHand)
+TEST_F(HandGrabSystemGiving, ThePressWhileOfferingGivesItToTheCreatureWithTheMatchingHand)
 {
 	const auto rock = HoldRock();
 	const auto creature = AddCreature(creature_giving::Verdict::Give);
@@ -1703,12 +1703,9 @@ TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWi
 	// The cursor has moved off it, but the offer stands
 	world->underCursor.reset();
 	Frame(16);
-	EXPECT_TRUE(Press());
-	// Given once the button has been held more than 225 ms
-	Frame(200);
-	EXPECT_TRUE(world->given.empty());
 	world->helpEvents.clear();
-	Frame(30);
+	// Given at the press, with no wait for the button to be held
+	EXPECT_TRUE(Press());
 	ASSERT_EQ(world->given.size(), 1u);
 	// The help counts the gift once
 	EXPECT_EQ(std::ranges::count(world->helpEvents, help::profile::k_Give), 1);
@@ -1725,6 +1722,28 @@ TEST_F(HandGrabSystemGiving, HoldingTheButtonWhileOfferingGivesItToTheCreatureWi
 	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 	EXPECT_FALSE(system->HandOver(rock));
+}
+
+TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	EXPECT_TRUE(Press());
+	// The press sends the give at once; the creature gets the thing at the turn that does the command
+	ASSERT_EQ(waiting.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandGive>(waiting.front()));
+	EXPECT_EQ(std::get<player_commands::HandGive>(waiting.front()).creature, creature);
+	EXPECT_EQ(std::get<player_commands::HandGive>(waiting.front()).object, rock);
+	EXPECT_TRUE(world->given.empty());
+	// Held down, the button sends no second give
+	Frame(300);
+	EXPECT_EQ(waiting.size(), 1u);
+	RunWaiting();
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().creature, creature);
 }
 
 TEST_F(HandGrabSystemGiving, WhileTheCreatureReachesTheHandMeetsItsHandAtTheMomentOfTaking)

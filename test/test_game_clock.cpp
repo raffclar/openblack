@@ -9,6 +9,11 @@
 
 #include <cstdint>
 
+#include <algorithm>
+#include <chrono>
+#include <optional>
+#include <vector>
+
 #include <gtest/gtest.h>
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -450,4 +455,25 @@ TEST(GameClock, ATimerPutBackUnderAPauseStaysStopped)
 	EXPECT_EQ(clock.time.GetTurn(), 1);
 	clock.now += 99;
 	EXPECT_FALSE(clock.Frame());
+}
+
+// A fixed frame time with a part of a millisecond adds the parts up: a frame of 16.7 ms moves the tick count on by 16 or
+// 17 ms, and ten frames move it on by 167 ms
+TEST(GameClock, AFixedFrameTimeWithAPartOfAMillisecondAddsThePartsUp)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.time.SetFixedFrameTime(std::chrono::microseconds(16700));
+	const auto start = clock.time.GetTicks();
+	std::vector<uint32_t> steps;
+	auto last = start;
+	for (int frame = 0; frame < 10; ++frame)
+	{
+		clock.time.Update();
+		steps.push_back(clock.time.GetTicks() - last);
+		last = clock.time.GetTicks();
+	}
+	EXPECT_EQ(clock.time.GetTicks() - start, 167u);
+	EXPECT_TRUE(std::ranges::all_of(steps, [](uint32_t step) { return step == 16u || step == 17u; }));
+	EXPECT_EQ(clock.time.GetFixedFrameTime(), std::optional(std::chrono::microseconds(16700)));
 }
