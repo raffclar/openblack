@@ -283,12 +283,15 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		{
 			std::ranges::sort(rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
 		}
+		// A component of which the hash keeps no row is not in the hash, as a component that no entity has
+		bool anyKept = false;
 		for (const auto row : rows)
 		{
 			if (keep && !keep(component.name, {}, row))
 			{
 				continue;
 			}
+			anyKept = true;
 			BinaryWriter out(context);
 			out.WriteRaw(row);
 			const void* value = component.storage->value(row);
@@ -324,6 +327,10 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 				}
 			}
 			mix(hash, out.Bytes());
+		}
+		if (!anyKept)
+		{
+			continue;
 		}
 		hashes.components.emplace_back(component.name, hash);
 		if (byField)

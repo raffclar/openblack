@@ -13,6 +13,7 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
@@ -37,6 +38,9 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	// It shows its player's alignment, starting neutral
 	registry.Assign<HandMorph>(entity);
 	registry.Assign<HandStillness>(entity);
+	// What its player last clicked, for the scripts. It is part of the hand from the start, so that the world is the same
+	// whether or not a frame of the hand ran.
+	registry.Assign<HandClicked>(entity);
 
 	return entity;
 }

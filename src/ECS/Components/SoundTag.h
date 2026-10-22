@@ -35,9 +35,10 @@ struct SoundTag
 	bool active;
 	/// The emitter that plays it, if one plays it
 	entt::entity emitter {entt::null};
-	/// True for a point's sound, false for an object's sound
+	/// True for a point's sound, false for an object's sound. Only the saves of older versions have the tags of points:
+	/// the sounds at points are not in the world now (see ecs::systems::PointSound), and a load removes these tags.
 	bool point {false};
-	/// True while a point's sound travels to the camera
+	/// True while a point's sound travels to the camera, in the saves of older versions
 	bool delayed {false};
 	/// Game turns since the tag was made
 	uint16_t turns {0};

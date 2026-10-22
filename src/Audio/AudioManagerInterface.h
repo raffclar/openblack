@@ -152,6 +152,12 @@ public:
 	/// applies. It gets a voice by the restart play type for its owner, unless its bank header gives another.
 	virtual entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
 	                                   entt::entity owner) = 0;
+	/// An emitter as CreateEmitter makes it, for a sound that no entity owns. The voice rules give it an owner that no
+	/// other sound has, so it never finds the voice of another sound.
+	virtual entt::entity CreateOwnSoundEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType)
+	{
+		return CreateEmitter(id, worldPosition, playType, entt::null);
+	}
 	virtual bool EmitterExists(entt::entity emitter) = 0;
 	[[nodiscard]] virtual float GetProgress(entt::entity emitter) = 0;
 	[[nodiscard]] virtual AudioStatus GetStatus(entt::entity emitter) = 0;

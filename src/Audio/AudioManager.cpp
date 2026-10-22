@@ -471,11 +471,20 @@ entt::entity AudioManager::CreateEmitter(entt::id_type id, std::optional<glm::ve
                                          entt::entity owner)
 {
 	VoiceChoice choice;
-	return CreateVoiceEmitter(id, worldPosition, playType, owner, k_CallerPlayType, choice);
+	return CreateVoiceEmitter(id, worldPosition, playType, owner, OwnerKey(owner), k_CallerPlayType, choice);
+}
+
+entt::entity AudioManager::CreateOwnSoundEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType)
+{
+	VoiceChoice choice;
+	const auto key = VoiceOwnerKey(VoiceOwner::OwnSound, std::nullopt, 0, _ownSoundSerial);
+	++_ownSoundSerial;
+	return CreateVoiceEmitter(id, worldPosition, playType, entt::null, key, k_CallerPlayType, choice);
 }
 
 entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
-                                              entt::entity owner, pack::AudioBankLoop callerPlayType, VoiceChoice& choice)
+                                              entt::entity owner, uint64_t ownerKey, pack::AudioBankLoop callerPlayType,
+                                              VoiceChoice& choice)
 {
 	auto& sounds = Locator::resources::value().GetSounds();
 	if (!sounds.Contains(id))
@@ -485,7 +494,7 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 		return entt::null;
 	}
 	auto sound = sounds.Handle(id);
-	choice = AcquireVoice(*sound, OwnerKey(owner), callerPlayType);
+	choice = AcquireVoice(*sound, ownerKey, callerPlayType);
 	if (!choice.start)
 	{
 		LogNotStarted(*sound, worldPosition.value_or(glm::zero<glm::vec3>()), NoVoiceReason(choice));
@@ -875,7 +884,8 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 
 	// The library plays an animation effect with the restart play type, unless the bank header gives another
 	VoiceChoice choice;
-	const auto entity = CreateVoiceEmitter(id, position, PlayType::Once, owner, pack::AudioBankLoop::Restart, choice);
+	const auto entity =
+	    CreateVoiceEmitter(id, position, PlayType::Once, owner, OwnerKey(owner), pack::AudioBankLoop::Restart, choice);
 	if (entity == entt::null)
 	{
 		const auto outcome = choice.slot.has_value() ? AnimEffectPlay::Outcome::AlreadyPlaying

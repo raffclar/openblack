@@ -28,8 +28,9 @@ public:
 	virtual void ProcessTurn(const glm::vec3& camera) = 0;
 	/// Switches an object's tag on or off; off stops its sound at once
 	virtual void SetActive(entt::entity entity, bool active) = 0;
-	/// Sounds once at a point: at once, or, when delayed, once it has travelled to the camera at the speed of sound
-	virtual entt::entity CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) = 0;
+	/// Sounds once at a point: at once, or, when delayed, once it has travelled to the camera at the speed of sound.
+	/// Only this computer hears the sound, so it makes no entity of the world.
+	virtual void CreatePointSound(entt::id_type sound, const glm::vec3& position, bool delayed) = 0;
 	/// Attaches a sound to an object, on, from the object's position, and returns the new tag. The object keeps all
 	/// the sounds it has: an object can keep up many sounds, also the same sound more than one time. When loops is
 	/// false, each start plays the sound one time.

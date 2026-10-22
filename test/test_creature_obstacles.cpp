@@ -23,6 +23,10 @@
 
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRoute.h"
+#include "ECS/Components/ScriptHighlight.h"
+#include "ECS/Components/Transform.h"
+#include "ECS/CreatureObstacleThings.h"
+#include "ECS/Registry.h"
 
 using namespace openblack;
 using namespace openblack::creature_obstacles;
@@ -194,6 +198,22 @@ TEST(CreatureObstacles, RocksAreOneCircleAtTheirPlaceAndTreesAThinTrunk)
 	EXPECT_NEAR(CirclesOf(tree, walker)[0].radius, 0.15f + 2.0f, k_Tolerance);
 	tree.width = 6.0f;
 	EXPECT_NEAR(CirclesOf(tree, walker)[0].radius, 0.25f + 2.0f, k_Tolerance);
+}
+
+// The draw turns a scroll and changes its size for the camera. A creature walks round the scroll at the size and the
+// angle that the world keeps, so two cameras give the same walk.
+TEST(CreatureObstacles, AHighlightIsWalkedRoundAtItsWorldSize)
+{
+	ecs::Registry registry;
+	const auto scroll = registry.Create();
+	registry.Assign<ecs::components::Transform>(scroll, glm::vec3(4.0f, 0.0f, 6.0f), glm::mat3(glm::eulerAngleY(1.0f)),
+	                                            glm::vec3(0.7f));
+	registry.Assign<ecs::components::ScriptHighlight>(scroll);
+	const auto thing = ecs::creature_obstacle_things::ThingOf(registry, scroll);
+	ASSERT_TRUE(thing.has_value());
+	EXPECT_EQ(thing->shape, Shape::AtPlace);
+	EXPECT_FLOAT_EQ(thing->scale, 1.0f);
+	EXPECT_FLOAT_EQ(thing->yAngle, 0.0f);
 }
 
 TEST(CreatureObstacles, OtherCreaturesAndSceneryHaveTheirOwnCircles)

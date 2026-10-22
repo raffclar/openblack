@@ -72,7 +72,7 @@ int ReceiveTypeOf(const InfoConstants& info, SpellSeedType seed)
 
 /// Whether a globe shows on the screen this frame, as it is tested when it is drawn: its sphere, pulled towards the
 /// camera by its radius as it is drawn, must show on the screen. Its middle is the middle of its model's box.
-bool GlobeOnScreen(const Transform& transform, glm::vec3 middle, const graphics::L3DMesh& bubble, glm::vec3 eye)
+bool GlobeOnScreen(glm::vec3 origin, float scale, glm::vec3 middle, const graphics::L3DMesh& bubble, glm::vec3 eye)
 {
 	if (!Locator::objectDrawListSystem::has_value())
 	{
@@ -84,11 +84,10 @@ bool GlobeOnScreen(const Transform& transform, glm::vec3 middle, const graphics:
 		return true;
 	}
 	const auto halfExtent = bubble.GetBoundingBox().Size() * 0.5f;
-	const float pull = std::max(halfExtent.x, halfExtent.z) * transform.scale.x;
+	const float pull = std::max(halfExtent.x, halfExtent.z) * scale;
 	const auto towards = eye - middle;
 	const auto push = glm::length(towards) > 0.0f ? glm::normalize(towards) * pull : glm::vec3(0.0f);
-	return object_draw_list::SphereOnScreen(*view, transform.position + push, middle + push,
-	                                        glm::length(halfExtent) * transform.scale.x);
+	return object_draw_list::SphereOnScreen(*view, origin + push, middle + push, glm::length(halfExtent) * scale);
 }
 
 HandMiracleFx* HandFx()
@@ -227,79 +226,85 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
 
 	std::vector<entt::entity> globes;
-	registry.Each<OneOffSpellSeed, Transform>([&](entt::entity entity, OneOffSpellSeed& globe, Transform& transform) {
-		globes.push_back(entity);
-		globe.spin = std::fmod(globe.spin + magic::k_OrbSeedSpin * seconds, k_TwoPi);
-		globe.ringSpin = std::fmod(globe.ringSpin + visuals::k_RingSpin * seconds, k_TwoPi);
-		globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
-		// The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
-		// about turns where it flies
-		globe.middle = transform.position + transform.rotation * (centre * transform.scale);
-		transform.rotation = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
-		transform.position = globe.middle - transform.rotation * (centre * transform.scale);
-		globe.position = globe.middle - centre * transform.scale;
-		const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
-		if (visuals::IsPhialSeed(globe.seedType))
-		{
-			const int receiveType = ReceiveTypeOf(info, globe.seedType);
-			globe.phialFrame = visuals::StepPhialFrame(globe.phialFrame, seconds);
-			globe.phialPhase = std::fmod(globe.phialPhase + visuals::PhialPulseSpeed(receiveType) * seconds, 1.0f);
-		}
-		// The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
-		// frame, so its glints sparkle on where the model was last drawn
-		// It steps only while the globe shows on the screen
-		if (const auto stepped = _holderEffects.find(entity);
-		    stepped != _holderEffects.end() && particles != nullptr &&
-		    (!meshes.Contains(bubble) || GlobeOnScreen(transform, globe.middle, *meshes.Handle(bubble), eye)))
-		{
-			particles->ProcessByFrame(stepped->second, seconds);
-		}
-		// The seed's model as it is drawn, which glints of its effect sparkle on from the next step: below the middle,
-		// spun, at the seed's scale and a phial's swell or squash, a big one's growing copy last
-		{
-			const float drawn = transform.scale.x * visuals::k_GlobeSeedScale;
-			float size = 1.0f;
-			glm::vec3 shape(1.0f);
-			if (visuals::IsPhialSeed(globe.seedType))
-			{
-				const int receiveType = ReceiveTypeOf(info, globe.seedType);
-				size = visuals::PhialDraws(receiveType, globe.phialPhase, visuals::PhialPulse(globe.phialPhase),
-				                           visuals::k_GlobeAlpha)
-				           .back()
-				           .size;
-				shape = visuals::PhialScale(receiveType, globe.phialPhase);
-			}
-			const auto at = globe.middle + glm::vec3(0.0f, seed.meshHeight * drawn, 0.0f);
-			globe.seedPlacement = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(globe.spin) *
-			                      glm::scale(glm::mat4(1.0f), seed.scale * drawn * size * shape);
-		}
-		// The miracle's own effect plays in the globe, faint as the globe is
-		if (particles == nullptr || seed.holderParticle == ParticleType::None)
-		{
-			return;
-		}
-		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
-		const auto point = globe.middle + glm::vec3(0.0f, seed.holderHeight * scale, 0.0f);
-		auto found = _holderEffects.find(entity);
-		if (found == _holderEffects.end())
-		{
-			const auto effect = particles->Start(seed.holderParticle, point, scale);
-			if (effect == ParticleSystemInterface::k_NoEffect)
-			{
-				return;
-			}
-			// What it acts on is the seed's model, for the glints a frozen creature's phial shows
-			particles->AddTarget(effect, entity);
-			if (auto* running = particles->Find(effect))
-			{
-				// Nobody owns a globe: its effect takes the neutral player's colour
-				running->SetPlayer(static_cast<int>(PlayerNames::NEUTRAL));
-				running->SetGlobalAlpha(static_cast<float>(visuals::k_GlobeAlpha));
-			}
-			found = _holderEffects.emplace(entity, effect).first;
-		}
-		particles->SetOrigin(found->second, point);
-	});
+	registry.Each<OneOffSpellSeed, const Transform>(
+	    [&](entt::entity entity, OneOffSpellSeed& globe, const Transform& transform) {
+		    globes.push_back(entity);
+		    globe.spin = std::fmod(globe.spin + magic::k_OrbSeedSpin * seconds, k_TwoPi);
+		    globe.ringSpin = std::fmod(globe.ringSpin + visuals::k_RingSpin * seconds, k_TwoPi);
+		    globe.glintFrame = visuals::StepGlint(globe.glintFrame, seconds);
+		    // The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
+		    // about turns where it flies. Only the draw turns it: the world keeps the globe where the turns put it, so the
+		    // camera does not change the world.
+		    globe.middle = transform.position + transform.rotation * (centre * transform.scale);
+		    const auto facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
+		    const auto drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    glm::mat4 drawnModel(facing * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
+		    drawnModel[3] = glm::vec4(drawnOrigin, 1.0f);
+		    globe.drawnModel = drawnModel;
+		    globe.position = globe.middle - centre * transform.scale;
+		    const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
+		    if (visuals::IsPhialSeed(globe.seedType))
+		    {
+			    const int receiveType = ReceiveTypeOf(info, globe.seedType);
+			    globe.phialFrame = visuals::StepPhialFrame(globe.phialFrame, seconds);
+			    globe.phialPhase = std::fmod(globe.phialPhase + visuals::PhialPulseSpeed(receiveType) * seconds, 1.0f);
+		    }
+		    // The miracle's own effect in the globe steps as the globe is drawn, before the seed's model is placed for this
+		    // frame, so its glints sparkle on where the model was last drawn
+		    // It steps only while the globe shows on the screen
+		    if (const auto stepped = _holderEffects.find(entity);
+		        stepped != _holderEffects.end() && particles != nullptr &&
+		        (!meshes.Contains(bubble) ||
+		         GlobeOnScreen(drawnOrigin, transform.scale.x, globe.middle, *meshes.Handle(bubble), eye)))
+		    {
+			    particles->ProcessByFrame(stepped->second, seconds);
+		    }
+		    // The seed's model as it is drawn, which glints of its effect sparkle on from the next step: below the middle,
+		    // spun, at the seed's scale and a phial's swell or squash, a big one's growing copy last
+		    {
+			    const float drawn = transform.scale.x * visuals::k_GlobeSeedScale;
+			    float size = 1.0f;
+			    glm::vec3 shape(1.0f);
+			    if (visuals::IsPhialSeed(globe.seedType))
+			    {
+				    const int receiveType = ReceiveTypeOf(info, globe.seedType);
+				    size = visuals::PhialDraws(receiveType, globe.phialPhase, visuals::PhialPulse(globe.phialPhase),
+				                               visuals::k_GlobeAlpha)
+				               .back()
+				               .size;
+				    shape = visuals::PhialScale(receiveType, globe.phialPhase);
+			    }
+			    const auto at = globe.middle + glm::vec3(0.0f, seed.meshHeight * drawn, 0.0f);
+			    globe.seedPlacement = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(globe.spin) *
+			                          glm::scale(glm::mat4(1.0f), seed.scale * drawn * size * shape);
+		    }
+		    // The miracle's own effect plays in the globe, faint as the globe is
+		    if (particles == nullptr || seed.holderParticle == ParticleType::None)
+		    {
+			    return;
+		    }
+		    const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
+		    const auto point = globe.middle + glm::vec3(0.0f, seed.holderHeight * scale, 0.0f);
+		    auto found = _holderEffects.find(entity);
+		    if (found == _holderEffects.end())
+		    {
+			    const auto effect = particles->Start(seed.holderParticle, point, scale);
+			    if (effect == ParticleSystemInterface::k_NoEffect)
+			    {
+				    return;
+			    }
+			    // What it acts on is the seed's model, for the glints a frozen creature's phial shows
+			    particles->AddTarget(effect, entity);
+			    if (auto* running = particles->Find(effect))
+			    {
+				    // Nobody owns a globe: its effect takes the neutral player's colour
+				    running->SetPlayer(static_cast<int>(PlayerNames::NEUTRAL));
+				    running->SetGlobalAlpha(static_cast<float>(visuals::k_GlobeAlpha));
+			    }
+			    found = _holderEffects.emplace(entity, effect).first;
+		    }
+		    particles->SetOrigin(found->second, point);
+	    });
 	// The effects of the globes that have gone go with them
 	std::erase_if(_holderEffects, [&](const auto& entry) {
 		if (std::ranges::find(globes, entry.first) != globes.end())

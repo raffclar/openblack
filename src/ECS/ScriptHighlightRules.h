@@ -35,6 +35,10 @@ namespace openblack::ecs::script_highlights
 	return kind == HighlightInfo::DidYouKnowSign;
 }
 
+/// The size of a highlight in the world. The world keeps a highlight upright at this size. Only the draw turns it and
+/// changes its size for the camera, so the outline on the map and the creatures' paths do not change with the camera.
+constexpr float k_WorldScale = 1.0f;
+
 /// The challenges of leaving a land through its vortex, one for each of the first four lands
 inline constexpr std::array<uint32_t, 4> k_LeaveThroughVortexChallenges {56, 59, 60, 61};
 

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 
 namespace openblack::ecs::systems
@@ -36,6 +37,9 @@ public:
 	[[nodiscard]] virtual bool IsEnabled() const = 0;
 	/// The checksum of the last turn that it made one for
 	[[nodiscard]] virtual std::optional<TurnChecksum> GetLast() const = 0;
+	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
+	/// function removes it.
+	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
 };
 
 } // namespace openblack::ecs::systems

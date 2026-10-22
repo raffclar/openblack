@@ -104,6 +104,9 @@ public:
 	virtual void HeldThingUsedOnLand(PlayerNames player) = 0;
 	/// Whether the game turn is being played: questions asked then measure from where the hands were at the turn
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
+	/// Fixes the reach of each citadel that no question fixed yet. The frames of the hand ask for the reaches in each frame,
+	/// so a world with no frames of the hand, as the dedicated server, fixes them at the same time.
+	virtual void FixCitadelReaches() = 0;
 
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
 	/// Whether a player's border shows yet: from the first time their temple stands wholly built on the land

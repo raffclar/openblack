@@ -47,4 +47,8 @@ void SyncChecksumSystem::ProcessTurn()
 		draws = random.GetSyncedDraws();
 	}
 	_last = TurnChecksum {.turn = Locator::time::value().GetTurn(), .checksum = synced_state::Checksum(hash.hash, seed, draws)};
+	if (_listener)
+	{
+		_listener(*_last);
+	}
 }
