@@ -1038,6 +1038,12 @@
   "writes": true
  },
  {
+  "description": "The web client and the lobby client: the requests that wait, the session and the push channel",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.online"
+ },
+ {
   "description": "The engine's settings: what is drawn, the display and the camera's clip",
   "kind": "object",
   "parameters": [],
@@ -1091,6 +1097,12 @@
   "kind": "object",
   "parameters": [],
   "query": "land.weather"
+ },
+ {
+  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.real_weather"
  },
  {
   "description": "The weather at a point: temperature, rain, snow, overcast, wind",

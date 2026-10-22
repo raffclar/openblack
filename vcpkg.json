@@ -42,6 +42,12 @@
             "platform": "!emscripten"
         },
         "minizip",
+        {
+            "name": "curl",
+            "default-features": false,
+            "features": [ "openssl" ],
+            "platform": "!emscripten"
+        },
         "gtest"
     ]
 }

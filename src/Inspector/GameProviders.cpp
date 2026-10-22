@@ -171,6 +171,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
@@ -187,6 +188,7 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
@@ -237,6 +239,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
+#include "Online/HttpClientInterface.h"
 #include "Particles/LightSheet.h"
 #include "Profiler.h"
 #include "RegistryProviders.h"
@@ -363,6 +366,9 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"landShadeSystem", "map.shade"},
     LocatorCoverage {"fixedOutlineSystem", "map.free"},
     LocatorCoverage {"creatureWebPageSystem", "creatures.systems"},
+    LocatorCoverage {"httpClient", "engine.online"},
+    LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
     LocatorCoverage {"filmCreatureSystem", "view.video"},
@@ -608,6 +614,29 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
 	provider->Add(
+	    Query("online", "The web client and the lobby client: the requests that wait, the session and the push channel"),
+	    [](const QueryContext& /*context*/) {
+		    Json result {{"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0}};
+		    if (!Locator::lobbyClient::has_value())
+		    {
+			    result["lobby"] = nullptr;
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& lobby = Locator::lobbyClient::value();
+		    const auto state = lobby.GetState();
+		    const auto account = lobby.GetAccount();
+		    result["lobby"] = Json {
+		        {"configured", lobby.IsConfigured()},
+		        {"state", state == ecs::systems::LobbySessionState::LoggedIn    ? "logged_in"
+		                  : state == ecs::systems::LobbySessionState::LoggingIn ? "logging_in"
+		                                                                        : "logged_out"},
+		        {"account", account.has_value() ? Json(account->name) : Json(nullptr)},
+		        {"push_open", lobby.IsPushOpen()},
+		        {"known_servers", lobby.GetKnownServers().size()},
+		    };
+		    return QueryResult::Value(std::move(result));
+	    });
+	provider->Add(
 	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
 	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
 		    return Json {
@@ -756,6 +785,36 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                               {"storms", std::move(storms)},
 		                               {"season", weather.GetSeason(turn)},
 		                               {"days_from_start", weather.GetDaysFromStart(turn)}};
+	                  }));
+	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
+	                                    "its storm and the background weather"),
+	              Serve<Locator::realWeatherSystem>(
+	                  "the real weather", [](const ecs::systems::RealWeatherSystemInterface& real, const QueryContext& /*c*/) {
+		                  Json result {{"applied", real.IsApplied()}, {"storm", real.GetStorm() != entt::null}};
+		                  if (const auto weather = real.GetWeather(); weather.has_value())
+		                  {
+			                  result["weather"] = Json {{"type", weather->type},
+			                                            {"temperature", weather->temperature},
+			                                            {"visibility", weather->visibility},
+			                                            {"city", weather->city},
+			                                            {"area", weather->area},
+			                                            {"country", weather->country}};
+		                  }
+		                  else
+		                  {
+			                  result["weather"] = nullptr;
+		                  }
+		                  if (Locator::weatherSystem::has_value())
+		                  {
+			                  const auto background = Locator::weatherSystem::value().GetBackgroundWeather();
+			                  result["background"] = Json {{"temperature", background.temperature},
+			                                               {"rain", background.rain},
+			                                               {"snow", background.snow},
+			                                               {"overcast", background.overcast},
+			                                               {"wind", {background.windX, background.windZ}},
+			                                               {"snow_cover", background.snowCover}};
+		                  }
+		                  return result;
 	                  }));
 	provider->Add(Query("weather_at", "The weather at a point: temperature, rain, snow, overcast, wind", {PositionParameter()}),
 	              Serve<Locator::weatherSystem>("the weather",

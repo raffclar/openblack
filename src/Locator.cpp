@@ -11,6 +11,16 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <ctime>
+
+#include <chrono>
+#include <exception>
+#include <memory>
+#include <optional>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <spdlog/spdlog.h>
 
 #include "3D/Implementations/LandIsland.h"
@@ -90,8 +100,10 @@
 #include "ECS/Systems/Implementations/IntroSystem.h"
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
+#include "ECS/Systems/Implementations/LobbyClientSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
+#include "ECS/Systems/Implementations/RealWeatherSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
@@ -157,7 +169,15 @@
 #include "Gui/TextDatabase.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
+#include "Online/HttpClientInterface.h"
+#include "Online/PushChannelInterface.h"
+#include "Online/TokenStoreInterface.h"
 #include "Profiler.h"
+#if defined(__EMSCRIPTEN__)
+#include "Web/FetchHttpClient.h"
+#else
+#include "Online/Desktop/CurlHttpClient.h"
+#endif
 #include "Resources/Resources.h"
 #include "Windowing/Sdl2WindowingSystem.h"
 #if __ANDROID__
@@ -241,6 +261,8 @@ using openblack::ecs::systems::LandShadeSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::LivingActionSystem;
+using openblack::ecs::systems::LobbyClientConfig;
+using openblack::ecs::systems::LobbyClientSystem;
 using openblack::ecs::systems::MagicShieldSystem;
 using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
@@ -257,6 +279,7 @@ using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
 using openblack::ecs::systems::RainSystem;
 using openblack::ecs::systems::ReactionSystem;
+using openblack::ecs::systems::RealWeatherSystem;
 using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SaveGameSystem;
@@ -346,6 +369,89 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	return true;
 }
 
+namespace openblack
+{
+namespace
+{
+
+/// The lobby of the config, if the game has one
+std::optional<LobbyClientConfig> LobbyConfig()
+{
+	if (!Locator::config::has_value() || !Locator::config::value().lobbyOrigin.has_value())
+	{
+		return std::nullopt;
+	}
+#if defined(__EMSCRIPTEN__)
+	// The web build calls the lobby on the origin of the page
+	return LobbyClientConfig {.origin = {}, .client = lobby_api::ClientKind::Browser};
+#else
+	auto origin = *Locator::config::value().lobbyOrigin;
+	while (!origin.empty() && origin.back() == '/')
+	{
+		origin.pop_back();
+	}
+	constexpr std::string_view k_Https = "https://";
+	if (!online::http_policy::IsHttpsAddress(origin) || origin.find('/', k_Https.size()) != std::string::npos ||
+	    origin.find_first_of("?#", k_Https.size()) != std::string::npos)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The lobby must be an https:// origin with no path: {}", origin);
+		return std::nullopt;
+	}
+	return LobbyClientConfig {.origin = std::move(origin), .client = lobby_api::ClientKind::Desktop};
+#endif
+}
+
+/// The date of the computer's calendar at a time
+lobby_api::Date LocalDate(int64_t unixTime)
+{
+	const auto time = static_cast<std::time_t>(unixTime);
+	std::tm local {};
+#if defined(_WIN32)
+	localtime_s(&local, &time);
+#else
+	localtime_r(&time, &local);
+#endif
+	return {.year = local.tm_year + 1900, .month = local.tm_mon + 1, .day = local.tm_mday};
+}
+
+/// The web client, the lobby client and the real-world weather. They make no call until the game asks for one.
+void InitializeOnline(const player_profiles::Store& profiles)
+{
+#if defined(__EMSCRIPTEN__)
+	Locator::httpClient::emplace<web::FetchHttpClient>();
+#else
+	Locator::httpClient::emplace<online::CurlHttpClient>();
+#endif
+	Locator::lobbyClient::emplace<LobbyClientSystem>(LobbyConfig(), Locator::httpClient::value(),
+	                                                 std::make_unique<online::NoPushChannel>(),
+	                                                 online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
+	                                                 []() { return std::chrono::steady_clock::now(); });
+	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
+	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
+	    internetWeather, Locator::lobbyClient::value(),
+	    []() -> std::optional<std::vector<uint8_t>> {
+		    auto& files = Locator::filesystem::value();
+		    const auto path = files.GetPath<filesystem::Path::Scripts>() / "weatherinfo.lhw";
+		    try
+		    {
+			    if (!files.Exists(path))
+			    {
+				    return std::nullopt;
+			    }
+			    return files.ReadAll(path);
+		    }
+		    catch (const std::exception& error)
+		    {
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read the weather presets: {}", error.what());
+			    return std::nullopt;
+		    }
+	    },
+	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); });
+}
+
+} // namespace
+} // namespace openblack
+
 bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 {
 	Locator::terrainSystem::emplace<UnloadedIsland>();
@@ -364,6 +470,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
+	InitializeOnline(profiles);
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
@@ -571,6 +678,10 @@ void openblack::ShutDownServices()
 
 	// The inspector goes first: its providers read the services below
 	Locator::inspector::reset();
+	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
+	Locator::realWeatherSystem::reset();
+	Locator::lobbyClient::reset();
+	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();

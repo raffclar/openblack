@@ -141,6 +141,7 @@
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
+#include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
@@ -212,6 +213,7 @@
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
+#include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
@@ -228,6 +230,7 @@
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/RainSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/RealWeatherSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -299,6 +302,7 @@
 #include "LHScriptX/Script.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
+#include "Online/HttpClientInterface.h"
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
@@ -664,6 +668,8 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
+	config.lobbyOrigin = args.lobbyOrigin;
+	config.useInternetWeather = args.useInternetWeather;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
 	config.resolution = {args.windowWidth, args.windowHeight};
@@ -2658,6 +2664,14 @@ void Game::PlayTurnStep(game_turn::Step step)
 	case Step::GlobalStatistics:
 		player_statistics::ProcessGlobalTurn(turn, _statisticsFrameRate.Rate());
 		break;
+	case Step::RealWeather:
+		// After the turn of the game, the real-world weather that came changes the weather of the land
+		if (Locator::realWeatherSystem::has_value())
+		{
+			ecs::RealWeatherLand land;
+			Locator::realWeatherSystem::value().ProcessTurn(land);
+		}
+		break;
 	case Step::WalkerLookahead:
 		// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
 		Locator::pathfindingSystem::value().ProcessLookahead();
@@ -2956,6 +2970,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Audio:
 		Locator::audio::value().Update();
 		break;
+	case Step::Online:
+		UpdateOnline();
+		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);
 		break;
@@ -2966,6 +2983,19 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	}
 	return true;
+}
+
+void Game::UpdateOnline()
+{
+	// The web client moves its transfers on and runs the callbacks of the answers. Then the lobby client moves on.
+	if (Locator::httpClient::has_value())
+	{
+		Locator::httpClient::value().Poll();
+	}
+	if (Locator::lobbyClient::has_value())
+	{
+		Locator::lobbyClient::value().Update();
+	}
 }
 
 void Game::StartFrame(FrameState& frame)
@@ -6017,6 +6047,12 @@ void Game::PrepareNewLand(land_change::Kind change)
 		{
 			Locator::creatureCarryOverSystem::value().StartGame();
 		}
+	}
+	// As a game starts, the real-world weather asks the lobby for the weather of today, when the player turned it on
+	if (rules.gameStarts && !toTestbed && Locator::realWeatherSystem::has_value())
+	{
+		ecs::RealWeatherLand land;
+		Locator::realWeatherSystem::value().StartGame(land);
 	}
 	if (Locator::playerSystem::has_value())
 	{

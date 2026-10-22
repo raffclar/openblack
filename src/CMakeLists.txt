@@ -17,6 +17,11 @@ if (NOT EMSCRIPTEN)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Web/")
   list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Web/")
 endif ()
+# The HTTPS client and the token stores of the desktop. The web build uses the fetch of the browser and its cookies.
+if (EMSCRIPTEN)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Online/Desktop/")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Online/Desktop/")
+endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
@@ -179,6 +184,8 @@ target_link_libraries(
           OpenAL::OpenAL
           minizip::minizip
   PUBLIC spdlog::spdlog
+         # The JSON shapes of the lobby's API are part of the lobby client
+         lobbyapi
          # The mind file's types are part of the creature mind component
          creaturemind
          # The saved game's files are part of the saved game component
@@ -191,6 +198,38 @@ if (EMSCRIPTEN)
   target_include_directories(
     openblack_lib PRIVATE "${EMSCRIPTEN_ROOT_PATH}/system/lib/wasmfs"
   )
+endif ()
+
+if (NOT EMSCRIPTEN)
+  # The HTTPS client of the desktop: libcurl with OpenSSL, for TLS 1.3 and its cipher suites on every platform
+  find_package(CURL CONFIG REQUIRED)
+  target_link_libraries(openblack_lib PRIVATE CURL::libcurl)
+  if (WIN32)
+    # The data protection of Windows encrypts the refresh token of the lobby
+    target_link_libraries(openblack_lib PRIVATE crypt32)
+  elseif (APPLE)
+    # The keychain keeps the refresh token of the lobby
+    target_link_libraries(
+      openblack_lib PRIVATE "-framework Security" "-framework CoreFoundation"
+    )
+  elseif (UNIX AND NOT ANDROID)
+    # The secret service keeps the refresh token of the lobby, when libsecret is on the system
+    find_package(PkgConfig QUIET)
+    if (PKG_CONFIG_FOUND)
+      pkg_check_modules(LIBSECRET QUIET IMPORTED_TARGET libsecret-1)
+    endif ()
+    if (LIBSECRET_FOUND)
+      target_link_libraries(openblack_lib PRIVATE PkgConfig::LIBSECRET)
+      target_compile_definitions(
+        openblack_lib PRIVATE OPENBLACK_HAVE_LIBSECRET
+      )
+    else ()
+      message(
+        STATUS
+          "libsecret not found: the lobby session is not kept between runs"
+      )
+    endif ()
+  endif ()
 endif ()
 
 if (WIN32)
@@ -400,8 +439,9 @@ else ()
     # and its file reads that wait work as on the desktop. The main thread of the page only gives the input to the game
     # and shows the canvas. The game draws into the canvas with WebGL 2.
     #
-    # The build has no part that sends data over the network: no emrun, no FETCH and no files that the page loads before
-    # the game starts. The page gives the user's game folder from the disk (see web/page).
+    # The only part of the build that sends data over the network is the lobby client. It uses the fetch of the browser
+    # (FETCH) for paths on the origin of the page only. There is no emrun and no file that the page loads before the
+    # game starts. The page gives the user's game folder from the disk (see web/page).
     target_link_options(
       openblack
       PRIVATE
@@ -421,6 +461,7 @@ else ()
       -sDEFAULT_PTHREAD_STACK_SIZE=2MB
       -sEXIT_RUNTIME=1
       -sENVIRONMENT=web,worker
+      -sFETCH=1
       "--pre-js=${CMAKE_SOURCE_DIR}/web/page/pre.js"
       "--post-js=${CMAKE_SOURCE_DIR}/web/page/post.js"
     )

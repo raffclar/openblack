@@ -193,6 +193,7 @@ enum class Step : uint8_t
 	Autosave,
 	GameOver,
 	GlobalStatistics,
+	RealWeather,
 	WalkerLookahead,
 	InfluenceTurnEnd,
 
@@ -292,6 +293,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Autosave, .stage = Stage::EndTurn},
     {.step = Step::GameOver, .stage = Stage::EndTurn},
     {.step = Step::GlobalStatistics, .stage = Stage::EndTurn},
+    // The real-world weather follows the turn of the game, also once the game is over
+    {.step = Step::RealWeather, .stage = Stage::AfterTurn},
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
 });

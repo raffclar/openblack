@@ -1272,6 +1272,62 @@ bool WeatherSystem::SetWeatherThingAffectedByWind(entt::entity thing, bool affec
 	return true;
 }
 
+bool WeatherSystem::StormLives(entt::entity entity) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(entity))
+	{
+		return false;
+	}
+	const auto* storm = registry.TryGet<const Storm>(entity);
+	return storm != nullptr && !storm->dead;
+}
+
+entt::entity WeatherSystem::AddStandingStorm(const script_weather::LandStorm& land)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = registry.Create();
+	auto& storm = registry.Assign<Storm>(entity);
+	storm.position = land.position;
+	storm.currentPosition = land.position;
+	storm.destination = land.position;
+	storm.speed = 0.0f;
+	storm.arrived = true;
+	storm.age = land.age;
+	storm.innerRadius = land.innerRadius;
+	storm.outerRadius = land.outerRadius;
+	storm.fadeTime = land.fadeSeconds;
+	storm.lastsFor = land.lastsFor;
+	storm.strength = land.strength;
+	storm.cloudHeight = land.cloudHeight;
+	storm.cloudCount = land.cloudCount;
+	storm.cloudShade = land.cloudShade;
+	storm.rainSpeed = land.rainSpeed;
+	storm.effect = land.effect;
+	storm.thunderWait = land.thunderWait;
+	storm.boltWait = land.boltWait;
+	storm.climate = entt::null;
+	storm.serial = _nextStormSerial++;
+	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "A standing storm at ({}, {}): radius {}, {}s", land.position.x, land.position.z,
+	                    land.outerRadius, land.lastsFor);
+	return entity;
+}
+
+void WeatherSystem::SetBackgroundWeather(const components::WeatherInfo& weather)
+{
+	_background = weather;
+	// Every cell of the atmosphere is worked out again
+	++_stamp;
+	if (_stamp == 0)
+	{
+		for (auto& cell : _grid)
+		{
+			cell.stamp = 0;
+		}
+		_stamp = 1;
+	}
+}
+
 void WeatherSystem::EndStorm(entt::entity entity)
 {
 	auto* storm = Locator::entitiesRegistry::value().TryGet<Storm>(entity);
@@ -1312,8 +1368,8 @@ void WeatherSystem::StrikeLightning(bool bolt)
 
 void WeatherSystem::ComputeCell(WeatherInfo& cell, int x, int z)
 {
-	// Calm air, then every live storm, newest first
-	cell = WeatherInfo {};
+	// The background weather, then every live storm, newest first
+	cell = _background;
 	const glm::vec3 point {static_cast<float>(x) * k_CellSize, 0.0f, static_cast<float>(z) * k_CellSize};
 	for (const auto& storm : _activeStorms)
 	{
@@ -1330,10 +1386,10 @@ void WeatherSystem::ComputeCell(WeatherInfo& cell, int x, int z)
 
 const WeatherInfo& WeatherSystem::GetCell(int x, int z)
 {
-	static const WeatherInfo ambient {};
+	// Each place off the land has the background weather
 	if (x < 0 || z < 0 || x >= k_GridSize || z >= k_GridSize)
 	{
-		return ambient;
+		return _background;
 	}
 	auto& cell = _grid[(z * k_GridSize) + x];
 	if (cell.stamp != _stamp)
@@ -1412,14 +1468,14 @@ WeatherInfo WeatherSystem::GetWeatherSmooth(const glm::vec3& position)
 	auto info = Lerp(Lerp(c00, c10, wx), Lerp(c01, c11, wx), wz);
 	info.stamp = c00.stamp;
 
-	// High above the ground the weather gives way to calm air
+	// High above the ground the weather gives way to the background weather
 	if (position.y > k_HighAltitude)
 	{
 		const auto weight = std::min(Ftol((position.y - k_HighAltitude) * k_HighAltitudeBlend), 256);
 		const auto temperature = info.temperature;
-		info = Lerp(info, WeatherInfo {}, weight);
+		info = Lerp(info, _background, weight);
 		info.stamp = c00.stamp;
-		info.temperature = static_cast<int8_t>(LerpByte(temperature, 0, weight) - k_HighAltitudeCooling);
+		info.temperature = static_cast<int8_t>(LerpByte(temperature, _background.temperature, weight) - k_HighAltitudeCooling);
 	}
 	else if (position.y > k_LowAltitude)
 	{
