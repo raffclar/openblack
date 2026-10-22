@@ -57,9 +57,9 @@ public:
 	virtual void Open(std::string url, std::string accessToken, PushHandlers handlers) = 0;
 	/// Sends a text frame. Nothing happens when the channel is not open.
 	virtual void Send(std::string_view text) = 0;
-	/// Closes the channel. The closed handler runs with Closed.
+	/// Closes the channel. No handler runs after this call.
 	virtual void Close() = 0;
-	/// Once a frame: moves the connection on without a wait, and runs the handlers
+	/// Once a frame, after the transport moved on: runs the handlers that wait
 	virtual void Poll() = 0;
 	[[nodiscard]] virtual bool IsOpen() const = 0;
 };

@@ -581,6 +581,13 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to initialize bgfx.");
 		return nullptr;
 	}
+	if (bgfx::getRendererType() != init.type)
+	{
+		// bgfx tries the next renderer when the renderer that the game asks for does not start. In a web browser with no
+		// WebGPU device, this is WebGL 2.
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "The {} renderer did not start. The game draws with {}.",
+		                   bgfx::getRendererName(init.type), bgfx::getRendererName(bgfx::getRendererType()));
+	}
 
 	const bgfx::Caps* caps = bgfx::getCaps();
 	if (caps->limits.maxTextureLayers < 9)

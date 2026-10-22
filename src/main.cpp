@@ -179,8 +179,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 #endif
 		if constexpr (openblack::k_Platform == openblack::Platform::Web)
 		{
-			// A web browser has WebGL 2 only
-			graphicsBackend = openblack::GraphicsBackend::OpenGLES;
+			// The web build draws with WebGPU. When the browser gives no WebGPU device, bgfx uses WebGL 2. The page also
+			// selects WebGL 2 on the command line when it finds no WebGPU adapter.
+			graphicsBackend = openblack::GraphicsBackend::WebGPU;
 		}
 
 		// allow user to specify a renderer
@@ -492,8 +493,7 @@ int main(int argc, char* argv[]) noexcept
 			return EXIT_FAILURE;
 		}
 #if defined(__EMSCRIPTEN__)
-		// In a web browser the game thread gives control back to the browser after each frame, so that the browser shows
-		// the frame. Thus the frames run after main returns, and the program stops after the last frame.
+		// In a web browser the game thread waits for the browser after each frame, so that the browser shows the frame
 		switch (game->StartRun())
 		{
 		case openblack::Game::RunStart::Failed:
@@ -503,12 +503,11 @@ int main(int argc, char* argv[]) noexcept
 		case openblack::Game::RunStart::Play:
 			break;
 		}
-		std::shared_ptr<openblack::Game> running(std::move(game));
-		openblack::web::RunFrames([running]() { return running->RunFrame(); },
-		                          [running]() {
-			                          running->EndRun();
-			                          return EXIT_SUCCESS;
-		                          });
+		return openblack::web::RunFrames([&game]() { return game->RunFrame(); },
+		                                 [&game]() {
+			                                 game->EndRun();
+			                                 return EXIT_SUCCESS;
+		                                 });
 #else
 		if (!game->Run())
 		{

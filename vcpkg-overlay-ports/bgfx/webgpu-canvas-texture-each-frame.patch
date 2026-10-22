@@ -1,0 +1,78 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 84cac84..f6c7018 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -5966,13 +5966,37 @@ WGPU_IMPORT
+ 		return textureView;
+ 	}
+ 
++	// A browser canvas gives one texture for each task of the page. The texture is not valid after the task ends,
++	// because the browser then shows it. Thus in the browser the swap chain gets the texture at the start of each
++	// frame, and not after it presents the frame before.
++	void SwapChainWGPU::acquire()
++	{
++		if (NULL == m_surface)
++		{
++			return;
++		}
++
++		wgpuRelease(m_textureView);
++		wgpuRelease(m_texture);
++
++		WGPUSurfaceTexture surfaceTexture = WGPU_SURFACE_TEXTURE_INIT;
++		wgpuSurfaceGetCurrentTexture(m_surface, &surfaceTexture);
++		m_texture = surfaceTexture.texture;
++
++		if (NULL != m_texture)
++		{
++			m_textureView = createTextureView();
++		}
++	}
++
+ 	void SwapChainWGPU::present()
+ 	{
+ 		wgpuRelease(m_textureView);
+ 		wgpuRelease(m_texture);
+-#if !BX_PLATFORM_EMSCRIPTEN
++#if BX_PLATFORM_EMSCRIPTEN
++		// The browser shows the canvas when the task ends. The next frame gets its texture in acquire().
++#else
+ 		WGPU_CHECK(wgpuSurfacePresent(m_surface) );
+-#endif // !BX_PLATFORM_EMSCRIPTEN
+ 
+ 		WGPUSurfaceTexture surfaceTexture = WGPU_SURFACE_TEXTURE_INIT;
+ 		wgpuSurfaceGetCurrentTexture(m_surface, &surfaceTexture);
+@@ -6003,6 +6027,7 @@ WGPU_IMPORT
+ 		{
+ 			m_textureView = createTextureView();
+ 		}
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 	}
+ 
+ 	void FrameBufferWGPU::create(uint8_t _num, const Attachment* _attachment)
+@@ -7141,6 +7166,13 @@ WGPU_IMPORT
+ 			return;
+ 		}
+ 
++#if BX_PLATFORM_EMSCRIPTEN
++		for (uint16_t ii = 0; ii < m_numWindows; ++ii)
++		{
++			getFrameBuffer(m_windows[ii]).m_swapChain.acquire();
++		}
++#endif // BX_PLATFORM_EMSCRIPTEN
++
+ 		if (_render->m_capture)
+ 		{
+ 			renderDocTriggerCapture();
+diff --git a/bgfx/src/renderer_webgpu.h b/bgfx/src/renderer_webgpu.h
+index 4f6af45..f2194c9 100644
+--- a/bgfx/src/renderer_webgpu.h
++++ b/bgfx/src/renderer_webgpu.h
+@@ -696,6 +696,7 @@ namespace wgpu {
+ 
+ 		bool configure(const SwapChain& _desc);
+ 		WGPUTextureView createTextureView();
++		void acquire();
+ 		void present();
+ 
+ 		void* m_nwh;

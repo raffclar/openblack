@@ -13,27 +13,11 @@
 #include <string_view>
 #include <vector>
 
+#include "Online/Desktop/CurlTls.h"
 #include "Online/HttpClientInterface.h"
 
 namespace openblack::online
 {
-
-/// The TLS settings of the desktop client
-namespace tls_settings
-{
-/// The TLS 1.2 cipher suites: ECDHE key exchange with AES-GCM or ChaCha20-Poly1305 only, so each connection has forward
-/// secrecy and authenticated encryption. The names are the names of OpenSSL.
-constexpr std::string_view k_Tls12Ciphers = "ECDHE-ECDSA-AES128-GCM-SHA256:ECDHE-RSA-AES128-GCM-SHA256:"
-                                            "ECDHE-ECDSA-AES256-GCM-SHA384:ECDHE-RSA-AES256-GCM-SHA384:"
-                                            "ECDHE-ECDSA-CHACHA20-POLY1305:ECDHE-RSA-CHACHA20-POLY1305";
-/// The TLS 1.3 cipher suites, which are all AEAD suites
-constexpr std::string_view k_Tls13Ciphers = "TLS_AES_128_GCM_SHA256:TLS_AES_256_GCM_SHA384:TLS_CHACHA20_POLY1305_SHA256";
-/// The time to connect, and the time for all of a request
-constexpr long k_ConnectTimeoutMs = 10'000;
-constexpr long k_RequestTimeoutMs = 30'000;
-/// The largest answer that the client keeps
-constexpr size_t k_MostAnswerBytes = 16 * 1024 * 1024;
-} // namespace tls_settings
 
 /// The HTTPS client of the desktop, with libcurl and OpenSSL. The transfers move on in Poll, without a wait, so a request
 /// does not stop a frame. Names of hosts resolve on a thread of libcurl.
