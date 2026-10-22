@@ -24,6 +24,16 @@ using namespace openblack::lobby_api;
 namespace
 {
 
+/// A server as the lobby lists it
+std::string ServerJson()
+{
+	return R"({"id":"eden","hostname":"Eden","land":"Test","gamemode":"openstaging","locked":true,"password":false,)"
+	       R"("numplayers":3,"maxplayers":32,"gamever":"1.0","infoversion":1,"creatureversion":2,"oosversion":3,)"
+	       R"("players":[{"account":{"id":4,"name":"abc"},"role":"god","clan":null},)"
+	       R"({"account":{"id":5,"name":"def"},"role":"observer","clan":9}],)"
+	       R"("url":"wss://bw.example/game/eden","updated":"2026-10-22T10:00:00.000Z"})";
+}
+
 std::string TextOf(const std::vector<uint8_t>& bytes)
 {
 	return {bytes.begin(), bytes.end()};
@@ -45,12 +55,12 @@ TEST(LobbyApi, AccountNamesAreThreeToThirtyTwoLettersAndDigits)
 	EXPECT_FALSE(IsValidAccountName(""));
 }
 
-TEST(LobbyApi, LoginRequestNamesTheClient)
+TEST(LobbyApi, LoginRequestAsksForTheCookieInTheBrowser)
 {
-	EXPECT_EQ(ToJson(LoginRequest {.name = "abc", .password = "pw", .client = ClientKind::Desktop}),
-	          R"({"client":"desktop","name":"abc","password":"pw"})");
-	EXPECT_EQ(ToJson(LoginRequest {.name = "abc", .password = "pw", .client = ClientKind::Browser}),
-	          R"({"client":"browser","name":"abc","password":"pw"})");
+	EXPECT_EQ(ToJson(LoginRequest {.name = "abc", .password = "pw", .cookie = false}),
+	          R"({"cookie":false,"name":"abc","password":"pw"})");
+	EXPECT_EQ(ToJson(LoginRequest {.name = "abc", .password = "pw", .cookie = true}),
+	          R"({"cookie":true,"name":"abc","password":"pw"})");
 }
 
 TEST(LobbyApi, RefreshRequestOfTheBrowserHasNoToken)
@@ -61,77 +71,111 @@ TEST(LobbyApi, RefreshRequestOfTheBrowserHasNoToken)
 
 TEST(LobbyApi, SessionNeedsATokenATimeAndAnAccount)
 {
-	const auto desktop =
-	    ParseSession(R"({"access_token":"a","expires_in":900,"refresh_token":"r","account":{"id":7,"name":"abc"},"extra":1})");
+	const auto desktop = ParseSession(R"({"token_type":"Bearer","access_token":"a",
+	    "access_token_expires":"2026-10-22T10:15:00.000Z","refresh_token":"r",
+	    "refresh_token_expires":"2026-11-21T10:00:00+00:00","account":{"id":7,"name":"abc"},"extra":1})");
 	ASSERT_TRUE(desktop.has_value());
 	EXPECT_EQ(desktop->accessToken, "a");
-	EXPECT_EQ(desktop->expiresIn, 900);
+	EXPECT_EQ(desktop->accessTokenExpires, *ParseTime("2026-10-22T10:15:00Z"));
 	EXPECT_EQ(desktop->refreshToken, "r");
+	EXPECT_EQ(desktop->refreshTokenExpires, *ParseTime("2026-11-21T10:00:00Z"));
 	EXPECT_EQ(desktop->account.id, 7);
 	EXPECT_EQ(desktop->account.name, "abc");
 
-	const auto browser = ParseSession(R"({"access_token":"a","expires_in":900,"account":{"id":7,"name":"abc"}})");
+	// The browser's refresh token is in the cookie
+	const auto browser = ParseSession(R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z",
+	    "refresh_token":null,"refresh_token_expires":"2026-11-21T10:00:00Z","account":{"id":7,"name":"abc"}})");
 	ASSERT_TRUE(browser.has_value());
 	EXPECT_FALSE(browser->refreshToken.has_value());
 
-	EXPECT_FALSE(ParseSession(R"({"expires_in":900,"account":{"id":7,"name":"abc"}})").has_value());
-	EXPECT_FALSE(ParseSession(R"({"access_token":"","expires_in":900,"account":{"id":7,"name":"abc"}})").has_value());
-	EXPECT_FALSE(ParseSession(R"({"access_token":"a","expires_in":0,"account":{"id":7,"name":"abc"}})").has_value());
-	EXPECT_FALSE(ParseSession(R"({"access_token":"a","expires_in":"900","account":{"id":7,"name":"abc"}})").has_value());
-	EXPECT_FALSE(ParseSession(R"({"access_token":"a","expires_in":900})").has_value());
+	EXPECT_FALSE(ParseSession(R"({"access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"}})"));
+	EXPECT_FALSE(
+	    ParseSession(R"({"access_token":"","access_token_expires":"2026-10-22T10:15:00Z","account":{"id":7,"name":"abc"}})"));
+	EXPECT_FALSE(ParseSession(R"({"access_token":"a","access_token_expires":900,"account":{"id":7,"name":"abc"}})"));
+	EXPECT_FALSE(ParseSession(R"({"access_token":"a","access_token_expires":"soon","account":{"id":7,"name":"abc"}})"));
+	EXPECT_FALSE(ParseSession(R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z"})"));
 	EXPECT_FALSE(ParseSession("not json").has_value());
 	EXPECT_FALSE(ParseSession("[]").has_value());
+}
+
+TEST(LobbyApi, TimesAreMillisecondsSince1970)
+{
+	EXPECT_EQ(ParseTime("1970-01-01T00:00:00Z"), 0);
+	EXPECT_EQ(ParseTime("1970-01-01T00:00:01.5Z"), 1500);
+	EXPECT_EQ(ParseTime("2001-01-01T12:00:00Z"), int64_t {978350400} * 1000);
+	EXPECT_EQ(ParseTime("2001-01-01T13:00:00+01:00"), int64_t {978350400} * 1000);
+	EXPECT_EQ(ParseTime("2001-01-01T11:30:00-00:30"), int64_t {978350400} * 1000);
+	EXPECT_EQ(ParseTime("2024-02-29T00:00:00.123456Z"), int64_t {1709164800} * 1000 + 123);
+	EXPECT_FALSE(ParseTime("2026-10-22T10:15:00").has_value());
+	EXPECT_FALSE(ParseTime("2026-13-22T10:15:00Z").has_value());
+	EXPECT_FALSE(ParseTime("2026-10-22 10:15Z").has_value());
+	EXPECT_FALSE(ParseTime("2026-10-22T10:15:00Zx").has_value());
 }
 
 TEST(LobbyApi, MeHasTheClansAndThePlaceForTheWeather)
 {
 	const auto me = ParseMe(R"({"id":3,"name":"abc","email":"a@b.c","email_verified":true,"points":1012.5,
-	    "clans":[{"id":1,"name":"Gods","points":2000}],"location":{"country":"gb","area":"","city":"Guildford"}})");
+	    "games_ranked":4,"country":"gb","area":"","city":"Guildford","clans":[{"id":1,"name":"Gods","role":"leader"}],
+	    "date_joined":"2026-10-01T09:00:00.000000+00:00"})");
 	ASSERT_TRUE(me.has_value());
 	EXPECT_EQ(me->id, 3);
 	EXPECT_TRUE(me->emailVerified);
 	EXPECT_DOUBLE_EQ(me->points, 1012.5);
+	EXPECT_EQ(me->gamesRanked, 4);
 	ASSERT_EQ(me->clans.size(), 1u);
 	EXPECT_EQ(me->clans[0].name, "Gods");
-	ASSERT_TRUE(me->location.has_value());
-	EXPECT_EQ(me->location->city, "Guildford");
-
-	const auto noPlace = ParseMe(R"({"id":3,"name":"abc","location":null})");
-	ASSERT_TRUE(noPlace.has_value());
-	EXPECT_FALSE(noPlace->location.has_value());
-	EXPECT_TRUE(noPlace->clans.empty());
+	EXPECT_EQ(me->clans[0].role, "leader");
+	EXPECT_EQ(me->country, "gb");
+	EXPECT_EQ(me->city, "Guildford");
+	EXPECT_EQ(me->dateJoined, *ParseTime("2026-10-01T09:00:00Z"));
+	EXPECT_FALSE(ParseMe(R"({"id":3,"name":"abc","clans":[{"id":1,"name":"Gods"}]})").has_value());
 }
 
 TEST(LobbyApi, ServerListReadsEachServer)
 {
-	const auto list = ParseServerList(R"({"servers":[{"id":5,"name":"Eden","players":3,"max_players":32,"playing":true,
-	    "version":"1.0","password_needed":false,"locked":true,"land":"Test"}]})");
+	const auto list = ParseServerList(R"({"servers":[)" + ServerJson() + "]}");
 	ASSERT_TRUE(list.has_value());
 	ASSERT_EQ(list->servers.size(), 1u);
 	const auto& server = list->servers[0];
-	EXPECT_EQ(server.id, 5);
-	EXPECT_EQ(server.players, 3);
-	EXPECT_EQ(server.maxPlayers, 32);
-	EXPECT_TRUE(server.playing);
+	EXPECT_EQ(server.id, "eden");
+	EXPECT_EQ(server.hostname, "Eden");
+	EXPECT_EQ(server.gamemode, "openstaging");
+	EXPECT_EQ(server.numplayers, 3);
+	EXPECT_EQ(server.maxplayers, 32);
 	EXPECT_TRUE(server.locked);
-	EXPECT_EQ(server.land, "Test");
-	EXPECT_FALSE(ParseServerList(R"({"servers":[{"id":5}]})").has_value());
+	EXPECT_FALSE(server.password);
+	EXPECT_EQ(server.oosversion, 3);
+	ASSERT_EQ(server.players.size(), 2u);
+	EXPECT_EQ(server.players[0].account.name, "abc");
+	EXPECT_FALSE(server.players[0].clan.has_value());
+	EXPECT_EQ(server.players[1].role, "observer");
+	EXPECT_EQ(server.players[1].clan, 9);
+	EXPECT_EQ(server.url, "wss://bw.example/game/eden");
+	EXPECT_EQ(server.updated, *ParseTime("2026-10-22T10:00:00Z"));
+	EXPECT_FALSE(ParseServerList(R"({"servers":[{"id":"eden"}]})").has_value());
 	EXPECT_FALSE(ParseServerList(R"({"servers":{}})").has_value());
 }
 
 TEST(LobbyApi, NumbersOutOfRangeAreRefused)
 {
-	EXPECT_FALSE(ParseServerList(R"({"servers":[{"id":5,"name":"x","players":4294967296,"max_players":32}]})").has_value());
-	EXPECT_FALSE(ParseServerList(R"({"servers":[{"id":5,"name":"x","players":1.5,"max_players":32}]})").has_value());
+	std::string server = ServerJson();
+	const auto big = server;
+	server.replace(server.find(R"("numplayers":3)"), 14, R"("numplayers":4294967296)");
+	EXPECT_FALSE(ParseServerList(R"({"servers":[)" + server + "]}").has_value());
+	server = big;
+	server.replace(server.find(R"("numplayers":3)"), 14, R"("numplayers":1.5)");
+	EXPECT_FALSE(ParseServerList(R"({"servers":[)" + server + "]}").has_value());
 }
 
 TEST(LobbyApi, TicketClansRankingAndPlayer)
 {
-	const auto ticket = ParseJoinTicket(R"({"url":"wss://bw.example/game/5","ticket":"v4.public.x","expires_in":60})");
+	const auto ticket =
+	    ParseJoinTicket(R"({"url":"wss://bw.example/game/5","ticket":"v4.public.x","expires":"2026-10-22T10:01:00Z"})");
 	ASSERT_TRUE(ticket.has_value());
 	EXPECT_EQ(ticket->url, "wss://bw.example/game/5");
-	EXPECT_EQ(ticket->expiresIn, 60);
-	EXPECT_FALSE(ParseJoinTicket(R"({"url":"wss://x","ticket":""})").has_value());
+	EXPECT_EQ(ticket->expires, *ParseTime("2026-10-22T10:01:00Z"));
+	EXPECT_FALSE(ParseJoinTicket(R"({"url":"wss://x","ticket":"","expires":"2026-10-22T10:01:00Z"})").has_value());
+	EXPECT_FALSE(ParseJoinTicket(R"({"url":"wss://x","ticket":"t"})").has_value());
 
 	const auto clans = ParseClanList(R"({"clans":[{"id":1,"name":"A"},{"id":2,"name":"B","points":3}]})");
 	ASSERT_TRUE(clans.has_value());
@@ -198,35 +242,57 @@ TEST(LobbyApi, ClanCreatureKeepsTheFilesAndTheBitsOfTheAlignment)
 
 TEST(LobbyApi, ProblemGivesTheDetail)
 {
-	const auto problem =
-	    ParseProblem(R"({"type":"about:blank","title":"Too Many Requests","status":429,"detail":"Wait 5 seconds"})");
+	const auto problem = ParseProblem(R"({"type":"about:blank","title":"Too Many Requests","status":429,
+	    "detail":"Wait 5 seconds","instance":"/api/v1/sessions","code":"throttled"})");
 	ASSERT_TRUE(problem.has_value());
 	EXPECT_EQ(problem->status, 429);
 	EXPECT_EQ(problem->detail, "Wait 5 seconds");
+	EXPECT_EQ(problem->code, "throttled");
 }
 
 TEST(LobbyApi, PushEventsAndFrames)
 {
-	const auto event = ParsePushEvent(R"({"seq":12,"type":"servers.changed","data":{"id":5,"removed":true}})");
+	const auto event = ParsePushEvent(
+	    R"({"seq":12,"type":"servers.removed","time":"2026-10-22T10:00:00.000Z","data":{"id":"eden","reason":"timeout"}})");
 	ASSERT_TRUE(event.has_value());
 	EXPECT_EQ(event->seq, 12);
-	EXPECT_EQ(event->type, events::k_ServersChanged);
-	const auto change = ParseServerChange(event->data);
-	ASSERT_TRUE(change.has_value());
-	EXPECT_TRUE(change->removed);
-	EXPECT_EQ(change->server.id, 5);
+	EXPECT_EQ(event->type, events::k_ServersRemoved);
+	EXPECT_EQ(event->time, "2026-10-22T10:00:00.000Z");
+	const auto removed = ParseServerChange(event->type, event->data);
+	ASSERT_TRUE(removed.has_value());
+	EXPECT_TRUE(removed->removed);
+	EXPECT_EQ(removed->server.id, "eden");
+	EXPECT_EQ(removed->reason, "timeout");
 
-	const auto ping = ParsePushEvent(R"({"type":"ping"})");
-	ASSERT_TRUE(ping.has_value());
-	EXPECT_EQ(ping->seq, 0);
-	EXPECT_EQ(ping->data, "null");
+	const auto changed = ParseServerChange(events::k_ServersChanged, R"({"server":)" + ServerJson() + "}");
+	ASSERT_TRUE(changed.has_value());
+	EXPECT_FALSE(changed->removed);
+	EXPECT_EQ(changed->server.hostname, "Eden");
+	EXPECT_FALSE(ParseServerChange(events::k_ChatLine, "{}").has_value());
+
+	// A control frame has no number
+	const auto hello = ParsePushEvent(R"({"type":"hello","data":{"epoch":"ab12","seq":40,"account":{"id":7,"name":"abc"}}})");
+	ASSERT_TRUE(hello.has_value());
+	EXPECT_FALSE(hello->seq.has_value());
+	const auto position = ParsePushPosition(hello->data);
+	ASSERT_TRUE(position.has_value());
+	EXPECT_EQ(position->epoch, "ab12");
+	EXPECT_EQ(position->seq, 40);
+	const auto error = ParsePushError(R"({"code":"no_access","detail":"Join the server's room first.","channel":"server-x"})");
+	ASSERT_TRUE(error.has_value());
+	EXPECT_EQ(error->channel, "server-x");
 	EXPECT_FALSE(ParsePushEvent(R"({"seq":1})").has_value());
 
-	EXPECT_EQ(PushFrame(PushOp::Resume, {}, 41), R"({"last_seq":41,"op":"resume"})");
-	EXPECT_EQ(PushFrame(PushOp::Subscribe, k_ServersChannel), R"({"channel":"servers","op":"subscribe"})");
-	EXPECT_EQ(PushFrame(PushOp::Unsubscribe, k_ServersChannel), R"({"channel":"servers","op":"unsubscribe"})");
-	EXPECT_EQ(PushFrame(PushOp::Pong), R"({"op":"pong"})");
-	EXPECT_DOUBLE_EQ(ParsePointsChange(R"({"points":1032.5})")->points, 1032.5);
+	EXPECT_EQ(SubscribeFrame(true, k_ServersChannel), R"({"channel":"servers","type":"subscribe"})");
+	EXPECT_EQ(SubscribeFrame(false, k_ServersChannel), R"({"channel":"servers","type":"unsubscribe"})");
+	const std::vector<std::string> channels {"servers", "lobby"};
+	EXPECT_EQ(ResumeFrame("ab12", 41, channels), R"({"channels":["servers","lobby"],"epoch":"ab12","seq":41,"type":"resume"})");
+	const auto points =
+	    ParsePointsChange(R"({"result":3,"points":1032.5,"games_ranked":5,"clan":null,"position":1,"change":16.0})");
+	ASSERT_TRUE(points.has_value());
+	EXPECT_DOUBLE_EQ(points->points, 1032.5);
+	EXPECT_EQ(points->gamesRanked, 5);
+	EXPECT_DOUBLE_EQ(points->change, 16.0);
 	EXPECT_EQ(ParseBan(R"({"reason":"cheat"})")->reason, "cheat");
 }
 

@@ -134,8 +134,11 @@ public:
 	[[nodiscard]] virtual std::span<const lobby_api::ServerEntry> GetKnownServers() const = 0;
 	/// Asks the lobby for the changes of the server list on the push channel, or stops them
 	virtual void WatchServers(bool watch) = 0;
+	/// Asks the lobby for the events of a channel of the push channel ("lobby", "servers" or "server-<id>"), or stops
+	/// them. The client asks again for each channel when the push channel opens again.
+	virtual void WatchChannel(std::string channel, bool watch) = 0;
 	/// A ticket to join a game server. The address of the game socket must be a WSS address.
-	virtual void RequestJoinTicket(int64_t serverId, LobbyCallback<lobby_api::JoinTicket> callback) = 0;
+	virtual void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) = 0;
 
 	virtual void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) = 0;
 	virtual void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) = 0;

@@ -29,9 +29,11 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const RefreshRequest& request);
 [[nodiscard]] std::string ToJson(const ClanCreature& creature);
 [[nodiscard]] std::string ToJson(const ClanCreatureReply& reply);
-/// The frame of an operation on the push channel. The argument is the channel for Subscribe and Unsubscribe, and the
-/// last number of an event for Resume.
-[[nodiscard]] std::string PushFrame(PushOp op, std::string_view channel = {}, int64_t lastSeq = 0);
+/// The frame that asks for the events of a channel, or stops them
+[[nodiscard]] std::string SubscribeFrame(bool subscribe, std::string_view channel);
+/// The frame that a client sends after it opens the channel again: the epoch and the number of the last event that it
+/// got, and the channels that it wants
+[[nodiscard]] std::string ResumeFrame(std::string_view epoch, int64_t seq, std::span<const std::string> channels);
 
 [[nodiscard]] std::optional<Session> ParseSession(std::string_view text);
 [[nodiscard]] std::optional<Me> ParseMe(std::string_view text);
@@ -47,9 +49,16 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<ClanCreatureReply> ParseClanCreatureReply(std::string_view text);
 [[nodiscard]] std::optional<Problem> ParseProblem(std::string_view text);
 [[nodiscard]] std::optional<PushEvent> ParsePushEvent(std::string_view text);
-[[nodiscard]] std::optional<ServerChange> ParseServerChange(std::string_view text);
+/// The data of "servers.changed" or of "servers.removed"
+[[nodiscard]] std::optional<ServerChange> ParseServerChange(std::string_view type, std::string_view data);
+[[nodiscard]] std::optional<PushPosition> ParsePushPosition(std::string_view data);
+[[nodiscard]] std::optional<PushError> ParsePushError(std::string_view data);
 [[nodiscard]] std::optional<PointsChange> ParsePointsChange(std::string_view text);
 [[nodiscard]] std::optional<Ban> ParseBan(std::string_view text);
+
+/// An ISO 8601 time of the lobby, such as "2026-10-22T10:15:00.123Z" or "2026-10-22T10:15:00+00:00", as milliseconds
+/// since 1970 (UTC). None when the text is not such a time.
+[[nodiscard]] std::optional<int64_t> ParseTime(std::string_view text);
 
 /// The date as the query value of the weather call: YYYY-MM-DD
 [[nodiscard]] std::string DateText(const Date& date);

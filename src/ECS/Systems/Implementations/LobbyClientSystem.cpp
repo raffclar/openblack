@@ -222,7 +222,7 @@ void LobbyClientSystem::Login(std::string name, std::string password, LobbyCallb
 	const auto body = lobby_api::ToJson(lobby_api::LoginRequest {
 	    .name = std::move(name),
 	    .password = std::move(password),
-	    .client = _config->client,
+	    .cookie = _config->client == lobby_api::ClientKind::Browser,
 	});
 	online::HttpRequest request {
 	    .method = HttpMethod::Post,
@@ -365,7 +365,7 @@ void LobbyClientSystem::Refresh(std::function<void(const LobbyError&)> after)
 void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 {
 	_accessToken = session.accessToken;
-	_accessExpiry = _clock() + std::chrono::seconds(session.expiresIn);
+	_accessExpiry = std::chrono::system_clock::time_point(std::chrono::milliseconds(session.accessTokenExpires));
 	_account = session.account;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
@@ -578,19 +578,31 @@ void LobbyClientSystem::GetServers(LobbyCallback<lobby_api::ServerList> callback
 
 void LobbyClientSystem::WatchServers(bool watch)
 {
-	if (_watchServers == watch)
+	WatchChannel(std::string(lobby_api::k_ServersChannel), watch);
+}
+
+void LobbyClientSystem::WatchChannel(std::string channel, bool watch)
+{
+	const auto found = std::ranges::find(_channels, channel);
+	if ((found != _channels.end()) == watch)
 	{
 		return;
 	}
-	_watchServers = watch;
+	if (watch)
+	{
+		_channels.push_back(channel);
+	}
+	else
+	{
+		_channels.erase(found);
+	}
 	if (_push->IsOpen())
 	{
-		_push->Send(lobby_api::PushFrame(watch ? lobby_api::PushOp::Subscribe : lobby_api::PushOp::Unsubscribe,
-		                                 lobby_api::k_ServersChannel));
+		_push->Send(lobby_api::SubscribeFrame(watch, channel));
 	}
 }
 
-void LobbyClientSystem::RequestJoinTicket(int64_t serverId, LobbyCallback<lobby_api::JoinTicket> callback)
+void LobbyClientSystem::RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback)
 {
 	if (!_config.has_value())
 	{
@@ -777,13 +789,8 @@ void LobbyClientSystem::OpenPush()
 		                    {
 			                    return;
 		                    }
+		                    // The lobby sends "hello" first; the client then asks for its channels
 		                    _reconnectWait = lobby_times::k_FirstReconnectWait;
-		                    // The lobby sends again the events after the last one that the client got
-		                    _push->Send(lobby_api::PushFrame(lobby_api::PushOp::Resume, {}, _lastSeq));
-		                    if (_watchServers)
-		                    {
-			                    _push->Send(lobby_api::PushFrame(lobby_api::PushOp::Subscribe, lobby_api::k_ServersChannel));
-		                    }
 	                    },
 	                .message =
 	                    [this, generation](std::string_view text) {
@@ -812,6 +819,11 @@ void LobbyClientSystem::PushClosed(online::PushClose reason)
 		// This build has no transport for the channel. The REST calls still work.
 		_pushUnavailable = true;
 		return;
+	case online::PushClose::SignedOut:
+	case online::PushClose::Banned:
+		// The lobby ended the session, or banned the account
+		EndSession();
+		return;
 	case online::PushClose::Refused:
 		// The access token is old: the next open gets a new one first
 		_accessToken.clear();
@@ -826,6 +838,49 @@ void LobbyClientSystem::PushClosed(online::PushClose reason)
 	}
 }
 
+void LobbyClientSystem::HandleControl(const lobby_api::PushEvent& frame)
+{
+	if (frame.type == lobby_api::events::k_Hello)
+	{
+		const auto position = lobby_api::ParsePushPosition(frame.data);
+		if (!position.has_value())
+		{
+			return;
+		}
+		if (_epoch.empty())
+		{
+			// The first connection: the client wants the events from now
+			_epoch = position->epoch;
+			_lastSeq = position->seq;
+			for (const auto& channel : _channels)
+			{
+				_push->Send(lobby_api::SubscribeFrame(true, channel));
+			}
+			return;
+		}
+		// A connection after a loss: the lobby sends again the events after the last one that the client got, and
+		// subscribes the channels again
+		_push->Send(lobby_api::ResumeFrame(_epoch, _lastSeq, _channels));
+		return;
+	}
+	if (frame.type == lobby_api::events::k_Resumed || frame.type == lobby_api::events::k_Resync)
+	{
+		const auto position = lobby_api::ParsePushPosition(frame.data);
+		if (!position.has_value())
+		{
+			return;
+		}
+		_epoch = position->epoch;
+		if (frame.type == lobby_api::events::k_Resync)
+		{
+			// The lobby could not send the events that the client missed: the client continues from now, and the
+			// next server list comes whole
+			_lastSeq = position->seq;
+			_serversTag.reset();
+		}
+	}
+}
+
 void LobbyClientSystem::HandlePush(std::string_view text)
 {
 	const auto event = lobby_api::ParsePushEvent(text);
@@ -833,23 +888,22 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 	{
 		return;
 	}
-	if (event->seq > 0)
+	if (!event->seq.has_value())
+	{
+		HandleControl(*event);
+	}
+	else
 	{
 		// An event that the client got before comes again after a resume
-		if (event->seq <= _lastSeq)
+		if (*event->seq <= _lastSeq)
 		{
 			return;
 		}
-		_lastSeq = event->seq;
+		_lastSeq = *event->seq;
 	}
-	if (event->type == lobby_api::events::k_Ping)
+	if (event->type == lobby_api::events::k_ServersChanged || event->type == lobby_api::events::k_ServersRemoved)
 	{
-		_push->Send(lobby_api::PushFrame(lobby_api::PushOp::Pong));
-		return;
-	}
-	if (event->type == lobby_api::events::k_ServersChanged)
-	{
-		if (const auto change = lobby_api::ParseServerChange(event->data); change.has_value())
+		if (const auto change = lobby_api::ParseServerChange(event->type, event->data); change.has_value())
 		{
 			const auto found =
 			    std::ranges::find_if(_servers, [&change](const auto& server) { return server.id == change->server.id; });
@@ -870,7 +924,7 @@ void LobbyClientSystem::HandlePush(std::string_view text)
 			}
 		}
 	}
-	// The listeners can add or remove listeners, so they run from a copy
+	// The listeners get the events and the control frames. They can add or remove listeners, so they run from a copy.
 	const auto listeners = _listeners;
 	for (const auto& [id, listener] : listeners)
 	{

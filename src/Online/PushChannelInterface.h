@@ -28,8 +28,12 @@ enum class PushClose : uint8_t
 	Closed,
 	/// The connection failed or stopped. The client can open it again.
 	Lost,
-	/// The lobby refused the access token
+	/// The lobby refused the access token in the handshake
 	Refused,
+	/// The lobby ended the session, or the account is no longer active (close code 4001)
+	SignedOut,
+	/// The lobby banned the account (close code 4003)
+	Banned,
 	/// This build has no transport for the channel. The client does not try again.
 	Unavailable,
 };
@@ -48,7 +52,8 @@ public:
 	virtual ~PushChannelInterface() = default;
 
 	/// Opens the channel to a wss:// address, or on the browser to a path of the origin of the page. The access token
-	/// goes with the opening handshake. The handlers run from Poll, never in Open.
+	/// goes with the opening handshake: in the header "Authorization: Bearer <token>" on the desktop, and in the
+	/// subprotocols "bwgame.v1" and "bearer.<token>" in the browser. The handlers run from Poll, never in Open.
 	virtual void Open(std::string url, std::string accessToken, PushHandlers handlers) = 0;
 	/// Sends a text frame. Nothing happens when the channel is not open.
 	virtual void Send(std::string_view text) = 0;

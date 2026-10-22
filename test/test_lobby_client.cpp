@@ -19,6 +19,7 @@
 #include <vector>
 
 #include <LobbyApi.h>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include "Online/HttpClientInterface.h"
@@ -158,10 +159,25 @@ private:
 	std::optional<std::string>& _kept;
 };
 
+/// The test starts at 10:00, and the access token of the login lasts until 10:15
 constexpr std::string_view k_Session =
-    R"({"access_token":"access1","expires_in":900,"refresh_token":"refresh1","account":{"id":7,"name":"abc"}})";
+    R"({"token_type":"Bearer","access_token":"access1","access_token_expires":"2026-10-22T10:15:00.000Z",)"
+    R"("refresh_token":"refresh1","refresh_token_expires":"2026-11-21T10:00:00.000Z","account":{"id":7,"name":"abc"}})";
 constexpr std::string_view k_Rotated =
-    R"({"access_token":"access2","expires_in":900,"refresh_token":"refresh2","account":{"id":7,"name":"abc"}})";
+    R"({"token_type":"Bearer","access_token":"access2","access_token_expires":"2026-10-22T12:00:00.000Z",)"
+    R"("refresh_token":"refresh2","refresh_token_expires":"2026-11-21T10:00:00.000Z","account":{"id":7,"name":"abc"}})";
+/// The first frame of the push channel
+constexpr std::string_view k_Hello = R"({"type":"hello","data":{"epoch":"e1","seq":0,"account":{"id":7,"name":"abc"}}})";
+
+/// A server as the lobby lists it
+std::string ServerJson(std::string_view id, int32_t players)
+{
+	return fmt::format(R"({{"id":"{}","hostname":"Room {}","land":"Test","gamemode":"openstaging","locked":false,)"
+	                   R"("password":false,"numplayers":{},"maxplayers":32,"gamever":"1.0","infoversion":1,)"
+	                   R"("creatureversion":1,"oosversion":1,"players":[],"url":"wss://bw.example/game/{}",)"
+	                   R"("updated":"2026-10-22T10:00:00Z"}})",
+	                   id, id, players, id);
+}
 constexpr std::string_view k_Origin = "https://bw.example";
 
 /// A client with fakes, and a clock that the test moves
@@ -190,12 +206,14 @@ protected:
 		_client->Login("abc", "secret", [](auto&& /*result*/) {});
 		_http.Answer(201, k_Session);
 		_push->Accept();
+		_push->Deliver(k_Hello);
 	}
 
 	FakeHttp _http;
 	FakePush* _push {nullptr};
 	std::optional<std::string> _kept;
-	std::chrono::steady_clock::time_point _now {std::chrono::steady_clock::time_point {} + 1000h};
+	/// 2026-10-22T10:00:00Z
+	std::chrono::system_clock::time_point _now {std::chrono::seconds {1792663200}};
 	std::unique_ptr<LobbyClientSystem> _client;
 };
 
@@ -235,7 +253,7 @@ TEST_F(LobbyClientTest, LoginKeepsTheRefreshTokenAndOpensThePushChannel)
 	ASSERT_EQ(_http.sent.size(), 1u);
 	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
 	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/sessions");
-	EXPECT_EQ(_http.NextBody(), R"({"client":"desktop","name":"abc","password":"secret"})");
+	EXPECT_EQ(_http.NextBody(), R"({"cookie":false,"name":"abc","password":"secret"})");
 	_http.Answer(201, k_Session);
 
 	ASSERT_TRUE(account.has_value());
@@ -245,9 +263,10 @@ TEST_F(LobbyClientTest, LoginKeepsTheRefreshTokenAndOpensThePushChannel)
 	EXPECT_EQ(_push->opens, 1);
 	EXPECT_EQ(_push->lastUrl, "wss://bw.example/api/v1/events");
 	EXPECT_EQ(_push->lastToken, "access1");
+	// The client waits for "hello", and with no channel it asks for nothing
 	_push->Accept();
-	ASSERT_EQ(_push->frames.size(), 1u);
-	EXPECT_EQ(_push->frames[0], R"({"last_seq":0,"op":"resume"})");
+	_push->Deliver(k_Hello);
+	EXPECT_TRUE(_push->frames.empty());
 }
 
 TEST_F(LobbyClientTest, WrongPasswordIsRefusedAndKeepsNothing)
@@ -384,13 +403,14 @@ TEST_F(LobbyClientTest, TheBrowserUsesThePathsOfTheOriginAndTheCookie)
 	// The cookie holds the refresh token, so the body has none
 	EXPECT_EQ(_http.Next().url, "/api/v1/sessions/refresh");
 	EXPECT_EQ(_http.NextBody(), "{}");
-	_http.Answer(200, R"({"access_token":"a","expires_in":900,"account":{"id":7,"name":"abc"}})");
+	_http.Answer(200, R"({"access_token":"a","access_token_expires":"2026-10-22T10:15:00Z","refresh_token":null,)"
+	                  R"("refresh_token_expires":"2026-11-21T10:00:00Z","account":{"id":7,"name":"abc"}})");
 	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedIn);
 	EXPECT_FALSE(_kept.has_value());
 	EXPECT_EQ(_push->lastUrl, "/api/v1/events");
 
 	_client->Login("abc", "pw", [](auto&& /*result*/) {});
-	EXPECT_EQ(_http.NextBody(), R"({"client":"browser","name":"abc","password":"pw"})");
+	EXPECT_EQ(_http.NextBody(), R"({"cookie":true,"name":"abc","password":"pw"})");
 }
 
 TEST_F(LobbyClientTest, LogoutForgetsTheTokensAlsoWhenTheLobbyFails)
@@ -421,7 +441,7 @@ TEST_F(LobbyClientTest, AnswersOfAnEndedSessionAreIgnored)
 	_now += 1h;
 	_client->GetMe([&](auto&& result) { kind = result.error.kind; });
 	// The ban comes while the refresh waits
-	_push->Deliver(R"({"seq":1,"type":"account.banned","data":{}})");
+	_push->Deliver(R"({"seq":1,"type":"account.banned","time":"2026-10-22T10:00:01Z","data":{}})");
 	_http.Answer(200, k_Rotated);
 	EXPECT_EQ(kind, LobbyErrorKind::Cancelled);
 	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
@@ -437,7 +457,7 @@ TEST_F(LobbyClientTest, ServerListUsesTheTagAndThePushChanges)
 	std::optional<lobby_api::ServerList> list;
 	_client->GetServers([&](auto&& result) { list = result.value; });
 	EXPECT_FALSE(_http.NextHeader("If-None-Match").has_value());
-	_http.Answer(200, R"({"servers":[{"id":1,"name":"A","players":1,"max_players":32}]})", {{"etag", "\"v1\""}});
+	_http.Answer(200, R"({"servers":[)" + ServerJson("a", 1) + "]}", {{"etag", "\"v1\""}});
 	ASSERT_TRUE(list.has_value());
 	EXPECT_EQ(_client->GetKnownServers().size(), 1u);
 
@@ -449,33 +469,37 @@ TEST_F(LobbyClientTest, ServerListUsesTheTagAndThePushChanges)
 	EXPECT_EQ(list->servers.size(), 1u);
 
 	_client->WatchServers(true);
-	EXPECT_EQ(_push->frames.back(), R"({"channel":"servers","op":"subscribe"})");
-	_push->Deliver(R"({"seq":1,"type":"servers.changed","data":{"id":2,"name":"B","players":0,"max_players":32}})");
-	_push->Deliver(R"({"seq":2,"type":"servers.changed","data":{"id":1,"name":"A","players":5,"max_players":32}})");
+	EXPECT_EQ(_push->frames.back(), R"({"channel":"servers","type":"subscribe"})");
+	_push->Deliver(R"({"seq":1,"type":"servers.changed","time":"2026-10-22T10:00:01Z","data":{"server":)" + ServerJson("b", 0) +
+	               "}}");
+	_push->Deliver(R"({"seq":2,"type":"servers.changed","time":"2026-10-22T10:00:02Z","data":{"server":)" + ServerJson("a", 5) +
+	               "}}");
 	ASSERT_EQ(_client->GetKnownServers().size(), 2u);
-	EXPECT_EQ(_client->GetKnownServers()[0].players, 5);
-	_push->Deliver(R"({"seq":3,"type":"servers.changed","data":{"id":2,"removed":true}})");
+	EXPECT_EQ(_client->GetKnownServers()[0].numplayers, 5);
+	_push->Deliver(R"({"seq":3,"type":"servers.removed","time":"2026-10-22T10:00:03Z","data":{"id":"b","reason":"timeout"}})");
 	EXPECT_EQ(_client->GetKnownServers().size(), 1u);
+	_client->WatchServers(false);
+	EXPECT_EQ(_push->frames.back(), R"({"channel":"servers","type":"unsubscribe"})");
 }
 
 TEST_F(LobbyClientTest, PushEventsGoToTheListenersOnceInOrder)
 {
 	Make();
 	LogIn();
-	std::vector<int64_t> seen;
-	const auto id = _client->AddEventListener([&](const lobby_api::PushEvent& event) { seen.push_back(event.seq); });
-	_push->Deliver(R"({"seq":1,"type":"chat.line","data":{}})");
-	_push->Deliver(R"({"seq":1,"type":"chat.line","data":{}})");
-	_push->Deliver(R"({"seq":2,"type":"chat.line","data":{}})");
+	std::vector<std::string> seen;
+	const auto id = _client->AddEventListener([&](const lobby_api::PushEvent& event) {
+		seen.push_back(event.type + (event.seq.has_value() ? std::to_string(*event.seq) : std::string {}));
+	});
+	_push->Deliver(R"({"seq":1,"type":"chat.line","time":"2026-10-22T10:00:01Z","data":{}})");
+	_push->Deliver(R"({"seq":1,"type":"chat.line","time":"2026-10-22T10:00:01Z","data":{}})");
+	_push->Deliver(R"({"seq":5,"type":"chat.line","time":"2026-10-22T10:00:02Z","data":{}})");
+	_push->Deliver(R"({"type":"error","data":{"code":"no_access","detail":"Join the server's room first."}})");
 	_push->Deliver("not json");
-	EXPECT_EQ(seen, (std::vector<int64_t> {1, 2}));
-
-	_push->Deliver(R"({"type":"ping"})");
-	EXPECT_EQ(_push->frames.back(), R"({"op":"pong"})");
+	EXPECT_EQ(seen, (std::vector<std::string> {"chat.line1", "chat.line5", "error"}));
 
 	_client->RemoveEventListener(id);
-	_push->Deliver(R"({"seq":3,"type":"chat.line","data":{}})");
-	EXPECT_EQ(seen.size(), 2u);
+	_push->Deliver(R"({"seq":6,"type":"chat.line","time":"2026-10-22T10:00:03Z","data":{}})");
+	EXPECT_EQ(seen.size(), 3u);
 }
 
 TEST_F(LobbyClientTest, ALostChannelOpensAgainWithTheLastEvent)
@@ -483,7 +507,8 @@ TEST_F(LobbyClientTest, ALostChannelOpensAgainWithTheLastEvent)
 	Make();
 	LogIn();
 	_client->WatchServers(true);
-	_push->Deliver(R"({"seq":9,"type":"chat.line","data":{}})");
+	_client->WatchChannel("lobby", true);
+	_push->Deliver(R"({"seq":9,"type":"chat.line","time":"2026-10-22T10:00:01Z","data":{}})");
 	_push->Lose(online::PushClose::Lost);
 	_client->Update();
 	EXPECT_EQ(_push->opens, 1);
@@ -492,9 +517,43 @@ TEST_F(LobbyClientTest, ALostChannelOpensAgainWithTheLastEvent)
 	EXPECT_EQ(_push->opens, 2);
 	_push->frames.clear();
 	_push->Accept();
-	ASSERT_EQ(_push->frames.size(), 2u);
-	EXPECT_EQ(_push->frames[0], R"({"last_seq":9,"op":"resume"})");
-	EXPECT_EQ(_push->frames[1], R"({"channel":"servers","op":"subscribe"})");
+	EXPECT_TRUE(_push->frames.empty());
+	_push->Deliver(R"({"type":"hello","data":{"epoch":"e1","seq":12,"account":{"id":7,"name":"abc"}}})");
+	ASSERT_EQ(_push->frames.size(), 1u);
+	EXPECT_EQ(_push->frames[0], R"({"channels":["servers","lobby"],"epoch":"e1","seq":9,"type":"resume"})");
+
+	// The lobby lost the events: the client continues from the lobby's number
+	_push->Deliver(R"({"type":"resync","data":{"epoch":"e2","seq":50}})");
+	std::vector<int64_t> seen;
+	_client->AddEventListener([&](const lobby_api::PushEvent& event) { seen.push_back(event.seq.value_or(0)); });
+	_push->Deliver(R"({"seq":45,"type":"chat.line","time":"2026-10-22T10:00:02Z","data":{}})");
+	_push->Deliver(R"({"seq":51,"type":"chat.line","time":"2026-10-22T10:00:03Z","data":{}})");
+	EXPECT_EQ(seen, (std::vector<int64_t> {51}));
+}
+
+TEST_F(LobbyClientTest, AFirstConnectionSubscribesTheChannels)
+{
+	Make();
+	_client->WatchServers(true);
+	_client->Login("abc", "secret", [](auto&& /*result*/) {});
+	_http.Answer(201, k_Session);
+	_push->Accept();
+	EXPECT_TRUE(_push->frames.empty());
+	_push->Deliver(k_Hello);
+	ASSERT_EQ(_push->frames.size(), 1u);
+	EXPECT_EQ(_push->frames[0], R"({"channel":"servers","type":"subscribe"})");
+}
+
+TEST_F(LobbyClientTest, ASignOutOrABanOfTheChannelEndsTheSession)
+{
+	Make();
+	LogIn();
+	_push->Lose(online::PushClose::SignedOut);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
+	EXPECT_FALSE(_kept.has_value());
+	LogIn();
+	_push->Lose(online::PushClose::Banned);
+	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
 }
 
 TEST_F(LobbyClientTest, TheWaitAfterALossDoublesToTheMost)
@@ -531,7 +590,7 @@ TEST_F(LobbyClientTest, ABanEndsTheSession)
 	LogIn();
 	bool told = false;
 	_client->AddEventListener([&](const lobby_api::PushEvent& event) { told = event.type == "account.banned"; });
-	_push->Deliver(R"({"seq":1,"type":"account.banned","data":{"reason":"cheat"}})");
+	_push->Deliver(R"({"seq":1,"type":"account.banned","time":"2026-10-22T10:00:01Z","data":{"reason":"cheat"}})");
 	EXPECT_TRUE(told);
 	EXPECT_EQ(_client->GetState(), LobbySessionState::LoggedOut);
 	EXPECT_FALSE(_kept.has_value());
@@ -542,15 +601,15 @@ TEST_F(LobbyClientTest, AJoinTicketMustBeForAnEncryptedSocket)
 	Make();
 	LogIn();
 	std::optional<LobbyResult<lobby_api::JoinTicket>> got;
-	_client->RequestJoinTicket(5, [&](auto&& result) { got = std::move(result); });
+	_client->RequestJoinTicket("eden", [&](auto&& result) { got = std::move(result); });
 	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
-	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/servers/5/tickets");
-	_http.Answer(201, R"({"url":"ws://bw.example/game/5","ticket":"t","expires_in":60})");
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/servers/eden/tickets");
+	_http.Answer(201, R"({"url":"ws://bw.example/game/eden","ticket":"t","expires":"2026-10-22T10:01:00Z"})");
 	ASSERT_TRUE(got.has_value());
 	EXPECT_EQ(got->error.kind, LobbyErrorKind::AddressRefused);
 
-	_client->RequestJoinTicket(5, [&](auto&& result) { got = std::move(result); });
-	_http.Answer(201, R"({"url":"wss://bw.example/game/5","ticket":"t","expires_in":60})");
+	_client->RequestJoinTicket("eden", [&](auto&& result) { got = std::move(result); });
+	_http.Answer(201, R"({"url":"wss://bw.example/game/eden","ticket":"t","expires":"2026-10-22T10:01:00Z"})");
 	ASSERT_TRUE(got->Ok());
 	EXPECT_EQ(got->value->ticket, "t");
 }

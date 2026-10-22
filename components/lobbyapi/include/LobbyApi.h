@@ -54,12 +54,12 @@ enum class ClientKind : uint8_t
 /// POST /api/v1/sessions
 struct LoginRequest
 {
-	/// "name"
+	/// "name": the lobby compares it without regard to case
 	std::string name;
 	/// "password"
 	std::string password;
-	/// "client": "desktop" or "browser"
-	ClientKind client {ClientKind::Desktop};
+	/// "cookie": true for the browser, which gets its refresh token in an HttpOnly cookie
+	bool cookie {false};
 };
 
 /// POST /api/v1/sessions/refresh. A refresh token works one time. The answer gives a new one.
@@ -69,7 +69,7 @@ struct RefreshRequest
 	std::optional<std::string> refreshToken;
 };
 
-/// "account": the account that a session is for
+/// "account": an account by its id and its name
 struct AccountRef
 {
 	/// "id"
@@ -78,42 +78,34 @@ struct AccountRef
 	std::string name;
 };
 
-/// The answer of a login and of a refresh
+/// The answer of a login (201) and of a refresh (200). The times are milliseconds since 1970 (UTC), from the ISO 8601
+/// times of the lobby.
 struct Session
 {
 	/// "access_token": the bearer token of the calls, which lasts 15 minutes
 	std::string accessToken;
-	/// "expires_in": the seconds until the access token stops
-	int64_t expiresIn {0};
-	/// "refresh_token": only for a desktop client
+	/// "access_token_expires"
+	int64_t accessTokenExpires {0};
+	/// "refresh_token": null for the browser, whose cookie holds it
 	std::optional<std::string> refreshToken;
+	/// "refresh_token_expires"
+	int64_t refreshTokenExpires {0};
 	/// "account"
 	AccountRef account;
 };
 
-/// "location": the place of the player, for the real-world weather
-struct Location
-{
-	/// "country": the two-letter code of the country
-	std::string country;
-	/// "area"
-	std::string area;
-	/// "city"
-	std::string city;
-};
-
-/// A clan in a list
-struct ClanSummary
+/// A clan of the account in GET /api/v1/me
+struct ClanRef
 {
 	/// "id"
 	int64_t id {0};
 	/// "name"
 	std::string name;
-	/// "points"
-	double points {0.0};
+	/// "role": the role of the account in the clan
+	std::string role;
 };
 
-/// GET /api/v1/me
+/// GET /api/v1/me. The place (country, area, city) is for the real-world weather.
 struct Me
 {
 	/// "id"
@@ -126,33 +118,61 @@ struct Me
 	bool emailVerified {false};
 	/// "points"
 	double points {0.0};
+	/// "games_ranked"
+	int32_t gamesRanked {0};
+	/// "country": the two-letter code of Scripts/country.lhw, for example gb
+	std::string country;
+	/// "area"
+	std::string area;
+	/// "city"
+	std::string city;
 	/// "clans"
-	std::vector<ClanSummary> clans;
-	/// "location": none when the player did not give a place
-	std::optional<Location> location;
+	std::vector<ClanRef> clans;
+	/// "date_joined"
+	int64_t dateJoined {0};
 };
 
-/// A game server in the list of GET /api/v1/servers, and the data of the event "servers.changed"
+/// A god or an observer in the room of a game server
+struct RoomPlayer
+{
+	/// "account"
+	AccountRef account;
+	/// "role": "god" or "observer"
+	std::string role;
+	/// "clan": the clan that the god plays for, or null
+	std::optional<int64_t> clan;
+};
+
+/// A game server in the list of GET /api/v1/servers, and the "server" of the event "servers.changed"
 struct ServerEntry
 {
 	/// "id"
-	int64_t id {0};
-	/// "name"
-	std::string name;
-	/// "players": the number of players in the server now
-	int32_t players {0};
-	/// "max_players"
-	int32_t maxPlayers {0};
-	/// "playing": the game started
-	bool playing {false};
-	/// "version": the version of the game that the server runs
-	std::string version;
-	/// "password_needed"
-	bool passwordNeeded {false};
+	std::string id;
+	/// "hostname": the name of the room
+	std::string hostname;
+	/// "land"
+	std::string land;
+	/// "gamemode": "openstaging" (in the room before the game), "closedplaying" or "exiting"
+	std::string gamemode;
 	/// "locked"
 	bool locked {false};
-	/// "land": the name of the land
-	std::string land;
+	/// "password": the room needs a password, which the game server checks
+	bool password {false};
+	/// "numplayers": the gods in the room
+	int32_t numplayers {0};
+	/// "maxplayers"
+	int32_t maxplayers {0};
+	/// "gamever", "infoversion", "creatureversion", "oosversion": the versions of the game server
+	std::string gamever;
+	int32_t infoversion {0};
+	int32_t creatureversion {0};
+	int32_t oosversion {0};
+	/// "players"
+	std::vector<RoomPlayer> players;
+	/// "url": the game socket, wss://<host>/game/<id>
+	std::string url;
+	/// "updated": the time of the last status of the server, 0 for none
+	int64_t updated {0};
 };
 
 /// GET /api/v1/servers: {"servers": [...]}
@@ -161,24 +181,35 @@ struct ServerList
 	std::vector<ServerEntry> servers;
 };
 
-/// POST /api/v1/servers/{id}/tickets
+/// POST /api/v1/servers/{id}/tickets (201)
 struct JoinTicket
 {
 	/// "url": the WSS address of the game socket of the server
 	std::string url;
-	/// "ticket": the signed ticket that the client shows to the game server
+	/// "ticket": a PASETO v4.public token that the client sends when the game socket opens
 	std::string ticket;
-	/// "expires_in": the seconds until the ticket stops
-	int64_t expiresIn {0};
+	/// "expires": 60 seconds after the lobby made it
+	int64_t expires {0};
 };
 
-/// GET /api/v1/me/clans: {"clans": [...]}
+/// A clan in a list. Not in the contract of the lobby yet: the shape of the plan.
+struct ClanSummary
+{
+	/// "id"
+	int64_t id {0};
+	/// "name"
+	std::string name;
+	/// "points"
+	double points {0.0};
+};
+
+/// GET /api/v1/me/clans: {"clans": [...]}. Not in the contract of the lobby yet.
 struct ClanList
 {
 	std::vector<ClanSummary> clans;
 };
 
-/// GET /api/v1/clans/{id}
+/// GET /api/v1/clans/{id}. Not in the contract of the lobby yet.
 struct ClanDetails
 {
 	/// "id"
@@ -210,7 +241,8 @@ struct RankingEntry
 	double points {0.0};
 };
 
-/// GET /api/v1/rankings/players?page=N and GET /api/v1/rankings/clans?page=N
+/// GET /api/v1/rankings/players?page=N and GET /api/v1/rankings/clans?page=N. Not in the contract of the lobby
+/// yet.
 struct RankingPage
 {
 	/// "page": 1 for the first page
@@ -221,7 +253,7 @@ struct RankingPage
 	std::vector<RankingEntry> entries;
 };
 
-/// GET /api/v1/players/{id}
+/// GET /api/v1/players/{id}. Not in the contract of the lobby yet.
 struct PlayerDetails
 {
 	/// "id"
@@ -236,7 +268,8 @@ struct PlayerDetails
 	std::vector<ClanSummary> clans;
 };
 
-/// GET /api/v1/me/weather?date=YYYY-MM-DD: the real-world weather at the place of the player on a day
+/// GET /api/v1/me/weather?date=YYYY-MM-DD: the real-world weather at the place of the player on a day. Not in the
+/// contract of the lobby yet.
 struct RealWeather
 {
 	/// "temperature": in degrees
@@ -262,7 +295,7 @@ struct Date
 };
 
 /// POST /api/v1/me/creatures: the files of the player's creature as multipart/form-data, as the creature upload tool of
-/// the game sent them
+/// the game sent them. Not in the contract of the lobby yet.
 struct CreatureUpload
 {
 	/// The field "creature": creature.lhp, the package of the values and the pictures of the creature's web page
@@ -328,49 +361,93 @@ struct Problem
 	int32_t status {0};
 	/// "detail"
 	std::string detail;
+	/// "code": the code of the error that a program can read
+	std::string code;
 };
 
-/// An event of the push channel: {"seq": n, "type": "...", "data": {...}}
+/// A frame of the push channel. An event: {"seq": n, "type": "...", "time": "...", "data": {...}}. A control frame
+/// ("hello", "subscribed", "unsubscribed", "resumed", "resync", "error") has no "seq".
 struct PushEvent
 {
-	/// "seq": the number of the event. On a new connection the client sends the last number that it got.
-	int64_t seq {0};
+	/// "seq": the number of the event, which goes up by one for each event that the lobby sends to any client. None for
+	/// a control frame.
+	std::optional<int64_t> seq;
 	/// "type", for example "servers.changed"
 	std::string type;
-	/// "data": the JSON text of the data of the event
+	/// "time": the ISO 8601 time of the event, empty for a control frame
+	std::string time;
+	/// "data": the JSON text of the data of the frame
 	std::string data;
 };
 
-/// The names of the events of the push channel
+/// The names of the frames of the push channel
 namespace events
 {
-constexpr std::string_view k_Ping = "ping";
+// The control frames
+constexpr std::string_view k_Hello = "hello";
+constexpr std::string_view k_Subscribed = "subscribed";
+constexpr std::string_view k_Unsubscribed = "unsubscribed";
+constexpr std::string_view k_Resumed = "resumed";
+constexpr std::string_view k_Resync = "resync";
+constexpr std::string_view k_Error = "error";
+// The events
 constexpr std::string_view k_ChatLine = "chat.line";
 constexpr std::string_view k_ChatJoined = "chat.joined";
 constexpr std::string_view k_ChatLeft = "chat.left";
 constexpr std::string_view k_PresenceChanged = "presence.changed";
 constexpr std::string_view k_ServersChanged = "servers.changed";
+constexpr std::string_view k_ServersRemoved = "servers.removed";
 constexpr std::string_view k_RoomChanged = "room.changed";
 constexpr std::string_view k_ClanInvited = "clan.invited";
 constexpr std::string_view k_ClanRequest = "clan.request";
+constexpr std::string_view k_ServerBanned = "server.banned";
+constexpr std::string_view k_ServerUnbanned = "server.unbanned";
 constexpr std::string_view k_AccountMuted = "account.muted";
 constexpr std::string_view k_AccountBanned = "account.banned";
 constexpr std::string_view k_PointsChanged = "points.changed";
 } // namespace events
 
-/// The data of "servers.changed": a server that is new or changed, or the id of a server that went from the list
-struct ServerChange
+/// The data of "hello" (the first frame on each connection), "resumed" and "resync": the epoch of the push process
+/// and the number of its last event
+struct PushPosition
 {
-	/// The data has the members of ServerEntry, or {"id": n, "removed": true}
-	ServerEntry server;
-	bool removed {false};
+	/// "epoch": a new push process has a new epoch, and the events of the old one are lost
+	std::string epoch;
+	/// "seq"
+	int64_t seq {0};
 };
 
-/// The data of "points.changed"
+/// The data of "error"
+struct PushError
+{
+	/// "code"
+	std::string code;
+	/// "detail"
+	std::string detail;
+	/// "channel", when the error is about a channel
+	std::string channel;
+};
+
+/// The data of "servers.changed" ({"server": {...}}) and of "servers.removed" ({"id": "...", "reason": "..."})
+struct ServerChange
+{
+	ServerEntry server;
+	bool removed {false};
+	/// The reason of a removal
+	std::string reason;
+};
+
+/// The data of "points.changed" after a ranked game
 struct PointsChange
 {
-	/// "points"
+	/// "points": the new points of the player
 	double points {0.0};
+	/// "games_ranked"
+	int32_t gamesRanked {0};
+	/// "position": the place of the player in the game
+	int32_t position {0};
+	/// "change": the points won or lost
+	double change {0.0};
 };
 
 /// The data of "account.banned"
@@ -380,20 +457,21 @@ struct Ban
 	std::string reason;
 };
 
-/// The frames that the client sends on the push channel. Each action is a REST call, so the client sends only these.
-enum class PushOp : uint8_t
-{
-	/// {"op": "resume", "last_seq": n}: the first frame on a new connection
-	Resume,
-	/// {"op": "subscribe", "channel": "..."}
-	Subscribe,
-	/// {"op": "unsubscribe", "channel": "..."}
-	Unsubscribe,
-	/// {"op": "pong"}: the answer to the event "ping"
-	Pong,
-};
-
-/// The channel of the push events about the server list
+/// The channels of the push channel
+constexpr std::string_view k_LobbyChannel = "lobby";
 constexpr std::string_view k_ServersChannel = "servers";
+/// The channel of the room of a game server is this text and the id of the server
+constexpr std::string_view k_ServerChannelPrefix = "server-";
+
+/// The handshake of the push channel. The desktop sends the header "Authorization: Bearer <access token>". A browser
+/// cannot send headers on a WebSocket, so it asks for the subprotocols "bwgame.v1" and "bearer.<access token>". The
+/// lobby answers with "bwgame.v1".
+constexpr std::string_view k_PushSubprotocol = "bwgame.v1";
+constexpr std::string_view k_PushTokenSubprotocolPrefix = "bearer.";
+
+/// The close codes of the push channel
+constexpr uint16_t k_CloseSignedOut = 4001;
+constexpr uint16_t k_CloseBanned = 4003;
+constexpr uint16_t k_CloseTooManyFrames = 4008;
 
 } // namespace openblack::lobby_api

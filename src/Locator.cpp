@@ -425,7 +425,7 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	Locator::lobbyClient::emplace<LobbyClientSystem>(LobbyConfig(), Locator::httpClient::value(),
 	                                                 std::make_unique<online::NoPushChannel>(),
 	                                                 online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
-	                                                 []() { return std::chrono::steady_clock::now(); });
+	                                                 []() { return std::chrono::system_clock::now(); });
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
 	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
 	    internetWeather, Locator::lobbyClient::value(),

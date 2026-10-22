@@ -53,7 +53,8 @@ constexpr std::chrono::seconds k_MostReconnectWait {60};
 class LobbyClientSystem final: public LobbyClientSystemInterface
 {
 public:
-	using Clock = std::function<std::chrono::steady_clock::time_point()>;
+	/// The clock of the computer. The lobby gives the end of each token as a time of the calendar.
+	using Clock = std::function<std::chrono::system_clock::time_point()>;
 
 	/// With no config, the game has no lobby, and each call fails with NotConfigured
 	LobbyClientSystem(std::optional<LobbyClientConfig> config, online::HttpClientInterface& http,
@@ -80,7 +81,8 @@ public:
 	void GetServers(LobbyCallback<lobby_api::ServerList> callback) override;
 	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return _servers; }
 	void WatchServers(bool watch) override;
-	void RequestJoinTicket(int64_t serverId, LobbyCallback<lobby_api::JoinTicket> callback) override;
+	void WatchChannel(std::string channel, bool watch) override;
+	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override;
 
 	void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) override;
 	void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) override;
@@ -126,6 +128,7 @@ private:
 
 	void OpenPush();
 	void HandlePush(std::string_view text);
+	void HandleControl(const lobby_api::PushEvent& frame);
 	void PushClosed(online::PushClose reason);
 
 	std::optional<LobbyClientConfig> _config;
@@ -137,7 +140,7 @@ private:
 	LobbySessionState _state {LobbySessionState::LoggedOut};
 	std::optional<lobby_api::AccountRef> _account;
 	std::string _accessToken;
-	std::chrono::steady_clock::time_point _accessExpiry {};
+	std::chrono::system_clock::time_point _accessExpiry {};
 	/// The refresh token of this run, also when the store cannot keep it
 	std::optional<std::string> _refreshToken;
 	/// The number of the session. An answer that comes after the session ended is ignored.
@@ -148,12 +151,16 @@ private:
 
 	std::vector<lobby_api::ServerEntry> _servers;
 	std::optional<std::string> _serversTag;
-	bool _watchServers {false};
+	/// The channels of the push channel that the client wants
+	std::vector<std::string> _channels;
 
+	/// The epoch of the push process and the number of the last event that the client got. Empty before the first
+	/// connection.
+	std::string _epoch;
 	int64_t _lastSeq {0};
 	bool _pushUnavailable {false};
 	bool _pushWanted {false};
-	std::optional<std::chrono::steady_clock::time_point> _reconnectAt;
+	std::optional<std::chrono::system_clock::time_point> _reconnectAt;
 	std::chrono::seconds _reconnectWait {lobby_times::k_FirstReconnectWait};
 
 	std::vector<std::pair<uint32_t, LobbyEventListener>> _listeners;

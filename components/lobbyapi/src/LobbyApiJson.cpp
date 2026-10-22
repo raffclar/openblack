@@ -155,6 +155,28 @@ bool ReadArray(const Json& object, std::string_view key, std::vector<Item>& out,
 	return true;
 }
 
+/// Reads an ISO 8601 time member as milliseconds since 1970. Null is 0 when the member is not required.
+bool ReadTime(const Json& object, std::string_view key, int64_t& out, bool required = true)
+{
+	std::string text;
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		return !required;
+	}
+	if (!ReadString(object, key, text))
+	{
+		return false;
+	}
+	const auto time = ParseTime(text);
+	if (!time.has_value())
+	{
+		return false;
+	}
+	out = *time;
+	return true;
+}
+
 bool ReadAccountRef(const Json& object, AccountRef& out)
 {
 	return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name);
@@ -166,19 +188,42 @@ bool ReadClanSummary(const Json& object, ClanSummary& out)
 	       ReadNumber(object, "points", out.points, false);
 }
 
-bool ReadLocation(const Json& object, Location& out)
+bool ReadClanRef(const Json& object, ClanRef& out)
 {
-	return ReadString(object, "country", out.country) && ReadString(object, "area", out.area, false) &&
-	       ReadString(object, "city", out.city);
+	return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) && ReadString(object, "role", out.role);
+}
+
+bool ReadRoomPlayer(const Json& object, RoomPlayer& out)
+{
+	const auto* account = Member(object, "account");
+	if (account == nullptr || !account->is_object() || !ReadAccountRef(*account, out.account) ||
+	    !ReadString(object, "role", out.role))
+	{
+		return false;
+	}
+	int64_t clan = 0;
+	const auto* member = Member(object, "clan");
+	if (member != nullptr && !member->is_null())
+	{
+		if (!ReadInteger(object, "clan", clan))
+		{
+			return false;
+		}
+		out.clan = clan;
+	}
+	return true;
 }
 
 bool ReadServerEntry(const Json& object, ServerEntry& out)
 {
-	return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) &&
-	       ReadInteger(object, "players", out.players) && ReadInteger(object, "max_players", out.maxPlayers) &&
-	       ReadBool(object, "playing", out.playing, false) && ReadString(object, "version", out.version, false) &&
-	       ReadBool(object, "password_needed", out.passwordNeeded, false) && ReadBool(object, "locked", out.locked, false) &&
-	       ReadString(object, "land", out.land, false);
+	return ReadString(object, "id", out.id) && !out.id.empty() && ReadString(object, "hostname", out.hostname) &&
+	       ReadString(object, "land", out.land) && ReadString(object, "gamemode", out.gamemode) &&
+	       ReadBool(object, "locked", out.locked) && ReadBool(object, "password", out.password) &&
+	       ReadInteger(object, "numplayers", out.numplayers) && ReadInteger(object, "maxplayers", out.maxplayers) &&
+	       ReadString(object, "gamever", out.gamever) && ReadInteger(object, "infoversion", out.infoversion) &&
+	       ReadInteger(object, "creatureversion", out.creatureversion) && ReadInteger(object, "oosversion", out.oosversion) &&
+	       ReadArray(object, "players", out.players, ReadRoomPlayer) && ReadString(object, "url", out.url) &&
+	       ReadTime(object, "updated", out.updated, false);
 }
 
 bool ReadRankingEntry(const Json& object, RankingEntry& out)
@@ -287,7 +332,7 @@ std::string ToJson(const LoginRequest& request)
 	return Dump(Json {
 	    {"name", request.name},
 	    {"password", request.password},
-	    {"client", request.client == ClientKind::Browser ? "browser" : "desktop"},
+	    {"cookie", request.cookie},
 	});
 }
 
@@ -320,20 +365,19 @@ std::string ToJson(const ClanCreatureReply& reply)
 	return Dump(object);
 }
 
-std::string PushFrame(PushOp op, std::string_view channel, int64_t lastSeq)
+std::string SubscribeFrame(bool subscribe, std::string_view channel)
 {
-	switch (op)
+	return Dump(Json {{"type", subscribe ? "subscribe" : "unsubscribe"}, {"channel", std::string(channel)}});
+}
+
+std::string ResumeFrame(std::string_view epoch, int64_t seq, std::span<const std::string> channels)
+{
+	auto list = Json::array();
+	for (const auto& channel : channels)
 	{
-	case PushOp::Resume:
-		return Dump(Json {{"op", "resume"}, {"last_seq", lastSeq}});
-	case PushOp::Subscribe:
-		return Dump(Json {{"op", "subscribe"}, {"channel", std::string(channel)}});
-	case PushOp::Unsubscribe:
-		return Dump(Json {{"op", "unsubscribe"}, {"channel", std::string(channel)}});
-	case PushOp::Pong:
-		return Dump(Json {{"op", "pong"}});
+		list.push_back(channel);
 	}
-	return {};
+	return Dump(Json {{"type", "resume"}, {"epoch", std::string(epoch)}, {"seq", seq}, {"channels", std::move(list)}});
 }
 
 std::optional<Session> ParseSession(std::string_view text)
@@ -355,30 +399,20 @@ std::optional<Session> ParseSession(std::string_view text)
 			out.refreshToken = std::move(refresh);
 		}
 		return ReadString(object, "access_token", out.accessToken) && !out.accessToken.empty() &&
-		       ReadInteger(object, "expires_in", out.expiresIn) && out.expiresIn > 0;
+		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
+		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false);
 	});
 }
 
 std::optional<Me> ParseMe(std::string_view text)
 {
 	return ParseWith<Me>(text, [](const Json& object, Me& out) {
-		if (!ReadInteger(object, "id", out.id) || !ReadString(object, "name", out.name) ||
-		    !ReadString(object, "email", out.email, false) || !ReadBool(object, "email_verified", out.emailVerified, false) ||
-		    !ReadNumber(object, "points", out.points, false) || !ReadArray(object, "clans", out.clans, ReadClanSummary, false))
-		{
-			return false;
-		}
-		const auto* location = Member(object, "location");
-		if (location != nullptr && !location->is_null())
-		{
-			Location place;
-			if (!location->is_object() || !ReadLocation(*location, place))
-			{
-				return false;
-			}
-			out.location = std::move(place);
-		}
-		return true;
+		return ReadInteger(object, "id", out.id) && ReadString(object, "name", out.name) &&
+		       ReadString(object, "email", out.email, false) && ReadBool(object, "email_verified", out.emailVerified, false) &&
+		       ReadNumber(object, "points", out.points, false) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
+		       ReadString(object, "country", out.country, false) && ReadString(object, "area", out.area, false) &&
+		       ReadString(object, "city", out.city, false) && ReadArray(object, "clans", out.clans, ReadClanRef, false) &&
+		       ReadTime(object, "date_joined", out.dateJoined, false);
 	});
 }
 
@@ -392,7 +426,7 @@ std::optional<JoinTicket> ParseJoinTicket(std::string_view text)
 {
 	return ParseWith<JoinTicket>(text, [](const Json& object, JoinTicket& out) {
 		return ReadString(object, "url", out.url) && ReadString(object, "ticket", out.ticket) && !out.ticket.empty() &&
-		       ReadInteger(object, "expires_in", out.expiresIn, false);
+		       ReadTime(object, "expires", out.expires);
 	});
 }
 
@@ -481,16 +515,27 @@ std::optional<Problem> ParseProblem(std::string_view text)
 {
 	return ParseWith<Problem>(text, [](const Json& object, Problem& out) {
 		return ReadString(object, "type", out.type, false) && ReadString(object, "title", out.title, false) &&
-		       ReadInteger(object, "status", out.status, false) && ReadString(object, "detail", out.detail, false);
+		       ReadInteger(object, "status", out.status, false) && ReadString(object, "detail", out.detail, false) &&
+		       ReadString(object, "code", out.code, false);
 	});
 }
 
 std::optional<PushEvent> ParsePushEvent(std::string_view text)
 {
 	return ParseWith<PushEvent>(text, [](const Json& object, PushEvent& out) {
-		if (!ReadInteger(object, "seq", out.seq, false) || !ReadString(object, "type", out.type) || out.type.empty())
+		if (!ReadString(object, "type", out.type) || out.type.empty() || !ReadString(object, "time", out.time, false))
 		{
 			return false;
+		}
+		const auto* seq = Member(object, "seq");
+		if (seq != nullptr && !seq->is_null())
+		{
+			int64_t number = 0;
+			if (!ReadInteger(object, "seq", number))
+			{
+				return false;
+			}
+			out.seq = number;
 		}
 		const auto* data = Member(object, "data");
 		out.data = data != nullptr ? Dump(*data) : std::string("null");
@@ -498,30 +543,139 @@ std::optional<PushEvent> ParsePushEvent(std::string_view text)
 	});
 }
 
-std::optional<ServerChange> ParseServerChange(std::string_view text)
+std::optional<ServerChange> ParseServerChange(std::string_view type, std::string_view data)
 {
-	return ParseWith<ServerChange>(text, [](const Json& object, ServerChange& out) {
-		if (!ReadBool(object, "removed", out.removed, false))
-		{
-			return false;
-		}
-		if (out.removed)
-		{
-			return ReadInteger(object, "id", out.server.id);
-		}
-		return ReadServerEntry(object, out.server);
+	if (type == events::k_ServersRemoved)
+	{
+		return ParseWith<ServerChange>(data, [](const Json& object, ServerChange& out) {
+			out.removed = true;
+			return ReadString(object, "id", out.server.id) && !out.server.id.empty() &&
+			       ReadString(object, "reason", out.reason, false);
+		});
+	}
+	if (type != events::k_ServersChanged)
+	{
+		return std::nullopt;
+	}
+	return ParseWith<ServerChange>(data, [](const Json& object, ServerChange& out) {
+		const auto* server = Member(object, "server");
+		return server != nullptr && server->is_object() && ReadServerEntry(*server, out.server);
+	});
+}
+
+std::optional<PushPosition> ParsePushPosition(std::string_view data)
+{
+	return ParseWith<PushPosition>(data, [](const Json& object, PushPosition& out) {
+		return ReadString(object, "epoch", out.epoch) && ReadInteger(object, "seq", out.seq);
+	});
+}
+
+std::optional<PushError> ParsePushError(std::string_view data)
+{
+	return ParseWith<PushError>(data, [](const Json& object, PushError& out) {
+		return ReadString(object, "code", out.code) && ReadString(object, "detail", out.detail, false) &&
+		       ReadString(object, "channel", out.channel, false);
 	});
 }
 
 std::optional<PointsChange> ParsePointsChange(std::string_view text)
 {
-	return ParseWith<PointsChange>(
-	    text, [](const Json& object, PointsChange& out) { return ReadNumber(object, "points", out.points); });
+	return ParseWith<PointsChange>(text, [](const Json& object, PointsChange& out) {
+		return ReadNumber(object, "points", out.points) && ReadInteger(object, "games_ranked", out.gamesRanked, false) &&
+		       ReadInteger(object, "position", out.position, false) && ReadNumber(object, "change", out.change, false);
+	});
 }
 
 std::optional<Ban> ParseBan(std::string_view text)
 {
 	return ParseWith<Ban>(text, [](const Json& object, Ban& out) { return ReadString(object, "reason", out.reason, false); });
+}
+
+std::optional<int64_t> ParseTime(std::string_view text)
+{
+	// YYYY-MM-DDTHH:MM:SS, then a fraction of a second, then Z or an offset of +HH:MM or -HH:MM
+	const auto digits = [&text](size_t start, size_t count) -> std::optional<int32_t> {
+		if (start + count > text.size())
+		{
+			return std::nullopt;
+		}
+		int32_t value = 0;
+		for (size_t i = start; i < start + count; ++i)
+		{
+			if (text[i] < '0' || text[i] > '9')
+			{
+				return std::nullopt;
+			}
+			value = (value * 10) + (text[i] - '0');
+		}
+		return value;
+	};
+	const auto at = [&text](size_t i, char c) { return i < text.size() && text[i] == c; };
+	const auto year = digits(0, 4);
+	const auto month = digits(5, 2);
+	const auto day = digits(8, 2);
+	const auto hour = digits(11, 2);
+	const auto minute = digits(14, 2);
+	const auto second = digits(17, 2);
+	if (!year || !month || !day || !hour || !minute || !second || !at(4, '-') || !at(7, '-') ||
+	    !(at(10, 'T') || at(10, 't') || at(10, ' ')) || !at(13, ':') || !at(16, ':') || *month < 1 || *month > 12 || *day < 1 ||
+	    *day > 31 || *hour > 23 || *minute > 59 || *second > 60)
+	{
+		return std::nullopt;
+	}
+	size_t i = 19;
+	int64_t milliseconds = 0;
+	if (at(i, '.'))
+	{
+		++i;
+		int64_t scale = 100;
+		const auto first = i;
+		while (i < text.size() && text[i] >= '0' && text[i] <= '9')
+		{
+			milliseconds += (text[i] - '0') * scale;
+			scale /= 10;
+			++i;
+		}
+		if (i == first)
+		{
+			return std::nullopt;
+		}
+	}
+	int64_t offsetMinutes = 0;
+	if (at(i, 'Z') || at(i, 'z'))
+	{
+		++i;
+	}
+	else if (at(i, '+') || at(i, '-'))
+	{
+		const auto sign = text[i] == '-' ? -1 : 1;
+		const auto offsetHours = digits(i + 1, 2);
+		const auto offsetMinute = digits(i + 4, 2);
+		if (!offsetHours || !offsetMinute || !at(i + 3, ':'))
+		{
+			return std::nullopt;
+		}
+		offsetMinutes = sign * ((*offsetHours * 60) + *offsetMinute);
+		i += 6;
+	}
+	else
+	{
+		return std::nullopt;
+	}
+	if (i != text.size())
+	{
+		return std::nullopt;
+	}
+	// The days from 1970-01-01 of a date of the civil calendar
+	const int64_t y = *year - (*month <= 2 ? 1 : 0);
+	const int64_t era = (y >= 0 ? y : y - 399) / 400;
+	const int64_t yearOfEra = y - (era * 400);
+	const int64_t monthFromMarch = (*month + 9) % 12;
+	const int64_t dayOfYear = ((153 * monthFromMarch) + 2) / 5 + *day - 1;
+	const int64_t dayOfEra = (yearOfEra * 365) + (yearOfEra / 4) - (yearOfEra / 100) + dayOfYear;
+	const int64_t days = (era * 146097) + dayOfEra - 719468;
+	const int64_t seconds = (days * 86400) + (*hour * 3600) + (*minute * 60) + *second - (offsetMinutes * 60);
+	return (seconds * 1000) + milliseconds;
 }
 
 std::string DateText(const Date& date)
