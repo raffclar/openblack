@@ -33,10 +33,10 @@ constexpr std::string_view k_WorkingFolder = "/work";
 /// Returns false when the page gave no install.
 [[nodiscard]] bool PrepareFileSystem();
 
-/// Run the frames of the game, one frame in each display frame of the browser. Between two frames the game thread gives
-/// control back to the browser, which then shows the frame that the canvas has. The call returns at once. When frame
-/// returns false, end runs and gives the exit code of the program, and the program stops.
-void RunFrames(std::function<bool()> frame, std::function<int()> end);
+/// Run the frames of the game, one frame in each display frame of the browser. Between two frames the game thread waits
+/// for the browser, which then shows the frame that the canvas has. When frame returns false, end runs, and the call
+/// returns the exit code that end gives.
+[[nodiscard]] int RunFrames(const std::function<bool()>& frame, const std::function<int()>& end);
 
 /// Call before the renderer draws a frame. When the renderer draws more than one frame in a frame of RunFrames, as a
 /// loading screen does, the frame that the canvas has goes to the page as an image before the next frame replaces it.

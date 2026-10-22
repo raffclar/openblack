@@ -48,15 +48,8 @@ SamplerDefaults::SamplerDefaults()
 	whiteCube = fromBgfx(bgfx::createTextureCube(1, false, 1, k_Format, k_Flags, WhiteTexels(6)));
 	bgfx::setName(toBgfx(whiteCube), "Default White Cube");
 	auto& white3D = _textures[static_cast<size_t>(DefaultTexture::White3D)];
-	if ((bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_3D) != 0)
-	{
-		white3D = fromBgfx(bgfx::createTexture3D(1, 1, 1, false, k_Format, k_Flags, WhiteTexels(1)));
-		bgfx::setName(toBgfx(white3D), "Default White 3D");
-	}
-	else
-	{
-		white3D = fromBgfx(bgfx::TextureHandle BGFX_INVALID_HANDLE);
-	}
+	white3D = fromBgfx(bgfx::createTexture3D(1, 1, 1, false, k_Format, k_Flags, WhiteTexels(1)));
+	bgfx::setName(toBgfx(white3D), "Default White 3D");
 }
 
 SamplerDefaults::~SamplerDefaults()

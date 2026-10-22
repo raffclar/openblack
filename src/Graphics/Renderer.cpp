@@ -33,7 +33,7 @@
 
 #include <LNDFile.h>
 #include <SDL_video.h>
-#include <bgfx/platform.h>
+#include <bgfx/bgfx.h>
 #include <bimg/bimg.h>
 #include <bx/file.h>
 #include <fmt/format.h>
@@ -430,17 +430,27 @@ struct BgfxCallback: public bgfx::CallbackI
 		}
 	}
 	// Saving a screenshot
-	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, const void* data, uint32_t size,
-	                bool yflip) override
+	void screenShot(const char* filePath, uint32_t width, uint32_t height, uint32_t pitch, bgfx::TextureFormat::Enum format,
+	                const void* data, uint32_t size, bool yflip) override
 	{
+		// The pictures are BGRA8. A renderer gives the pixels in the format of its window, which can be RGBA8.
+		auto bgra = std::span(static_cast<const uint8_t*>(data), size);
+		std::vector<uint8_t> swapped;
+		if (format == bgfx::TextureFormat::RGBA8)
+		{
+			swapped = graphics::RgbaToBgra(bgra);
+			bgra = swapped;
+		}
+		else if (format != bgfx::TextureFormat::BGRA8)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Screenshot at {} is in a format that can't be written", filePath);
+			failures.Record(filePath, "the window's pixels are in a format that can't be written");
+			return;
+		}
 		if (graphics::ScreenPictures::InMemory(filePath))
 		{
 			// Make the picture now from the pixels of bgfx, and do not copy the full frame
-			pictures.Make(filePath, {.width = width,
-			                         .height = height,
-			                         .pitch = pitch,
-			                         .yflip = yflip,
-			                         .bgra = std::span(static_cast<const uint8_t*>(data), size)});
+			pictures.Make(filePath, {.width = width, .height = height, .pitch = pitch, .yflip = yflip, .bgra = bgra});
 			return;
 		}
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Taking a screenshot...");
@@ -453,8 +463,7 @@ struct BgfxCallback: public bgfx::CallbackI
 			failures.Record(filePath, "only .png pictures can be written");
 			return;
 		}
-		const auto pixels = std::span(static_cast<const uint8_t*>(data), size);
-		if (const auto why = graphics::WriteScreenshotPng(path, width, height, pitch, pixels, yflip); !why.empty())
+		if (const auto why = graphics::WriteScreenshotPng(path, width, height, pitch, bgra, yflip); !why.empty())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("graphics"), "Failed to save Screenshot ({}x{}) at {}: {}", width, height, filePath,
 			                    why);
@@ -510,6 +519,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	case GraphicsBackend::OpenGLES:
 		init.type = bgfx::RendererType::OpenGLES;
 		break;
+	case GraphicsBackend::WebGPU:
+		init.type = bgfx::RendererType::WebGPU;
+		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
 		return nullptr;
@@ -522,13 +534,13 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		const auto& window = Locator::windowing::value();
 
 		drawableSize = static_cast<glm::uvec2>(window.GetSize());
-		init.resolution.width = static_cast<uint32_t>(drawableSize.x);
-		init.resolution.height = static_cast<uint32_t>(drawableSize.y);
+		init.swapChain.width = static_cast<uint32_t>(drawableSize.x);
+		init.swapChain.height = static_cast<uint32_t>(drawableSize.y);
 
 		// Get Native Handles from SDL window
 		const auto handles = window.GetNativeHandles();
-		init.platformData.nwh = handles.nativeWindow;
-		init.platformData.ndt = handles.nativeDisplay;
+		init.swapChain.nwh = handles.nativeWindow;
+		init.swapChain.ndt = handles.nativeDisplay;
 	}
 
 	uint32_t bgfxReset = BGFX_RESET_NONE;
@@ -550,10 +562,12 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	{
 		bgfxReset |= BGFX_RESET_VSYNC;
 	}
-	init.resolution.reset = bgfxReset;
+	init.reset = bgfxReset;
+	// The window's colours are 8-bit RGBA, the format that the screenshots and the other readers of the window expect
+	init.swapChain.formatColor = bgfx::TextureFormat::RGBA8;
 	// Three buffers to draw into: with two, a frame waits for the one on screen to be let go of, a whole refresh or two
 	// whenever the window is composited, as Direct3D 12 windows often are
-	init.resolution.numBackBuffers = k_BackBuffers;
+	init.swapChain.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
 	if constexpr (k_Platform == Platform::Web)
@@ -567,9 +581,16 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to initialize bgfx.");
 		return nullptr;
 	}
+	if (bgfx::getRendererType() != init.type)
+	{
+		// bgfx tries the next renderer when the renderer that the game asks for does not start. In a web browser with no
+		// WebGPU device, this is WebGL 2.
+		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "The {} renderer did not start. The game draws with {}.",
+		                   bgfx::getRendererName(init.type), bgfx::getRendererName(bgfx::getRendererType()));
+	}
 
 	const bgfx::Caps* caps = bgfx::getCaps();
-	if ((caps->supported & BGFX_CAPS_TEXTURE_2D_ARRAY) == 0 || caps->limits.maxTextureLayers < 9)
+	if (caps->limits.maxTextureLayers < 9)
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Graphics device must support texture layers.");
 		return nullptr;
@@ -595,13 +616,10 @@ Renderer::Renderer(uint32_t bgfxReset, std::unique_ptr<BgfxCallback>&& bgfxCallb
 		                                               bgfx::copy(&k_White, sizeof(k_White))));
 		bgfx::setName(toBgfx(*_whiteTexture), "White");
 	}
-	if ((bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_READ_BACK) != 0)
-	{
-		_readBackTexture = fromBgfx(
-		    bgfx::createTexture2D(1, 1, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_READ_BACK | BGFX_SAMPLER_NONE,
-		                          bgfx::copy(_readBackTexel.data(), static_cast<uint32_t>(_readBackTexel.size()))));
-		bgfx::setName(toBgfx(*_readBackTexture), "Read Back");
-	}
+	_readBackTexture =
+	    fromBgfx(bgfx::createTexture2D(1, 1, false, 1, bgfx::TextureFormat::RGBA8, BGFX_TEXTURE_READ_BACK | BGFX_SAMPLER_NONE,
+	                                   bgfx::copy(_readBackTexel.data(), static_cast<uint32_t>(_readBackTexel.size()))));
+	bgfx::setName(toBgfx(*_readBackTexture), "Read Back");
 	// The moving shadows' data, grown as more are cast
 	_groundShadowData = std::make_unique<Texture2D>("Ground Shadow Data");
 	_groundShadowData->Create(k_GroundShadowDataWidth, 1, 1, TextureFormat::RGBA32F, Wrapping::ClampEdge, Filter::Nearest,
@@ -764,7 +782,11 @@ void Renderer::ConfigureView(graphics::RenderPass viewId, glm::u16vec2 resolutio
 
 void Renderer::Reset(glm::u16vec2 resolution) const noexcept
 {
-	bgfx::reset(resolution.x, resolution.y, _bgfxReset);
+	// The other values of the window's buffers stay as bgfx::init set them
+	bgfx::SwapChain swapChain;
+	swapChain.width = resolution.x;
+	swapChain.height = resolution.y;
+	bgfx::reset(_bgfxReset, &swapChain);
 	// The scene and its mirror in the sea cover the window, each keeping how it is cleared
 	SetSceneViewRects(RenderPass::Main, resolution);
 	SetSceneViewRects(RenderPass::Reflection, resolution);
@@ -3942,8 +3964,7 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 	const auto origin = camera.GetOrigin();
 	const float near = camera.GetNearClip();
 	const auto samples = sun::GlareSamples(placement.has_value() ? placement->position : origin, origin, near);
-	const bool asksDrawing = (bgfx::getCaps()->supported & BGFX_CAPS_OCCLUSION_QUERY) != 0 &&
-	                         sun::GlareTestsDepth(Locator::config::value().detailLevel);
+	const bool asksDrawing = sun::GlareTestsDepth(Locator::config::value().detailLevel);
 	const auto resolution =
 	    Locator::windowing::has_value() ? static_cast<glm::vec2>(Locator::windowing::value().GetSize()) : glm::vec2(0.0f);
 	const auto toClip = camera.GetViewProjectionMatrix();
@@ -4842,8 +4863,7 @@ void Renderer::KeepLightOfFrameBefore() const
 	// The luminosity and the colours that the frame before drew, copied before the first pass of this frame draws over
 	// them
 	_before.texturesKept = false;
-	const bool blits = (bgfx::getCaps()->supported & BGFX_CAPS_TEXTURE_BLIT) != 0;
-	if (!blits || !_landColourFrameBuffer)
+	if (!_landColourFrameBuffer)
 	{
 		return;
 	}
@@ -4861,8 +4881,11 @@ void Renderer::KeepLightOfFrameBefore() const
 			bgfx::setName(toBgfx(*to), name);
 			size = fromSize;
 		}
-		bgfx::blit(static_cast<bgfx::ViewId>(RenderPass::LandShade), toBgfx(*to), 0, 0,
-		           toBgfx(from.GetColorAttachment().GetNativeHandle()));
+		bgfx::TextureRegion dst;
+		dst.init(toBgfx(*to));
+		bgfx::TextureRegion src;
+		src.init(toBgfx(from.GetColorAttachment().GetNativeHandle()));
+		bgfx::blit(static_cast<bgfx::ViewId>(RenderPass::LandShade), dst, src);
 	};
 	copy(*_landColourFrameBuffer, _before.colour, _before.colourSize, bgfx::TextureFormat::RGBA8, "Land Colour Before");
 	_before.texturesKept = true;
@@ -7838,7 +7861,9 @@ void Renderer::ReleaseGpuWorkMemory() noexcept
 	// of that work
 	if (_readBackTexture)
 	{
-		bgfx::readTexture(toBgfx(*_readBackTexture), _readBackTexel.data());
+		bgfx::TextureRegion texel;
+		texel.init(toBgfx(*_readBackTexture));
+		bgfx::read(texel, _readBackTexel.data());
 	}
 }
 
@@ -7947,11 +7972,11 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 {
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
-	constexpr uint64_t k_ReadBackCaps = BGFX_CAPS_TEXTURE_READ_BACK | BGFX_CAPS_TEXTURE_BLIT;
-	const bool canReadBack = (bgfx::getCaps()->supported & k_ReadBackCaps) == k_ReadBackCaps;
+	// All the renderers of bgfx can copy and read back textures
+	constexpr bool k_CanReadBack = true;
 	// Vulkan lets go of the window's buffers while it is minimised, where the other renderers keep drawing into them
 	const bool screenDropped = bgfx::getRendererType() == bgfx::RendererType::Vulkan;
-	switch (const auto plan = PlanScreenshot(screenDropped, minimised, canReadBack, size); plan.route)
+	switch (const auto plan = PlanScreenshot(screenDropped, minimised, k_CanReadBack, size); plan.route)
 	{
 	case ScreenshotRoute::Screen:
 	{

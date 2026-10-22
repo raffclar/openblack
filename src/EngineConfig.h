@@ -13,6 +13,7 @@
 #include <array>
 #include <map>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <utility>
 
@@ -31,6 +32,8 @@ enum class GraphicsBackend : uint8_t
 	Vulkan,
 	/// OpenGL ES 3, which is WebGL 2 in a web browser. Only the web build has it.
 	OpenGLES,
+	/// WebGPU. In a web browser, the browser gives it. On the desktop, bgfx needs the Dawn library next to the game.
+	WebGPU,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
@@ -50,6 +53,8 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
     {"GLES", GraphicsBackend::OpenGLES},
     {"WebGL", GraphicsBackend::OpenGLES},
 #endif
+    {"WebGPU", GraphicsBackend::WebGPU},
+    {"WGPU", GraphicsBackend::WebGPU},
 });
 
 /// The backend a command line names, by any of its names in any case
@@ -139,5 +144,12 @@ struct EngineConfig
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
+
+	/// The https:// origin of the lobby (bwgame-service). With none, the game has no online services. The web build
+	/// uses the origin of the page for any value.
+	std::optional<std::string> lobbyOrigin;
+	/// The real-world weather of the player's place changes the weather of a single-player game. It is off unless the
+	/// player turns it on, as in the original game.
+	bool useInternetWeather {false};
 };
 } // namespace openblack

@@ -56,6 +56,10 @@ public:
 
 	void ForceStorm(const ForcedStorm& storm) override;
 	void EndStorm(entt::entity storm) override;
+	[[nodiscard]] bool StormLives(entt::entity storm) const override;
+	entt::entity AddStandingStorm(const script_weather::LandStorm& storm) override;
+	void SetBackgroundWeather(const components::WeatherInfo& weather) override;
+	[[nodiscard]] components::WeatherInfo GetBackgroundWeather() const override { return _background; }
 	void ClearStorms() override;
 	void StrikeLightning(bool bolt) override;
 
@@ -125,6 +129,8 @@ private:
 	uint32_t _nextStormSerial {0};
 	/// The storm forced over the island, if there is one
 	entt::entity _forcedStorm {entt::null};
+	/// The weather of each place before the storms add to it. It stays from one land to the next.
+	components::WeatherInfo _background {};
 	std::vector<components::WeatherInfo> _grid;
 	uint8_t _stamp {1};
 };

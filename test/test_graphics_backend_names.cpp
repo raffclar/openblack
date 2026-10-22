@@ -37,6 +37,13 @@ TEST(GraphicsBackendNames, ShortNamesInAnyCase)
 	EXPECT_EQ(ParseGraphicsBackend("null"), GraphicsBackend::Noop);
 }
 
+TEST(GraphicsBackendNames, WebGpuByItsNames)
+{
+	EXPECT_EQ(ParseGraphicsBackend("WebGPU"), GraphicsBackend::WebGPU);
+	EXPECT_EQ(ParseGraphicsBackend("webgpu"), GraphicsBackend::WebGPU);
+	EXPECT_EQ(ParseGraphicsBackend("WGPU"), GraphicsBackend::WebGPU);
+}
+
 TEST(GraphicsBackendNames, UnknownNamesAreRefused)
 {
 	EXPECT_FALSE(ParseGraphicsBackend("").has_value());

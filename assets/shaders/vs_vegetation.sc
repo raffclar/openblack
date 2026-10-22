@@ -9,6 +9,8 @@ $output v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
+#include "instance.sh"
+
 #ifdef USE_HEIGHT_MAP
 SAMPLER2D(s_heightmap, 1);
 #endif // USE_HEIGHT_MAP
@@ -42,7 +44,7 @@ void main()
     model[3] = i_data3;
 
     // The tree's sway, or its bend away from the hand, is in its matrix (VegetationSystem)
-    vec4 worldPosition = instMul(model, vec4(a_position.xyz, 1.0));
+    vec4 worldPosition = InstanceMul(model, vec4(a_position.xyz, 1.0));
 
     v_position = worldPosition;
 
@@ -55,7 +57,7 @@ void main()
 
     // The game makes its trees unlit: no light shades them, they take the land's light of the cell they stand in, scaled
     // by the trees' brightness of the frame
-    vec3 origin = instMul(model, vec4(0.0, 0.0, 0.0, 1.0)).xyz;
+    vec3 origin = InstanceMul(model, vec4(0.0, 0.0, 0.0, 1.0)).xyz;
     // A tree held in the hand and mirrored in the sea takes the light that it kept in the hand: the land's light and
     // colour at its place on the map, blended over the four cells around it, and the haze of the kept distance
     // A tree with a fire on it takes a grey instead, no brighter than the trees' brightness
@@ -82,10 +84,10 @@ void main()
         float snowLevel = SnowShownLevel(i_data4.w);
         if (snowLevel > 0.0)
         {
-            vec3 worldNormal = normalize(instMul(model, vec4(a_normal, 0.0)).xyz);
-            vec3 localLight = ModelLightLocal(instMul(model, vec4(1.0, 0.0, 0.0, 0.0)).xyz,
-                                              instMul(model, vec4(0.0, 1.0, 0.0, 0.0)).xyz,
-                                              instMul(model, vec4(0.0, 0.0, 1.0, 0.0)).xyz, origin);
+            vec3 worldNormal = normalize(InstanceMul(model, vec4(a_normal, 0.0)).xyz);
+            vec3 localLight = ModelLightLocal(InstanceMul(model, vec4(1.0, 0.0, 0.0, 0.0)).xyz,
+                                              InstanceMul(model, vec4(0.0, 1.0, 0.0, 0.0)).xyz,
+                                              InstanceMul(model, vec4(0.0, 0.0, 1.0, 0.0)).xyz, origin);
             v_snow = vec4(SnowUv(a_position.xyz, worldNormal), snowLevel / 255.0, 0.0);
             v_snowLight = ModelLightColour(SnowColour(colour), ModelLightFactor(a_normal, localLight));
         }

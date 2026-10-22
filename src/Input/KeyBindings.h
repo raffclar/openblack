@@ -22,6 +22,7 @@
 #include <SDL_scancode.h>
 
 #include "BindableActions.h"
+#include "Common/Platform.h"
 
 namespace openblack::input
 {
@@ -134,6 +135,62 @@ inline constexpr KeyBindingTable k_DefaultKeyBindings {{
 	{BindableActionMap::NEXT_LEASH,             "Next Leash",                  BindCategory::Creature,  KeyChord {SDL_SCANCODE_B},      MouseInput::None,         BindStatus::OwnedByLeashWork},
 }};
 // clang-format on
+
+// clang-format off
+/// The defaults of the web build, in the same order. A web browser keeps some keys for its own commands, such as F5 to
+/// load the page again and Ctrl+L to go to the address bar. The game cannot stop these commands, so these defaults use
+/// other keys for those actions:
+/// - Help: H, not F1, which opens the help of the browser.
+/// - Zoom To Realm: R, not F3, which finds text on the page.
+/// - Zoom To Creature Room: K, not F5, which loads the page again.
+/// - Zoom To Challenge Room: J, not F6, which goes to the address bar.
+/// - Zoom To Save Game Room: G, not F7, which starts caret browsing.
+/// - Zoom To Library: I, not F9, which opens the reader view of some browsers.
+/// - Quick Save: Alt+S, not Ctrl+S, which saves the page.
+/// - Quick Load: Alt+L, not Ctrl+L, which goes to the address bar.
+/// All the other keys are the same as the game's defaults.
+inline constexpr KeyBindingTable k_WebDefaultKeyBindings {{
+	{BindableActionMap::HELP,                   "Help",                        BindCategory::Interface, KeyChord {SDL_SCANCODE_H},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::MOVE,                   "Move",                        BindCategory::Hand,      std::nullopt,                   MouseInput::LeftButton,   BindStatus::Implemented},
+	{BindableActionMap::ACTION,                 "Action",                      BindCategory::Hand,      std::nullopt,                   MouseInput::RightButton,  BindStatus::Implemented},
+	{BindableActionMap::ZOOM_OUT,               "Zoom Out",                    BindCategory::Camera,    std::nullopt,                   MouseInput::WheelDown,    BindStatus::Implemented},
+	{BindableActionMap::ZOOM_IN,                "Zoom In",                     BindCategory::Camera,    std::nullopt,                   MouseInput::WheelUp,      BindStatus::Implemented},
+	{BindableActionMap::TALK,                   "Talk",                        BindCategory::Interface, KeyChord {SDL_SCANCODE_T},      MouseInput::None,         BindStatus::NotYetImplemented},
+	{BindableActionMap::ZOOM_ON,                "Zoom On",                     BindCategory::Camera,    KeyChord {SDL_SCANCODE_RCTRL},  MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::MOVE_LEFT,              "Move Left",                   BindCategory::Camera,    KeyChord {SDL_SCANCODE_LEFT},   MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::MOVE_RIGHT,             "Move Right",                  BindCategory::Camera,    KeyChord {SDL_SCANCODE_RIGHT},  MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::MOVE_FORWARDS,          "Move Forwards",               BindCategory::Camera,    KeyChord {SDL_SCANCODE_UP},     MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::MOVE_BACKWARDS,         "Move Backwards",              BindCategory::Camera,    KeyChord {SDL_SCANCODE_DOWN},   MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::TILT_UP,                "Tilt Up",                     BindCategory::Camera,    KeyChord {SDL_SCANCODE_A},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::TILT_DOWN,              "Tilt Down",                   BindCategory::Camera,    KeyChord {SDL_SCANCODE_Q},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ROTATE_LEFT,            "Rotate Left",                 BindCategory::Camera,    KeyChord {SDL_SCANCODE_Z},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ROTATE_RIGHT,           "Rotate Right",                BindCategory::Camera,    KeyChord {SDL_SCANCODE_U},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ROTATE_ON,              "Tilt/Rotate On",              BindCategory::Camera,    KeyChord {SDL_SCANCODE_RSHIFT}, MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ROTATE_AROUND_MOUSE_ON, "Tilt/Rotate Around Mouse On", BindCategory::Camera,    std::nullopt,                   MouseInput::MiddleButton, BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_TEMPLE,         "Zoom To Temple",              BindCategory::Places,    KeyChord {SDL_SCANCODE_SPACE},  MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_CREATURE,       "Zoom To Creature",            BindCategory::Creature,  KeyChord {SDL_SCANCODE_C},      MouseInput::None,         BindStatus::OwnedByCreatureModeWork},
+	{BindableActionMap::ZOOM_TO_REALM,          "Zoom To Realm",               BindCategory::Places,    KeyChord {SDL_SCANCODE_R},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_INSIDE_TEMPLE,  "Zoom To Inside Temple",       BindCategory::Places,    KeyChord {SDL_SCANCODE_F4},     MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_CREATURE_ROOM,  "Zoom To Creature Room",       BindCategory::Places,    KeyChord {SDL_SCANCODE_K},      MouseInput::None,         BindStatus::OwnedByCreatureModeWork},
+	{BindableActionMap::ZOOM_TO_CHALLENGE_ROOM, "Zoom To Challenge Room",      BindCategory::Places,    KeyChord {SDL_SCANCODE_J},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_SAVE_GAME_ROOM, "Zoom To Save Game Room",      BindCategory::Places,    KeyChord {SDL_SCANCODE_G},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_OPTIONS_ROOM,   "Zoom To Options Room",        BindCategory::Places,    KeyChord {SDL_SCANCODE_F8},     MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::ZOOM_TO_LIBRARY,        "Zoom To Library",             BindCategory::Places,    KeyChord {SDL_SCANCODE_I},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::LEASH_UNLEASH_CREATURE, "Leash/UnLeash Creature",      BindCategory::Creature,  KeyChord {SDL_SCANCODE_L},      MouseInput::None,         BindStatus::OwnedByLeashWork},
+	{BindableActionMap::SHOW_VILLAGER_NAMES,    "Show Villager Names",         BindCategory::Villagers, KeyChord {SDL_SCANCODE_N},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::SHOW_VILLAGER_DETAILS,  "Show Villager Details",       BindCategory::Villagers, KeyChord {SDL_SCANCODE_S},      MouseInput::None,         BindStatus::Implemented},
+	{BindableActionMap::QUICK_SAVE,             "Quick Save",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_S, Modifier::Alt} , MouseInput::None, BindStatus::Implemented},
+	{BindableActionMap::QUICK_LOAD,             "Quick Load",                  BindCategory::Game,      KeyChord {SDL_SCANCODE_L, Modifier::Alt} , MouseInput::None, BindStatus::Implemented},
+	{BindableActionMap::PREVIOUS_LEASH,         "Previous Leash",              BindCategory::Creature,  KeyChord {SDL_SCANCODE_V},      MouseInput::None,         BindStatus::OwnedByLeashWork},
+	{BindableActionMap::NEXT_LEASH,             "Next Leash",                  BindCategory::Creature,  KeyChord {SDL_SCANCODE_B},      MouseInput::None,         BindStatus::OwnedByLeashWork},
+}};
+// clang-format on
+
+/// The default key bindings of the platform: the game's defaults on the desktop, and the web defaults in a web browser
+[[nodiscard]] constexpr const KeyBindingTable& DefaultKeyBindings(Platform platform = k_Platform) noexcept
+{
+	return platform == Platform::Web ? k_WebDefaultKeyBindings : k_DefaultKeyBindings;
+}
 
 /// The key that stands for both sides' modifier keys: the left one for either Ctrl, Shift or Alt
 [[nodiscard]] SDL_Scancode CanonicalKey(SDL_Scancode key) noexcept;

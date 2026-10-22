@@ -52,6 +52,12 @@ namespace chlapi
 class CHLApi;
 }
 
+namespace online
+{
+class HttpClientInterface;
+class WebSocketClientInterface;
+} // namespace online
+
 namespace debug::gui
 {
 class DebugGuiInterface;
@@ -202,6 +208,8 @@ class LandShadeSystemInterface;
 class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
+class LobbyClientSystemInterface;
+class RealWeatherSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
 class ForestSystemInterface;
@@ -359,6 +367,14 @@ struct Locator
 	using creatureCarryOverSystem = entt::locator<ecs::systems::CreatureCarryOverSystemInterface>;
 	using saveGameSystem = entt::locator<ecs::systems::SaveGameSystemInterface>;
 	using creatureWebPageSystem = entt::locator<ecs::systems::CreatureWebPageSystemInterface>;
+	/// The HTTPS client of the web calls of the game
+	using httpClient = entt::locator<online::HttpClientInterface>;
+	/// The WSS client of the push channel of the lobby and of the sockets of the game servers
+	using webSocketClient = entt::locator<online::WebSocketClientInterface>;
+	/// The client of the lobby (bwgame-service)
+	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The real-world weather of a single-player game, off unless the player turns it on
+	using realWeatherSystem = entt::locator<ecs::systems::RealWeatherSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;
 	using magicShieldSystem = entt::locator<ecs::systems::MagicShieldSystemInterface>;
 	using forestSystem = entt::locator<ecs::systems::ForestSystemInterface>;

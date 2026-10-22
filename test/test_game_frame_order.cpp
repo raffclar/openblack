@@ -221,7 +221,7 @@ TEST(GameFrameOrder, TheGraphicsAreTheCameraTheDrawStartThePreDrawAndTheDraw)
 		EXPECT_TRUE(IsGraphics(step)) << static_cast<int>(step);
 	}
 	for (const auto step : {Step::FrameClock, Step::Input, Step::Interface, Step::Turns, Step::FrameTime, Step::FilmClock,
-	                        Step::CameraKeys, Step::ProfileAlignment, Step::Audio})
+	                        Step::CameraKeys, Step::ProfileAlignment, Step::Audio, Step::Online})
 	{
 		EXPECT_FALSE(IsGraphics(step)) << static_cast<int>(step);
 	}

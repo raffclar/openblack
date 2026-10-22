@@ -295,8 +295,43 @@ async function choose(entries, source) {
   }
 }
 
+// The game draws with WebGPU, and with WebGL 2 when the browser has no WebGPU. The page asks the browser for a WebGPU
+// adapter before the game starts. When it gets none, the game starts with WebGL 2 at once. The page parameter
+// "renderer" (webgpu or webgl2) selects the renderer, and a renderer on the game's command line ("args") wins.
+async function chooseRenderer(parameters, gameArguments) {
+  if (gameArguments.some((argument) => argument === '-b' || argument.startsWith('--backend-type'))) {
+    return { backend: undefined, reason: 'the game arguments select the renderer' };
+  }
+  const forced = (parameters.get('renderer') || '').toLowerCase();
+  if (forced === 'webgl2' || forced === 'webgl') {
+    return { backend: 'OpenGLES', reason: 'the page parameter selects WebGL 2' };
+  }
+  if (forced === 'webgpu') {
+    return { backend: 'WebGPU', reason: 'the page parameter selects WebGPU' };
+  }
+  if (forced !== '') {
+    log(`The page does not know the renderer "${forced}". Use webgpu or webgl2.`);
+  }
+  if (!navigator.gpu) {
+    return { backend: 'OpenGLES', reason: 'the browser has no WebGPU' };
+  }
+  try {
+    if (await navigator.gpu.requestAdapter({ powerPreference: 'high-performance' })) {
+      return { backend: 'WebGPU', reason: 'the browser gives a WebGPU adapter' };
+    }
+  } catch (error) {
+    log(`The WebGPU adapter request failed: ${error}`);
+  }
+  return { backend: 'OpenGLES', reason: 'the browser gives no WebGPU adapter' };
+}
+
 async function start() {
   if (!chosen) {
+    return;
+  }
+  if (typeof WebAssembly.Suspending !== 'function') {
+    showMessage('The page cannot start the game',
+      'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs.');
     return;
   }
   element('play').disabled = true;
@@ -308,6 +343,12 @@ async function start() {
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const parameters = new URLSearchParams(location.search);
   const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
+  const renderer = await chooseRenderer(parameters, gameArguments);
+  if (renderer.backend) {
+    gameArguments.push('--backend-type', renderer.backend);
+  }
+  log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
+    `because ${renderer.reason}.`);
   element('chooser').hidden = true;
   element('game').hidden = false;
   document.body.classList.add('playing');
