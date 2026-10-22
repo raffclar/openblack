@@ -67,6 +67,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/ChallengeRoomRules.h"
@@ -386,8 +387,7 @@ void GameInterface::ShowSkipBox(bool currentProfileHasCreature)
 	_skipBoxAnswer.reset();
 	_skipBox->Show(currentProfileHasCreature);
 	// The control under the pointer lights up at once
-	glm::ivec2 mouse;
-	SDL_GetMouseState(&mouse.x, &mouse.y);
+	const auto mouse = input::WindowPointer();
 	_skipBox->MouseMove(_painter.ToDialog(mouse));
 }
 
@@ -396,8 +396,7 @@ void GameInterface::ShowNewPlayerBox(bool canCancel, NewPlayerBox::CheckName che
 	_newPlayerBox->checkName = std::move(checkName);
 	_newPlayerBox->Show(canCancel);
 	// The control under the pointer lights up at once
-	glm::ivec2 mouse;
-	SDL_GetMouseState(&mouse.x, &mouse.y);
+	const auto mouse = input::WindowPointer();
 	_newPlayerBox->MouseMove(_painter.ToDialog(mouse));
 }
 
@@ -746,8 +745,7 @@ bool GameInterface::ProcessMusicControlsEvent(const SDL_Event& event, glm::u16ve
 		{
 			return false;
 		}
-		glm::ivec2 mouse;
-		SDL_GetMouseState(&mouse.x, &mouse.y);
+		const auto mouse = input::WindowPointer();
 		_musicControls->Wheel(ToMusicControls(mouse, resolution), event.wheel.y);
 		return true;
 	}
@@ -874,8 +872,7 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 		return true;
 	case SDL_MOUSEWHEEL:
 	{
-		glm::ivec2 mouse;
-		SDL_GetMouseState(&mouse.x, &mouse.y);
+		const auto mouse = input::WindowPointer();
 		_menu->Wheel(_painter.ToDialog(mouse), event.wheel.y);
 		return true;
 	}
@@ -969,8 +966,8 @@ void GameInterface::Update(float deltaSeconds)
 	if (_menu->IsCapturing())
 	{
 		// The box that asks for a new input reads the mouse buttons held once a frame
-		glm::ivec2 mouse;
-		const auto buttons = SDL_GetMouseState(&mouse.x, &mouse.y);
+		const auto buttons = SDL_GetMouseState(nullptr, nullptr);
+		const auto mouse = input::WindowPointer();
 		_menu->PollCapture((buttons & SDL_BUTTON_LMASK) != 0u, (buttons & SDL_BUTTON_RMASK) != 0u,
 		                   (buttons & SDL_BUTTON_MMASK) != 0u, _painter.ToDialog(mouse));
 	}

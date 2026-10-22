@@ -149,7 +149,7 @@ public:
 		/// The player's creature, without which most of the creature's scrolls aren't written
 		std::optional<CreatureFacts> creature;
 		/// What each of the game's controls is bound to, which the help that names a control tells
-		std::vector<input::KeyBinding> bindings {input::k_DefaultKeyBindings.begin(), input::k_DefaultKeyBindings.end()};
+		std::vector<input::KeyBinding> bindings {input::DefaultKeyBindings().begin(), input::DefaultKeyBindings().end()};
 
 		/// Made up facts, for the systems openblack doesn't have yet
 		static Facts Mock();

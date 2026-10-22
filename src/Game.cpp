@@ -295,6 +295,7 @@
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyRebinding.h"
+#include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
 #include "LivingTurnOrder.h"
@@ -1033,103 +1034,108 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		case SDLK_p:
 			Locator::time::value().SetPaused(!IsPaused());
 			break;
-		// F1 is the game's Help key, so the renderer's statistics are on F11
-		case SDLK_F11:
-			Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
-			break;
-		case SDLK_1:
-		case SDLK_2:
-		case SDLK_3:
-		case SDLK_4:
-		case SDLK_5:
-		case SDLK_6:
-		case SDLK_7:
+		default:
 		{
+			namespace keys = input::platform_keys;
+			const auto key = event.key.keysym.sym;
 			const auto mod = event.key.keysym.mod;
-			const bool shift = (mod & KMOD_SHIFT) != 0;
-			const bool ctrl = (mod & KMOD_CTRL) != 0;
-			const bool alt = (mod & KMOD_ALT) != 0;
-			// Alt and 1 halves the game's speed, to half of normal at the least. Alt and 2 doubles it, to twice
-			// normal at the most. Shift or Ctrl with the key goes before Alt.
-			if ((event.key.keysym.sym == SDLK_1 || event.key.keysym.sym == SDLK_2) && !shift && !ctrl && alt)
+			const keys::Modifiers held {
+			    .shift = (mod & KMOD_SHIFT) != 0,
+			    .ctrl = (mod & KMOD_CTRL) != 0,
+			    .alt = (mod & KMOD_ALT) != 0,
+			};
+			// F1 is the game's Help key, so the renderer's statistics are on another key
+			if (key == keys::RendererStatisticsKey(k_Platform))
 			{
-				auto& clock = Locator::time::value();
-				clock.SetSpeed(event.key.keysym.sym == SDLK_1 ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
-				                                              : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
+				Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
 				break;
 			}
-			if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
+			// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
+			// twice normal at the most.
+			if (const auto speed = keys::SpeedKeyFor(k_Platform, key, held); speed != keys::SpeedKey::None)
+			{
+				auto& clock = Locator::time::value();
+				clock.SetSpeed(speed == keys::SpeedKey::Slower ? std::max(clock.GetSpeed() * 0.5f, 0.5f)
+				                                               : std::min(clock.GetSpeed() + clock.GetSpeed(), 2.0f));
+				break;
+			}
+			if (key >= SDLK_1 && key <= SDLK_7)
+			{
+				if (!BookmarkKeysAllowed() || !Locator::cameraBookmarkSystem::value().IsEnabled())
+				{
+					break;
+				}
+				auto& bookmarks = Locator::cameraBookmarkSystem::value();
+				const auto slot = static_cast<size_t>(key - SDLK_1);
+				switch (keys::BookmarkKeyFor(k_Platform, held))
+				{
+				case keys::BookmarkKey::Clear:
+					if (bookmarks.IsSet(slot))
+					{
+						bookmarks.ClearBookmark(slot);
+					}
+					break;
+				case keys::BookmarkKey::Set:
+				{
+					// The bookmark keeps the place of the hand, or the thing under the hand
+					const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
+					const auto left = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+					const auto right = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+					if (left.has_value() || right.has_value())
+					{
+						std::optional<entt::entity> thing;
+						if (Locator::pickingSystem::has_value())
+						{
+							thing = Locator::pickingSystem::value().GetPick().object;
+						}
+						bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
+						                      camera.GetOrigin());
+					}
+					break;
+				}
+				case keys::BookmarkKey::ToggleFollow:
+					bookmarks.ToggleFollow(slot);
+					break;
+				case keys::BookmarkKey::Jump:
+					bookmarks.JumpTo(slot);
+					break;
+				case keys::BookmarkKey::None:
+					break;
+				}
+				break;
+			}
+			const auto move = keys::BookmarkMoveFor(k_Platform, key, held);
+			if (move == keys::BookmarkMove::None || !BookmarkKeysAllowed())
 			{
 				break;
 			}
 			auto& bookmarks = Locator::cameraBookmarkSystem::value();
-			const auto slot = static_cast<size_t>(event.key.keysym.sym - SDLK_1);
-			// Ctrl and Shift clear a set bookmark. Ctrl without Alt keeps the place of the hand, or the thing under the
-			// hand. The key alone jumps to a set bookmark. Shift starts or stops a follow of a set bookmark.
-			if (ctrl && shift)
+			switch (move)
 			{
-				if (bookmarks.IsSet(slot))
+			case keys::BookmarkMove::Back:
+				bookmarks.JumpBack();
+				break;
+			case keys::BookmarkMove::Previous:
+				bookmarks.JumpToPrevious();
+				break;
+			case keys::BookmarkMove::Next:
+				bookmarks.JumpToNext();
+				break;
+			case keys::BookmarkMove::NextTown:
+			{
+				std::optional<entt::entity> thing;
+				if (Locator::pickingSystem::has_value())
 				{
-					bookmarks.ClearBookmark(slot);
+					thing = Locator::pickingSystem::value().GetPick().object;
 				}
+				bookmarks.FlyToNextTown(thing);
+				break;
 			}
-			else if (ctrl && !alt)
-			{
-				const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
-				const auto left = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-				const auto right = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
-				if (left.has_value() || right.has_value())
-				{
-					std::optional<entt::entity> thing;
-					if (Locator::pickingSystem::has_value())
-					{
-						thing = Locator::pickingSystem::value().GetPick().object;
-					}
-					bookmarks.SetBookmark(slot, left.value_or(right.value_or(glm::zero<glm::vec3>())), thing,
-					                      camera.GetOrigin());
-				}
-			}
-			else if (shift)
-			{
-				bookmarks.ToggleFollow(slot);
-			}
-			else if (!ctrl && !alt)
-			{
-				bookmarks.JumpTo(slot);
+			case keys::BookmarkMove::None:
+				break;
 			}
 			break;
 		}
-		case SDLK_BACKSPACE:
-			// The go-back key flies the camera back to the view before the last jump to a bookmark
-			if (BookmarkKeysAllowed())
-			{
-				Locator::cameraBookmarkSystem::value().JumpBack();
-			}
-			break;
-		case SDLK_TAB:
-			// Shift and Tab jumps to the last set bookmark, and Ctrl and Tab to the next one. Tab without them flies to
-			// the next town of the player.
-			if (BookmarkKeysAllowed())
-			{
-				if ((event.key.keysym.mod & KMOD_SHIFT) != 0)
-				{
-					Locator::cameraBookmarkSystem::value().JumpToPrevious();
-				}
-				else if ((event.key.keysym.mod & KMOD_CTRL) != 0)
-				{
-					Locator::cameraBookmarkSystem::value().JumpToNext();
-				}
-				else
-				{
-					std::optional<entt::entity> thing;
-					if (Locator::pickingSystem::has_value())
-					{
-						thing = Locator::pickingSystem::value().GetPick().object;
-					}
-					Locator::cameraBookmarkSystem::value().FlyToNextTown(thing);
-				}
-			}
-			break;
 		}
 		break;
 	case SDL_MOUSEMOTION:
@@ -6717,7 +6723,7 @@ void Game::PlayerProfileChanged()
 void Game::LoadProfileKeys()
 {
 	// A profile that keeps no bindings has the game's defaults
-	input::KeyBindingTable bindings = input::k_DefaultKeyBindings;
+	input::KeyBindingTable bindings = input::DefaultKeyBindings();
 	if (Locator::playerProfileSystem::has_value())
 	{
 		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
