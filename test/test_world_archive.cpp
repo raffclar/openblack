@@ -50,6 +50,7 @@
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/SpriteTextures.h"
+#include "PlayerSlots.h"
 
 using namespace openblack;
 using namespace openblack::ecs::reflection;
@@ -968,4 +969,47 @@ TEST(WorldArchive, AnOlderSaveOfAnAudioEmitterLoadsWithoutItsSource)
 	const auto& sound = loaded.get<ecs::components::AudioEmitter>(emitter);
 	EXPECT_EQ(sound.sourceId, 0u);
 	EXPECT_EQ(sound.soundId, k_Sound.value());
+}
+
+TEST(WorldArchive, AShorterSavedArrayFillsTheStartOfALongerArray)
+{
+	entt::meta_ctx context;
+	Register(context);
+	// A table for each of the 8 players of an old save loads into a table for more players
+	const std::array<float, player_slots::k_LandSlots> plain {1.0f, 2.0f, 3.0f, 4.0f, 5.0f, 6.0f, 7.0f, 8.0f};
+	const std::array<std::optional<uint32_t>, 2> listed {std::optional<uint32_t> {5}, std::nullopt};
+	BinaryWriter out(context);
+	Save(out, plain);
+	Save(out, listed);
+
+	const EntityRemap identity;
+	BinaryReader in(context, out.Bytes(), identity);
+	std::array<float, player_slots::k_MaxPlayers> morePlain {};
+	std::array<std::optional<uint32_t>, 4> moreListed {};
+	Load(in, morePlain);
+	Load(in, moreListed);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	for (size_t i = 0; i < morePlain.size(); ++i)
+	{
+		EXPECT_EQ(morePlain.at(i), i < plain.size() ? plain.at(i) : 0.0f) << "player " << i;
+	}
+	EXPECT_EQ(moreListed.at(0), std::optional<uint32_t> {5});
+	EXPECT_FALSE(moreListed.at(1).has_value());
+	EXPECT_FALSE(moreListed.at(2).has_value());
+	EXPECT_FALSE(moreListed.at(3).has_value());
+}
+
+TEST(WorldArchive, ALongerSavedArrayFailsTheReader)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const std::array<float, 8> plain {};
+	BinaryWriter out(context);
+	Save(out, plain);
+	const EntityRemap identity;
+	BinaryReader in(context, out.Bytes(), identity);
+	std::array<float, 4> fewer {};
+	Load(in, fewer);
+	EXPECT_TRUE(in.Failed());
 }

@@ -9,6 +9,7 @@
 
 #include "PlayerArchetype.h"
 
+#include "ECS/Components/Alignment.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Registry.h"
@@ -25,6 +26,9 @@ entt::entity PlayerArchetype::Create(PlayerNames name)
 	const auto entity = registry.Create();
 	registry.Assign<Player>(entity, name);
 	registry.Assign<PlayerStatistics>(entity);
+	// Each player has an alignment from the start, which is neutral until the player does good or evil. Thus a player has
+	// the same parts on a land that the game loaded and on a land that the story changed to.
+	registry.Assign<Alignment>(entity);
 	// A player made again on a later land is as they were on the last
 	if (Locator::playerSystem::has_value())
 	{
