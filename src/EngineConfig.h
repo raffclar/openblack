@@ -31,6 +31,8 @@ enum class GraphicsBackend : uint8_t
 	Vulkan,
 	/// OpenGL ES 3, which is WebGL 2 in a web browser. Only the web build has it.
 	OpenGLES,
+	/// WebGPU: the browser's WebGPU in the web build, Dawn on the desktop
+	WebGPU,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
@@ -45,6 +47,8 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
     {"MTL", GraphicsBackend::Metal},
     {"Vulkan", GraphicsBackend::Vulkan},
     {"VK", GraphicsBackend::Vulkan},
+    {"WebGPU", GraphicsBackend::WebGPU},
+    {"WGPU", GraphicsBackend::WebGPU},
 #if defined(__EMSCRIPTEN__)
     {"OpenGLES", GraphicsBackend::OpenGLES},
     {"GLES", GraphicsBackend::OpenGLES},

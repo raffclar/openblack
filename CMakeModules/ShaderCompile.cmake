@@ -35,7 +35,8 @@ function (openblack_compile_shaders)
   )
 
   # Renderers per platform, as bgfx_compile_shaders() picks them
-  set(profiles 120 300_es spirv)
+  # bgfx 1.166 has no GLSL profile below 330. The WebGPU renderer takes WGSL.
+  set(profiles 430 300_es spirv wgsl)
   if (IOS)
     set(platform IOS)
     list(APPEND profiles metal)
@@ -55,7 +56,8 @@ function (openblack_compile_shaders)
     OR CYGWIN
   )
     set(platform WINDOWS)
-    list(APPEND profiles s_4_0 s_5_0)
+    # Direct3D 11 takes DXBC; Direct3D 12 takes DXIL only from bgfx 1.166
+    list(APPEND profiles s_5_0 s_6_0)
   else ()
     message(FATAL_ERROR "shaderc: unsupported platform")
   endif ()

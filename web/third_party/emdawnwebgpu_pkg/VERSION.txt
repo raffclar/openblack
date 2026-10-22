@@ -1,0 +1,1 @@
+Dawn release v20260623.191042 at revision <https://dawn.googlesource.com/dawn/+log/636a470ddb7f53d1316ae740e2e843697bf8595a>.

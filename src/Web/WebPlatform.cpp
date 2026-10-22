@@ -28,9 +28,26 @@ EM_JS(int, openblack_storage_available, (), {
 EM_JS(void, openblack_present_frame, (), {
 	const canvas = Module['canvas'];
 	if (canvas && canvas.transferToImageBitmap) {
-		const frame = canvas.transferToImageBitmap();
-		postMessage({ openblackFrame: frame }, [frame]);
+		try {
+			const frame = canvas.transferToImageBitmap();
+			postMessage({ openblackFrame: frame }, [frame]);
+		} catch (error) {
+			if (!globalThis.openblackPresentError) {
+				globalThis.openblackPresentError = true;
+				console.error('openblack: the frame could not go to the page: ' + error);
+			}
+		}
 	}
+});
+// The game thread gives control back to the browser for a moment after each frame. Then the browser can complete
+// the WebGPU work that waits (adapter, device, buffer maps and errors). A message on a channel comes back at once, with
+// no minimum delay as a timer has.
+EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
+	await new Promise((resolve) => {
+		const channel = new MessageChannel();
+		channel.port1.onmessage = () => resolve();
+		channel.port2.postMessage(0);
+	});
 });
 EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
 // clang-format on
@@ -97,6 +114,7 @@ bool openblack::web::PrepareFileSystem()
 void openblack::web::PresentFrame()
 {
 	openblack_present_frame();
+	openblack_yield_to_browser();
 }
 
 void openblack::web::ShowPageMessage(std::string_view title, std::string_view text)

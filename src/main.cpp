@@ -175,8 +175,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 #endif
 		if constexpr (openblack::k_Platform == openblack::Platform::Web)
 		{
-			// A web browser has WebGL 2 only
-			graphicsBackend = openblack::GraphicsBackend::OpenGLES;
+			// The web build draws with WebGPU. WebGL 2 stays as a choice on the command line.
+			graphicsBackend = openblack::GraphicsBackend::WebGPU;
 		}
 
 		// allow user to specify a renderer

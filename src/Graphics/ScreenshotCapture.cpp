@@ -196,7 +196,11 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 		bgfx::setViewFrameBuffer(static_cast<bgfx::ViewId>(pass), frameBuffer);
 	}
 	_redirected = true;
-	bgfx::blit(k_CopyView, readBack, 0, 0, textures[0]);
+	bgfx::TextureRegion dst;
+	dst.init(readBack);
+	bgfx::TextureRegion src;
+	src.init(textures[0]);
+	bgfx::blit(k_CopyView, dst, src);
 
 	Capture capture {
 	    .path = path,
@@ -207,7 +211,9 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	    .readyAt = 0,
 	};
 	// The vector's buffer stays where it is while the capture moves about, so bgfx may write into it later
-	capture.readyAt = bgfx::readTexture(readBack, capture.pixels.data());
+	bgfx::TextureRegion region;
+	region.init(readBack);
+	capture.readyAt = bgfx::read(region, capture.pixels.data());
 	_captures.push_back(std::move(capture));
 }
 

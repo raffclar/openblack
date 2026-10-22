@@ -23,6 +23,7 @@ $output v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 #endif // BGFX_CONFIG_MAX_BONES
 
 #include <bgfx_shader.sh>
+#include "instancing.sh"
 
 #include "haze.sh"
 #include "model_light.sh"

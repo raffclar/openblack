@@ -409,6 +409,8 @@ else ()
       -fwasm-exceptions
       -sWASMFS=1
       -sPROXY_TO_PTHREAD=1
+      -sJSPI=1
+      --profiling-funcs
       -sPTHREAD_POOL_SIZE=20
       -sOFFSCREENCANVAS_SUPPORT=1
       -sMIN_WEBGL_VERSION=2

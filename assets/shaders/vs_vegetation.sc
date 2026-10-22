@@ -8,6 +8,7 @@ $output v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 #endif
 
 #include <bgfx_shader.sh>
+#include "instancing.sh"
 
 #ifdef USE_HEIGHT_MAP
 SAMPLER2D(s_heightmap, 1);

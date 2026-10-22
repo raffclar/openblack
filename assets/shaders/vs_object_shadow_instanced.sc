@@ -10,6 +10,7 @@ $output v_texcoord0
 #endif // BGFX_CONFIG_MAX_BONES
 
 #include <bgfx_shader.sh>
+#include "instancing.sh"
 
 // The sun, from the caster's origin (ObjectShadows::k_Sun)
 uniform vec4 u_shadowSun;
