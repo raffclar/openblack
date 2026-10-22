@@ -23,6 +23,7 @@
 #include "../TestTempFolder.h"
 
 using openblack::graphics::PlanScreenshot;
+using openblack::graphics::RgbaToBgra;
 using openblack::graphics::ScreenPictures;
 using openblack::graphics::ScreenshotFailures;
 using openblack::graphics::ScreenshotRoute;
@@ -157,4 +158,14 @@ TEST(ScreenshotCapture, ABackgroundWindowStaysInAWindow)
 	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Borderless, true), DisplayMode::Windowed);
 	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Fullscreen, false), DisplayMode::Fullscreen);
 	EXPECT_EQ(BackgroundDisplayMode(DisplayMode::Windowed, false), DisplayMode::Windowed);
+}
+
+// A window in RGBA8 gives its pixels with red and blue in the other places: each pixel changes them back, and the
+// green and alpha stay
+TEST(ScreenshotCapture, RgbaPixelsBecomeBgra)
+{
+	const std::vector<uint8_t> rgba {1, 2, 3, 4, 10, 20, 30, 40};
+	const std::vector<uint8_t> expected {3, 2, 1, 4, 30, 20, 10, 40};
+	EXPECT_EQ(RgbaToBgra(rgba), expected);
+	EXPECT_TRUE(RgbaToBgra({}).empty());
 }

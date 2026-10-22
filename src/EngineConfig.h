@@ -31,6 +31,8 @@ enum class GraphicsBackend : uint8_t
 	Vulkan,
 	/// OpenGL ES 3, which is WebGL 2 in a web browser. Only the web build has it.
 	OpenGLES,
+	/// WebGPU. In a web browser, the browser gives it. On the desktop, bgfx needs the Dawn library next to the game.
+	WebGPU,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
@@ -50,6 +52,8 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
     {"GLES", GraphicsBackend::OpenGLES},
     {"WebGL", GraphicsBackend::OpenGLES},
 #endif
+    {"WebGPU", GraphicsBackend::WebGPU},
+    {"WGPU", GraphicsBackend::WebGPU},
 });
 
 /// The backend a command line names, by any of its names in any case

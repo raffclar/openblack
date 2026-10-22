@@ -11,6 +11,8 @@ $output v_texcoord0
 
 #include <bgfx_shader.sh>
 
+#include "instance.sh"
+
 // The sun, from the caster's origin (ObjectShadows::k_Sun)
 uniform vec4 u_shadowSun;
 
@@ -26,7 +28,7 @@ void main()
 	model[2] = i_data2;
 	model[3] = i_data3;
 
-	vec4 world = instMul(model, mul(u_model[modelIndex], vec4(a_position.xyz, 1.0f)));
+	vec4 world = InstanceMul(model, mul(u_model[modelIndex], vec4(a_position.xyz, 1.0f)));
 	vec3 origin = i_data3.xyz;
 
 	// Below the origin casts straight down

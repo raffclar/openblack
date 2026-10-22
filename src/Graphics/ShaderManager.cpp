@@ -36,19 +36,11 @@
 #include <map>
 #include <string_view>
 
-#include <bgfx/embedded_shader.h>
-// BGFX has support for WSL to use windows d3d. We disable it here from the BGFX_EMBEDDED_SHADER macro.
-#if BX_PLATFORM_LINUX
-#undef BGFX_EMBEDDED_SHADER_DXBC
-#define BGFX_EMBEDDED_SHADER_DXBC(...)
-#undef BGFX_EMBEDDED_SHADER_DX9BC
-#define BGFX_EMBEDDED_SHADER_DX9BC(...)
-#endif
-
 #include <spdlog/spdlog.h>
 
 #include "Camera/Camera.h"
 #include "DescriptorSetTally.h"
+#include "EmbeddedShaders.h"
 #include "GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
 

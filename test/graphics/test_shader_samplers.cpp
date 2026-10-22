@@ -42,6 +42,11 @@ public:
 		{
 			Write32(0x9ABCDEF0); // output hash
 		}
+		if (version >= 12)
+		{
+			Write32(0x00000003); // raw read bindings
+			Write32(0x00000001); // raw write bindings
+		}
 		_countAt = _bytes.size();
 		Write16(0);
 	}
@@ -105,6 +110,20 @@ TEST(ShaderSamplers, ReadsTheSamplersWithTheirStagesAndKinds)
 	    {.name = "s_blocks", .stage = 13, .dimension = Dimension::Texture2DArray},
 	};
 	EXPECT_EQ(*samplers, expected);
+}
+
+TEST(ShaderSamplers, ReadsPastTheRawBindingsOfNewBinaries)
+{
+	// Version 12 and later put the masks of the raw bindings after the hashes
+	for (const uint8_t version : {uint8_t {12}, uint8_t {13}})
+	{
+		const auto shader =
+		    FakeShader('V', version).Uniform("u_colour", k_Vec4, 0).Uniform("s_bones", k_SamplerType, 2 + 4, k_Dim2D);
+		const auto samplers = ReadSpirvSamplers(shader.Bytes());
+		ASSERT_TRUE(samplers.has_value());
+		const std::vector<Sampler> expected {{.name = "s_bones", .stage = 4, .dimension = Dimension::Texture2D}};
+		EXPECT_EQ(*samplers, expected);
+	}
 }
 
 TEST(ShaderSamplers, OlderBinariesOffsetTheStagesByShaderKind)
