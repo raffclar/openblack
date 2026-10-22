@@ -11,10 +11,12 @@
 
 #include <algorithm>
 #include <array>
+#include <memory>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "Graphics/LandShadowBake.h"
 #include "Graphics/TreeShadows.h"
 
 namespace tree_shadows = openblack::graphics::tree_shadows;
@@ -183,4 +185,25 @@ TEST(TreeShadows, ACompressedTexturesAlphaIsReadAsTheGameTurnsItInto4Bits)
 	dxt5[1] = 0;
 	dxt5[2] = 0x02; // index 2: six sevenths of the first value
 	EXPECT_EQ(tree_shadows::MaskOfCompressed(dxt5, 4, 4, tree_shadows::Compression::Dxt5)[0], ((6 * 255 / 7) >> 4) << 4);
+}
+
+TEST(TreeShadows, ALeafTriangleKeepsItsAlphaWhenTheModelGoes)
+{
+	// The model owns its alpha, as the resource caches do. The bake on the other threads reads the triangle after the
+	// caches release the model, as at the exit of the game.
+	auto model = std::make_unique<tree_shadows::AlphaMask>(SolidMask(0xF0));
+	const openblack::graphics::LandShadowBake::LeafTriangle triangle {
+	    .positions = {},
+	    .uvs = {},
+	    .mask = std::make_shared<const tree_shadows::AlphaMask>(*model),
+	};
+	model.reset();
+
+	const std::array<tree_shadows::Corner, 3> corners {At(0.0f, 0.0f), At(8.0f, 0.0f), At(0.0f, 8.0f)};
+	tree_shadows::Coverage kept {};
+	tree_shadows::Fill(kept, corners, *triangle.mask);
+	tree_shadows::Coverage expected {};
+	tree_shadows::Fill(expected, corners, SolidMask(0xF0));
+	EXPECT_EQ(kept, expected);
+	EXPECT_GT(RowCount(kept, 0), 0);
 }
