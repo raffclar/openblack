@@ -208,6 +208,8 @@ public:
 	}
 
 	[[nodiscard]] bool Creates() const override { return true; }
+	/// The symbols keep their creator through a save and a load, so that the load draws them again
+	[[nodiscard]] const Creator* OwnCreator() const override { return &symbol; }
 
 	bool ModifyCollection(Effect& effect, Collection& collection, Collection::Slot& slot) const override
 	{

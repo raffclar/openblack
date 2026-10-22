@@ -100,3 +100,39 @@ TEST(PlayersSymbols, ASheetOfTheWrongSizeOrASquareOutsideItChangesNothing)
 	EXPECT_FALSE(small.Whole());
 	EXPECT_TRUE(players.Whole());
 }
+
+TEST(PlayersSymbols, ThePlayerShowsTheSymbolOfTheProfileOrTheSymbolThatATestPutsInItsPlace)
+{
+	EXPECT_EQ(ChosenSymbol(14, std::nullopt), 14u);
+	EXPECT_EQ(ChosenSymbol(0, std::nullopt), 0u);
+	EXPECT_EQ(ChosenSymbol(14, 3u), 3u);
+	EXPECT_EQ(ChosenSymbol(std::nullopt, 3u), 3u);
+	EXPECT_EQ(ChosenSymbol(std::nullopt, std::nullopt), std::nullopt);
+}
+
+TEST(PlayersSymbols, ALoadMakesTheSheetAgainWithTheSymbolOfTheProfilePlayedNow)
+{
+	const auto file = NumberedSheet(100);
+	const auto designs = NumberedSheet(0);
+	// The game that made the save showed symbol 5 in the square of player 1
+	const auto played = MakeSheet(file, designs, ChosenSymbol(5, std::nullopt), 1, std::nullopt);
+	EXPECT_EQ(played.alpha[TexelOf(1, 0, 0)], 5);
+	// The save keeps no part of the sheet, so the load makes it again from the file, with the profile's symbol 14
+	const auto loaded = MakeSheet(file, designs, ChosenSymbol(14, std::nullopt), 1, std::nullopt);
+	EXPECT_EQ(loaded.alpha[TexelOf(1, 0, 0)], 14);
+	EXPECT_EQ(loaded.colours[TexelOf(1, 63, 63) * 3], 14);
+	// The other squares are the file's squares
+	EXPECT_EQ(loaded.alpha[TexelOf(0, 0, 0)], 100);
+	EXPECT_EQ(loaded.alpha[TexelOf(2, 0, 0)], 102);
+	// A load of the same profile makes the same sheet as the game that made the save
+	EXPECT_EQ(MakeSheet(file, designs, ChosenSymbol(5, std::nullopt), 1, std::nullopt).colours, played.colours);
+}
+
+TEST(PlayersSymbols, WithNoProfileTheSheetIsTheFilesSheet)
+{
+	const auto file = NumberedSheet(100);
+	const auto designs = NumberedSheet(0);
+	const auto sheet = MakeSheet(file, designs, std::nullopt, 0, std::nullopt);
+	EXPECT_EQ(sheet.colours, file.colours);
+	EXPECT_EQ(sheet.alpha, file.alpha);
+}

@@ -97,8 +97,17 @@ public:
 		return shield && !maths::InsideSphere(before, shield->centre, shield->radius, margin) ? shield : nullptr;
 	}
 
+	[[nodiscard]] std::optional<TownCentreBelief> TownCentreBeliefOf(entt::entity centre) const override
+	{
+		return centre == townCentre ? std::optional(centreBelief) : std::nullopt;
+	}
+	[[nodiscard]] std::vector<int> PlayersInGame() const override { return players; }
+
 	std::vector<StrikeCandidate> candidates;
 	std::vector<std::weak_ptr<ShieldSphere>> shields;
+	entt::entity townCentre {entt::null};
+	TownCentreBelief centreBelief;
+	std::vector<int> players;
 };
 
 class FakeRandom final: public GameRandomInterface
@@ -487,5 +496,73 @@ TEST_F(ParticleSaveTest, ASurfaceInASaveFromBeforeItsCreatorHadANameIsDrawnAgain
 	auto loaded = Make(text);
 	Load(bytes, *loaded);
 	EXPECT_EQ(SurfacesDrawn(*loaded), 1u);
+	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
+}
+
+namespace
+{
+/// The symbols of belief over the totem of a village centre
+std::string TownBeliefEffect()
+{
+	return Header() + Object("UR_TownCentreBelief", "Belief0", "PROPERTY Group INTEGER 0\nPROPERTY HeightAt1 FLOAT 2\n");
+}
+
+/// The players whose symbols an effect draws, in the order of their numbers
+std::vector<int> SymbolsDrawn(const Effect& effect)
+{
+	Effect::DrawWalk walk;
+	effect.Walk(1.0f, walk);
+	std::vector<int> players;
+	for (const auto& atom : walk.atoms)
+	{
+		if (atom.creator != nullptr && atom.creator->kind == Creator::Kind::Symbol)
+		{
+			players.push_back(atom.player);
+		}
+	}
+	std::ranges::sort(players);
+	return players;
+}
+} // namespace
+
+TEST_F(ParticleSaveTest, TheSymbolsOfBeliefOverATotemComeBackDrawnForTheSamePlayers)
+{
+	world.townCentre = static_cast<entt::entity>(7);
+	world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f, 0.0f, 100.0f}};
+	world.players = {0, 2};
+	const auto text = TownBeliefEffect();
+	auto saved = Make(text);
+	saved->AddTarget(world.townCentre);
+	for (int i = 0; i < 4; ++i)
+	{
+		saved->Step(k_Step);
+	}
+	ASSERT_EQ(SymbolsDrawn(*saved), (std::vector<int> {0, 2}));
+	const auto bytes = Save(*saved);
+	auto loaded = Make(text);
+	Load(bytes, *loaded);
+	EXPECT_EQ(SymbolsDrawn(*loaded), (std::vector<int> {0, 2}));
+	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
+	ExpectSameSteps(*saved, *loaded, 5);
+	EXPECT_EQ(SymbolsDrawn(*loaded), (std::vector<int> {0, 2}));
+}
+
+TEST_F(ParticleSaveTest, TheSymbolsOfBeliefInASaveThatKeptNoCreatorForThemAreDrawnAgain)
+{
+	world.townCentre = static_cast<entt::entity>(7);
+	world.centreBelief = {.totemTop = {10.0f, 20.0f, 30.0f}, .beliefs = {300.0f}};
+	world.players = {0};
+	const auto text = TownBeliefEffect();
+	auto saved = Make(text);
+	saved->AddTarget(world.townCentre);
+	for (int i = 0; i < 4; ++i)
+	{
+		saved->Step(k_Step);
+	}
+	auto bytes = Save(*saved);
+	bytes.effects = WithoutRuleCreatorName(std::move(bytes.effects));
+	auto loaded = Make(text);
+	Load(bytes, *loaded);
+	EXPECT_EQ(SymbolsDrawn(*loaded), (std::vector<int> {0}));
 	EXPECT_EQ(Drawn(*loaded), Drawn(*saved));
 }

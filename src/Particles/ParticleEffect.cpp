@@ -76,15 +76,36 @@ bool IsCreatorClass(std::string_view className)
 	return className.starts_with("Particle") && className.find("Creator") != std::string_view::npos;
 }
 
-/// The creator of the one rule of a collection that keeps a surface creator of its own, none when no rule or more than
-/// one rule keeps one
-const Creator* SurfaceCreatorOf(const Collection& collection)
+/// The creator of the one rule of a collection that keeps a creator of this kind of its own, none when no rule or more
+/// than one rule keeps one
+const Creator* OwnCreatorOf(const Collection& collection, Creator::Kind kind)
 {
 	const Creator* found = nullptr;
 	for (const auto& slot : collection.modifiers)
 	{
 		const auto* own = slot.modifier != nullptr ? slot.modifier->OwnCreator() : nullptr;
-		if (own == nullptr || own->kind != Creator::Kind::Surface || own == found)
+		if (own == nullptr || own->kind != kind || own == found)
+		{
+			continue;
+		}
+		if (found != nullptr)
+		{
+			return nullptr;
+		}
+		found = own;
+	}
+	return found;
+}
+
+/// The creator of the one rule that keeps a state for a particle and has a creator of its own, none when no rule or more
+/// than one rule does
+const Creator* RuleCreatorOf(const Atom& atom)
+{
+	const Creator* found = nullptr;
+	for (const auto& entry : atom.data)
+	{
+		const auto* own = entry.first != nullptr ? entry.first->OwnCreator() : nullptr;
+		if (own == nullptr || own == found)
 		{
 			continue;
 		}
@@ -1536,6 +1557,11 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 			in.ReadValue(fragment->normals);
 			in.ReadValue(fragment->skins);
 			atom.fragment = std::move(fragment);
+			// An older save kept no creator for a fragment. The one rule of the collection that throws fragments made it.
+			if (atom.creator == nullptr)
+			{
+				atom.creator = OwnCreatorOf(*collection, Creator::Kind::Fragment);
+			}
 		}
 		in.ReadValue(has);
 		if (has)
@@ -1550,7 +1576,7 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 			// of the collection made it.
 			if (atom.creator == nullptr)
 			{
-				atom.creator = SurfaceCreatorOf(*collection);
+				atom.creator = OwnCreatorOf(*collection, Creator::Kind::Surface);
 			}
 		}
 		in.ReadValue(has);
@@ -1695,6 +1721,12 @@ void Effect::LoadRuleState(Collection& collection, EffectReader& in)
 			{
 				atom->data.insert_or_assign(modifier, std::move(data));
 			}
+		}
+		// An older save kept no creator for a particle that a rule made with a creator of its own. The rule that keeps
+		// a state for the particle and has its own creator made it.
+		if (atom->creator == nullptr)
+		{
+			atom->creator = RuleCreatorOf(*atom);
 		}
 		for (auto& sub : atom->subCollections)
 		{
