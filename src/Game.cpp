@@ -2891,7 +2891,10 @@ void Game::UpdateFrameEffects()
 	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const auto* keys = SDL_GetKeyboardState(nullptr);
+		// The key comes from the player's keyboard, which the input lock keeps out also when the window has the keys
+		const bool playerKeys =
+		    !Locator::gameActionSystem::has_value() || !Locator::gameActionSystem::value().IsPlayerInputBlocked();
+		const auto* keys = playerKeys ? SDL_GetKeyboardState(nullptr) : nullptr;
 		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
 		Locator::helpTextSystem::value().Update({
 		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),

@@ -27,6 +27,11 @@ vcpkg_download_distfile(
 # - webgpu-vertex-texture-caps: WebGPU can read textures in vertex shaders, thus the formats get the vertex flag.
 # - webgpu-min-max-blend-factors: min and max blends get the factors one. They do not use the factors, but WebGPU
 #   refuses other factors for them.
+# A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
+# shaders:
+# - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
+#   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
+#   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -38,6 +43,7 @@ vcpkg_extract_source_archive(
     webgpu-missing-vertex-inputs.patch
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
+    essl-no-inline.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

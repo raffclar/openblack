@@ -309,7 +309,8 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 		{
 			*position = RestingPointer(WindowSize());
 		}
-		return SDL_GetMouseState(nullptr, nullptr);
+		// A background run holds no buttons of the mouse of the desk
+		return IsBackground() ? 0 : SDL_GetMouseState(nullptr, nullptr);
 	}
 	if (position != nullptr && _pointerScaled)
 	{
@@ -333,7 +334,8 @@ void GameActionMap::RestPointerUntilCursorSeen()
 	if (Locator::windowing::has_value())
 	{
 		const auto* window = Locator::windowing::value().GetHandle();
-		_playerCursorSeen = window != nullptr && SDL_GetMouseFocus() == window;
+		// A background run never takes the cursor of the desk, also when the cursor is over the window
+		_playerCursorSeen = !IsBackground() && window != nullptr && SDL_GetMouseFocus() == window;
 	}
 	if (!_playerCursorSeen && !_scriptedPointer.has_value())
 	{
@@ -435,10 +437,9 @@ bool GameActionMap::AdmitEvent(const SDL_Event& event)
 			return false;
 		}
 	}
-	// A hand demonstration moves the hand: the player's own mouse is kept out, the demonstration's moves let in
-	if (_playerMouseBlocked && !IsInjected(event) &&
-	    (event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
-	     event.type == SDL_MOUSEWHEEL))
+	// A hand demonstration moves the hand: the player's own mouse is kept out, the demonstration's moves let in. A
+	// background run never takes the mouse of the desk, so only the inspector's mouse moves its pointer
+	if ((_playerMouseBlocked || IsBackground()) && IsDeskMouseEvent(event))
 	{
 		return false;
 	}
@@ -800,12 +801,16 @@ void GameActionMap::Frame()
 		{
 			_cursorPinnedAt = glm::ivec2(_mousePosition);
 		}
-		// A still mouse sends its messages while the window has the keys, the camera does not hold the cursor and no
-		// hand demonstration plays
+		// A still mouse sends its messages while the window has the keys and the player's mouse reaches the game, the
+		// camera does not hold the cursor and no hand demonstration plays
 		const auto* window =
 		    Locator::windowing::has_value() ? static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()) : nullptr;
-		const bool stillMessages =
-		    window != nullptr && SDL_GetKeyboardFocus() == window && !_cursorFreeze.IsFrozen() && !_playerMouseBlocked;
+		const bool stillMessages = help::SendsStillMessages({
+		    .windowHasKeys = window != nullptr && SDL_GetKeyboardFocus() == window,
+		    .playerInputBlocked = _lock.Locked(),
+		    .cursorFrozen = _cursorFreeze.IsFrozen(),
+		    .playerMouseBlocked = _playerMouseBlocked,
+		});
 		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();

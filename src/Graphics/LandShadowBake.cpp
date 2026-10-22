@@ -265,10 +265,11 @@ std::span<const LandShadowBake::LeafTriangle> LandShadowBake::LeavesOf(entt::id_
 			{
 				continue;
 			}
+			const auto kept = std::make_shared<const tree_shadows::AlphaMask>(*mask);
 			const auto end = std::min<size_t>(primitive.indicesOffset + primitive.indicesCount, surface.indices.size());
 			for (size_t i = primitive.indicesOffset; i + 2 < end; i += 3)
 			{
-				LeafTriangle triangle {.positions = {}, .uvs = {}, .mask = mask};
+				LeafTriangle triangle {.positions = {}, .uvs = {}, .mask = kept};
 				bool valid = true;
 				for (size_t k = 0; k < 3; ++k)
 				{

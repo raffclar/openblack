@@ -21,6 +21,7 @@
 #include <gtest/gtest.h>
 
 #define LOCATOR_IMPLEMENTATIONS
+#include <EngineConfig.h>
 #include <Input/GameActionMap.h>
 #include <Input/InjectedInput.h>
 #include <Input/ScriptedMouse.h>
@@ -86,6 +87,7 @@ protected:
 	{
 		Locator::gameActionSystem::reset();
 		Locator::windowing::reset();
+		Locator::config::reset();
 		SDL_FlushEvents(SDL_FIRSTEVENT, SDL_LASTEVENT);
 		SDL_QuitSubSystem(SDL_INIT_EVENTS);
 	}
@@ -281,5 +283,49 @@ TEST_F(ScriptedMouse, ThePointerIsKnownOnlyOnceSomeoneHoldsIt)
 	EXPECT_FALSE(_actions->IsPointerKnown());
 	_actions->SetInputLockMode(input::LockMode::Locked);
 	Frame();
+	EXPECT_TRUE(_actions->IsPointerKnown());
+}
+
+// Only a move, a button or a wheel turn that the inspector did not send is an event of the mouse of the desk
+TEST(ScriptedMouseEvents, OnlyTheDesksOwnMouseEventsAreDeskMouseEvents)
+{
+	for (const auto type : {SDL_MOUSEMOTION, SDL_MOUSEBUTTONDOWN, SDL_MOUSEBUTTONUP, SDL_MOUSEWHEEL})
+	{
+		SDL_Event event {};
+		event.type = type;
+		EXPECT_TRUE(input::IsDeskMouseEvent(event));
+		input::MarkInjected(event);
+		EXPECT_FALSE(input::IsDeskMouseEvent(event));
+	}
+	SDL_Event key {};
+	key.type = SDL_KEYDOWN;
+	EXPECT_FALSE(input::IsDeskMouseEvent(key));
+	auto motion = input::PumpedMotion({1, 2}, 0);
+	EXPECT_FALSE(input::IsDeskMouseEvent(motion));
+}
+
+// A background run never takes the mouse of the desk: its moves and buttons stay out, and the hand stays where it
+// waits for a known pointer. The inspector's mouse still moves the pointer
+TEST_F(ScriptedMouse, ABackgroundRunNeverTakesTheDesksMouse)
+{
+	Locator::config::emplace().background = true;
+	SDL_Event motion {};
+	motion.type = SDL_MOUSEMOTION;
+	motion.motion.x = 10;
+	motion.motion.y = 20;
+	EXPECT_FALSE(_actions->AdmitEvent(motion));
+	SDL_Event press {};
+	press.type = SDL_MOUSEBUTTONDOWN;
+	press.button.button = SDL_BUTTON_LEFT;
+	EXPECT_FALSE(_actions->AdmitEvent(press));
+	const auto seen = Frame();
+	EXPECT_FALSE(_actions->IsPointerKnown());
+	EXPECT_EQ(seen.readAtFrameStart, k_Window / 2);
+	EXPECT_EQ(seen.buttonsAtFrameStart, 0U);
+
+	Ask(R"({"query": "input.button", "params": {"button": "left", "action": "press"}})");
+	const auto pressed = Frame();
+	ASSERT_EQ(pressed.pressesAt.size(), 1U);
+	EXPECT_EQ(pressed.pressesAt.front(), k_Window / 2);
 	EXPECT_TRUE(_actions->IsPointerKnown());
 }
