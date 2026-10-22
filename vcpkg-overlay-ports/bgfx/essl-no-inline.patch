@@ -1,0 +1,78 @@
+diff --git a/bgfx/tools/shaderc/shaderc_glsl.cpp b/bgfx/tools/shaderc/shaderc_glsl.cpp
+index 0fd6665..e4540be 100644
+--- a/bgfx/tools/shaderc/shaderc_glsl.cpp
++++ b/bgfx/tools/shaderc/shaderc_glsl.cpp
+@@ -101,6 +101,57 @@ namespace bgfx { namespace glsl
+ 		return false;
+ 	}
+ 
++	// openblack: the performance passes without the three passes that inline functions (OpKill wrap, merge return and
++	// exhaustive inline). The inline of a function that returns early puts its body in a block that runs one time,
++	// which SPIRV-Cross writes as do { } while(false). ANGLE on Direct3D compiles these blocks very slowly (more than a
++	// minute for a large shader), and the browser can then lose the context. Without the inline, the functions and
++	// their return statements stay as they are in the source. The other passes are the same and in the same order.
++	static void registerEsslPasses(spvtools::Optimizer& _opt)
++	{
++		_opt.RegisterPass(spvtools::CreateDeadBranchElimPass() )
++			.RegisterPass(spvtools::CreateEliminateDeadFunctionsPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreatePrivateToLocalPass() )
++			.RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass() )
++			.RegisterPass(spvtools::CreateLocalSingleStoreElimPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateScalarReplacementPass(0) )
++			.RegisterPass(spvtools::CreateLocalAccessChainConvertPass() )
++			.RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass() )
++			.RegisterPass(spvtools::CreateLocalSingleStoreElimPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateLocalMultiStoreElimPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateCCPPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateLoopUnrollPass(true) )
++			.RegisterPass(spvtools::CreateDeadBranchElimPass() )
++			.RegisterPass(spvtools::CreateRedundancyEliminationPass() )
++			.RegisterPass(spvtools::CreateCombineAccessChainsPass() )
++			.RegisterPass(spvtools::CreateSimplificationPass() )
++			.RegisterPass(spvtools::CreateScalarReplacementPass(0) )
++			.RegisterPass(spvtools::CreateLocalAccessChainConvertPass() )
++			.RegisterPass(spvtools::CreateLocalSingleBlockLoadStoreElimPass() )
++			.RegisterPass(spvtools::CreateLocalSingleStoreElimPass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateSSARewritePass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateVectorDCEPass() )
++			.RegisterPass(spvtools::CreateDeadInsertElimPass() )
++			.RegisterPass(spvtools::CreateDeadBranchElimPass() )
++			.RegisterPass(spvtools::CreateSimplificationPass() )
++			.RegisterPass(spvtools::CreateIfConversionPass() )
++			.RegisterPass(spvtools::CreateCopyPropagateArraysPass() )
++			.RegisterPass(spvtools::CreateReduceLoadSizePass() )
++			.RegisterPass(spvtools::CreateAggressiveDCEPass(false) )
++			.RegisterPass(spvtools::CreateBlockMergePass() )
++			.RegisterPass(spvtools::CreateRedundancyEliminationPass() )
++			.RegisterPass(spvtools::CreateDeadBranchElimPass() )
++			.RegisterPass(spvtools::CreateBlockMergePass() )
++			.RegisterPass(spvtools::CreateSimplificationPass() )
++			;
++	}
++
+ 	static bool compileSpirvCross(const Options& _options, uint32_t _version, const std::string& _code, bx::WriterI* _shaderWriter, bx::WriterI* _messageWriter)
+ 	{
+ 		bx::ErrorAssert messageErr;
+@@ -209,7 +260,14 @@ namespace bgfx { namespace glsl
+ 					bx::write(_messageWriter, &messageErr, "%s\n", _message);
+ 				});
+ 
+-			opt.RegisterPerformancePasses();
++			if (es)
++			{
++				registerEsslPasses(opt);
++			}
++			else
++			{
++				opt.RegisterPerformancePasses();
++			}
+ 
+ 			std::vector<uint32_t> optimized;
+ 
