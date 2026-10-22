@@ -41,6 +41,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -572,6 +573,9 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 	spdlog::apply_all([this](const std::shared_ptr<spdlog::logger>& logger) { logger->sinks().push_back(_sink); });
 	// The times so far are not the record's
 	[[maybe_unused]] const auto before = Locator::simulation::value().TakeTimings();
+	// The record keeps the synced part of the world at the end of each turn that it records
+	_synced.reset();
+	Locator::simulation::value().SetTurnEndWatcher([this](uint32_t turn) { TurnEnded(turn); });
 	auto start = State();
 	start["type"] = "start";
 	start["seed"] = Locator::rng::has_value() ? Json(Locator::rng::value().GetRunSeed()) : Json(nullptr);
@@ -583,6 +587,11 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 
 void SimProvider::StopRecord()
 {
+	if (Locator::simulation::has_value())
+	{
+		Locator::simulation::value().SetTurnEndWatcher({});
+	}
+	_synced.reset();
 	if (_sink != nullptr)
 	{
 		spdlog::apply_all([this](const std::shared_ptr<spdlog::logger>& logger) {
@@ -614,6 +623,68 @@ void SimProvider::StopRecord()
 	*_out << Dump(end) << '\n';
 	_out->close();
 	_out.reset();
+}
+
+void SimProvider::TurnEnded(uint32_t turn)
+{
+	const auto* registry = RegistryOrNone();
+	if (!_out.has_value() || _every == 0 || turn % _every != 0 || registry == nullptr)
+	{
+		return;
+	}
+	// The hash of the entities and of every saved component, but for the parts that only show the world on this computer
+	const auto& underlying = registry->Underlying();
+	// The parts that only some entities have, by the storage of their marker component
+	std::vector<std::pair<const sim_checks::PresentationPart*, const entt::sparse_set*>> marked;
+	for (const auto& part : sim_checks::PresentationParts())
+	{
+		if (!part.marker.empty())
+		{
+			if (const auto* marker = reflection::FindStorage(underlying, part.marker); marker != nullptr)
+			{
+				marked.emplace_back(&part, marker);
+			}
+		}
+	}
+	const auto keep = [&marked](std::string_view component, std::string_view field, entt::entity entity) {
+		if (entity == entt::null)
+		{
+			return !(field.empty() && sim_checks::IsPresentationOnly(component, {}));
+		}
+		if (!field.empty() && sim_checks::IsPresentationOnly(component, field))
+		{
+			return false;
+		}
+		return std::ranges::none_of(marked, [&](const auto& entry) {
+			const auto& [part, marker] = entry;
+			const bool componentMatches = part->component == "*" || part->component == component;
+			const bool fieldMatches = part->field.empty() ? field.empty() : part->field == field;
+			return componentMatches && fieldMatches && marker->contains(entity);
+		});
+	};
+	const auto hashes = reflection::HashWorld(underlying, _context, keep);
+	uint64_t hash = k_HashOffset;
+	Mix(hash, &hashes.entities, sizeof(hashes.entities));
+	Json parts = Json::object();
+	parts["entities"] = fmt::format("{:016x}", hashes.entities);
+	for (const auto& [name, part] : hashes.components)
+	{
+		Mix(hash, name.data(), name.size());
+		Mix(hash, &part, sizeof(part));
+		parts[name] = fmt::format("{:016x}", part);
+	}
+	Json value = {{"hash", fmt::format("{:016x}", hash)}};
+	if (Locator::gameRandom::has_value())
+	{
+		const auto& random = Locator::gameRandom::value();
+		value["seed"] = random.GetSeeds().synced;
+		value["draws"] = random.GetSyncedDraws();
+	}
+	if (_hashParts)
+	{
+		value["parts"] = std::move(parts);
+	}
+	_synced = Synced {.turn = turn, .value = std::move(value)};
 }
 
 bool SimProvider::Keep(const sim_checks::Flag& flag)
@@ -682,6 +753,12 @@ void SimProvider::Frame(uint64_t frame)
 		const auto seeds = random.GetSeeds();
 		record["seeds"] = {seeds.synced, seeds.local};
 		record["draws"] = random.GetSyncedDraws();
+	}
+	// The synced part of the world at the end of the turn, which the frame rate must not change
+	if (_synced.has_value() && _synced->turn == turn)
+	{
+		record["synced"] = std::move(_synced->value);
+		_synced.reset();
 	}
 	record["flags"] = std::move(problems);
 	*_out << Dump(record) << '\n';

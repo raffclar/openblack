@@ -2228,6 +2228,9 @@ void Game::PlayTurnStep(game_turn::Step step)
 
 	switch (step)
 	{
+	case Step::DrawnPlaces:
+		Locator::animalSystem::value().ShowTurnEnd();
+		break;
 	case Step::PlayerCommands:
 		// The world does the commands that the players sent
 		Locator::playerCommandSystem::value().RunSent();
@@ -2235,6 +2238,13 @@ void Game::PlayTurnStep(game_turn::Step step)
 	case Step::HandStillness:
 		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place
 		Locator::handSystem::value().ProcessTurn();
+		break;
+	case Step::HandInterface:
+		// The hand's own work of the turn, as of each frame. The commands that it sends go to a later turn.
+		if (Locator::handGrabSystem::has_value())
+		{
+			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
+		}
 		break;
 	case Step::TurnCheering:
 		ProcessTurnCheering();
@@ -2319,6 +2329,12 @@ void Game::PlayTurnStep(game_turn::Step step)
 	case Step::VillageTotems:
 		// A town totem that arrives at its share rings the village bell
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
+		break;
+	case Step::TownFlags:
+		Locator::townDesireSystem::value().ProcessFlags();
+		break;
+	case Step::AppleBarrel:
+		Locator::appleBarrelSystem::value().ProcessTurn();
 		break;
 	case Step::ChimneySmoke:
 		Locator::chimneySmokeSystem::value().ProcessTurn();
@@ -2655,6 +2671,11 @@ void Game::PlayTurnStep(game_turn::Step step)
 		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);
+		break;
+	case Step::RunRecord:
+		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
+		// turn, so the number is the turn after this one.
+		Locator::simulation::value().TurnEnded(clock.GetTurn());
 		break;
 	case Step::_Count:
 		break;
@@ -3708,6 +3729,10 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				    Locator::handSystem::value()
 				        .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 				auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
+				if (!_stillHandAt.has_value())
+				{
+					_stillHandAt = handTransform.position;
+				}
 				UpdateHandNavigation(handTransform);
 				UpdateHandKnock(handTransform);
 				if (Locator::temple::has_value() && Locator::temple::value().Active())
@@ -3726,6 +3751,11 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				TraceHand("navigation", handTransform.position);
+				// A tool's run can keep the hand where it started, so that the hand gives no input
+				if (Locator::simulation::value().GetSettings().stillHand)
+				{
+					handTransform.position = _stillHandAt.value_or(handTransform.position);
+				}
 				// Held to a creature, the hand rests on its body under the cursor, stroking and slapping it
 				{
 					auto creatureHand = profiler.BeginScoped(Profiler::Stage::CreatureHandUpdate);

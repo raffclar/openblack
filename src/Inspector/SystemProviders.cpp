@@ -1277,7 +1277,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 			              return QueryResult::Error("there is no audio");
 		              }
 		              size_t playing = 0;
-		              if (const auto* registry = Registry(sources.world); registry != nullptr)
+		              if (const auto* registry = sources.emitters ? sources.emitters() : nullptr; registry != nullptr)
 		              {
 			              registry->Each<const AudioEmitter>([&playing](entt::entity /*entity*/, const AudioEmitter& emitter) {
 				              playing += emitter.state == audio::AudioStatus::Playing ? 1 : 0;
@@ -1314,10 +1314,10 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeAudioProvider(Audio
 	provider->Add(Query("sounds", "The sounds about a point, nearest first (sounds without a place are left out)", {},
 	                    ResultKind::List, true),
 	              [sources](const QueryContext& /*context*/) {
-		              const auto* registry = Registry(sources.world);
+		              const auto* registry = sources.emitters ? sources.emitters() : nullptr;
 		              if (registry == nullptr)
 		              {
-			              return QueryResult::Error(std::string(k_NoRegistry));
+			              return QueryResult::Error("there is no audio");
 		              }
 		              Json items = Json::array();
 		              registry->Each<const AudioEmitter>([&items](entt::entity entity, const AudioEmitter& emitter) {

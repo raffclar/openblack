@@ -32,7 +32,8 @@ bool PulledByAHand(const Registry& registry, entt::entity object)
 {
 	bool pulled = false;
 	registry.Each<const HandGrab>([&pulled, object](const HandGrab& grab) {
-		pulled = pulled || (grab.state == HandGrab::State::Grabbing && grab.tug.has_value() && grab.object == object);
+		pulled = pulled || ((grab.state == HandGrab::State::Grabbing || grab.state == HandGrab::State::Taking) &&
+		                    grab.tug.has_value() && grab.object == object);
 	});
 	return pulled;
 }
@@ -65,8 +66,8 @@ void tree_roots::Show(Registry& registry)
 	registry.Each<const Tree, const CarriedByTornado>(
 	    [&trees](entt::entity tree, const Tree&, const CarriedByTornado&) { trees.push_back(tree); });
 	registry.Each<const HandGrab>([&registry, &trees](const HandGrab& grab) {
-		if (grab.state == HandGrab::State::Grabbing && grab.tug.has_value() && registry.Valid(grab.object) &&
-		    registry.AllOf<Tree>(grab.object))
+		if ((grab.state == HandGrab::State::Grabbing || grab.state == HandGrab::State::Taking) && grab.tug.has_value() &&
+		    registry.Valid(grab.object) && registry.AllOf<Tree>(grab.object))
 		{
 			trees.push_back(grab.object);
 		}

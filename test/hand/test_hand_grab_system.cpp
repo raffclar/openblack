@@ -10,9 +10,13 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <functional>
 #include <map>
 #include <numbers>
 #include <set>
+#include <type_traits>
+#include <utility>
+#include <variant>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -173,6 +177,17 @@ public:
 		return true;
 	}
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
+	void SendCommand(player_commands::Action action) override
+	{
+		sent.push_back(action);
+		if (onCommand)
+		{
+			onCommand(action);
+		}
+	}
+	/// The commands that the hand sent, in their order, and what the test does with each as it comes
+	std::vector<player_commands::Action> sent;
+	std::function<void(const player_commands::Action&)> onCommand;
 	void VillagerIntoHand(entt::entity villager) override { villagersInHand.push_back(villager); }
 	void AnimalIntoOwnFlock(entt::entity) override {}
 	void TreeUprooted(PlayerNames, entt::entity tree) override { uprooted.push_back(tree); }
@@ -446,8 +461,54 @@ protected:
 		auto owned = std::make_unique<FakeWorld>();
 		world = owned.get();
 		system = std::make_unique<HandGrabSystem>(std::move(owned));
+		// The world does each command of the hand at once, unless a test keeps the commands for a later turn
+		world->onCommand = [this](const player_commands::Action& action) {
+			if (deferCommands)
+			{
+				waiting.push_back(action);
+				return;
+			}
+			Run(action);
+		};
 		// The hand has been over the land a frame before anything is pressed
 		Frame(0);
+	}
+
+	/// The world does one command of the hand's player
+	void Run(const player_commands::Action& action)
+	{
+		const auto player = world->HandPlayer();
+		std::visit(
+		    [this, player](const auto& command) {
+			    using Kind = std::decay_t<decltype(command)>;
+			    if constexpr (std::is_same_v<Kind, player_commands::HandTake>)
+			    {
+				    system->DoTake(player, command.object);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandLetGo>)
+			    {
+				    system->DoLetGo(player, command.object, command.velocity);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandTap>)
+			    {
+				    system->DoTap(player, command.object);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandGive>)
+			    {
+				    system->DoGive(player, command.creature, command.object);
+			    }
+		    },
+		    action);
+	}
+
+	/// The start of a turn: the world does the commands that wait
+	void RunWaiting()
+	{
+		const auto commands = std::exchange(waiting, {});
+		for (const auto& command : commands)
+		{
+			Run(command);
+		}
 	}
 
 	glm::vec3 Frame(uint32_t gameMs, glm::vec3 target = {0.0f, 0.0f, 0.0f}, glm::vec3 ground = {0.0f, 0.0f, 0.0f})
@@ -470,6 +531,9 @@ protected:
 	FakeWorld* world {nullptr};
 	std::unique_ptr<HandGrabSystem> system;
 	uint32_t now {1000};
+	/// The commands wait for a turn, as in the game, when the test asks for it
+	bool deferCommands {false};
+	std::vector<player_commands::Action> waiting;
 };
 
 TEST_F(HandGrabSystemWithWorld, ARockIsTakenOnceTheHandHasFadedIntoItsPull)
@@ -1801,4 +1865,134 @@ TEST_F(HandGrabSystemWithWorld, AHeldThingThatIsDestroyedLeavesTheHandAtTheNextT
 	world->registry.Destroy(rock);
 	system->ProcessTurn();
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+// The hand sends the take as a command, with its pick-up sound. The thing stays on the land until the turn that does
+// the command, and the hand keeps its grip on it until then.
+TEST_F(HandGrabSystemWithWorld, ATakeWaitsForTheTurnThatDoesItsCommand)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && world->sent.empty(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_EQ(world->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandTake>(world->sent.front()));
+	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, rock);
+	EXPECT_FALSE(world->samples.empty());
+	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(system->IsBusy());
+	// More frames send no second take
+	Frame(10);
+	EXPECT_EQ(world->sent.size(), 1u);
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(rock));
+}
+
+// The hand lets go of the thing as a command, with the velocity that it had when the player let go of the button. It
+// holds the thing until the turn that does the command.
+TEST_F(HandGrabSystemWithWorld, ALetGoWaitsForItsTurnWithTheVelocityOfTheRelease)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	deferCommands = true;
+	world->sent.clear();
+	Press();
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Frame(10, {10.0f, 0.0f, 0.0f});
+	Release();
+	ASSERT_EQ(world->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandLetGo>(world->sent.front()));
+	const auto letGo = std::get<player_commands::HandLetGo>(world->sent.front());
+	EXPECT_EQ(letGo.object, rock);
+	EXPECT_GT(letGo.velocity.x, 0.0f);
+	EXPECT_TRUE(world->released.empty());
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	EXPECT_FALSE(system->IsAboutToThrow());
+	// A press before the turn does nothing more
+	EXPECT_TRUE(Press());
+	Release();
+	EXPECT_EQ(world->sent.size(), 1u);
+	RunWaiting();
+	ASSERT_EQ(world->released.size(), 1u);
+	EXPECT_EQ(world->released.front().first, rock);
+	EXPECT_EQ(world->released.front().second, letGo.velocity);
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+// A short press sends the tap. The world taps the thing at the turn that does the command.
+TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	Frame(50);
+	Release();
+	EXPECT_TRUE(world->tapped.empty());
+	ASSERT_EQ(world->sent.size(), 1u);
+	EXPECT_TRUE(std::holds_alternative<player_commands::HandTap>(world->sent.front()));
+	RunWaiting();
+	ASSERT_EQ(world->tapped.size(), 1u);
+	EXPECT_EQ(world->tapped.front(), rock);
+}
+
+// The hand's work of the turn takes a thing in flight once the button was held long enough, also with no frame between
+TEST_F(HandGrabSystemWithWorld, TheTurnWorkOfTheHandTakesAFlyingThingAfterTheWait)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->flying.insert(rock);
+	world->underCursor = rock;
+	Press();
+	system->InterfaceTurn(now + 100, (now + 100) / 100);
+	EXPECT_TRUE(world->sent.empty());
+	system->InterfaceTurn(now + 300, (now + 300) / 100);
+	ASSERT_EQ(world->sent.size(), 1u);
+	EXPECT_TRUE(std::holds_alternative<player_commands::HandTake>(world->sent.front()));
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+// A take that the hand no longer waits for does nothing at its turn
+TEST_F(HandGrabSystemWithWorld, ATakeForAHandThatWasClearedDoesNothing)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->flying.insert(rock);
+	world->underCursor = rock;
+	Press();
+	system->InterfaceTurn(now + 300, (now + 300) / 100);
+	ASSERT_EQ(world->sent.size(), 1u);
+	system->Reset();
+	RunWaiting();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
+}
+
+// A command of another player does not move this hand
+TEST_F(HandGrabSystemWithWorld, TheHandDoesOnlyTheCommandsOfItsOwnPlayer)
+{
+	deferCommands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->flying.insert(rock);
+	world->underCursor = rock;
+	Press();
+	system->InterfaceTurn(now + 300, (now + 300) / 100);
+	system->DoTake(PlayerNames::PLAYER_TWO, rock);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
 }

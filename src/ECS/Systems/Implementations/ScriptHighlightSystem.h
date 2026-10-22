@@ -69,11 +69,13 @@ private:
 	void UpdateHighlight(entt::entity entity, components::ScriptHighlight& highlight, float frameMilliseconds,
 	                     glm::vec3 camera);
 	/// Its glow, made the first time it shows, hidden while it doesn't
-	void UpdateGlow(entt::entity entity, const components::ScriptHighlight& highlight, bool shown, glm::vec3 camera);
+	void UpdateGlow(const components::ScriptHighlight& highlight, bool shown, glm::vec3 camera);
 	/// A gold scroll's sparks go on while it is drawn
 	void UpdateSparks(entt::entity entity, bool drawn, float frameMilliseconds);
 	/// The glows whose highlight has gone go too
 	void RemoveLoneGlows();
+	/// Each highlight has the entity of its glow, and of its sparks while it has them. Only the turn makes them.
+	void MakeGlows();
 
 	void OnHighlightGone(entt::registry& registry, entt::entity entity);
 

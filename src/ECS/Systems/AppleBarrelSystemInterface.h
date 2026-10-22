@@ -27,6 +27,9 @@ public:
 	/// Once a frame: the barrel and its worm go to the pit that carries them (made when one first does, gone while none
 	/// does), and the worm's clip plays on by the frame's game time
 	virtual void Update(std::chrono::milliseconds frameGameTime) = 0;
+	/// Once a turn: the barrel and its worm are made when a pit first carries them, and go while none does. Only the turn
+	/// makes and removes these entities, so that every computer keeps the same entities in the world.
+	virtual void ProcessTurn() = 0;
 
 	/// The barrel drawn now, none while no pit carries it
 	[[nodiscard]] virtual entt::entity GetBarrel() const = 0;

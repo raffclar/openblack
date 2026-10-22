@@ -235,6 +235,34 @@ def compare(records_a, records_b):
     return {"same": compared > 0, "compared": compared, "turn": None}
 
 
+def compare_synced(records_a, records_b):
+    """Where two runs part in their synced worlds: the first turn recorded in both whose synced hash, synced seed or
+    count of synced draws differ. Only the synced part of each record counts: two runs at other frame rates or with
+    other draws of the frames give other local draws and other drawn places, but the same synced world."""
+    by_turn_b = {record["turn"]: record for record in records_b if record.get("synced")}
+    compared = 0
+    for record in records_a:
+        synced_a = record.get("synced")
+        synced_b = (by_turn_b.get(record["turn"]) or {}).get("synced")
+        if not synced_a or not synced_b:
+            continue
+        compared += 1
+        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws")):
+            parts_a, parts_b = synced_a.get("parts") or {}, synced_b.get("parts") or {}
+            parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
+            return {
+                "same": False,
+                "compared": compared,
+                "turn": record["turn"],
+                "frame": [record.get("frame"), by_turn_b[record["turn"]].get("frame")],
+                "hash": [synced_a.get("hash"), synced_b.get("hash")],
+                "seeds": [synced_a.get("seed"), synced_b.get("seed")],
+                "draws": [synced_a.get("draws"), synced_b.get("draws")],
+                "parts": parts,
+            }
+    return {"same": compared > 0, "compared": compared, "turn": None}
+
+
 # The blocks of a saved world, each after its four letter tag, in the order the game writes them
 SAVE_TAGS = (b"ECSW", b"RCTX", b"TIME", b"CAMR", b"LHVM", b"SOBJ", b"SYST")
 

@@ -230,6 +230,85 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+openblack::ecs::reflection::WorldHashes
+openblack::ecs::reflection::HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep)
+{
+	// FNV-1a over the bytes of each part
+	constexpr uint64_t k_Offset = 14695981039346656037ull;
+	constexpr uint64_t k_Prime = 1099511628211ull;
+	const auto mix = [](uint64_t& hash, std::span<const uint8_t> bytes) {
+		for (const auto byte : bytes)
+		{
+			hash = (hash ^ byte) * k_Prime;
+		}
+	};
+	WorldHashes hashes;
+	{
+		BinaryWriter out(context);
+		const auto* entities = registry.storage<entt::entity>();
+		const auto count = entities != nullptr ? entities->size() : 0;
+		out.WriteSize(count);
+		out.WriteSize(entities != nullptr ? entities->free_list() : 0);
+		for (size_t i = 0; i < count; ++i)
+		{
+			out.WriteRaw(entities->data()[i]);
+		}
+		hashes.entities = k_Offset;
+		mix(hashes.entities, out.Bytes());
+	}
+	std::vector<std::string> unregistered;
+	for (const auto& component : RegisteredStorages(registry, context, unregistered))
+	{
+		if (keep && !keep(component.name, {}, entt::null))
+		{
+			continue;
+		}
+		// Each row: its entity, then each field that the hash keeps, with the bytes that a save writes
+		const auto* codec = ComponentCodec(component.type);
+		const auto fields = KeptFields(component.type);
+		uint64_t hash = k_Offset;
+		for (const auto row : LiveRows(*component.storage))
+		{
+			if (keep && !keep(component.name, {}, row))
+			{
+				continue;
+			}
+			BinaryWriter out(context);
+			out.WriteRaw(row);
+			const void* value = component.storage->value(row);
+			if (codec != nullptr)
+			{
+				if (!keep || keep(component.name, k_WholeComponent, row))
+				{
+					codec->save(value, out);
+				}
+			}
+			else
+			{
+				for (const auto& field : fields)
+				{
+					if (keep && !keep(component.name, field.info->name, row))
+					{
+						continue;
+					}
+					if (field.info->saveFrom != nullptr)
+					{
+						field.info->saveFrom(value, out);
+					}
+					else
+					{
+						auto instance = component.type.from_void(value);
+						field.info->save(field.data.get(instance), out);
+					}
+				}
+			}
+			mix(hash, out.Bytes());
+		}
+		hashes.components.emplace_back(component.name, hash);
+	}
+	return hashes;
+}
+
 std::shared_ptr<const WorldSnapshot> openblack::ecs::reflection::SnapshotWorld(const entt::registry& registry,
                                                                                const entt::meta_ctx& context)
 {

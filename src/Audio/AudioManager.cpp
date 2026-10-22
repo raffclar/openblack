@@ -118,12 +118,8 @@ AudioManager::~AudioManager()
 	_customMusic.reset();
 	_musicPlayer.reset();
 	_musicStreams.reset();
-	// The sound can go before the game has made its registry, or after the game removed it
-	if (Locator::entitiesRegistry::has_value())
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		registry.Each<AudioEmitter>([this](entt::entity entity, const AudioEmitter&) { DestroyEmitter(entity); });
-	}
+	// The sounds stop before their buffers go
+	_emitters.Each<AudioEmitter>([this](entt::entity entity, const AudioEmitter&) { DestroyEmitter(entity); });
 
 	// Stops the atmosphere voices before their buffers go
 	_atmos.reset();
@@ -224,7 +220,7 @@ Listener openblack::audio::CameraListener()
 void AudioManager::Stop()
 {
 	_musicPlayer->Stop(false);
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	registry.Each<AudioEmitter>([this](entt::entity entity, const AudioEmitter&) { DestroyEmitter(entity); });
 	_atmos->Process(false);
 }
@@ -238,7 +234,7 @@ void AudioManager::Update()
 	}
 
 	// Finished emitters are released
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	registry.Each<AudioEmitter>([this](entt::entity entity, AudioEmitter& emitter) {
 		emitter.state = _audioPlayer->GetStatus(emitter.sourceId);
 		if (emitter.state == AudioStatus::Stopped)
@@ -289,7 +285,7 @@ void AudioManager::PlaceListenerAndSounds()
 	const auto listener = HeardListener();
 	_audioPlayer->UpdateListener(listener.origin, listener.forward, listener.up);
 	// Placed sounds and placed music are heard from where they are, as the listener sees them
-	Locator::entitiesRegistry::value().Each<AudioEmitter>([this](entt::entity, AudioEmitter& emitter) {
+	_emitters.Each<AudioEmitter>([this](entt::entity, AudioEmitter& emitter) {
 		if (emitter.spatial)
 		{
 			PositionSource(emitter.sourceId, ToListenerFrame(emitter.position));
@@ -319,7 +315,7 @@ void AudioManager::StopOutOfRangeEmitters()
 {
 	// Each 3D sound that follows asks for the point of its owner, moves there, or stops. No sound gets a speed, so
 	// nothing changes pitch as it moves.
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	const auto listener = GetListener().origin;
 	std::vector<entt::entity> stopped;
 	registry.Each<AudioEmitter>([&](entt::entity entity, AudioEmitter& emitter) {
@@ -327,8 +323,9 @@ void AudioManager::StopOutOfRangeEmitters()
 		{
 			return;
 		}
-		const auto ownerPoint =
-		    emitter.follows == Follows::Owner ? ecs::SoundPointOf(registry, emitter.owner) : std::optional<glm::vec3> {};
+		const auto ownerPoint = emitter.follows == Follows::Owner
+		                            ? ecs::SoundPointOf(Locator::entitiesRegistry::value(), emitter.owner)
+		                            : std::optional<glm::vec3> {};
 		const auto step = StepFollowingSound(emitter.follows, ownerPoint, emitter.position, listener, emitter.maxDistance);
 		if (step.stop)
 		{
@@ -344,7 +341,8 @@ void AudioManager::StopOutOfRangeEmitters()
 		[[maybe_unused]] const auto& emitter = registry.Get<const AudioEmitter>(entity);
 		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stops at turn {}: {}", DescribeEmitter(entity, emitter),
 		                    LogTurn(),
-		                    emitter.follows == Follows::Owner && !ecs::SoundPointOf(registry, emitter.owner).has_value()
+		                    emitter.follows == Follows::Owner &&
+		                            !ecs::SoundPointOf(Locator::entitiesRegistry::value(), emitter.owner).has_value()
 		                        ? std::string("its owner is gone or has no point")
 		                        : TooFar(emitter.position, emitter.maxDistance));
 		DestroyEmitter(entity);
@@ -358,7 +356,7 @@ BufferId AudioManager::CreateBuffer(ChannelLayout layout, const std::vector<int1
 
 void AudioManager::PlayEmitter(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	_audioPlayer->SetVolume(component.sourceId, EmitterVolume(component));
@@ -368,7 +366,7 @@ void AudioManager::PlayEmitter(entt::entity emitter)
 
 void AudioManager::PauseEmitter(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	_audioPlayer->PauseSource(component.sourceId);
@@ -376,7 +374,7 @@ void AudioManager::PauseEmitter(entt::entity emitter)
 
 void AudioManager::StopEmitter(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} stopped at turn {}", DescribeEmitter(emitter, component), LogTurn());
@@ -385,17 +383,17 @@ void AudioManager::StopEmitter(entt::entity emitter)
 
 void AudioManager::ForgetSavedEmitters()
 {
+	// An older save kept the sounds that played in the world. Each sound of this run plays on.
+	if (!Locator::entitiesRegistry::has_value())
+	{
+		return;
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> saved;
 	registry.Each<AudioEmitter>([&saved](entt::entity entity, const AudioEmitter&) { saved.push_back(entity); });
 	for (const auto emitter : saved)
 	{
-		// The source that the save names is not this run's, so it is not stopped. A voice that a sound of this run kept
-		// under the same entity is free again.
-		if (const auto slot = VoiceOf(emitter))
-		{
-			ReleaseVoice(*slot);
-		}
+		// The source that the save names is not this run's, so it is not stopped
 		registry.Destroy(emitter);
 	}
 	if (!saved.empty())
@@ -406,7 +404,7 @@ void AudioManager::ForgetSavedEmitters()
 
 void AudioManager::DestroyEmitter(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	if (component.state != AudioStatus::Stopped)
@@ -497,7 +495,7 @@ entt::entity AudioManager::CreateVoiceEmitter(entt::id_type id, std::optional<gl
 	const auto start = MakeVoiceStart(*sound, placed, playType, {});
 	const auto source = CreateSource(*sound, start);
 
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	const auto entity = registry.Create();
 	registry.Assign<AudioEmitter>(entity, AudioEmitter {
 	                                          .sourceId = source,
@@ -572,13 +570,13 @@ void AudioManager::CreateBuffer(Sound& sound)
 
 bool AudioManager::EmitterExists(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	return registry.Valid(emitter) && registry.AnyOf<AudioEmitter>(emitter);
 }
 
 float AudioManager::GetProgress(entt::entity entity)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(entity));
 	auto& emitter = registry.Get<AudioEmitter>(entity);
 	auto sizeInBytes = Locator::resources::value().GetSounds().Handle(emitter.soundId)->sizeInBytes;
@@ -587,7 +585,7 @@ float AudioManager::GetProgress(entt::entity entity)
 
 AudioStatus AudioManager::GetStatus(entt::entity emitter)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	assert(registry.AnyOf<AudioEmitter>(emitter));
 	auto& component = registry.Get<AudioEmitter>(emitter);
 	return _audioPlayer->GetStatus(component.sourceId);
@@ -682,7 +680,7 @@ entt::entity AudioManager::StartSoundEffect(entt::id_type id, const SoundEffectO
 	                                      .callerWins = options.callerWins,
 	                                  });
 	const auto source = CreateSource(*sound, start);
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _emitters;
 	const auto entity = registry.Create();
 	registry.Assign<AudioEmitter>(entity, AudioEmitter {
 	                                          .sourceId = source,
@@ -719,7 +717,7 @@ void AudioManager::SetEmitterPosition(entt::entity emitter, const glm::vec3& pos
 		return;
 	}
 	// A move does not change the axes that the bank header locks
-	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	auto& component = _emitters.Get<AudioEmitter>(emitter);
 	component.position = MoveWithLockedAxes(component.lockedAxes, component.position, position);
 }
 
@@ -729,7 +727,7 @@ void AudioManager::SetEmitterFollows(entt::entity emitter, Follows follows)
 	{
 		return;
 	}
-	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	auto& component = _emitters.Get<AudioEmitter>(emitter);
 	component.follows = component.spatial ? follows : Follows::Nothing;
 }
 
@@ -739,7 +737,7 @@ void AudioManager::ReleaseEmitterLoop(entt::entity emitter)
 	{
 		return;
 	}
-	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	auto& component = _emitters.Get<AudioEmitter>(emitter);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Emitter {} let go at turn {}: plays to the end of its pass",
 	                    DescribeEmitter(emitter, component), LogTurn());
 	_audioPlayer->SetLooping(component.sourceId, false);
@@ -748,7 +746,7 @@ void AudioManager::ReleaseEmitterLoop(entt::entity emitter)
 
 bool AudioManager::IsEmitterLooping(entt::entity emitter)
 {
-	return EmitterExists(emitter) && Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter).loop == PlayType::Repeat;
+	return EmitterExists(emitter) && _emitters.Get<AudioEmitter>(emitter).loop == PlayType::Repeat;
 }
 
 void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
@@ -757,7 +755,7 @@ void AudioManager::SetEmitterVolume(entt::entity emitter, uint32_t volume)
 	{
 		return;
 	}
-	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	auto& component = _emitters.Get<AudioEmitter>(emitter);
 	// The bank header's volume stays for the whole play
 	const auto clamped = std::min<uint32_t>(volume, k_MaxVolume);
 	if (!VolumeChangeApplies(component.headerSet) || component.volume == clamped)
@@ -777,7 +775,7 @@ void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
 	{
 		return;
 	}
-	auto& component = Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter);
+	auto& component = _emitters.Get<AudioEmitter>(emitter);
 	// The bank header's playback rate stays for the whole play
 	if (!PitchChangeApplies(component.headerSet, pitchPercent) || component.pitchPercent == pitchPercent)
 	{
@@ -791,7 +789,7 @@ void AudioManager::SetEmitterPitch(entt::entity emitter, uint32_t pitchPercent)
 
 uint32_t AudioManager::GetEmitterVolume(entt::entity emitter)
 {
-	return EmitterExists(emitter) ? Locator::entitiesRegistry::value().Get<AudioEmitter>(emitter).volume : 0;
+	return EmitterExists(emitter) ? _emitters.Get<AudioEmitter>(emitter).volume : 0;
 }
 
 void AudioManager::StopOwnedSounds(entt::entity owner)
@@ -801,7 +799,7 @@ void AudioManager::StopOwnedSounds(entt::entity owner)
 		return;
 	}
 	std::vector<entt::entity> owned;
-	Locator::entitiesRegistry::value().Each<const AudioEmitter>([&](entt::entity entity, const AudioEmitter& emitter) {
+	_emitters.Each<const AudioEmitter>([&](entt::entity entity, const AudioEmitter& emitter) {
 		if (emitter.owner == owner)
 		{
 			owned.push_back(entity);
@@ -816,7 +814,7 @@ void AudioManager::StopOwnedSounds(entt::entity owner)
 void AudioManager::StopAllSoundEffects()
 {
 	std::vector<entt::entity> effects;
-	Locator::entitiesRegistry::value().Each<const AudioEmitter>([&effects](entt::entity entity, const AudioEmitter& emitter) {
+	_emitters.Each<const AudioEmitter>([&effects](entt::entity entity, const AudioEmitter& emitter) {
 		if (!emitter.music)
 		{
 			effects.push_back(entity);
@@ -929,7 +927,7 @@ void AudioManager::EndAnimEffect(const std::string& bankName, std::span<const in
 entt::entity AudioManager::FindPlaying(entt::entity owner, entt::id_type bank, entt::id_type id, uint16_t group) const
 {
 	auto found = entt::entity {entt::null};
-	Locator::entitiesRegistry::value().Each<const AudioEmitter>([&](entt::entity entity, const AudioEmitter& emitter) {
+	_emitters.Each<const AudioEmitter>([&](entt::entity entity, const AudioEmitter& emitter) {
 		if (found != entt::null || emitter.owner != owner || emitter.bank != bank || emitter.state == AudioStatus::Stopped)
 		{
 			return;

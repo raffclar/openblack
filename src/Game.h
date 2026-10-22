@@ -594,6 +594,8 @@ private:
 	bool _handOverObject {false};
 	/// Where the cursor points at in the world, on the landscape or the sea
 	std::optional<glm::vec3> _cursorWorldPosition;
+	/// Where the hand started, where a tool's run can keep it (sim_run::Settings::stillHand)
+	std::optional<glm::vec3> _stillHandAt;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land

@@ -153,10 +153,10 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 	{
 		_barrel = entt::null;
 	}
+	// The turn removes the barrel while no pit carries it
 	const auto store = CarryingStore();
 	if (!store.has_value())
 	{
-		Remove();
 		return;
 	}
 
@@ -175,19 +175,10 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 	const auto barrelModel = meshes.Handle(k_BarrelModel);
 	const auto wormSpot = apple_barrel::WormSpot(barrelSpot, barrelModel->GetChimneyPos().value_or(glm::vec3(0.0f)));
 
-	if (_barrel == entt::null)
+	// The turn makes the barrel
+	if (_barrel == entt::null || !registry.AllOf<AppleBarrel>(_barrel))
 	{
-		_barrel = registry.Create();
-		registry.Assign<Transform>(_barrel, barrelSpot, glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<Mesh>(_barrel, k_BarrelModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
-		const auto worm = registry.Create();
-		registry.Assign<Transform>(worm, wormSpot, glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<Mesh>(worm, k_WormModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
-		registry.Assign<AppleBarrelWorm>(worm, _barrel);
-		// The worm is very small. Thus it stays in view to a larger distance than its size alone gives.
-		registry.Assign<DrawImportance>(worm, apple_barrel::k_WormImportance);
-		registry.Assign<AnimatedStaticPose>(worm);
-		registry.Assign<AppleBarrel>(_barrel, *store, worm);
+		return;
 	}
 	auto& barrel = registry.Get<AppleBarrel>(_barrel);
 	barrel.store = *store;
@@ -205,6 +196,39 @@ void AppleBarrelSystem::Update(std::chrono::milliseconds frameGameTime)
 		pose.place = worm.place;
 		PoseWorm(*clip, *meshes.Handle(k_WormModel), worm.place, pose.bones);
 	}
+	registry.SetDirty();
+}
+
+void AppleBarrelSystem::ProcessTurn()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (_barrel != entt::null && !registry.Valid(_barrel))
+	{
+		_barrel = entt::null;
+	}
+	const auto store = CarryingStore();
+	if (!store.has_value())
+	{
+		Remove();
+		return;
+	}
+	if (_barrel != entt::null)
+	{
+		return;
+	}
+	// The frames put the barrel and its worm in their places at the pit
+	const auto& at = registry.Get<const Transform>(*store).position;
+	_barrel = registry.Create();
+	registry.Assign<Transform>(_barrel, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(_barrel, k_BarrelModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	const auto worm = registry.Create();
+	registry.Assign<Transform>(worm, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(worm, k_WormModel, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<AppleBarrelWorm>(worm, _barrel);
+	// The worm is very small. Thus it stays in view to a larger distance than its size alone gives.
+	registry.Assign<DrawImportance>(worm, apple_barrel::k_WormImportance);
+	registry.Assign<AnimatedStaticPose>(worm);
+	registry.Assign<AppleBarrel>(_barrel, *store, worm);
 	registry.SetDirty();
 }
 

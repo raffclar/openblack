@@ -90,6 +90,13 @@ std::optional<glm::vec3> LineMeetsPlane(glm::vec3 origin, glm::vec3 direction, g
 	}
 	return origin + direction * (glm::dot(point - origin, normal) / along);
 }
+
+/// Whether the hand holds the thing: also while it waits for the turn that lets go of it
+[[nodiscard]] bool Holds(const HandGrab& grab)
+{
+	return grab.state == HandGrab::State::Holding || grab.state == HandGrab::State::ReadyToThrow ||
+	       grab.state == HandGrab::State::LettingGo;
+}
 } // namespace
 
 HandGrabSystem::HandGrabSystem()
@@ -280,7 +287,16 @@ void HandGrabSystem::Tap(entt::entity object)
 	{
 		return;
 	}
-	_world->TapThing(object, _world->PoseOf(_world->Hand()).origin, _world->HandPlayer());
+	_world->SendCommand(player_commands::HandTap {.object = object});
+}
+
+void HandGrabSystem::DoTap(PlayerNames player, entt::entity object)
+{
+	if (player != _world->HandPlayer() || !Exists(object))
+	{
+		return;
+	}
+	_world->TapThing(object, _world->PoseOf(_world->Hand()).origin, player);
 }
 
 HandClicked* HandGrabSystem::Clicked()
@@ -360,7 +376,9 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		grab->springPending = true;
 		return true;
 	case HandGrab::State::Grabbing:
+	case HandGrab::State::Taking:
 	case HandGrab::State::ReadyToThrow:
+	case HandGrab::State::LettingGo:
 		return true;
 	case HandGrab::State::Empty:
 		break;
@@ -452,16 +470,16 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			grab->springPending = false;
 			return std::nullopt;
 		}
-		// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the
-		// border, before the throw
-		_world->HeldThingUsedOnLand(_world->HandPlayer());
+		// The hand sends the throw with the velocity that it has now. It holds the thing until the turn that does the
+		// command, and its spring keeps the hand where the drag took it.
 		const auto velocity = hand_grab::ThrowVelocity(grab->recordedThrow, grab->springOn, grab->spring.Velocity());
 		grab->lastThrow = HandGrab::Throw {
 		    .velocity = velocity,
 		    .springVelocity = hand_grab::ThrowVelocity(std::nullopt, grab->springOn, grab->spring.Velocity()),
 		    .from = grab->spring.Position(),
 		};
-		LetGo(*grab, velocity, false);
+		grab->state = HandGrab::State::LettingGo;
+		_world->SendCommand(player_commands::HandLetGo {.object = grab->object, .velocity = velocity});
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -477,10 +495,26 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			EndScoop(*grab);
 		}
 		break;
+	case HandGrab::State::Taking:
+	case HandGrab::State::LettingGo:
 	case HandGrab::State::Empty:
 		break;
 	}
 	return std::nullopt;
+}
+
+void HandGrabSystem::DoLetGo(PlayerNames player, entt::entity object, glm::vec3 velocity)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer() || grab->state != HandGrab::State::LettingGo ||
+	    grab->object != object)
+	{
+		return;
+	}
+	// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the border,
+	// before the throw
+	_world->HeldThingUsedOnLand(player);
+	LetGo(*grab, velocity, false);
 }
 
 bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
@@ -876,7 +910,59 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 	return hand_grab::TugHandPoint(tug, grab.holdDistance, grab.stretch.GetValue());
 }
 
-void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld)
+void HandGrabSystem::PlayTakeSounds(entt::entity object)
+{
+	// A standing tree pulled from the ground creaks as the hand takes it, and a big forest gives a standing tree
+	const auto kind = KindOf(object);
+	if (kind == GrabKind::BigForest || (kind == GrabKind::Tree && !_world->IsFlying(object)))
+	{
+		return;
+	}
+	const auto position = _world->PoseOf(object).origin;
+	_world->PlaySample(k_PickUpSample, position);
+	// People cry out
+	const auto& registry = _world->Entities();
+	if (const auto* villager = registry.TryGet<const Villager>(object); villager != nullptr && _world->LifeOf(object) > 0.0f)
+	{
+		const uint32_t first = villager->lifeStage == Villager::LifeStage::Child ? k_ChildCries
+		                       : villager->sex == Villager::Sex::FEMALE          ? k_WomanCries
+		                                                                         : k_ManCries;
+		_world->PlaySample(first + _world->LocalRandom(k_CriesEach), position);
+	}
+}
+
+void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
+{
+	// A thing that the hand can no longer take is let go of
+	if (!MayTake(object))
+	{
+		Empty(grab);
+		return;
+	}
+	// The hand plays the pick-up sound as it sends the take. It keeps its grip on the thing until the turn that does
+	// the command.
+	PlayTakeSounds(object);
+	grab.state = HandGrab::State::Taking;
+	grab.object = object;
+	_world->SendCommand(player_commands::HandTake {.object = object});
+}
+
+void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer() || grab->state != HandGrab::State::Taking || grab->object != object)
+	{
+		return;
+	}
+	if (!Exists(object))
+	{
+		Empty(*grab);
+		return;
+	}
+	Take(*grab, object, true, false);
+}
+
+void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds)
 {
 	auto& registry = _world->Entities();
 	// The pull may have ended on a thing that can no longer be taken: the hand lets go of it
@@ -891,7 +977,7 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	{
 		if (const auto tree = _world->TreeFromBigForest(object); tree.has_value() && Exists(*tree))
 		{
-			Take(grab, *tree, true);
+			Take(grab, *tree, true, sounds);
 		}
 		else
 		{
@@ -915,18 +1001,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	}
 	const auto position = _world->PoseOf(object).origin;
 
-	// Its pick-up sound: a standing tree pulled from the ground creaks instead; people cry out
-	if (fromTheWorld && (kind != GrabKind::Tree || wasFlying))
+	// Its pick-up sound, when the hand did not send it as it sent the take
+	if (fromTheWorld && sounds)
 	{
-		_world->PlaySample(k_PickUpSample, position);
-		if (const auto* villager = registry.TryGet<const Villager>(object);
-		    villager != nullptr && _world->LifeOf(object) > 0.0f)
-		{
-			const uint32_t first = villager->lifeStage == Villager::LifeStage::Child ? k_ChildCries
-			                       : villager->sex == Villager::Sex::FEMALE          ? k_WomanCries
-			                                                                         : k_ManCries;
-			_world->PlaySample(first + _world->LocalRandom(k_CriesEach), position);
-		}
+		PlayTakeSounds(object);
 	}
 
 	// The people and animals about the hand see it pick something up
@@ -1059,7 +1137,7 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 void HandGrabSystem::Empty(HandGrab& grab)
 {
 	// The hand lets go of a thing that it gripped and did not take. The land's draw list is made again for two frames.
-	if (grab.state == HandGrab::State::Grabbing && grab.grips)
+	if ((grab.state == HandGrab::State::Grabbing || grab.state == HandGrab::State::Taking) && grab.grips)
 	{
 		_world->RemakeDrawList(2);
 	}
@@ -1123,7 +1201,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 
 	// The twist of what it let go, once the hand has moved on a little
-	if (grab->state == HandGrab::State::Grabbing)
+	if (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking)
 	{
 		// While it pulls a thing the twist waits; while it waits to catch a flying one the twist is made ready again
 		if (!grab->pulling)
@@ -1131,8 +1209,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 			grab->releaseSpinMs = static_cast<int32_t>(hand_grab::k_ReleaseSpinDelayMs);
 		}
 	}
-	else if (grab->releaseSpinMs.has_value() && grab->state != HandGrab::State::Holding &&
-	         grab->state != HandGrab::State::ReadyToThrow)
+	else if (grab->releaseSpinMs.has_value() && !Holds(*grab))
 	{
 		switch (hand_grab::CountDown(*grab->releaseSpinMs, frame.gameMs))
 		{
@@ -1174,7 +1251,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 			{
 				return frame.target;
 			}
-			Take(*grab, grab->object);
+			SendTake(*grab, grab->object);
 		}
 		else if (grab->pulling)
 		{
@@ -1186,7 +1263,7 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		}
 		else
 		{
-			Take(*grab, grab->object);
+			SendTake(*grab, grab->object);
 		}
 		// Taken, the hand holds it from this frame, risen for it at once
 		if (grab->state != HandGrab::State::Holding)
@@ -1195,24 +1272,27 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		}
 		break;
 	}
+	case HandGrab::State::Taking:
+		if (!Exists(grab->object))
+		{
+			Empty(*grab);
+			return frame.target;
+		}
+		// The hand keeps its grip where the pull left the thing, until the turn that takes the thing
+		if (grab->tug.has_value())
+		{
+			return hand_grab::TugHandPoint(*grab->tug, grab->holdDistance, grab->stretch.GetValue());
+		}
+		return frame.target;
 	case HandGrab::State::Holding:
 	case HandGrab::State::ReadyToThrow:
+	case HandGrab::State::LettingGo:
 		break;
 	}
 
 	// The button held down a while gives what the hand holds to the creature it offers it to, or to one under the cursor
 	// that would take it: the hand keeps hold of it, no longer ready to throw, until the creature takes it
-	if (grab->givePress &&
-	    hand_grab::ElapsedMs(frame.nowMs, grab->pressMs, frame.turn, grab->pressTurn) > hand_grab::k_GrabWaitMs)
-	{
-		grab->givePress = false;
-		if (Give(*grab, _world->ObjectUnderCursor()))
-		{
-			grab->state = HandGrab::State::Holding;
-			grab->springOn = false;
-			grab->springPending = false;
-		}
-	}
+	GiveAfterLongPress(*grab, frame.nowMs, frame.turn);
 	// Offered to a creature, the hand may be drawn to its hand as it reaches
 	const auto offered = UpdateOffer(*grab, frame);
 	// The hand rises by how far what it holds hung last frame, which it then measures again
@@ -1333,15 +1413,73 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	{
 		return false;
 	}
+	_world->SendCommand(player_commands::HandGive {.creature = *creature, .object = held});
+	return true;
+}
+
+void HandGrabSystem::GiveAfterLongPress(HandGrab& grab, uint32_t nowMs, uint32_t turn)
+{
+	if (!grab.givePress || grab.state == HandGrab::State::LettingGo ||
+	    !(hand_grab::ElapsedMs(nowMs, grab.pressMs, turn, grab.pressTurn) > hand_grab::k_GrabWaitMs))
+	{
+		return;
+	}
+	grab.givePress = false;
+	if (Give(grab, _world->ObjectUnderCursor()))
+	{
+		grab.state = HandGrab::State::Holding;
+		grab.springOn = false;
+		grab.springPending = false;
+	}
+}
+
+void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::entity object)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer() || !Holds(*grab) || grab->object != object ||
+	    grab->givenTo != entt::null || !Exists(object) || !Exists(creature) ||
+	    _world->GiveVerdict(creature, object) != creature_giving::Verdict::Give)
+	{
+		return;
+	}
 	// The help counts the gift as the creature may take it, before the creature starts to take it
 	_world->CountHelpEvent(help::profile::k_Give);
-	if (!_world->GiveTo(*creature, held, !_world->RightHanded()))
+	if (!_world->GiveTo(creature, object, !_world->RightHanded()))
 	{
-		return false;
+		return;
 	}
-	grab.offeredTo = *creature;
-	grab.givenTo = *creature;
-	return true;
+	grab->offeredTo = creature;
+	grab->givenTo = creature;
+}
+
+void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
+{
+	auto* grab = Grab();
+	if (grab == nullptr)
+	{
+		return;
+	}
+	// A thing in flight, or one that the hand cannot pull at, is taken once the button was held a while. A thing that the
+	// pull freed is taken at once.
+	if (grab->state == HandGrab::State::Grabbing && Exists(grab->object))
+	{
+		if (_world->IsFlying(grab->object) || !hand_grab::Tuggable(KindOf(grab->object)))
+		{
+			if (!(hand_grab::ElapsedMs(nowMs, grab->pressMs, turn, grab->pressTurn) < hand_grab::k_GrabWaitMs))
+			{
+				SendTake(*grab, grab->object);
+			}
+		}
+		else if (!grab->pulling)
+		{
+			SendTake(*grab, grab->object);
+		}
+		return;
+	}
+	if (Holds(*grab))
+	{
+		GiveAfterLongPress(*grab, nowMs, turn);
+	}
 }
 
 void HandGrabSystem::ForgetOffer(HandGrab& grab)
@@ -1354,8 +1492,7 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 bool HandGrabSystem::HandOver(entt::entity object)
 {
 	auto* grab = Grab();
-	if (grab == nullptr || grab->object != object ||
-	    (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || grab->object != object || !Holds(*grab))
 	{
 		return false;
 	}
@@ -1389,7 +1526,7 @@ bool HandGrabSystem::GiveHeldTo(entt::entity creature)
 std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
 {
 	const auto* grab = Grab();
-	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || !Holds(*grab))
 	{
 		return std::nullopt;
 	}
@@ -1403,8 +1540,7 @@ std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
 bool HandGrabSystem::OffersToCreature() const
 {
 	const auto* grab = Grab();
-	return grab != nullptr && (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow) &&
-	       grab->offer.Active() && grab->offeredTo != entt::null;
+	return grab != nullptr && Holds(*grab) && grab->offer.Active() && grab->offeredTo != entt::null;
 }
 
 float HandGrabSystem::GetOfferTurn() const
@@ -1428,7 +1564,7 @@ void HandGrabSystem::ProcessTurn()
 	{
 		grab->lastDropped = entt::null;
 	}
-	if (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow)
+	if (!Holds(*grab))
 	{
 		return;
 	}
@@ -1469,7 +1605,7 @@ void HandGrabSystem::SetRecordedThrow(glm::vec3 velocity)
 void HandGrabSystem::ForceDrop()
 {
 	auto* grab = Grab();
-	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || !Holds(*grab))
 	{
 		return;
 	}
@@ -1485,7 +1621,7 @@ void HandGrabSystem::ForceDrop()
 bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 {
 	auto* grab = Grab();
-	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || !Holds(*grab))
 	{
 		return false;
 	}
@@ -1512,7 +1648,7 @@ void HandGrabSystem::Reset()
 std::optional<entt::entity> HandGrabSystem::GetHeld() const
 {
 	const auto* grab = Grab();
-	if (grab == nullptr || (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || !Holds(*grab))
 	{
 		return std::nullopt;
 	}
@@ -1522,8 +1658,7 @@ std::optional<entt::entity> HandGrabSystem::GetHeld() const
 std::optional<entt::entity> HandGrabSystem::GetLockedOn() const
 {
 	const auto* grab = Grab();
-	if (grab == nullptr || grab->scoopSource == entt::null ||
-	    (grab->state != HandGrab::State::Holding && grab->state != HandGrab::State::ReadyToThrow))
+	if (grab == nullptr || grab->scoopSource == entt::null || !Holds(*grab))
 	{
 		return std::nullopt;
 	}
@@ -1581,7 +1716,8 @@ std::optional<HandGrabSystemInterface::PullPose> HandGrabSystem::GetPullPose() c
 {
 	const auto* grab = Grab();
 	// Until the hand holds it, including the frame it comes free, the hand keeps to its pull
-	if (grab == nullptr || grab->state != HandGrab::State::Grabbing || !grab->tug.has_value() || !Exists(grab->object))
+	if (grab == nullptr || (grab->state != HandGrab::State::Grabbing && grab->state != HandGrab::State::Taking) ||
+	    !grab->tug.has_value() || !Exists(grab->object))
 	{
 		return std::nullopt;
 	}

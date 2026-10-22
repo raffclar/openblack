@@ -2384,6 +2384,18 @@ void AnimalSystem::LeaveFlock(entt::entity entity, Animal& animal)
 
 // Drawing
 
+void AnimalSystem::ShowTurnEnd()
+{
+	auto& registry = EntityRegistry();
+	registry.Each<const Animal, Transform>([&registry](entt::entity entity, const Animal& animal, Transform& transform) {
+		// What carries it, holds it or moves it in the physics places it
+		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
+		{
+			transform.position = animal.position;
+		}
+	});
+}
+
 void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFraction)
 {
 	auto& registry = EntityRegistry();

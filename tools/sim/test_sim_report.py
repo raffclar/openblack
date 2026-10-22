@@ -121,6 +121,33 @@ class CompareTests(unittest.TestCase):
         self.assertFalse(sim_report.compare([record(100)], [record(200)])["same"])
 
 
+def synced_record(turn, hash_value="s", local=9, drawn="d", parts=None):
+    synced = {"hash": hash_value, "seed": 7, "draws": turn * 3}
+    if parts is not None:
+        synced["parts"] = parts
+    return {"type": "record", "turn": turn, "hash": drawn, "seeds": [7, local], "synced": synced}
+
+
+class CompareSyncedTests(unittest.TestCase):
+    def test_other_local_draws_and_drawn_places_agree(self):
+        first = [synced_record(1), synced_record(2)]
+        other = [synced_record(1, local=4, drawn="x"), synced_record(2, local=5, drawn="y")]
+        self.assertEqual(sim_report.compare_synced(first, other), {"same": True, "compared": 2, "turn": None})
+
+    def test_the_first_synced_world_that_differs_names_its_parts(self):
+        first = [synced_record(1, parts={"Villager": "1", "Tree": "2"}), synced_record(2, parts={"Villager": "1"})]
+        other = [synced_record(1, parts={"Villager": "1", "Tree": "2"}),
+                 synced_record(2, hash_value="t", parts={"Villager": "3"})]
+        result = sim_report.compare_synced(first, other)
+        self.assertFalse(result["same"])
+        self.assertEqual(result["turn"], 2)
+        self.assertEqual(result["parts"], ["Villager"])
+
+    def test_records_without_the_synced_world_do_not_agree(self):
+        plain = {"type": "record", "turn": 1, "hash": "a"}
+        self.assertFalse(sim_report.compare_synced([plain], [plain])["same"])
+
+
 class CompareSavesTests(unittest.TestCase):
     def test_the_same_saves_agree(self):
         data = b"headECSW1234RCTX5678"

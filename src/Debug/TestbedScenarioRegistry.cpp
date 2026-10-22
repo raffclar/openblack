@@ -5623,6 +5623,31 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The camera looks at a rock from 35 m. The hand takes the rock and throws it. The take and the throw are commands,
+	// which the world does at the start of the next turn.
+	all.push_back({
+	    .id = "hand.commands_next_turn",
+	    .name = "The hand's take and throw at the next turn",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the Action button on a rock until it takes it, then makes ready to throw and flings "
+	                   "it with an upward sweep of the pointer. Step the frames with the inspector (game.step frames 1) "
+	                   "and watch players.commands and the hand's HandGrab state.",
+	    .expected = "After the wait the hand sends the take: its state is Taking, one command waits, and the rock is still on "
+	                "the land, gripped by the hand. At the start of the next turn the rock is in the hand. After the "
+	                "release the state is LettingGo and the rock stays in the hand until the next turn, then flies from "
+	                "where the hand is, at the speed that the hand had at the release.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
 	// The camera looks at a cuddly toy and a toy ball on flat land from 35 m. The hand takes each toy in turn.
 	all.push_back({
 	    .id = "hand.hold_toys",

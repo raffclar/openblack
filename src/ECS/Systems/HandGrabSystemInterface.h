@@ -77,6 +77,19 @@ public:
 	virtual void SetRecordedThrow(glm::vec3 velocity) = 0;
 	/// The world is cleared: the hand holds nothing
 	virtual void Reset() = 0;
+
+	/// The hand's own work of the turn, after the commands of the turn: the hand takes a thing that it waited for long
+	/// enough, and gives what it holds to a creature after a long enough press. The hand does the same work each frame.
+	virtual void InterfaceTurn(uint32_t /*nowMs*/, uint32_t /*turn*/) {}
+	/// The commands of the hand, which the world does at the start of a turn, for the player that sent them. The hand
+	/// takes the thing that it waited for.
+	virtual void DoTake(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// The hand lets go of the thing that it holds, at the velocity of the throw
+	virtual void DoLetGo(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*velocity*/) {}
+	/// The hand taps a thing
+	virtual void DoTap(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// The hand gives the thing that it holds to a creature
+	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
 	/// Whether the hand still held it to give.
 	virtual bool HandOver(entt::entity /*object*/) { return false; }

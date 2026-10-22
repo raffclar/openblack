@@ -155,6 +155,7 @@ public:
 	void AnimalTurn(entt::entity) override {}
 	void EndTurn() override {}
 	void Update(std::chrono::milliseconds, float) override {}
+	void ShowTurnEnd() override {}
 	void Reset() override {}
 	entt::entity CreateFlock(glm::vec2, float, float) override { return entt::null; }
 	entt::entity CreateSpellAnimal(AnimalInfo, glm::vec2, float, uint16_t, PlayerNames, entt::entity, entt::entity) override
