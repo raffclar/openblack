@@ -314,6 +314,9 @@ public:
 	/// The keys that take the player into the temple's rooms, from outside it or within
 	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
+	/// A step of the frame's draw that changes the world, which the dedicated server does with no window: the creatures'
+	/// fights, walks and animations, and the frame's effects
+	[[nodiscard]] static bool DedicatedServerStep(game_frame::Step step);
 	bool Initialize() noexcept;
 	/// Runs the game to its end: the start, the frames, and the end
 	bool Run() noexcept;

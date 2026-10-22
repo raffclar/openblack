@@ -49,8 +49,14 @@ struct ServerSettings
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock
 	bool fast {false};
-	/// The folder of the server's own profile. It is never a folder of a player.
-	std::filesystem::path profileFolder;
+	/// The folder of the server's own profile. It is never a folder of a player. With none, the server plays as the
+	/// profile of a tool's run, in the Profiles folder of its working folder.
+	std::optional<std::filesystem::path> profileFolder;
+	/// Tools: the server writes the run record of each turn to this file, as the game's --sim-record does, with the hash
+	/// of each component. It starts the inspector on a free port of 127.0.0.1.
+	std::optional<std::filesystem::path> recordPath;
+	/// Tools: the run record also has the hash of each field of each component
+	bool recordFields {false};
 	/// The file of the log, or "stdout"
 	std::string logFile {"stdout"};
 	spdlog::level::level_enum logLevel {spdlog::level::info};

@@ -55,7 +55,9 @@ int main(int argc, char* argv[])
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
 		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
 		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
-		("profile-folder", "The folder of the server's own profile.", cxxopts::value<std::string>()->default_value("server-profile"))
+		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
+		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
+		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("h,help", "Show this help.");
 	// clang-format on
@@ -85,8 +87,16 @@ int main(int argc, char* argv[])
 		}
 		settings.frameMilliseconds = result["frame-ms"].as<double>();
 		settings.fast = result.count("fast") != 0;
-		settings.profileFolder = result["profile-folder"].as<std::string>();
+		if (result.count("profile-folder") != 0)
+		{
+			settings.profileFolder = std::filesystem::path(result["profile-folder"].as<std::string>());
+		}
 		settings.logFile = result["log-file"].as<std::string>();
+		if (result.count("record") != 0)
+		{
+			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
+			settings.recordFields = result.count("record-fields") != 0;
+		}
 		openblack::crash_handler::SetLogFile(settings.logFile);
 	}
 	catch (const cxxopts::exceptions::exception& error)

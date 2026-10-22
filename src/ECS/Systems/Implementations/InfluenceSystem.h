@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
+	void FixCitadelReaches() override;
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames player) const override;

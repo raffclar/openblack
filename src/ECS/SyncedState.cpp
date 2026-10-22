@@ -71,15 +71,29 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillageLight", .field = "glowSize", .marker = ""},
     {.component = "FireLook", .field = "", .marker = ""},
     {.component = "ResourcePile", .field = "rise", .marker = ""},
+    // The drawn height of a pile, and the amount that it last rose or sank to show. The turns read only its speed-up.
+    {.component = "ResourcePile", .field = "height", .marker = ""},
+    {.component = "ResourcePile", .field = "shownAmount", .marker = ""},
+    {.component = "ResourcePile", .field = "risen", .marker = ""},
     {.component = "LeashPost", .field = "look", .marker = ""},
     {.component = "Transform", .field = "rotation", .marker = "LeashPost"},
+    // The frames find whether a post hangs its leash, for the hand's picks and tooltips, and show it at its size
+    {.component = "LeashPost", .field = "hung", .marker = ""},
+    {.component = "Transform", .field = "scale", .marker = "LeashPost"},
     // The moving bodies are drawn between their last two turns. The turns read the Transform.
     {.component = "PhysicsDrawPose", .field = "", .marker = ""},
     // The particle effects that the frames step
     {.component = "Vortex", .field = "beforeLandEffect", .marker = ""},
     {.component = "Vortex", .field = "afterLandEffect", .marker = ""},
+    // The particle effects of a vortex and of a script's spot, by the numbers that the particles of this computer gave them
+    {.component = "Vortex", .field = "lightMapEffect", .marker = ""},
+    {.component = "Vortex", .field = "objectMoverEffect", .marker = ""},
+    {.component = "ScriptSpotVisual", .field = "effect", .marker = ""},
     // The town totems ease to their shares by the computer's clock, as in the game
     {.component = "VillageTotem", .field = "ease", .marker = ""},
+    // The rise that the totem last showed, by which the hand's tooltip of its share comes
+    {.component = "VillageTotem", .field = "lastShownRise", .marker = ""},
+    {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
@@ -89,6 +103,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
     {.component = "ScriptHighlight", .field = "yAngle", .marker = ""},
     {.component = "ScriptHighlight", .field = "sparks", .marker = ""},
+    // The particle effects of a highlight, by the numbers that the particles of this computer gave them
+    {.component = "ScriptHighlight", .field = "glints", .marker = ""},
+    {.component = "ScriptHighlight", .field = "activeEffect", .marker = ""},
     {.component = "ScriptHighlight", .field = "onScreen", .marker = ""},
     {.component = "Transform", .field = "rotation", .marker = "ScriptHighlight"},
     {.component = "Transform", .field = "scale", .marker = "ScriptHighlight"},
@@ -96,12 +113,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
     {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
-    // The drawn hand follows the pointer and the camera in each frame
+    // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera
     {.component = "Transform", .field = "rotation", .marker = "Hand"},
+    {.component = "Transform", .field = "scale", .marker = "Hand"},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The hand's size follows its distance from the camera in each frame. Only the frames read it.
     {.component = "HandGrab", .field = "handSize", .marker = ""},
     {.component = "HandMorph", .field = "", .marker = ""},
+    // The hand's bones as the frame draws them. Only the frames read them, as the place of the leash's rope.
+    {.component = "Hand", .field = "boneMatrices", .marker = ""},
     {.component = "HandMiracleFx", .field = "", .marker = ""},
     // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
     // the newest turn.
@@ -110,6 +130,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureEyes", .field = "", .marker = ""},
     {.component = "CreatureAudio", .field = "", .marker = ""},
     {.component = "CreatureDrawnFeet", .field = "", .marker = ""},
+    // The creature's skins as the frames paint them for the renderer
+    {.component = "CreatureSkin", .field = "", .marker = ""},
+    // Whether an object's sound is on: the frames turn the street lanterns' sounds on at dusk, and only the sounds read it
+    {.component = "SoundTag", .field = "active", .marker = ""},
 });
 
 } // namespace

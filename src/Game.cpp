@@ -2217,6 +2217,12 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
+bool Game::DedicatedServerStep(game_frame::Step step)
+{
+	return Locator::config::value().dedicatedServer &&
+	       (step == game_frame::Step::CreaturePoses || step == game_frame::Step::FrameEffects);
+}
+
 bool Game::DoesFrameGraphics() const
 {
 	// The dedicated server has no window: its frames do as the frames of a minimised window, with no picture
@@ -2243,7 +2249,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	using game_frame::Step;
 	// While the window is minimised the turns, the keys and the film's clock continue, but the camera, the start of the draw,
 	// the hand and the world's draw stop
-	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
+	if (game_frame::IsGraphics(step) && !DoesFrameGraphics() && !DedicatedServerStep(step))
 	{
 		return true;
 	}
@@ -2864,7 +2870,9 @@ void Game::UpdateFrameEffects()
 	{
 		Locator::cinematicDirectorSystem::value().UpdateTexts(static_cast<int32_t>(clock.GetFrameGameTime().count()));
 	}
-	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise
+	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise. They act on
+	// the screen, so the dedicated server, which has no window, has none.
+	if (Locator::windowing::has_value())
 	{
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());

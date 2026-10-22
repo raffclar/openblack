@@ -69,6 +69,13 @@ Arguments GameArgumentsFor(const ServerSettings& settings)
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
+	if (settings.recordPath.has_value())
+	{
+		simulation.recordPath = settings.recordPath;
+		simulation.recordEvery = 1;
+		simulation.hashParts = settings.recordFields ? sim_run::HashDetail::Fields : sim_run::HashDetail::Components;
+		args.inspectPort = 0;
+	}
 	args.simulation = simulation;
 	return args;
 }

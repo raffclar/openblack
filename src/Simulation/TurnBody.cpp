@@ -423,6 +423,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::InfluenceTurnStart:
 		// The influence asked during the turn is measured from where the hands were at it
 		Locator::influenceSystem::value().SetInGameTurn(true);
+		// The frames of the hand fix the reaches of the citadels. With no frames of the hand, the turn fixes them.
+		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::MapCells:
 		// What moved since the last turn goes into its new map cell
@@ -819,6 +821,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);
+		// The view's steps fix the reach of a citadel that the turn made. With no view, the end of the turn fixes it.
+		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::SyncChecksum:
 		// When a network game asks for it, the checksum of the synced world as this turn left it

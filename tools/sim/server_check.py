@@ -7,7 +7,8 @@ the checksum of each turn. Each turn of the server must have the same checksum a
     python tools/sim/server_check.py --turns 100
     python tools/sim/server_check.py --turns 100 --config RelWithDebInfo --out E:/runs/server
 
-Both programs start with no console window of their own. The game starts with --background. The script stops only the
+Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
+own. The game starts with --background. The script stops only the
 processes that it started, by their own process ids.
 """
 
@@ -87,6 +88,7 @@ def main():
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
@@ -94,6 +96,9 @@ def main():
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
+    parser.add_argument("--hash-parts", action="store_true",
+                        help="both runs record the hash of each component, to find what made them part")
+    parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, and the hash of each field")
     options = parser.parse_args()
 
     folder = options.bin or default_bin(options.config)
@@ -109,11 +114,16 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    server_command = [server_exe, "-g", options.game_path, "-s", options.land, "--skip-opening", options.opening,
+    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    server_command = [server_exe, "-g", options.game_path] + where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "--profile-folder", os.path.join(server_dir, "profile"), "-l", server_log]
+                      "-l", server_log]
     if options.server_fast:
         server_command.append("--fast")
+    if options.hash_parts or options.hash_fields:
+        server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
+    if options.hash_fields:
+        server_command.append("--record-fields")
     started = time.monotonic()
     code = run(server_command, server_dir)
     server_seconds = time.monotonic() - started
@@ -121,12 +131,16 @@ def main():
         print(f"the server ended with exit code {code}; see {server_log}")
         return 1
 
+    # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
                     "--sim-fast", "--sim-draw-every", "0", "--sim-frame-ms", str(options.frame_ms),
-                    "--sim-until-turn", str(options.turns), "--sim-still-hand", "--sim-record", record,
+                    "--sim-until-turn", str(options.turns + 1), "--sim-still-hand", "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
-                    "-s", options.land, "--skip-opening", options.opening,
-                    "--profile-folder", os.path.join(game_dir, "profile"), "-l", game_log]
+                    "-l", game_log] + where
+    if options.hash_fields:
+        game_command.append("--sim-hash-fields")
+    elif options.hash_parts:
+        game_command.append("--sim-hash-parts")
     code = run(game_command, game_dir)
     if code != 0:
         print(f"the game ended with exit code {code}; see {game_log}")

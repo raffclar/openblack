@@ -38,11 +38,17 @@ struct FakeGlowMark
 	int kind {0};
 };
 
+/// A component with no values, as a mark that the frames put on and take off
+struct FakeHidden
+{
+};
+
 void Register(entt::meta_ctx& context)
 {
 	Reflect<FakeBody>(context).Field<&FakeBody::place>("place").Field<&FakeBody::drawnPlace>("drawnPlace");
 	Reflect<FakeGlow>(context).Field<&FakeGlow::shine>("shine");
 	Reflect<FakeGlowMark>(context).Field<&FakeGlowMark::kind>("kind");
+	Reflect<FakeHidden> {context};
 }
 
 // The drawn place of each body, and every component of an entity that the glow mark marks
@@ -100,4 +106,22 @@ TEST(SyncedState, TheGamesPresentationPartsHaveAComponentEach)
 	{
 		EXPECT_FALSE(part.component.empty());
 	}
+}
+
+TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow);
+	const auto before = synced_state::HashOf(registry, context, k_Presentation).hash;
+	// The frames hide the marked glow: no entity of the synced state has the mark, so the hash stays the same
+	registry.emplace<FakeHidden>(glow);
+	EXPECT_EQ(synced_state::HashOf(registry, context, k_Presentation).hash, before);
+	// The turn hides the body: the synced state changes
+	registry.emplace<FakeHidden>(body);
+	EXPECT_NE(synced_state::HashOf(registry, context, k_Presentation).hash, before);
 }

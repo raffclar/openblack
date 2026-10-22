@@ -314,6 +314,17 @@ void InfluenceSystem::MarkTownInfluence(entt::entity entity)
 	NoteReach(influence.radius, influence.drawnRadius);
 }
 
+void InfluenceSystem::FixCitadelReaches()
+{
+	for (const auto citadel : Citadels())
+	{
+		if (citadel != entt::null)
+		{
+			CitadelReach(citadel);
+		}
+	}
+}
+
 void InfluenceSystem::ProcessCitadels()
 {
 	const auto citadels = Citadels();
