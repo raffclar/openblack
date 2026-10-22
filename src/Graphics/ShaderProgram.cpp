@@ -11,6 +11,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "BoneBudget.h"
 #include "DescriptorSetTally.h"
 #include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -159,6 +160,26 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 	}
 	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
 	_samplerDefaults.Discarded(discardFlags);
+}
+
+void ShaderProgram::SetBoneVariants(const ShaderProgram* singleBone, const ShaderProgram* fewBones) noexcept
+{
+	_singleBone = singleBone;
+	_fewBones = fewBones;
+}
+
+const ShaderProgram& ShaderProgram::ForBones(std::size_t bones) const noexcept
+{
+	switch (bone_budget::For(bones))
+	{
+	case bone_budget::Budget::Single:
+		return _singleBone != nullptr ? *_singleBone : *this;
+	case bone_budget::Budget::Few:
+		return _fewBones != nullptr ? *_fewBones : *this;
+	case bone_budget::Budget::All:
+		break;
+	}
+	return *this;
 }
 
 void ShaderProgram::SetUniformArray(const char* uniformName, const void* values, uint16_t count) const
