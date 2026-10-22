@@ -241,6 +241,7 @@
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -2692,6 +2693,10 @@ void Game::PlayTurnStep(game_turn::Step step)
 		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);
+		break;
+	case Step::SyncChecksum:
+		// When a network game asks for it, the checksum of the synced world as this turn left it
+		Locator::syncChecksumSystem::value().ProcessTurn();
 		break;
 	case Step::RunRecord:
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the

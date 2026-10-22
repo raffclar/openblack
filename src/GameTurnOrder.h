@@ -207,6 +207,8 @@ enum class Step : uint8_t
 	GlobalStatistics,
 	WalkerLookahead,
 	InfluenceTurnEnd,
+	/// The checksum of the synced world, as the turn left it, for a network game
+	SyncChecksum,
 	/// The run record of a tool sees the world as the turn left it, before the steps of the frame
 	RunRecord,
 
@@ -317,6 +319,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::GlobalStatistics, .stage = Stage::EndTurn},
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
+    // The checksum of the world that the turn left, which a network game sends after each turn
+    {.step = Step::SyncChecksum, .stage = Stage::AfterTurn},
     {.step = Step::RunRecord, .stage = Stage::AfterTurn},
 });
 
