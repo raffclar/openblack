@@ -51,6 +51,7 @@
 #include "LandChange.h"
 #include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
+#include "Simulation/TurnBody.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -171,6 +172,8 @@ struct Arguments
 	bool noDraw {false};
 	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
 	bool background {false};
+	/// The dedicated server: no audio device, and the frames run with no window
+	bool dedicatedServer {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
@@ -214,7 +217,9 @@ struct Arguments
 	std::optional<std::filesystem::path> profileFolder;
 };
 
-class Game
+/// The game on this computer: the window, the view of the player and the loop of the frames. The world turns in the
+/// simulation, with the game as the view of its turns.
+class Game: public simulation::TurnViewInterface
 {
 public:
 	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
@@ -253,10 +258,10 @@ public:
 
 	bool ProcessEvents(const SDL_Event& event) noexcept;
 	bool GameLogicLoop() noexcept;
-	/// One step of the game turn
-	void PlayTurnStep(game_turn::Step step);
-	/// One step of the creature's own turn, at its place in the turn of the living
-	void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature);
+	/// The steps of the game turn that the view of the player does: the sounds, the music, the tooltips and the help
+	void PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition) override;
+	/// The frames each second that the statistics of the game keep
+	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// What the steps of one frame share
 	struct FrameState
 	{
@@ -309,6 +314,9 @@ public:
 	/// The keys that take the player into the temple's rooms, from outside it or within
 	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
+	/// A step of the frame's draw that changes the world, which the dedicated server does with no window: the creatures'
+	/// fights, walks and animations, and the frame's effects
+	[[nodiscard]] static bool DedicatedServerStep(game_frame::Step step);
 	bool Initialize() noexcept;
 	/// Runs the game to its end: the start, the frames, and the end
 	bool Run() noexcept;
@@ -661,8 +669,6 @@ private:
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
 	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	/// Each player's turn in the game turn: its temple, then its towns
-	void ProcessPlayerTurns();
 	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
 	                float deltaSeconds);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
@@ -769,8 +775,6 @@ private:
 	/// The tooltips that the hand submits this turn for what it holds and what is under the pointer
 	void SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entity> pointed);
 	void ProcessTurnCheering();
-	/// The turn of the living: each creature, villager and animal takes its turn in the order of the list of the living
-	void ProcessLivingTurn();
 	/// Where a point of the world is on the screen, in whole pixels, when it is on it
 	/// Hangs the hand's tooltip by the hand as drawn this frame
 	void UpdateHandToolTipAnchor();

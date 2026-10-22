@@ -9,7 +9,9 @@
 
 #pragma once
 
+#include <functional>
 #include <memory>
+#include <utility>
 
 #include <entt/meta/fwd.hpp>
 
@@ -32,12 +34,14 @@ public:
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
+	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
 
 private:
 	/// The names of the saved components, by which the checksum reads the world
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	bool _enabled {false};
 	std::optional<TurnChecksum> _last;
+	std::function<void(const TurnChecksum&)> _listener;
 };
 
 } // namespace openblack::ecs::systems

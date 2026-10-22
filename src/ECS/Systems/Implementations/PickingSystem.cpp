@@ -638,15 +638,20 @@ void PickingSystem::AddBubbles(glm::vec3 camera)
 			    return;
 		    }
 		    const float scale = transform.scale.x;
-		    auto model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
-		    model[3] = glm::vec4(transform.position, 1.0f);
+		    // The globe as the frame drew it, turned to face the camera
+		    auto model = globe.drawnModel.value_or(glm::mat4(1.0f));
+		    if (!globe.drawnModel.has_value())
+		    {
+			    model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
+			    model[3] = glm::vec4(transform.position, 1.0f);
+		    }
 		    const auto middle = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
 		    auto pushed = model;
 		    pushed[3] += glm::vec4(ecs::pick_shapes::BubblePickOffset(middle, camera, halfExtents, scale), 0.0f);
 		    _candidates.push_back({
 		        .centre = glm::vec3(pushed * glm::vec4(box.Center(), 1.0f)),
 		        .radius = x87::LengthZyx(halfExtents) * scale,
-		        .origin = transform.position,
+		        .origin = glm::vec3(model[3]),
 		        .halfExtents = glm::vec2(halfExtents.x, halfExtents.z),
 		    });
 		    _candidateEntities.push_back(entity);
@@ -779,8 +784,14 @@ std::optional<screen_pick::MeshHit> PickingSystem::FeelModel(entt::entity object
 	else if (const auto* transform = registry.TryGet<const Transform>(object);
 	         transform != nullptr && registry.AllOf<OneOffSpellSeed>(object))
 	{
-		auto model = glm::mat4(transform->rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform->scale)));
-		model[3] = glm::vec4(transform->position, 1.0f);
+		// The globe as the frame drew it, turned to face the camera
+		const auto& drawnModel = registry.Get<const OneOffSpellSeed>(object).drawnModel;
+		auto model = drawnModel.value_or(glm::mat4(1.0f));
+		if (!drawnModel.has_value())
+		{
+			model = glm::mat4(transform->rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform->scale)));
+			model[3] = glm::vec4(transform->position, 1.0f);
+		}
 		felt = std::pair {OneOffSpellSeed::k_MeshId.value(), model};
 	}
 	if (!felt.has_value() || !meshes.Contains(felt->first))

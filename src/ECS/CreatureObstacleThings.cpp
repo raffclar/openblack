@@ -50,6 +50,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -92,6 +93,12 @@ std::optional<obstacles::Thing> creature_obstacle_things::ThingOf(const Registry
 	                        .worshipSites = {},
 	                        .owner = PlayerNames::NEUTRAL};
 	thing.burning = thing.hasFire && Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(entity);
+	// The world keeps a highlight upright at its full size. Only its draw turns it and changes its size for the camera.
+	if (registry.AllOf<ScriptHighlight>(entity))
+	{
+		thing.yAngle = 0.0f;
+		thing.scale = script_highlights::k_WorldScale;
+	}
 
 	if (const auto* other = registry.TryGet<const CreatureLocomotion>(entity))
 	{

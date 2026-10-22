@@ -379,8 +379,8 @@ void Game::PlayStartupScreens()
 	if (!Locator::windowing::has_value() || Locator::config::value().graphicsBackend == GraphicsBackend::Noop)
 	{
 		// A window with no renderer shows no screens, so the game is running at once. With no window at all, the game
-		// does not run frames
-		if (Locator::windowing::has_value())
+		// does not run frames, but for the dedicated server
+		if (Locator::windowing::has_value() || Locator::config::value().dedicatedServer)
 		{
 			Locator::config::value().running = true;
 		}

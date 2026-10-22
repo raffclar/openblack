@@ -59,6 +59,8 @@ public:
 		audio::PlayType playType {audio::PlayType::Once};
 		entt::entity owner {entt::null};
 		audio::Follows follows {audio::Follows::Nothing};
+		/// The voice rules give it an owner that no other sound has
+		bool ownSound {false};
 	};
 	std::map<entt::entity, Emitter> emitters;
 	/// The number of times a system moved an emitter
@@ -80,6 +82,13 @@ public:
 		emitters.emplace(
 		    entity,
 		    Emitter {.sound = id, .position = worldPosition.value_or(glm::vec3(0.0f)), .playType = playType, .owner = owner});
+		return entity;
+	}
+	entt::entity CreateOwnSoundEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition,
+	                                   audio::PlayType playType) override
+	{
+		const auto entity = CreateEmitter(id, worldPosition, playType, entt::null);
+		emitters.at(entity).ownSound = true;
 		return entity;
 	}
 	bool EmitterExists(entt::entity emitter) override { return emitters.contains(emitter); }
@@ -196,33 +205,39 @@ protected:
 
 TEST_F(SoundTags, APointSoundNotDelayedPlaysAtOnce)
 {
-	const auto point = _tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	const auto entitiesBefore = Locator::entitiesRegistry::value().Underlying().storage<entt::entity>().size();
+	_tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
 	ASSERT_EQ(Audio().emitters.size(), 1u);
 	const auto& [emitter, played] = *Audio().emitters.begin();
 	EXPECT_TRUE(played.played);
 	EXPECT_EQ(played.sound, k_Sound);
 	EXPECT_EQ(played.position, glm::vec3(10.0f, 0.0f, 0.0f));
-	EXPECT_EQ(Locator::entitiesRegistry::value().Get<ecs::components::SoundTag>(point).emitter, emitter);
+	// The sound owns itself, so the voice rules never find the voice of another sound for it
+	EXPECT_TRUE(played.ownSound);
+	ASSERT_EQ(_tags.PointSounds().size(), 1u);
+	EXPECT_EQ(_tags.PointSounds()[0].emitter, emitter);
+	// Only this computer hears it: the world gets no entity for it
+	EXPECT_EQ(Locator::entitiesRegistry::value().Underlying().storage<entt::entity>().size(), entitiesBefore);
 }
 
 TEST_F(SoundTags, APointSoundGoesOnceItHasPlayed)
 {
-	const auto point = _tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	_tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
 	_tags.ProcessTurn(glm::vec3(0.0f));
-	EXPECT_TRUE(Locator::entitiesRegistry::value().Valid(point));
+	EXPECT_EQ(_tags.PointSounds().size(), 1u);
 
 	Audio().emitters.begin()->second.stopped = true;
 	_tags.ProcessTurn(glm::vec3(0.0f));
-	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
+	EXPECT_TRUE(_tags.PointSounds().empty());
 	EXPECT_TRUE(Audio().emitters.empty());
 }
 
 TEST_F(SoundTags, APointSoundBeyondItsReachIsNotHeard)
 {
-	const auto point = _tags.CreatePointSound(k_Sound, {k_Reach + 1.0f, 0.0f, 0.0f}, false);
+	_tags.CreatePointSound(k_Sound, {k_Reach + 1.0f, 0.0f, 0.0f}, false);
 	EXPECT_TRUE(Audio().emitters.empty());
 	_tags.ProcessTurn(glm::vec3(0.0f));
-	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
+	EXPECT_TRUE(_tags.PointSounds().empty());
 }
 
 TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
@@ -240,13 +255,13 @@ TEST_F(SoundTags, ADelayedPointSoundWaitsToReachTheCamera)
 TEST_F(SoundTags, ADelayedPointSoundAtItsReachNeverStarts)
 {
 	// Arrived at the camera, a delayed sound starts only nearer than its reach
-	const auto point = _tags.CreatePointSound(k_Sound, {k_Reach, 0.0f, 0.0f}, true);
+	_tags.CreatePointSound(k_Sound, {k_Reach, 0.0f, 0.0f}, true);
 	for (int turn = 0; turn < 20; ++turn)
 	{
 		_tags.ProcessTurn(glm::vec3(0.0f));
 	}
 	EXPECT_TRUE(Audio().emitters.empty());
-	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(point));
+	EXPECT_TRUE(_tags.PointSounds().empty());
 }
 
 TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)
@@ -254,10 +269,10 @@ TEST_F(SoundTags, InsideTheTempleOnlyTheTemplesSoundsStart)
 	ecs::systems::SoundTagSystem tags(&InsideTemple);
 
 	// Not heard: it doesn't start, and its point goes on the next turn
-	const auto quiet = tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
 	EXPECT_TRUE(Audio().emitters.empty());
 	tags.ProcessTurn(glm::vec3(0.0f));
-	EXPECT_FALSE(Locator::entitiesRegistry::value().Valid(quiet));
+	EXPECT_TRUE(tags.PointSounds().empty());
 
 	// A delayed one is asked about when it reaches the camera
 	tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, true);
@@ -493,14 +508,14 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	                                                    });
 	const auto box = CreateObjectAt({30.0f, 0.0f, 0.0f});
 	const auto attached = _tags.AttachObjectSound(box, k_Sound, false);
-	const auto point = _tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
+	_tags.CreatePointSound(k_Sound, {10.0f, 0.0f, 0.0f}, false);
 	_tags.ProcessTurn(glm::vec3(0.0f));
 	ASSERT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
 	const auto before = Audio().emitters.size();
 
 	_tags.ForgetSavedSounds();
 	EXPECT_FALSE(registry.Valid(attached));
-	EXPECT_FALSE(registry.Valid(point));
+	EXPECT_TRUE(_tags.PointSounds().empty());
 	EXPECT_TRUE(registry.Valid(box));
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter == entt::null);
 

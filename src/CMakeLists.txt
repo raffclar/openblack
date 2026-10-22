@@ -36,6 +36,23 @@ if (NOT ANDROID)
   list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SYSTEM_SOURCES})
 endif ()
 
+# The simulation library, openblack_sim, has the world that the game and the dedicated server (apps/openblack-server)
+# share: the ECS and its components, the turn, the script machine, the physics, the creatures' minds, the land's data and
+# the save. The systems library is the systems part of it. The renderer, the GUI, the audio, the input, the windows and
+# the videos stay in the game's library, openblack_lib. Some files of the simulation still use the game's library, so the
+# two libraries use each other's symbols for now.
+set(OPENBLACK_SIM_SOURCES ${OPENBLACK_SOURCES})
+list(
+  FILTER
+  OPENBLACK_SIM_SOURCES
+  INCLUDE
+  REGEX
+  "/src/(Animals|Blast|Commands|Common|Creature|ECS|FileSystem|Fire|Hand|LHScriptX|Magic|Nature|Parsers|Physics|Scenery|ScriptHeaders|Serializer|Simulation|Story)/|/src/(CHLApi|InfoConstants|Level|Profiler)[.]cpp$"
+)
+if (NOT ANDROID)
+  list(REMOVE_ITEM OPENBLACK_SOURCES ${OPENBLACK_SIM_SOURCES})
+endif ()
+
 set(OPENBLACK_RC ${CMAKE_SOURCE_DIR}/assets/resource/icon/openblack.rc)
 
 file(GLOB OPENBLACK_IMGUI_VS_SHADERS
@@ -390,8 +407,29 @@ if (NOT ANDROID)
       set_property(TARGET openblack_systems PROPERTY ${property} "${value}")
     endif ()
   endforeach ()
-  target_link_libraries(openblack_lib PUBLIC openblack_systems)
+  # The simulation library takes the build properties of the game's library in the same way
+  add_library(openblack_sim STATIC ${OPENBLACK_SIM_SOURCES})
+  foreach (
+    property
+    COMPILE_DEFINITIONS
+    COMPILE_OPTIONS
+    INCLUDE_DIRECTORIES
+    LINK_LIBRARIES
+    LINKER_LANGUAGE
+    CXX_CLANG_TIDY
+  )
+    get_target_property(value openblack_lib ${property})
+    if (value)
+      set_property(TARGET openblack_sim PROPERTY ${property} "${value}")
+    endif ()
+  endforeach ()
+  # The headers of the simulation are found from the folder of the sources, as the game's are
+  target_include_directories(
+    openblack_sim PUBLIC ${CMAKE_CURRENT_LIST_DIR} ${CMAKE_BINARY_DIR}/include
+  )
+  target_link_libraries(openblack_lib PUBLIC openblack_systems openblack_sim)
   target_link_libraries(openblack_systems PUBLIC openblack_lib)
+  target_link_libraries(openblack_sim PUBLIC openblack_systems openblack_lib)
 endif ()
 
 set_property(
@@ -410,7 +448,8 @@ if (ANDROID)
   add_library(openblack ALIAS openblack_lib)
 else ()
   add_executable(openblack main.cpp)
-  target_link_libraries(openblack PRIVATE openblack_lib)
+  # The game is the simulation library and the game's own library
+  target_link_libraries(openblack PRIVATE openblack_sim openblack_lib)
 
   if (MSVC)
     # Debug builds create a debug console

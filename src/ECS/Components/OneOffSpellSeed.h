@@ -55,6 +55,9 @@ struct OneOffSpellSeed
 	/// How the seed's model was placed when last drawn, scale and all, which its effect's glints sparkle on; none before
 	/// it has been
 	std::optional<glm::mat4> seedPlacement;
+	/// The globe's model as the last frame drew it, turned about its middle to face the camera, none before the first
+	/// frame. The world keeps the globe at its Transform, which the camera does not change.
+	std::optional<glm::mat4> drawnModel;
 	/// Where its dispenser made it, none for one put down by itself
 	entt::entity dispenser {entt::null};
 };

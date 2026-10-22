@@ -70,6 +70,7 @@ public:
 	[[nodiscard]] ecs::Registry* Emitters() override { return &_emitters; }
 	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
 	                           entt::entity owner) override;
+	entt::entity CreateOwnSoundEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType) override;
 	[[nodiscard]] bool EmitterExists(entt::entity emitter) override;
 	[[nodiscard]] float GetProgress(entt::entity entity) override;
 	[[nodiscard]] AudioStatus GetStatus(entt::entity emitter) override;
@@ -174,7 +175,8 @@ private:
 	[[nodiscard]] static uint32_t BankOf(entt::id_type id);
 	/// An emitter for a sound on a voice of the pool, null when the sound does not start
 	entt::entity CreateVoiceEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
-	                                entt::entity owner, pack::AudioBankLoop callerPlayType, VoiceChoice& choice);
+	                                entt::entity owner, uint64_t ownerKey, pack::AudioBankLoop callerPlayType,
+	                                VoiceChoice& choice);
 
 	/// A source for a voice of a loaded sound, decoding the sound first if needed
 	SourceId CreateSource(Sound& sound, const VoiceStart& start);
