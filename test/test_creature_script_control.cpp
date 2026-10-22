@@ -40,8 +40,10 @@ class WalkingHands final: public CreatureObjectActionSystemInterface
 {
 public:
 	void ProcessTurn() override {}
-	void Update(std::chrono::duration<float, std::milli>) override {}
-	void LateUpdate(std::chrono::duration<float, std::milli>) override {}
+	void ActionTurn(entt::entity) override {}
+	void AfterPoseTurn(entt::entity) override {}
+	void UpdateHeld() override {}
+	void ShowHeldAtTurnEnd() override {}
 	bool PickUp(entt::entity, entt::entity) override { return false; }
 	bool PutDown(entt::entity) override { return false; }
 	bool Discard(entt::entity) override { return false; }

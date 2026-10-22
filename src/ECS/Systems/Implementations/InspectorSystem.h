@@ -67,7 +67,7 @@ public:
 	void PauseOnLoad(bool pause) override;
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
-	                                                        bool hashParts) override;
+	                                                        sim_run::HashDetail hashParts) override;
 
 private:
 	/// The helper answering while the game loads: until told to stop

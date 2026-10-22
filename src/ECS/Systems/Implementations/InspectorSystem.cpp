@@ -120,7 +120,9 @@ public:
 			return std::nullopt;
 		}
 		const auto fixed = Locator::time::value().GetFixedFrameTime();
-		return fixed.has_value() ? std::optional(static_cast<uint32_t>(fixed->count())) : std::nullopt;
+		return fixed.has_value()
+		           ? std::optional(static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(*fixed).count()))
+		           : std::nullopt;
 	}
 	[[nodiscard]] inspector::Json InputLock() const override { return inspector::InputLockState(); }
 	bool LoadScenario(std::string_view id) override
@@ -414,7 +416,8 @@ uint16_t InspectorSystem::GetPort() const
 }
 
 std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem::path& path, uint32_t every,
-                                                           const std::optional<std::filesystem::path>& limits, bool hashParts)
+                                                           const std::optional<std::filesystem::path>& limits,
+                                                           sim_run::HashDetail hashParts)
 {
 	_sim->SetHashParts(hashParts);
 	return _sim->StartRecord(path, every, limits);

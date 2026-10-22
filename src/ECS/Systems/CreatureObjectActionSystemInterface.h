@@ -50,11 +50,15 @@ public:
 	virtual void BeginTurn() {}
 	/// In the creature's own turn, after its walk: its hands walk up to their thing, and what it carries counts
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
-	/// Once a frame before the bodies are posed, by the game time: the actions play on
-	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
-	/// Once a frame after the bodies are posed: things are taken hold of and let go of, what is held rides in the hand,
-	/// and what was let go of flies
-	virtual void LateUpdate(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// In the creature's own turn, before its body takes its pose: its action plays on by the time of the turn
+	virtual void ActionTurn(entt::entity creature) = 0;
+	/// In the creature's own turn, after its body takes its pose: the spheres of its body knock about what they hit,
+	/// things are taken hold of and let go of, and what was let go of flies
+	virtual void AfterPoseTurn(entt::entity creature) = 0;
+	/// Once a frame: what the creatures hold is drawn in their hands, as the frame draws their bodies
+	virtual void UpdateHeld() = 0;
+	/// At the start of a turn: what the creatures hold goes back into their hands as their last turns posed them
+	virtual void ShowHeldAtTurnEnd() = 0;
 
 	/// Each returns whether the creature could start. Picking up and knocking down need empty hands, all those that act
 	/// on what it holds need something held.

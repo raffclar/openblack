@@ -9,6 +9,8 @@
 
 #include "SimRun.h"
 
+#include <cmath>
+
 #include <algorithm>
 
 namespace openblack::sim_run
@@ -28,15 +30,24 @@ bool Finished(const Settings& settings, uint32_t turn)
 	return settings.untilTurn.has_value() && turn >= *settings.untilTurn;
 }
 
-std::chrono::microseconds PaceWait(const Settings& settings, std::optional<uint32_t> frameMs,
+std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::chrono::microseconds> frameTime,
                                    std::chrono::microseconds frameTook)
 {
-	if (settings.fast || !settings.paceToWallClock || !frameMs.has_value())
+	if (settings.fast || !settings.paceToWallClock || !frameTime.has_value())
 	{
 		return std::chrono::microseconds {0};
 	}
-	const auto wanted = std::chrono::microseconds(std::chrono::milliseconds(*frameMs));
-	return std::max(wanted - frameTook, std::chrono::microseconds {0});
+	return std::max(*frameTime - frameTook, std::chrono::microseconds {0});
+}
+
+std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds)
+{
+	constexpr double k_MicrosecondsPerMs = 1000.0;
+	if (!(milliseconds >= 1.0 && milliseconds <= static_cast<double>(k_LongestFrameMs)))
+	{
+		return std::nullopt;
+	}
+	return std::chrono::microseconds(std::llround(milliseconds * k_MicrosecondsPerMs));
 }
 
 void Timings::AddTurn(float ms)

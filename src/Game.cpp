@@ -244,6 +244,7 @@
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TattooMenuSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
@@ -680,7 +681,7 @@ Game::Game(Arguments&& args) noexcept
 	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
-	config.clockedAudio = args.simulation.has_value() && args.simulation->frameMs.has_value();
+	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
 	config.detailLevel = args.detailLevel;
 	config.guiScale = args.guiScale;
 }
@@ -2199,6 +2200,13 @@ void Game::PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 	case Step::CreatureSway:
 		Locator::creatureAnimationSystem::value().SwayTurn(creature);
 		break;
+	case Step::CreatureBodyActions:
+	{
+		// What it does with things plays on its body by the time of the turn
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().ActionTurn(creature);
+		break;
+	}
 	case Step::CreatureFightMoves:
 	{
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
@@ -2210,6 +2218,13 @@ void Game::PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 		// At the end of its body's turn it takes its pose, and each frame draws its body between the last two
 		auto turnPose = profiler.BeginScoped(Profiler::Stage::CreatureTurnPose);
 		Locator::creatureAnimationSystem::value().EndPoseTurn(creature);
+		break;
+	}
+	case Step::CreatureHandMoments:
+	{
+		// Its body knocks about what it hits, and its hands take hold of and let go of things where the pose put them
+		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
+		Locator::creatureObjectActionSystem::value().AfterPoseTurn(creature);
 		break;
 	}
 	case Step::CreatureCarryOver:
@@ -2252,6 +2267,10 @@ void Game::PlayTurnStep(game_turn::Step step)
 	{
 	case Step::DrawnPlaces:
 		Locator::animalSystem::value().ShowTurnEnd();
+		// The creatures that walk go back to where their last turn took them, with the clips of that turn's end, and what
+		// they hold goes back into their hands as their last turn posed them
+		Locator::creatureLocomotionSystem::value().Update(1.0f);
+		Locator::creatureObjectActionSystem::value().ShowHeldAtTurnEnd();
 		break;
 	case Step::PlayerCommands:
 		// The world does the commands that the players sent
@@ -2414,9 +2433,11 @@ void Game::PlayTurnStep(game_turn::Step step)
 	case Step::CreatureMotes:
 	case Step::CreatureBlood:
 	case Step::CreatureSway:
+	case Step::CreatureBodyActions:
 	case Step::CreatureFightMoves:
 	case Step::CreatureFightStamina:
 	case Step::CreaturePoses:
+	case Step::CreatureHandMoments:
 	case Step::CreatureWebPage:
 	case Step::CreatureCarryOver:
 	case Step::CreatureAlignment:
@@ -2701,6 +2722,10 @@ void Game::PlayTurnStep(game_turn::Step step)
 		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);
+		break;
+	case Step::SyncChecksum:
+		// When a network game asks for it, the checksum of the synced world as this turn left it
+		Locator::syncChecksumSystem::value().ProcessTurn();
 		break;
 	case Step::RunRecord:
 		// A tool that records the run reads the world as the turn left it. The turn count moved on at the start of the
@@ -3326,11 +3351,6 @@ void Game::UpdateCreaturePoses()
 		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
 	}
 	{
-		// What they do with things plays on their bodies
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().Update(gameTime);
-	}
-	{
 		// The creatures breathe, act, pull faces and look about
 		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
 		Locator::creatureAnimationSystem::value().Update(gameTime);
@@ -3431,9 +3451,9 @@ void Game::UpdateFrameEffects()
 		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
 	}
 	{
-		// The creatures take hold of and let go of things with their hands as posed, and what they let go of flies
+		// What the creatures hold is drawn in their hands as the frame poses them
 		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().LateUpdate(gameTime);
+		Locator::creatureObjectActionSystem::value().UpdateHeld();
 	}
 	{
 		// The animals are drawn between their last two turns, their models posed by their clips
@@ -4472,13 +4492,13 @@ bool Game::Initialize() noexcept
 	if (_simulation.has_value())
 	{
 		Locator::simulation::value().SetSettings(_simulation->settings);
-		if (_simulation->frameMs.has_value())
+		if (_simulation->frameTime.has_value())
 		{
-			Locator::time::value().SetFixedFrameTime(std::chrono::milliseconds(*_simulation->frameMs));
+			Locator::time::value().SetFixedFrameTime(*_simulation->frameTime);
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: fast {}, frame time {} ms, draw every {}, until turn {}",
-		                   _simulation->settings.fast, _simulation->frameMs.value_or(0), _simulation->settings.drawEvery,
-		                   _simulation->settings.untilTurn.value_or(0));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: fast {}, frame time {} us, draw every {}, until turn {}",
+		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
+		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
 	}
 	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
 	// while the game's data loads, it answers that the game is loading
@@ -5508,7 +5528,7 @@ Game::RunStart Game::StartRun() noexcept
 
 	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
 	// picture or its model then starts after the same frames each run, at any speed.
-	if (_simulation.has_value() && _simulation->frameMs.has_value())
+	if (_simulation.has_value() && _simulation->frameTime.has_value())
 	{
 		auto& loading = Locator::resources::value();
 		const auto loadStart = std::chrono::steady_clock::now();
@@ -5691,10 +5711,8 @@ bool Game::RunFrame() noexcept
 
 		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too
 		auto& simulation = Locator::simulation::value();
-		const auto fixedFrame = Locator::time::value().GetFixedFrameTime();
 		if (const auto wait = sim_run::PaceWait(
-		        simulation.GetSettings(),
-		        fixedFrame.has_value() ? std::optional(static_cast<uint32_t>(fixedFrame->count())) : std::nullopt,
+		        simulation.GetSettings(), Locator::time::value().GetFixedFrameTime(),
 		        std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::steady_clock::now() - frameStart));
 		    wait.count() > 0)
 		{

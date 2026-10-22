@@ -1958,12 +1958,12 @@ bool CreatureObjectActionSystem::Catch(entt::entity creature, entt::entity objec
 	return Start(creature, {.kind = Kind::Catch, .target = object});
 }
 
-void CreatureObjectActionSystem::StartPendingCatches()
+void CreatureObjectActionSystem::StartPendingCatches(std::optional<entt::entity> only)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<std::pair<entt::entity, entt::entity>> due;
 	registry.Each<const PendingCatch>([&](entt::entity creature, const PendingCatch& pending) {
-		if (!CatchWaits(creature))
+		if ((!only.has_value() || *only == creature) && !CatchWaits(creature))
 		{
 			due.emplace_back(creature, pending.object);
 		}
@@ -2821,138 +2821,143 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	}
 }
 
-void CreatureObjectActionSystem::Update(std::chrono::duration<float, std::milli> gameTime)
+void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const Creature, const Transform, CreatureAnimation, CreatureObjectAction>(
-	    [&](entt::entity entity, const Creature& body, const Transform& transform, CreatureAnimation& animation,
-	        CreatureObjectAction& action) {
-		    if (action.phase != Phase::Playing || (action.status != Status::Running && action.status != Status::Contact))
-		    {
-			    return;
-		    }
-		    // A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
-		    // and does not change.
-		    const float step = creature_layers::HurriedStep(
-		        gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
-		    if (action.kind == Kind::Catch)
-		    {
-			    using Catching = CreatureObjectAction::Catching;
-			    if (action.catching == Catching::Ready || action.catching == Catching::Stepping)
-			    {
-				    UpdateReady(registry, entity, body, transform, animation, action, step);
-			    }
-			    if (action.catching != Catching::Ready && action.catching != Catching::Stepping &&
-			        action.status != Status::Done)
-			    {
-				    UpdateCatch(registry, entity, body, transform, animation, action, step);
-			    }
-			    return;
-		    }
-		    action.timeMs = action.kind == Kind::Point
-		                        ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
-		                        : action.timeMs + step;
+	// The body's actions play on once a turn, by the time of the turn, before the body takes its pose
+	const auto gameTime = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration);
+	const auto play = [&](entt::entity entity, const Creature& body, const Transform& transform, CreatureAnimation& animation,
+	                      CreatureObjectAction& action) {
+		if (action.phase != Phase::Playing || (action.status != Status::Running && action.status != Status::Contact))
+		{
+			return;
+		}
+		// A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
+		// and does not change.
+		const float step = creature_layers::HurriedStep(
+		    gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
+		if (action.kind == Kind::Catch)
+		{
+			using Catching = CreatureObjectAction::Catching;
+			if (action.catching == Catching::Ready || action.catching == Catching::Stepping)
+			{
+				UpdateReady(registry, entity, body, transform, animation, action, step);
+			}
+			if (action.catching != Catching::Ready && action.catching != Catching::Stepping && action.status != Status::Done)
+			{
+				UpdateCatch(registry, entity, body, transform, animation, action, step);
+			}
+			return;
+		}
+		action.timeMs = action.kind == Kind::Point
+		                    ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
+		                    : action.timeMs + step;
 
-		    // Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
-		    if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
-		    {
-			    const auto* at = action.target.has_value() && registry.Valid(*action.target)
-			                         ? registry.TryGet<const Transform>(*action.target)
-			                         : nullptr;
-			    if (at == nullptr)
-			    {
-				    Fail(action, "it has gone");
-				    animation.slots.clear();
-				    return;
-			    }
-			    // It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
-			    // left is in whole milliseconds.
-			    const auto living = LivingOf(registry, *action.target);
-			    const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
-			    const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
-			    const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
-			    const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
-			    const auto reach =
-			        creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
-			    if (!reach.inRange)
-			    {
-				    Fail(action, "it got out of reach");
-				    animation.slots.clear();
-				    return;
-			    }
-			    action.weights = reach.weights;
-		    }
+		// Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
+		if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
+		{
+			const auto* at = action.target.has_value() && registry.Valid(*action.target)
+			                     ? registry.TryGet<const Transform>(*action.target)
+			                     : nullptr;
+			if (at == nullptr)
+			{
+				Fail(action, "it has gone");
+				animation.slots.clear();
+				return;
+			}
+			// It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
+			// left is in whole milliseconds.
+			const auto living = LivingOf(registry, *action.target);
+			const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
+			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
+			const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
+			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
+			const auto reach =
+			    creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
+			if (!reach.inRange)
+			{
+				Fail(action, "it got out of reach");
+				animation.slots.clear();
+				return;
+			}
+			action.weights = reach.weights;
+		}
 
-		    if (action.kind == Kind::Point)
-		    {
-			    // Pointing at a thing, it points wherever the thing has got to. The blend follows the point each frame.
-			    if (action.target.has_value() && registry.Valid(*action.target))
-			    {
-				    if (const auto* at = registry.TryGet<const Transform>(*action.target); at != nullptr)
-				    {
-					    action.point = at->position;
-				    }
-			    }
-			    SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity), false);
-			    if (!action.pointEnding)
-			    {
-				    action.holdMs -= gameTime.count();
-				    if (action.holdMs <= 0.0f)
-				    {
-					    // The point ends, and the arm plays to the end of its animations
-					    action.holdMs = 0.0f;
-					    action.pointEnding = true;
-				    }
-			    }
-			    else if (action.timeMs >= action.durationMs)
-			    {
-				    action.status = Status::Done;
-			    }
-		    }
-		    else if (action.timeMs >= action.durationMs && (action.eventDone || action.eventMs > action.durationMs))
-		    {
-			    // Thrown into a store, it waits for the thing to come down first
-			    const bool flying = action.thrown.has_value() && registry.Valid(*action.thrown) &&
-			                        Locator::dynamicsSystem::has_value() &&
-			                        Locator::dynamicsSystem::value().IsFlying(*action.thrown);
-			    if (!creature_object_actions::ThrowOver(true, action.waitsForLanding, flying))
-			    {
-				    animation.slots.clear();
-				    return;
-			    }
-			    // An eat with no thing given fails when its animation ends
-			    if (action.kind == Kind::Eat && !action.swallows)
-			    {
-				    Fail(action, "it was told to eat no thing");
-				    animation.slots.clear();
-				    return;
-			    }
-			    // The creature swallows what it ate as the eat animation ends
-			    if (action.kind == Kind::Eat)
-			    {
-				    Swallow(entity, action, action.eaten.has_value() ? FoodValueOf(*action.eaten) : std::nullopt);
-			    }
-			    action.status = Status::Done;
-		    }
-		    if (action.status == Status::Done)
-		    {
-			    animation.slots.clear();
-			    return;
-		    }
+		if (action.kind == Kind::Point)
+		{
+			// Pointing at a thing, it points wherever the thing has got to. The blend follows the point each frame.
+			if (action.target.has_value() && registry.Valid(*action.target))
+			{
+				if (const auto* at = registry.TryGet<const Transform>(*action.target); at != nullptr)
+				{
+					action.point = at->position;
+				}
+			}
+			SetPointing(action, transform, body, registry.TryGet<const CreatureHeldObject>(entity), false);
+			if (!action.pointEnding)
+			{
+				action.holdMs -= gameTime.count();
+				if (action.holdMs <= 0.0f)
+				{
+					// The point ends, and the arm plays to the end of its animations
+					action.holdMs = 0.0f;
+					action.pointEnding = true;
+				}
+			}
+			else if (action.timeMs >= action.durationMs)
+			{
+				action.status = Status::Done;
+			}
+		}
+		else if (action.timeMs >= action.durationMs && (action.eventDone || action.eventMs > action.durationMs))
+		{
+			// Thrown into a store, it waits for the thing to come down first
+			const bool flying = action.thrown.has_value() && registry.Valid(*action.thrown) &&
+			                    Locator::dynamicsSystem::has_value() &&
+			                    Locator::dynamicsSystem::value().IsFlying(*action.thrown);
+			if (!creature_object_actions::ThrowOver(true, action.waitsForLanding, flying))
+			{
+				animation.slots.clear();
+				return;
+			}
+			// An eat with no thing given fails when its animation ends
+			if (action.kind == Kind::Eat && !action.swallows)
+			{
+				Fail(action, "it was told to eat no thing");
+				animation.slots.clear();
+				return;
+			}
+			// The creature swallows what it ate as the eat animation ends
+			if (action.kind == Kind::Eat)
+			{
+				Swallow(entity, action, action.eaten.has_value() ? FoodValueOf(*action.eaten) : std::nullopt);
+			}
+			action.status = Status::Done;
+		}
+		if (action.status == Status::Done)
+		{
+			animation.slots.clear();
+			return;
+		}
 
-		    animation.slots.clear();
-		    for (size_t i = 0; i < action.animationCount; ++i)
-		    {
-			    const auto duration = DurationOf(entity, action.animations.at(i));
-			    // Each animation holds its last frame
-			    const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
-			    animation.slots.push_back({.animation = action.animations.at(i),
-			                               .timeMs = time,
-			                               .weight = action.weights.at(i),
-			                               .mirrored = action.mirrored});
-		    }
-	    });
-	StartPendingCatches();
+		animation.slots.clear();
+		for (size_t i = 0; i < action.animationCount; ++i)
+		{
+			const auto duration = DurationOf(entity, action.animations.at(i));
+			// Each animation holds its last frame
+			const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
+			animation.slots.push_back({.animation = action.animations.at(i),
+			                           .timeMs = time,
+			                           .weight = action.weights.at(i),
+			                           .mirrored = action.mirrored});
+		}
+	};
+	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
+	{
+		play(creature, registry.Get<const Creature>(creature), registry.Get<const Transform>(creature),
+		     registry.Get<CreatureAnimation>(creature), registry.Get<CreatureObjectAction>(creature));
+	}
+	StartPendingCatches(creature);
 }
 
 namespace
@@ -3094,7 +3099,7 @@ void KnockAbout(ecs::Registry& registry, entt::entity creature, const Creature& 
 
 /// The spheres round the body of each creature come on and go off as its body actions start. While they are on, each
 /// part that moved far enough since its last check knocks about what it reaches.
-void Trample(ecs::Registry& registry)
+void Trample(ecs::Registry& registry, entt::entity only)
 {
 	struct Moved
 	{
@@ -3108,7 +3113,7 @@ void Trample(ecs::Registry& registry)
 	registry.Each<const Creature, const Transform, const CreatureAnimation>(
 	    [&](entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation) {
 		    const auto* points = PointsOf(body);
-		    if (points == nullptr)
+		    if (creature != only || points == nullptr)
 		    {
 			    return;
 		    }
@@ -3182,10 +3187,11 @@ void Trample(ecs::Registry& registry)
 }
 } // namespace
 
-void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::milli> /*gameTime*/)
+void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	Trample(registry);
+	// The spheres of the body check what they hit once a turn, after the body takes its pose
+	Trample(registry, creature);
 
 	// The moments things are taken hold of and let go of, with the hand where the body was posed at the end of its
 	// newest game turn
@@ -3194,17 +3200,15 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 		entt::entity creature;
 	};
 	std::vector<Moment> moments;
-	registry.Each<CreatureObjectAction>([&](entt::entity entity, const CreatureObjectAction& action) {
-		if (action.phase == Phase::Playing && action.status == Status::Running && !action.eventDone &&
-		    action.timeMs >= action.eventMs)
-		{
-			moments.push_back({entity});
-		}
-	});
+	if (const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
+	    action != nullptr && action->phase == Phase::Playing && action->status == Status::Running && !action->eventDone &&
+	    action->timeMs >= action->eventMs)
+	{
+		moments.push_back({creature});
+	}
 	for (const auto& moment : moments)
 	{
-		const auto creature = moment.creature;
-		auto& action = registry.Get<CreatureObjectAction>(creature);
+		auto& action = registry.Get<CreatureObjectAction>(moment.creature);
 		const auto& body = registry.Get<const Creature>(creature);
 		const auto& transform = registry.Get<const Transform>(creature);
 		const auto& animation = registry.Get<const CreatureAnimation>(creature);
@@ -3366,7 +3370,11 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			break;
 		}
 	}
+}
 
+void CreatureObjectActionSystem::PlaceHeld(bool drawn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	// What is held rides in the hand, turned with it
 	bool moved = false;
 	registry.Each<const Creature, const Transform, const CreatureAnimation, const CreatureHeldObject>(
@@ -3377,7 +3385,8 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 			    return;
 		    }
 		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
+		    const auto pose =
+		        HeldPoseOf(held, animation, drawn ? DrawnPoseOf(animation, transform) : TurnPoseOf(animation, transform));
 		    at->rotation = pose.rotation;
 		    at->position = pose.position;
 		    moved = true;
@@ -3387,4 +3396,16 @@ void CreatureObjectActionSystem::LateUpdate(std::chrono::duration<float, std::mi
 	{
 		registry.SetDirty();
 	}
+}
+
+void CreatureObjectActionSystem::UpdateHeld()
+{
+	// Each frame draws the thing in the hand as the frame draws the body
+	PlaceHeld(true);
+}
+
+void CreatureObjectActionSystem::ShowHeldAtTurnEnd()
+{
+	// The turn sees the thing in the hand as the last turn posed the body, at any frame rate
+	PlaceHeld(false);
 }

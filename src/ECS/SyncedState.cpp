@@ -1,0 +1,183 @@
+/*******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#include "SyncedState.h"
+
+#include <algorithm>
+#include <array>
+
+#include <entt/entity/registry.hpp>
+#include <entt/meta/context.hpp>
+
+#include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
+
+namespace openblack::synced_state
+{
+
+namespace
+{
+
+/// FNV-1a over bytes, as the parts of the world are hashed
+constexpr uint64_t k_HashOffset = 14695981039346656037ull;
+constexpr uint64_t k_HashPrime = 1099511628211ull;
+
+void Mix(uint64_t& hash, const void* data, size_t size)
+{
+	const auto* bytes = static_cast<const unsigned char*>(data);
+	for (size_t i = 0; i < size; ++i)
+	{
+		hash = (hash ^ bytes[i]) * k_HashPrime;
+	}
+}
+
+// The frames draw these. Each turn reader of them was checked: the turns read none of these fields.
+constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
+    // The animals play their clips and tilt in the frames. The turns go by Animal::position and Animal::heading.
+    {.component = "Animal", .field = "clipPlace", .marker = ""},
+    {.component = "Animal", .field = "groundCarry", .marker = ""},
+    {.component = "Animal", .field = "bank", .marker = ""},
+    {.component = "AnimalPose", .field = "", .marker = ""},
+    {.component = "Transform", .field = "rotation", .marker = "Animal"},
+    {.component = "AnimatedStaticPose", .field = "", .marker = ""},
+    {.component = "AppleBarrelWorm", .field = "place", .marker = ""},
+    // The villagers are drawn gliding between their turns
+    {.component = "VillagerPose", .field = "place", .marker = ""},
+    {.component = "VillagerPose", .field = "groundCarry", .marker = ""},
+    {.component = "VillagerPose", .field = "drawnAt", .marker = ""},
+    {.component = "VillagerPose", .field = "easedHeading", .marker = ""},
+    {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
+    // The puffs of smoke, the clouds, the mists, the sky and the lights
+    {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
+    {.component = "ChimneySmoke", .field = "state", .marker = ""},
+    {.component = "Cloud", .field = "track", .marker = ""},
+    {.component = "Mist", .field = "counter", .marker = ""},
+    {.component = "Mist", .field = "counterRemainder", .marker = ""},
+    {.component = "Mist", .field = "colour", .marker = ""},
+    {.component = "Transform", .field = "position", .marker = "Cloud"},
+    {.component = "Transform", .field = "position", .marker = "Mist"},
+    {.component = "Sun", .field = "", .marker = ""},
+    {.component = "SkyDome", .field = "", .marker = ""},
+    // The moon's phase comes from the date of the computer's clock, as in the game
+    {.component = "Moon", .field = "", .marker = ""},
+    {.component = "VillageLight", .field = "flicker", .marker = ""},
+    {.component = "VillageLight", .field = "flickerTimer", .marker = ""},
+    {.component = "VillageLight", .field = "glowSize", .marker = ""},
+    {.component = "FireLook", .field = "", .marker = ""},
+    {.component = "ResourcePile", .field = "rise", .marker = ""},
+    {.component = "LeashPost", .field = "look", .marker = ""},
+    {.component = "Transform", .field = "rotation", .marker = "LeashPost"},
+    // The moving bodies are drawn between their last two turns. The turns read the Transform.
+    {.component = "PhysicsDrawPose", .field = "", .marker = ""},
+    // The particle effects that the frames step
+    {.component = "Vortex", .field = "beforeLandEffect", .marker = ""},
+    {.component = "Vortex", .field = "afterLandEffect", .marker = ""},
+    // The town totems ease to their shares by the computer's clock, as in the game
+    {.component = "VillageTotem", .field = "ease", .marker = ""},
+    // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
+    {.component = "Sprite", .field = "", .marker = ""},
+    {.component = "Transform", .field = "", .marker = "Sprite"},
+    {.component = "*", .field = "", .marker = "ScriptHighlightGlow"},
+    {.component = "ScriptHighlight", .field = "centre", .marker = ""},
+    {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
+    {.component = "ScriptHighlight", .field = "radius", .marker = ""},
+    {.component = "ScriptHighlight", .field = "yAngle", .marker = ""},
+    {.component = "ScriptHighlight", .field = "sparks", .marker = ""},
+    {.component = "ScriptHighlight", .field = "onScreen", .marker = ""},
+    {.component = "Transform", .field = "rotation", .marker = "ScriptHighlight"},
+    {.component = "Transform", .field = "scale", .marker = "ScriptHighlight"},
+    // The flags over the stores and the apple barrel move in the frames
+    {.component = "*", .field = "", .marker = "TownDesireFlag"},
+    {.component = "Transform", .field = "", .marker = "AppleBarrel"},
+    {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
+    // The drawn hand follows the pointer and the camera in each frame
+    {.component = "Transform", .field = "rotation", .marker = "Hand"},
+    {.component = "HandGrab", .field = "handPoint", .marker = ""},
+    // The hand's size follows its distance from the camera in each frame. Only the frames read it.
+    {.component = "HandGrab", .field = "handSize", .marker = ""},
+    {.component = "HandMorph", .field = "", .marker = ""},
+    {.component = "HandMiracleFx", .field = "", .marker = ""},
+    // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
+    // the newest turn.
+    {.component = "CreatureAnimation", .field = "boneMatrices", .marker = ""},
+    // The creature's eyes, the sounds of its body and the prints of its feet
+    {.component = "CreatureEyes", .field = "", .marker = ""},
+    {.component = "CreatureAudio", .field = "", .marker = ""},
+    {.component = "CreatureDrawnFeet", .field = "", .marker = ""},
+});
+
+} // namespace
+
+std::span<const PresentationPart> PresentationParts()
+{
+	return k_PresentationParts;
+}
+
+bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_view component, std::string_view field)
+{
+	return std::ranges::any_of(parts, [component, field](const PresentationPart& part) {
+		return part.marker.empty() && part.component == component && (part.field.empty() || part.field == field);
+	});
+}
+
+Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
+            bool byField)
+{
+	// The parts that only some entities have, by the storage of their marker component
+	std::vector<std::pair<const PresentationPart*, const entt::sparse_set*>> marked;
+	for (const auto& part : presentation)
+	{
+		if (!part.marker.empty())
+		{
+			if (const auto* marker = ecs::reflection::FindStorage(registry, part.marker); marker != nullptr)
+			{
+				marked.emplace_back(&part, marker);
+			}
+		}
+	}
+	const auto keep = [&marked, presentation](std::string_view component, std::string_view field, entt::entity entity) {
+		if (entity == entt::null)
+		{
+			return !(field.empty() && IsPresentationOnly(presentation, component, {}));
+		}
+		if (!field.empty() && IsPresentationOnly(presentation, component, field))
+		{
+			return false;
+		}
+		return std::ranges::none_of(marked, [&](const auto& entry) {
+			const auto& [part, marker] = entry;
+			const bool componentMatches = part->component == "*" || part->component == component;
+			const bool fieldMatches = part->field.empty() ? field.empty() : part->field == field;
+			return componentMatches && fieldMatches && marker->contains(entity);
+		});
+	};
+	const auto hashes = ecs::reflection::HashWorld(registry, context, keep, byField);
+	Hash result {.hash = k_HashOffset, .parts = {}};
+	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
+	result.parts.emplace_back("entities", hashes.entities);
+	for (const auto& [name, part] : hashes.components)
+	{
+		Mix(result.hash, name.data(), name.size());
+		Mix(result.hash, &part, sizeof(part));
+		result.parts.emplace_back(name, part);
+	}
+	result.parts.insert(result.parts.end(), hashes.fields.begin(), hashes.fields.end());
+	return result;
+}
+
+uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)
+{
+	uint64_t hash = k_HashOffset;
+	Mix(hash, &stateHash, sizeof(stateHash));
+	Mix(hash, &seed, sizeof(seed));
+	Mix(hash, &draws, sizeof(draws));
+	return hash;
+}
+
+} // namespace openblack::synced_state

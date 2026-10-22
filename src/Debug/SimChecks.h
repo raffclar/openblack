@@ -44,25 +44,6 @@ enum class FlagKind : uint8_t
 
 [[nodiscard]] std::string_view Name(FlagKind kind);
 
-/// A part of the saved world that only shows the world on one computer. The frames change it, and the turns do not read
-/// it. Two computers that play the same turns at other frame rates have other values in it, so the synced hash of a run
-/// record leaves it out.
-struct PresentationPart
-{
-	/// The component, or "*" for each component of the entity
-	std::string_view component;
-	/// The field, or empty for the whole component
-	std::string_view field;
-	/// Only the entities that have this component, or empty for each entity
-	std::string_view marker;
-};
-
-/// The parts of the saved world that only show the world on one computer (see PresentationPart)
-[[nodiscard]] std::span<const PresentationPart> PresentationParts();
-
-/// Whether a field of a component, or the whole component when the field is empty, only shows the world for each entity
-[[nodiscard]] bool IsPresentationOnly(std::string_view component, std::string_view field);
-
 /// A problem that a check found
 struct Flag
 {

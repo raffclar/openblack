@@ -26,6 +26,7 @@
 #include <entt/meta/context.hpp>
 
 #include "Debug/SimChecks.h"
+#include "Debug/SimRun.h"
 
 namespace openblack::inspector
 {
@@ -64,8 +65,8 @@ public:
 	[[nodiscard]] std::optional<std::string> StartRecord(const std::filesystem::path& path, uint32_t every,
 	                                                     const std::optional<std::filesystem::path>& limitsPath);
 	void StopRecord();
-	/// The records also keep the hash of the transforms of the entities of each component
-	void SetHashParts(bool parts) { _hashParts = parts; }
+	/// What the records keep of the hashes of the parts of the world
+	void SetHashParts(sim_run::HashDetail parts) { _hashParts = parts; }
 
 private:
 	/// The record of the game now. With checks, the trackers see it; without, only its values are checked.
@@ -90,8 +91,8 @@ private:
 	std::set<std::string, std::less<>> _flagged;
 	std::shared_ptr<SimLogSink> _sink;
 	uint64_t _frame {0};
-	/// The records also keep a hash for each component
-	bool _hashParts {false};
+	/// What the records keep of the hashes of the parts of the world
+	sim_run::HashDetail _hashParts {sim_run::HashDetail::None};
 	/// The synced part of the world as the last turn to record left it, before the steps of the frame
 	struct Synced
 	{

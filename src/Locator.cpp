@@ -106,6 +106,7 @@
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
+#include "ECS/Systems/Implementations/SyncChecksumSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
@@ -293,6 +294,7 @@ using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
 using openblack::ecs::systems::SoundTagSystem;
 using openblack::ecs::systems::SpellIconSystem;
+using openblack::ecs::systems::SyncChecksumSystem;
 using openblack::ecs::systems::TattooEditorSystem;
 using openblack::ecs::systems::TattooMenuSystem;
 using openblack::ecs::systems::TeleportSystem;
@@ -541,6 +543,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
 	Locator::handDemoSystem::emplace<HandDemoSystem>();
 	Locator::playerCommandSystem::emplace<PlayerCommandSystem>();
+	Locator::syncChecksumSystem::emplace<SyncChecksumSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -738,6 +741,7 @@ void openblack::ShutDownServices()
 	Locator::tipBubbleSystem::reset();
 	Locator::handDemoSystem::reset();
 	Locator::playerCommandSystem::reset();
+	Locator::syncChecksumSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

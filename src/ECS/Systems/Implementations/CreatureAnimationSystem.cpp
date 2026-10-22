@@ -915,11 +915,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	auto& resources = Locator::resources::value();
 	const auto& meshes = resources.GetMeshes();
 	const auto& rigs = resources.GetCreatureRigs();
-	const auto seconds = std::chrono::duration<float>(gameTime).count();
 	const auto milliseconds = static_cast<int32_t>(std::lround(gameTime.count()));
-	// The breath moves towards its target period one step a frame, at most 60 times a second
-	const bool breathSteps = frame_pace::Due(_breathPace, std::chrono::milliseconds {milliseconds});
-	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
 	// The body is drawn between the poses of the last two game turns, by the part of the turn that has passed
 	const auto weight =
 	    creature_turn_pose::DrawWeight(Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f);
@@ -962,27 +958,6 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 			    auto mirror = rig != nullptr ? rig->MirrorBones(rest.size()) : std::nullopt;
 			    animation.mirror = mirror.has_value() ? std::move(*mirror) : skeletal_animation::MirrorJoints(rest);
 		    }
-
-		    // Standing, the creature breathes in and out over its stand animation, from its first frame at its resting
-		    // period
-		    const auto resting = creature_animation::BreathPeriod(ShownSize(creature));
-		    if (animation.breathPeriod <= 0.0f)
-		    {
-			    animation.breathPeriod = resting;
-		    }
-		    if (animation.breathTarget <= 0.0f)
-		    {
-			    animation.breathTarget = animation.breathPeriod;
-		    }
-		    if (breathSteps)
-		    {
-			    animation.breathPeriod = creature_animation::EaseBreathPeriod(animation.breathPeriod, animation.breathTarget,
-			                                                                  resting, k_TurnSeconds);
-		    }
-		    // A frozen creature plays slower, down to not at all
-		    const float scale = animation.playbackScale;
-		    animation.breathPhase =
-		        creature_animation::AdvanceBreath(animation.breathPhase, seconds * scale, animation.breathPeriod);
 
 		    // Before its first game turn, the body takes its first pose now, and the animations do not move on
 		    if (animation.newerTurnPose.empty() || animation.newerTurnPose.size() != animation.skeleton.parents.size())
@@ -1091,7 +1066,37 @@ void CreatureAnimationSystem::PoseTurn(entt::entity creature)
 		Locator::creatureLocomotionSystem::value().ShowTurnEnd(creature);
 	}
 	constexpr auto k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
+	BreatheForTurn(creature, k_TurnMs);
 	PoseForTurn(creature, k_TurnMs);
+}
+
+void CreatureAnimationSystem::BreatheForTurn(entt::entity creature, float milliseconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	auto* animation = registry.TryGet<CreatureAnimation>(creature);
+	if (body == nullptr || animation == nullptr)
+	{
+		return;
+	}
+	// Standing, the creature breathes in and out over its stand animation, from its first frame at its resting period.
+	// Each game turn, before the body takes its pose, the period moves one step towards its target and the breath moves on
+	// by the time of the turn. The frames do not change the breath.
+	constexpr auto k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
+	const auto resting = creature_animation::BreathPeriod(ShownSize(*body));
+	if (animation->breathPeriod <= 0.0f)
+	{
+		animation->breathPeriod = resting;
+	}
+	if (animation->breathTarget <= 0.0f)
+	{
+		animation->breathTarget = animation->breathPeriod;
+	}
+	animation->breathPeriod =
+	    creature_animation::EaseBreathPeriod(animation->breathPeriod, animation->breathTarget, resting, k_TurnSeconds);
+	// A frozen creature plays slower, down to not at all
+	const auto seconds = milliseconds * animation->playbackScale / 1000.0f;
+	animation->breathPhase = creature_animation::AdvanceBreath(animation->breathPhase, seconds, animation->breathPeriod);
 }
 
 void CreatureAnimationSystem::PoseTurns()

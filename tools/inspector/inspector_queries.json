@@ -1422,6 +1422,19 @@
   "query": "players.commands"
  },
  {
+  "description": "The checksum of the synced world that a network game sends after each turn: whether it is on, and the turn and checksum of the last turn. With on, it turns it on or off",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "Turn the checksum on or off from the next turn",
+    "name": "on",
+    "type": "boolean"
+   }
+  ],
+  "query": "players.checksum",
+  "writes": true
+ },
+ {
   "description": "Each player's heartbeat: danger, rate, beat and pulse",
   "kind": "list",
   "parameters": [],
@@ -2484,6 +2497,11 @@
    {
     "description": "Also keep the hash of the transforms of the entities of each component",
     "name": "parts",
+    "type": "boolean"
+   },
+   {
+    "description": "As parts, and the synced hash of each field of each component too",
+    "name": "fields",
     "type": "boolean"
    },
    {

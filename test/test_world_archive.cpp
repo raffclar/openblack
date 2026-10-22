@@ -1013,3 +1013,52 @@ TEST(WorldArchive, ALongerSavedArrayFailsTheReader)
 	Load(in, fewer);
 	EXPECT_TRUE(in.Failed());
 }
+
+// A mark with no values has no order that the game reads: the hash of the world does not change with the order of the
+// marked entities
+TEST(WorldArchive, TheHashOfAMarkDoesNotFollowTheOrderOfItsEntities)
+{
+	entt::meta_ctx context;
+	Register(context);
+	const auto hashOf = [&context](bool reversed) {
+		entt::registry registry;
+		std::vector<entt::entity> made(3);
+		registry.create(made.begin(), made.end());
+		if (reversed)
+		{
+			std::ranges::reverse(made);
+		}
+		for (const auto entity : made)
+		{
+			registry.emplace<FakeTag>(entity);
+		}
+		const auto hashes = HashWorld(registry, context);
+		const auto tag =
+		    std::ranges::find(hashes.components, std::string("FakeTag"), [](const auto& part) { return part.first; });
+		return tag != hashes.components.end() ? std::optional(tag->second) : std::nullopt;
+	};
+	ASSERT_TRUE(hashOf(false).has_value());
+	EXPECT_EQ(hashOf(false), hashOf(true));
+}
+
+// With the fields asked for, each field of a component has its own hash, so a change of one field shows which it is
+TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto entity = registry.create();
+	registry.emplace<FakeWalker>(entity, SampleWalker(entity, entity));
+	const auto before = HashWorld(registry, context, {}, true);
+	registry.get<FakeWalker>(entity).name = "Tom";
+	const auto after = HashWorld(registry, context, {}, true);
+	const auto fieldOf = [](const WorldHashes& hashes, std::string_view name) {
+		const auto found = std::ranges::find(hashes.fields, std::string(name), [](const auto& part) { return part.first; });
+		return found != hashes.fields.end() ? std::optional(found->second) : std::nullopt;
+	};
+	ASSERT_TRUE(fieldOf(before, "FakeWalker.name").has_value());
+	EXPECT_NE(fieldOf(before, "FakeWalker.name"), fieldOf(after, "FakeWalker.name"));
+	EXPECT_EQ(fieldOf(before, "FakeWalker.counts"), fieldOf(after, "FakeWalker.counts"));
+	// Without the fields asked for, the hashes keep none
+	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
+}

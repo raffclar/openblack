@@ -263,6 +263,22 @@ def compare_synced(records_a, records_b):
     return {"same": compared > 0, "compared": compared, "turn": None}
 
 
+def synced_part_firsts(records_a, records_b, limit=40):
+    """For each synced part that differs between two runs, the first turn recorded in both at which it differs: the
+    parts with the earliest turns first, at most limit of them. Empty without the hashes of the parts."""
+    by_turn_b = {record["turn"]: record for record in records_b if record.get("synced")}
+    firsts = {}
+    for record in records_a:
+        parts_a = (record.get("synced") or {}).get("parts")
+        parts_b = ((by_turn_b.get(record["turn"]) or {}).get("synced") or {}).get("parts")
+        if not parts_a or not parts_b:
+            continue
+        for key in set(parts_a) | set(parts_b):
+            if key not in firsts and parts_a.get(key) != parts_b.get(key):
+                firsts[key] = record["turn"]
+    return dict(sorted(firsts.items(), key=lambda item: (item[1], item[0]))[:limit])
+
+
 # The blocks of a saved world, each after its four letter tag, in the order the game writes them
 SAVE_TAGS = (b"ECSW", b"RCTX", b"TIME", b"CAMR", b"LHVM", b"SOBJ", b"SYST")
 

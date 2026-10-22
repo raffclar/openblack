@@ -208,7 +208,9 @@ TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 	EXPECT_TRUE(recorder.Before(Step::Ambience, Step::Autosave));
 	EXPECT_TRUE(recorder.Before(Step::Autosave, Step::GameOver));
 	EXPECT_TRUE(recorder.Before(Step::GameOver, Step::WalkerLookahead));
-	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 2);
+	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 3);
+	// The checksum of the turn comes after all the work of the turn, just before a tool's run record
+	EXPECT_EQ(recorder.IndexOf(Step::SyncChecksum), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 2);
 }
 
 TEST(GameTurnOrder, TheRunRecordSeesTheWorldAfterTheLastStepOfTheTurn)
@@ -327,4 +329,23 @@ TEST(GameTurnOrder, TheCreaturesTurnIsPartOfTheTurnOfTheLiving)
 	ASSERT_EQ(creatures.Steps().size(), k_CreaturesTurn.size());
 	EXPECT_EQ(creatures.Steps().front(), Step::CreaturePens);
 	EXPECT_EQ(creatures.Steps().back(), Step::CreatureAlignment);
+}
+
+// The body's actions play on in the creature's own turn before its pose, as its sway and its fight moves do, and its
+// hands take hold of and let go of things after the pose
+TEST(GameTurnOrder, TheBodysActionsPlayInTheTurnAroundThePose)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureSway, Step::CreatureBodyActions));
+	EXPECT_TRUE(recorder.Before(Step::CreatureBodyActions, Step::CreatureFightMoves));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePoses, Step::CreatureHandMoments));
+	EXPECT_TRUE(recorder.Before(Step::CreatureHandMoments, Step::CreatureCarryOver));
+}
+
+// The checksum of a network game reads the world as the turn left it, before a tool's run record
+TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::GlobalStatistics, Step::SyncChecksum));
+	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
 }
