@@ -157,6 +157,8 @@ def main():
         "game_turns": len(game),
         "compared": len(compared),
         "different": different[:20],
+        # The last turn up to which every checksum is the same
+        "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
         "same": not different and len(compared) >= options.turns,
     }
     with open(os.path.join(out, "server_check.json"), "w", encoding="utf-8") as file:
