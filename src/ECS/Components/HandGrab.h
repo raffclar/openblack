@@ -152,8 +152,6 @@ struct HandGrab
 	Zoomer offerTurn {0.0f};
 	/// Where the hand was drawn last frame
 	std::optional<glm::vec3> lastHand;
-	/// The button is held down while it holds something, since the press: held long enough it gives the thing
-	bool givePress {false};
 	/// What it last picked up and last dropped, while they still exist
 	entt::entity lastPickedUp {entt::null};
 	entt::entity lastDropped {entt::null};

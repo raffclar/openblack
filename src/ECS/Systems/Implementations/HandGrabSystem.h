@@ -110,8 +110,6 @@ private:
 	void SendTake(components::HandGrab& grab, entt::entity object);
 	/// The pick-up sound of a thing, and the cry of a villager
 	void PlayTakeSounds(entt::entity object);
-	/// The button held down a while gives what the hand holds to a creature
-	void GiveAfterLongPress(components::HandGrab& grab, uint32_t nowMs, uint32_t turn);
 	/// A press on a pile scoops a handful out of it, which grows while the button is held; whether it did
 	bool StartScoop(components::HandGrab& grab, entt::entity source);
 	/// A game turn of scooping: whether the scoop goes on

@@ -16,6 +16,8 @@
 #include <string>
 #include <string_view>
 
+#include "Debug/SimRun.h"
+
 namespace openblack::fight_autopilot
 {
 class AutopilotInterface;
@@ -60,7 +62,8 @@ public:
 	/// component when asked: an error, or none
 	[[nodiscard]] virtual std::optional<std::string>
 	StartSimRecord([[maybe_unused]] const std::filesystem::path& path, [[maybe_unused]] uint32_t every,
-	               [[maybe_unused]] const std::optional<std::filesystem::path>& limits, [[maybe_unused]] bool hashParts)
+	               [[maybe_unused]] const std::optional<std::filesystem::path>& limits,
+	               [[maybe_unused]] sim_run::HashDetail hashParts)
 	{
 		return "this inspector writes no run record";
 	}

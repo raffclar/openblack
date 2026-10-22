@@ -28,6 +28,7 @@
 #include <L3DFile.h>
 #include <LHVM.h>
 #include <LNDFile.h>
+#include <fmt/format.h>
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
@@ -199,6 +200,7 @@
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SnowfallSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
+#include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TempleDestructionSystemInterface.h"
@@ -392,6 +394,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
     LocatorCoverage {"playerCommandSystem", "players.commands"},
+    LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
@@ -1704,6 +1707,32 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 	        "the players' commands", [](const ecs::systems::PlayerCommandSystemInterface& commands, const QueryContext& /*c*/) {
 		        return Json {{"sender", static_cast<int>(commands.GetSender())}, {"pending", commands.PendingCount()}};
 	        }));
+	provider->Add({.name = "checksum",
+	               .description = "The checksum of the synced world that a network game sends after each turn: whether it "
+	                              "is on, and the turn and checksum of the last turn. With on, it turns it on or off",
+	               .parameters = {{.name = "on",
+	                               .type = "boolean",
+	                               .description = "Turn the checksum on or off from the next turn",
+	                               .required = false}},
+	               .kind = ResultKind::Object,
+	               .needsNear = false,
+	               .writes = true},
+	              [](const QueryContext& context) {
+		              if (!Locator::syncChecksumSystem::has_value())
+		              {
+			              return QueryResult::Error("no checksum of the synced world");
+		              }
+		              auto& checksum = Locator::syncChecksumSystem::value();
+		              if (const auto on = context.params.find("on"); on != context.params.end() && on->is_boolean())
+		              {
+			              checksum.SetEnabled(on->get<bool>());
+		              }
+		              const auto last = checksum.GetLast();
+		              return QueryResult::Value(
+		                  Json {{"on", checksum.IsEnabled()},
+		                        {"turn", last.has_value() ? Json(last->turn) : Json(nullptr)},
+		                        {"checksum", last.has_value() ? Json(fmt::format("{:016x}", last->checksum)) : Json(nullptr)}});
+	              });
 	provider->Add(Query("heartbeat", "Each player's heartbeat: danger, rate, beat and pulse", {}, ResultKind::List),
 	              Serve<Locator::heartbeatSystem>(
 	                  "the heartbeats", [](const ecs::systems::HeartbeatSystemInterface& hearts, const QueryContext& /*c*/) {

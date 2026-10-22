@@ -25,6 +25,7 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
+#include "Common/X87.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -85,7 +86,8 @@ constexpr uint32_t k_GlobalMaxStorms = 10;
 constexpr float k_MaxStormsPerUnit = 0.001f;
 constexpr uint32_t k_StormCloudHeight = 500;
 constexpr std::array<float, 5> k_StormLightning = {1.0f, 5.0f, 60.0f, 5.0f, 60.0f};
-constexpr float k_RainDesireRandom = 0.02f;
+/// The game keeps this factor as a double
+constexpr double k_RainDesireRandom = 0.02;
 constexpr float k_TemperatureStep = 0.1f;
 constexpr float k_WindSpread = 5.0f;
 constexpr float k_StormDrift = 0.01f;
@@ -365,11 +367,8 @@ float WeatherSystem::GetDayOfMonth(uint32_t turn) const
 
 float WeatherSystem::RandomFloat(float max) const
 {
-	if (!(max > 0.0f))
-	{
-		return 0.0f;
-	}
-	return Locator::rng::value().NextValue(0.0f, max);
+	// The weather draws on the synced numbers of the game, so that each computer gets the same weather
+	return Locator::gameRandom::value().GameFloatRand(max);
 }
 
 const GClimateInfo& WeatherSystem::GetInfo(const Climate& climate) const
@@ -876,9 +875,10 @@ void WeatherSystem::ProcessRain(Climate& climate)
 
 	// The monthly and hourly terms come from a table of rain figures that the game never loads, so they are 0
 	const auto& info = GetInfo(climate);
-	const auto fromMin = RandomFloat(RainMin(info, _season) * k_RainDesireRandom);
-	const auto fromMax = RandomFloat(RainMax(info, _season) * k_RainDesireRandom);
-	climate.rainDesire = std::min(climate.rainDesire + fromMax + fromMin, 1.0f);
+	const auto fromMin = RandomFloat(x87::Mul(RainMin(info, _season), k_RainDesireRandom));
+	const auto fromMax = RandomFloat(x87::Mul(RainMax(info, _season), k_RainDesireRandom));
+	// The game adds the two draws first, then the desire
+	climate.rainDesire = std::min((fromMax + fromMin) + climate.rainDesire, 1.0f);
 }
 
 // The wind, between the season's extremes by how close the climate is to rain
@@ -913,8 +913,9 @@ glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 		}
 		else
 		{
-			cell.x = static_cast<int16_t>(Locator::rng::value().NextValue<int>(0, 0x1FF));
-			cell.y = static_cast<int16_t>(Locator::rng::value().NextValue<int>(0, 0x1FF));
+			auto& random = Locator::gameRandom::value();
+			cell.x = static_cast<int16_t>(random.GameRand(static_cast<uint32_t>(LandIslandInterface::k_MapCellsPerSide)));
+			cell.y = static_cast<int16_t>(random.GameRand(static_cast<uint32_t>(LandIslandInterface::k_MapCellsPerSide)));
 		}
 
 		// The game's water test reads the cell's water bit, which is never 1: only points off the island retry
@@ -966,7 +967,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	}
 	else
 	{
-		radius = static_cast<uint32_t>(Locator::rng::value().NextValue<int>(0, k_GlobalStormRadiusRange - 1));
+		radius = Locator::gameRandom::value().GameRand(k_GlobalStormRadiusRange);
 	}
 	radius = std::clamp(radius, k_MinStormRadius, k_MaxStormRadius);
 

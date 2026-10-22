@@ -23,6 +23,17 @@
 namespace openblack::sim_run
 {
 
+/// How much of the synced world each record of a run keeps besides its hash
+enum class HashDetail : uint8_t
+{
+	/// Only the hash
+	None,
+	/// The hash of each component
+	Components,
+	/// The hash of each component and of each field of each component
+	Fields,
+};
+
 /// How the game runs its frames
 struct Settings
 {
@@ -44,16 +55,16 @@ struct Settings
 struct Request
 {
 	Settings settings {};
-	/// The game time of each frame in milliseconds, none for the wall clock
-	std::optional<uint32_t> frameMs;
+	/// The game time of each frame, none for the wall clock
+	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines
 	std::optional<std::filesystem::path> recordPath;
 	/// Write a record each time this many turns go by
 	uint32_t recordEvery {k_DefaultRecordEvery};
 	/// The table of the longest time that a plan or an activity can stay the same, as JSON
 	std::optional<std::filesystem::path> limitsPath;
-	/// The records also keep the hash of the transforms of the entities of each component
-	bool hashParts {false};
+	/// What the records keep of the hash of the parts of the world
+	HashDetail hashParts {HashDetail::None};
 	/// Each land starts paused, before any of its frames, for a tool that steps it through the inspector
 	bool startPaused {false};
 
@@ -67,6 +78,10 @@ constexpr uint32_t k_DefaultFastFrameMs = 20;
 /// The longest fixed frame time, which is the longest time the inspector also accepts
 constexpr uint32_t k_LongestFrameMs = 1000;
 
+/// The fixed frame time from a number of milliseconds with a part of a millisecond, to the nearest microsecond: none
+/// when it is not from 1 to the longest frame time
+[[nodiscard]] std::optional<std::chrono::microseconds> FrameTimeFromMs(double milliseconds);
+
 /// Whether the game draws this frame
 [[nodiscard]] bool DrawsFrame(const Settings& settings, uint64_t frame);
 
@@ -75,7 +90,7 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without
 /// a fixed frame time, or once the frame took that long or longer
-[[nodiscard]] std::chrono::microseconds PaceWait(const Settings& settings, std::optional<uint32_t> frameMs,
+[[nodiscard]] std::chrono::microseconds PaceWait(const Settings& settings, std::optional<std::chrono::microseconds> frameTime,
                                                  std::chrono::microseconds frameTook);
 
 /// The times of the turns and the frames since the last record

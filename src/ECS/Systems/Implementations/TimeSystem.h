@@ -81,8 +81,8 @@ public:
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
-	void SetFixedFrameTime(std::optional<std::chrono::milliseconds> frameTime) override;
-	[[nodiscard]] std::optional<std::chrono::milliseconds> GetFixedFrameTime() const override { return _fixedFrameTime; }
+	void SetFixedFrameTime(std::optional<std::chrono::microseconds> frameTime) override;
+	[[nodiscard]] std::optional<std::chrono::microseconds> GetFixedFrameTime() const override { return _fixedFrameTime; }
 
 	[[nodiscard]] uint32_t GetTicks() const override { return Ticks() - _ticksEpoch; }
 	[[nodiscard]] int64_t GetUnixTime() const override;
@@ -99,9 +99,11 @@ private:
 	void FollowStop(bool wasStopped);
 
 	TickSource _ticks;
-	std::optional<std::chrono::milliseconds> _fixedFrameTime;
+	std::optional<std::chrono::microseconds> _fixedFrameTime;
 	/// While frames take a fixed time, the tick count; after, what is added to the tick source's to carry on from it
 	uint32_t _fixedTicks {0};
+	/// The part of a millisecond that the fixed frame times added and the tick count did not take yet
+	uint32_t _fixedRemainderUs {0};
 	uint32_t _tickOffset {0};
 	/// The wall clock's whole milliseconds at the last frame
 	uint32_t _lastFrameTicks {0};

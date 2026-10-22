@@ -43,6 +43,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -334,6 +335,10 @@ std::vector<QueryDescription> SimProvider::Describe() const
 	                     .type = "boolean",
 	                     .description = "Also keep the hash of the transforms of the entities of each component",
 	                     .required = false},
+	                    {.name = "fields",
+	                     .type = "boolean",
+	                     .description = "As parts, and the synced hash of each field of each component too",
+	                     .required = false},
 	                    {.name = "stop", .type = "boolean", .description = "Stop the record", .required = false}},
 	     .kind = ResultKind::Object,
 	     .needsNear = false,
@@ -390,7 +395,7 @@ Json SimProvider::State() const
 	{
 		if (const auto frame = Locator::time::value().GetFixedFrameTime(); frame.has_value())
 		{
-			fixed = static_cast<uint32_t>(frame->count());
+			fixed = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(*frame).count());
 		}
 	}
 	return {
@@ -477,7 +482,9 @@ QueryResult SimProvider::Run(std::string_view query, const QueryContext& context
 			return QueryResult::Error("every is a whole number of turns from 1");
 		}
 		const auto limits = StringMember(params, "limits");
-		_hashParts = BoolMember(params, "parts").value_or(false);
+		_hashParts = BoolMember(params, "fields").value_or(false)  ? sim_run::HashDetail::Fields
+		             : BoolMember(params, "parts").value_or(false) ? sim_run::HashDetail::Components
+		                                                           : sim_run::HashDetail::None;
 		if (const auto error = StartRecord(*path, static_cast<uint32_t>(every),
 		                                   limits.has_value() ? std::optional(std::filesystem::path(*limits)) : std::nullopt);
 		    error.has_value())
@@ -633,54 +640,24 @@ void SimProvider::TurnEnded(uint32_t turn)
 		return;
 	}
 	// The hash of the entities and of every saved component, but for the parts that only show the world on this computer
-	const auto& underlying = registry->Underlying();
-	// The parts that only some entities have, by the storage of their marker component
-	std::vector<std::pair<const sim_checks::PresentationPart*, const entt::sparse_set*>> marked;
-	for (const auto& part : sim_checks::PresentationParts())
-	{
-		if (!part.marker.empty())
-		{
-			if (const auto* marker = reflection::FindStorage(underlying, part.marker); marker != nullptr)
-			{
-				marked.emplace_back(&part, marker);
-			}
-		}
-	}
-	const auto keep = [&marked](std::string_view component, std::string_view field, entt::entity entity) {
-		if (entity == entt::null)
-		{
-			return !(field.empty() && sim_checks::IsPresentationOnly(component, {}));
-		}
-		if (!field.empty() && sim_checks::IsPresentationOnly(component, field))
-		{
-			return false;
-		}
-		return std::ranges::none_of(marked, [&](const auto& entry) {
-			const auto& [part, marker] = entry;
-			const bool componentMatches = part->component == "*" || part->component == component;
-			const bool fieldMatches = part->field.empty() ? field.empty() : part->field == field;
-			return componentMatches && fieldMatches && marker->contains(entity);
-		});
-	};
-	const auto hashes = reflection::HashWorld(underlying, _context, keep);
-	uint64_t hash = k_HashOffset;
-	Mix(hash, &hashes.entities, sizeof(hashes.entities));
+	const auto synced = synced_state::HashOf(registry->Underlying(), _context, synced_state::PresentationParts(),
+	                                         _hashParts == sim_run::HashDetail::Fields);
 	Json parts = Json::object();
-	parts["entities"] = fmt::format("{:016x}", hashes.entities);
-	for (const auto& [name, part] : hashes.components)
+	for (const auto& [name, part] : synced.parts)
 	{
-		Mix(hash, name.data(), name.size());
-		Mix(hash, &part, sizeof(part));
 		parts[name] = fmt::format("{:016x}", part);
 	}
-	Json value = {{"hash", fmt::format("{:016x}", hash)}};
+	Json value = {{"hash", fmt::format("{:016x}", synced.hash)}};
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
 		value["seed"] = random.GetSeeds().synced;
 		value["draws"] = random.GetSyncedDraws();
+		// The checksum that a network game compares each turn
+		value["checksum"] =
+		    fmt::format("{:016x}", synced_state::Checksum(synced.hash, random.GetSeeds().synced, random.GetSyncedDraws()));
 	}
-	if (_hashParts)
+	if (_hashParts != sim_run::HashDetail::None)
 	{
 		value["parts"] = std::move(parts);
 	}
@@ -846,7 +823,7 @@ Json SimProvider::Sample(uint32_t turn, uint64_t frame, bool track, std::vector<
 	record["entities"] = entities;
 	record["hash"] = fmt::format("{:016x}", TransformHash(*registry));
 	// The hashes of the transforms of the entities of each component, to find what made two runs part
-	if (_hashParts)
+	if (_hashParts != sim_run::HashDetail::None)
 	{
 		Json parts = Json::object();
 		for (const auto& [id, storage] : registry->Underlying().storage())

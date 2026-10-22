@@ -122,7 +122,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 		("sim-fast", "Tools: the fast simulation mode. The game plays its frames one after the other as fast as the processor can and draws none of them (see --sim-draw-every). Each frame takes the fixed game time of --sim-frame-ms, 20 ms by default in this mode, so the turns are the same as at the normal speed.")
-		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<uint32_t>())
+		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. It can have a part of a millisecond, such as 16.7 for 60 frames a second. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<double>())
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
 	;
@@ -133,6 +133,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
+		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
 		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
 		("inspect-lock-input", "With --inspect-port, keep the player's mouse and keyboard out from the start, as for a headless scenario run.")
@@ -287,18 +288,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			simulation.settings.drawEvery = result["sim-draw-every"].as<uint32_t>();
 			if (result.count("sim-frame-ms") != 0)
 			{
-				const auto ms = result["sim-frame-ms"].as<uint32_t>();
-				if (ms == 0 || ms > openblack::sim_run::k_LongestFrameMs)
+				const auto frameTime = openblack::sim_run::FrameTimeFromMs(result["sim-frame-ms"].as<double>());
+				if (!frameTime.has_value())
 				{
-					throw cxxopts::exceptions::parsing("--sim-frame-ms is a whole number of milliseconds from 1 to 1000");
+					throw cxxopts::exceptions::parsing("--sim-frame-ms is a number of milliseconds from 1 to 1000");
 				}
-				simulation.frameMs = ms;
+				simulation.frameTime = frameTime;
 			}
 			else if (simulation.settings.fast)
 			{
-				simulation.frameMs = openblack::sim_run::k_DefaultFastFrameMs;
+				simulation.frameTime = std::chrono::milliseconds(openblack::sim_run::k_DefaultFastFrameMs);
 			}
-			simulation.settings.paceToWallClock = !simulation.settings.fast && simulation.frameMs.has_value();
+			simulation.settings.paceToWallClock = !simulation.settings.fast && simulation.frameTime.has_value();
 			if (result.count("sim-until-turn") != 0)
 			{
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
@@ -388,7 +389,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			}
 			args.simulation->recordPath = std::filesystem::path(result["sim-record"].as<std::string>());
 			args.simulation->recordEvery = std::max(1u, result["sim-record-every"].as<uint32_t>());
-			args.simulation->hashParts = result["sim-hash-parts"].as<bool>();
+			args.simulation->hashParts = result["sim-hash-fields"].as<bool>()  ? openblack::sim_run::HashDetail::Fields
+			                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
+			                                                                   : openblack::sim_run::HashDetail::None;
 			args.simulation->startPaused = result["sim-start-paused"].as<bool>();
 			if (result.count("sim-limits") != 0)
 			{
