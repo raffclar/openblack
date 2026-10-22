@@ -22,6 +22,8 @@ namespace
 constexpr uint8_t k_FirstVersionWithOutputHash = 6;
 constexpr uint8_t k_FirstVersionWithTextureInfo = 8;
 constexpr uint8_t k_FirstVersionWithTextureFormat = 10;
+// From this version, two masks of the raw buffer bindings follow the hashes
+constexpr uint8_t k_FirstVersionWithRawBindings = 12;
 // From this version, a SPIR-V sampler's binding is its stage plus two (past the two uniform buffers); before it the
 // stage was offset by 16, and a fragment shader's by another 48
 constexpr uint8_t k_FirstVersionWithNewBindings = 11;
@@ -127,6 +129,11 @@ bool SkipToAttributes(Reader& reader)
 	{
 		reader.Read<uint32_t>(); // and of its outputs
 	}
+	if (version >= k_FirstVersionWithRawBindings)
+	{
+		reader.Read<uint32_t>(); // the masks of its raw buffer bindings
+		reader.Read<uint32_t>();
+	}
 
 	const auto count = reader.Read<uint16_t>();
 	for (uint16_t i = 0; i < count && reader.Ok(); ++i)
@@ -167,6 +174,11 @@ std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> b
 	if (version >= k_FirstVersionWithOutputHash)
 	{
 		reader.Read<uint32_t>(); // and of its outputs
+	}
+	if (version >= k_FirstVersionWithRawBindings)
+	{
+		reader.Read<uint32_t>(); // the masks of its raw buffer bindings
+		reader.Read<uint32_t>();
 	}
 
 	const auto count = reader.Read<uint16_t>();

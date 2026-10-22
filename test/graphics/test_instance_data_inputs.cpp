@@ -32,14 +32,14 @@
 
 #if defined(_WIN32)
 // The instanced shaders as the game embeds them, compiled for Direct3D
-#include "generated/shaders/dx11/vs_object_hm_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_lightmap_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_morph_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_palette_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_static_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_particle_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_vegetation_hm_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_hm_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_lightmap_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_morph_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_palette_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_static_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_particle_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_vegetation_hm_instanced.sc.bin.h"
 #endif // defined(_WIN32)
 
 namespace
@@ -193,14 +193,14 @@ bool Takes(const std::vector<uint16_t>& attributes, uint16_t attribute)
 TEST(InstanceDataInputs, CompiledForDirect3DEveryInstanceColumnIsInstanceData)
 {
 	const std::map<std::string, std::span<const uint8_t>> binaries {
-	    {"vs_object_hm_instanced", vs_object_hm_instanced_dx11},
-	    {"vs_object_instanced", vs_object_instanced_dx11},
-	    {"vs_object_lightmap_instanced", vs_object_lightmap_instanced_dx11},
-	    {"vs_object_morph_instanced", vs_object_morph_instanced_dx11},
-	    {"vs_object_palette_instanced", vs_object_palette_instanced_dx11},
-	    {"vs_object_static_instanced", vs_object_static_instanced_dx11},
-	    {"vs_particle_instanced", vs_particle_instanced_dx11},
-	    {"vs_vegetation_hm_instanced", vs_vegetation_hm_instanced_dx11},
+	    {"vs_object_hm_instanced", vs_object_hm_instanced_dxbc},
+	    {"vs_object_instanced", vs_object_instanced_dxbc},
+	    {"vs_object_lightmap_instanced", vs_object_lightmap_instanced_dxbc},
+	    {"vs_object_morph_instanced", vs_object_morph_instanced_dxbc},
+	    {"vs_object_palette_instanced", vs_object_palette_instanced_dxbc},
+	    {"vs_object_static_instanced", vs_object_static_instanced_dxbc},
+	    {"vs_particle_instanced", vs_particle_instanced_dxbc},
+	    {"vs_vegetation_hm_instanced", vs_vegetation_hm_instanced_dxbc},
 	};
 	for (const auto& [name, binary] : binaries)
 	{
@@ -217,7 +217,7 @@ TEST(InstanceDataInputs, CompiledForDirect3DEveryInstanceColumnIsInstanceData)
 
 TEST(InstanceDataInputs, CompiledForDirect3DTheLightmapCoordinatesAreAVertexAttributeOfTheirOwn)
 {
-	const auto attributes = openblack::graphics::shader_samplers::ReadVertexAttributes(vs_object_lightmap_instanced_dx11);
+	const auto attributes = openblack::graphics::shader_samplers::ReadVertexAttributes(vs_object_lightmap_instanced_dxbc);
 	ASSERT_TRUE(attributes.has_value());
 	EXPECT_TRUE(Takes(*attributes, k_TexCoord1));
 }

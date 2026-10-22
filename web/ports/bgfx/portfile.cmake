@@ -148,7 +148,12 @@ vcpkg_cmake_config_fixup(CONFIG_PATH "lib/cmake/${PORT}")
 vcpkg_copy_pdbs()
 
 if ("tools" IN_LIST FEATURES)
-  vcpkg_copy_tools(TOOL_NAMES bin2c shaderc geometryc texturec AUTO_CLEAN)
+  vcpkg_copy_tools(TOOL_NAMES bin2c shaderc geometryc geometryv texturec texturev AUTO_CLEAN)
+  # shaderc of bgfx 1.166 makes the DXIL shaders for Direct3D 12 with the DXC compiler, which it loads at run time
+  if(VCPKG_TARGET_IS_WINDOWS)
+    file(COPY "${SOURCE_PATH}/bgfx/tools/bin/windows/dxcompiler.dll" "${SOURCE_PATH}/bgfx/tools/bin/windows/dxil.dll"
+         DESTINATION "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
+  endif()
 endif ()
 
 file(GLOB _licence "${CURRENT_PACKAGES_DIR}/share/licences/${PORT}/LICENSE")

@@ -21,11 +21,11 @@ vec4 v_position          : TEXCOORD1 = vec4(0.0, 0.0, 0.0, 0.0);
 vec4 v_color0            : COLOR0    = vec4(1.0, 0.0, 0.0, 1.0);
 vec4 v_texcoord0         : TEXCOORD0 = vec4(0.0, 0.0, 0.0, 1.0);
 vec4 v_texcoord1         : TEXCOORD1 = vec4(0.0, 0.0, 0.0, 1.0);
-vec3 v_normal            : NORMAL;
-vec3 v_lightColour      : COLOR3;
+vec3 v_normal            : NORMAL    = vec3(0.0, 0.0, 0.0);
+vec3 v_lightColour      : COLOR3    = vec3(0.0, 0.0, 0.0);
 vec2 v_smallBumpFade     : TEXCOORD4 = vec2(0.0, 0.0);
 vec4 v_shadowCoord       : TEXCOORD2 = vec4(0.0, 0.0, -1.0, 1.0);
 vec4 v_haze              : TEXCOORD3 = vec4(0.0, 0.0, 0.0, 1.0);
 vec4 v_snow              : TEXCOORD5 = vec4(0.0, 0.0, 0.0, 0.0); // xy: where the snow texture is read, z: the snow's level
-vec3 v_snowLight         : COLOR1;
+vec3 v_snowLight         : COLOR1    = vec3(0.0, 0.0, 0.0);
 vec3 v_world             : TEXCOORD6 = vec3(0.0, 0.0, 0.0); // where the land is, for the creatures' shadows
