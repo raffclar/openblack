@@ -24,6 +24,8 @@ $output v_position, v_texcoord0, v_normal, v_color0, v_haze, v_snow, v_snowLight
 
 #include <bgfx_shader.sh>
 
+#include "instance.sh"
+
 #include "haze.sh"
 #include "model_light.sh"
 #include "window_light.sh"
@@ -157,9 +159,9 @@ void main()
 	model[3] = i_data3;
 #ifdef USE_BONE_TEXTURE
 	mat4 bone = BoneMatrix(u_bones.x + (i_data0.w * u_bones.y) + float(modelIndex));
-#define TO_WORLD(p) instMul(model, mul(bone, p))
+#define TO_WORLD(p) InstanceMul(model, mul(bone, p))
 #else
-#define TO_WORLD(p) instMul(model, mul(BONE, p))
+#define TO_WORLD(p) InstanceMul(model, mul(BONE, p))
 #endif // USE_BONE_TEXTURE
 #else
 #define TO_WORLD(p) mul(BONE, p)
@@ -192,7 +194,7 @@ void main()
 		                       u_morphWeights.z * (texture2DLod(s_blendWeakStrong, partnerUv, 0.0f).xyz - partnerBase.xyz);
 		uint partnerBone = uint(max(0.0f, partnerBase.w + 0.5f));
 #ifdef USE_INSTANCING
-		vec4 partnerWorld = instMul(model, mul(u_model[partnerBone], vec4(partnerPosition, 1.0f)));
+		vec4 partnerWorld = InstanceMul(model, mul(u_model[partnerBone], vec4(partnerPosition, 1.0f)));
 #else
 		vec4 partnerWorld = mul(u_model[partnerBone], vec4(partnerPosition, 1.0f));
 #endif // USE_INSTANCING

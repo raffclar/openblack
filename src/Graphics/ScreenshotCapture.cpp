@@ -139,6 +139,16 @@ void ScreenPictures::Forget(const std::string& name)
 	_made.erase(name);
 }
 
+std::vector<uint8_t> RgbaToBgra(std::span<const uint8_t> rgba)
+{
+	std::vector<uint8_t> bgra(rgba.begin(), rgba.end());
+	for (size_t i = 0; i + k_BytesPerPixel <= bgra.size(); i += k_BytesPerPixel)
+	{
+		std::swap(bgra[i], bgra[i + 2]);
+	}
+	return bgra;
+}
+
 std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width, uint32_t height, uint32_t pitch,
                                std::span<const uint8_t> bgra, bool yflip)
 {
@@ -196,7 +206,11 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 		bgfx::setViewFrameBuffer(static_cast<bgfx::ViewId>(pass), frameBuffer);
 	}
 	_redirected = true;
-	bgfx::blit(k_CopyView, readBack, 0, 0, textures[0]);
+	bgfx::TextureRegion to;
+	to.init(readBack);
+	bgfx::TextureRegion from;
+	from.init(textures[0]);
+	bgfx::blit(k_CopyView, to, from);
 
 	Capture capture {
 	    .path = path,
@@ -207,7 +221,9 @@ void OffscreenScreenshots::Begin(const std::filesystem::path& path, glm::u16vec2
 	    .readyAt = 0,
 	};
 	// The vector's buffer stays where it is while the capture moves about, so bgfx may write into it later
-	capture.readyAt = bgfx::readTexture(readBack, capture.pixels.data());
+	bgfx::TextureRegion all;
+	all.init(readBack);
+	capture.readyAt = bgfx::read(all, capture.pixels.data());
 	_captures.push_back(std::move(capture));
 }
 

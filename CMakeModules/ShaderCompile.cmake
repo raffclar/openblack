@@ -34,8 +34,9 @@ function (openblack_compile_shaders)
     ARGS "${options}" "${oneValueArgs}" "${multiValueArgs}" "${ARGN}"
   )
 
-  # Renderers per platform, as bgfx_compile_shaders() picks them
-  set(profiles 120 300_es spirv)
+  # Renderers per platform, as bgfx_compile_shaders() picks them. WGSL is for the WebGPU renderer, which bgfx can
+  # use on every desktop platform and in the browser.
+  set(profiles 430 300_es spirv wgsl)
   if (IOS)
     set(platform IOS)
     list(APPEND profiles metal)
@@ -55,7 +56,8 @@ function (openblack_compile_shaders)
     OR CYGWIN
   )
     set(platform WINDOWS)
-    list(APPEND profiles s_4_0 s_5_0)
+    # Direct3D 11 and 12 both use the Shader Model 5 binaries (see src/Graphics/EmbeddedShaders.h)
+    list(APPEND profiles s_5_0)
   else ()
     message(FATAL_ERROR "shaderc: unsupported platform")
   endif ()
@@ -100,7 +102,7 @@ function (openblack_compile_shaders)
         set(depfile_args DEPFILE "${output}.d")
       endif ()
 
-      # Same flags as bgfx_compile_shaders() produces (its debug flag never reaches shaderc, so none here either)
+      # Same flags as bgfx_compile_shaders() produces, but without its debug flag, which puts debug data in the shaders
       _bgfx_shaderc_parse(
         cli ${ARGS_TYPE} ${profile_platform} WERROR ${depends_flag}
         BIN2C ${shader_name}_${profile_ext}
