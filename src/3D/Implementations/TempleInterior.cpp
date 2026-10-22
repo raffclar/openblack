@@ -608,7 +608,7 @@ void TempleInterior::SaveIntoSlot(uint32_t slot, std::u16string_view name, games
 		Locator::playerProfileSystem::value().CountSave();
 	}
 	ListSavedGames();
-	_saveGameRoom->ReadSmallPictures(ReadSavedGamePicture);
+	_saveGameRoom->ReadPicturesAfterSave(slot, ReadSavedGamePicture);
 	if (_scrolls != nullptr)
 	{
 		_scrolls->Rewrite(TempleScrolls::Content::SaveGame, GatherScrollFacts());
