@@ -39,6 +39,13 @@ std::vector<SDL_Event> PeekQueue()
 
 } // namespace
 
+bool openblack::input::IsDeskMouseEvent(const SDL_Event& event)
+{
+	const bool mouse = event.type == SDL_MOUSEMOTION || event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP ||
+	                   event.type == SDL_MOUSEWHEEL;
+	return mouse && !IsInjected(event);
+}
+
 glm::ivec2 openblack::input::RestingPointer(glm::ivec2 windowSize)
 {
 	return glm::max(windowSize, glm::ivec2(1)) / 2;
