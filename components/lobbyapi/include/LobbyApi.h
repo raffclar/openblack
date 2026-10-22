@@ -405,6 +405,7 @@ constexpr std::string_view k_ServerUnbanned = "server.unbanned";
 constexpr std::string_view k_AccountMuted = "account.muted";
 constexpr std::string_view k_AccountBanned = "account.banned";
 constexpr std::string_view k_PointsChanged = "points.changed";
+constexpr std::string_view k_RoomClanChosen = "room.clan_chosen";
 } // namespace events
 
 /// The data of "hello" (the first frame on each connection), "resumed" and "resync": the epoch of the push process
@@ -448,6 +449,73 @@ struct PointsChange
 	int32_t position {0};
 	/// "change": the points won or lost
 	double change {0.0};
+};
+
+/// The most characters of a chat line. The chat box of the game takes 254 characters.
+constexpr size_t k_MostChatCharacters = 254;
+
+/// POST /api/v1/chat/channels/{channel}/messages: a line of 1 to 254 characters to the lobby or to the room of a server
+struct ChatLineRequest
+{
+	/// "text"
+	std::string text;
+};
+
+/// The data of "chat.line": {"channel": "...", "from": {"id": n, "name": "..."}, "text": "..."}
+struct ChatLine
+{
+	/// "channel"
+	std::string channel;
+	/// "from"
+	AccountRef from;
+	/// "text"
+	std::string text;
+};
+
+/// GET /api/v1/account-names/{name}: whether a name can have a new account
+struct AccountNameCheck
+{
+	/// "name"
+	std::string name;
+	/// "valid": 3 to 32 letters and digits, with no blocked word or reserved name
+	bool valid {false};
+	/// "available": valid, and no account has it
+	bool available {false};
+};
+
+/// PUT /api/v1/servers/{id}/clan: "Use This Clan" for a god in the room of the server, or none to play for itself
+struct UseClanRequest
+{
+	/// "clan": null to play for itself
+	std::optional<int64_t> clan;
+};
+
+/// The answer of "Use This Clan": {"clan": {...}} or {"clan": null}
+struct UsedClan
+{
+	std::optional<ClanRef> clan;
+};
+
+/// The data of "room.changed": who is in the room of a server
+struct RoomChange
+{
+	/// "server": the id of the server
+	std::string server;
+	/// "gamemode"
+	std::string gamemode;
+	/// "players"
+	std::vector<RoomPlayer> players;
+};
+
+/// The data of "room.clan_chosen": a god in the room plays for a clan, or for itself
+struct RoomClanChoice
+{
+	/// "server"
+	std::string server;
+	/// "account"
+	AccountRef account;
+	/// "clan": none when the god plays for itself
+	std::optional<ClanRef> clan;
 };
 
 /// The data of "account.banned"

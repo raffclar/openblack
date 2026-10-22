@@ -244,6 +244,9 @@ public:
 		/// A mouse drawn in the gap left for it by five spaces before a "(", or after the text without one
 		std::optional<int> mouseCell;
 		bool mouseMirrored {false};
+		/// The colour of the item's text, as the chat of the game room gives each player's lines. With none, the text
+		/// lights up under the pointer and with the focus as usual.
+		std::optional<glm::vec4> colour;
 	};
 
 	List(const GameFont& font, DialogRect rect, int size, bool centred, bool scrollBar, bool showSelection);
@@ -334,6 +337,9 @@ public:
 	/// Puts the text in, the caret after it and nothing selected
 	void SetText(std::u16string_view text);
 	std::function<void(const std::u16string&)> onChange;
+	/// The box shows a '#' for each character of its text, as a password's box does
+	bool masked {false};
+	static constexpr char16_t k_MaskCharacter = u'#';
 
 private:
 	[[nodiscard]] int Width(std::u16string_view text) const;

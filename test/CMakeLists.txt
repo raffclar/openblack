@@ -1696,3 +1696,6 @@ openblack_setup_and_add_test(test_turn_stream online/test_turn_stream.cpp)
 openblack_setup_and_add_test(test_curl_websocket online/test_curl_websocket.cpp)
 openblack_setup_and_add_test(test_turn_body test_turn_body.cpp)
 openblack_setup_and_add_test(test_dedicated_server test_dedicated_server.cpp)
+openblack_setup_and_add_test(
+  test_multiplayer_front_end test_multiplayer_front_end.cpp
+)

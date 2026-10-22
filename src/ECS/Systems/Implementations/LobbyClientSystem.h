@@ -84,6 +84,9 @@ public:
 	void WatchServers(bool watch) override;
 	void WatchChannel(std::string channel, bool watch) override;
 	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override;
+	void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback) override;
+	void UseClan(std::string serverId, std::optional<int64_t> clanId, LobbyCallback<lobby_api::UsedClan> callback) override;
+	void CheckAccountName(std::string name, LobbyCallback<lobby_api::AccountNameCheck> callback) override;
 
 	void GetMyClans(LobbyCallback<lobby_api::ClanList> callback) override;
 	void GetClan(int64_t clanId, LobbyCallback<lobby_api::ClanDetails> callback) override;

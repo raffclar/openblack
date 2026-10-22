@@ -76,8 +76,8 @@ int saving_box::TextTop(const DialogRect& rect, float textHeight)
 
 void saving_box::Draw(const DialogPainter& painter, glm::u16vec2 resolution, std::u16string_view text, bool darken)
 {
-	const auto left = painter.ToDialog({0, 0}).x;
-	const auto right = painter.ToDialog({resolution.x, resolution.y}).x;
+	const auto left = painter.EdgeToDialog({0, 0}).x;
+	const auto right = painter.EdgeToDialog({resolution.x, resolution.y}).x;
 	const auto layout = LayoutFor(left, right);
 	for (size_t i = darken ? 0 : 1; i < layout.quads.size(); ++i)
 	{

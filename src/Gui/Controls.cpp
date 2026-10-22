@@ -491,7 +491,9 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 				    {.min = {rect.min.x, std::max(top, rect.min.y)}, .max = {boxRight, std::min(bottom, rect.max.y)}}, 0,
 				    DialogPainter::All, glm::vec4(1.0f));
 			}
-			const auto colour = selected ? DialogPainter::k_FocusColour : TextColour(hoveredItem == i, focused);
+			const auto colour = selected                  ? DialogPainter::k_FocusColour
+			                    : item.colour.has_value() ? *item.colour
+			                                              : TextColour(hoveredItem == i, focused);
 
 			// The list fades the lines the box cuts through
 			const auto left = rect.min.x + 4;
@@ -606,6 +608,11 @@ EditBox::EditBox(const GameFont& font, DialogRect rect, std::u16string text, siz
 
 int EditBox::Width(std::u16string_view text) const
 {
+	if (masked)
+	{
+		// A box that hides its text measures a '#' for each character
+		return static_cast<int>(_font.GetWidth(std::u16string(text.size(), k_MaskCharacter), static_cast<float>(_size)));
+	}
 	return static_cast<int>(_font.GetWidth(text, static_cast<float>(_size)));
 }
 
@@ -641,7 +648,9 @@ void EditBox::Draw(const DialogPainter& painter, bool /*hovered*/, bool focused,
 		return;
 	}
 	painter.DrawBevelBox(rect, 1, DialogPainter::All, glm::vec4(1.0f));
-	const auto text = std::u16string_view(_state.text);
+	// A box that hides its text, as the password's box, shows a '#' for each character
+	const auto hidden = masked ? std::u16string(_state.text.size(), k_MaskCharacter) : std::u16string();
+	const auto text = masked ? std::u16string_view(hidden) : std::u16string_view(_state.text);
 	const auto scroll = static_cast<size_t>(std::clamp(_state.scroll, 0, static_cast<int>(text.size())));
 	const auto shown = text.substr(scroll);
 	const int left = rect.min.x + 4;
