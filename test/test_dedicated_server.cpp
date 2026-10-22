@@ -22,9 +22,10 @@
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
-using openblack::server::GameArgumentsFor;
 using openblack::server::ParseChecksumLine;
+using openblack::server::ServerConfig;
 using openblack::server::ServerSettings;
+using openblack::server::SimulationFor;
 
 namespace
 {
@@ -47,38 +48,36 @@ ServerSettings MockSettings(const std::filesystem::path& profileFolder)
 
 } // namespace
 
-TEST(DedicatedServer, TheGameOfTheServerHasNoWindowNoDeviceAndNoAudio)
+TEST(DedicatedServer, TheServerHasNoWindowNoDeviceAndNoAudio)
 {
-	const auto args = GameArgumentsFor(ServerSettings {.gamePath = "data", .seed = 7, .turns = 100});
-	EXPECT_EQ(args.graphicsBackend, openblack::GraphicsBackend::Noop);
-	EXPECT_TRUE(args.dedicatedServer);
-	EXPECT_TRUE(args.background);
-	EXPECT_TRUE(args.skipLogos);
-	ASSERT_TRUE(args.seed.has_value());
-	EXPECT_EQ(*args.seed, 7u);
-	EXPECT_EQ(args.gamePath, "data");
+	const auto config = ServerConfig(ServerSettings {.gamePath = "data", .seed = 7, .turns = 100});
+	EXPECT_EQ(config.graphicsBackend, openblack::GraphicsBackend::Noop);
+	EXPECT_TRUE(config.dedicatedServer);
+	EXPECT_TRUE(config.background);
+	EXPECT_FALSE(config.vsync);
+	EXPECT_EQ(config.resolution.x, 0);
+	EXPECT_EQ(config.resolution.y, 0);
 }
 
 TEST(DedicatedServer, EachFrameOfTheServerTakesOneTurnAndWaitsForTheWallClock)
 {
-	const auto args = GameArgumentsFor(ServerSettings {.turns = 100});
-	ASSERT_TRUE(args.simulation.has_value());
-	ASSERT_TRUE(args.simulation->frameTime.has_value());
-	EXPECT_EQ(*args.simulation->frameTime, std::chrono::milliseconds(100));
-	EXPECT_TRUE(args.simulation->settings.paceToWallClock);
-	EXPECT_FALSE(args.simulation->settings.fast);
-	EXPECT_TRUE(args.simulation->settings.stillHand);
-	ASSERT_TRUE(args.simulation->settings.untilTurn.has_value());
-	EXPECT_EQ(*args.simulation->settings.untilTurn, 100u);
+	const auto simulation = SimulationFor(ServerSettings {.turns = 100});
+	ASSERT_TRUE(simulation.frameTime.has_value());
+	EXPECT_EQ(*simulation.frameTime, std::chrono::milliseconds(100));
+	EXPECT_TRUE(simulation.settings.paceToWallClock);
+	EXPECT_FALSE(simulation.settings.fast);
+	EXPECT_TRUE(simulation.settings.stillHand);
+	ASSERT_TRUE(simulation.settings.untilTurn.has_value());
+	EXPECT_EQ(*simulation.settings.untilTurn, 100u);
+	EXPECT_FALSE(simulation.recordPath.has_value());
 }
 
 TEST(DedicatedServer, AFastRunDoesNotWaitAndARunWithNoTurnsHasNoEnd)
 {
-	const auto args = GameArgumentsFor(ServerSettings {.fast = true});
-	ASSERT_TRUE(args.simulation.has_value());
-	EXPECT_TRUE(args.simulation->settings.fast);
-	EXPECT_FALSE(args.simulation->settings.paceToWallClock);
-	EXPECT_FALSE(args.simulation->settings.untilTurn.has_value());
+	const auto simulation = SimulationFor(ServerSettings {.fast = true});
+	EXPECT_TRUE(simulation.settings.fast);
+	EXPECT_FALSE(simulation.settings.paceToWallClock);
+	EXPECT_FALSE(simulation.settings.untilTurn.has_value());
 }
 
 TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)

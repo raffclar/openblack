@@ -84,6 +84,8 @@ public:
 	/// Null when the game's files for it are missing. The player's own pictures take the places of their symbols.
 	static std::unique_ptr<GameInterface> Create(std::u16string_view playerName, MenuSettings settings,
 	                                             const creature_tattoo::Pictures& pictures);
+	/// The texts of the game from its text scripts, which the interface and the help's dialogue show
+	[[nodiscard]] static TextDatabase LoadTexts();
 	~GameInterface();
 
 	/// Takes every key press and mouse event while the menu or a dialog is open. True when the event was taken.

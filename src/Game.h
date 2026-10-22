@@ -54,6 +54,7 @@
 #include "Magic/HandHoldPoser.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/TurnBody.h"
+#include "Simulation/WorldStart.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
 #include "Windowing/WindowingInterface.h" // For DisplayMode
@@ -89,29 +90,6 @@ namespace help::profile
 struct WorldCameraView;
 }
 
-enum class LoggingSubsystem : uint8_t
-{
-	game,
-	input,
-	graphics,
-	scripting,
-	audio,
-	pathfinding,
-	ai,
-
-	_count
-};
-
-constexpr static std::array<std::string_view, static_cast<size_t>(LoggingSubsystem::_count)> k_LoggingSubsystemStrs {
-    "game",        //
-    "input",       //
-    "graphics",    //
-    "scripting",   //
-    "audio",       //
-    "pathfinding", //
-    "ai",          //
-};
-
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
 struct FightAutopilotRequest
@@ -136,9 +114,6 @@ struct ScenarioRequest
 	/// asked for while the game runs (from the debug inspector) only runs
 	bool benchmark {true};
 };
-
-/// The land a new game starts on, unless another is asked for
-inline constexpr std::string_view k_DefaultStartLevel = "Land1.txt";
 
 struct Arguments
 {
@@ -174,8 +149,6 @@ struct Arguments
 	bool noDraw {false};
 	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
 	bool background {false};
-	/// The dedicated server: no audio device, and the frames run with no window
-	bool dedicatedServer {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
@@ -221,7 +194,12 @@ struct Arguments
 
 /// The game on this computer: the window, the view of the player and the loop of the frames. The world turns in the
 /// simulation, with the game as the view of its turns and of the land's loads.
-class Game: public simulation::TurnViewInterface, public ecs::systems::LandViewInterface, public simulation::FrameViewInterface
+class Game:
+    public simulation::TurnViewInterface,
+    public ecs::systems::LandViewInterface,
+    public simulation::FrameViewInterface,
+    public simulation::WorldDataViewInterface,
+    public simulation::PlayStartViewInterface
 {
 public:
 	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
@@ -231,11 +209,11 @@ public:
 	/// About how many bytes of files the loading threads read at a time, and how much of what they make may reach the
 	/// graphics card each frame, so no frame waits long for it: sixteen buffers or textures keep the renderer's share of a
 	/// loading frame to about 6 ms on Vulkan, where some models' hundreds of small parts made it 17 ms
-	static constexpr size_t k_FrameLoadBudget = 256 << 10;
-	static constexpr graphics::UploadPacer::Allowance k_FrameUploads {.bytes = 128 << 10, .uploads = 16};
+	static constexpr size_t k_FrameLoadBudget = simulation::k_FrameLoadBudget;
+	static constexpr graphics::UploadPacer::Allowance k_FrameUploads = simulation::k_FrameUploads;
 	/// How many bytes of files the loading threads read at a time while the loading screen shows. No game frame waits
 	/// then, so the threads read as much as they can.
-	static constexpr size_t k_LoadingScreenLoadBudget = 64 << 20;
+	static constexpr size_t k_LoadingScreenLoadBudget = simulation::k_LoadingScreenLoadBudget;
 	static constexpr float k_TurnDurationMultiplierSlow = 2.0f;
 	static constexpr float k_TurnDurationMultiplierNormal = 1.0f;
 	static constexpr float k_TurnDurationMultiplierFast = 0.5f;
@@ -280,6 +258,11 @@ public:
 	void UpdateSingAlong(bool inTemple) override;
 	[[nodiscard]] bool DialogueWordsDrawn() const override;
 	void CloseMenuForCinema() override;
+	/// The parts of the start of the world that the view of the player does
+	void StartupStep(std::string_view step) override;
+	[[nodiscard]] const gui::TextDatabase* MakeInterface() override;
+	void StartPlayView() override;
+	void BeforeFirstFrame(bool continued) override;
 	/// What the steps of one frame share
 	struct FrameState
 	{
@@ -332,9 +315,6 @@ public:
 	/// The keys that take the player into the temple's rooms, from outside it or within
 	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
-	/// A step of the frame's draw that changes the world, which the dedicated server does with no window: the creatures'
-	/// fights, walks and animations, and the frame's effects
-	[[nodiscard]] static bool DedicatedServerStep(game_frame::Step step);
 	bool Initialize() noexcept;
 	/// Runs the game to its end: the start, the frames, and the end
 	bool Run() noexcept;
@@ -476,7 +456,7 @@ private:
 	/// the sea's reflection and the camera's shape follow it, on whichever screen is up
 	void FollowWindowSize();
 	/// Sets the scene's view and the sea's reflection to the window's size, as the game's frames draw them
-	void SizeSceneToWindow();
+	void SizeSceneToWindow() override;
 	/// Whether the player has a profile. A first start has none: the pre-intro plays, the tips start from the first, the
 	/// intro can't be skipped and the new player's box asks for a name before the first land
 	[[nodiscard]] static bool HasPlayerProfiles() noexcept;
@@ -680,9 +660,7 @@ private:
 	/// A knock on a house: the hand's tap starts, waits while the hand holds something, and the houses' read-out runs
 	void UpdateHandKnock(const ecs::components::Transform& handTransform);
 	/// Loads the hand animations of Data/CTR/hh.hbn for the hand mesh
-	void LoadHandAnimation();
-	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
-	static void LoadCreatureRigs();
+	void LoadHandAnimation() override;
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
 	/// The challenge file: in its usual folder, or in the folder that the settings file of the -SETTINGS: switch names.
 	/// The game reads the settings file one time, at the first call.
@@ -708,8 +686,6 @@ private:
 	void NameCreatureAfterProfile();
 	/// Reads the current profile's own pictures for the designs of the symbols and the tattoos into the tattoo editor
 	void ReadTattooPictures();
-	/// Loads what the creatures' tattoos and marks are painted with, in place of what the game loaded before
-	void LoadCreatureSkinArt();
 	/// The new player's box over the game, from the Players page
 	void AskForAnotherPlayer(bool canCancel);
 	/// The menu ended this game. The save on exit goes to its profile, and the next game starts once the save has its
