@@ -63,12 +63,14 @@ public:
 	/// The baked texture, none before the first update with an island
 	[[nodiscard]] const Texture2D* GetTexture() const { return _texture.get(); }
 
-	/// A triangle of a tree's model, in its own space, with its texture's alpha
+	/// A triangle of a tree's model, in its own space, with its texture's alpha. The triangle keeps a copy of the alpha.
+	/// The bake on the other threads can then continue when the resource caches release the model and its textures, as
+	/// at the exit of the game.
 	struct LeafTriangle
 	{
 		std::array<glm::vec3, 3> positions;
 		std::array<glm::vec2, 3> uvs;
-		const tree_shadows::AlphaMask* mask;
+		std::shared_ptr<const tree_shadows::AlphaMask> mask;
 	};
 	/// A triangle of a solid thing's model, in its own space, and whether it is drawn from both sides
 	struct ShapeTriangle
