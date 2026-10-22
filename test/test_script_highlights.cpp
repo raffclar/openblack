@@ -383,8 +383,11 @@ TEST(ScriptHighlights, AScrollStandsAtItsDrawHeightOrOnWhatIsUnderIt)
 	system->SetDrawHeight(scroll, 10.0f);
 	system->ProcessTurn();
 	EXPECT_FLOAT_EQ(world->registry.Get<ScriptHighlight>(scroll).heightAbove, 10.0f);
-	system->UpdateFrame(16.0f, 0.0f, {5.0f, 30.0f, 40.0f});
+	// The turn puts it at that height above the land, and the frames do not move it
 	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(scroll).position.y, 12.0f);
+	world->registry.Get<Transform>(scroll).position.y = 0.0f;
+	system->UpdateFrame(16.0f, 0.0f, {5.0f, 30.0f, 40.0f});
+	EXPECT_FLOAT_EQ(world->registry.Get<Transform>(scroll).position.y, 0.0f);
 }
 
 TEST(ScriptHighlights, HiddenScrollsAreNotDrawnButSignsAre)

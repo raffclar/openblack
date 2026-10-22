@@ -38,7 +38,7 @@ namespace
 {
 constexpr float k_SecondsPerMillisecond = 0.001f;
 /// A highlight is made at its full size, facing north
-constexpr float k_Scale = 1.0f;
+constexpr float k_Scale = rules::k_WorldScale;
 } // namespace
 
 ScriptHighlightSystem::ScriptHighlightSystem()
@@ -277,6 +277,9 @@ void ScriptHighlightSystem::ProcessTurn()
 			const auto things = _world->ThingsBelow(entity, at);
 			highlight.heightAbove = rules::HeightOnThings(rules::InCell({at.x, at.z}), ReachAcross(entity), things);
 		}
+		// The highlight stands at that height above the land. Only the turn moves it, so the place does not change with
+		// the frames or the camera.
+		registry.Get<Transform>(entity).position = StandingPoint(entity, highlight);
 		// A sign checks now and then whether its tip has been read meanwhile
 		if (!highlight.active && rules::IsTipSign(highlight.kind) &&
 		    rules::ChecksTipThisTurn(entt::to_integral(entity), turn) && _tipsRead.Has(highlight.scriptId, highlight.category))
@@ -355,7 +358,6 @@ void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight
 	highlight.yAngle = rules::IsTipSign(highlight.kind) && highlight.active ? rules::FacingAngle(camera, point)
 	                                                                        : rules::Spin(highlight.yAngle, frameMilliseconds);
 	const float scale = rules::DrawnScale(highlight.kind, k_Scale, glm::distance(point, camera));
-	transform.position = point;
 	transform.rotation = glm::mat3(glm::eulerAngleY(-highlight.yAngle));
 	transform.scale = glm::vec3(scale);
 

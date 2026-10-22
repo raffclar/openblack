@@ -290,8 +290,12 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 			const float radius = std::max(halfExtent.x, halfExtent.z) * transform.scale.x;
 			const auto towards = eye - globe.middle;
 			const auto push = glm::length(towards) > 0.0f ? glm::normalize(towards) * radius : glm::vec3(0.0f);
-			glm::mat4 model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
-			model[3] = glm::vec4(transform.position, 1.0f);
+			glm::mat4 model = globe.drawnModel.value_or(glm::mat4(1.0f));
+			if (!globe.drawnModel.has_value())
+			{
+				model = glm::mat4(transform.rotation * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
+				model[3] = glm::vec4(transform.position, 1.0f);
+			}
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = translucent;
 			submitDesc.program = objectProgram;

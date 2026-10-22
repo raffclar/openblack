@@ -109,6 +109,19 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ScriptHighlight", .field = "onScreen", .marker = ""},
     {.component = "Transform", .field = "rotation", .marker = "ScriptHighlight"},
     {.component = "Transform", .field = "scale", .marker = "ScriptHighlight"},
+    // A miracle's globe as the frames draw it: turned to face the camera, its seed spun and its glint, rings and phial
+    // stepped by the frames. The turns read the globe's Transform.
+    {.component = "OneOffSpellSeed", .field = "position", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "middle", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "spin", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "ringSpin", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "glintFrame", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "phialFrame", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "phialPhase", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
+    // The roots that the frames show on a tree out of the land. Only the draw reads them.
+    {.component = "ShownRoots", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
@@ -134,6 +147,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureSkin", .field = "", .marker = ""},
     // Whether an object's sound is on: the frames turn the street lanterns' sounds on at dusk, and only the sounds read it
     {.component = "SoundTag", .field = "active", .marker = ""},
+    // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
+    {.component = "SoundTag", .field = "emitter", .marker = ""},
 });
 
 } // namespace

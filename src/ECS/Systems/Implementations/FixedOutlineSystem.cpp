@@ -39,6 +39,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/ScriptHighlightRules.h"
 #include "ECS/ThingMapPlace.h"
 #include "ECS/ThingModel.h"
 #include "Locator.h"
@@ -129,8 +130,10 @@ std::optional<fixed_outlines::Outline> FixedOutlineSystem::OutlineOf(const Regis
 		return std::nullopt;
 	}
 	const auto box = Locator::resources::value().GetMeshes().Handle(*model)->GetBoundingBox();
-	const float scale = transform->scale.x;
-	const auto angles = x87::GameAnglesYxz(transform->rotation[0], transform->rotation[2]);
+	// The world keeps a highlight upright at its full size. Only its draw turns it and changes its size for the camera.
+	const bool upright = registry.AllOf<ScriptHighlight>(entity);
+	const float scale = upright ? script_highlights::k_WorldScale : transform->scale.x;
+	const auto angles = upright ? glm::vec3(0.0f) : x87::GameAnglesYxz(transform->rotation[0], transform->rotation[2]);
 	const auto rows = shape == Shape::LeaningBox ? creature_obstacles::LeaningPlacement(angles.y, angles.x, angles.z, scale)
 	                                             : creature_obstacles::UprightPlacement(angles.y, scale);
 	auto outline = fixed_outlines::OfModelBox(rows, place, angles.y, scale, box.Center(), box.Size() * 0.5f);
