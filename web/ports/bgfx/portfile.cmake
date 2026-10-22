@@ -48,6 +48,16 @@ if(VCPKG_TARGET_IS_EMSCRIPTEN)
   if(NOT _renderer_gl MATCHES "case TextureFormat::R8: // Luminance\r?\n[\t ]*// GLES2 formats without sRGB")
     message(FATAL_ERROR "The bgfx source changed: the web build cannot turn off its 16-bit formats")
   endif()
+  # When bgfx makes a texture in a format that is not valid, it uses RGBA8. But it changes the data of an update to
+  # RGBA8 only for a compressed format. Thus the 16-bit data of an update (for example, a creature's painted skin) went
+  # into the RGBA8 texture with no change, and the skin was wrong. With this change, each update changes its data to
+  # RGBA8 when the texture is not in the format that the game asked for.
+  string(REPLACE "|| (compressed && m_textureFormat != m_requestedFormat)" "|| m_textureFormat != m_requestedFormat"
+                 _renderer_gl_updated "${_renderer_gl}")
+  if(_renderer_gl_updated STREQUAL _renderer_gl)
+    message(FATAL_ERROR "The bgfx source changed: the web build cannot change the data of texture updates")
+  endif()
+  set(_renderer_gl "${_renderer_gl_updated}")
   file(WRITE "${SOURCE_PATH}/bgfx/src/renderer_gl.cpp" "${_renderer_gl}")
 endif()
 
