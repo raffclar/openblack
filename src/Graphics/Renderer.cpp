@@ -1437,8 +1437,13 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 			}
 			if (desc.morphWithTerrain)
 			{
-				setSampler(MeshUniform::Heightmap, 1, heightMap);     // vs
-				setUniform(MeshUniform::IslandExtent, &islandExtent); // vs
+				setSampler(MeshUniform::Heightmap, 1, heightMap); // vs
+			}
+			// The land's extent is for the land's height under a model that follows the land, and for the land's light.
+			// bgfx accepts a uniform only once for each draw, so it is set one time for the two.
+			if (desc.morphWithTerrain || has(MeshUniform::LandLight))
+			{
+				setUniform(MeshUniform::IslandExtent, &islandExtent);
 			}
 			if (has(MeshUniform::LandLight))
 			{
@@ -1467,7 +1472,6 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				program->SetTextureSampler(
 				    "s_landLight", 7,
 				    desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight : GetLandLightTexture());
-				setUniform(MeshUniform::IslandExtent, &islandExtent);
 				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
 			if (has(MeshUniform::Haze))
@@ -1853,8 +1857,10 @@ void Renderer::DrawTempleMapPass() const
 	terrainShader->SetTextureSampler("s2_smallBump", 2, *smallBump);
 	SetObjectShadowUniforms(*terrainShader);
 	terrainShader->SetTextureSampler("s7_landLight", 7, GetLandLightTexture());
-	// Nor any moving shadow
+	// Nor any moving shadow, on no block
 	SetGroundShadowUniforms(*terrainShader, false);
+	const auto noGroundShadow = glm::vec4(0.0f);
+	terrainShader->SetUniformValue("u_groundShadowBlock", &noGroundShadow);
 	// The temple's map of the land has no haze
 	const auto noHaze = glm::vec4(0.0f);
 	terrainShader->SetUniformValue("u_haze", &noHaze);
@@ -5640,9 +5646,6 @@ void Renderer::SetGroundShadowUniforms(const ShaderProgram& program, bool receiv
 	const glm::vec4 info {static_cast<float>(receives ? _groundShadowsOnObjects : 0U), static_cast<float>(count), 0.0f, 0.0f};
 	program.SetUniformValue("u_groundShadowInfo", &info);
 	program.SetTextureSampler("s4_groundShadowData", 4, *_groundShadowData);
-	// No block takes any until it says which
-	const auto none = glm::vec4(0.0f);
-	program.SetUniformValue("u_groundShadowBlock", &none);
 }
 
 void Renderer::SetObjectGroundShadowUniforms(const ShaderProgram& program, bool receives) const
