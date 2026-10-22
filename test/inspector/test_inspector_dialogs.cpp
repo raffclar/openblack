@@ -260,7 +260,7 @@ TEST(InspectorDialogs, AClickFindsTheControlOnEveryScreen)
 	{
 		const auto space = FrontEndSpace(screen.x, screen.y);
 		const auto onScreen = DialogToScreen(k_Ok, screen);
-		const auto back = glm::ivec2(glm::floor(space.ToLayout(glm::vec2(onScreen))));
+		const auto back = space.PixelToLayout(onScreen);
 		EXPECT_GE(back.x, SkipBox::k_ButtonPosition.x) << screen.x << "x" << screen.y;
 		EXPECT_GE(back.y, SkipBox::k_ButtonPosition.y) << screen.x << "x" << screen.y;
 		EXPECT_LT(back.x, SkipBox::k_ButtonPosition.x + SkipBox::k_ButtonSize) << screen.x << "x" << screen.y;

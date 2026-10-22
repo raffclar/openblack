@@ -91,6 +91,11 @@ void DialogPainter::Begin(glm::u16vec2 resolution)
 
 glm::ivec2 DialogPainter::ToDialog(glm::ivec2 screen) const
 {
+	return LayoutSpace {.scale = _scale, .offset = _offset}.PixelToLayout(screen);
+}
+
+glm::ivec2 DialogPainter::EdgeToDialog(glm::ivec2 screen) const
+{
 	return {glm::floor((glm::vec2(screen) - _offset) / _scale)};
 }
 

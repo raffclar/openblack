@@ -68,6 +68,13 @@ struct LayoutSpace
 
 	[[nodiscard]] glm::vec2 ToScreen(glm::vec2 layout) const noexcept { return (layout * scale) + offset; }
 	[[nodiscard]] glm::vec2 ToLayout(glm::vec2 screen) const noexcept { return (screen - offset) / scale; }
+	/// The layout unit under a pixel of the screen, found from the middle of the pixel. The GPU fills a pixel of a box
+	/// when the middle of the pixel is in the box, so a pixel finds a box's unit exactly when the box fills that pixel.
+	/// On the default screen this is the pixel's own position
+	[[nodiscard]] glm::ivec2 PixelToLayout(glm::ivec2 pixel) const noexcept;
+	/// The pixel of the screen that the middle of a layout unit falls in. When a unit is one pixel or more, that pixel
+	/// finds the same unit again (PixelToLayout)
+	[[nodiscard]] glm::ivec2 LayoutToPixel(glm::ivec2 layout) const noexcept;
 	bool operator==(const LayoutSpace&) const = default;
 };
 /// Where the front end's layout goes on a screen. On a screen smaller than the default one in either direction it is

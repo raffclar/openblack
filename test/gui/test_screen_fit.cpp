@@ -165,3 +165,127 @@ TEST(ScreenFit, TheFrontEndShrinksAsTheGameShrinksItOnSmallScreens)
 	EXPECT_NEAR(space.offset.x, (640.0f - (800.0f * 480.0f / 650.0f)) * 0.5f, 1e-3f);
 	EXPECT_NEAR(space.offset.y, (480.0f - (600.0f * 480.0f / 650.0f)) * 0.5f, 1e-3f);
 }
+
+namespace
+{
+// The screens the front end is checked on: the default one, smaller windows, wide, ultrawide and super wide ones
+constexpr std::array<std::pair<int32_t, int32_t>, 11> k_Screens {{
+    {800, 600},
+    {640, 480},
+    {400, 300},
+    {1024, 768},
+    {1280, 720},
+    {1366, 768},
+    {1920, 1080},
+    {2560, 1440},
+    {3440, 1440},
+    {5120, 1440},
+    {1280, 1024},
+}};
+
+// Boxes of the dialog space, from min up to but not including max: a button, a list's row, a thin line and a box at
+// the corner of the space
+struct Box
+{
+	glm::ivec2 min;
+	glm::ivec2 max;
+};
+constexpr std::array<Box, 5> k_Boxes {{
+    {.min = {40, 490}, .max = {150, 550}},
+    {.min = {110, 197}, .max = {380, 219}},
+    {.min = {325, 250}, .max = {555, 290}},
+    {.min = {399, 300}, .max = {400, 301}},
+    {.min = {0, 0}, .max = {800, 600}},
+}};
+
+// The GPU fills a pixel of a box when the middle of the pixel is in the box: left and top edges in, right and bottom
+// edges out
+bool Fills(const LayoutSpace& space, const Box& box, glm::ivec2 pixel)
+{
+	const auto middle = glm::vec2(pixel) + 0.5f;
+	const auto min = space.ToScreen(glm::vec2(box.min));
+	const auto max = space.ToScreen(glm::vec2(box.max));
+	return middle.x >= min.x && middle.y >= min.y && middle.x < max.x && middle.y < max.y;
+}
+
+bool Finds(const LayoutSpace& space, const Box& box, glm::ivec2 pixel)
+{
+	const auto unit = space.PixelToLayout(pixel);
+	return unit.x >= box.min.x && unit.y >= box.min.y && unit.x < box.max.x && unit.y < box.max.y;
+}
+} // namespace
+
+TEST(ScreenFit, APixelOfTheDefaultScreenFindsItsOwnUnit)
+{
+	const auto space = FrontEndSpace(800, 600);
+	for (const auto pixel : {glm::ivec2(0, 0), glm::ivec2(1, 1), glm::ivec2(399, 300), glm::ivec2(799, 599)})
+	{
+		EXPECT_EQ(space.PixelToLayout(pixel), pixel);
+		EXPECT_EQ(space.LayoutToPixel(pixel), pixel);
+	}
+	// A pixel a unit, centred, as the game finds it on a screen wider than the default one
+	EXPECT_EQ(FrontEndSpace(1000, 600).PixelToLayout({100, 0}), glm::ivec2(0, 0));
+	EXPECT_EQ(FrontEndSpace(1000, 600).PixelToLayout({99, 5}), glm::ivec2(-1, 5));
+}
+
+TEST(ScreenFit, APixelFindsABoxExactlyWhenTheBoxFillsIt)
+{
+	for (const auto [width, height] : k_Screens)
+	{
+		const auto space = FrontEndSpace(width, height);
+		for (const auto& box : k_Boxes)
+		{
+			// Every pixel of a band three pixels round each edge of the box, across and down its middle
+			const auto min = glm::ivec2(glm::floor(space.ToScreen(glm::vec2(box.min)))) - 3;
+			const auto max = glm::ivec2(glm::floor(space.ToScreen(glm::vec2(box.max)))) + 3;
+			const auto middle = space.LayoutToPixel((box.min + box.max) / 2);
+			for (int32_t x = min.x; x <= max.x; ++x)
+			{
+				const glm::ivec2 pixel {x, middle.y};
+				EXPECT_EQ(Finds(space, box, pixel), Fills(space, box, pixel))
+				    << width << "x" << height << " pixel " << x << "," << middle.y;
+			}
+			for (int32_t y = min.y; y <= max.y; ++y)
+			{
+				const glm::ivec2 pixel {middle.x, y};
+				EXPECT_EQ(Finds(space, box, pixel), Fills(space, box, pixel))
+				    << width << "x" << height << " pixel " << middle.x << "," << y;
+			}
+		}
+	}
+}
+
+TEST(ScreenFit, ThePixelOfAUnitFindsTheUnitAgainWhenTheLayoutIsNotShrunk)
+{
+	for (const auto [width, height] : k_Screens)
+	{
+		const auto space = FrontEndSpace(width, height);
+		if (space.scale < 1.0f)
+		{
+			continue;
+		}
+		for (int32_t x = 0; x < k_ReferenceWidth; ++x)
+		{
+			EXPECT_EQ(space.PixelToLayout(space.LayoutToPixel({x, 300})), glm::ivec2(x, 300)) << width << "x" << height;
+		}
+		for (int32_t y = 0; y < k_ReferenceHeight; ++y)
+		{
+			EXPECT_EQ(space.PixelToLayout(space.LayoutToPixel({400, y})), glm::ivec2(400, y)) << width << "x" << height;
+		}
+	}
+}
+
+TEST(ScreenFit, OnASmallScreenEveryPixelOfAControlFindsTheControl)
+{
+	// A unit is less than a pixel, so some units have no pixel of their own, but each pixel still finds the unit under
+	// its middle, and a control of the layout's sizes still has pixels
+	for (const auto [width, height] : {std::pair {640, 480}, std::pair {400, 300}})
+	{
+		const auto space = FrontEndSpace(width, height);
+		ASSERT_LT(space.scale, 1.0f);
+		const Box button {.min = {40, 490}, .max = {150, 550}};
+		const auto pixel = space.LayoutToPixel({95, 520});
+		EXPECT_TRUE(Finds(space, button, pixel)) << width << "x" << height;
+		EXPECT_TRUE(Fills(space, button, pixel)) << width << "x" << height;
+	}
+}
