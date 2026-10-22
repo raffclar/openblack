@@ -14,9 +14,30 @@ vcpkg_download_distfile(
   SHA512 3fb29796aecba66f13e1c8541897bf28317c7fc10455f796cc6b1a317ed48bafabfd1b36ae207b4af480b7bc535f211b198f1e7abc5c7c5210dd04c9cfac29eb
 )
 
+# Changes to the WebGPU renderer. Each one changes only the WebGPU renderer or only the Emscripten code, thus the other
+# renderers stay the same. Each one can go upstream alone:
+# - webgpu-emscripten-renderer-on: turn the renderer on for Emscripten (bgfx turns it off there by default).
+# - webgpu-canvas-texture-each-frame: in the browser, get the canvas texture at the start of each frame. The browser
+#   gives one texture for each task, and the texture is not valid after the task.
+# - webgpu-yield-in-read-loops: in the browser, a texture or buffer read gives control back to the browser while it
+#   waits, because the map completes only then. The program must link with JSPI or Asyncify.
+# - webgpu-unset-samplers: a sampler of the shader that the draw does not set gets a 1x1 black texture and a default
+#   sampler. WebGPU needs an entry for each binding of the layout.
+# - webgpu-missing-vertex-inputs: a vertex input that no stream gives takes only as many floats as the vertex holds.
+# - webgpu-vertex-texture-caps: WebGPU can read textures in vertex shaders, thus the formats get the vertex flag.
+# - webgpu-min-max-blend-factors: min and max blends get the factors one. They do not use the factors, but WebGPU
+#   refuses other factors for them.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
+  PATCHES
+    webgpu-emscripten-renderer-on.patch
+    webgpu-canvas-texture-each-frame.patch
+    webgpu-yield-in-read-loops.patch
+    webgpu-unset-samplers.patch
+    webgpu-missing-vertex-inputs.patch
+    webgpu-vertex-texture-caps.patch
+    webgpu-min-max-blend-factors.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
@@ -42,6 +63,26 @@ if(VCPKG_TARGET_IS_EMSCRIPTEN)
   openblack_bgfx_replace(CMakeLists.txt
     "cmake_dependent_option\\(BGFX_CONFIG_MULTITHREADED ([^\r\n]*) ON \"NOT CMAKE_SYSTEM_NAME STREQUAL Emscripten\" OFF\\)"
     "option(BGFX_CONFIG_MULTITHREADED \\1 ON)")
+
+  if("webgpu" IN_LIST FEATURES)
+    # The WebGPU renderer of this bgfx release compiles against a Dawn header of 2026-06-22. The emdawnwebgpu release
+    # of the next day has the same structures and values; the emdawnwebgpu of the Emscripten SDK is older. The port
+    # keeps that release in share/bgfx, and the bgfx target links it from there.
+    vcpkg_download_distfile(EMDAWNWEBGPU_ARCHIVE
+      URLS "https://github.com/google/dawn/releases/download/v20260623.191042/emdawnwebgpu_pkg-v20260623.191042.zip"
+      FILENAME "emdawnwebgpu_pkg-v20260623.191042.zip"
+      SHA512 f3649765536fa308cac31e36aaf819c1ce9a9f9f16e055f4419b8ac8617516b44bdd701461d25018a87cc1b7e7b8be860db338fdb7da9cd859d0019070667cdd
+    )
+    # emdawnwebgpu-timestamp-writes: the JavaScript bindings send "no timestamp write" as the number 4294967295. The
+    # browser refuses it, and then loses each command buffer that has a timer query.
+    vcpkg_extract_source_archive(EMDAWNWEBGPU_PATH
+      ARCHIVE "${EMDAWNWEBGPU_ARCHIVE}"
+      PATCHES emdawnwebgpu-timestamp-writes.patch
+    )
+    openblack_bgfx_replace(cmake/bgfx/bgfx.cmake
+      "target_link_options\\(bgfx PUBLIC \"--use-port=emdawnwebgpu\"\\)"
+      "target_link_options(bgfx PUBLIC \"$<BUILD_INTERFACE:--use-port=${EMDAWNWEBGPU_PATH}/emdawnwebgpu.port.py>\" \"$<INSTALL_INTERFACE:--use-port=$<INSTALL_PREFIX>/share/bgfx/emdawnwebgpu_pkg/emdawnwebgpu.port.py>\")")
+  endif()
 endif()
 
 vcpkg_check_features(
@@ -108,6 +149,10 @@ if("tools" IN_LIST FEATURES)
   if(VCPKG_TARGET_IS_WINDOWS)
     file(COPY "${SOURCE_PATH}/bgfx/tools/bin/windows/dxil.dll" DESTINATION "${CURRENT_PACKAGES_DIR}/tools/${PORT}")
   endif()
+endif()
+
+if(VCPKG_TARGET_IS_EMSCRIPTEN AND "webgpu" IN_LIST FEATURES)
+  file(COPY "${EMDAWNWEBGPU_PATH}/" DESTINATION "${CURRENT_PACKAGES_DIR}/share/${PORT}/emdawnwebgpu_pkg")
 endif()
 
 vcpkg_install_copyright(

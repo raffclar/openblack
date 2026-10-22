@@ -1,0 +1,25 @@
+diff --git a/webgpu/src/library_webgpu.js b/webgpu/src/library_webgpu.js
+index 2f6298b..b977e70 100644
+--- a/webgpu/src/library_webgpu.js
++++ b/webgpu/src/library_webgpu.js
+@@ -305,12 +305,17 @@ var LibraryWebGPU = {
+ 
+     makePassTimestampWrites: (ptr) => {
+       if (ptr === 0) return undefined;
+-      return {
++      // WGPU_QUERY_SET_INDEX_UNDEFINED (0xFFFFFFFF) means "no write". The JavaScript API wants the member left
++      // out for that, and refuses the number.
++      var beginning = {{{ makeGetValue('ptr', C_STRUCTS.WGPUPassTimestampWrites.beginningOfPassWriteIndex, 'u32') }}};
++      var end = {{{ makeGetValue('ptr', C_STRUCTS.WGPUPassTimestampWrites.endOfPassWriteIndex, 'u32') }}};
++      var writes = {
+         "querySet": WebGPU.getJsObject(
+           {{{ makeGetValue('ptr', C_STRUCTS.WGPUPassTimestampWrites.querySet, '*') }}}),
+-        "beginningOfPassWriteIndex": {{{ makeGetValue('ptr', C_STRUCTS.WGPUPassTimestampWrites.beginningOfPassWriteIndex, 'u32') }}},
+-        "endOfPassWriteIndex": {{{ makeGetValue('ptr', C_STRUCTS.WGPUPassTimestampWrites.endOfPassWriteIndex, 'u32') }}},
+       };
++      if (beginning !== 0xFFFFFFFF) writes["beginningOfPassWriteIndex"] = beginning;
++      if (end !== 0xFFFFFFFF) writes["endOfPassWriteIndex"] = end;
++      return writes;
+     },
+ 
+     makePipelineConstants: (constantCount, constantsPtr) => {
