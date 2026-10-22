@@ -18,6 +18,7 @@
 #include <glm/vec3.hpp>
 
 #include "Animals/FishFarmRules.h"
+#include "Commands/PlayerCommands.h"
 #include "Creature/CreatureGiving.h"
 #include "ECS/AltarOffering.h"
 #include "Enums.h"
@@ -162,6 +163,8 @@ public:
 	virtual bool LeashTap(entt::entity object) = 0;
 	/// A local random number below a count
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
+	/// Sends a command of the hand's player. The world does the command at the start of a later turn.
+	virtual void SendCommand(player_commands::Action action) = 0;
 	/// A villager goes into the hand: it remembers what it was doing and is held
 	virtual void VillagerIntoHand(entt::entity villager) = 0;
 	/// An animal leaves its flock for one of its own, the old one going if it is left empty

@@ -96,6 +96,7 @@
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
@@ -462,6 +463,14 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 		audio::StartGameSoundEffect(
 		    entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
 		    {.position = position, .voiceOwner = audio::VoiceOwner::OwnSound, .follows = audio::Follows::Place});
+	}
+}
+
+void GameHandGrabWorld::SendCommand(player_commands::Action action)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(std::move(action));
 	}
 }
 

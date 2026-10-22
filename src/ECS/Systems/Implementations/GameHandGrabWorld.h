@@ -72,6 +72,7 @@ public:
 	/// Whether the player's leash takes a tap on the thing as an order to the creature, in place of the thing's own tap
 	[[nodiscard]] static bool LeashTakesTap(entt::entity object, PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
+	void SendCommand(player_commands::Action action) override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;

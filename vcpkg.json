@@ -33,6 +33,7 @@
         {
             "name": "bgfx",
             "default-features": false,
+            "features": [ "webgpu" ],
             "platform": "emscripten"
         },
         {
@@ -49,5 +50,8 @@
             "platform": "!emscripten"
         },
         "gtest"
-    ]
+    ],
+    "vcpkg-configuration": {
+        "overlay-ports": [ "./vcpkg-overlay-ports" ]
+    }
 }

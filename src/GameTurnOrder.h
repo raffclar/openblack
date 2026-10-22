@@ -88,8 +88,12 @@ enum class Stage : uint8_t
 /// The steps of openblack's turn
 enum class Step : uint8_t
 {
+	/// The things that the frames draw between their last two turns stand at the place of the last turn
+	DrawnPlaces,
 	PlayerCommands,
 	HandStillness,
+	/// The hand's own work of the turn: it can send commands, which a later turn does
+	HandInterface,
 	TurnCheering,
 	Clock,
 	/// The count of the turns that the reactions keep
@@ -109,6 +113,10 @@ enum class Step : uint8_t
 	WorshipSiteLooks,
 	PlayerAlignment,
 	VillageTotems,
+	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
+	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
+	TownFlags,
+	AppleBarrel,
 	ChimneySmoke,
 	Dances,
 	Fields,
@@ -196,6 +204,8 @@ enum class Step : uint8_t
 	RealWeather,
 	WalkerLookahead,
 	InfluenceTurnEnd,
+	/// The run record of a tool sees the world as the turn left it, before the steps of the frame
+	RunRecord,
 
 	_Count
 };
@@ -210,11 +220,17 @@ struct Place
 
 /// The turn, step by step
 inline constexpr std::array k_Turn = std::to_array<Place>({
+    // The frames draw the animals between their last two turns. Before anything else, the turn puts them back at the
+    // places of the last turn, so that the turn sees the world as the game keeps it, at any frame rate.
+    {.step = Step::DrawnPlaces, .stage = std::nullopt},
     // The commands that the players sent come first in the turn, in the order that they went, before the hand does its
     // own work of the turn
     {.step = Step::PlayerCommands, .stage = Stage::Input},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
+    // Then the hand does the work that it also does each frame: it takes a thing that it waited for, or gives what it
+    // holds after a long press. The commands that it sends go to a later turn.
+    {.step = Step::HandInterface, .stage = Stage::Input},
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input
     {.step = Step::ChimneySmoke, .stage = Stage::Input},
     {.step = Step::Clock, .stage = Stage::StartTurn},
@@ -230,6 +246,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Players, .stage = Stage::Players},
     // A town's totem takes its turn with the buildings of its town
     {.step = Step::VillageTotems, .stage = Stage::Players},
+    {.step = Step::TownFlags, .stage = std::nullopt},
+    {.step = Step::AppleBarrel, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
     // The influence of the towns and the temples. The borders that it draws and the influence that the hand keeps are
     // also in this step.
@@ -297,6 +315,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::RealWeather, .stage = Stage::AfterTurn},
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
+    {.step = Step::RunRecord, .stage = Stage::AfterTurn},
 });
 
 /// The steps of a creature's own turn, in the game's order. The turn of the living does them for each creature at the

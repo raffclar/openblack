@@ -162,7 +162,7 @@ public:
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, 2> GetHandPositions() const = 0;
 
 	/// The options screen's actions and what each is bound to now
-	[[nodiscard]] virtual std::span<const KeyBinding> GetKeyBindings() const { return k_DefaultKeyBindings; }
+	[[nodiscard]] virtual std::span<const KeyBinding> GetKeyBindings() const { return DefaultKeyBindings(); }
 	/// Binds an action to a key chord, or unbinds its key
 	virtual void SetKeyBinding([[maybe_unused]] BindableActionMap action, [[maybe_unused]] std::optional<KeyChord> key) {}
 	/// Puts every binding back to the game's defaults

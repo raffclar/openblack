@@ -19,6 +19,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOwnership.h"
 #include "Creature/LeashSnap.h"
@@ -176,6 +177,9 @@ public:
 	/// A player taps one of their leash posts: it picks that leash, or unpicks it when tapped again, and swaps the worn
 	/// leash for it
 	virtual bool TapPost(entt::entity post) = 0;
+	/// The world does an order of a player to their creature on the leash, at the start of a turn: an order on a thing,
+	/// an order at a place, a tie of the leash to a thing, or an untie
+	virtual void DoOrder(PlayerNames /*player*/, const player_commands::LeashOrder& /*order*/) {}
 };
 
 } // namespace openblack::ecs::systems

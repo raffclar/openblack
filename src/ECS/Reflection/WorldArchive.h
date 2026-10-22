@@ -13,11 +13,14 @@
 #include <cstdint>
 
 #include <array>
+#include <functional>
 #include <memory>
 #include <optional>
 #include <set>
 #include <span>
 #include <string>
+#include <string_view>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -81,6 +84,25 @@ struct WorldLoadResult
 /// Writes every entity of the registry and every registered component of each entity
 [[nodiscard]] std::vector<uint8_t> SaveWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                              WorldSaveReport* report = nullptr);
+
+/// The hashes of the parts of a world: the list of the entities, and the rows of each registered component, with the
+/// bytes that SaveWorld writes for each row.
+struct WorldHashes
+{
+	uint64_t entities {0};
+	/// Each registered component that has an entity, by its name, in the order of the names
+	std::vector<std::pair<std::string, uint64_t>> components;
+};
+
+/// Whether a hash of the world keeps a part of a component. The hash asks first about the whole component (no field and
+/// no entity), then about the row of each entity (no field), then about each field of the row. The field is "*" for a
+/// component that saves as one value.
+using KeepInHash = std::function<bool(std::string_view component, std::string_view field, entt::entity entity)>;
+
+/// Makes the hashes of the parts of the world, with no save in memory of the whole world. With a keep function, the hash
+/// of a component leaves out the parts that the function does not keep. The hash of each component goes over its live
+/// rows in the order of the storage.
+[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {});
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the

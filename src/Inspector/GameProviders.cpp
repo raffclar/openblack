@@ -4059,6 +4059,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		        }
 	        },
 	    .deviceLost = []() { return Locator::audio::has_value() && Locator::audio::value().IsDeviceLost(); },
+	    .emitters = []() -> const ecs::Registry* {
+		    return Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+	    },
 	}));
 
 	inspector.Add(EngineProvider());

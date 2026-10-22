@@ -92,6 +92,15 @@ private:
 	uint64_t _frame {0};
 	/// The records also keep a hash for each component
 	bool _hashParts {false};
+	/// The synced part of the world as the last turn to record left it, before the steps of the frame
+	struct Synced
+	{
+		uint32_t turn {0};
+		Json value;
+	};
+	std::optional<Synced> _synced;
+	/// At the end of a turn to record: keeps the synced part of the world
+	void TurnEnded(uint32_t turn);
 };
 
 /// The limits from a table as JSON: {"limits": [{"key": "plan:*", "turns": null}, ...]}; none when it is not one

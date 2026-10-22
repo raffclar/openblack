@@ -10,6 +10,7 @@
 #include "ShaderSamplers.h"
 
 #include <algorithm>
+#include <optional>
 
 namespace openblack::graphics::shader_samplers
 {
@@ -22,6 +23,8 @@ namespace
 constexpr uint8_t k_FirstVersionWithOutputHash = 6;
 constexpr uint8_t k_FirstVersionWithTextureInfo = 8;
 constexpr uint8_t k_FirstVersionWithTextureFormat = 10;
+// From this version, the header has two masks of the raw resource bindings after the hashes
+constexpr uint8_t k_FirstVersionWithRawBindings = 12;
 // From this version, a SPIR-V sampler's binding is its stage plus two (past the two uniform buffers); before it the
 // stage was offset by 16, and a fragment shader's by another 48
 constexpr uint8_t k_FirstVersionWithNewBindings = 11;
@@ -110,9 +113,16 @@ Dimension DimensionFromId(uint8_t id)
 	}
 }
 
-/// Reads a bgfx shader binary's header up to its vertex attributes: past its uniforms and its code. False when the
-/// binary isn't a shader this can read.
-bool SkipToAttributes(Reader& reader)
+/// The kind and the format version of a bgfx shader binary
+struct ShaderHeader
+{
+	char kind;
+	uint8_t version;
+};
+
+/// Reads a bgfx shader binary's header up to the count of its uniforms. Empty when the binary isn't a shader this can
+/// read.
+std::optional<ShaderHeader> ReadHeader(Reader& reader)
 {
 	const auto kind = static_cast<char>(reader.Read<uint8_t>());
 	const auto s = static_cast<char>(reader.Read<uint8_t>());
@@ -120,13 +130,31 @@ bool SkipToAttributes(Reader& reader)
 	const auto version = reader.Read<uint8_t>();
 	if (!reader.Ok() || (kind != 'V' && kind != 'F' && kind != 'C') || s != 'S' || h != 'H')
 	{
-		return false;
+		return std::nullopt;
 	}
 	reader.Read<uint32_t>(); // the hash of its inputs
 	if (version >= k_FirstVersionWithOutputHash)
 	{
 		reader.Read<uint32_t>(); // and of its outputs
 	}
+	if (version >= k_FirstVersionWithRawBindings)
+	{
+		reader.Read<uint32_t>(); // the mask of its raw read bindings
+		reader.Read<uint32_t>(); // and of its raw write bindings
+	}
+	return ShaderHeader {.kind = kind, .version = version};
+}
+
+/// Reads a bgfx shader binary's header up to its vertex attributes: past its uniforms and its code. False when the
+/// binary isn't a shader this can read.
+bool SkipToAttributes(Reader& reader)
+{
+	const auto header = ReadHeader(reader);
+	if (!header.has_value())
+	{
+		return false;
+	}
+	const auto version = header->version;
 
 	const auto count = reader.Read<uint16_t>();
 	for (uint16_t i = 0; i < count && reader.Ok(); ++i)
@@ -153,21 +181,13 @@ bool SkipToAttributes(Reader& reader)
 std::optional<std::vector<Sampler>> ReadSpirvSamplers(std::span<const uint8_t> binary)
 {
 	Reader reader(binary);
-	const auto kind = static_cast<char>(reader.Read<uint8_t>());
-	const auto s = static_cast<char>(reader.Read<uint8_t>());
-	const auto h = static_cast<char>(reader.Read<uint8_t>());
-	const auto version = reader.Read<uint8_t>();
-	if (!reader.Ok() || (kind != 'V' && kind != 'F' && kind != 'C') || s != 'S' || h != 'H')
+	const auto header = ReadHeader(reader);
+	if (!header.has_value())
 	{
 		return std::nullopt;
 	}
-	const bool fragment = kind == 'F';
-
-	reader.Read<uint32_t>(); // the hash of its inputs
-	if (version >= k_FirstVersionWithOutputHash)
-	{
-		reader.Read<uint32_t>(); // and of its outputs
-	}
+	const auto version = header->version;
+	const bool fragment = header->kind == 'F';
 
 	const auto count = reader.Read<uint16_t>();
 	std::vector<Sampler> samplers;

@@ -63,6 +63,7 @@
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/TextDatabase.h"
+#include "Input/WindowPointer.h"
 #include "Locator.h"
 #include "Resources/Loaders.h"
 #include "Resources/ResourcesInterface.h"
@@ -104,6 +105,8 @@ StartupInput PollStartupInput()
 	SDL_Event event;
 	while (SDL_PollEvent(&event) != 0)
 	{
+		// On the web the mouse events get the place of the pointer of the game
+		input::PointWindowEvent(event);
 		if (event.type == SDL_QUIT)
 		{
 			input.quit = true;
@@ -156,6 +159,8 @@ LogoInput TakeLogoInput(Game& game)
 	SDL_Event event;
 	while (SDL_PollEvent(&event) != 0)
 	{
+		// On the web the mouse events get the place of the pointer of the game
+		input::PointWindowEvent(event);
 		if (event.type == SDL_QUIT)
 		{
 			input.startup.quit = true;
@@ -324,6 +329,8 @@ bool Game::AskForNewPlayer()
 		SDL_Event event;
 		while (SDL_PollEvent(&event) != 0)
 		{
+			// On the web the mouse events get the place of the pointer of the game
+			input::PointWindowEvent(event);
 			if (event.type == SDL_QUIT)
 			{
 				RequestQuit();
@@ -339,8 +346,7 @@ bool Game::AskForNewPlayer()
 			profiles.CreateProfile(answer->name, answer->symbol);
 		}
 		gui::menu_backdrop::StepFade(fade, !box.IsActive(), frame);
-		glm::ivec2 mouse {0, 0};
-		SDL_GetMouseState(&mouse.x, &mouse.y);
+		const auto mouse = input::WindowPointer();
 		PresentStartupFrame([this, mouse, frame, &fade](glm::u16vec2 size) {
 			_interface->DrawNewPlayerScreen(size, mouse, machine_clock::Ticks(), static_cast<float>(frame), fade.alpha);
 		});
@@ -520,8 +526,7 @@ void Game::PlayLogoEffect()
 		const auto milliseconds = std::max(1, static_cast<int32_t>(now - last));
 		last = now;
 		input = TakeLogoInput(*this);
-		glm::ivec2 pointer {0, 0};
-		SDL_GetMouseState(&pointer.x, &pointer.y);
+		const auto pointer = input::WindowPointer();
 		const auto frame = effect.Step({.milliseconds = milliseconds,
 		                                .pointer = pointer - glm::ivec2(box.x, box.y),
 		                                .mouseMove = input.mouseMove,

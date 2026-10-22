@@ -450,7 +450,8 @@ bool HandHoldsNothing(const ecs::Registry& registry)
 	}
 	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* grab = registry.Valid(hand) ? registry.TryGet<const HandGrab>(hand) : nullptr;
-	return grab == nullptr || grab->state == HandGrab::State::Empty || grab->state == HandGrab::State::Grabbing;
+	return grab == nullptr || grab->state == HandGrab::State::Empty || grab->state == HandGrab::State::Grabbing ||
+	       grab->state == HandGrab::State::Taking;
 }
 
 /// The creature the hand is over, as the interface picked it when the last frame was drawn

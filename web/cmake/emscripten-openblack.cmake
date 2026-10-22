@@ -15,12 +15,6 @@ set(OPENBLACK_WEB_FLAGS "-DEMSCRIPTEN=1")
 string(APPEND OPENBLACK_WEB_FLAGS " -pthread -fwasm-exceptions")
 # The web build has threads, which bx turns off for every Emscripten build. bgfx needs them for its locks.
 string(APPEND OPENBLACK_WEB_FLAGS " -DBX_CONFIG_SUPPORTS_THREADING=1")
-# WebGL 2 cannot copy a texture or read it back. bgfx then does these operations with frame buffers.
-string(
-  APPEND
-  OPENBLACK_WEB_FLAGS
-  " -DBGFX_GL_CONFIG_BLIT_EMULATION=1 -DBGFX_GL_CONFIG_TEXTURE_READ_BACK_EMULATION=1"
-)
 
 string(APPEND CMAKE_C_FLAGS_INIT " ${OPENBLACK_WEB_FLAGS}")
 string(APPEND CMAKE_CXX_FLAGS_INIT " ${OPENBLACK_WEB_FLAGS}")

@@ -29,6 +29,7 @@
 #include "AudioManagerInterface.h"
 #include "AudioPlayer.h"
 #include "CustomMusicPlayer.h"
+#include "ECS/Registry.h"
 #include "HeaderOverrides.h"
 #include "MusicPlayer.h"
 #include "MusicStreamBackend.h"
@@ -66,6 +67,7 @@ public:
 	void StopEmitter(entt::entity emitter) override;
 	void DestroyEmitter(entt::entity emitter) override;
 	void ForgetSavedEmitters() override;
+	[[nodiscard]] ecs::Registry* Emitters() override { return &_emitters; }
 	entt::entity CreateEmitter(entt::id_type id, std::optional<glm::vec3> worldPosition, PlayType playType,
 	                           entt::entity owner) override;
 	[[nodiscard]] bool EmitterExists(entt::entity emitter) override;
@@ -229,6 +231,8 @@ private:
 	std::array<VoiceOccupant, VoicePool::k_VoiceCount> _voiceOccupants {};
 	/// Counts the sounds that have an owner of their own
 	uint64_t _ownSoundSerial {0};
+	/// The entities of the sounds, apart from the world's
+	ecs::Registry _emitters;
 };
 
 } // namespace openblack::audio

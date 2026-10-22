@@ -33,6 +33,11 @@
 namespace openblack
 {
 
+namespace ecs
+{
+class Registry;
+}
+
 namespace pack
 {
 struct AudioBankSampleHeader;
@@ -138,6 +143,10 @@ public:
 	/// A saved game has loaded. The sounds that played at the save do not come back: each emitter that the save kept
 	/// goes, and no sound of its own is stopped, because the sounds stopped as the last land went.
 	virtual void ForgetSavedEmitters() {}
+	/// The entities of the sounds that play. A sound only shows the world on this computer, so its entity is not in the
+	/// registry of the world: two computers, or a server with no sound, keep the same entities in the world. None when
+	/// the manager plays no sound.
+	[[nodiscard]] virtual ecs::Registry* Emitters() { return nullptr; }
 	/// An emitter for a loaded sound, ready to play. With a world position it is 3D audio sounding from there,
 	/// otherwise 2D audio centred on the listener. Repeat loops it forever, otherwise the bank header's loop count
 	/// applies. It gets a voice by the restart play type for its owner, unless its bank header gives another.

@@ -345,7 +345,7 @@ private:
 	/// The options page's Quit arrow, hidden inside the temple
 	BigButton* _optionsQuit {nullptr};
 	List* _controls {nullptr};
-	input::KeyBindingTable _bindings {input::k_DefaultKeyBindings};
+	input::KeyBindingTable _bindings {input::DefaultKeyBindings()};
 	std::array<std::u16string, input::k_KeyBindingCount> _actionNames;
 	/// HELP_TEXT_DIALOG_KEYREMINDER, HELP_TEXT_DIALOG_LOADDEFAULTS and the Cancel of a box
 	std::u16string _keyReminder;

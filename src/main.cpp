@@ -92,7 +92,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
-		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop.", cxxopts::value<std::string>())
+		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
 		("l,log-file", "Output file for logs, 'stdout'/'logcat' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
 		("L,log-level", "Level (trace, debug, info, warning, error, critical, off) of logging per subsystem (" + loggingSubsystems + ").",
@@ -133,6 +133,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
 		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
 		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
+		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
 		("inspect-port", "Start the debug inspector on this port of 127.0.0.1 (0 for any free port), for agents and tools to query and control the game. The player's mouse and keyboard are kept out while a client is connected; Ctrl+Alt+Shift+F12 takes the game back.", cxxopts::value<uint16_t>())
@@ -304,6 +305,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			{
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
+			simulation.settings.stillHand = result["sim-still-hand"].as<bool>();
 			args.simulation = simulation;
 		}
 

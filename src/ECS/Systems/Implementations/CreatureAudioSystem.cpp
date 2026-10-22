@@ -308,8 +308,13 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		    }
 	    });
 
-	// The creatures' sounds follow them about
-	registry.Each<AudioEmitter>([&registry](AudioEmitter& emitter) {
+	// The creatures' sounds follow them about. The sounds' entities are the audio's, apart from the world's.
+	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+	if (emitters == nullptr)
+	{
+		return;
+	}
+	emitters->Each<AudioEmitter>([&registry](AudioEmitter& emitter) {
 		if (emitter.owner == entt::null || !registry.Valid(emitter.owner))
 		{
 			return;

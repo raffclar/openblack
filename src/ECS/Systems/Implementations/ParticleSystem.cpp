@@ -289,10 +289,7 @@ void GameParticleWorld::StartSound(const particles::Effect& /*effect*/,
                                    const std::shared_ptr<particles::ParticleSoundLink>& sound)
 {
 	auto& playing = _sounds.emplace_back(PlayingSound {.link = sound});
-	if (Locator::entitiesRegistry::has_value())
-	{
-		playing.owner = Locator::entitiesRegistry::value().Create();
-	}
+	playing.owner = NewSoundOwner();
 	// Thunder is heard once it has come from the cloud
 	if (sound->sound.travelsAtSoundSpeed && Locator::audio::has_value())
 	{
@@ -346,8 +343,9 @@ void GameParticleWorld::Play(PlayingSound& sound) const
 
 void GameParticleWorld::ProcessSounds()
 {
-	auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
 	auto* audio = Locator::audio::has_value() ? &Locator::audio::value() : nullptr;
+	// The sounds' entities are the audio's, apart from the world's
+	auto* registry = audio != nullptr ? audio->Emitters() : nullptr;
 	const auto playing = [&](const PlayingSound& sound) {
 		return audio != nullptr && sound.emitter != entt::null && audio->EmitterExists(sound.emitter) &&
 		       audio->GetStatus(sound.emitter) != audio::AudioStatus::Stopped;
@@ -451,15 +449,20 @@ void GameParticleWorld::Fade(PlayingSound& sound)
 	}
 }
 
+entt::entity GameParticleWorld::NewSoundOwner()
+{
+	// The sound's own owner only tells the audio which sounds are the same. It is an entity of the audio, not of the
+	// world, so that a computer with no sound keeps the same entities in the world.
+	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+	return emitters != nullptr ? emitters->Create() : entt::null;
+}
+
 void GameParticleWorld::Forget(PlayingSound& sound)
 {
-	if (sound.owner != entt::null && Locator::entitiesRegistry::has_value())
+	auto* emitters = Locator::audio::has_value() ? Locator::audio::value().Emitters() : nullptr;
+	if (sound.owner != entt::null && emitters != nullptr && emitters->Valid(sound.owner))
 	{
-		auto& registry = Locator::entitiesRegistry::value();
-		if (registry.Valid(sound.owner))
-		{
-			registry.Destroy(sound.owner);
-		}
+		emitters->Destroy(sound.owner);
 	}
 	sound.owner = entt::null;
 }
@@ -1662,6 +1665,8 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 		PlayingSound sound;
 		sound.link = in.ReadShared<particles::ParticleSoundLink>();
 		in.ReadValue(sound.owner);
+		// The saved owner was of the last run's audio. The sound gets an owner of this run.
+		sound.owner = NewSoundOwner();
 		in.ReadValue(sound.letGo);
 		in.ReadPlain(sound.fade);
 		in.ReadValue(sound.wait);

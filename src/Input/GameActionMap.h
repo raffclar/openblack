@@ -24,6 +24,7 @@
 #include "GameActionMapInterface.h"
 #include "Help/MouseMoves.h"
 #include "MouseMotion.h"
+#include "PlatformKeys.h"
 #include "PointerSpeed.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -105,7 +106,7 @@ private:
 	void ApplyQueuedPresses();
 
 	/// What each of the options screen's actions is bound to, starting as the game's defaults
-	KeyBindingTable _bindings {k_DefaultKeyBindings};
+	KeyBindingTable _bindings {DefaultKeyBindings()};
 	/// The keys down, as pressed, so their letting go can be made up when it goes elsewhere
 	std::bitset<SDL_NUM_SCANCODES> _heldKeys;
 	/// The keys that went down in this frame. A key that goes down and up in one frame shows as pressed for the frame,
@@ -166,5 +167,14 @@ private:
 	void StartScaledPointer(glm::ivec2 at);
 	/// The window lets the mouse go, the system's cursor left where the pointer was
 	void StopScaledPointer();
+
+	/// The pointer lock of the web page. While the page holds it, the mouse moves the scaled pointer, as on the desktop
+	/// while the window has the mouse.
+	platform_keys::PointerHold _pointerHold;
+	/// On the web, start or stop the scaled pointer as the page takes or frees the pointer
+	void FollowPagePointerLock();
+	/// On the web, the first Escape frees the pointer and the game does not see it. Returns true when the event is that
+	/// Escape.
+	[[nodiscard]] bool EscapeFreesPointer(const SDL_Event& event);
 };
 } // namespace openblack::input

@@ -109,6 +109,9 @@ private:
 	std::unordered_map<std::string, std::vector<uint8_t>> _made;
 };
 
+/// RGBA8 pixels made into BGRA8 pixels: the red and blue of each pixel change places
+[[nodiscard]] std::vector<uint8_t> RgbaToBgra(std::span<const uint8_t> rgba);
+
 /// Writes BGRA8 pixels, rows pitch bytes apart, to a PNG without their alpha. The file is written aside and renamed once
 /// whole, so that whoever waits for it never reads half of it. Why not, if it couldn't.
 [[nodiscard]] std::string WriteScreenshotPng(const std::filesystem::path& path, uint32_t width, uint32_t height, uint32_t pitch,

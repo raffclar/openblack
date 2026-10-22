@@ -111,10 +111,21 @@ TEST(GameTurnOrder, AStepOfAnEarlierStageAfterALaterOneIsOutOfOrder)
 TEST(GameTurnOrder, TheHandInputComesBeforeTheTurnCountMovesOn)
 {
 	const auto recorder = PlayOneTurn();
-	// The commands of the players come first, then the hand's own work of the turn
-	EXPECT_EQ(recorder.IndexOf(Step::PlayerCommands), 0);
-	EXPECT_EQ(recorder.IndexOf(Step::HandStillness), 1);
+	// The drawn things go back to the places of the last turn first. The commands of the players come next, then the
+	// hand's own work of the turn.
+	EXPECT_EQ(recorder.IndexOf(Step::DrawnPlaces), 0);
+	EXPECT_EQ(recorder.IndexOf(Step::PlayerCommands), 1);
+	EXPECT_EQ(recorder.IndexOf(Step::HandStillness), 2);
 	EXPECT_TRUE(recorder.Before(Step::HandStillness, Step::Clock));
+}
+
+TEST(GameTurnOrder, TheHandDoesItsOwnWorkAfterTheCommandsOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	// The commands of the turn come first, so a command that the hand sends in its own work waits for a later turn
+	EXPECT_TRUE(recorder.Before(Step::PlayerCommands, Step::HandInterface));
+	EXPECT_TRUE(recorder.Before(Step::HandStillness, Step::HandInterface));
+	EXPECT_TRUE(recorder.Before(Step::HandInterface, Step::Clock));
 }
 
 TEST(GameTurnOrder, TheStormsMoveBeforeThePlayersAndTheClimatesAfterTheTimeOfDay)
@@ -197,7 +208,13 @@ TEST(GameTurnOrder, TheEndOfTheTurnSoundsThenSavesThenEndsTheGame)
 	EXPECT_TRUE(recorder.Before(Step::Ambience, Step::Autosave));
 	EXPECT_TRUE(recorder.Before(Step::Autosave, Step::GameOver));
 	EXPECT_TRUE(recorder.Before(Step::GameOver, Step::WalkerLookahead));
-	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 1);
+	EXPECT_EQ(recorder.IndexOf(Step::InfluenceTurnEnd), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 2);
+}
+
+TEST(GameTurnOrder, TheRunRecordSeesTheWorldAfterTheLastStepOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_EQ(recorder.IndexOf(Step::RunRecord), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 1);
 }
 
 // The real-world weather follows the turn of the game, before the walker that came up against an edge tries again
