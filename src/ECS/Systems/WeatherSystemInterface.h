@@ -100,6 +100,15 @@ public:
 	virtual void ForceStorm(const ForcedStorm& storm) = 0;
 	/// A storm clears from the strength it has now over its fading time, as though at the end of its life
 	virtual void EndStorm(entt::entity storm) = 0;
+	/// Whether a storm still lives
+	[[nodiscard]] virtual bool StormLives(entt::entity /*storm*/) const { return false; }
+	/// Makes a storm that stands where it is made, at full strength after its fading time, and belongs to no climate.
+	/// The real-world weather makes one.
+	virtual entt::entity AddStandingStorm(const script_weather::LandStorm& /*storm*/) { return entt::null; }
+	/// The background weather: the weather of each place before the storms add to it, and of each place off the land.
+	/// It is calm air unless the real-world weather changes it.
+	virtual void SetBackgroundWeather(const components::WeatherInfo& /*weather*/) {}
+	[[nodiscard]] virtual components::WeatherInfo GetBackgroundWeather() const { return {}; }
 	/// Every storm clears
 	virtual void ClearStorms() = 0;
 	/// Every storm with lightning flashes on its next turn, with a bolt or with thunder

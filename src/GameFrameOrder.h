@@ -81,6 +81,7 @@ enum class Step : uint8_t
 	ScreenFade,
 	PauseText,
 	Audio,
+	Online,
 	CameraKeys,
 	ProfileAlignment,
 
@@ -151,6 +152,9 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The sound library's own work: the voices that finished are let go and the sounds follow the listener. The game's
     // sound library does this work itself, outside the game's frame.
     {.step = Step::Audio, .stage = std::nullopt},
+    // The web client and the lobby client do their work. The game's network library did this work itself, outside the
+    // game's frame.
+    {.step = Step::Online, .stage = std::nullopt},
     // The keys of the camera act after the camera moved, so their steps move the camera in the next frame
     {.step = Step::CameraKeys, .stage = Stage::CameraKeys},
     {.step = Step::ProfileAlignment, .stage = Stage::EndFrame},

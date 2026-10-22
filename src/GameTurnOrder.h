@@ -205,6 +205,7 @@ enum class Step : uint8_t
 	Autosave,
 	GameOver,
 	GlobalStatistics,
+	RealWeather,
 	WalkerLookahead,
 	InfluenceTurnEnd,
 	/// The checksum of the synced world, as the turn left it, for a network game
@@ -317,6 +318,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Autosave, .stage = Stage::EndTurn},
     {.step = Step::GameOver, .stage = Stage::EndTurn},
     {.step = Step::GlobalStatistics, .stage = Stage::EndTurn},
+    // The real-world weather follows the turn of the game, also once the game is over
+    {.step = Step::RealWeather, .stage = Stage::AfterTurn},
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
     // The checksum of the world that the turn left, which a network game sends after each turn
