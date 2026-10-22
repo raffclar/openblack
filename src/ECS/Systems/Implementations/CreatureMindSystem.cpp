@@ -430,7 +430,8 @@ float PlayerInterestNow(const Creature& creature, CreatureMindState& mind)
 	std::optional<float> heldRadius;
 	if (const auto* grab = registry.Valid(handEntity) ? registry.TryGet<const HandGrab>(handEntity) : nullptr;
 	    grab != nullptr && registry.Valid(grab->object) &&
-	    (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow))
+	    (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow ||
+	     grab->state == HandGrab::State::LettingGo))
 	{
 		heldRadius = object_measures::TwoDRadius(registry, grab->object);
 	}

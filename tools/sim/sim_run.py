@@ -30,6 +30,8 @@ the story's lessons do, up to the last; the run then continues as the creature g
     python tools/sim/sim_run.py match --turns 1500 --every 10      (the normal speed against the fast mode)
     python tools/sim/sim_run.py repeat --turns 3000 --every 1      (two fast runs with the same seed)
     python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 20   (twenty runs, each against the first)
+    python tools/sim/sim_run.py repeat --turns 2000 --every 1 --runs 5 --frames 10,17,20:1,33,10:1
+                                                   (five runs at other frame rates, drawn and not: the synced worlds)
 """
 
 import argparse
@@ -86,6 +88,8 @@ def game_arguments(options, record, log, until_turn, fast, driven):
             "--background"]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
+    if getattr(options, "still_hand", False):
+        args.append("--sim-still-hand")
     if options.limits:
         args += ["--sim-limits", options.limits]
     if options.hash_parts:
@@ -392,10 +396,23 @@ def compare_exit_saves(first, other):
         return sim_report.compare_saves(file_a.read(), file_b.read())
 
 
-def repeat_result(records_first, records_other):
+def parse_frames(text):
+    """The frame settings of the runs of a frame-rate repeat, from "10,17,20:1": each item is the frame time in
+    milliseconds, and after a colon the draw every (0, no frame drawn, by default)"""
+    frames = []
+    for item in (text or "").split(","):
+        item = item.strip()
+        if not item:
+            continue
+        ms, _, draw = item.partition(":")
+        frames.append((int(ms), int(draw or 0)))
+    return frames
+
+
+def repeat_result(records_first, records_other, synced=False):
     """How a repeat run compares with the first: where it parts, the counts of its records and its last count of
-    draws"""
-    result = sim_report.compare(records_first, records_other)
+    draws. With synced, only the synced part of the records counts (a frame-rate repeat)."""
+    result = (sim_report.compare_synced if synced else sim_report.compare)(records_first, records_other)
     result["records"] = [len(records_first), len(records_other)]
     result["draws_last"] = [(records_first or [{}])[-1].get("draws"), (records_other or [{}])[-1].get("draws")]
     return result
@@ -406,20 +423,34 @@ def command_repeat(options):
     agree at every record. Each run is compared with the first, and every run that parts from it is reported with its
     first record that differs."""
     runs = max(options.runs, 2)
-    first = run_once(options, "repeat-1", True, options.turns)
+    # A frame-rate repeat gives each run the next frame setting of the list, and compares only the synced worlds
+    frames = parse_frames(options.frames)
+    synced = bool(frames)
+
+    def run_options(index):
+        if not frames:
+            return options
+        # The hand gives no input in a frame-rate repeat: a hand that follows the pointer eases to it by the frames
+        ms, draw = frames[(index - 1) % len(frames)]
+        return argparse.Namespace(**{**vars(options), "frame_ms": ms, "draw_every": draw, "still_hand": True})
+
+    first = run_once(run_options(1), "repeat-1", True, options.turns)
     first_save = keep_exit_save(options, "repeat-1")
     _, records_first, _ = sim_report.load(first[0])
     results = []
     for index in range(2, runs + 1):
-        other = run_once(options, f"repeat-{index}", True, options.turns)
+        other = run_once(run_options(index), f"repeat-{index}", True, options.turns)
         _, records_other, _ = sim_report.load(other[0])
-        result = repeat_result(records_first, records_other)
+        result = repeat_result(records_first, records_other, synced)
         result["run"] = index
+        if frames:
+            result["frame_ms"] = [run_options(1).frame_ms, run_options(index).frame_ms]
+            result["draw_every"] = [run_options(1).draw_every, run_options(index).draw_every]
         result["exit_codes"] = [first[2], other[2]]
         # Information only: some saved fields follow the graphics card's handles, not the game (see the handover)
         result["save_differs"] = compare_exit_saves(first_save, keep_exit_save(options, f"repeat-{index}"))
         results.append(result)
-        shown = ("run", "same", "turn", "differs", "draws_last", "save_differs")
+        shown = ("run", "same", "turn", "differs", "parts", "draws_last", "save_differs", "frame_ms", "draw_every")
         print(json.dumps({key: result.get(key) for key in shown}), flush=True)
     divergences = [result for result in results if not result["same"]]
     exit_ok = all(code == 0 for result in results for code in result["exit_codes"])
@@ -428,9 +459,10 @@ def command_repeat(options):
     summary.update({
         "same": not divergences and exit_ok,
         "runs": runs,
+        "frames": frames,
         "divergences": len(divergences),
         "diverged": [{key: result.get(key) for key in ("run", "turn", "frame", "differs", "seeds", "draws", "hash",
-                                                         "counts", "draws_last")} for result in divergences],
+                                                         "counts", "parts", "draws_last")} for result in divergences],
         "results": results,
     })
     with open(os.path.join(options.out, "repeat.json"), "w", encoding="utf-8") as file:
@@ -468,6 +500,10 @@ def parse(argv):
         sub.add_argument("--name")
         sub.add_argument("--runs", type=int, default=2,
                          help="repeat: how many runs to make; each is compared with the first (2 by default)")
+        sub.add_argument("--frames",
+                         help="repeat: a frame-rate repeat, with the frame setting of each run in turn, as "
+                              "'10,17,20:1' (the frame time in ms, and after a colon the draw every); only the synced "
+                              "worlds must agree")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     return parser.parse_args(argv)
 

@@ -26,6 +26,7 @@ class AppleBarrelSystem final: public AppleBarrelSystemInterface
 {
 public:
 	void Update(std::chrono::milliseconds frameGameTime) override;
+	void ProcessTurn() override;
 	[[nodiscard]] entt::entity GetBarrel() const override { return _barrel; }
 	void Reset() override;
 	void FindAfterLoad() override;

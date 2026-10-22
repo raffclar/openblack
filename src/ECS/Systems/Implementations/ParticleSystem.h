@@ -163,6 +163,8 @@ private:
 	static void Fade(PlayingSound& sound);
 	/// The sound has gone: its owner goes with it
 	static void Forget(PlayingSound& sound);
+	/// A new owner of its own for a sound of a particle, among the entities of the audio
+	static entt::entity NewSoundOwner();
 
 	GameObjectEffects _objectEffects;
 	GameFragmentSource _fragments;

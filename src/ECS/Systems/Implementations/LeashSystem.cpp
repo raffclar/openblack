@@ -93,6 +93,7 @@
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingMapPlace.h"
@@ -1729,7 +1730,11 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 			{
 				Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
 			}
-			TapPost(*picked);
+			// The tap is a command, which the world does at the start of a later turn
+			if (Locator::playerCommandSystem::has_value())
+			{
+				Locator::playerCommandSystem::value().Submit(player_commands::LeashPostTap {.post = *picked});
+			}
 			return;
 		}
 	}
@@ -1792,38 +1797,76 @@ void LeashSystem::ActOnTap(PlayerNames player, entt::entity creature, const Unde
 	    .leashTarget = !object.has_value() || !registry.AnyOf<LeashPost, Temple, LeashMarker>(*object),
 	    .miracleBubble = object.has_value() && registry.AllOf<OneOffSpellSeed>(*object),
 	};
+	// The tap sends the order. The world does it at the start of a later turn.
+	using player_commands::LeashOrder;
 	switch (doubleTap ? orders::OnDoubleTap(state, tapped) : orders::OnTap(state, tapped))
 	{
 	case orders::Tap::OrderOnThing:
-		OrderOn(player, *object);
+		SendOrder({.kind = LeashOrder::Kind::OnThing, .object = *object});
 		break;
 	case orders::Tap::OrderOnLand:
 		if (under.land.has_value())
 		{
-			OrderAt(player, *under.land);
+			SendOrder({.kind = LeashOrder::Kind::AtPlace, .place = *under.land});
 		}
 		break;
 	case orders::Tap::Tie:
-	{
-		// Grown up enough, it can be tied to things, and it leaves what it was doing for the thing
-		const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-		if (mind != nullptr && mind->developmentPhase <= orders::k_TyingPhase)
-		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is too young to have its leash tied to things",
-			                   entt::to_integral(creature));
-			break;
-		}
-		if (TieTo(creature, *object))
-		{
-			TakeThingOrder(creature, *object);
-		}
+		SendOrder({.kind = LeashOrder::Kind::Tie, .object = *object});
 		break;
-	}
 	case orders::Tap::Untie:
-		UntieToHand(creature);
+		SendOrder({.kind = LeashOrder::Kind::Untie});
 		break;
 	case orders::Tap::Normal:
 	case orders::Tap::Nothing:
+		break;
+	}
+}
+
+void LeashSystem::SendOrder(const player_commands::LeashOrder& order)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(order);
+	}
+}
+
+void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder& order)
+{
+	using player_commands::LeashOrder;
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto creature = PlayersCreature(player);
+	// The thing of the order can go from the world before the turn
+	const bool withThing = order.kind == LeashOrder::Kind::OnThing || order.kind == LeashOrder::Kind::Tie;
+	if (!creature.has_value() || (withThing && !registry.Valid(order.object)))
+	{
+		return;
+	}
+	switch (order.kind)
+	{
+	case LeashOrder::Kind::OnThing:
+		OrderOn(player, order.object);
+		break;
+	case LeashOrder::Kind::AtPlace:
+		OrderAt(player, order.place);
+		break;
+	case LeashOrder::Kind::Tie:
+	{
+		// Grown up enough, it can be tied to things, and it leaves what it was doing for the thing
+		const auto* mind = registry.TryGet<const CreatureMindState>(*creature);
+		if (mind != nullptr && mind->developmentPhase <= orders::k_TyingPhase)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {} is too young to have its leash tied to things",
+			                   entt::to_integral(*creature));
+			break;
+		}
+		if (TieTo(*creature, order.object))
+		{
+			TakeThingOrder(*creature, order.object);
+		}
+		break;
+	}
+	case LeashOrder::Kind::Untie:
+		UntieToHand(*creature);
 		break;
 	}
 }
@@ -1853,8 +1896,8 @@ bool LeashSystem::TapThing(PlayerNames player, entt::entity object)
 	{
 		return false;
 	}
-	// The leash takes the tap even when the creature refuses the order
-	OrderOn(player, object);
+	// The leash takes the tap even when the creature refuses the order. The tap sends the order.
+	SendOrder({.kind = player_commands::LeashOrder::Kind::OnThing, .object = object});
 	return true;
 }
 

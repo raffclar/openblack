@@ -16,6 +16,7 @@
 
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
 
@@ -52,6 +53,46 @@ void Run(const Command& command)
 			    if (openblack::Locator::creatureMindSystem::has_value() && registry.Valid(action.creature))
 			    {
 				    openblack::Locator::creatureMindSystem::value().SendReleaseFeedback(action.creature, action.amount);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandTake> || std::is_same_v<Kind, HandLetGo> ||
+		                       std::is_same_v<Kind, HandTap> || std::is_same_v<Kind, HandGive>)
+		    {
+			    // The hand checks that the thing is still there, and that its own state still asks for the command
+			    if (!openblack::Locator::handGrabSystem::has_value())
+			    {
+				    return;
+			    }
+			    auto& hand = openblack::Locator::handGrabSystem::value();
+			    if constexpr (std::is_same_v<Kind, HandTake>)
+			    {
+				    hand.DoTake(command.player, action.object);
+			    }
+			    else if constexpr (std::is_same_v<Kind, HandLetGo>)
+			    {
+				    hand.DoLetGo(command.player, action.object, action.velocity);
+			    }
+			    else if constexpr (std::is_same_v<Kind, HandTap>)
+			    {
+				    hand.DoTap(command.player, action.object);
+			    }
+			    else
+			    {
+				    hand.DoGive(command.player, action.creature, action.object);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashOrder>)
+		    {
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().DoOrder(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
+		    {
+			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
+			    {
+				    openblack::Locator::leashSystem::value().TapPost(action.post);
 			    }
 		    }
 	    },

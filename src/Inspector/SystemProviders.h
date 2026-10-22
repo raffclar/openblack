@@ -217,6 +217,8 @@ struct AudioSources
 	std::function<void(bool lost)> simulateDeviceLoss;
 	/// The machine lost the sound device, or a tool acts as if it did
 	std::function<bool()> deviceLost;
+	/// The entities of the sounds that play, which are the audio's and not the world's; none with no sound
+	std::function<const ecs::Registry*()> emitters;
 };
 
 ///   audio.state                          the volumes, the music, how many sounds play and where they're heard from

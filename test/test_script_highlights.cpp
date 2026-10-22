@@ -405,6 +405,8 @@ TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
 {
 	auto [world, system] = Make();
 	const auto scroll = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
+	// The turn makes the entity of its glow
+	system->ProcessTurn();
 	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f});
 	const auto& highlight = world->registry.Get<ScriptHighlight>(scroll);
 	EXPECT_NEAR(highlight.yAngle, glm::pi<float>(), 1e-5f);
@@ -418,8 +420,24 @@ TEST(ScriptHighlights, AShownScrollSpinsScalesAndGlows)
 	// Its glow goes after it
 	const auto glow = highlight.glow;
 	world->registry.Destroy(scroll);
+	// A frame never removes an entity of the world: the next turn does
 	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	EXPECT_TRUE(world->registry.Valid(glow));
+	system->ProcessTurn();
 	EXPECT_FALSE(world->registry.Valid(glow));
+}
+
+// Only the turn makes the entities of a highlight's glow and sparks, so that a computer that draws no frame keeps the
+// same entities
+TEST(ScriptHighlights, AFrameMakesNoEntityOfTheWorld)
+{
+	auto [world, system] = Make();
+	system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
+	const auto before = world->registry.Underlying().storage<entt::entity>().free_list();
+	system->UpdateFrame(1000.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	EXPECT_EQ(world->registry.Underlying().storage<entt::entity>().free_list(), before);
+	system->ProcessTurn();
+	EXPECT_GT(world->registry.Underlying().storage<entt::entity>().free_list(), before);
 }
 
 // Why a sign is hard to keep the hand on: until its tip is read it spins like a scroll, its board turning edge on to the
@@ -612,6 +630,8 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	auto [world, system] = Make();
 	const auto gold = system->Create(k_Gold, {0.0f, 0.0f, 0.0f}, 52);
 	const auto silver = system->Create(static_cast<uint32_t>(HighlightInfo::Silver), {20.0f, 0.0f, 0.0f}, 53);
+	// The turn makes the entities of the sparks
+	system->ProcessTurn();
 	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
 	const auto& highlight = world->registry.Get<ScriptHighlight>(gold);
 	ASSERT_TRUE(highlight.sparks.has_value());
@@ -622,7 +642,7 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	ASSERT_NE(sprite, nullptr);
 	EXPECT_NEAR(sprite->tint.a, 25.0f / 255.0f, 1e-6f); // 500 ms of the 5000 it fades in over: 25.5, cut down
 	EXPECT_NE(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(1)), nullptr);
-	EXPECT_TRUE(highlight.sparkSprites.at(2) == entt::null);
+	EXPECT_EQ(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(2)), nullptr);
 	const auto& at = world->registry.Get<Transform>(highlight.sparkSprites.at(0)).position;
 	EXPECT_GT(at.y, highlight.centre.y + highlight.radius);
 	// Hidden, the scroll's sparks stop and aren't drawn
@@ -630,10 +650,10 @@ TEST(ScriptHighlights, OnlyGoldScrollsSendUpSparks)
 	system->UpdateFrame(500.0f, 0.0f, {0.0f, 2.0f, 20.0f});
 	EXPECT_EQ(world->registry.TryGet<Sprite>(highlight.sparkSprites.at(0)), nullptr);
 	EXPECT_EQ(highlight.sparks->sparks.at(0).ageMilliseconds, 500);
-	// They go with it
+	// They go with it, at the next turn
 	const auto first = highlight.sparkSprites.at(0);
 	world->registry.Destroy(gold);
-	system->UpdateFrame(16.0f, 0.0f, {0.0f, 2.0f, 20.0f});
+	system->ProcessTurn();
 	EXPECT_FALSE(world->registry.Valid(first));
 }
 

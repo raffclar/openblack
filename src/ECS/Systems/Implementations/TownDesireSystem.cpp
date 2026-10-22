@@ -427,11 +427,9 @@ void PlaceOnStore(TownDesireFlag& flag, entt::entity store)
 
 } // namespace
 
-void TownDesireSystem::UpdateFlags(float seconds)
+void TownDesireSystem::ProcessFlags()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto& info = Locator::infoConstants::value().townDesire;
-
 	std::vector<entt::entity> towns;
 	registry.Each<const Town, const TownDesire>([&](entt::entity town, const Town&, const TownDesire&) {
 		if (!registry.AllOf<TownDesireFlags>(town))
@@ -443,17 +441,33 @@ void TownDesireSystem::UpdateFlags(float seconds)
 	{
 		MakeFlags(town);
 	}
+	std::vector<entt::entity> orphans;
+	registry.Each<const TownDesireFlag>([&](entt::entity entity, const TownDesireFlag& flag) {
+		if (!registry.Valid(flag.town) || !registry.AllOf<Town>(flag.town))
+		{
+			orphans.push_back(entity);
+		}
+	});
+	for (const auto orphan : orphans)
+	{
+		registry.Destroy(orphan);
+	}
+}
+
+void TownDesireSystem::UpdateFlags(float seconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto& info = Locator::infoConstants::value().townDesire;
 
 	// A flag holds still while it is out of view, as the game moves it only as it draws it
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
 	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
 	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
 
-	std::vector<entt::entity> orphans;
-	registry.Each<TownDesireFlag, Transform>([&](entt::entity entity, TownDesireFlag& flag, Transform& transform) {
+	registry.Each<TownDesireFlag, Transform>([&](TownDesireFlag& flag, Transform& transform) {
+		// The turn removes the flags of a town that has gone
 		if (!registry.Valid(flag.town) || !registry.AllOf<Town>(flag.town))
 		{
-			orphans.push_back(entity);
 			return;
 		}
 		const auto store = construction::StoragePitOf(flag.town);
@@ -487,10 +501,6 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		transform.rotation = glm::mat3(glm::eulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
 		transform.scale = glm::vec3(town_desire_flags::DrawnScale(flag.level, showsAfter));
 	});
-	for (const auto orphan : orphans)
-	{
-		registry.Destroy(orphan);
-	}
 }
 
 std::optional<TownDesireSystemInterface::FlagToolTip> TownDesireSystem::GetFlagToolTip(entt::entity flag) const

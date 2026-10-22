@@ -55,6 +55,11 @@ public:
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
 	void Reset() override;
+	void InterfaceTurn(uint32_t nowMs, uint32_t turn) override;
+	void DoTake(PlayerNames player, entt::entity object) override;
+	void DoLetGo(PlayerNames player, entt::entity object, glm::vec3 velocity) override;
+	void DoTap(PlayerNames player, entt::entity object) override;
+	void DoGive(PlayerNames player, entt::entity creature, entt::entity object) override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
 	[[nodiscard]] std::optional<entt::entity> GetLockedOn() const override;
@@ -98,8 +103,15 @@ private:
 	void StartPull(components::HandGrab& grab, const Frame& frame);
 	/// A frame of pulling; where the hand is, on the thing
 	glm::vec3 Pull(components::HandGrab& grab, const Frame& frame);
-	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops
-	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true);
+	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops. With
+	/// sounds, the hand also plays the sounds of the take.
+	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true);
+	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take
+	void SendTake(components::HandGrab& grab, entt::entity object);
+	/// The pick-up sound of a thing, and the cry of a villager
+	void PlayTakeSounds(entt::entity object);
+	/// The button held down a while gives what the hand holds to a creature
+	void GiveAfterLongPress(components::HandGrab& grab, uint32_t nowMs, uint32_t turn);
 	/// A press on a pile scoops a handful out of it, which grows while the button is held; whether it did
 	bool StartScoop(components::HandGrab& grab, entt::entity source);
 	/// A game turn of scooping: whether the scoop goes on
@@ -118,7 +130,8 @@ private:
 	/// The second press with the pointer on something the held thing is used on (a store, a pile of the same): it is
 	/// given to it at once, without being thrown. Whether it was.
 	bool ApplyTo(components::HandGrab& grab, entt::entity target);
-	/// Gives what it holds to the creature it offers it to, or to a creature under the cursor that would take it
+	/// Sends the gift of what it holds to the creature it offers it to, or to a creature under the cursor that would take
+	/// it. Whether it sent the gift.
 	bool Give(components::HandGrab& grab, std::optional<entt::entity> under);
 	/// Each frame it holds something: the offer to a creature under it is kept up or runs down, the held thing turns over
 	/// to offer it, and while the creature reaches for it the hand is drawn to the creature's hand. Where the hand is to

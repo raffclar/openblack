@@ -45,6 +45,9 @@ public:
 	/// Each frame: the animals are drawn between their last two turns, each posed by its own clip played on by the
 	/// frame's game time
 	virtual void Update(std::chrono::milliseconds frameGameTime, float turnFraction) = 0;
+	/// Before the steps of a turn: each animal stands at the place of the last turn. The frames draw it between its last
+	/// two turns, but the turn sees it at its place in the game, as the game does.
+	virtual void ShowTurnEnd() = 0;
 	virtual void Reset() = 0;
 
 	/// A new flock with nobody in it yet, made at a point its leader's legs wander about

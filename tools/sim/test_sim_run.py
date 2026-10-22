@@ -65,5 +65,22 @@ class RepeatTests(unittest.TestCase):
         self.assertEqual(result["draws_last"], [9, 10])
 
 
+class FramesTests(unittest.TestCase):
+    def test_each_item_gives_the_frame_time_and_the_draw_every(self):
+        self.assertEqual(sim_run.parse_frames("10, 17,20:1"), [(10, 0), (17, 0), (20, 1)])
+
+    def test_no_list_is_no_frame_rate_repeat(self):
+        self.assertEqual(sim_run.parse_frames(None), [])
+        self.assertEqual(sim_run.parse_frames(""), [])
+
+    def test_a_frame_rate_repeat_compares_only_the_synced_worlds(self):
+        first = [{"type": "record", "turn": 1, "hash": "a", "seeds": [7, 1], "draws": 3,
+                  "synced": {"hash": "s", "seed": 7, "draws": 3}}]
+        other = [{"type": "record", "turn": 1, "hash": "b", "seeds": [7, 2], "draws": 3,
+                  "synced": {"hash": "s", "seed": 7, "draws": 3}}]
+        self.assertTrue(sim_run.repeat_result(first, other, synced=True)["same"])
+        self.assertFalse(sim_run.repeat_result(first, other)["same"])
+
+
 if __name__ == "__main__":
     unittest.main()
