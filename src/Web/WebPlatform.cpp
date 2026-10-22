@@ -10,7 +10,10 @@
 #include "WebPlatform.h"
 
 #include <filesystem>
+#include <functional>
 #include <iostream>
+#include <memory>
+#include <optional>
 #include <string>
 #include <system_error>
 
@@ -24,19 +27,101 @@
 EM_JS(int, openblack_storage_available, (), {
 	return globalThis.openblackWeb && globalThis.openblackWeb.storage ? 1 : 0;
 });
-// The canvas of the game thread is an OffscreenCanvas. Its picture goes to the page as an image, which the page draws.
-EM_JS(void, openblack_present_frame, (), {
+// The canvas of the game thread is an OffscreenCanvas. This sends its picture to the page as an image, which the page
+// draws on its screen canvas.
+EM_JS(void, openblack_send_frame, (), {
 	const canvas = Module['canvas'];
 	if (canvas && canvas.transferToImageBitmap) {
 		const frame = canvas.transferToImageBitmap();
 		postMessage({ openblackFrame: frame }, [frame]);
 	}
 });
+// This tells the page which canvas shows the game: the game canvas, which the browser shows when the game thread gives
+// control back, or the screen canvas, which shows the images that the game thread sends.
+EM_JS(void, openblack_set_present, (int canvas), {
+	postMessage({ openblackPresent: canvas ? 'canvas' : 'image' });
+});
 EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
 // clang-format on
 
 namespace
 {
+
+/// How the page shows the frames of the game
+enum class Present
+{
+	Image,  ///< The game thread sends each frame to the page as an image
+	Canvas, ///< The browser shows the game canvas when the game thread gives control back
+};
+
+/// The frames of the game that RunFrames runs, and their state
+struct FrameRun
+{
+	std::function<bool()> frame;
+	std::function<int()> end;
+};
+
+/// The state of the frame hand-off to the page. Only the game thread, which owns the canvas, uses it.
+struct PresentState
+{
+	/// The game thread is in a frame of RunFrames
+	bool inRunFrame {false};
+	/// The frames that the renderer drew in this frame of RunFrames
+	int framesDrawn {0};
+	/// What the page shows now; nothing before the first frame
+	std::optional<Present> shown;
+};
+
+PresentState& GetPresentState()
+{
+	static PresentState state;
+	return state;
+}
+
+void SetPresent(Present present)
+{
+	auto& state = GetPresentState();
+	if (state.shown != present)
+	{
+		state.shown = present;
+		openblack_set_present(present == Present::Canvas ? 1 : 0);
+	}
+}
+
+void SendFrame()
+{
+	openblack_send_frame();
+	SetPresent(Present::Image);
+}
+
+/// One frame of RunFrames, which the browser calls once in each of its display frames
+void RunOneFrame(void* argument)
+{
+	auto& run = *static_cast<FrameRun*>(argument);
+	auto& state = GetPresentState();
+	state.inRunFrame = true;
+	state.framesDrawn = 0;
+	const bool goOn = run.frame();
+	state.inRunFrame = false;
+	if (state.framesDrawn == 1)
+	{
+		// The browser shows this frame when this function returns
+		SetPresent(Present::Canvas);
+	}
+	else if (state.framesDrawn > 1)
+	{
+		SendFrame();
+	}
+	if (!goOn)
+	{
+		emscripten_cancel_main_loop();
+		std::unique_ptr<FrameRun> owned(&run);
+		const int code = owned->end();
+		// This destroys the game, as the end of main does on the desktop
+		owned.reset();
+		emscripten_force_exit(code);
+	}
+}
 
 /// The folder in the private storage of the site where the game keeps its profiles
 constexpr std::string_view k_StorageFolder = "/storage";
@@ -94,9 +179,32 @@ bool openblack::web::PrepareFileSystem()
 	return true;
 }
 
+void openblack::web::RunFrames(std::function<bool()> frame, std::function<int()> end)
+{
+	auto run = std::make_unique<FrameRun>(FrameRun {.frame = std::move(frame), .end = std::move(end)});
+	// The browser calls the frames at its display rate. The run frees itself after its last frame.
+	emscripten_set_main_loop_arg(RunOneFrame, run.release(), 0, false);
+}
+
+void openblack::web::BeforeFrame()
+{
+	const auto& state = GetPresentState();
+	if (state.inRunFrame && state.framesDrawn > 0)
+	{
+		// The next frame replaces the frame that the canvas has, before the browser can show it
+		SendFrame();
+	}
+}
+
 void openblack::web::PresentFrame()
 {
-	openblack_present_frame();
+	auto& state = GetPresentState();
+	if (state.inRunFrame)
+	{
+		++state.framesDrawn;
+		return;
+	}
+	SendFrame();
 }
 
 void openblack::web::ShowPageMessage(std::string_view title, std::string_view text)

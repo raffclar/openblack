@@ -12,12 +12,14 @@
 // names match without letter case, as on Windows.
 
 #include <cerrno>
+#include <cstdint>
 #include <cstdlib>
 
 #include <algorithm>
 #include <atomic>
 #include <map>
 #include <memory>
+#include <mutex>
 #include <string>
 #include <vector>
 
@@ -61,12 +63,77 @@ namespace
 using openblack::filesystem::LowerName;
 using openblack::filesystem::UserFolderIndex;
 
+/// The size of a block of a file that the block cache keeps
+constexpr off_t k_BlockSize = 1024 * 1024;
+/// The number of blocks that the block cache keeps for all the files together
+constexpr size_t k_CachedBlocks = 32;
+
+/// Read a part of a file of the user's folder from the page. Returns the number of bytes read, or -EIO.
+ssize_t ReadFromPage(uint32_t file, uint8_t* buffer, off_t count, off_t offset)
+{
+	const auto done = openblack_user_folder_read(file, buffer, static_cast<double>(count), static_cast<double>(offset));
+	return done < 0 ? -EIO : static_cast<ssize_t>(done);
+}
+
+/// The last blocks that the game read from the files of the user's folder, for all the files and threads together.
+///
+/// Each read of the page takes a long time, whatever its size, and the game reads many files in small parts. Some
+/// files it opens again for each part, such as a sound bank for each sample. Thus a small read gets its bytes from a
+/// block that an earlier read kept, also after the file closed.
+class BlockCache
+{
+public:
+	/// Copy the bytes at offset from the cached block of the file that has them all. Returns false when no block has them.
+	bool Copy(uint32_t file, uint8_t* buffer, off_t count, off_t offset)
+	{
+		const std::scoped_lock lock(_mutex);
+		const auto found = std::ranges::find_if(_blocks, [&](const Block& block) {
+			return block.file == file && offset >= block.start &&
+			       offset + count <= block.start + static_cast<off_t>(block.bytes.size());
+		});
+		if (found == _blocks.end())
+		{
+			return false;
+		}
+		std::copy_n(found->bytes.begin() + (offset - found->start), count, buffer);
+		found->lastUse = ++_uses;
+		return true;
+	}
+
+	/// Keep a block that the game read, in the place of the block that the game did not use for the longest time
+	void Keep(uint32_t file, off_t start, std::vector<uint8_t> bytes)
+	{
+		const std::scoped_lock lock(_mutex);
+		Block block {.file = file, .start = start, .bytes = std::move(bytes), .lastUse = ++_uses};
+		if (_blocks.size() < k_CachedBlocks)
+		{
+			_blocks.push_back(std::move(block));
+			return;
+		}
+		*std::ranges::min_element(_blocks, {}, &Block::lastUse) = std::move(block);
+	}
+
+private:
+	struct Block
+	{
+		uint32_t file;
+		off_t start;
+		std::vector<uint8_t> bytes;
+		uint64_t lastUse;
+	};
+
+	std::mutex _mutex;
+	std::vector<Block> _blocks;
+	uint64_t _uses {0};
+};
+
 /// A file of the user's folder. The file is read-only.
 class UserFolderFile final: public wasmfs::DataFile
 {
 public:
-	UserFolderFile(wasmfs::backend_t backend, uint32_t file, uint64_t size)
+	UserFolderFile(wasmfs::backend_t backend, BlockCache& cache, uint32_t file, uint64_t size)
 	    : wasmfs::DataFile(S_IRUGO, backend)
+	    , _cache(cache)
 	    , _file(file)
 	    , _size(static_cast<off_t>(size))
 	{
@@ -74,12 +141,7 @@ public:
 
 private:
 	int open(wasmfs::oflags_t flags) override { return (flags & O_ACCMODE) == O_RDONLY ? 0 : -EROFS; }
-	int close() override
-	{
-		_block.clear();
-		_block.shrink_to_fit();
-		return 0;
-	}
+	int close() override { return 0; }
 	ssize_t read(uint8_t* buffer, size_t length, off_t offset) override
 	{
 		if (offset >= _size)
@@ -87,45 +149,33 @@ private:
 			return 0;
 		}
 		const auto count = std::min<off_t>(static_cast<off_t>(length), _size - offset);
-		// Each read of the page takes a long time, whatever its size, and the game reads many files in small parts. Thus
-		// a small read gets its bytes from a block of the file that the last read kept.
 		if (count >= k_BlockSize)
 		{
-			return ReadFromPage(buffer, count, offset);
+			return ReadFromPage(_file, buffer, count, offset);
 		}
-		const bool inBlock = offset >= _blockStart && offset + count <= _blockStart + static_cast<off_t>(_block.size());
-		if (!inBlock)
+		if (_cache.Copy(_file, buffer, count, offset))
 		{
-			const off_t start = offset - offset % k_BlockSize;
-			const off_t end = std::min<off_t>(_size, std::max<off_t>(start + k_BlockSize, offset + count));
-			_block.resize(static_cast<size_t>(end - start));
-			if (ReadFromPage(_block.data(), end - start, start) != end - start)
-			{
-				_block.clear();
-				return -EIO;
-			}
-			_blockStart = start;
+			return static_cast<ssize_t>(count);
 		}
-		std::copy_n(_block.begin() + (offset - _blockStart), count, buffer);
+		const off_t start = offset - offset % k_BlockSize;
+		const off_t end = std::min<off_t>(_size, std::max<off_t>(start + k_BlockSize, offset + count));
+		std::vector<uint8_t> block(static_cast<size_t>(end - start));
+		if (ReadFromPage(_file, block.data(), end - start, start) != end - start)
+		{
+			return -EIO;
+		}
+		std::copy_n(block.begin() + (offset - start), count, buffer);
+		_cache.Keep(_file, start, std::move(block));
 		return static_cast<ssize_t>(count);
-	}
-	ssize_t ReadFromPage(uint8_t* buffer, off_t count, off_t offset) const
-	{
-		const auto done = openblack_user_folder_read(_file, buffer, static_cast<double>(count), static_cast<double>(offset));
-		return done < 0 ? -EIO : static_cast<ssize_t>(done);
 	}
 	ssize_t write(const uint8_t*, size_t, off_t) override { return -EROFS; }
 	int setSize(off_t) override { return -EROFS; }
 	int flush() override { return 0; }
 	off_t getSize() override { return _size; }
 
-	/// The size of the block that a small read keeps
-	static constexpr off_t k_BlockSize = 1024 * 1024;
-
+	BlockCache& _cache;
 	uint32_t _file;
 	off_t _size;
-	std::vector<uint8_t> _block;
-	off_t _blockStart {0};
 };
 
 /// A folder of the user's folder. It finds its entries with any letter case and gives them with their names on the disk.
@@ -216,7 +266,7 @@ private:
 			std::shared_ptr<wasmfs::File> file;
 			if (entry.file.has_value())
 			{
-				file = std::make_shared<UserFolderFile>(this, *entry.file, entry.size);
+				file = std::make_shared<UserFolderFile>(this, _cache, *entry.file, entry.size);
 			}
 			else
 			{
@@ -229,6 +279,7 @@ private:
 	}
 
 	UserFolderIndex _index;
+	BlockCache _cache;
 	bool _given {false};
 };
 
