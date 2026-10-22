@@ -1,0 +1,21 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 6c518af..ce9833f 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -4116,10 +4116,12 @@ WGPU_IMPORT
+ 				const bool equRGBIsMinOrMax = 3 <= equRGB;
+ 				const bool equAIsMinOrMax   = 3 <= equA;
+ 
+-				const uint32_t srcRGB = equRGBIsMinOrMax ? 0 : (blend      ) & 0xf;
+-				const uint32_t dstRGB = equRGBIsMinOrMax ? 0 : (blend >>  4) & 0xf;
+-				const uint32_t srcA   = equAIsMinOrMax   ? 0 : (blend >>  8) & 0xf;
+-				const uint32_t dstA   = equAIsMinOrMax   ? 0 : (blend >> 12) & 0xf;
++				// Min and max do not use the factors, but WebGPU refuses factors other than one for them.
++				constexpr uint32_t kBlendOne = (BGFX_STATE_BLEND_ONE & BGFX_STATE_BLEND_MASK) >> BGFX_STATE_BLEND_SHIFT;
++				const uint32_t srcRGB = equRGBIsMinOrMax ? kBlendOne : (blend      ) & 0xf;
++				const uint32_t dstRGB = equRGBIsMinOrMax ? kBlendOne : (blend >>  4) & 0xf;
++				const uint32_t srcA   = equAIsMinOrMax   ? kBlendOne : (blend >>  8) & 0xf;
++				const uint32_t dstA   = equAIsMinOrMax   ? kBlendOne : (blend >> 12) & 0xf;
+ 
+ 				_outBlendState[0] =
+ 				{

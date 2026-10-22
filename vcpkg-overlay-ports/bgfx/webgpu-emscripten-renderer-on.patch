@@ -1,0 +1,13 @@
+diff --git a/bgfx/src/config.h b/bgfx/src/config.h
+index f569b18..eadc1bf 100644
+--- a/bgfx/src/config.h
++++ b/bgfx/src/config.h
+@@ -118,7 +118,7 @@
+ 
+ #	ifndef BGFX_CONFIG_RENDERER_WEBGPU
+ #		define BGFX_CONFIG_RENDERER_WEBGPU (0     \
+-					/*|| BX_PLATFORM_EMSCRIPTEN*/ \
++					|| BX_PLATFORM_EMSCRIPTEN     \
+ 					|| BX_PLATFORM_LINUX          \
+ 					|| BX_PLATFORM_OSX            \
+ 					|| BX_PLATFORM_WINDOWS        \

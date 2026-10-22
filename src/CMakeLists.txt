@@ -398,7 +398,11 @@ else ()
   if (EMSCRIPTEN)
     # The web build. The game runs on a worker thread of its own (PROXY_TO_PTHREAD), so its loops that wait, its threads
     # and its file reads that wait work as on the desktop. The main thread of the page only gives the input to the game
-    # and shows the canvas. The game draws into the canvas with WebGL 2.
+    # and shows the canvas. The game draws into the canvas with WebGPU, or with WebGL 2 when the browser has no WebGPU.
+    #
+    # JSPI lets the game thread wait for the browser in the middle of its code: WebGPU gives the adapter, the device and
+    # the texture reads only when the thread gives control back to the browser. The game thread also waits for the
+    # browser after each frame (see src/Web/WebPlatform.cpp).
     #
     # The build has no part that sends data over the network: no emrun, no FETCH and no files that the page loads before
     # the game starts. The page gives the user's game folder from the disk (see web/page).
@@ -409,6 +413,7 @@ else ()
       -fwasm-exceptions
       -sWASMFS=1
       -sPROXY_TO_PTHREAD=1
+      -sJSPI=1
       -sPTHREAD_POOL_SIZE=20
       -sOFFSCREENCANVAS_SUPPORT=1
       -sMIN_WEBGL_VERSION=2

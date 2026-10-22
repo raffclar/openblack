@@ -12,7 +12,6 @@
 #include <filesystem>
 #include <functional>
 #include <iostream>
-#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -32,14 +31,33 @@ EM_JS(int, openblack_storage_available, (), {
 EM_JS(void, openblack_send_frame, (), {
 	const canvas = Module['canvas'];
 	if (canvas && canvas.transferToImageBitmap) {
-		const frame = canvas.transferToImageBitmap();
-		postMessage({ openblackFrame: frame }, [frame]);
+		try {
+			const frame = canvas.transferToImageBitmap();
+			postMessage({ openblackFrame: frame }, [frame]);
+		} catch (error) {
+			if (!globalThis.openblackSendFrameFailed) {
+				globalThis.openblackSendFrameFailed = true;
+				console.error('openblack: the frame cannot go to the page: ' + error);
+			}
+		}
 	}
 });
 // This tells the page which canvas shows the game: the game canvas, which the browser shows when the game thread gives
 // control back, or the screen canvas, which shows the images that the game thread sends.
 EM_JS(void, openblack_set_present, (int canvas), {
 	postMessage({ openblackPresent: canvas ? 'canvas' : 'image' });
+});
+// The game thread waits for the next display frame of the browser. While it waits, the browser shows the frame that the
+// canvas has, and completes the WebGPU work that waits for it. The program links with JSPI, which keeps the stack of the
+// game thread while it waits.
+EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
+	await new Promise((resolve) => {
+		if (typeof requestAnimationFrame === 'function') {
+			requestAnimationFrame(() => resolve());
+		} else {
+			setTimeout(resolve, 0);
+		}
+	});
 });
 EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
 // clang-format on
@@ -52,13 +70,6 @@ enum class Present
 {
 	Image,  ///< The game thread sends each frame to the page as an image
 	Canvas, ///< The browser shows the game canvas when the game thread gives control back
-};
-
-/// The frames of the game that RunFrames runs, and their state
-struct FrameRun
-{
-	std::function<bool()> frame;
-	std::function<int()> end;
 };
 
 /// The state of the frame hand-off to the page. Only the game thread, which owns the canvas, uses it.
@@ -94,33 +105,24 @@ void SendFrame()
 	SetPresent(Present::Image);
 }
 
-/// One frame of RunFrames, which the browser calls once in each of its display frames
-void RunOneFrame(void* argument)
+/// One frame of RunFrames. Returns false after the last frame.
+bool RunOneFrame(const std::function<bool()>& frame)
 {
-	auto& run = *static_cast<FrameRun*>(argument);
 	auto& state = GetPresentState();
 	state.inRunFrame = true;
 	state.framesDrawn = 0;
-	const bool goOn = run.frame();
+	const bool goOn = frame();
 	state.inRunFrame = false;
 	if (state.framesDrawn == 1)
 	{
-		// The browser shows this frame when this function returns
+		// The browser shows this frame while the game thread waits for the next display frame
 		SetPresent(Present::Canvas);
 	}
 	else if (state.framesDrawn > 1)
 	{
 		SendFrame();
 	}
-	if (!goOn)
-	{
-		emscripten_cancel_main_loop();
-		std::unique_ptr<FrameRun> owned(&run);
-		const int code = owned->end();
-		// This destroys the game, as the end of main does on the desktop
-		owned.reset();
-		emscripten_force_exit(code);
-	}
+	return goOn;
 }
 
 /// The folder in the private storage of the site where the game keeps its profiles
@@ -179,11 +181,16 @@ bool openblack::web::PrepareFileSystem()
 	return true;
 }
 
-void openblack::web::RunFrames(std::function<bool()> frame, std::function<int()> end)
+int openblack::web::RunFrames(const std::function<bool()>& frame, const std::function<int()>& end)
 {
-	auto run = std::make_unique<FrameRun>(FrameRun {.frame = std::move(frame), .end = std::move(end)});
-	// The browser calls the frames at its display rate. The run frees itself after its last frame.
-	emscripten_set_main_loop_arg(RunOneFrame, run.release(), 0, false);
+	// One frame in each display frame of the browser. A frame can also wait for the browser inside it, for example
+	// while WebGPU reads a texture back. Thus the frames run in this loop, which JSPI can suspend at each wait, and not
+	// in a main loop callback of Emscripten, which cannot wait.
+	while (RunOneFrame(frame))
+	{
+		openblack_wait_for_display_frame();
+	}
+	return end();
 }
 
 void openblack::web::BeforeFrame()

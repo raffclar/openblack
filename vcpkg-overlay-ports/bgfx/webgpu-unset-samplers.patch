@@ -1,0 +1,178 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index cac5bc3..92d2918 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -881,6 +881,9 @@ WGPU_IMPORT
+ 			BX_UNUSED(&popErrorScopeCb, &wgpuErrorCheck, s_backendType, s_adapterType);
+ 			bx::memSet(m_mipGenStubTexture,     0, sizeof(m_mipGenStubTexture) );
+ 			bx::memSet(m_mipGenStubTextureView, 0, sizeof(m_mipGenStubTextureView) );
++			bx::memSet(m_unboundTexture,       0, sizeof(m_unboundTexture) );
++			bx::memSet(m_unboundTextureView,   0, sizeof(m_unboundTextureView) );
++			m_unboundSampler = NULL;
+ 		}
+ 
+ 		~RendererContextWGPU()
+@@ -1590,6 +1593,14 @@ WGPU_IMPORT
+ 				}
+ 			}
+ 
++			for (uint32_t ii = 0; ii < BX_COUNTOF(m_unboundTexture); ++ii)
++			{
++				wgpuRelease(m_unboundTextureView[ii]);
++				wgpuRelease(m_unboundTexture[ii]);
++			}
++
++			wgpuRelease(m_unboundSampler);
++
+ 			m_frameBuffers.each([](FrameBufferWGPU& _frameBuffer) { _frameBuffer.destroy(); });
+ 
+ 			m_indexBuffers.each([](IndexBufferWGPU& _indexBuffer) { _indexBuffer.destroy(); });
+@@ -3188,6 +3199,72 @@ WGPU_IMPORT
+ 			};
+ 		}
+ 
++		// A shader can have a texture that a draw does not set. WebGPU needs an entry for each binding of the
++		// layout, thus such a binding gets a 1x1 black texture of the dimension that the shader has, and a
++		// default sampler. The layout takes the binding as a filterable float texture.
++		WGPUTextureView getUnboundTextureView(WGPUTextureViewDimension _dimension)
++		{
++			const uint32_t idx = WGPUTextureViewDimension_2DArray == _dimension ? 1
++				: WGPUTextureViewDimension_Cube    == _dimension ? 2
++				: WGPUTextureViewDimension_3D      == _dimension ? 3
++				: 0
++				;
++
++			if (NULL == m_unboundTextureView[idx])
++			{
++				const uint32_t layers = 2 == idx ? 6 : 1;
++
++				// WebGPU fills a new texture with zeros: black with zero alpha.
++				const WGPUTextureDescriptor textureDesc =
++				{
++					.nextInChain     = NULL,
++					.label           = toWGPUStringView("Unbound"),
++					.usage           = WGPUTextureUsage_TextureBinding,
++					.dimension       = 3 == idx ? WGPUTextureDimension_3D : WGPUTextureDimension_2D,
++					.size            = { 1, 1, layers },
++					.format          = WGPUTextureFormat_RGBA8Unorm,
++					.mipLevelCount   = 1,
++					.sampleCount     = 1,
++					.viewFormatCount = 0,
++					.viewFormats     = NULL,
++				};
++
++				m_unboundTexture[idx] = WGPU_CHECK(wgpuDeviceCreateTexture(m_device, &textureDesc) );
++
++				const WGPUTextureViewDescriptor viewDesc =
++				{
++					.nextInChain     = NULL,
++					.label           = toWGPUStringView("Unbound"),
++					.format          = WGPUTextureFormat_RGBA8Unorm,
++					.dimension       = 0 == idx ? WGPUTextureViewDimension_2D
++						: 1 == idx ? WGPUTextureViewDimension_2DArray
++						: 2 == idx ? WGPUTextureViewDimension_Cube
++						: WGPUTextureViewDimension_3D
++						,
++					.baseMipLevel    = 0,
++					.mipLevelCount   = 1,
++					.baseArrayLayer  = 0,
++					.arrayLayerCount = layers,
++					.aspect          = WGPUTextureAspect_All,
++					.usage           = WGPUTextureUsage_TextureBinding,
++				};
++
++				m_unboundTextureView[idx] = WGPU_CHECK(wgpuTextureCreateView(m_unboundTexture[idx], &viewDesc) );
++			}
++
++			return m_unboundTextureView[idx];
++		}
++
++		WGPUSampler getUnboundSampler()
++		{
++			if (NULL == m_unboundSampler)
++			{
++				m_unboundSampler = WGPU_CHECK(wgpuDeviceCreateSampler(m_device, NULL) );
++			}
++
++			return m_unboundSampler;
++		}
++
+ 		uint8_t fillBindGroupLayoutEntry(WGPUBindGroupLayoutEntry* _entries, const ProgramWGPU& _program, const RenderBind& _renderBind, bool _isCompute)
+ 		{
+ 			uint8_t entryCount = 0;
+@@ -3255,15 +3332,18 @@ WGPU_IMPORT
+ 
+ 				case ShaderBinding::Type::Sampler:
+ 					{
+-						TextureWGPU& texture = m_textures[bind.m_idx];
++						const bool unbound = kInvalidHandle == bind.m_idx;
++						const TextureWGPU* texture = unbound ? NULL : &m_textures[bind.m_idx];
+ 
+-						const uint32_t resolvedFlags = 0 == (BGFX_SAMPLER_INTERNAL_DEFAULT & bind.m_samplerFlags)
++						const uint32_t resolvedFlags = unbound ? 0
++							: 0 == (BGFX_SAMPLER_INTERNAL_DEFAULT & bind.m_samplerFlags)
+ 							? bind.m_samplerFlags
+-							: uint32_t(texture.m_flags)
++							: uint32_t(texture->m_flags)
+ 							;
+ 
+-						WGPUTextureSampleType sampleType = WGPUTextureSampleType_Depth != shaderBind.sampleType
+-							? s_textureFormat[texture.m_textureFormat].m_samplerType
++						WGPUTextureSampleType sampleType = unbound ? WGPUTextureSampleType_Float
++							: WGPUTextureSampleType_Depth != shaderBind.sampleType
++							? s_textureFormat[texture->m_textureFormat].m_samplerType
+ 							: shaderBind.sampleType
+ 							;
+ 
+@@ -3290,7 +3370,7 @@ WGPU_IMPORT
+ 							, sampleType
+ 							, WGPUTextureViewDimension_Undefined != shaderBind.viewDimension
+ 								? shaderBind.viewDimension
+-								: m_textures[bind.m_idx].m_viewDimension
++								: unbound ? WGPUTextureViewDimension_2D : texture->m_viewDimension
+ 							, shaderBind.multisampled
+ 							);
+ 
+@@ -3948,6 +4028,32 @@ WGPU_IMPORT
+ 						break;
+ 					}
+ 				}
++				else if (isValid(shaderBind.uniformHandle)
++				     &&  ShaderBinding::Type::Sampler == shaderBind.type
++				     &&  !_isCompute)
++				{
++					bindGroupEntry[entryCount++] =
++					{
++						.nextInChain = NULL,
++						.binding     = shaderBind.binding,
++						.buffer      = NULL,
++						.offset      = 0,
++						.size        = 0,
++						.sampler     = NULL,
++						.textureView = getUnboundTextureView(shaderBind.viewDimension),
++					};
++
++					bindGroupEntry[entryCount++] =
++					{
++						.nextInChain = NULL,
++						.binding     = shaderBind.samplerBinding,
++						.buffer      = NULL,
++						.offset      = 0,
++						.size        = 0,
++						.sampler     = getUnboundSampler(),
++						.textureView = NULL,
++					};
++				}
+ 			}
+ 
+ 			BX_ASSERT(_program.m_numBindings <= entryCount, "");
+@@ -4196,6 +4302,9 @@ WGPU_IMPORT
+ 
+ 		const MipGen*   m_mipGen;
+ 		WGPUTexture     m_mipGenStubTexture[2];
++		WGPUTexture     m_unboundTexture[4];
++		WGPUTextureView m_unboundTextureView[4];
++		WGPUSampler     m_unboundSampler;
+ 		WGPUTextureView m_mipGenStubTextureView[2][3];
+ 
+ 		HandleArenaT<IndexBufferWGPU,  BGFX_CONFIG_MAX_INDEX_BUFFERS>  m_indexBuffers;

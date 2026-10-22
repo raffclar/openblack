@@ -68,11 +68,14 @@ if (!target) {
 const ws = new WebSocket(target.webSocketDebuggerUrl);
 let id = 0;
 const pending = new Map();
-const send = (method, params = {}) => new Promise((resolve) => {
+const send = (method, params = {}, sessionId = undefined) => new Promise((resolve) => {
   const n = ++id;
   pending.set(n, resolve);
-  ws.send(JSON.stringify({ id: n, method, params }));
+  ws.send(JSON.stringify({ id: n, method, params, sessionId }));
 });
+const frames = (d) => (d.stackTrace?.callFrames ?? []).slice(0, 25)
+  .map((f) => `
+    at ${f.functionName || '?'} (${f.url.split('/').pop()}:${f.lineNumber}:${f.columnNumber})`).join('');
 ws.onmessage = (event) => {
   const m = JSON.parse(event.data);
   if (m.id && pending.has(m.id)) {
@@ -82,13 +85,18 @@ ws.onmessage = (event) => {
     record(`[${m.params.type}] ` + m.params.args.map((a) => a.value ?? a.description ?? '').join(' '));
   } else if (m.method === 'Runtime.exceptionThrown') {
     const d = m.params.exceptionDetails;
-    record(`[exception] ${d.text} ${d.exception?.description ?? ''}`);
+    record(`[exception${m.sessionId ? ' worker' : ''}] ${d.text} ${d.exception?.description ?? ''}${frames(d)}`);
+  } else if (m.method === 'Target.attachedToTarget') {
+    const session = m.params.sessionId;
+    send('Runtime.enable', {}, session);
+    send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true }, session);
   } else if (m.method === 'Log.entryAdded') {
     record(`[log ${m.params.entry.level}] ${m.params.entry.text}`);
   }
 };
 await new Promise((resolve) => { ws.onopen = resolve; });
 await send('Runtime.enable');
+await send('Target.setAutoAttach', { autoAttach: true, waitForDebuggerOnStart: false, flatten: true });
 await send('Log.enable');
 await send('Page.enable');
 await send('DOM.enable');
