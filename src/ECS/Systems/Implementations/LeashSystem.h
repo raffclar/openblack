@@ -72,6 +72,7 @@ public:
 	[[nodiscard]] std::optional<uint32_t> ToolTip(PlayerNames player, std::optional<entt::entity> hovered) const override;
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
+	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;
@@ -136,6 +137,8 @@ private:
 	[[nodiscard]] Under TappedUnder(const glm::vec3& rayOrigin, const glm::vec3& rayDirection) const;
 	/// A single or double tap of the Action button with the leash, acting on what is under the cursor
 	void ActOnTap(PlayerNames player, entt::entity creature, const Under& under, bool doubleTap);
+	/// Sends an order of the player of this computer, which the world does at the start of a later turn
+	static void SendOrder(const player_commands::LeashOrder& order);
 	/// The clock every order's ring throbs by, in milliseconds of game time
 };
 

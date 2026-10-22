@@ -411,7 +411,8 @@ creature_reaction::Facts CreatureFactsOf(const ecs::Registry& registry, entt::en
 		const auto* grab = registry.TryGet<const HandGrab>(thing);
 		facts.ownPlayersHand = registry.AllOf<Hand>(thing) && source.player == body.owner;
 		facts.handHolds = grab != nullptr && registry.Valid(grab->object) &&
-		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow);
+		                  (grab->state == HandGrab::State::Holding || grab->state == HandGrab::State::ReadyToThrow ||
+		                   grab->state == HandGrab::State::LettingGo);
 	}
 	return facts;
 }

@@ -313,7 +313,8 @@ TEST(InspectorAudio, SoundsNearAPoint)
 	                                           .info = []() -> const InfoConstants* { return nullptr; }},
 	                                 .state = []() -> std::optional<AudioState> {
 		                                 return AudioState {.globalVolume = 1.0f, .listener = glm::vec3(1.0f, 2.0f, 3.0f)};
-	                                 }}));
+	                                 },
+	                                 .emitters = [&registry]() -> const ecs::Registry* { return &registry; }}));
 	const auto sounds = Ask(inspector, R"({"query": "audio.sounds", "near": [0, 0, 0], "radius": 50})");
 	ASSERT_EQ(sounds["total"], 1);
 	EXPECT_EQ(sounds["items"][0]["id"], entt::to_integral(near));

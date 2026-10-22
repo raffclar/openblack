@@ -30,6 +30,7 @@ public:
 	void AnimalTurn(entt::entity animal) override;
 	void EndTurn() override;
 	void Update(std::chrono::milliseconds frameGameTime, float turnFraction) override;
+	void ShowTurnEnd() override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;

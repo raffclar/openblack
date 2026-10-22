@@ -35,6 +35,9 @@ struct Settings
 	bool paceToWallClock {false};
 	/// Stop the game once it gets to this turn
 	std::optional<uint32_t> untilTurn;
+	/// The hand stays where it starts and does not follow the pointer: the player gives no input with the hand. The
+	/// frames ease the hand to the pointer, so a hand that moves gives other places at other frame rates.
+	bool stillHand {false};
 };
 
 /// What the command line asks of a simulation run

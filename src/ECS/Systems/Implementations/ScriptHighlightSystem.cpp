@@ -255,6 +255,10 @@ void ScriptHighlightSystem::ProcessTurn()
 {
 	rules::StepPulse(_pulse, _world->MillisecondsPerTurn());
 	auto& registry = _world->Entities();
+	// The glows and the sparks of the highlights are entities of the world. Only the turn makes them and removes them,
+	// so that every computer, also one that draws no frame, makes the same entities in the same order.
+	RemoveLoneGlows();
+	MakeGlows();
 	const auto turn = _world->Turn();
 	std::vector<entt::entity> highlights;
 	registry.Each<ScriptHighlight>(
@@ -290,7 +294,6 @@ bool ScriptHighlightSystem::Drawn(const ScriptHighlight& highlight) const
 void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFraction*/, glm::vec3 camera)
 {
 	auto& registry = _world->Entities();
-	RemoveLoneGlows();
 	const auto frame = _world->DrawFrame();
 	bool moved = false;
 	registry.Each<ScriptHighlight>(
@@ -322,7 +325,7 @@ void ScriptHighlightSystem::UpdateFrame(float frameMilliseconds, float /*turnFra
 		    {
 			    highlight.onScreen = OnScreenAfterDraw(entity, highlight, drawn);
 		    }
-		    UpdateGlow(entity, highlight, drawn && rules::GlowShown(highlight.kind, highlight.active), camera);
+		    UpdateGlow(highlight, drawn && rules::GlowShown(highlight.kind, highlight.active), camera);
 		    UpdateSparks(entity, drawn, frameMilliseconds);
 	    });
 	if (moved)
@@ -383,7 +386,7 @@ void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight
 	}
 }
 
-void ScriptHighlightSystem::UpdateGlow(entt::entity entity, const ScriptHighlight& highlight, bool shown, glm::vec3 camera)
+void ScriptHighlightSystem::UpdateGlow(const ScriptHighlight& highlight, bool shown, glm::vec3 camera)
 {
 	auto& registry = _world->Entities();
 	if (!shown || highlight.radius <= 0.0f)
@@ -399,13 +402,11 @@ void ScriptHighlightSystem::UpdateGlow(entt::entity entity, const ScriptHighligh
 	{
 		return;
 	}
-	auto glow = highlight.glow;
+	// The turn makes the glow's entity, so that a frame never makes an entity of the world
+	const auto glow = highlight.glow;
 	if (glow == entt::null || !registry.Valid(glow))
 	{
-		glow = registry.Create();
-		registry.Assign<ScriptHighlightGlow>(glow, entity);
-		registry.Assign<Transform>(glow, highlight.centre, glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Get<ScriptHighlight>(entity).glow = glow;
+		return;
 	}
 	const float halfSize = rules::GlowHalfSize(highlight.radius);
 	auto& transform = registry.Get<Transform>(glow);
@@ -448,11 +449,10 @@ void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float 
 			}
 			continue;
 		}
+		// The turn makes the entities of the sparks
 		if (sprite == entt::null || !registry.Valid(sprite))
 		{
-			sprite = registry.Create();
-			registry.Assign<ScriptHighlightGlow>(sprite, entity);
-			registry.Assign<Transform>(sprite, from, glm::mat3(1.0f), glm::vec3(1.0f));
+			continue;
 		}
 		const auto made = sprite;
 		auto& transform = registry.Get<Transform>(made);
@@ -463,6 +463,44 @@ void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float 
 		auto& drawnSprite = registry.AllOf<Sprite>(made) ? registry.Get<Sprite>(made) : registry.Assign<Sprite>(made, *picture);
 		drawnSprite = *picture;
 		drawnSprite.tint = glm::vec4(1.0f, 1.0f, 1.0f, static_cast<float>(look->alpha) / 255.0f);
+	}
+}
+
+void ScriptHighlightSystem::MakeGlows()
+{
+	auto& registry = _world->Entities();
+	std::vector<entt::entity> highlights;
+	registry.Each<ScriptHighlight>(
+	    [&highlights](entt::entity entity, const ScriptHighlight& /*unused*/) { highlights.push_back(entity); });
+	const auto make = [&registry](entt::entity highlight, glm::vec3 at) {
+		const auto made = registry.Create();
+		registry.Assign<ScriptHighlightGlow>(made, highlight);
+		registry.Assign<Transform>(made, at, glm::mat3(1.0f), glm::vec3(1.0f));
+		return made;
+	};
+	for (const auto entity : highlights)
+	{
+		if (const auto glow = registry.Get<ScriptHighlight>(entity).glow; glow == entt::null || !registry.Valid(glow))
+		{
+			const auto centre = registry.Get<ScriptHighlight>(entity).centre;
+			const auto made = make(entity, centre);
+			registry.Get<ScriptHighlight>(entity).glow = made;
+		}
+		// A highlight with sparks has an entity for each spark
+		if (!registry.Get<ScriptHighlight>(entity).sparks.has_value())
+		{
+			continue;
+		}
+		for (size_t i = 0; i < rules::k_Sparks; ++i)
+		{
+			if (const auto sprite = registry.Get<ScriptHighlight>(entity).sparkSprites.at(i);
+			    sprite == entt::null || !registry.Valid(sprite))
+			{
+				const auto& highlight = registry.Get<ScriptHighlight>(entity);
+				const auto made = make(entity, highlight.centre + glm::vec3(0.0f, highlight.radius, 0.0f));
+				registry.Get<ScriptHighlight>(entity).sparkSprites.at(i) = made;
+			}
+		}
 	}
 }
 

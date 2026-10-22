@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "Creature/LeashKeys.h"
 #include "Enums.h"
@@ -57,8 +58,63 @@ struct CreatureFeedback
 	float amount;
 };
 
+/// The hand takes the thing that it waited for: the thing leaves the land, and the hand holds it
+struct HandTake
+{
+	entt::entity object;
+};
+
+/// The hand lets go of the thing that it holds. It puts the thing down, or throws it at the velocity that the hand had
+/// when the player let go of the button.
+struct HandLetGo
+{
+	entt::entity object;
+	glm::vec3 velocity;
+};
+
+/// The hand taps a thing
+struct HandTap
+{
+	entt::entity object;
+};
+
+/// The hand gives the thing that it holds to a creature
+struct HandGive
+{
+	entt::entity creature;
+	entt::entity object;
+};
+
+/// An order to the player's creature on its leash
+struct LeashOrder
+{
+	enum class Kind : uint8_t
+	{
+		/// The creature acts on a thing
+		OnThing,
+		/// The creature goes to a place on the land
+		AtPlace,
+		/// The leash is tied to a thing
+		Tie,
+		/// The leash comes back to the hand from the thing that it is tied to
+		Untie,
+	};
+	Kind kind;
+	/// The thing of an order on a thing or of a tie
+	entt::entity object {entt::null};
+	/// The place of an order at a place
+	glm::vec3 place {0.0f};
+};
+
+/// The tap of the player's hand on a leash that hangs at the temple
+struct LeashPostTap
+{
+	entt::entity post;
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap>;
 
 /// A command and the player that sent it
 struct Command

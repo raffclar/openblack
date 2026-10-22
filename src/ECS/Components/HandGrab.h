@@ -60,10 +60,15 @@ struct HandGrab
 		Empty,
 		/// The button is held on a thing, which the hand takes once it has waited, or pulled it free
 		Grabbing,
+		/// The hand sent the command that takes the thing, and waits for the turn that does it
+		Taking,
 		/// Holding a thing, the button let go
 		Holding,
 		/// Holding a thing with the button held, the hand dragged after the cursor by its spring, ready to throw
 		ReadyToThrow,
+		/// Holding a thing after the button was let go: the hand sent the command that puts down or throws the thing, and
+		/// waits for the turn that does it
+		LettingGo,
 	};
 
 	State state {State::Empty};

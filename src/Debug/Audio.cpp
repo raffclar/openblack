@@ -14,6 +14,7 @@
 #include <array>
 #include <string>
 #include <string_view>
+#include <utility>
 
 #include <imgui.h>
 
@@ -35,6 +36,19 @@ using namespace openblack;
 using namespace openblack::audio;
 using namespace openblack::debug::gui;
 using namespace openblack::ecs::components;
+
+namespace
+{
+/// Each sound that plays. The sounds' entities are the audio's, apart from the world's.
+template <typename Function>
+void ForEachSound(Function&& function)
+{
+	if (auto* emitters = Locator::audio::value().Emitters(); emitters != nullptr)
+	{
+		emitters->Each<AudioEmitter>(std::forward<Function>(function));
+	}
+}
+} // namespace
 
 const ImVec4 k_RedColor = ImVec4(1.0f, 0.0f, 0.0f, 1.0f);
 const ImVec4 k_GreenColor = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
@@ -300,37 +314,36 @@ void Audio::AudioSettings() noexcept
 	ImGui::Text("Pitch");
 	ImGui::NextColumn();
 	ImGui::Separator();
-	Locator::entitiesRegistry::value().Each<ecs::components::AudioEmitter>(
-	    [this](entt::entity entity, const AudioEmitter& emitter) {
-		    if (ImGui::Selectable(("##" + std::to_string(emitter.sourceId)).c_str(), _selectedEmitter == entity,
-		                          ImGuiSelectableFlags_SpanAllColumns))
-		    {
-			    _selectedEmitter = entity;
-		    }
-		    ImGui::SameLine();
-		    ImGui::Text("%u", emitter.sourceId);
-		    ImGui::NextColumn();
-		    ImGui::Text("%s", Locator::audio::value().GetSound(emitter.soundId).name.c_str());
-		    ImGui::NextColumn();
-		    ImGui::Text("%d", emitter.sourceId);
-		    ImGui::NextColumn();
-		    const char* kind = emitter.spatial ? "3D" : "2D";
-		    ImGui::Text("%s", emitter.music ? "Music" : kind);
-		    ImGui::NextColumn();
-		    if (emitter.spatial)
-		    {
-			    ImGui::Text("(%.1f, %.1f, %.1f)", emitter.position.x, emitter.position.y, emitter.position.z);
-		    }
-		    else
-		    {
-			    ImGui::Text("N/A");
-		    }
-		    ImGui::NextColumn();
-		    ImGui::Text("%.3f", emitter.gain);
-		    ImGui::NextColumn();
-		    ImGui::Text("%u%%", emitter.pitchPercent);
-		    ImGui::NextColumn();
-	    });
+	ForEachSound([this](entt::entity entity, const AudioEmitter& emitter) {
+		if (ImGui::Selectable(("##" + std::to_string(emitter.sourceId)).c_str(), _selectedEmitter == entity,
+		                      ImGuiSelectableFlags_SpanAllColumns))
+		{
+			_selectedEmitter = entity;
+		}
+		ImGui::SameLine();
+		ImGui::Text("%u", emitter.sourceId);
+		ImGui::NextColumn();
+		ImGui::Text("%s", Locator::audio::value().GetSound(emitter.soundId).name.c_str());
+		ImGui::NextColumn();
+		ImGui::Text("%d", emitter.sourceId);
+		ImGui::NextColumn();
+		const char* kind = emitter.spatial ? "3D" : "2D";
+		ImGui::Text("%s", emitter.music ? "Music" : kind);
+		ImGui::NextColumn();
+		if (emitter.spatial)
+		{
+			ImGui::Text("(%.1f, %.1f, %.1f)", emitter.position.x, emitter.position.y, emitter.position.z);
+		}
+		else
+		{
+			ImGui::Text("N/A");
+		}
+		ImGui::NextColumn();
+		ImGui::Text("%.3f", emitter.gain);
+		ImGui::NextColumn();
+		ImGui::Text("%u%%", emitter.pitchPercent);
+		ImGui::NextColumn();
+	});
 	ImGui::EndChild();
 	ImGui::SameLine();
 	ImGui::BeginChild("Audio Player Settings", ImGui::GetContentRegionAvail(), ImGuiChildFlags_Borders);
@@ -384,40 +397,39 @@ void Audio::AudioSettings() noexcept
 	ImGui::Text("Progress");
 	ImGui::NextColumn();
 	ImGui::Separator();
-	Locator::entitiesRegistry::value().Each<ecs::components::AudioEmitter>(
-	    [this](entt::entity entity, const AudioEmitter& emitter) {
-		    if (ImGui::Selectable(("##" + std::to_string(emitter.sourceId)).c_str(), _selectedEmitter == entity,
-		                          ImGuiSelectableFlags_SpanAllColumns))
-		    {
-			    _selectedEmitter = entity;
-		    }
-		    const auto& sound = Locator::audio::value().GetSound(emitter.soundId);
-		    ImGui::SameLine();
-		    ImGui::Text("%u", emitter.sourceId);
-		    ImGui::NextColumn();
-		    ImGui::Text("%u", sound.bufferId);
-		    ImGui::NextColumn();
-		    ImGui::Text("%s", sound.name.c_str());
-		    ImGui::NextColumn();
-		    switch (Locator::audio::value().GetStatus(entity))
-		    {
-		    case AudioStatus::Initial:
-			    ImGui::TextColored(k_RedColor, "Initial");
-			    break;
-		    case AudioStatus::Playing:
-			    ImGui::TextColored(k_GreenColor, "Playing");
-			    break;
-		    case AudioStatus::Paused:
-			    ImGui::TextColored(k_RedColor, "Paused");
-			    break;
-		    case AudioStatus::Stopped:
-			    ImGui::TextColored(k_RedColor, "Stopped");
-			    break;
-		    }
-		    ImGui::NextColumn();
-		    ImGui::ProgressBar(Locator::audio::value().GetProgress(entity));
-		    ImGui::NextColumn();
-	    });
+	ForEachSound([this](entt::entity entity, const AudioEmitter& emitter) {
+		if (ImGui::Selectable(("##" + std::to_string(emitter.sourceId)).c_str(), _selectedEmitter == entity,
+		                      ImGuiSelectableFlags_SpanAllColumns))
+		{
+			_selectedEmitter = entity;
+		}
+		const auto& sound = Locator::audio::value().GetSound(emitter.soundId);
+		ImGui::SameLine();
+		ImGui::Text("%u", emitter.sourceId);
+		ImGui::NextColumn();
+		ImGui::Text("%u", sound.bufferId);
+		ImGui::NextColumn();
+		ImGui::Text("%s", sound.name.c_str());
+		ImGui::NextColumn();
+		switch (Locator::audio::value().GetStatus(entity))
+		{
+		case AudioStatus::Initial:
+			ImGui::TextColored(k_RedColor, "Initial");
+			break;
+		case AudioStatus::Playing:
+			ImGui::TextColored(k_GreenColor, "Playing");
+			break;
+		case AudioStatus::Paused:
+			ImGui::TextColored(k_RedColor, "Paused");
+			break;
+		case AudioStatus::Stopped:
+			ImGui::TextColored(k_RedColor, "Stopped");
+			break;
+		}
+		ImGui::NextColumn();
+		ImGui::ProgressBar(Locator::audio::value().GetProgress(entity));
+		ImGui::NextColumn();
+	});
 	ImGui::EndChild();
 	ImGui::PopStyleVar();
 }
