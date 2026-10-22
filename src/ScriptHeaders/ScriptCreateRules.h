@@ -36,9 +36,13 @@ inline constexpr int32_t k_LastCreateType = static_cast<int32_t>(ObjectType::Ani
 /// Whether a script may ask to create a thing of the type; any other is refused with an error
 [[nodiscard]] bool IsCreatableType(int32_t type);
 
-/// Whether a thing a script creates keeps the height above the land the script gave its place. Only a marker and a mobile
-/// static do; everything else is made standing on the land under that place, whatever height the script gave.
-[[nodiscard]] bool KeepsScriptHeight(ObjectType type);
+/// Whether a thing a script creates keeps the height above the land that the script gave its place. `subtype` is the
+/// row of the thing in the info table of its type.
+/// - A marker keeps the height.
+/// - A mobile static that can not move in the physics keeps the height: a holder of a singing stone, a lantern and a
+///   bonfire. Every other mobile static goes down onto the land when the script makes it.
+/// - Everything else stands on the land under that place, whatever height the script gave.
+[[nodiscard]] bool KeepsScriptHeight(ObjectType type, uint32_t subtype = 0);
 
 /// Whether a thing a script creates takes no notice of reactions until a script tells it to. Only a creature does: it
 /// does not react to what happens near it, and it does not catch what flies to it.
