@@ -161,6 +161,10 @@ struct Arguments
 	bool frameStatsViews {false};
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
+	/// The https:// origin of the lobby, none for no online services
+	std::optional<std::string> lobbyOrigin;
+	/// The real-world weather changes the weather of a single-player game (off by default, as in the original game)
+	bool useInternetWeather {false};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
@@ -286,6 +290,8 @@ public:
 	void UpdateCreaturePoses();
 	/// The effects of the frame that the draw moves on, by the frame's game time, after the hand moved
 	void UpdateFrameEffects();
+	/// The web client and the lobby client do their work of the frame
+	void UpdateOnline();
 	/// The numbers and the marks that rise over things
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw

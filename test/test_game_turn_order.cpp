@@ -219,6 +219,14 @@ TEST(GameTurnOrder, TheRunRecordSeesTheWorldAfterTheLastStepOfTheTurn)
 	EXPECT_EQ(recorder.IndexOf(Step::RunRecord), static_cast<std::ptrdiff_t>(recorder.Steps().size()) - 1);
 }
 
+// The real-world weather follows the turn of the game, before the walker that came up against an edge tries again
+TEST(GameTurnOrder, TheRealWeatherFollowsTheTurnOfTheGame)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::GlobalStatistics, Step::RealWeather));
+	EXPECT_TRUE(recorder.Before(Step::RealWeather, Step::WalkerLookahead));
+}
+
 TEST(GameTurnOrder, TheHandSpeedForTheSmokeIsPartOfTheInput)
 {
 	const auto recorder = PlayOneTurn();

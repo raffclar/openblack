@@ -118,6 +118,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
+		("lobby", "The https:// origin of the lobby for the online services, such as https://bw.example.org. Without it, the game has no online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>())
+		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is off by default, as in the original game, and needs --lobby and a login.")
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
@@ -329,6 +331,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
+		if (result.count("lobby") != 0)
+		{
+			args.lobbyOrigin = result["lobby"].as<std::string>();
+		}
+		args.useInternetWeather = result.count("internet-weather") != 0;
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;
