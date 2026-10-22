@@ -76,6 +76,10 @@ std::optional<std::pair<EDTWay, size_t>> ReadWay(std::span<const uint8_t> bytes,
 	    .unknown2 = Read<uint16_t>(bytes, offset + 2),
 	    .unknown8 = Read<float>(bytes, offset + 8),
 	    .duration = Read<int32_t>(bytes, offset + 0x10),
+	    .points = {},
+	    .handles = {},
+	    .times = {},
+	    .speeds = {},
 	};
 	auto at = offset + k_WayHeaderSize;
 	way.points.reserve(count);

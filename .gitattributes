@@ -15,3 +15,4 @@
 # Shell scripts must keep LF endings for bash, batch files CRLF for cmd.exe
 tools/build/ob-build text eol=lf
 *.cmd text eol=crlf
+tools/build/ob-web text eol=lf

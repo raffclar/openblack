@@ -189,10 +189,11 @@ Sdl2WindowingSystem::NativeHandles Sdl2WindowingSystem::GetNativeHandles() const
 {
 	NativeHandles result {nullptr, nullptr};
 #if defined(__EMSCRIPTEN__)
+	// In a web browser the renderer draws into the page's canvas, which it finds by its selector
 	static const char* canvas = "#canvas";
-	nativeWindow = const_cast<void*>(reinterpret_cast<const void*>(canvas));
-	return;
-#endif
+	result.nativeWindow = const_cast<void*>(reinterpret_cast<const void*>(canvas));
+	return result;
+#else
 
 	SDL_SysWMinfo wmi;
 	SDL_VERSION(&wmi.version);
@@ -280,6 +281,7 @@ Sdl2WindowingSystem::NativeHandles Sdl2WindowingSystem::GetNativeHandles() const
 	}
 	return result;
 	// clang-format on
+#endif // defined(__EMSCRIPTEN__)
 }
 
 bool Sdl2WindowingSystem::IsOpen() const
