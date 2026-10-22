@@ -8,10 +8,10 @@
  *******************************************************************************/
 
 // Direct3D binds an instanced draw's instance data by semantic alone: bgfx gives the instance's columns i_data0 to
-// i_data4 the texture coordinates 7 down to 3, whatever the shader declares, while Vulkan binds them by their place
+// i_data4 the texture coordinates 31 down to 27, whatever the shader declares, while Vulkan binds them by their place
 // after the vertex attributes. An instance column declared at any other semantic reads the vertex buffer on Direct3D
-// (meshes blended by their instance's alpha were drawn opaque), and a vertex attribute at those texture coordinates is
-// replaced by the instance data.
+// (meshes blended by their instance's alpha were drawn opaque, and models were not drawn), and a vertex attribute at
+// those texture coordinates is replaced by the instance data.
 
 #include <cstdint>
 #include <cstdlib>
@@ -32,14 +32,14 @@
 
 #if defined(_WIN32)
 // The instanced shaders as the game embeds them, compiled for Direct3D
-#include "generated/shaders/dx11/vs_object_hm_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_lightmap_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_morph_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_palette_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_object_static_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_particle_instanced.sc.bin.h"
-#include "generated/shaders/dx11/vs_vegetation_hm_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_hm_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_lightmap_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_morph_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_palette_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_object_static_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_particle_instanced.sc.bin.h"
+#include "generated/shaders/dxbc/vs_vegetation_hm_instanced.sc.bin.h"
 #endif // defined(_WIN32)
 
 namespace
@@ -84,7 +84,7 @@ std::vector<std::string> Words(std::string text)
 	return words;
 }
 
-/// Every input's semantic in the varying definitions, by name: "vec4 i_data0 : TEXCOORD7;" gives i_data0 TEXCOORD7
+/// Every input's semantic in the varying definitions, by name: "vec4 i_data0 : TEXCOORD31;" gives i_data0 TEXCOORD31
 std::map<std::string, std::string> Semantics()
 {
 	std::map<std::string, std::string> semantics;
@@ -134,7 +134,8 @@ std::vector<std::pair<std::string, std::vector<std::string>>> VertexInputs()
 /// The texture coordinates bgfx binds instance column 0 to 4 to on Direct3D
 std::string InstanceSemantic(int column)
 {
-	return "TEXCOORD" + std::to_string(7 - column);
+	constexpr int k_FirstInstanceTexCoord = 31;
+	return "TEXCOORD" + std::to_string(k_FirstInstanceTexCoord - column);
 }
 
 TEST(InstanceDataInputs, InstanceColumnsAreAtTheTextureCoordinatesDirect3DBindsThemTo)
@@ -190,17 +191,17 @@ bool Takes(const std::vector<uint16_t>& attributes, uint16_t attribute)
 	return std::ranges::find(attributes, attribute) != attributes.end();
 }
 
-TEST(InstanceDataInputs, CompiledForDirect3DEveryInstanceColumnIsInstanceData)
+TEST(InstanceDataInputs, CompiledForDirect3DNoInstanceColumnIsAVertexAttribute)
 {
 	const std::map<std::string, std::span<const uint8_t>> binaries {
-	    {"vs_object_hm_instanced", vs_object_hm_instanced_dx11},
-	    {"vs_object_instanced", vs_object_instanced_dx11},
-	    {"vs_object_lightmap_instanced", vs_object_lightmap_instanced_dx11},
-	    {"vs_object_morph_instanced", vs_object_morph_instanced_dx11},
-	    {"vs_object_palette_instanced", vs_object_palette_instanced_dx11},
-	    {"vs_object_static_instanced", vs_object_static_instanced_dx11},
-	    {"vs_particle_instanced", vs_particle_instanced_dx11},
-	    {"vs_vegetation_hm_instanced", vs_vegetation_hm_instanced_dx11},
+	    {"vs_object_hm_instanced", vs_object_hm_instanced_dxbc},
+	    {"vs_object_instanced", vs_object_instanced_dxbc},
+	    {"vs_object_lightmap_instanced", vs_object_lightmap_instanced_dxbc},
+	    {"vs_object_morph_instanced", vs_object_morph_instanced_dxbc},
+	    {"vs_object_palette_instanced", vs_object_palette_instanced_dxbc},
+	    {"vs_object_static_instanced", vs_object_static_instanced_dxbc},
+	    {"vs_particle_instanced", vs_particle_instanced_dxbc},
+	    {"vs_vegetation_hm_instanced", vs_vegetation_hm_instanced_dxbc},
 	};
 	for (const auto& [name, binary] : binaries)
 	{
@@ -208,16 +209,19 @@ TEST(InstanceDataInputs, CompiledForDirect3DEveryInstanceColumnIsInstanceData)
 		ASSERT_TRUE(attributes.has_value()) << name;
 		// None of them takes a vertex colour: the fifth column read from one is the vertex buffer's first bytes
 		EXPECT_FALSE(Takes(*attributes, k_Colour0)) << name;
+		// The instance columns come from the instance data, not from the vertex buffer: no vertex attribute takes the
+		// texture coordinates where the instance columns were before
 		for (uint16_t attribute = k_TexCoord3; attribute <= k_TexCoord7; ++attribute)
 		{
-			EXPECT_TRUE(Takes(*attributes, attribute)) << name << " lacks instance column " << (k_TexCoord7 - attribute);
+			EXPECT_FALSE(Takes(*attributes, attribute))
+			    << name << " reads texture coordinate " << (attribute - k_TexCoord3 + 3);
 		}
 	}
 }
 
 TEST(InstanceDataInputs, CompiledForDirect3DTheLightmapCoordinatesAreAVertexAttributeOfTheirOwn)
 {
-	const auto attributes = openblack::graphics::shader_samplers::ReadVertexAttributes(vs_object_lightmap_instanced_dx11);
+	const auto attributes = openblack::graphics::shader_samplers::ReadVertexAttributes(vs_object_lightmap_instanced_dxbc);
 	ASSERT_TRUE(attributes.has_value());
 	EXPECT_TRUE(Takes(*attributes, k_TexCoord1));
 }
