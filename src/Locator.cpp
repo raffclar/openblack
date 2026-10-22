@@ -172,11 +172,15 @@
 #include "Online/HttpClientInterface.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
+#include "Online/WebSocketInterface.h"
+#include "Online/WebSocketPushChannel.h"
 #include "Profiler.h"
 #if defined(__EMSCRIPTEN__)
+#include "Web/BrowserWebSocketClient.h"
 #include "Web/FetchHttpClient.h"
 #else
 #include "Online/Desktop/CurlHttpClient.h"
+#include "Online/Desktop/CurlWebSocketClient.h"
 #endif
 #include "Resources/Resources.h"
 #include "Windowing/Sdl2WindowingSystem.h"
@@ -414,18 +418,25 @@ lobby_api::Date LocalDate(int64_t unixTime)
 	return {.year = local.tm_year + 1900, .month = local.tm_mon + 1, .day = local.tm_mday};
 }
 
-/// The web client, the lobby client and the real-world weather. They make no call until the game asks for one.
+/// The web client, the WSS client, the lobby client and the real-world weather. They make no call and open no socket
+/// until the game asks for one.
 void InitializeOnline(const player_profiles::Store& profiles)
 {
 #if defined(__EMSCRIPTEN__)
 	Locator::httpClient::emplace<web::FetchHttpClient>();
+	Locator::webSocketClient::emplace<web::BrowserWebSocketClient>();
+	// The browser cannot send headers in the handshake
+	constexpr auto k_PushAuth = online::PushAuth::Subprotocol;
 #else
 	Locator::httpClient::emplace<online::CurlHttpClient>();
+	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
-	Locator::lobbyClient::emplace<LobbyClientSystem>(LobbyConfig(), Locator::httpClient::value(),
-	                                                 std::make_unique<online::NoPushChannel>(),
-	                                                 online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
-	                                                 []() { return std::chrono::system_clock::now(); });
+	Locator::lobbyClient::emplace<LobbyClientSystem>(
+	    LobbyConfig(), Locator::httpClient::value(),
+	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
+	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
+	    []() { return std::chrono::system_clock::now(); });
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
 	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
 	    internetWeather, Locator::lobbyClient::value(),
@@ -681,6 +692,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();
+	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
 	Locator::rendereringSystem::reset();

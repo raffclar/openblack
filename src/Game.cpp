@@ -304,6 +304,7 @@
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/WebSocketInterface.h"
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
 #include "Physics/Materials.h"
@@ -3014,10 +3015,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 
 void Game::UpdateOnline()
 {
-	// The web client moves its transfers on and runs the callbacks of the answers. Then the lobby client moves on.
+	// The web client and the WSS client move their transfers on and run the handlers. Then the lobby client moves on.
 	if (Locator::httpClient::has_value())
 	{
 		Locator::httpClient::value().Poll();
+	}
+	if (Locator::webSocketClient::has_value())
+	{
+		Locator::webSocketClient::value().Poll();
 	}
 	if (Locator::lobbyClient::has_value())
 	{
