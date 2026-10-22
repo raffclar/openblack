@@ -90,3 +90,28 @@ void openblack::players_symbols::PutProfileSymbol(Sheet& players, const Sheet& d
 	}
 	CopyDesign(players, designs, symbol, player);
 }
+
+std::optional<uint32_t> openblack::players_symbols::ChosenSymbol(std::optional<int> profileSymbol,
+                                                                 std::optional<uint32_t> symbolInPlace)
+{
+	if (symbolInPlace.has_value())
+	{
+		return symbolInPlace;
+	}
+	if (!profileSymbol.has_value())
+	{
+		return std::nullopt;
+	}
+	// A number outside the sheet of designs copies nothing
+	return static_cast<uint32_t>(*profileSymbol);
+}
+
+Sheet openblack::players_symbols::MakeSheet(Sheet file, const Sheet& designs, std::optional<uint32_t> symbol, uint32_t player,
+                                            std::optional<std::span<const uint8_t>> ownPicture)
+{
+	if (symbol.has_value())
+	{
+		PutProfileSymbol(file, designs, *symbol, player, ownPicture);
+	}
+	return file;
+}
