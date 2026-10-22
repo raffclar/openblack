@@ -90,6 +90,8 @@ private:
 	/// The creature's animations move on by some milliseconds, and the body takes a new pose where the creature is. The
 	/// pose of the last turn becomes the older pose.
 	void PoseForTurn(entt::entity entity, float milliseconds);
+	/// The breath of a creature in a game turn of this many milliseconds
+	void BreatheForTurn(entt::entity creature, float milliseconds);
 	/// The creature starts or stops its creed hum after a change to its glows
 	static void ApplyHum(entt::entity creature, creature_hand_glow::Hum hum);
 	/// While the body of a creature plays the loop of the puke animation, twelve drops of sick come out of its lips
@@ -97,8 +99,6 @@ private:
 
 	/// The game's random numbers: the blinks and the eye movements draw on the local seed, the dance moves on the synced seed
 	GameRandomSource _random;
-	/// When the breaths move towards their target periods
-	frame_pace::Pace _breathPace;
 	/// The animations adjusted to the variants' stands, made the first time that a creature of the species wants them
 	AdjustedAnimations _adjusted;
 };

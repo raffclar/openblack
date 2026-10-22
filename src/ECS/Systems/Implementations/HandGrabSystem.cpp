@@ -356,10 +356,14 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	switch (grab->state)
 	{
 	case HandGrab::State::Holding:
-		// Held down long enough, the button gives what the hand holds to a creature (see UpdateFrame)
-		grab->givePress = true;
 		grab->pressMs = nowMs;
 		grab->pressTurn = turn;
+		// The press first gives what the hand holds to the creature that it offers it to, or to a creature under the
+		// hand that would take it. The hand keeps hold of it, not ready to throw, until the creature takes it.
+		if (Give(*grab, _world->ObjectUnderCursor()))
+		{
+			return true;
+		}
 		// On something the held thing can be used on, it is given to it; otherwise ready to throw: the spring takes hold of
 		// the hand the next frame, where the hand then is
 		if (const auto target = _world->ObjectUnderCursor(); target.has_value() && HandInInfluence() && ApplyTo(*grab, *target))
@@ -428,7 +432,6 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	{
 		return std::nullopt;
 	}
-	grab->givePress = false;
 	switch (grab->state)
 	{
 	case HandGrab::State::Grabbing:
@@ -1145,7 +1148,6 @@ void HandGrabSystem::Empty(HandGrab& grab)
 	ForgetOffer(grab);
 	grab.offerTurn.Reset(0.0f);
 	grab.lastHand.reset();
-	grab.givePress = false;
 	grab.state = HandGrab::State::Empty;
 	grab.object = entt::null;
 	grab.waits = false;
@@ -1290,9 +1292,6 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		break;
 	}
 
-	// The button held down a while gives what the hand holds to the creature it offers it to, or to one under the cursor
-	// that would take it: the hand keeps hold of it, no longer ready to throw, until the creature takes it
-	GiveAfterLongPress(*grab, frame.nowMs, frame.turn);
 	// Offered to a creature, the hand may be drawn to its hand as it reaches
 	const auto offered = UpdateOffer(*grab, frame);
 	// The hand rises by how far what it holds hung last frame, which it then measures again
@@ -1417,22 +1416,6 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	return true;
 }
 
-void HandGrabSystem::GiveAfterLongPress(HandGrab& grab, uint32_t nowMs, uint32_t turn)
-{
-	if (!grab.givePress || grab.state == HandGrab::State::LettingGo ||
-	    !(hand_grab::ElapsedMs(nowMs, grab.pressMs, turn, grab.pressTurn) > hand_grab::k_GrabWaitMs))
-	{
-		return;
-	}
-	grab.givePress = false;
-	if (Give(grab, _world->ObjectUnderCursor()))
-	{
-		grab.state = HandGrab::State::Holding;
-		grab.springOn = false;
-		grab.springPending = false;
-	}
-}
-
 void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::entity object)
 {
 	auto* grab = Grab();
@@ -1474,11 +1457,6 @@ void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
 		{
 			SendTake(*grab, grab->object);
 		}
-		return;
-	}
-	if (Holds(*grab))
-	{
-		GiveAfterLongPress(*grab, nowMs, turn);
 	}
 }
 

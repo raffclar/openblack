@@ -74,6 +74,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
     // The puffs of smoke, the clouds, the mists, the sky and the lights
     {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
+    {.component = "ChimneySmoke", .field = "state", .marker = ""},
     {.component = "Cloud", .field = "track", .marker = ""},
     {.component = "Mist", .field = "counter", .marker = ""},
     {.component = "Mist", .field = "counterRemainder", .marker = ""},
@@ -91,6 +92,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ResourcePile", .field = "rise", .marker = ""},
     {.component = "LeashPost", .field = "look", .marker = ""},
     {.component = "Transform", .field = "rotation", .marker = "LeashPost"},
+    // The moving bodies are drawn between their last two turns. The turns read the Transform.
+    {.component = "PhysicsDrawPose", .field = "", .marker = ""},
     // The particle effects that the frames step
     {.component = "Vortex", .field = "beforeLandEffect", .marker = ""},
     {.component = "Vortex", .field = "afterLandEffect", .marker = ""},
@@ -101,6 +104,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Transform", .field = "", .marker = "Sprite"},
     {.component = "*", .field = "", .marker = "ScriptHighlightGlow"},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
+    {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
     {.component = "ScriptHighlight", .field = "yAngle", .marker = ""},
     {.component = "ScriptHighlight", .field = "sparks", .marker = ""},
@@ -114,8 +118,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The drawn hand follows the pointer and the camera in each frame
     {.component = "Transform", .field = "rotation", .marker = "Hand"},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
+    // The hand's size follows its distance from the camera in each frame. Only the frames read it.
+    {.component = "HandGrab", .field = "handSize", .marker = ""},
     {.component = "HandMorph", .field = "", .marker = ""},
     {.component = "HandMiracleFx", .field = "", .marker = ""},
+    // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
+    // the newest turn.
+    {.component = "CreatureAnimation", .field = "boneMatrices", .marker = ""},
     // The creature's eyes, the sounds of its body and the prints of its feet
     {.component = "CreatureEyes", .field = "", .marker = ""},
     {.component = "CreatureAudio", .field = "", .marker = ""},

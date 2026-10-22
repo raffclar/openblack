@@ -52,15 +52,15 @@ TEST(SimRun, TheRunEndsAtItsLastTurn)
 TEST(SimRun, ThePacedRunWaitsForTheRestOfTheFrame)
 {
 	const Settings paced {.paceToWallClock = true};
-	EXPECT_EQ(PaceWait(paced, 20u, 5ms), 15ms);
-	EXPECT_EQ(PaceWait(paced, 20u, 25ms), 0ms);
+	EXPECT_EQ(PaceWait(paced, 20ms, 5ms), 15ms);
+	EXPECT_EQ(PaceWait(paced, 20ms, 25ms), 0ms);
 	EXPECT_EQ(PaceWait(paced, std::nullopt, 5ms), 0ms);
 }
 
 TEST(SimRun, FastAndUnpacedRunsDoNotWait)
 {
-	EXPECT_EQ(PaceWait(Settings {.fast = true, .paceToWallClock = true}, 20u, 1ms), 0ms);
-	EXPECT_EQ(PaceWait(Settings {}, 20u, 1ms), 0ms);
+	EXPECT_EQ(PaceWait(Settings {.fast = true, .paceToWallClock = true}, 20ms, 1ms), 0ms);
+	EXPECT_EQ(PaceWait(Settings {}, 20ms, 1ms), 0ms);
 }
 
 TEST(SimRun, TimingsGiveAveragesAndTheLongest)
@@ -87,4 +87,12 @@ TEST(SimRun, TimingsAddTheStagesOfEachFrame)
 	EXPECT_FLOAT_EQ(timings.stageTotalMs[0], 1.5f);
 	EXPECT_FLOAT_EQ(timings.stageTotalMs[1], 1.5f);
 	EXPECT_FLOAT_EQ(timings.stageTotalMs[2], 2.0f);
+}
+
+TEST(SimRun, AFrameTimeCanHaveAPartOfAMillisecond)
+{
+	EXPECT_EQ(FrameTimeFromMs(16.7), std::optional(std::chrono::microseconds(16700)));
+	EXPECT_EQ(FrameTimeFromMs(20.0), std::optional(std::chrono::microseconds(20000)));
+	EXPECT_FALSE(FrameTimeFromMs(0.5).has_value());
+	EXPECT_FALSE(FrameTimeFromMs(1000.5).has_value());
 }

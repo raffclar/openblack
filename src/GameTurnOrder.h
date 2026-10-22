@@ -152,11 +152,15 @@ enum class Step : uint8_t
 	CreatureBlood,
 	/// The body of a creature sways from what hit it
 	CreatureSway,
+	/// The animations of what a creature does with things go on by the time of the turn
+	CreatureBodyActions,
 	/// A fighter's moves and blows in the duel
 	CreatureFightMoves,
 	/// A fighter gets back stamina
 	CreatureFightStamina,
 	CreaturePoses,
+	/// After the pose: the body's spheres knock things about, and the hands take hold of and let go of things
+	CreatureHandMoments,
 	/// The turn of the living: each creature, villager and animal in turn, the newest first (see living_turn::Walk)
 	Living,
 	MapCellsAfterLiving,
@@ -219,8 +223,9 @@ struct Place
 
 /// The turn, step by step
 inline constexpr std::array k_Turn = std::to_array<Place>({
-    // The frames draw the animals between their last two turns. Before anything else, the turn puts them back at the
-    // places of the last turn, so that the turn sees the world as the game keeps it, at any frame rate.
+    // The frames draw the animals and the creatures that walk between their last two turns. Before anything else, the
+    // turn puts them back at the places of the last turn, so that the turn sees the world as the game keeps it, at any
+    // frame rate.
     {.step = Step::DrawnPlaces, .stage = std::nullopt},
     // The commands that the players sent come first in the turn, in the order that they went, before the hand does its
     // own work of the turn
@@ -344,8 +349,12 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
     Step::CreatureMotes,
     Step::CreatureBlood,
     Step::CreatureSway,
+    // What it does with things plays on, by the time of the turn
+    Step::CreatureBodyActions,
     Step::CreatureFightMoves,
     Step::CreaturePoses,
+    // With the body in its new pose: what its body hits, and the things that its hands take hold of and let go of
+    Step::CreatureHandMoments,
     // The rest of its turn: what a land keeps of it, its picture for its web page, the stamina of a fighter, and the
     // change of its alignment at the end
     Step::CreatureCarryOver,

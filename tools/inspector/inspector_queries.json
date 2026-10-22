@@ -2475,6 +2475,11 @@
     "type": "boolean"
    },
    {
+    "description": "As parts, and the synced hash of each field of each component too",
+    "name": "fields",
+    "type": "boolean"
+   },
+   {
     "description": "Stop the record",
     "name": "stop",
     "type": "boolean"

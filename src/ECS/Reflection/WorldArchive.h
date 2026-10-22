@@ -92,6 +92,9 @@ struct WorldHashes
 	uint64_t entities {0};
 	/// Each registered component that has an entity, by its name, in the order of the names
 	std::vector<std::pair<std::string, uint64_t>> components;
+	/// When asked, each field of each registered component as "component.field", in the order of the components. A
+	/// component that saves as one value has the field "*".
+	std::vector<std::pair<std::string, uint64_t>> fields;
 };
 
 /// Whether a hash of the world keeps a part of a component. The hash asks first about the whole component (no field and
@@ -101,8 +104,9 @@ using KeepInHash = std::function<bool(std::string_view component, std::string_vi
 
 /// Makes the hashes of the parts of the world, with no save in memory of the whole world. With a keep function, the hash
 /// of a component leaves out the parts that the function does not keep. The hash of each component goes over its live
-/// rows in the order of the storage.
-[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {});
+/// rows in the order of the storage. With byField, the hashes also keep each field of each component on its own.
+[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {},
+                                    bool byField = false);
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the

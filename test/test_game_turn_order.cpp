@@ -320,3 +320,14 @@ TEST(GameTurnOrder, TheCreaturesTurnIsPartOfTheTurnOfTheLiving)
 	EXPECT_EQ(creatures.Steps().front(), Step::CreaturePens);
 	EXPECT_EQ(creatures.Steps().back(), Step::CreatureAlignment);
 }
+
+// The body's actions play on in the creature's own turn before its pose, as its sway and its fight moves do, and its
+// hands take hold of and let go of things after the pose
+TEST(GameTurnOrder, TheBodysActionsPlayInTheTurnAroundThePose)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::CreatureSway, Step::CreatureBodyActions));
+	EXPECT_TRUE(recorder.Before(Step::CreatureBodyActions, Step::CreatureFightMoves));
+	EXPECT_TRUE(recorder.Before(Step::CreaturePoses, Step::CreatureHandMoments));
+	EXPECT_TRUE(recorder.Before(Step::CreatureHandMoments, Step::CreatureCarryOver));
+}

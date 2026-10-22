@@ -1387,7 +1387,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandGrab::givenTo>("givenTo")
 	    .Field<&components::HandGrab::offerTurn>("offerTurn")
 	    .Field<&components::HandGrab::lastHand>("lastHand")
-	    .Field<&components::HandGrab::givePress>("givePress")
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
 	    .Field<&components::HandGrab::lastDropped>("lastDropped");
 	Reflect<components::HandMiracleFx>(context)

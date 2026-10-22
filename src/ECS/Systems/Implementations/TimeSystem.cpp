@@ -112,11 +112,12 @@ uint32_t TimeSystem::Ticks() const
 	return _fixedFrameTime.has_value() ? _fixedTicks : _ticks() + _tickOffset;
 }
 
-void TimeSystem::SetFixedFrameTime(std::optional<std::chrono::milliseconds> frameTime)
+void TimeSystem::SetFixedFrameTime(std::optional<std::chrono::microseconds> frameTime)
 {
 	if (frameTime.has_value() && !_fixedFrameTime.has_value())
 	{
 		_fixedTicks = Ticks();
+		_fixedRemainderUs = 0;
 	}
 	else if (!frameTime.has_value() && _fixedFrameTime.has_value())
 	{
@@ -130,7 +131,11 @@ void TimeSystem::Update()
 {
 	if (_fixedFrameTime.has_value())
 	{
-		_fixedTicks += static_cast<uint32_t>(_fixedFrameTime->count());
+		// Each whole millisecond goes on the tick count; the rest waits for the next frames
+		constexpr uint32_t k_MicrosecondsPerMs = 1000;
+		_fixedRemainderUs += static_cast<uint32_t>(_fixedFrameTime->count());
+		_fixedTicks += _fixedRemainderUs / k_MicrosecondsPerMs;
+		_fixedRemainderUs %= k_MicrosecondsPerMs;
 	}
 	// The real time since the start, by the tick count, so that it follows a fixed frame time
 	const auto ticks = Ticks();

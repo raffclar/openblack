@@ -92,7 +92,9 @@ def game_arguments(options, record, log, until_turn, fast, driven):
         args.append("--sim-still-hand")
     if options.limits:
         args += ["--sim-limits", options.limits]
-    if options.hash_parts:
+    if getattr(options, "hash_fields", False):
+        args.append("--sim-hash-fields")
+    elif options.hash_parts:
         args.append("--sim-hash-parts")
     # A driven run starts paused, so that the driver gives its input at the same turns each time
     if driven:
@@ -397,15 +399,17 @@ def compare_exit_saves(first, other):
 
 
 def parse_frames(text):
-    """The frame settings of the runs of a frame-rate repeat, from "10,17,20:1": each item is the frame time in
-    milliseconds, and after a colon the draw every (0, no frame drawn, by default)"""
+    """The frame settings of the runs of a frame-rate repeat, from "10,16.7,20:1": each item is the frame time in
+    milliseconds, with a part of a millisecond if needed, and after a colon the draw every (0, no frame drawn, by
+    default)"""
     frames = []
     for item in (text or "").split(","):
         item = item.strip()
         if not item:
             continue
         ms, _, draw = item.partition(":")
-        frames.append((int(ms), int(draw or 0)))
+        value = float(ms)
+        frames.append((int(value) if value.is_integer() else value, int(draw or 0)))
     return frames
 
 
@@ -413,6 +417,8 @@ def repeat_result(records_first, records_other, synced=False):
     """How a repeat run compares with the first: where it parts, the counts of its records and its last count of
     draws. With synced, only the synced part of the records counts (a frame-rate repeat)."""
     result = (sim_report.compare_synced if synced else sim_report.compare)(records_first, records_other)
+    if synced:
+        result["first_by_part"] = sim_report.synced_part_firsts(records_first, records_other)
     result["records"] = [len(records_first), len(records_other)]
     result["draws_last"] = [(records_first or [{}])[-1].get("draws"), (records_other or [{}])[-1].get("draws")]
     return result
@@ -462,7 +468,8 @@ def command_repeat(options):
         "frames": frames,
         "divergences": len(divergences),
         "diverged": [{key: result.get(key) for key in ("run", "turn", "frame", "differs", "seeds", "draws", "hash",
-                                                         "counts", "parts", "draws_last")} for result in divergences],
+                                                         "counts", "parts", "draws_last", "first_by_part")}
+                     for result in divergences],
         "results": results,
     })
     with open(os.path.join(options.out, "repeat.json"), "w", encoding="utf-8") as file:
@@ -488,10 +495,13 @@ def parse(argv):
         sub.add_argument("--act-every", type=int, default=200, help="the turns between two inputs of the style")
         sub.add_argument("--stages", type=int, default=0,
                          help="start the creature at stage 0 and move it on one stage each time this many turns go by")
-        sub.add_argument("--frame-ms", type=int, default=DEFAULT_FRAME_MS)
+        sub.add_argument("--frame-ms", type=float, default=DEFAULT_FRAME_MS,
+                         help="the game time of each frame in ms, with a part of a millisecond if needed (16.7)")
         sub.add_argument("--draw-every", type=int, default=0, help="in the fast mode, draw one frame in this many")
         sub.add_argument("--normal", action="store_true", help="run at the normal speed, drawn, not in the fast mode")
         sub.add_argument("--hash-parts", action="store_true")
+        sub.add_argument("--hash-fields", action="store_true",
+                         help="as --hash-parts, and the synced hash of each field of each component (large records)")
         sub.add_argument("--limits", default=os.path.join(HERE, "stuck_limits.json"))
         sub.add_argument("--config", default="RelWithDebInfo")
         sub.add_argument("--exe")
