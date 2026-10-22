@@ -8,7 +8,9 @@
  *******************************************************************************/
 
 #include <cmath>
+#include <cstdint>
 
+#include <bit>
 #include <map>
 #include <utility>
 #include <vector>
@@ -191,4 +193,40 @@ TEST(LandFootprintRules, RiversArePaintedFirstRiverFirstLastStretchFirst)
 	    {.river = 1, .from = 0, .channel = false}, {.river = 1, .from = 0, .channel = true},
 	};
 	EXPECT_EQ(order, expected);
+}
+
+TEST(LandFootprintRules, AGroundPrintLiesAtTheMapPlaceOfItsThingWithNoTurn)
+{
+	// 1.0001 m is 6554 units of the map's fixed point, which is 1.00006104 m
+	const auto placement = land_footprints::GroundPrintPlacement({1.0001f, -20.7f, 2.5f});
+	EXPECT_EQ(std::bit_cast<uint32_t>(placement.origin.x), 0x3F800200u);
+	EXPECT_EQ(placement.origin.y, 2.5f);
+	EXPECT_EQ(placement.xFromX, 1.0f);
+	EXPECT_EQ(placement.xFromZ, 0.0f);
+	EXPECT_EQ(placement.zFromX, 0.0f);
+	EXPECT_EQ(placement.zFromZ, 1.0f);
+}
+
+TEST(LandFootprintRules, GroundPrintsArePaintedNewestFirst)
+{
+	using Thing = land_footprints::GroundPrintThing;
+	const std::vector<Thing> things {
+	    {.mesh = 7, .position = {10.0f, 0.0f, 10.0f}, .made = 1},
+	    {.mesh = 7, .position = {20.0f, 0.0f, 10.0f}, .made = 0},
+	    {.mesh = 7, .position = {30.0f, 0.0f, 10.0f}, .made = 2},
+	};
+	EXPECT_EQ(land_footprints::GroundPrintOrder(things), (std::vector<size_t> {2, 0, 1}));
+}
+
+TEST(LandFootprintRules, AGroundPrintSameAsAnOlderOneIsNotMade)
+{
+	using Thing = land_footprints::GroundPrintThing;
+	const std::vector<Thing> things {
+	    {.mesh = 7, .position = {10.0f, 0.0f, 10.0f}, .made = 0},
+	    // The same model at the same place of the map, at another height: not made
+	    {.mesh = 7, .position = {10.0f, 5.0f, 10.0f}, .made = 1},
+	    // Another model at the same place: made
+	    {.mesh = 8, .position = {10.0f, 0.0f, 10.0f}, .made = 2},
+	};
+	EXPECT_EQ(land_footprints::GroundPrintOrder(things), (std::vector<size_t> {2, 0}));
 }

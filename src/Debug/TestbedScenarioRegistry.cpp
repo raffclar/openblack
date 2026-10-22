@@ -1634,7 +1634,7 @@ void AddBreederOffers(std::vector<Scenario>& all)
 void AddRivalCreatureLoads(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
-	constexpr glm::vec2 k_Place {20.0f, 0.0f};
+	static constexpr glm::vec2 k_Place {20.0f, 0.0f};
 	const auto load = [](std::string_view script, float scale) {
 		return Command {.kind = Kind::RunScript,
 		                .delaySeconds = 0.5f,
@@ -1827,6 +1827,29 @@ void AddGuideStorm(std::vector<Scenario>& all)
 	});
 }
 
+/// The stone circle of The Singing Stones, as the first land makes it at its places
+void AddSingingStones(std::vector<Scenario>& all)
+{
+	// The circle's centre on the map, from the middle of the map
+	constexpr glm::vec2 k_Circle {2496.6653f - 2560.0f, 2246.3257f - 2560.0f};
+	all.push_back({
+	    .id = "story.singing_stones_circle",
+	    .name = "The stone circle of The Singing Stones",
+	    .facet = Facet::Story,
+	    .description = "The game's SingingStoneCircle script runs as the first land starts it. It makes the circle south "
+	                   "of the middle: eight holders on a ring, three stones in them and the other stones far away.",
+	    .expected = "Eight prints of the holders show on the ground, on a ring 17.5 from the centre, one every eighth of "
+	                "a turn. The three fixed stones stand on the land in the first, second and sixth holders. The "
+	                "holders' models are under the land and do not show. Two seconds in, the circle plays the notes of "
+	                "its three stones in turn, one holder every half second.",
+	    .environment = {.dispenserGrid = false, .landNumber = 1},
+	    .framing = {.shot = Shot::Placed,
+	                .eye = {k_Circle.x + 10.0f, 30.0f, k_Circle.y - 40.0f},
+	                .look = {k_Circle.x, 0.0f, k_Circle.y}},
+	    .commands = {{.kind = Kind::RunScript, .delaySeconds = 0.5f, .script = "SingingStoneCircle"}},
+	});
+}
+
 void AddStory(std::vector<Scenario>& all)
 {
 	// The player's temple west of the middle, turned as Land 1's
@@ -1946,6 +1969,7 @@ void AddStory(std::vector<Scenario>& all)
 	AddOgreLair(all);
 	AddGuideStorm(all);
 	AddRivalCreatureLoads(all);
+	AddSingingStones(all);
 }
 
 void AddExplorersBoat(std::vector<Scenario>& all)

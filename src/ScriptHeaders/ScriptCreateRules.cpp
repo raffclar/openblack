@@ -76,9 +76,19 @@ std::optional<uint32_t> TribeVillagerRow(int32_t tribe, uint32_t draw, std::size
 	return static_cast<uint32_t>(row);
 }
 
-bool KeepsScriptHeight(ObjectType type)
+bool KeepsScriptHeight(ObjectType type, uint32_t subtype)
 {
-	return type == ObjectType::Marker || type == ObjectType::MobileStatic;
+	if (type == ObjectType::Marker)
+	{
+		return true;
+	}
+	if (type != ObjectType::MobileStatic)
+	{
+		return false;
+	}
+	const auto row = static_cast<MobileStaticInfo>(subtype);
+	return row == MobileStaticInfo::SingingStoneBase || row == MobileStaticInfo::StreetLantern ||
+	       row == MobileStaticInfo::CountryLantern || row == MobileStaticInfo::Bonfire;
 }
 
 bool IgnoresReactions(ObjectType type)

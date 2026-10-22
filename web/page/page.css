@@ -1,0 +1,36 @@
+:root {
+  color-scheme: dark;
+  --background: #101010;
+  --text: #d8d4c8;
+  --muted: #9a958a;
+  --accent: #c8a04a;
+  --good: #7fbf6a;
+  --bad: #e07060;
+  --panel: #1c1b19;
+}
+body { margin: 0; background: var(--background); color: var(--text); font: 15px/1.5 system-ui, sans-serif; }
+main { max-width: 760px; margin: 0 auto; padding: 24px 16px; }
+h1 { color: var(--accent); margin-top: 0; }
+.privacy { color: var(--muted); }
+section { margin: 16px 0; display: flex; flex-direction: column; gap: 10px; align-items: flex-start; }
+button, .file-button {
+  background: var(--panel); color: var(--text); border: 1px solid var(--accent); border-radius: 4px;
+  padding: 8px 14px; font: inherit; cursor: pointer;
+}
+button:disabled { opacity: 0.5; cursor: default; }
+.file-button input { display: none; }
+#drop-zone { border: 2px dashed var(--muted); border-radius: 6px; padding: 24px; width: 100%; box-sizing: border-box; }
+#drop-zone.active { border-color: var(--accent); }
+#check-list { margin: 0; padding-left: 20px; }
+.good { color: var(--good); }
+.bad { color: var(--bad); }
+body.playing { overflow: hidden; }
+#game { position: relative; display: flex; justify-content: center; background: #000; }
+#game[hidden] { display: none; }
+#screen { display: block; background: #000; }
+#canvas { position: absolute; top: 0; opacity: 0; outline: none; }
+#messages { max-width: 760px; margin: 0 auto; padding: 0 16px; }
+.message { border-left: 4px solid var(--bad); background: var(--panel); padding: 8px 12px; width: 100%; box-sizing: border-box; }
+.message strong { display: block; }
+#log-box { max-width: 1280px; margin: 8px auto; padding: 0 16px; color: var(--muted); }
+#log { max-height: 30vh; overflow: auto; white-space: pre-wrap; font: 12px monospace; margin: 0; }

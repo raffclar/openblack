@@ -78,6 +78,13 @@ struct BoltTarget
 	/// Arcs may crawl over it, and have since the targets were looked for
 	bool arcs {false};
 	bool arced {false};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const BoltTarget& self, Visitor&& visit)
+	{
+		visit(self.object, self.ground, self.height, self.drawsBolt, self.arcs, self.arced);
+	}
 };
 
 /// What a bolt keeps between steps

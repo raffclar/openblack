@@ -88,6 +88,14 @@ struct TornadoState
 	float pretendDue {0.0f};
 	float debrisMade {0.0f};
 	float debrisDue {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const TornadoState& self, Visitor&& visit)
+	{
+		visit(self.first, self.closing, self.base, self.top, self.baseVelocity, self.topVelocity, self.closeFade, self.alpha,
+		      self.pretendMade, self.pretendDue, self.debrisMade, self.debrisDue);
+	}
 };
 
 /// What it keeps for each flying atom

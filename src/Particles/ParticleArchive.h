@@ -20,6 +20,7 @@
 
 #include <glm/vec3.hpp>
 
+#include "ECS/Reflection/PlainImage.h"
 #include "ParticleEffect.h"
 
 namespace openblack::ecs::reflection
@@ -138,14 +139,27 @@ public:
 	    requires std::is_trivially_copyable_v<Type>
 	void WritePlain(const Type& value)
 	{
-		WriteBytes(&value, sizeof(Type));
+		// The gaps between the fields are zero, so that the same value always gives the same bytes
+		const auto image = ecs::reflection::PlainImage(value);
+		WriteBytes(image.bytes.data(), sizeof(Type));
 	}
 	template <typename Type>
 	    requires std::is_trivially_copyable_v<Type>
 	void WritePlainList(const std::vector<Type>& values)
 	{
 		WriteSize(values.size());
-		WriteBytes(values.data(), values.size() * sizeof(Type));
+		if constexpr (std::is_class_v<Type>)
+		{
+			for (const auto& value : values)
+			{
+				const auto image = ecs::reflection::PlainImage(value);
+				WriteBytes(image.bytes.data(), sizeof(Type));
+			}
+		}
+		else
+		{
+			WriteBytes(values.data(), values.size() * sizeof(Type));
+		}
 	}
 
 	/// The effect's atoms and collections start their numbers again

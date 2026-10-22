@@ -1,0 +1,182 @@
+#!/usr/bin/env bash
+# ******************************************************************************
+# Copyright (c) 2018-2026 openblack developers
+#
+# For a complete list of all authors, please refer to contributors.md
+# Interested in contributing? Visit https://github.com/openblack/openblack
+#
+# openblack is licensed under the GNU General Public License version 3.
+# ******************************************************************************
+# ob-web: builds and tries the web build of openblack (WebAssembly and WebGL 2) on Windows. It is the web partner of
+# ob-build, which builds the desktop game with MSVC only.
+#
+#   ob-web configure [--worktree PATH] [--build-dir PATH] [--config Release|Debug|RelWithDebInfo] [--fresh]
+#   ob-web build     [options] [target]          (the default target is openblack)
+#   ob-web serve     [options] [port]            (serves the page folder on 127.0.0.1 only, until it is stopped)
+#   ob-web chrome    [options] <url> <seconds> <output folder> [page script]
+#                                                (headless Chrome on the page: its console, then a screenshot)
+#   ob-web dir       [options]                   (prints the folder of the page)
+#   ob-web env       [options]                   (prints the tools and folders ob-web found)
+#
+# The worktree is the git worktree of the current folder, the build folder is E:/openblack/builds/<worktree>-web and
+# the config is Release (or $OB_WEB_CONFIG). Before each configure and build, ob-web stops when the disk of the build
+# folder has less than 20 GB free.
+#
+# The web build uses the CMake preset emscripten-vcpkg: the toolchain web/cmake/emscripten-openblack.cmake, the triplet
+# wasm32-emscripten-openblack in web/triplets and the ports in web/ports. ob-web adds the folders of this machine.
+#
+# Environment overrides: OB_ROOT (E:/openblack), OB_EMSDK (OB_ROOT/tools/emsdk), OB_VCPKG_ROOT
+# (E:/openblack/vcpkg-5de6d1f), OB_CMAKE, OB_NINJA, OB_CHROME, OB_WEB_CONFIG, OB_WEB_JOBS (12), OB_WEB_MIN_FREE_GB (20).
+set -uo pipefail
+
+die() {
+	echo "ob-web: error: $*" >&2
+	exit 1
+}
+note() { echo "ob-web: $*" >&2; }
+
+OB_SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
+OB_ROOT=$(cygpath -m "${OB_ROOT:-E:/openblack}")
+CONFIG=${OB_WEB_CONFIG:-Release}
+WT=""
+B=""
+FRESH=0
+
+parse_options() {
+	REST=()
+	while [ $# -gt 0 ]; do
+		case "$1" in
+		--worktree) WT=$2; shift 2 ;;
+		--build-dir) B=$2; shift 2 ;;
+		--config) CONFIG=$2; shift 2 ;;
+		--fresh) FRESH=1; shift ;;
+		*) REST+=("$1"); shift ;;
+		esac
+	done
+}
+
+resolve_folders() {
+	if [ -z "$WT" ]; then
+		WT=$(git rev-parse --show-toplevel 2>/dev/null) || die "not inside a git worktree; pass --worktree PATH"
+	fi
+	WT=$(cygpath -m "$(cd "$WT" && pwd)")
+	[ -f "$WT/CMakePresets.json" ] && [ -d "$WT/web" ] || die "$WT is not an openblack worktree with the web build"
+	B=$(cygpath -m "${B:-$OB_ROOT/builds/$(basename "$WT")-web}")
+	case "$(echo "$B" | tr 'A-Z' 'a-z')" in
+	"$(echo "$WT" | tr 'A-Z' 'a-z')"/*) die "the build folder $B is inside the worktree; build folders live on E:" ;;
+	esac
+	PAGE="$B/bin/$CONFIG"
+}
+
+first_existing() {
+	local candidate
+	for candidate in "$@"; do
+		if [ -n "$candidate" ] && [ -f "$candidate" ]; then
+			cygpath -m "$candidate"
+			return 0
+		fi
+	done
+	return 1
+}
+
+find_tools() {
+	local clion
+	clion=$(cygpath -u "${LOCALAPPDATA:-C:/Users/$USERNAME/AppData/Local}/Programs/CLion/bin")
+	CMAKE=$(first_existing "${OB_CMAKE:-}" "$clion/cmake/win/x64/bin/cmake.exe" "$(command -v cmake 2>/dev/null)") ||
+		die "cmake not found; set OB_CMAKE"
+	NINJA=$(first_existing "${OB_NINJA:-}" "$clion/ninja/win/x64/ninja.exe" "$(command -v ninja 2>/dev/null)") ||
+		die "ninja not found; set OB_NINJA"
+	EMSDK=$(cygpath -m "${OB_EMSDK:-$OB_ROOT/tools/emsdk}")
+	[ -f "$EMSDK/upstream/emscripten/emcc.py" ] || die "no Emscripten SDK at $EMSDK; set OB_EMSDK"
+	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-E:/openblack/vcpkg-5de6d1f}")
+	[ -f "$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" ] || die "no vcpkg at $VCPKG_ROOT_DIR; set OB_VCPKG_ROOT"
+	NODE=$(ls -d "$EMSDK"/node/*/node.exe "$EMSDK"/node/*/bin/node.exe 2>/dev/null | head -1)
+	PYTHON=$(ls -d "$EMSDK"/python/*/python.exe 2>/dev/null | head -1)
+	[ -n "$PYTHON" ] || die "no Python in $EMSDK/python"
+	# The environment of the Emscripten SDK, for this process and its children only
+	export EMSDK
+	export EMSDK_PYTHON="$PYTHON"
+	export EMSCRIPTEN_ROOT="$EMSDK/upstream/emscripten"
+	export EM_CONFIG="$EMSDK/.emscripten"
+	export VCPKG_ROOT="$VCPKG_ROOT_DIR"
+	export VCPKG_DEFAULT_BINARY_CACHE
+	VCPKG_DEFAULT_BINARY_CACHE=$(cygpath -w "$OB_ROOT/cache/vcpkg-binary")
+	PATH="$(cygpath -u "$EMSCRIPTEN_ROOT"):$(dirname "$(cygpath -u "${NODE:-/x/node}")"):$(dirname "$(cygpath -u "$NINJA")"):$PATH"
+	export PATH
+}
+
+check_disk() {
+	local free limit=${OB_WEB_MIN_FREE_GB:-20}
+	mkdir -p "$(dirname "$B")"
+	df -h "$(dirname "$B")" | tail -1 >&2
+	free=$(df --output=avail -BG "$(dirname "$B")" | tail -1 | tr -dc 0-9)
+	[ "$free" -ge "$limit" ] || die "only $free GB free on the disk of $B (at least $limit GB needed)"
+}
+
+cmd_configure() {
+	find_tools
+	check_disk
+	if [ $FRESH = 1 ]; then
+		rm -f "$B/CMakeCache.txt"
+	fi
+	mkdir -p "$B"
+	"$CMAKE" -S "$WT" -B "$B" --preset emscripten-vcpkg \
+		"-DCMAKE_MAKE_PROGRAM=$NINJA" \
+		"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" \
+		"-DVCPKG_HOST_TRIPLET=x64-windows" \
+		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$B/vcpkg-buildtrees;--x-packages-root=$B/vcpkg-packages" \
+		"${REST[@]}"
+}
+
+cmd_build() {
+	find_tools
+	check_disk
+	[ -f "$B/CMakeCache.txt" ] || cmd_configure
+	"$CMAKE" --build "$B" --config "$CONFIG" --target "${REST[0]:-openblack}" -- -j "${OB_WEB_JOBS:-12}"
+}
+
+cmd_serve() {
+	find_tools
+	[ -f "$PAGE/index.html" ] || die "no page in $PAGE; run ob-web build first"
+	exec "$PYTHON" -I "$WT/web/scripts/serve.py" "$PAGE" "${REST[0]:-8631}"
+}
+
+cmd_chrome() {
+	find_tools
+	[ ${#REST[@]} -ge 3 ] || die "usage: ob-web chrome <url> <seconds> <output folder> [page script]"
+	local chrome
+	chrome=$(first_existing "${OB_CHROME:-}" "/c/Program Files/Google/Chrome/Application/chrome.exe") ||
+		die "Chrome not found; set OB_CHROME"
+	[ -n "$NODE" ] || die "no node in $EMSDK/node"
+	mkdir -p "${REST[2]}"
+	"$NODE" "$WT/web/scripts/cdp-run.mjs" "$chrome" "${REST[@]}"
+}
+
+cmd_env() {
+	find_tools
+	echo "worktree   $WT"
+	echo "build      $B"
+	echo "page       $PAGE"
+	echo "config     $CONFIG"
+	echo "cmake      $CMAKE"
+	echo "ninja      $NINJA"
+	echo "emsdk      $EMSDK"
+	echo "vcpkg      $VCPKG_ROOT_DIR"
+	echo "node       $NODE"
+	echo "python     $PYTHON"
+}
+
+COMMAND=${1:-}
+[ -n "$COMMAND" ] || die "no command; see the top of $OB_SCRIPT_DIR/ob-web"
+shift
+parse_options "$@"
+resolve_folders
+case "$COMMAND" in
+configure) cmd_configure ;;
+build) cmd_build ;;
+serve) cmd_serve ;;
+chrome) cmd_chrome ;;
+dir) echo "$PAGE" ;;
+env) cmd_env ;;
+*) die "unknown command $COMMAND" ;;
+esac

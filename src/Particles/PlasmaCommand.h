@@ -28,6 +28,13 @@ struct PlasmaCommand
 	float life {0.0f};
 	float speed {0.0f};
 	uint8_t alpha {0};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const PlasmaCommand& self, Visitor&& visit)
+	{
+		visit(self.start, self.end, self.startTangent, self.endTangent, self.life, self.speed, self.alpha);
+	}
 };
 
 /// A temple heart's beams: two seconds long, at one and a half times the speed, faded to 70 of 255 at most, leaving the

@@ -68,6 +68,7 @@
 #include "3D/WaterRings.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Common/Platform.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
 #include "Creature/CreatureFizzLook.h"
@@ -193,6 +194,9 @@
 #include "Resources/ResourcesInterface.h"
 #include "Scenery/ObjectDrawList.h"
 #include "Windowing/WindowingInterface.h"
+#if defined(__EMSCRIPTEN__)
+#include "Web/WebPlatform.h"
+#endif
 #include "entt/locator/locator.hpp"
 
 using namespace openblack;
@@ -503,6 +507,9 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	case GraphicsBackend::Vulkan:
 		init.type = bgfx::RendererType::Vulkan;
 		break;
+	case GraphicsBackend::OpenGLES:
+		init.type = bgfx::RendererType::OpenGLES;
+		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
 		return nullptr;
@@ -549,6 +556,12 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	init.resolution.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
+	if constexpr (k_Platform == Platform::Web)
+	{
+		// The browser gives the WebGL context of the canvas only to the game thread. A call to renderFrame before init
+		// makes bgfx draw on this thread, with no render thread of its own.
+		bgfx::renderFrame();
+	}
 	if (!bgfx::init(init))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to initialize bgfx.");
@@ -7720,12 +7733,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    }
 					    }
 					    // A sprite whose texture the cache does not have is not drawn
-					    const auto* texture = textures.Find(sprite.texture);
-					    const auto* alpha = textures.Find(sprite_textures::AlphaId(sprite));
-					    if (texture == nullptr || alpha == nullptr)
+					    const auto found =
+					        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+					    if (!found.has_value())
 					    {
 						    return;
 					    }
+					    const auto* texture = found->texture;
+					    const auto* alpha = found->alpha;
 					    glm::mat4 modelMatrix = glm::mat4(1.0f);
 					    modelMatrix = glm::translate(modelMatrix, transform.position);
 					    modelMatrix *= glm::mat4(transform.rotation);
@@ -7838,6 +7853,9 @@ void Renderer::Frame() noexcept
 	}
 	// Advance to next frame. Process submitted rendering primitives.
 	const auto frame = bgfx::frame();
+#if defined(__EMSCRIPTEN__)
+	web::PresentFrame();
+#endif
 	// After it, the views are set back, and the frame is not counted for the descriptor sets of the game's frames
 	if (warmUp)
 	{

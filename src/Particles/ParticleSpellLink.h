@@ -40,6 +40,13 @@ struct ProcessInfo
 	bool enabled {true};
 	/// How the caster spun the miracle as it let go, in radians a second, which curves a thrown fireball
 	float spin {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ProcessInfo& self, Visitor&& visit)
+	{
+		visit(self.handPosition, self.cameraForward, self.direction, self.power, self.enabled, self.spin);
+	}
 };
 
 /// An event a rule sends to the miracle

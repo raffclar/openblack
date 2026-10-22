@@ -59,6 +59,13 @@ struct EmitterClock
 	float next {0.0f};
 	int emitted {0};
 	bool started {false};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const EmitterClock& self, Visitor&& visit)
+	{
+		visit(self.next, self.emitted, self.started);
+	}
 };
 struct EmitterLimits
 {

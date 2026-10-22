@@ -101,6 +101,13 @@ struct CastInput
 	/// The turn it was locked on, and the last turn it was applied
 	uint32_t lockTurn {0};
 	uint32_t lastApplyTurn {0};
+
+	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const CastInput& self, Visitor&& visit)
+	{
+		visit(self.state, self.onObject, self.lockTurn, self.lastApplyTurn);
+	}
 };
 
 /// The action button goes down

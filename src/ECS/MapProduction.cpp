@@ -33,6 +33,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flowers.h"
 #include "ECS/Components/Forest.h"
+#include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MapCellResident.h"
@@ -188,6 +189,11 @@ MapProduction::~MapProduction()
 
 std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registry, entt::entity entity)
 {
+	// A thing that shows only as a print on the land never goes into the map's cells
+	if (registry.AnyOf<GroundPrint>(entity))
+	{
+		return std::nullopt;
+	}
 	if (registry.AnyOf<Abode, Feature, AnimatedStatic, Flowers, BigForest, SpellDispenser, TeleportStone, WorshipSite,
 	                   WorshipAltar, Temple>(entity))
 	{

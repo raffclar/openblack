@@ -34,6 +34,7 @@
 #include <entt/meta/meta.hpp>
 
 #include "Common/GameHeading.h"
+#include "PlainImage.h"
 #include "ReflectionTraits.h"
 
 /// The binary archive of the reflection. It writes the value of a registered field with no loss: floats as their bits,
@@ -98,7 +99,16 @@ public:
 	{
 		const auto at = _bytes.size();
 		_bytes.resize(at + sizeof(Type));
-		std::memcpy(_bytes.data() + at, &value, sizeof(Type));
+		if constexpr (std::is_class_v<Type>)
+		{
+			// A value with fields has zero in its gaps, so that the same value always gives the same bytes
+			const auto image = PlainImage(value);
+			std::memcpy(_bytes.data() + at, image.bytes.data(), sizeof(Type));
+		}
+		else
+		{
+			std::memcpy(_bytes.data() + at, &value, sizeof(Type));
+		}
 	}
 
 	/// A count or a length, as 32 bits
@@ -306,6 +316,7 @@ template <typename Container>
 template <typename Type>
 void Save(BinaryWriter& out, const Type& value)
 {
+	static_assert(!detail::k_IsRunHandle<Type>, "A save must not keep a pointer or a graphics handle: keep a stable key");
 	if constexpr (std::is_same_v<Type, bool>)
 	{
 		out.WriteRaw(static_cast<uint8_t>(value ? 1 : 0));
@@ -445,6 +456,7 @@ void Save(BinaryWriter& out, const Type& value)
 template <typename Type>
 void Load(BinaryReader& in, Type& value)
 {
+	static_assert(!detail::k_IsRunHandle<Type>, "A load must not read a pointer or a graphics handle");
 	if (in.Failed())
 	{
 		return;
