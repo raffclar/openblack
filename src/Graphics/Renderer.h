@@ -309,7 +309,8 @@ private:
 	[[nodiscard]] std::array<uint8_t, GroundShadow::k_Texels * GroundShadow::k_Texels>
 	ShadowTextureLevels(const GroundShadowBody& body, const GroundShadow::Footprint& footprint, const GroundShadow::Cast& cast,
 	                    uint8_t alpha) const;
-	/// Hands the moving shadows to the land's program, or none where it isn't to receive them
+	/// Hands the moving shadows to the land's program, or none where it isn't to receive them. Each block sets its own
+	/// u_groundShadowBlock, because bgfx accepts a uniform only once for each draw.
 	void SetGroundShadowUniforms(const ShaderProgram& program, bool receives) const;
 	/// The objects' shadows on the land: those drawn each frame and the trees' baked ones
 	void SetObjectShadowUniforms(const ShaderProgram& program) const;
