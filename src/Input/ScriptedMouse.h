@@ -40,6 +40,9 @@ using ScriptedPointer = GameActionInterface::ScriptedPointer;
 /// player's own mouse is doing, so an agent's runs start alike.
 [[nodiscard]] glm::ivec2 RestingPointer(glm::ivec2 windowSize);
 
+/// Whether the event is a move, a button or a wheel turn of the mouse of the desk, not of the inspector's mouse
+[[nodiscard]] bool IsDeskMouseEvent(const SDL_Event& event);
+
 /// A move of the scripted mouse by so much, in pixels, for the window's queue; where it ends is reported as it is pumped
 [[nodiscard]] SDL_Event PumpedMotion(glm::ivec2 by, uint32_t windowId);
 /// A press or a letting go of the scripted mouse's button, with its click count, for the window's queue
