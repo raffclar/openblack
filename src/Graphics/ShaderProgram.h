@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <limits>
@@ -75,6 +76,14 @@ public:
 
 	[[nodiscard]] ProgramHandle GetRawHandle() const { return _program; }
 
+	/// Gives the programs that have the same shaders but declare fewer bone matrices. A null program means this
+	/// program.
+	void SetBoneVariants(const ShaderProgram* singleBone, const ShaderProgram* fewBones) noexcept;
+	/// Gives the program for a mesh with the given number of bone matrices. Of the programs with the same shaders, it
+	/// is the one that declares the fewest bones that hold them. Every draw uploads all the bones that its vertex
+	/// shader declares, and Vulkan keeps the uniforms of all the draws of a frame in one buffer of fixed size.
+	[[nodiscard]] const ShaderProgram& ForBones(std::size_t bones) const noexcept;
+
 	/// bgfx's BGFX_DISCARD_ALL, everything set for a draw dropped after it
 	static constexpr uint8_t k_DiscardAll = 0xFF;
 
@@ -90,6 +99,9 @@ private:
 	SamplerDefaults& _samplerDefaults;
 	DescriptorSetTally* _tally;
 	DrawWindow* _window;
+	/// The programs for a mesh with one bone and with a few bones; null for this program
+	const ShaderProgram* _singleBone {nullptr};
+	const ShaderProgram* _fewBones {nullptr};
 	/// The uniforms set on this shader that it doesn't have, already warned about
 	mutable std::set<std::string, std::less<>> _warnedMissing;
 };

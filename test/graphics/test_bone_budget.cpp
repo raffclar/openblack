@@ -17,14 +17,18 @@
 #include "Graphics/ShaderSamplers.h"
 
 // The object shaders as the game embeds them, compiled for Vulkan
+#include "generated/shaders/spirv/fs_object.sc.bin.h"
 #include "generated/shaders/spirv/vs_celestial.sc.bin.h"
 #include "generated/shaders/spirv/vs_mist.sc.bin.h"
+#include "generated/shaders/spirv/vs_object.sc.bin.h"
+#include "generated/shaders/spirv/vs_object_few_bones.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_few_bones_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_hm_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_hm_static_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_shadow_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_shadow_static_instanced.sc.bin.h"
+#include "generated/shaders/spirv/vs_object_single_bone.sc.bin.h"
 #include "generated/shaders/spirv/vs_object_static_instanced.sc.bin.h"
 #include "generated/shaders/spirv/vs_sprite.sc.bin.h"
 
@@ -77,6 +81,10 @@ TEST(BoneBudget, ShadersDeclareTheirBudgetsBones)
 	          (bone_budget::k_All - 1) * k_MatrixBytes);
 	EXPECT_EQ(UniformBytes(vs_object_shadow_instanced_spv) - UniformBytes(vs_object_shadow_static_instanced_spv),
 	          (bone_budget::k_All - 1) * k_MatrixBytes);
+	// The shaders for the meshes that are not instanced, such as the particles that are models
+	const auto fewSingle = UniformBytes(vs_object_few_bones_spv);
+	EXPECT_EQ(fewSingle - UniformBytes(vs_object_single_bone_spv), (bone_budget::k_Few - 1) * k_MatrixBytes);
+	EXPECT_EQ(UniformBytes(vs_object_spv) - fewSingle, (bone_budget::k_All - bone_budget::k_Few) * k_MatrixBytes);
 }
 
 TEST(BoneBudget, ShadersUsingOnlyTheModelMatrixDeclareOne)
@@ -99,4 +107,15 @@ TEST(BoneBudget, ACrowdedLandFitsAFrame)
 	                   (2 * k_Static * UniformBytes(vs_object_static_instanced_spv)) +
 	                   (k_Static * UniformBytes(vs_object_shadow_static_instanced_spv));
 	EXPECT_LT(bytes, k_FrameUniformBytes / 2);
+}
+
+TEST(BoneBudget, ManyModelParticlesFitAFrame)
+{
+	// A land with many fires draws more than 600 models without bones in its translucent view, as particles and
+	// effects. The sea's reflection draws them again. With all the bones of a creature, these draws alone took more
+	// than the full buffer of a frame.
+	constexpr std::size_t k_Models = 1500;
+	const auto fragment = UniformBytes(fs_object_spv);
+	EXPECT_GT(k_Models * (UniformBytes(vs_object_spv) + fragment), k_FrameUniformBytes);
+	EXPECT_LT(k_Models * (UniformBytes(vs_object_single_bone_spv) + fragment), k_FrameUniformBytes / 4);
 }

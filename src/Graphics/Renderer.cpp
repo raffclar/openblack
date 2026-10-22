@@ -1093,8 +1093,11 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 	const Texture2D* lightmap = lightmapSkinID.has_value() ? GetTexture(*lightmapSkinID, skins) : nullptr;
 	// A cap has no lightmap coordinates of its own
 	// The temple's pictures have lightmaps, but the game draws them without
-	const auto* program =
-	    desc.lightmapProgram != nullptr && lightmap != nullptr && !desc.cap && !picture ? desc.lightmapProgram : desc.program;
+	// A draw uploads all the bones that its program declares, so a mesh with fewer bones uses a program that declares
+	// fewer. This keeps a frame with many meshes inside the uniform buffer of Vulkan.
+	const auto* program = desc.lightmapProgram != nullptr && lightmap != nullptr && !desc.cap && !picture
+	                          ? desc.lightmapProgram
+	                          : &desc.program->ForBones(desc.matrixCount);
 	if (desc.onlyJoints && !subMesh.GetJoint().has_value())
 	{
 		return;
