@@ -328,22 +328,13 @@ void openblack::InitializeWindow(const std::string& title, int width, int height
 	Locator::windowing::emplace<Sdl2WindowingSystem>(title, width, height, displayMode, extraFlags, background);
 }
 
-bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
+void openblack::InitializeSimulationCore()
 {
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "EnTT version: {}", ENTT_VERSION);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), GLM_VERSION_COMPLETE);
 
 	Locator::profiler::emplace();
-
-	Locator::rendererInterface::reset(RendererInterface::Create(backend, vsync).release());
-	if (!Locator::rendererInterface::has_value())
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create renderer");
-		return false;
-	}
-	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
 	Locator::events::emplace<EventManager>();
-
 #if __ANDROID__
 	Locator::filesystem::emplace<AndroidFileSystem>();
 #else
@@ -351,6 +342,24 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 #endif
 	Locator::rng::emplace<RandomNumberManagerProduction>();
 	Locator::gameRandom::emplace<GameRandomProduction>();
+}
+
+bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
+{
+	Locator::rendererInterface::reset(RendererInterface::Create(backend, vsync).release());
+	if (!Locator::rendererInterface::has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to create renderer");
+		return false;
+	}
+	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
+
+	// The dedicated server has no audio device
+	if (Locator::config::has_value() && Locator::config::value().noAudio)
+	{
+		Locator::audio::emplace<AudioManagerNoOp>();
+		return true;
+	}
 	try
 	{
 		// A simulation run with a fixed frame time times its sounds by the game's clock
@@ -369,9 +378,6 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 		SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Falling back to no-op audio: {}", error.what());
 		Locator::audio::emplace<AudioManagerNoOp>();
 	}
-
-	Locator::chlapi::emplace<CHLApi>();
-	Locator::vm::emplace<LHVM>();
 	return true;
 }
 
@@ -465,13 +471,14 @@ void InitializeOnline(const player_profiles::Store& profiles)
 } // namespace
 } // namespace openblack
 
-bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
+bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noexcept
 {
+	// The script machine and its natives
+	Locator::chlapi::emplace<CHLApi>();
+	Locator::vm::emplace<LHVM>();
 	Locator::terrainSystem::emplace<UnloadedIsland>();
 	Locator::resources::emplace<Resources>();
 	Locator::playerSystem::emplace<PlayerSystem>();
-	Locator::gameActionSystem::emplace<GameActionMap>();
-	Locator::rendereringSystem::emplace<RenderingSystem>();
 	Locator::entitiesRegistry::emplace<Registry>();
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
@@ -483,7 +490,6 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::tutorialSkipSystem::emplace<TutorialSkipSystem>();
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
-	InitializeOnline(profiles);
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
@@ -514,7 +520,6 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::creatureHandSystem::emplace<CreatureHandSystem>();
 	Locator::footprintSystem::emplace<FootprintSystem>();
 	Locator::footpathSystem::emplace<FootpathSystem>();
-	Locator::editorSystem::emplace<EditorSystem>();
 	Locator::creatureSkinSystem::emplace<CreatureSkinSystem>();
 	Locator::creaturePenSystem::emplace<CreaturePenSystem>();
 	Locator::leashSystem::emplace<LeashSystem>();
@@ -534,7 +539,6 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::walkPathSystem::emplace<WalkPathSystem>();
 	Locator::danceSystem::emplace<DanceSystem>();
 	Locator::sharkSystem::emplace<SharkSystem>();
-	Locator::videoSystem::emplace<VideoSystem>();
 	Locator::helpTextSystem::emplace<HelpTextSystem>();
 	Locator::helpProfileSystem::emplace<HelpProfileSystem>();
 	Locator::creatureHelpSystem::emplace<CreatureHelpSystem>();
@@ -589,6 +593,26 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
 	Locator::scriptHighlightSystem::emplace<ecs::systems::ScriptHighlightSystem>();
+	return true;
+}
+
+void openblack::InitializeClient(const player_profiles::Store& profiles)
+{
+	// The input of the player, the drawing of the world, the editor, the videos and the online services
+	Locator::gameActionSystem::emplace<GameActionMap>();
+	Locator::rendereringSystem::emplace<RenderingSystem>();
+	InitializeOnline(profiles);
+	Locator::editorSystem::emplace<EditorSystem>();
+	Locator::videoSystem::emplace<VideoSystem>();
+}
+
+bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
+{
+	if (!InitializeSimulation(profiles))
+	{
+		return false;
+	}
+	InitializeClient(profiles);
 	return true;
 }
 

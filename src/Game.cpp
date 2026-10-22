@@ -680,6 +680,7 @@ Game::Game(Arguments&& args) noexcept
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
 	config.background = args.background;
+	config.noAudio = args.noAudio;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
@@ -3699,6 +3700,8 @@ bool Game::Initialize() noexcept
 	}
 
 	using filesystem::Path;
+	// The services that the game shares with the dedicated server come first, then the services that show the world
+	InitializeSimulationCore();
 	if (!InitializeEngine(config.graphicsBackend, config.vsync))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");

@@ -228,8 +228,18 @@ class InspectorSystemInterface;
 
 void InitializeWindow(const std::string& title, int width, int height, windowing::DisplayMode displayMode, uint32_t extraFlags,
                       bool background = false);
+/// The services that the game and the dedicated server share, first of all: the profiler, the events, the files and the
+/// random numbers
+void InitializeSimulationCore();
+/// The services that show the world: the renderer, the debug GUI and the audio. Call it after the core services.
 bool InitializeEngine(GraphicsBackend backend, bool vsync) noexcept;
-/// The game's services, the players' profiles kept as the store says
+/// The script machine and the systems of the world, which the game and the dedicated server share. The players' profiles
+/// are kept as the store says.
+bool InitializeSimulation(const player_profiles::Store& profiles) noexcept;
+/// The services of the game on the player's computer: the input, the drawing of the world, the editor, the videos and
+/// the online services. Call it after the simulation.
+void InitializeClient(const player_profiles::Store& profiles);
+/// The simulation, then the services of the game on the player's computer
 bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
