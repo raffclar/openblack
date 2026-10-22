@@ -680,7 +680,7 @@ Game::Game(Arguments&& args) noexcept
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
 	config.background = args.background;
-	config.noAudio = args.noAudio;
+	config.dedicatedServer = args.dedicatedServer;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
@@ -2219,6 +2219,11 @@ bool Game::Update() noexcept
 
 bool Game::DoesFrameGraphics() const
 {
+	// The dedicated server has no window: its frames do as the frames of a minimised window, with no picture
+	if (Locator::config::value().dedicatedServer)
+	{
+		return false;
+	}
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	if (!minimised)
 	{
@@ -2513,6 +2518,11 @@ bool Game::UpdateDebugGui()
 	if (!config.running || _quitRequested)
 	{
 		return false;
+	}
+	// The dedicated server has no window to show the debug windows in
+	if (config.dedicatedServer)
+	{
+		return true;
 	}
 
 	// ImGui events + prepare

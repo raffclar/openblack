@@ -355,7 +355,7 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 	Locator::debugGui::reset(DebugGuiInterface::Create(graphics::RenderPass::ImGui).release());
 
 	// The dedicated server has no audio device
-	if (Locator::config::has_value() && Locator::config::value().noAudio)
+	if (Locator::config::has_value() && Locator::config::value().dedicatedServer)
 	{
 		Locator::audio::emplace<AudioManagerNoOp>();
 		return true;

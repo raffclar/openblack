@@ -172,8 +172,8 @@ struct Arguments
 	bool noDraw {false};
 	/// Tools: the window never takes the focus, the front or the mouse, and stays in a window
 	bool background {false};
-	/// The dedicated server: no audio device, and the sounds go to the audio manager that plays nothing
-	bool noAudio {false};
+	/// The dedicated server: no audio device, and the frames run with no window
+	bool dedicatedServer {false};
 	/// Debug: the Creature Breeder's bonus creatures taken as unlocked (none by default, as on a normal install)
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder

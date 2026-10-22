@@ -205,6 +205,10 @@ add_subdirectory(apps/morphtool)
 add_subdirectory(apps/binktool)
 add_subdirectory(apps/creaturemindtool)
 add_subdirectory(apps/lhvmtool)
+# The dedicated server runs on a computer of its own, not on a phone or in a web page
+if (NOT ANDROID AND NOT EMSCRIPTEN)
+  add_subdirectory(apps/openblack-server)
+endif ()
 
 # Map CMAKE_HOST_SYSTEM_PROCESSOR value
 if (${CMAKE_HOST_SYSTEM_PROCESSOR} STREQUAL "AMD64"
