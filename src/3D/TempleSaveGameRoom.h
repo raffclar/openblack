@@ -68,6 +68,9 @@ public:
 	void SetEmptyPicture(std::span<const uint8_t> rgba);
 	/// Reads the small pictures of the slots again, as the room does once it is set up and after each save
 	void ReadSmallPictures(const ReadPicture& read);
+	/// Reads the pictures again after a save into the slot. The large picture changes too when the slot shows in high
+	/// detail.
+	void ReadPicturesAfterSave(uint32_t slot, const ReadPicture& read);
 	/// Coming into the room, no picture is shown in high detail
 	void Enter();
 	/// The saved games that the room lists, in its order

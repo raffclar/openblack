@@ -125,6 +125,11 @@ save_game_room::UvRect save_game_room::EmptyPicture(float alignment)
 	return alignment >= 0.0f ? k_GoodHalf : k_EvilHalf;
 }
 
+save_game_room::PicturesToRead save_game_room::PicturesAfterSave(uint32_t slot, std::optional<uint32_t> highDetail)
+{
+	return {.smallPictures = true, .largePicture = highDetail == slot};
+}
+
 std::u16string save_game_room::ToolTipName(std::u16string_view name)
 {
 	if (name.size() < k_ToolTipNameLength)

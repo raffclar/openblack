@@ -3803,6 +3803,20 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.save_room_picture_after_save",
+	    .name = "The temple's save game room shows a new save's picture at once",
+	    .facet = Facet::Story,
+	    .description = "The player goes through the temple's main room into the save game room. Click an empty "
+	                   "picture, click it again, then click OK in the box that asks for a name.",
+	    .expected = "After the save, the picture in front of the camera shows the land as it was when the player went "
+	                "into the temple. It does not show a white picture, and the player does not have to leave the "
+	                "room first.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 6}},
+	});
+
+	all.push_back({
 	    .id = "temple.future_room_turn",
 	    .name = "The temple's future room turns by itself under its words",
 	    .facet = Facet::Story,
