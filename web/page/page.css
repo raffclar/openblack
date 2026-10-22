@@ -29,6 +29,8 @@ body.playing { overflow: hidden; }
 #game[hidden] { display: none; }
 #screen { display: block; background: #000; }
 #canvas { position: absolute; top: 0; opacity: 0; outline: none; }
+#game.canvas-present #canvas { opacity: 1; background: #000; }
+#game.canvas-present #screen { visibility: hidden; }
 #messages { max-width: 760px; margin: 0 auto; padding: 0 16px; }
 .message { border-left: 4px solid var(--bad); background: var(--panel); padding: 8px 12px; width: 100%; box-sizing: border-box; }
 .message strong { display: block; }

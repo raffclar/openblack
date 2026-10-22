@@ -13,6 +13,7 @@
 #error "The web platform code is only for the web build"
 #endif
 
+#include <functional>
 #include <string_view>
 
 /// The parts of the web build that connect the game to the browser page
@@ -32,8 +33,18 @@ constexpr std::string_view k_WorkingFolder = "/work";
 /// Returns false when the page gave no install.
 [[nodiscard]] bool PrepareFileSystem();
 
-/// Show the frame that the renderer drew on the page. The game thread never gives control back to the browser, so the
-/// browser does not show the frames of the canvas of the game thread by itself.
+/// Run the frames of the game, one frame in each display frame of the browser. Between two frames the game thread gives
+/// control back to the browser, which then shows the frame that the canvas has. The call returns at once. When frame
+/// returns false, end runs and gives the exit code of the program, and the program stops.
+void RunFrames(std::function<bool()> frame, std::function<int()> end);
+
+/// Call before the renderer draws a frame. When the renderer draws more than one frame in a frame of RunFrames, as a
+/// loading screen does, the frame that the canvas has goes to the page as an image before the next frame replaces it.
+void BeforeFrame();
+
+/// Call after the renderer drew a frame. When a frame of RunFrames draws one frame only, the browser shows it when the
+/// game thread gives control back. All other frames go to the page as images, because the game thread does not give
+/// control back to the browser while it draws them.
 void PresentFrame();
 
 /// Show a message from the game on the page, under the game's picture
