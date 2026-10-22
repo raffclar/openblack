@@ -51,4 +51,13 @@ void PutPicture(Sheet& players, std::span<const uint8_t> greys, uint32_t player)
 void PutProfileSymbol(Sheet& players, const Sheet& designs, uint32_t symbol, uint32_t player,
                       std::optional<std::span<const uint8_t>> ownPicture);
 
+/// The symbol of the player of this computer: the symbol that a test puts in place of the profile's, else the profile's
+/// symbol. There is no symbol without a profile.
+[[nodiscard]] std::optional<uint32_t> ChosenSymbol(std::optional<int> profileSymbol, std::optional<uint32_t> symbolInPlace);
+
+/// The sheet that the world shows from the start of a game, a new game or a load: the sheet of the file, with the chosen
+/// symbol in the square of the player of this computer. A save keeps no part of the sheet, so a load makes it again.
+[[nodiscard]] Sheet MakeSheet(Sheet file, const Sheet& designs, std::optional<uint32_t> symbol, uint32_t player,
+                              std::optional<std::span<const uint8_t>> ownPicture);
+
 } // namespace openblack::players_symbols

@@ -577,6 +577,14 @@ const std::string k_WindowTitle = "openblack";
 
 Game* Game::sInstance = nullptr;
 
+/// The state that the frames of the game loop keep from one frame to the next
+struct Game::FrameLoop
+{
+	std::chrono::high_resolution_clock::time_point lastTime;
+	std::optional<debug::FrameStatsLog> frameStats;
+	std::chrono::steady_clock::time_point frameStart;
+};
+
 Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
@@ -5302,6 +5310,24 @@ const std::filesystem::path& Game::ChallengePath()
 
 bool Game::Run() noexcept
 {
+	switch (StartRun())
+	{
+	case RunStart::Failed:
+		return false;
+	case RunStart::Done:
+		return true;
+	case RunStart::Play:
+		break;
+	}
+	while (RunFrame())
+	{
+	}
+	EndRun();
+	return true;
+}
+
+Game::RunStart Game::StartRun() noexcept
+{
 	auto& config = Locator::config::value();
 
 	// The game has no skirmish box and no network game yet, so these switches start the game as with no switch. The
@@ -5341,7 +5367,7 @@ bool Game::Run() noexcept
 		if (start == game_session::Start::NewGame &&
 		    !LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
-			return false;
+			return RunStart::Failed;
 		}
 	}
 	if (_startupTimer.has_value())
@@ -5401,7 +5427,7 @@ bool Game::Run() noexcept
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Challenge file not found at {}",
 		                    (fileSystem.GetGamePath() / challengePath).generic_string());
-		return false;
+		return RunStart::Failed;
 	}
 	// A continue loads the save on exit, or starts a new game when it cannot
 	bool continued = false;
@@ -5410,7 +5436,7 @@ bool Game::Run() noexcept
 		continued = ContinueGame();
 		if (_landPath.empty())
 		{
-			return false;
+			return RunStart::Failed;
 		}
 	}
 	if (_startupTimer.has_value())
@@ -5422,7 +5448,7 @@ bool Game::Run() noexcept
 	if (_launchSwitches.convert && !_startTestbed)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -CONVERT switch: the land is loaded, the game closes");
-		return true;
+		return RunStart::Done;
 	}
 	// Everything the map made goes into the map's cells, in the order it was made
 	Locator::entitiesMap::value().Sync();
@@ -5491,20 +5517,32 @@ bool Game::Run() noexcept
 		Locator::time::value().ResetTimerToTurn();
 	}
 	_frameCount = 0;
-	auto lastTime = std::chrono::high_resolution_clock::now();
-	auto& profiler = Locator::profiler::value();
-	std::optional<debug::FrameStatsLog> frameStats;
+	_frameLoop = std::make_unique<FrameLoop>();
+	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
 	if (config.frameStatsInterval > 0)
 	{
-		frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
-		                   Locator::rendererInterface::value().GetPipelinesMade());
+		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
+		                               Locator::rendererInterface::value().GetPipelinesMade());
 		if (config.frameStatsViews)
 		{
 			Locator::rendererInterface::value().SetProfile(true);
 		}
 	}
-	auto frameStart = std::chrono::steady_clock::now();
-	while (Update())
+	_frameLoop->frameStart = std::chrono::steady_clock::now();
+	return RunStart::Play;
+}
+
+bool Game::RunFrame() noexcept
+{
+	if (!Update())
+	{
+		return false;
+	}
+	auto& config = Locator::config::value();
+	auto& profiler = Locator::profiler::value();
+	const auto lastTime = _frameLoop->lastTime;
+	auto& frameStats = _frameLoop->frameStats;
+	auto& frameStart = _frameLoop->frameStart;
 	{
 		// What the loading threads finished goes into the caches, and they're given a little more
 		auto& resources = Locator::resources::value();
@@ -5660,10 +5698,14 @@ bool Game::Run() noexcept
 		const auto& director = Locator::cinematicDirectorSystem::value();
 		if (game_session::CloseEndsGame(_closeAsked, director.IsWideScreenOn() && director.GetWideScreenOwner() != 0))
 		{
-			break;
+			return false;
 		}
 	}
+	return true;
+}
 
+void Game::EndRun() noexcept
+{
 	// As the player leaves the game, the game saves it into the slot of the save on exit
 	SaveAsGameEnds(game_session::End::Quit, true);
 	// As the game ends, the player's creature is written to their files as it is now
@@ -5674,7 +5716,7 @@ bool Game::Run() noexcept
 	// The last line of an orderly end: a log that stops without it, and without a crash report, was ended from outside
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends after {} frames, at turn {}", _frameCount,
 	                   Locator::time::value().GetTurn());
-	return true;
+	_frameLoop.reset();
 }
 
 bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) noexcept
@@ -5941,6 +5983,9 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	}
 	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
 	player_statistics::GameStarts(registry);
+	// Each load starts a game: the square of the player of this computer takes the symbol of the profile played now. The
+	// save keeps no symbol.
+	MakePlayersSymbols();
 	RenderLoadingFrame();
 	StartNewLand(land_change::Kind::SavedGame);
 	EndLoadingScreen();
@@ -6780,30 +6825,30 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 			return {};
 		}
 	};
-	players_symbols::Sheet players {.colours = read(textures / "PlayersSymbols.raw"),
-	                                .alpha = read(textures / "PlayersSymbolsa.raw")};
+	players_symbols::Sheet file {.colours = read(textures / "PlayersSymbols.raw"),
+	                             .alpha = read(textures / "PlayersSymbolsa.raw")};
 	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
 	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
-	if (!players.Whole() || !designs.Whole())
+	if (!file.Whole() || !designs.Whole())
 	{
 		return;
 	}
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (profile.has_value() || symbolInPlace.has_value())
+	const auto symbol =
+	    players_symbols::ChosenSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt, symbolInPlace);
+	std::optional<std::span<const uint8_t>> ownPicture;
+	std::optional<creature_tattoo::Picture> picture;
+	if (symbol.has_value() && Locator::tattooEditorSystem::has_value() && *symbol < creature_tattoo::k_DesignCount)
 	{
-		const auto symbol = symbolInPlace.value_or(profile.has_value() ? static_cast<uint32_t>(profile->symbol) : 0u);
-		std::optional<std::span<const uint8_t>> ownPicture;
-		std::optional<creature_tattoo::Picture> picture;
-		if (Locator::tattooEditorSystem::has_value() && symbol < creature_tattoo::k_DesignCount)
+		picture = Locator::tattooEditorSystem::value().GetPictures().at(*symbol);
+		if (picture.has_value())
 		{
-			picture = Locator::tattooEditorSystem::value().GetPictures().at(symbol);
-			if (picture.has_value())
-			{
-				ownPicture = std::span<const uint8_t>(*picture);
-			}
+			ownPicture = std::span<const uint8_t>(*picture);
 		}
-		players_symbols::PutProfileSymbol(players, designs, symbol, static_cast<uint32_t>(PlayerNames::PLAYER_ONE), ownPicture);
 	}
+	const auto localPlayer =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
 	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {

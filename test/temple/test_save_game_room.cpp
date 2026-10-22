@@ -226,3 +226,14 @@ TEST(SavePictures, ACellIsItsRowsOfBlocks)
 	EXPECT_FALSE(ReadPictureFile(bytes).has_value());
 	EXPECT_FALSE(ReadPictureFile(std::vector<uint8_t>(100)).has_value());
 }
+
+TEST(SaveGameRoom, AfterASaveThePictureInHighDetailIsReadAgain)
+{
+	// The small pictures are read again after every save
+	EXPECT_EQ(rules::PicturesAfterSave(4, std::nullopt),
+	          (rules::PicturesToRead {.smallPictures = true, .largePicture = false}));
+	EXPECT_EQ(rules::PicturesAfterSave(4, 7u), (rules::PicturesToRead {.smallPictures = true, .largePicture = false}));
+	// The picture in high detail is read again when the save goes into its slot
+	EXPECT_EQ(rules::PicturesAfterSave(4, 4u), (rules::PicturesToRead {.smallPictures = true, .largePicture = true}));
+	EXPECT_EQ(rules::PicturesAfterSave(0, 0u), (rules::PicturesToRead {.smallPictures = true, .largePicture = true}));
+}

@@ -33,6 +33,8 @@
 #include <cstdint> // Shaders below need uint8_t
 
 #include <array>
+#include <map>
+#include <string_view>
 
 #include <bgfx/embedded_shader.h>
 // BGFX has support for WSL to use windows d3d. We disable it here from the BGFX_EMBEDDED_SHADER macro.
@@ -59,6 +61,10 @@
 #include "ShaderIncluder.h"
 
 #define SHADER_NAME vs_object
+#include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_single_bone
+#include "ShaderIncluder.h"
+#define SHADER_NAME vs_object_few_bones
 #include "ShaderIncluder.h"
 #define SHADER_NAME vs_object_instanced
 #include "ShaderIncluder.h"
@@ -206,11 +212,13 @@ struct ShaderDefinition
 	const std::string_view fragmentShaderName;
 };
 
-const std::array<bgfx::EmbeddedShader, 68> k_EmbeddedShaders = {{
+const std::array<bgfx::EmbeddedShader, 70> k_EmbeddedShaders = {{
     BGFX_EMBEDDED_SHADER(vs_line),
     BGFX_EMBEDDED_SHADER(vs_line_instanced), //
     BGFX_EMBEDDED_SHADER(fs_line),           //
     BGFX_EMBEDDED_SHADER(vs_object),
+    BGFX_EMBEDDED_SHADER(vs_object_single_bone),
+    BGFX_EMBEDDED_SHADER(vs_object_few_bones),
     BGFX_EMBEDDED_SHADER(vs_object_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_few_bones_instanced),
     BGFX_EMBEDDED_SHADER(vs_object_palette_instanced),
@@ -326,6 +334,34 @@ constexpr std::array k_Shaders {
     ShaderDefinition {"InterfaceSorted", "vs_interface_sorted", "fs_interface"},
     ShaderDefinition {"Video", "vs_interface", "fs_video"},
     ShaderDefinition {"Text3D", "vs_text3d", "fs_interface"},
+    // The programs above that draw a mesh with all of its bones, again with shaders that declare fewer bones
+    ShaderDefinition {"ObjectSingleBone", "vs_object_single_bone", "fs_object"},
+    ShaderDefinition {"ObjectFewBones", "vs_object_few_bones", "fs_object"},
+    ShaderDefinition {"ReflectionSingleBone", "vs_object_single_bone", "fs_reflection"},
+    ShaderDefinition {"ReflectionFewBones", "vs_object_few_bones", "fs_reflection"},
+    ShaderDefinition {"SkySingleBone", "vs_object_single_bone", "fs_sky"},
+    ShaderDefinition {"SkyFewBones", "vs_object_few_bones", "fs_sky"},
+    ShaderDefinition {"GhostDepthSingleBone", "vs_object_single_bone", "fs_ghost_depth"},
+    ShaderDefinition {"GhostDepthFewBones", "vs_object_few_bones", "fs_ghost_depth"},
+    ShaderDefinition {"ShadowCasterSingleBone", "vs_object_single_bone", "fs_shadow_caster"},
+    ShaderDefinition {"ShadowCasterFewBones", "vs_object_few_bones", "fs_shadow_caster"},
+};
+
+/// A program that draws a mesh with all of its bones, and its programs with the same fragment shader for a mesh with
+/// one bone and with a few bones
+struct BoneVariants
+{
+	std::string_view program;
+	std::string_view singleBone;
+	std::string_view fewBones;
+};
+
+constexpr std::array k_BoneVariants {
+    BoneVariants {.program = "Object", .singleBone = "ObjectSingleBone", .fewBones = "ObjectFewBones"},
+    BoneVariants {.program = "Reflection", .singleBone = "ReflectionSingleBone", .fewBones = "ReflectionFewBones"},
+    BoneVariants {.program = "Sky", .singleBone = "SkySingleBone", .fewBones = "SkyFewBones"},
+    BoneVariants {.program = "GhostDepth", .singleBone = "GhostDepthSingleBone", .fewBones = "GhostDepthFewBones"},
+    BoneVariants {.program = "ShadowCaster", .singleBone = "ShadowCasterSingleBone", .fewBones = "ShadowCasterFewBones"},
 };
 
 namespace
@@ -385,6 +421,7 @@ void ShaderManager::LoadShaders()
 		_descriptorSets = std::make_unique<DescriptorSetTally>();
 		_drawWindow = std::make_unique<DrawWindow>();
 	}
+	std::map<std::string_view, ShaderProgram*> made;
 	for (const auto& shader : k_Shaders)
 	{
 		bgfx::RendererType::Enum type = bgfx::getRendererType();
@@ -392,9 +429,14 @@ void ShaderManager::LoadShaders()
 		assert(bgfx::isValid(vs));
 		auto fs = bgfx::createEmbeddedShader(k_EmbeddedShaders.data(), type, shader.fragmentShaderName.data());
 		assert(bgfx::isValid(fs));
-		_shaderPrograms[shader.name.data()] =
-		    new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults,
-		                      _descriptorSets.get(), _drawWindow.get());
+		auto* program = new ShaderProgram(shader.name.data(), fromBgfx(vs), fromBgfx(fs), SamplersOf(shader), *_samplerDefaults,
+		                                  _descriptorSets.get(), _drawWindow.get());
+		made[shader.name] = program;
+		_shaderPrograms[shader.name.data()] = program;
+	}
+	for (const auto& variants : k_BoneVariants)
+	{
+		made.at(variants.program)->SetBoneVariants(made.at(variants.singleBone), made.at(variants.fewBones));
 	}
 }
 

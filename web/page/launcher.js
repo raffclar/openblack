@@ -24,13 +24,44 @@ const k_Needed = [
 const element = (id) => document.getElementById(id);
 const logElement = element('log');
 
-function log(text) {
-  logElement.textContent += text + '\n';
-  if (logElement.textContent.length > 4000000) {
-    logElement.textContent = logElement.textContent.slice(-2000000);
+// The page keeps the last lines of the game log. It writes them into the log box only while the box is open, and at most
+// once in each frame of the page. A change of the box text makes the browser lay out the page again. The page must not
+// do that for each line, because the main thread of the page also shows the game's frames.
+const k_LogLines = 20000;
+const logLines = [];
+let logShown = 0;
+let logUpdateDue = false;
+
+function showLog() {
+  logUpdateDue = false;
+  if (!logElement.parentElement.open) {
+    return;
   }
+  if (logShown > logLines.length || logElement.textContent.length === 0) {
+    logElement.textContent = logLines.join('\n');
+  } else if (logShown < logLines.length) {
+    logElement.append(logLines.slice(logShown).map((line) => '\n' + line).join(''));
+  }
+  logShown = logLines.length;
   logElement.scrollTop = logElement.scrollHeight;
 }
+
+function log(text) {
+  logLines.push(text);
+  if (logLines.length > 2 * k_LogLines) {
+    logLines.splice(0, logLines.length - k_LogLines);
+    // The box gets all its text again at the next update
+    logShown = logLines.length + 1;
+  }
+  if (!logUpdateDue && logElement.parentElement.open) {
+    logUpdateDue = true;
+    requestAnimationFrame(showLog);
+  }
+}
+
+/** All the lines of the game log that the page keeps, for the test scripts */
+globalThis.openblackLogText = () => logLines.join('\n');
+logElement.parentElement.addEventListener('toggle', showLog);
 
 /** Show a message on the page. The game calls this too, for an error that stops it. */
 function showMessage(title, text) {
@@ -211,9 +242,15 @@ function copyToStorage(entries) {
 
 let chosen = null;
 
-// The game thread draws into an OffscreenCanvas and sends each frame as an image. The screen canvas shows it. The game
-// canvas stays on top of it, without a picture, and takes the mouse and the keys.
+// The game thread draws into an OffscreenCanvas. In the frames of its game loop, the thread gives control back to the
+// browser after each frame, and the browser shows the game canvas. While it draws other frames, such as a loading
+// screen, it does not give control back, so it sends each frame as an image, and the screen canvas shows it. The game
+// canvas stays on top of the screen canvas, and takes the mouse and the keys. Without a picture it is not visible.
 let screenContext = null;
+function setPresent(present) {
+  element('game').classList.toggle('canvas-present', present === 'canvas');
+}
+
 function showFrame(frame) {
   const screen = element('screen');
   if (screen.width !== frame.width || screen.height !== frame.height) {
@@ -289,7 +326,7 @@ async function start() {
     arguments: gameArguments,
     print: log,
     printErr: log,
-    openblackWeb: { folder: { list, files: chosen.map((entry) => entry.file) }, storage, showFrame },
+    openblackWeb: { folder: { list, files: chosen.map((entry) => entry.file) }, storage, showFrame, setPresent },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
   const script = document.createElement('script');

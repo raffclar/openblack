@@ -484,10 +484,30 @@ int main(int argc, char* argv[]) noexcept
 		{
 			return EXIT_FAILURE;
 		}
+#if defined(__EMSCRIPTEN__)
+		// In a web browser the game thread gives control back to the browser after each frame, so that the browser shows
+		// the frame. Thus the frames run after main returns, and the program stops after the last frame.
+		switch (game->StartRun())
+		{
+		case openblack::Game::RunStart::Failed:
+			return EXIT_FAILURE;
+		case openblack::Game::RunStart::Done:
+			return EXIT_SUCCESS;
+		case openblack::Game::RunStart::Play:
+			break;
+		}
+		std::shared_ptr<openblack::Game> running(std::move(game));
+		openblack::web::RunFrames([running]() { return running->RunFrame(); },
+		                          [running]() {
+			                          running->EndRun();
+			                          return EXIT_SUCCESS;
+		                          });
+#else
 		if (!game->Run())
 		{
 			return EXIT_FAILURE;
 		}
+#endif
 	}
 	catch (std::exception& e)
 	{

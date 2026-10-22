@@ -304,7 +304,22 @@ public:
 	void ProcessTempleRoomKeys();
 	bool Update() noexcept;
 	bool Initialize() noexcept;
+	/// Runs the game to its end: the start, the frames, and the end
 	bool Run() noexcept;
+
+	/// What the start of a run gives
+	enum class RunStart
+	{
+		Play,   ///< The game is ready for its frames
+		Done,   ///< The game did all of its work before its first frame, with no error
+		Failed, ///< The game cannot start
+	};
+	/// The part of Run before the first frame: the first land, the scripts and the start of the game loop
+	[[nodiscard]] RunStart StartRun() noexcept;
+	/// One frame of the game loop. Returns false when the game ends after this frame.
+	[[nodiscard]] bool RunFrame() noexcept;
+	/// The part of Run after the last frame, as the player leaves the game
+	void EndRun() noexcept;
 
 	/// Loads a land's map script, keeping the challenge's scripts running, as the story's own change of land does. The
 	/// tips screen shows while it loads, as for a new game; a script's own map command shows the "please wait" banner
@@ -524,6 +539,9 @@ private:
 	uint32_t _frameCount {0};
 	/// The frame rate the game's statistics take, over a few seconds of frames drawn
 	statistics::FrameRateMeter _statisticsFrameRate;
+	/// The state that the frames of the game loop keep from one frame to the next, from the start of the loop to its end
+	struct FrameLoop;
+	std::unique_ptr<FrameLoop> _frameLoop;
 	glm::ivec2 _mousePosition {0, 0};
 	/// Whether the hand follows the pointer the window reports yet, or until the mouse first moves the game's own
 	input::HandPointer _handPointer;
