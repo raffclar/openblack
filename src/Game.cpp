@@ -5935,6 +5935,9 @@ bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::files
 	}
 	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
 	player_statistics::GameStarts(registry);
+	// Each load starts a game: the square of the player of this computer takes the symbol of the profile played now. The
+	// save keeps no symbol.
+	MakePlayersSymbols();
 	RenderLoadingFrame();
 	StartNewLand(land_change::Kind::SavedGame);
 	EndLoadingScreen();
@@ -6774,30 +6777,30 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 			return {};
 		}
 	};
-	players_symbols::Sheet players {.colours = read(textures / "PlayersSymbols.raw"),
-	                                .alpha = read(textures / "PlayersSymbolsa.raw")};
+	players_symbols::Sheet file {.colours = read(textures / "PlayersSymbols.raw"),
+	                             .alpha = read(textures / "PlayersSymbolsa.raw")};
 	const players_symbols::Sheet designs {.colours = read(textures / "OriginalChooseSymbol.raw"),
 	                                      .alpha = read(textures / "OriginalChooseSymbola.raw")};
-	if (!players.Whole() || !designs.Whole())
+	if (!file.Whole() || !designs.Whole())
 	{
 		return;
 	}
 	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (profile.has_value() || symbolInPlace.has_value())
+	const auto symbol =
+	    players_symbols::ChosenSymbol(profile.has_value() ? std::optional(profile->symbol) : std::nullopt, symbolInPlace);
+	std::optional<std::span<const uint8_t>> ownPicture;
+	std::optional<creature_tattoo::Picture> picture;
+	if (symbol.has_value() && Locator::tattooEditorSystem::has_value() && *symbol < creature_tattoo::k_DesignCount)
 	{
-		const auto symbol = symbolInPlace.value_or(profile.has_value() ? static_cast<uint32_t>(profile->symbol) : 0u);
-		std::optional<std::span<const uint8_t>> ownPicture;
-		std::optional<creature_tattoo::Picture> picture;
-		if (Locator::tattooEditorSystem::has_value() && symbol < creature_tattoo::k_DesignCount)
+		picture = Locator::tattooEditorSystem::value().GetPictures().at(*symbol);
+		if (picture.has_value())
 		{
-			picture = Locator::tattooEditorSystem::value().GetPictures().at(symbol);
-			if (picture.has_value())
-			{
-				ownPicture = std::span<const uint8_t>(*picture);
-			}
+			ownPicture = std::span<const uint8_t>(*picture);
 		}
-		players_symbols::PutProfileSymbol(players, designs, symbol, static_cast<uint32_t>(PlayerNames::PLAYER_ONE), ownPicture);
 	}
+	const auto localPlayer =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
 	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
