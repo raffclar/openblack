@@ -181,6 +181,7 @@
 #include "ECS/Systems/PathfindingSystemInterface.h"
 #include "ECS/Systems/PauseTextSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -390,6 +391,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
+    LocatorCoverage {"playerCommandSystem", "players.commands"},
     LocatorCoverage {"videoSystem", "view.video"},
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
@@ -1694,6 +1696,13 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			        items.push_back(std::move(item));
 		        });
 		        return items;
+	        }));
+	provider->Add(
+	    Query("commands", "The queue of the players' commands: the player of this computer, whose number the commands carry, "
+	                      "and the commands that wait for the start of a turn"),
+	    Serve<Locator::playerCommandSystem>(
+	        "the players' commands", [](const ecs::systems::PlayerCommandSystemInterface& commands, const QueryContext& /*c*/) {
+		        return Json {{"sender", static_cast<int>(commands.GetSender())}, {"pending", commands.PendingCount()}};
 	        }));
 	provider->Add(Query("heartbeat", "Each player's heartbeat: danger, rate, beat and pulse", {}, ResultKind::List),
 	              Serve<Locator::heartbeatSystem>(

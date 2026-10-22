@@ -88,6 +88,7 @@ enum class Stage : uint8_t
 /// The steps of openblack's turn
 enum class Step : uint8_t
 {
+	PlayerCommands,
 	HandStillness,
 	TurnCheering,
 	Clock,
@@ -208,6 +209,9 @@ struct Place
 
 /// The turn, step by step
 inline constexpr std::array k_Turn = std::to_array<Place>({
+    // The commands that the players sent come first in the turn, in the order that they went, before the hand does its
+    // own work of the turn
+    {.step = Step::PlayerCommands, .stage = Stage::Input},
     // The hand's count of the turns that it stays still is part of the player's input
     {.step = Step::HandStillness, .stage = Stage::Input},
     // The speed of the hand, which blows the chimneys' smoke, comes from the same part of the player's input

@@ -111,7 +111,9 @@ TEST(GameTurnOrder, AStepOfAnEarlierStageAfterALaterOneIsOutOfOrder)
 TEST(GameTurnOrder, TheHandInputComesBeforeTheTurnCountMovesOn)
 {
 	const auto recorder = PlayOneTurn();
-	EXPECT_EQ(recorder.IndexOf(Step::HandStillness), 0);
+	// The commands of the players come first, then the hand's own work of the turn
+	EXPECT_EQ(recorder.IndexOf(Step::PlayerCommands), 0);
+	EXPECT_EQ(recorder.IndexOf(Step::HandStillness), 1);
 	EXPECT_TRUE(recorder.Before(Step::HandStillness, Step::Clock));
 }
 

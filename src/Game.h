@@ -268,6 +268,8 @@ public:
 	void StartFrame(FrameState& frame);
 	/// The keys, the mouse buttons and the pointer of the frame
 	void UpdateInput();
+	/// The shortcut keys of this frame that change the world send their commands
+	void SubmitKeyCommands();
 	/// The debug windows. It returns false when the game must stop.
 	bool UpdateDebugGui();
 	/// The editor's camera, the creature's camera and the creature's cave

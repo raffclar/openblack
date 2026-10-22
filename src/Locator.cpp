@@ -91,6 +91,7 @@
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
+#include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 #include "ECS/Systems/Implementations/SaveGameSystem.h"
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
@@ -250,6 +251,7 @@ using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
 using openblack::ecs::systems::PauseTextSystem;
 using openblack::ecs::systems::PickingSystem;
+using openblack::ecs::systems::PlayerCommandSystem;
 using openblack::ecs::systems::PlayerProfileSystem;
 using openblack::ecs::systems::PlayerSystem;
 using openblack::ecs::systems::ProfileFolderSystem;
@@ -420,6 +422,7 @@ bool openblack::InitializeGame(const player_profiles::Store& profiles) noexcept
 	Locator::guidanceSystem::emplace<GuidanceSystem>();
 	Locator::tipBubbleSystem::emplace<TipBubbleSystem>();
 	Locator::handDemoSystem::emplace<HandDemoSystem>();
+	Locator::playerCommandSystem::emplace<PlayerCommandSystem>();
 	Locator::advisorSystem::emplace<AdvisorSystem>();
 	Locator::soundTagSystem::emplace<SoundTagSystem>();
 	Locator::rainSystem::emplace<RainSystem>();
@@ -611,6 +614,7 @@ void openblack::ShutDownServices()
 	Locator::helpMessageSystem::reset();
 	Locator::tipBubbleSystem::reset();
 	Locator::handDemoSystem::reset();
+	Locator::playerCommandSystem::reset();
 	Locator::influenceSystem::reset();
 	Locator::chimneySmokeSystem::reset();
 	Locator::abodeKnockSystem::reset();

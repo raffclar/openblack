@@ -245,3 +245,15 @@ TEST(GameFrameOrder, AMinimisedWindowSkipsTheGraphicsUnlessAPictureIsWanted)
 	EXPECT_FALSE(DoesGraphics(true, false));
 	EXPECT_TRUE(DoesGraphics(true, true));
 }
+
+TEST(GameFrameOrder, TheKeysSendTheirCommandsBeforeTheTurnsAndTheBlockGoesAfterThem)
+{
+	const auto recorder = PlayOneFrame();
+	EXPECT_TRUE(recorder.Before(Step::Input, Step::KeyCommands));
+	EXPECT_TRUE(recorder.Before(Step::KeyCommands, Step::Turns));
+	// The turns of the frame do not see the commands of the frame: the block goes after them
+	EXPECT_TRUE(recorder.Before(Step::Turns, Step::SendCommands));
+	EXPECT_TRUE(recorder.Before(Step::SendCommands, Step::FrameTime));
+	// The hand's frame comes after the block went, so its commands wait for the block of the next frame
+	EXPECT_TRUE(recorder.Before(Step::SendCommands, Step::Hand));
+}

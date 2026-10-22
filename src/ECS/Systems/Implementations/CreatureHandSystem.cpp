@@ -54,6 +54,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -673,7 +674,16 @@ void CreatureHandSystem::Release()
 	GiveCameraBack();
 	if (registry.Valid(creature) && Locator::creatureMindSystem::has_value() && ReleaseGivesFeedback(creature))
 	{
-		Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
+		// The creature feels the strokes and the slaps at the start of the next turn, as a command of the player
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(
+			    player_commands::CreatureFeedback {.creature = creature, .amount = delivered});
+		}
+		else
+		{
+			Locator::creatureMindSystem::value().SendReleaseFeedback(creature, delivered);
+		}
 		// Too slight to count, as a click is, the hand offers to focus on the creature
 		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
 	}

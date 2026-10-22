@@ -534,7 +534,9 @@ void Load(BinaryReader& in, Type& value)
 	else if constexpr (detail::k_IsPlainList<Type>)
 	{
 		const auto size = in.ReadSize();
-		if (!size.has_value() || (detail::k_IsStdArray<Type> && *size != value.size()))
+		// A saved fixed array can be shorter than the array of this build, as when a table for each player gets more
+		// players. The saved values fill the start, and the rest keep their defaults. A longer saved array fails.
+		if (!size.has_value() || (detail::k_IsStdArray<Type> && *size > value.size()))
 		{
 			in.Fail();
 			return;
@@ -553,14 +555,15 @@ void Load(BinaryReader& in, Type& value)
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{
 		const auto size = in.ReadSize();
-		if (!size.has_value() || *size != value.size())
+		// A shorter saved array fills the start of the array, as above
+		if (!size.has_value() || *size > value.size())
 		{
 			in.Fail();
 			return;
 		}
-		for (auto& element : value)
+		for (size_t i = 0; i < *size; ++i)
 		{
-			Load(in, element);
+			Load(in, value[i]);
 		}
 	}
 	else if constexpr (detail::k_IsSequence<Type>)
