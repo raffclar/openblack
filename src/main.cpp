@@ -307,7 +307,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			{
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
-			simulation.settings.stillHand = result["sim-still-hand"].as<bool>();
+			// Only the builds with the inspector have this option
+			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
 			args.simulation = simulation;
 		}
 
