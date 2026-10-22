@@ -46,7 +46,7 @@
         {
             "name": "curl",
             "default-features": false,
-            "features": [ "openssl" ],
+            "features": [ "openssl", "websockets" ],
             "platform": "!emscripten"
         },
         "gtest"

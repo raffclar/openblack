@@ -764,7 +764,7 @@ void LobbyClientSystem::OpenPush()
 			}
 			else if (_state == LobbySessionState::LoggedIn)
 			{
-				_reconnectAt = _clock() + _reconnectWait;
+				_reconnectAt = _clock() + _reconnectWait.Current();
 			}
 		});
 		return;
@@ -790,7 +790,7 @@ void LobbyClientSystem::OpenPush()
 			                    return;
 		                    }
 		                    // The lobby sends "hello" first; the client then asks for its channels
-		                    _reconnectWait = lobby_times::k_FirstReconnectWait;
+		                    _reconnectWait.Reset();
 	                    },
 	                .message =
 	                    [this, generation](std::string_view text) {
@@ -831,8 +831,7 @@ void LobbyClientSystem::PushClosed(online::PushClose reason)
 	case online::PushClose::Lost:
 		if (_state == LobbySessionState::LoggedIn && _pushWanted)
 		{
-			_reconnectAt = _clock() + _reconnectWait;
-			_reconnectWait = std::min(_reconnectWait * 2, lobby_times::k_MostReconnectWait);
+			_reconnectAt = _clock() + _reconnectWait.Next();
 		}
 		return;
 	}
