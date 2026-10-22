@@ -16,17 +16,10 @@
 namespace openblack
 {
 
-class Game;
-
 class FotFile
 {
 public:
-	explicit FotFile(Game& game);
-
 	void Load(const std::filesystem::path& path);
-
-private:
-	Game& _game;
 };
 
 } // namespace openblack

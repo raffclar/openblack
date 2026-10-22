@@ -210,6 +210,7 @@
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -318,7 +319,10 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Serializer/FotFile.h"
+#include "Simulation/FrameBody.h"
+#include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
+#include "Simulation/WorldStart.h"
 #include "Temple/TempleHelp.h"
 #include "Video/VideoRules.h"
 
@@ -343,12 +347,6 @@ void TraceHand(std::string_view writer, const glm::vec3& position)
 }
 /// The hand's splash, its sound and the scare it gives the fish are this high over the sea
 constexpr float k_HandSplashHeight = 0.2f;
-// Where the camera starts on the testbed: above and behind the middle of the map
-/// What the land's path reads while the testbed is loaded
-constexpr std::string_view k_TestbedLandPath = "testbed";
-/// How far the testbed's player's influence reaches from its middle, and the prayer power their worship has stored
-constexpr float k_TestbedInfluenceRadius = 400.0f;
-constexpr float k_TestbedPrayer = 1.0e6f;
 
 /// The meshes the hand is pulled towards as its player turns evil or good, the first two of its morph file's variants,
 /// and the files of the base and those two for their skins. Black & White would also blend the hand's bones and
@@ -421,55 +419,6 @@ bool FeelsModel(entt::entity object)
 	}
 	const auto* info = ecs::world_objects::InfoOf(object);
 	return info == nullptr || info->type != ObjectType::TotemStatue;
-}
-
-/// How many bytes a game file has, for the loading budget, or none when it isn't there
-std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
-{
-	try
-	{
-		std::error_code error;
-		const auto size = std::filesystem::file_size(Locator::filesystem::value().FindPath(path), error);
-		if (!error)
-		{
-			return static_cast<size_t>(size);
-		}
-	}
-	catch (const std::exception&)
-	{
-		// Not found: there is nothing to load
-	}
-	return std::nullopt;
-}
-
-/// Registers a resource read from a game file, to be loaded by its cache's loader with these arguments when it is first
-/// needed or prefetched. One whose file isn't there is left out, as loading it would fail.
-template <typename Manager, typename Id, typename... Args>
-void RegisterFile(Manager& manager, Id id, const std::filesystem::path& path, Args... args)
-{
-	if (const auto bytes = GameFileBytes(path))
-	{
-		manager.RegisterLoad(id, *bytes, std::move(args)...);
-	}
-	else
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", path.generic_string());
-	}
-}
-
-/// The sound banks whose samples are decoded as soon as they are read, as they are wanted at once and often: the hand's,
-/// the miracles' and the interface's
-constexpr std::array<std::string_view, 1> k_DecodedAheadBanks = {"InGame.sad"};
-/// Both advisors are sent home, the good one first; a help script's vanish rather than fly home
-void SendAdvisorsHome(bool helpScript)
-{
-	if (!Locator::advisorSystem::has_value() || !Locator::advisorSystem::value().IsLoaded())
-	{
-		return;
-	}
-	auto& advisors = Locator::advisorSystem::value().GetController();
-	advisors.SpiritHome(1, helpScript);
-	advisors.SpiritHome(2, helpScript);
 }
 
 /// The creature a script's camera is about, any player's: the thing it looks at, else the one it follows, when that is
@@ -626,49 +575,8 @@ Game::Game(Arguments&& args) noexcept
                     !args.playVideo.empty() || args.numFramesToSimulate > 0 || args.requestScreenshot.has_value())
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
-	std::function<std::shared_ptr<spdlog::logger>(const std::string&)> createLogger;
-	bool fileLog = false;
-#ifdef __ANDROID__
-	if (!args.logFile.empty() && args.logFile == "logcat")
-	{
-		createLogger = [](const std::string& name) { return spdlog::android_logger_mt(name, "spdlog-android"); };
-	}
-	else
-#endif // __ANDROID__
-	{
-		if (!args.logFile.empty() && args.logFile != "stdout")
-		{
-			// Every subsystem's logger writes through the one file: each opening the file for itself, their writes
-			// overwrote each other's and lines went missing. The sink writes the file on its own thread each second, so
-			// that a thread that logs a line does not wait for the disk.
-			fileLog = true;
-			auto fileSink = logging::BufferedLogSink::ToFile(args.logFile, std::chrono::seconds(1));
-			createLogger = [fileSink](const std::string& name) {
-				auto logger = std::make_shared<spdlog::logger>(name, fileSink);
-				spdlog::register_logger(logger);
-				return logger;
-			};
-		}
-		else
-		{
-			createLogger = [](const std::string& name) { return spdlog::stdout_color_mt(name); };
-		}
-	}
-	// TODO (#749) use std::views::enumerate
-	for (size_t i = 0; const auto& subsystem : k_LoggingSubsystemStrs)
-	{
-		auto logger = createLogger(subsystem.data());
-		logger->set_level(args.logLevels.at(i));
-		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no
-		// crash report can be written
-		logger->flush_on(spdlog::level::err);
-		++i;
-	}
-	// Everything else is written out within a second. The file sink does this itself.
-	if (!fileLog)
-	{
-		spdlog::flush_every(std::chrono::seconds(1));
-	}
+	// The log of each part of the game
+	simulation::StartLogs(args.logFile, args.logLevels);
 	sInstance = this;
 
 	auto& config = Locator::config::emplace();
@@ -684,7 +592,6 @@ Game::Game(Arguments&& args) noexcept
 	config.displayMode = args.displayMode;
 	config.noDraw = args.noDraw;
 	config.background = args.background;
-	config.dedicatedServer = args.dedicatedServer;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
 	config.vsync = args.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
@@ -729,6 +636,10 @@ Game::~Game() noexcept
 	if (Locator::playerProfileSystem::has_value())
 	{
 		Locator::playerProfileSystem::value().StopPlaying(static_cast<int64_t>(std::time(nullptr)));
+	}
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetView(nullptr);
 	}
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
@@ -1969,57 +1880,6 @@ void Game::ProcessTurnCheering()
 	}
 }
 
-bool Game::GameLogicLoop() noexcept
-{
-	using namespace ecs::components;
-	using namespace ecs::systems;
-
-	const auto currentTime = machine_clock::Ticks();
-	const auto delta = std::chrono::milliseconds(currentTime - _lastGameLoopTime);
-	auto& clock = Locator::time::value();
-
-	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
-	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
-	// what they point at.
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
-	{
-		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
-		{
-			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
-			ProcessTempleAudioTurn();
-			Locator::advisorSystem::value().ProcessTurn();
-			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
-			// only when it is already due.
-			if (Locator::helpMessageSystem::has_value())
-			{
-				Locator::helpMessageSystem::value().ProcessTurn();
-			}
-			_lastGameLoopTime = currentTime;
-		}
-		return false;
-	}
-
-	if (clock.IsPaused())
-	{
-		// The ambience is silent while the game is paused
-		Locator::audio::value().AtmosProcess(false);
-		return false;
-	}
-
-	if (!clock.IsTurnDue())
-	{
-		return false;
-	}
-	// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). The game is the
-	// view of the turn.
-	simulation::PlayTurn(*this);
-
-	_lastGameLoopTime = currentTime;
-	_turnDeltaTime = delta;
-
-	return false;
-}
-
 void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 {
 	using game_turn::Step;
@@ -2221,19 +2081,8 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
-bool Game::DedicatedServerStep(game_frame::Step step)
-{
-	return Locator::config::value().dedicatedServer &&
-	       (step == game_frame::Step::CreaturePoses || step == game_frame::Step::FrameEffects);
-}
-
 bool Game::DoesFrameGraphics() const
 {
-	// The dedicated server has no window: its frames do as the frames of a minimised window, with no picture
-	if (Locator::config::value().dedicatedServer)
-	{
-		return false;
-	}
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	if (!minimised)
 	{
@@ -2253,7 +2102,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	using game_frame::Step;
 	// While the window is minimised the turns, the keys and the film's clock continue, but the camera, the start of the draw,
 	// the hand and the world's draw stop
-	if (game_frame::IsGraphics(step) && !DoesFrameGraphics() && !DedicatedServerStep(step))
+	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
 	{
 		return true;
 	}
@@ -2378,7 +2227,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateCameraKeys(frame.deltaTime);
 		break;
 	case Step::ProfileAlignment:
-		KeepAlignmentInProfile();
+		Locator::landSystem::value().KeepAlignmentInProfile();
 		break;
 	case Step::_Count:
 		break;
@@ -2529,12 +2378,6 @@ bool Game::UpdateDebugGui()
 	{
 		return false;
 	}
-	// The dedicated server has no window to show the debug windows in
-	if (config.dedicatedServer)
-	{
-		return true;
-	}
-
 	// ImGui events + prepare
 	{
 		auto guiLoop = profiler.BeginScoped(Profiler::Stage::GuiLoop);
@@ -2665,60 +2508,31 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 	}
 }
 
+std::chrono::duration<float, std::milli> Game::GetDeltaTime() const
+{
+	return Locator::landSystem::value().GetTurnDeltaTime();
+}
+
+const std::filesystem::path& Game::GetLandPath() const noexcept
+{
+	return Locator::landSystem::value().GetLandPath();
+}
+
+const std::filesystem::path& Game::GetLandscapePath() const noexcept
+{
+	return Locator::landSystem::value().GetLandscapePath();
+}
+
 bool Game::PlayTurns()
 {
-	auto& profiler = Locator::profiler::value();
-	// Update Game Logic in Registry
-	{
-		auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
-		const auto turnBefore = Locator::time::value().GetTurn();
-		const auto logicStart = std::chrono::steady_clock::now();
-		if (GameLogicLoop())
-		{
-			return false; // Quit event
-		}
-		// The run record keeps the time of each turn
-		if (Locator::time::value().GetTurn() != turnBefore)
-		{
-			Locator::simulation::value().TurnPlayed(
-			    std::chrono::duration<float, std::milli>(std::chrono::steady_clock::now() - logicStart).count());
-		}
-	}
+	// The game is the view of the turns
+	Locator::landSystem::value().PlayTurns(*this);
 	return true;
 }
 
 void Game::UpdateCreaturePoses()
 {
-	auto& profiler = Locator::profiler::value();
-	auto& clock = Locator::time::value();
-	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
-	// The static that the eyes of all the creatures fizz through continues to slide as the draw starts
-	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
-	{
-		// The fight animations play, blows land and the fighters move as their animations carry them
-		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().Update(gameTime);
-	}
-	{
-		// The creatures are drawn moving between the last two turns
-		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
-		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
-	}
-	{
-		// The creatures breathe, act, pull faces and look about
-		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
-		Locator::creatureAnimationSystem::value().Update(gameTime);
-	}
-	{
-		// Their hair swings from the posed bodies
-		auto creatureHair = profiler.BeginScoped(Profiler::Stage::CreatureHairUpdate);
-		Locator::creatureHairSystem::value().Update(gameTime);
-	}
-	{
-		// They make the sounds of the moments their animations have played past
-		auto creatureAudio = profiler.BeginScoped(Profiler::Stage::CreatureAudioUpdate);
-		Locator::creatureAudioSystem::value().Update(gameTime);
-	}
+	simulation::PlayCreaturePoses();
 }
 
 void Game::UpdateScreenMarks()
@@ -2741,201 +2555,72 @@ void Game::UpdateScreenMarks()
 
 void Game::UpdateFrameEffects()
 {
-	auto& profiler = Locator::profiler::value();
+	// The game is the view of the effects of the frame
+	simulation::PlayFrameEffects(*this);
+}
+
+void Game::UpdateAdvisors()
+{
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	auto& clock = Locator::time::value();
-	const auto gameTime = std::chrono::duration<float, std::milli>(clock.GetFrameGameTime());
-	Locator::alignmentSystem::value().Update(gameTime);
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());
+	const auto gameMs = static_cast<int32_t>(clock.GetFrameGameTime().count());
+	const auto screenSize = glm::max(Locator::windowing::value().GetSize(), glm::ivec2(1));
+	Locator::advisorSystem::value().Update({
+	    .camera = &camera,
+	    .screen = static_cast<glm::u16vec2>(screenSize),
+	    .mouse = _mousePosition,
+	    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
+	    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
+	    .tickMs = machine_clock::Ticks(),
+	    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
+	});
+}
+
+bool Game::TakeDialogueClick()
+{
+	return std::exchange(_dialogueClick, false);
+}
+
+bool Game::DialogueSkipKeyDown() const
+{
+	// The key comes from the player's keyboard, which the input lock keeps out also when the window has the keys
+	const bool playerKeys =
+	    !Locator::gameActionSystem::has_value() || !Locator::gameActionSystem::value().IsPlayerInputBlocked();
+	const auto* keys = playerKeys ? SDL_GetKeyboardState(nullptr) : nullptr;
+	return keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0;
+}
+
+void Game::UpdateSingAlong(bool inTemple)
+{
+	if (!_interface)
 	{
-		auto actions = profiler.BeginScoped(Profiler::Stage::VegetationUpdate);
-		Locator::vegetation::value().Update(gameTime);
+		return;
 	}
-	// The clouds drift with the wind, then every mist and cloud animates
-	Locator::cloudSystem::value().Update(gameTime);
-	// The storms' own clouds gather and wander over them with the frames, at the screen refresh's pace
-	Locator::cloudSystem::value().UpdateStormClouds(clock.GetFrameRealTime());
-	// The rain falls as the storm nearest the camera has it
-	Locator::rainSystem::value().Update(std::chrono::duration<float>(gameTime).count(), clock.GetFrameRealTime(),
-	                                    camera.GetOrigin());
-	// The rings on the water grow and fade
-	Locator::waterRingSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
-	// The ribbons' textures slide on the frames that draw them
-	if (Locator::particleSystem::has_value())
+	const auto& clock = Locator::time::value();
+	std::optional<int32_t> word;
+	if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
 	{
-		Locator::particleSystem::value().ScrollChains(clock.GetFrameRealTime(), clock.GetFrameGameTime());
+		word = _gameMusic->GetMusicLyrics().word;
 	}
-	{
-		// The flames, steam and smoke of what burns move on
-		auto fire = profiler.BeginScoped(Profiler::Stage::FireUpdate);
-		Locator::fireSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
-	}
-	// The vortices' swirls and effects step with the frame, and their marks on the ground follow their openness
-	if (Locator::vortexSystem::has_value())
-	{
-		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
-	}
-	// The reward chests from the sky fall and thump down, and their dust fades
-	if (Locator::rewardSystem::has_value())
-	{
-		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
-	}
-	// The fireflies out drift about where they are between their last two turns
-	if (Locator::fireflySystem::has_value())
-	{
-		Locator::fireflySystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
-		                                       clock.GetTurnFraction());
-	}
-	// The moving bodies are drawn between their last two turns
-	if (Locator::dynamicsSystem::has_value())
-	{
-		Locator::dynamicsSystem::value().UpdateFrame(clock.GetTurnFraction());
-	}
-	// The drops, the dust, the smoke and the motes move on and fade by the frame's game time, and in the temple, where the
-	// world stops, by its real time
-	if (Locator::liquidParticleSystem::has_value())
-	{
-		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const auto milliseconds = inTemple ? clock.GetFrameRealTime() : clock.GetFrameGameTime();
-		Locator::liquidParticleSystem::value().UpdateFrame(liquid_particles::FrameSeconds(milliseconds.count()), true);
-	}
-	{
-		// The sparkles that mark the player's queued fight moves. The hand goes to a sparkle in the next frame.
-		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
-		Locator::creatureFightSystem::value().DrawMarks(
-		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
-	}
-	{
-		// What the creatures hold is drawn in their hands as the frame poses them
-		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
-		Locator::creatureObjectActionSystem::value().UpdateHeld();
-	}
-	{
-		// The animals are drawn between their last two turns, their models posed by their clips
-		auto animals = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
-		Locator::animalSystem::value().Update(clock.GetFrameGameTime(), clock.GetTurnFraction());
-		// The clips the villagers' states play go on, and the sounds of their frames play
-		Locator::livingActionSystem::value().UpdatePoses(clock.GetFrameGameTime(), clock.GetTurnFraction());
-		// The sharks swim between their last two turns and leave their wakes
-		Locator::sharkSystem::value().Update(gameTime, clock.GetTurnFraction());
-		// The opening's light falls and its hand lifts the boy and sets him down, by the frame's game time
-		Locator::introSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
-		// The explorers' boat is pushed into the sea and sails away, by the frame's game time
-		Locator::boatLaunchSystem::value().Update(static_cast<uint32_t>(clock.GetFrameGameTime().count()));
-		// The apple barrel goes to the local player's storage pit nearest their temple and its worm wriggles on
-		Locator::appleBarrelSystem::value().Update(clock.GetFrameGameTime());
-	}
-	{
-		// Their footprints fade away, only on a frame that draws the land
-		auto creatureFootprints = profiler.BeginScoped(Profiler::Stage::CreatureFootprintsUpdate);
-		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const bool landHidden = Locator::videoSystem::has_value() &&
-		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
-		Locator::footprintSystem::value().Update(gameTime, !inTemple && !landHidden);
-	}
-	{
-		// Their skins are painted again where their alignment, tattoos or marks have changed
-		auto creatureSkin = profiler.BeginScoped(Profiler::Stage::CreatureSkinUpdate);
-		Locator::creatureSkinSystem::value().Update();
-	}
-	{
-		// What a tornado carries is drawn where it whirls, between the last two turns
-		auto tornado = profiler.BeginScoped(Profiler::Stage::TornadoUpdate);
-		Locator::tornadoSystem::value().Update(clock.GetTurnFraction());
-	}
-	// The snow falls as the rain does
-	Locator::snowfallSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
-	                                        Locator::rainSystem::value().GetFall());
-	// The homes' smoke rises while someone is in
-	Locator::chimneySmokeSystem::value().Update(clock.GetFrameRealTime(), clock.GetFrameGameTime());
-	Locator::influenceSystem::value().Update(gameTime);
-	// What the hand shows past the border is shown with the hand
-	if (IsHandDrawn())
-	{
-		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
-	}
-	Locator::mistSystem::value().Update(gameTime);
-	Locator::villageLightSystem::value().Update(gameTime);
-	// The disciples glow, and the one in or under the hand shows the symbol of its work
-	ecs::villager_disciple::UpdateMarks();
-	// The town totems move to their shares by the real clock, also while the game is paused
-	Locator::villageTotemSystem::value().Update(static_cast<uint32_t>(clock.GetElapsedTime().count()));
-	// The owners' symbols float over their worthiest artefacts
-	Locator::artefactSystem::value().UpdateFrame(static_cast<float>(gameTime.count()));
-	// The flags over the towns' stores ease to their desires and turn to the camera
-	Locator::townDesireSystem::value().UpdateFlags(std::chrono::duration<float>(gameTime).count());
-	// The players' symbols of belief over the village centres move on
-	Locator::townSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
-	Locator::fieldSystem::value().Update(gameTime);
-	// The shoals near the camera swim, and dart from what scared them
-	Locator::fishFarmSystem::value().Update(std::chrono::duration<float>(gameTime).count(),
-	                                        Locator::camera::value().GetOrigin());
-	Locator::cinematicDirectorSystem::value().Update(gameTime);
-	// The scripts' words on the screen fade by the game's time, and stand still while a video plays
-	if (!Locator::videoSystem::has_value() || !Locator::videoSystem::value().IsPlaying())
-	{
-		Locator::cinematicDirectorSystem::value().UpdateTexts(static_cast<int32_t>(clock.GetFrameGameTime().count()));
-	}
-	// The advisors move and act once a frame, by the real time inside the temple and the game's otherwise. They act on
-	// the screen, so the dedicated server, which has no window, has none.
-	if (Locator::windowing::has_value())
-	{
-		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const auto realMs = static_cast<int32_t>(clock.GetFrameRealTime().count());
-		const auto gameMs = static_cast<int32_t>(clock.GetFrameGameTime().count());
-		const auto screenSize = glm::max(Locator::windowing::value().GetSize(), glm::ivec2(1));
-		Locator::advisorSystem::value().Update({
-		    .camera = &camera,
-		    .screen = static_cast<glm::u16vec2>(screenSize),
-		    .mouse = _mousePosition,
-		    .frameMs = static_cast<uint32_t>(std::max(realMs, 1)),
-		    .stepMs = std::clamp(inTemple ? realMs : gameMs, 0, 500),
-		    .tickMs = machine_clock::Ticks(),
-		    .wideScreen = Locator::cinematicDirectorSystem::value().IsWideScreenOn(),
-		});
-	}
-	// The scripts' dialogue: the voices, the player's click and the newest text sliding in
-	{
-		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		// The key comes from the player's keyboard, which the input lock keeps out also when the window has the keys
-		const bool playerKeys =
-		    !Locator::gameActionSystem::has_value() || !Locator::gameActionSystem::value().IsPlayerInputBlocked();
-		const auto* keys = playerKeys ? SDL_GetKeyboardState(nullptr) : nullptr;
-		const bool demoPlaying = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
-		Locator::helpTextSystem::value().Update({
-		    .gameMs = static_cast<uint32_t>(clock.GetFrameGameTime().count()),
-		    .realMs = static_cast<uint32_t>(clock.GetFrameRealTime().count()),
-		    .inTemple = inTemple,
-		    // Nor can the player click or key through the advisors' lines while a hand demonstration plays
-		    .click = _dialogueClick && !demoPlaying,
-		    .skipKey = !demoPlaying && keys != nullptr && keys[SDL_SCANCODE_KP_ENTER] != 0,
-		});
-		_dialogueClick = false;
-		// While a script plays a sung verse, the newest text's word that the song has reached gets the glow
-		if (_interface)
-		{
-			std::optional<int32_t> word;
-			if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
-			{
-				word = _gameMusic->GetMusicLyrics().word;
-			}
-			_interface->SetSingAlong(
-			    word, help::sing_along::StepMilliseconds(inTemple, static_cast<int32_t>(clock.GetFrameRealTime().count()),
-			                                             static_cast<int32_t>(clock.GetFrameGameTime().count())));
-		}
-	}
-	// The gestures' hints fade while the advisors' words were drawn, and while shown their dots run and their collars
-	// turn, by the game's time
-	if (Locator::gestureSystem::has_value())
-	{
-		const auto seconds = std::chrono::duration<float>(clock.GetFrameGameTime()).count();
-		Locator::gestureSystem::value().StepHints(seconds, _interface && _interface->WereDialogueWordsDrawn());
-	}
-	// The tip bubble's time to show runs down by the game's time while it is up
-	Locator::tipBubbleSystem::value().UpdateFrame(static_cast<float>(clock.GetFrameGameTime().count()));
-	// The names display grows in and out by the game's time
-	UpdateVillagerLabels(static_cast<float>(clock.GetFrameGameTime().count()));
-	// The cinema bars coming in hide the game's dialogs
-	if (Locator::cinematicDirectorSystem::value().TakeHideDialogs() && _interface && _interface->GetMenu().IsOpen())
+	_interface->SetSingAlong(word, help::sing_along::StepMilliseconds(inTemple,
+	                                                                  static_cast<int32_t>(clock.GetFrameRealTime().count()),
+	                                                                  static_cast<int32_t>(clock.GetFrameGameTime().count())));
+}
+
+bool Game::DialogueWordsDrawn() const
+{
+	return _interface && _interface->WereDialogueWordsDrawn();
+}
+
+void Game::CloseMenuForCinema()
+{
+	if (_interface && _interface->GetMenu().IsOpen())
 	{
 		_interface->GetMenu().Close();
 	}
@@ -3847,6 +3532,9 @@ bool Game::Initialize() noexcept
 		return false;
 	}
 	_startupTimer->Step("game services and shaders");
+	// The game is the view of the land's loads
+	Locator::landSystem::value().SetView(this);
+	Locator::landSystem::value().SetNewGameStart(_newGameStart);
 	// A deterministic run: every random number from the seed, the date pinned
 	if (_seed.has_value())
 	{
@@ -3886,741 +3574,74 @@ bool Game::Initialize() noexcept
 	// meanwhile ends the game at its first frame
 	PlayStartupScreens();
 
-	auto& resources = Locator::resources::value();
-	auto& meshManager = resources.GetMeshes();
-	auto& textureManager = resources.GetTextures();
-	auto& animationManager = resources.GetAnimations();
-	auto& levelManager = resources.GetLevels();
-	auto& soundManager = resources.GetSounds();
-	auto& glowManager = resources.GetGlows();
-	auto& camPathManager = resources.GetCameraPaths();
-
-	// The main room's markers of the temples, creatures and challenges on the map, and the creature's room's belts and
-	// medals
-	std::vector<std::string> icons {"I_citadel_on_map", "I_creature_on_map", "I_challenge_on_map"};
-	for (uint32_t i = 0; i < CreatureCaveTrophies::k_IconCount; ++i)
+	// Every resource of the game's data, as the dedicated server registers them too. The game is the view of the start.
+	if (!simulation::RegisterWorldData(*this))
 	{
-		icons.push_back(CreatureCaveTrophies::IconName(i));
-	}
-	for (const auto& icon : icons)
-	{
-		const auto path = fileSystem.GetPath<Path::Citadel>() / "icons" / fmt::format("{}.l3d", icon);
-		try
-		{
-			RegisterFile(meshManager, fmt::format("temple/icons/{}", icon), path, resources::L3DLoader::FromDiskTag {}, path);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	}
-
-	fileSystem.Iterate(fileSystem.GetPath<Path::Citadel>() / "OutsideMeshes", false,
-	                   [&meshManager, &resources](const std::filesystem::path& f) {
-		                   const auto extension = string_utils::LowerCase(f.extension().string());
-		                   const auto name = fmt::format("temple/{}", string_utils::LowerCase(f.stem().string()));
-		                   try
-		                   {
-			                   if (extension == ".zzz")
-			                   {
-				                   SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading temple mesh: {}", f.stem().string());
-				                   RegisterFile(meshManager, name, f, resources::L3DLoader::FromDiskTag {}, f);
-				                   // The temple's outside is blended from the temple meshes, into the first temple's,
-				                   // and its worship sites wear its skin
-				                   if (name.starts_with("temple/b_temple") || name.starts_with("temple/b_first_temple") ||
-				                       name == "temple/b_worship_l3d")
-				                   {
-					                   RegisterFile(resources.GetL3DFiles(), name, f, resources::L3DFileLoader::FromDiskTag {},
-					                                f);
-				                   }
-			                   }
-			                   else if (extension == ".16b")
-			                   {
-				                   // And its texture from these, from evil to neutral to good
-				                   RegisterFile(resources.GetBitmaps(), name, f, resources::Bitmap16BLoader::FromDiskTag {}, f);
-			                   }
-		                   }
-		                   catch (std::runtime_error& err)
-		                   {
-			                   SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		                   }
-	                   });
-
-	_startupTimer->Step("temple outside meshes");
-
-	// What things are made of, for the physics; without the file every material is zero, as in the game
-	if (const auto constants = fileSystem.GetPath<filesystem::Path::Data>() / "PhysicsConstants.txt";
-	    fileSystem.Exists(constants))
-	{
-		resources.GetPhysicsMaterials().Load(physics::k_MaterialsId.value(), resources::PhysicsMaterialsLoader::FromDiskTag {},
-		                                     constants);
-	}
-	else
-	{
-		resources.GetPhysicsMaterials().Load(physics::k_MaterialsId.value(), resources::PhysicsMaterialsLoader::EmptyTag {});
-	}
-	// The sheet the physics' dust puffs are drawn from
-	for (const auto* name : {"blobs", "blobsa"})
-	{
-		if (const auto sheet = fileSystem.GetPath<filesystem::Path::Data>() / fmt::format("{}.raw", name);
-		    fileSystem.Exists(sheet))
-		{
-			// Loaded with its alpha by the game, so both keep four bits a channel
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
-			                    graphics::texel_depth::Depth::FourBits);
-		}
-	}
-
-	// The land's light is built from this every frame
-	if (const auto palette = fileSystem.GetPath<filesystem::Path::WeatherSystem>() / "palette.raw"; fileSystem.Exists(palette))
-	{
-		resources.GetLandLightPalettes().Load(LandLightPalette::k_Id.value(), resources::LandLightPaletteLoader::FromDiskTag {},
-		                                      palette);
-	}
-
-	_startupTimer->Step("physics materials, dust sheets and land palette");
-	fileSystem.Iterate( //
-	    fileSystem.GetPath<filesystem::Path::Citadel>() / "engine", false,
-	    [&meshManager, &glowManager, &fileSystem, &config](const std::filesystem::path& f) {
-		    if (f.extension() == ".zzz")
-		    {
-			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
-			    // the two is loaded: both together are more meshes than the renderer holds.
-			    const auto stem = f.stem().string();
-			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
-			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
-			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
-			    if (!name.has_value())
-			    {
-				    return;
-			    }
-			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple mesh: {} as {}", stem, *name);
-			    try
-			    {
-				    RegisterFile(meshManager, fmt::format("temple/interior/{}", *name), f, resources::L3DLoader::FromDiskTag {},
-				                 f);
-			    }
-			    catch (std::runtime_error& err)
-			    {
-				    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			    }
-		    }
-		    else if (f.extension() == ".glw")
-		    {
-			    SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple glows: {}", f.stem().string());
-			    try
-			    {
-				    RegisterFile(glowManager, fmt::format("temple/interior/glow/{}", f.stem().string()), f,
-				                 resources::LightLoader::FromDiskTag {}, f);
-			    }
-			    catch (std::runtime_error& err)
-			    {
-				    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			    }
-		    }
-	    });
-
-	_startupTimer->Step("temple interior meshes and glows");
-	// The pack is kept by the loads of its meshes and textures until the last of them has run
-	const auto pack = std::make_shared<pack::PackFile>();
-
-	auto packResult = pack->ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllMeshes.g3d"));
-	if (packResult != pack::PackResult::Success)
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Unable to load AllMeshes.g3d: {}", pack::ResultToStr(packResult));
 		return false;
 	}
+	_prefetchTimer.emplace("of every resource");
+	return true;
+}
 
-	_startupTimer->Step("mesh pack read");
-	const auto& meshes = pack->GetMeshes();
-	for (uint32_t i = 0; i < meshes.size(); ++i)
-	{
-		meshManager.Register(
-		    static_cast<MeshId>(i),
-		    [pack, i] {
-			    return resources::L3DLoader {}(resources::L3DLoader::FromBufferTag {}, std::string(k_MeshNames.at(i)),
-			                                   pack->GetMesh(i));
-		    },
-		    meshes[i].size());
-	}
-
-	_startupTimer->Step("mesh pack meshes");
-	for (const auto& [name, g3dTexture] : pack->GetTextures())
-	{
-		textureManager.Register(
-		    g3dTexture.header.id,
-		    [pack, name] {
-			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, pack->GetTexture(name));
-		    },
-		    g3dTexture.ddsData.size());
-	}
-
-	_startupTimer->Step("mesh pack textures");
-	pack::PackFile animationPack;
-	packResult = animationPack.ReadFile(*fileSystem.GetData(fileSystem.GetPath<Path::Data>() / "AllAnims.anm"));
-	if (packResult != pack::PackResult::Success)
-	{
-		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Unable to load AllAnims.anm: {}", pack::ResultToStr(packResult));
-		return false;
-	}
-
-	const auto& animations = animationPack.GetAnimations();
-	// TODO (#749) use std::views::enumerate
-	for (size_t i = 0; i < animations.size(); i++)
-	{
-		animationManager.Load(i, resources::L3DAnimLoader::FromBufferTag {}, animations[i]);
-	}
-	_startupTimer->Step("animation pack");
-	// The game stops one of the packed clips playing round and round as it loads them
-	if (constexpr uint32_t k_HeldOnceClip = 323; animationManager.Contains(resources::HashIdentifier(k_HeldOnceClip)))
-	{
-		animationManager.Handle(resources::HashIdentifier(k_HeldOnceClip))->StopLooping();
-	}
-	// The sounds placed on the frames of the people's, animals' and birds' clips
-	if (const auto sounds = fileSystem.GetPath<Path::Data>() / "SmallSounds.SAS"; fileSystem.Exists(sounds))
-	{
-		resources.GetClipSounds().Load(audio::clip_sounds::k_TableId.value(), resources::ClipSoundsLoader::FromDiskTag {},
-		                               sounds);
-	}
-	else
-	{
-		resources.GetClipSounds().Load(audio::clip_sounds::k_TableId.value(), resources::ClipSoundsLoader::EmptyTag {});
-	}
-	{
-		// Each name's sounds go to the first packed clip bearing it
-		std::vector<std::string_view> packNames;
-		packNames.reserve(animations.size());
-		for (size_t i = 0; i < animations.size(); ++i)
-		{
-			const auto clip = animationManager.Handle(resources::HashIdentifier(i));
-			packNames.emplace_back(clip ? std::string_view(clip->GetName().c_str()) : std::string_view {});
-		}
-		resources.GetClipSounds().Handle(audio::clip_sounds::k_TableId.value())->Attach(packNames);
-	}
-
-	_startupTimer->Step("clip sounds");
-	fileSystem.Iterate(fileSystem.GetPath<Path::CreatureMesh>(), false, [&meshManager](const std::filesystem::path& f) {
-		const auto& fileName = f.stem().string();
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading creature mesh: {}", fileName);
-		try
-		{
-			if (string_utils::BeginsWith(fileName, "Hand"))
-			{
-				return;
-			}
-
-			const auto meshId = creature::GetIdFromMeshName(fileName);
-			RegisterFile(meshManager, meshId, f, resources::L3DLoader::FromDiskTag {}, f);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	});
-
-	_startupTimer->Step("creature meshes");
-	fileSystem.Iterate(fileSystem.GetPath<Path::Symbols>(), false, [&camPathManager](const std::filesystem::path& f) {
-		if (f.extension() != ".cam")
-		{
-			return;
-		}
-		const auto& fileName = f.stem().string();
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading symbol cam: {}", fileName);
-		const auto pathId = fmt::format("symbol/{}", fileName);
-		try
-		{
-			camPathManager.Load(pathId, resources::CameraPathLoader::FromDiskTag {}, f);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	});
-
-	fileSystem.Iterate(fileSystem.GetPath<Path::CitadelEngine>(), false, [&camPathManager](const std::filesystem::path& f) {
-		if (f.extension() != ".cam")
-		{
-			return;
-		}
-		const auto& fileName = f.stem().string();
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading interior temple cam: {}", fileName);
-		const auto pathId = fmt::format("temple/{}", fileName);
-		try
-		{
-			camPathManager.Load(pathId, resources::CameraPathLoader::FromDiskTag {}, f);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	});
-
-	_startupTimer->Step("camera paths");
-	// Load loose one-off assets
-	{
-		using AFromDiskTag = resources::L3DAnimLoader::FromDiskTag;
-		animationManager.Load("coffre", AFromDiskTag {}, fileSystem.GetPath<Path::Misc>() / "coffre.anm");
-
-		using LFromDiskTag = resources::L3DLoader::FromDiskTag;
-		meshManager.Load("hand", LFromDiskTag {}, fileSystem.GetPath<Path::CreatureMesh>() / "Hand_Boned_Base2.l3d");
-		_startupTimer->Step("hand mesh");
-		LoadHandAnimation();
-		_startupTimer->Step("hand animations");
-		LoadCreatureRigs();
-		_startupTimer->Step("creature rigs");
-		Locator::advisorSystem::value().Load();
-		const auto registerMesh = [&meshManager](auto id, const std::filesystem::path& path) {
-			RegisterFile(meshManager, id, path, LFromDiskTag {}, path);
-		};
-		registerMesh("coffre", fileSystem.GetPath<Path::Misc>() / "coffre.l3d");
-		// The closed reward chest
-		if (const auto path = fileSystem.GetPath<Path::Misc>() / "chest0.l3d"; fileSystem.Exists(path))
-		{
-			registerMesh("misc/chest0", path);
-		}
-		// The collar the citadel's leash posts are drawn with
-		if (const auto path = fileSystem.GetPath<Path::Misc>() / "leash.l3d"; fileSystem.Exists(path))
-		{
-			registerMesh("misc/leash", path);
-		}
-		// The eyes every creature is drawn with
-		for (const auto& [id, file] : {std::pair {ecs::components::CreatureEyes::k_EyeballMeshId, "Eyeball.l3d"},
-		                               std::pair {ecs::components::CreatureEyes::k_EyelidMeshId, "Eyelid.l3d"}})
-		{
-			if (const auto path = fileSystem.GetPath<Path::Data>() / file; fileSystem.Exists(path))
-			{
-				registerMesh(id, path);
-			}
-		}
-		registerMesh("cone", fileSystem.GetPath<Path::Data>() / "cone.l3d");
-		registerMesh("marker", fileSystem.GetPath<Path::Data>() / "marker.l3d");
-		registerMesh("river", fileSystem.GetPath<Path::Data>() / "river.l3d");
-		registerMesh("river2", fileSystem.GetPath<Path::Data>() / "river2.l3d");
-		registerMesh("metre_sphere", fileSystem.GetPath<Path::Data>() / "metre_sphere.l3d");
-		// The sky: its dome, with the dome's pictures, the sun and the moon
-		using SkyArchetype = ecs::archetypes::SkyArchetype;
-		registerMesh(SkyArchetype::k_DomeMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sky.l3d");
-		{
-			std::vector<std::filesystem::path> pictures;
-			for (const auto& file : sky_dome::PictureFiles())
-			{
-				pictures.push_back(fileSystem.GetPath<Path::WeatherSystem>() / file);
-			}
-			textureManager.Load(SkyArchetype::k_DomeTextureId.value(), resources::Texture2DLoader::FromBitmapLayersTag {},
-			                    "Sky", pictures, sky_dome::k_Rows);
-		}
-		registerMesh(SkyArchetype::k_SunMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "sun.l3d");
-		registerMesh(SkyArchetype::k_MoonMeshId.value(), fileSystem.GetPath<Path::WeatherSystem>() / "moon.l3d");
-		registerMesh(ecs::components::Mist::k_MeshId, fileSystem.GetPath<Path::Landscape>() / "mist.l3d");
-
-		using CFromDiskTag = resources::CameraPathLoader::FromDiskTag;
-		camPathManager.Load("cam", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "cam.cam");
-		camPathManager.Load("flying", CFromDiskTag {}, fileSystem.GetPath<Path::Data>() / "flying.cam");
-	}
-
-	_startupTimer->Step("one-off meshes");
-	// The info tables come before the game's interface, whose tooltips take their priorities and times from them
-	{
-		InfoFile infoFile;
-		auto result = infoFile.LoadFromFile(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / "info.dat");
-		if (!result)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to load game info data.");
-			return false;
-		}
-		Locator::infoConstants::reset(result.release());
-	}
-
-	_startupTimer->Step("info tables");
-	// The current profile's own pictures take the places of their designs from the start
-	ReadTattooPictures();
+const gui::TextDatabase* Game::MakeInterface()
+{
 	// The game's menu, which greets the player by their profile's name and shows their creature's name and their
 	// symbol; before a first start's player has a profile, by the name they log in with
+	auto [playerName, settings] = simulation::ProfileMenuSettings();
+	auto& audio = Locator::audio::value();
+	const auto kept = gui::ToProfileSettings(settings);
+	const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
+	_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
+	ApplyPlayerSettings(kept);
+	LoadProfileKeys();
+	RefreshPlayersPage();
+	if (!_interface)
 	{
-		const auto* user = std::getenv("USERNAME");
-		user = user != nullptr ? user : std::getenv("USER");
-		auto playerName = gui::ToUtf16(user != nullptr ? user : "Player");
-		// The settings the menu starts with are the game's
-		gui::MenuSettings settings;
-		settings.leftHandedHand = !Locator::config::value().rightHandedHand;
-		// The options the player keeps with their profile, the game's own without one
-		if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
-		{
-			playerName = gui::ToUtf16(profile->name);
-			settings.creatureName = gui::ToUtf16(profile->creatureName);
-			settings.symbol = profile->symbol;
-			gui::TakeProfileSettings(settings, profile->settings);
-		}
-		auto& audio = Locator::audio::value();
-		settings.sfxVolume = audio.GetSfxVolume();
-		settings.musicVolume = audio.GetMusicVolume();
-		settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
-		const auto kept = gui::ToProfileSettings(settings);
-		const auto& pictures = Locator::tattooEditorSystem::value().GetPictures();
-		_interface = gui::GameInterface::Create(playerName, std::move(settings), pictures);
-		ApplyPlayerSettings(kept);
-		LoadProfileKeys();
-		RefreshPlayersPage();
-		if (!_interface)
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
-		}
-		else
-		{
-			// The slider of the help's text speed shows only when the game has no sound
-			_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
-			// Each save and each load shows its box first
-			if (Locator::saveGameSystem::has_value())
-			{
-				Locator::saveGameSystem::value().SetShowBox(
-				    [this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
-				// A save that did not write its world files completely is told to the player in a box
-				Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
-			}
-			// The Game Statistics box takes the players' figures as it opens
-			_interface->GetMenu().SetStatisticsSource([] {
-				const auto local = Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
-				                                                      : PlayerNames::PLAYER_ONE;
-				return std::pair(player_statistics::Box(), local);
-			});
-			if (Locator::temple::has_value())
-			{
-				Locator::temple::value().SetInterface(_interface.get());
-			}
-			if (Locator::creatureCaveSystem::has_value())
-			{
-				Locator::creatureCaveSystem::value().SetInterface(_interface.get());
-			}
-			if (Locator::miracleFxSystem::has_value())
-			{
-				Locator::miracleFxSystem::value().SetInterface(_interface.get());
-			}
-			if (Locator::pauseTextSystem::has_value())
-			{
-				Locator::pauseTextSystem::value().SetInterface(_interface.get());
-			}
-		}
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The game's menu is not available, Escape quits");
 	}
-
-	_startupTimer->Step("game interface");
-	// TODO(raffclar): #400: Parse level files within the resource loader
-	// TODO(raffclar): #405: Determine campaign levels from the challenge script file
-	// Load the campaign levels
-	fileSystem.Iterate(fileSystem.GetPath<Path::Scripts>(), false, [&levelManager](const std::filesystem::path& f) {
-		const auto& name = f.stem().string();
-		if (f.extension() != ".txt" || name.rfind("InfoScript", 0) != std::string::npos)
-		{
-			return;
-		}
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading campaign level: {}", f.stem().string());
-		try
-		{
-			if (Level::IsLevelFile(f))
-			{
-				levelManager.Load(fmt::format("campaign/{}", name), resources::LevelLoader::FromDiskTag {}, f,
-				                  Level::LandType::Campaign);
-			}
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	});
-	// Load Playgrounds
-	// Attempt to load additional levels as playgrounds
-	fileSystem.Iterate(fileSystem.GetPath<Path::Playgrounds>(), false, [&levelManager](const std::filesystem::path& f) {
-		if (f.extension() != ".txt")
-		{
-			return;
-		}
-		const auto& name = f.stem().string();
-		if (levelManager.Contains(fmt::format("playgrounds/{}", name)))
-		{
-			// Already added
-			return;
-		}
-
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading custom level: {}", f.stem().string());
-		try
-		{
-			if (Level::IsLevelFile(f))
-			{
-				levelManager.Load(fmt::format("playgrounds/{}", name), resources::LevelLoader::FromDiskTag {}, f,
-				                  Level::LandType::Skirmish);
-			}
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	});
-
-	_startupTimer->Step("level list");
-	// Load all sound packs in the Audio directory
-	auto& audioManager = Locator::audio::value();
-	fileSystem.Iterate(
-	    fileSystem.GetPath<Path::Audio>(), true, [&audioManager, &soundManager, &fileSystem](const std::filesystem::path& f) {
-		    if (f.extension() != ".sad")
-		    {
-			    return;
-		    }
-
-		    // Only the samples' headers are read now: each sample is read from the file when it is wanted
-		    pack::PackFile soundPack;
-		    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Opening sound pack {}", f.filename().string());
-		    auto result = soundPack.ReadFile(*fileSystem.GetData(f), {"LHAudioWaveData"});
-		    const auto waveData = soundPack.GetUnreadBlock("LHAudioWaveData");
-		    if (result == pack::PackResult::Success && soundPack.HasBlock("LHAudioBankSampleTable") && !waveData.has_value())
-		    {
-			    result = pack::PackResult::ErrMissingAudioWaveDataBlock;
-		    }
-		    const auto& audioHeaders = soundPack.GetAudioSampleHeaders();
-		    // As when the whole pack is read, a sample beyond the wave data spoils the pack
-		    if (result == pack::PackResult::Success && waveData.has_value() &&
-		        std::ranges::any_of(audioHeaders, [&waveData](const pack::AudioBankSampleHeader& header) {
-			        return static_cast<uint64_t>(header.offset) + header.size > waveData->size;
-		        }))
-		    {
-			    result = pack::PackResult::ErrFileTooSmall;
-		    }
-		    if (result != pack::PackResult::Success)
-		    {
-			    SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to load sound pack {}: {}", f.filename().string(),
-			                        pack::ResultToStr(result));
-			    return;
-		    }
-
-		    if (audioHeaders.empty())
-		    {
-			    SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Empty sound pack found for {}. Skipping", f.filename().string());
-			    return;
-		    }
-		    auto soundName = std::filesystem::path(audioHeaders[0].name.data());
-
-		    auto groupName = f.filename().string();
-
-		    // A hacky way of detecting if the sound is music as all music sounds end with "mpg"
-		    if (soundName.extension() == ".mpg")
-		    {
-			    auto buffers = std::queue<std::vector<uint8_t>>();
-			    auto packName = f.string();
-			    audioManager.AddMusicEntry(packName);
-		    }
-		    else
-		    {
-			    audioManager.CreateSoundGroup(groupName);
-			    const bool decodeAhead = std::ranges::find(k_DecodedAheadBanks, groupName) != k_DecodedAheadBanks.end();
-			    for (size_t i = 0; i < audioHeaders.size(); i++)
-			    {
-				    soundName = std::filesystem::path(audioHeaders[i].name.data());
-				    // Banks have gaps between their samples, which are skipped without skipping the samples after them
-				    if (audioHeaders[i].size == 0)
-				    {
-					    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Empty sound buffer found for {}/{}. Skipping", groupName,
-					                        audioHeaders[i].id);
-					    continue;
-				    }
-
-				    const auto stringId = fmt::format("{}/{}", groupName, audioHeaders[i].id);
-				    const entt::id_type id = entt::hashed_string(stringId.c_str());
-				    SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Registering sound {}: {}", stringId,
-				                        audioHeaders[i].name.data());
-				    soundManager.RegisterLoad(id, audioHeaders[i].size, resources::SoundLoader::FromBankFileTag {}, f,
-				                              waveData->offset, audioHeaders[i], decodeAhead);
-				    audioManager.AddToSoundGroup(groupName, id);
-			    }
-
-			    // What the bank plays for things happening in the game, such as trees rustling
-			    if (soundPack.HasBlock("LHAudioAnimArrayTable") && soundPack.HasBlock("LHAudioWaveNumTable"))
-			    {
-				    if (auto effects = audio::AnimEffectTable::Parse(soundPack.GetBlock("LHAudioAnimArrayTable"),
-				                                                     soundPack.GetBlock("LHAudioWaveNumTable")))
-				    {
-					    audioManager.AddAnimEffects(groupName, std::move(*effects));
-				    }
-				    else
-				    {
-					    SPDLOG_LOGGER_WARN(spdlog::get("audio"), "Malformed animation effects in sound pack {}",
-					                       f.filename().string());
-				    }
-			    }
-		    }
-	    });
-
-	// Which sample of the speech banks says each help text, for the lines the scripts have spoken
-	if (_interface)
+	else
 	{
-		auto& sounds = Locator::resources::value().GetSounds();
-		std::array<std::vector<audio::SpeechBankSample>, audio::k_SpeechBankFiles.size()> banks;
-		for (const auto& [groupName, group] : audioManager.GetSoundGroups())
+		// The slider of the help's text speed shows only when the game has no sound
+		_interface->GetMenu().SetSoundInstalled(audio.IsInstalled());
+		// Each save and each load shows its box first
+		if (Locator::saveGameSystem::has_value())
 		{
-			const auto bank = std::ranges::find_if(audio::k_SpeechBankFiles, [&groupName](std::string_view file) {
-				return string_utils::LowerCase(std::string(file)) == string_utils::LowerCase(groupName);
-			});
-			if (bank == audio::k_SpeechBankFiles.end())
-			{
-				continue;
-			}
-			auto& samples = banks.at(static_cast<size_t>(std::distance(audio::k_SpeechBankFiles.begin(), bank)));
-			for (const auto id : group.sounds)
-			{
-				const auto& sound = *sounds.Handle(id);
-				samples.push_back({.sample = static_cast<uint32_t>(sound.id), .file = sound.name, .sound = id});
-			}
+			Locator::saveGameSystem::value().SetShowBox([this](bool loading, bool darken) { ShowSavingBox(loading, darken); });
+			// A save that did not write its world files completely is told to the player in a box
+			Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
 		}
-		Locator::helpSpeechSystem::value().SetTable(audio::HelpSpeechTable(_interface->GetTexts().GetHelpNames(), banks));
-		// The scripts' dialogue, its text sized for the screen it starts on
-		const int screenHeight = Locator::windowing::has_value() ? Locator::windowing::value().GetSize().y : 0;
-		Locator::helpTextSystem::value().Start(_interface->GetTexts(), screenHeight);
-		// What the dialogue changing hands does to the advisors and the texts
-		Locator::dialogueControlSystem::value().SetHooks({
-		    .sendSpiritsHome = [](bool helpScript) { SendAdvisorsHome(helpScript); },
-		    .taken = []() { Locator::helpTextSystem::value().ClearAllText(); },
-		    .released =
-		        [](bool helpScript) {
-			        // They fly home, are cut short in what they say, are sent home as the script would, and the texts go
-			        SendAdvisorsHome(false);
-			        Locator::helpTextSystem::value().InterruptAdvisors();
-			        SendAdvisorsHome(helpScript);
-			        Locator::helpTextSystem::value().ClearAllText();
-		        },
+		// The Game Statistics box takes the players' figures as it opens
+		_interface->GetMenu().SetStatisticsSource([] {
+			const auto local =
+			    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+			return std::pair(player_statistics::Box(), local);
 		});
+		if (Locator::temple::has_value())
+		{
+			Locator::temple::value().SetInterface(_interface.get());
+		}
+		if (Locator::creatureCaveSystem::has_value())
+		{
+			Locator::creatureCaveSystem::value().SetInterface(_interface.get());
+		}
+		if (Locator::miracleFxSystem::has_value())
+		{
+			Locator::miracleFxSystem::value().SetInterface(_interface.get());
+		}
+		if (Locator::pauseTextSystem::has_value())
+		{
+			Locator::pauseTextSystem::value().SetInterface(_interface.get());
+		}
 	}
+	return _interface ? &_interface->GetTexts() : nullptr;
+}
 
-	_startupTimer->Step("sound and music banks");
-	// The temple's leashes are drawn with the leash texture and its alpha
-	if (const auto leash = fileSystem.GetPath<Path::Textures>() / "leash.raw",
-	    alpha = fileSystem.GetPath<Path::Textures>() / "leasha.raw";
-	    fileSystem.Exists(leash) && fileSystem.Exists(alpha))
+void Game::StartupStep(std::string_view step)
+{
+	if (_startupTimer.has_value())
 	{
-		constexpr uint16_t k_LeashTextureSide = 256;
-		try
-		{
-			textureManager.Load(ecs::components::LeashPost::k_TextureId, resources::Texture2DLoader::FromDiskWithAlphaTag {},
-			                    leash, alpha, k_LeashTextureSide);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
+		_startupTimer->Step(step);
 	}
-	// The marks the vortices leave on the ground, with their alphas
-	for (const auto& textures : ecs::components::Vortex::k_GroundTextures)
-	{
-		for (const auto& [id, name] :
-		     {std::pair {textures.hole, textures.holeFile}, std::pair {textures.ring, textures.ringFile}})
-		{
-			const auto colours = fileSystem.GetPath<Path::Textures>() / fmt::format("{}.raw", name);
-			const auto alpha = fileSystem.GetPath<Path::Textures>() / fmt::format("{}a.raw", name);
-			if (!fileSystem.Exists(colours) || !fileSystem.Exists(alpha))
-			{
-				continue;
-			}
-			constexpr uint16_t k_VortexTextureSide = 256;
-			try
-			{
-				textureManager.Load(id, resources::Texture2DLoader::FromDiskWithAlphaTag {}, colours, alpha,
-				                    k_VortexTextureSide);
-			}
-			catch (std::runtime_error& err)
-			{
-				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-			}
-		}
-	}
-	// The sea's texture, its colours and alpha together
-	try
-	{
-		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-	}
-	// Each texture is kept at the depth the game keeps it: colours with an alpha file and the alphas four bits a channel,
-	// colours without one five bits a channel, and the small pictures the game reads as numbers as they are
-	std::vector<std::filesystem::path> rawFiles;
-	std::unordered_set<std::string> rawStems;
-	fileSystem.Iterate(fileSystem.GetPath<Path::Textures>(), false, [&rawFiles, &rawStems](const std::filesystem::path& f) {
-		// The game ships a grey ice map it never loads, cut short of a whole texture
-		constexpr std::string_view k_UnusedTexture = "s_iceenvmapgrey.raw";
-		if (string_utils::LowerCase(f.extension().string()) == ".raw" &&
-		    string_utils::LowerCase(f.filename().string()) != k_UnusedTexture)
-		{
-			rawFiles.push_back(f);
-			rawStems.insert(string_utils::LowerCase(f.stem().string()));
-		}
-	});
-	for (const auto& f : rawFiles)
-	{
-		// The people's shadow is a grey picture the game draws as an alpha
-		constexpr std::string_view k_GreyAlpha = "human_shadow";
-		const auto stem = string_utils::LowerCase(f.stem().string());
-		const bool isAlpha = stem == k_GreyAlpha || (stem.ends_with('a') && rawStems.contains(stem.substr(0, stem.size() - 1)));
-		const auto bytes = GameFileBytes(f);
-		if (!bytes)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Can't find {}", f.generic_string());
-			continue;
-		}
-		const auto kind = graphics::texel_depth::Classify(*bytes, rawStems.contains(stem + "a"), isAlpha);
-		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
-		try
-		{
-			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
-			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	}
-
-	_startupTimer->Step("raw textures");
-	// The texture every creature's hair is drawn with, and its alpha beside it
-	for (const auto& [id, name] : {std::pair {ecs::components::CreatureHair::k_TextureId, "C_Ape_Hair.raw"},
-	                               std::pair {ecs::components::CreatureHair::k_AlphaTextureId, "C_Ape_Haira.raw"}})
-	{
-		const auto path = fileSystem.GetPath<Path::Data>() / name;
-		if (!fileSystem.Exists(path))
-		{
-			continue;
-		}
-		try
-		{
-			// The game loads the hair with its alpha, so both keep four bits a channel
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
-		}
-		catch (std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-		}
-	}
-
-	// What creatures' tattoos and marks are painted with
-	LoadCreatureSkinArt();
-
-	// The noise that makes the snow's edges on the land ragged
-	try
-	{
-		textureManager.Load(snow_cover::k_NoiseTextureId.value(), resources::Texture2DLoader::FromDiskTag {},
-		                    fileSystem.GetPath<Path::WeatherSystem>() / "snowmap.raw");
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-	}
-	_startupTimer->Step("hair, skin art and snow textures");
-
-	// Everything registered is loaded on the loading threads from now on, while the first land is made: what the land
-	// needs before its turn comes is loaded there and then
-	resources.PrefetchAll();
-	SPDLOG_LOGGER_INFO(spdlog::get("game"), "{} resources registered to be loaded", resources.PendingCount());
-	_prefetchTimer.emplace("of every resource");
-
-	return true;
 }
 
 void Game::StartFightTools()
@@ -4788,53 +3809,14 @@ Game::RunStart Game::StartRun() noexcept
 		Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	}
 
-	auto& fileSystem = Locator::filesystem::value();
-
-	const auto challengePath = ChallengePath();
-	if (fileSystem.Exists(challengePath))
+	// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
+	// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and the
+	// start-of-game question isn't asked
+	auto& lands = Locator::landSystem::value();
+	const bool startStory = !_startTestbed && start == game_session::Start::NewGame &&
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	if (!lands.StartChallengeScripts(startStory))
 	{
-		auto& chlapi = Locator::chlapi::value();
-		auto& lhvm = Locator::vm::value();
-		// The virtual machine's errors go to the scripting log, where the editor's Scripts panel shows them
-		// The land's scripts start with every place of the scripts' object table free; each native tells the table
-		// whether it takes control of what it is given, and the scripts' variables keep their objects' references
-		Locator::scriptObjects::value().Reset();
-		chlapi.ResetSwitches();
-		lhvm.Initialise(
-		    &chlapi.GetFunctionsTable(),
-		    [](uint32_t func) {
-			    Locator::scriptObjects::value().EnterNative(func);
-			    Locator::chlapi::value().EnterNative(func);
-		    },
-		    nullptr, [](uint32_t task) { chlapi::CHLApi::TaskStopped(task); },
-		    [](lhvm::ErrorCode code, const std::string& text, uint32_t number) {
-			    SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Script error: {} ({} {})",
-			                        lhvm::k_ErrorMsg.at(static_cast<size_t>(code)), text, number);
-		    },
-		    [](uint32_t object) { Locator::scriptObjects::value().AddReference(static_cast<entt::entity>(object)); },
-		    [](uint32_t object) { Locator::scriptObjects::value().RemoveReference(static_cast<entt::entity>(object)); });
-		try
-		{
-			lhvm.LoadBinary(fileSystem.ReadAll(challengePath));
-			// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
-			// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and
-			// the start-of-game question isn't asked
-			if (!_startTestbed && start == game_session::Start::NewGame &&
-			    new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish))
-			{
-				StartStoryScripts();
-			}
-		}
-		catch (const std::runtime_error& err)
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}",
-			                    (fileSystem.GetGamePath() / challengePath).generic_string(), err.what());
-		}
-	}
-	else
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Challenge file not found at {}",
-		                    (fileSystem.GetGamePath() / challengePath).generic_string());
 		return RunStart::Failed;
 	}
 	// A continue loads the save on exit, or starts a new game when it cannot
@@ -4842,7 +3824,7 @@ Game::RunStart Game::StartRun() noexcept
 	if (start == game_session::Start::Continue)
 	{
 		continued = ContinueGame();
-		if (_landPath.empty())
+		if (lands.GetLandPath().empty())
 		{
 			return RunStart::Failed;
 		}
@@ -4858,18 +3840,26 @@ Game::RunStart Game::StartRun() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -CONVERT switch: the land is loaded, the game closes");
 		return RunStart::Done;
 	}
-	// Everything the map made goes into the map's cells, in the order it was made
-	Locator::entitiesMap::value().Sync();
-
-	SizeSceneToWindow();
-
-	// A saved game keeps its own time of day
-	if (!continued)
+	// The world starts to play, with the game as its view
+	simulation::BeginPlay(continued, _simulation.has_value() && _simulation->frameTime.has_value(), *this);
+	_frameCount = 0;
+	_frameLoop = std::make_unique<FrameLoop>();
+	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
+	if (config.frameStatsInterval > 0)
 	{
-		Game::SetTime(config.timeOfDay);
+		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
+		                               Locator::rendererInterface::value().GetPipelinesMade());
+		if (config.frameStatsViews)
+		{
+			Locator::rendererInterface::value().SetProfile(true);
+		}
 	}
-	Locator::time::value().Start();
+	_frameLoop->frameStart = std::chrono::steady_clock::now();
+	return RunStart::Play;
+}
 
+void Game::StartPlayView()
+{
 	if (_playVideo == "intro")
 	{
 		Locator::videoSystem::value().Play("Data/INTRO.bik");
@@ -4892,52 +3882,20 @@ Game::RunStart Game::StartRun() noexcept
 	// The game loop starts: the help record of the player comes from their profile, and the game writes it back at once
 	LoadHelpRecord();
 	SaveHelpRecord();
+}
 
-	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
-	// picture or its model then starts after the same frames each run, at any speed.
-	if (_simulation.has_value() && _simulation->frameTime.has_value())
-	{
-		auto& loading = Locator::resources::value();
-		const auto loadStart = std::chrono::steady_clock::now();
-		while (loading.PendingCount() > 0)
-		{
-			loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
-			// The graphics card takes what the loading made, as on the loading screen
-			Locator::rendererInterface::value().Frame();
-		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
-		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
-	}
+void Game::BeforeFirstFrame(bool continued)
+{
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{
 		PlayLogoEffect();
 	}
 	// A game that continued from the save on exit starts under the menu
-	if (game_session::ShowsMenuOnStart(start, continued))
+	if (game_session::ShowsMenuOnStart(game_session::Start::Continue, continued))
 	{
 		ShowMenuOnStart();
 	}
-	// Just before its first frame, the game puts the turn timer back to the start of the current turn. Thus the time of
-	// the load, the logo and the menu is not game time. A game that continued from a save keeps the time of the save.
-	if (!continued)
-	{
-		Locator::time::value().ResetTimerToTurn();
-	}
-	_frameCount = 0;
-	_frameLoop = std::make_unique<FrameLoop>();
-	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
-	if (config.frameStatsInterval > 0)
-	{
-		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
-		                               Locator::rendererInterface::value().GetPipelinesMade());
-		if (config.frameStatsViews)
-		{
-			Locator::rendererInterface::value().SetProfile(true);
-		}
-	}
-	_frameLoop->frameStart = std::chrono::steady_clock::now();
-	return RunStart::Play;
 }
 
 bool Game::RunFrame() noexcept
@@ -5129,103 +4087,12 @@ void Game::EndRun() noexcept
 
 bool Game::LoadMap(const std::filesystem::path& path, loading::LoadingClock::Mode look, land_change::Kind change) noexcept
 {
-	const ecs::systems::InspectorLoading loading(path.filename().generic_string());
-	auto& fileSystem = Locator::filesystem::value();
-
-	if (!fileSystem.Exists(path))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find script {}", path.generic_string());
-		return false;
-	}
-
-	LoadTimer timer(fmt::format("land {}", path.stem().string()));
-	BeginLoadingScreen(look);
-	const auto data = fileSystem.ReadAll(path);
-	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
-
-	PrepareNewLand(change);
-	timer.Step("reset");
-	RenderLoadingFrame();
-
-	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
-	Locator::entitiesRegistry::value().Context().skirmish = IsPlaygroundLand(path);
-	_landPath = path;
-
-	Script script;
-	try
-	{
-		// The tips screen is drawn again as the map's commands are carried out, when it is due
-		script.Load(source, [this]() { RenderLoadingFrame(); });
-	}
-	catch (const std::exception& e)
-	{
-		// A script that can't be read leaves the land as far as it got, rather than ending the game
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
-	}
-
-	timer.Step("map script");
-	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
-	// map cells now, and no footpath goes round them
-	Locator::entitiesMap::value().Sync();
-	if (Locator::footpathSystem::has_value())
-	{
-		Locator::footpathSystem::value().ProcessObstacleChanges();
-	}
-	// Each released map comes with an optional .fot file which contains the footpath information for the map
-	const auto stem = string_utils::LowerCase(path.stem().generic_string());
-	const auto fotPath = fileSystem.GetPath<filesystem::Path::Landscape>() / fmt::format("{}.fot", stem);
-
-	if (fileSystem.Exists(fotPath))
-	{
-		FotFile fotFile(*this);
-		fotFile.Load(fotPath);
-	}
-	else
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The map at {} does not come with a footpath file. Expected {}",
-		                   path.generic_string(), fotPath.generic_string());
-	}
-
-	timer.Step("footpaths");
-	// With the land laid out, each town of a player with a temple is given its worship site if it has none
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().LandLaidOut();
-	}
-
-	// With the land laid out, each town gathers the lone trees about it into its scenic forest
-	if (Locator::forestSystem::has_value())
-	{
-		Locator::forestSystem::value().MakeScenicForests();
-		// Each town finds the forests near it with wood in them
-		Locator::forestSystem::value().AssignForestsToTowns();
-	}
-
-	timer.Step("forests");
-	// A new game starts the player as good or evil as their profile last kept them, once the land is set up
-	if (land_change::RulesFor(change).alignmentFromProfile)
-	{
-		StartPlayerAtProfileAlignment();
-	}
-	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
-	MakePlayersSymbols();
-	RenderLoadingFrame();
-	StartNewLand(change);
-	timer.Step("start");
-	EndLoadingScreen();
-	return true;
+	return Locator::landSystem::value().LoadMap(path, look, change);
 }
 
 bool Game::IsPlaygroundLand(const std::filesystem::path& path)
 {
-	// The script is matched by where its file is found, however its path was given
-	const auto scriptFile = Level::ResolveScriptPath(path);
-	bool playground = false;
-	Locator::resources::value().GetLevels().Each([&scriptFile, &playground](entt::id_type /*id*/, const Level& level) {
-		playground = playground || (level.GetType() == Level::LandType::Skirmish &&
-		                            Level::IsSameScript(Level::ResolveScriptPath(level.GetScriptPath()), scriptFile));
-	});
-	return playground;
+	return Locator::landSystem::value().IsPlaygroundLand(path);
 }
 
 bool Game::LoadFromLandMenu(const std::filesystem::path& path) noexcept
@@ -5237,486 +4104,22 @@ bool Game::LoadFromLandMenu(const std::filesystem::path& path) noexcept
 
 bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) noexcept
 {
-	// Outside the story, a land is loaded with the challenge's scripts started again from scratch: every task of the
-	// last land stops, the scripts' variables are cleared and the challenge's scripts that start by themselves start
-	// again. None of the last land's scripts go on running on the new land.
-	if (Locator::vm::has_value())
-	{
-		// The program starting again frees every place of the scripts' objects, while the last land's objects are still
-		// there to be let go back into the game
-		if (Locator::scriptObjects::has_value())
-		{
-			Locator::scriptObjects::value().Reset();
-		}
-		if (Locator::chlapi::has_value())
-		{
-			Locator::chlapi::value().ResetSwitches();
-		}
-		auto& fileSystem = Locator::filesystem::value();
-		const auto challengePath = ChallengePath();
-		try
-		{
-			Locator::vm::value().LoadBinary(fileSystem.ReadAll(challengePath));
-		}
-		catch (const std::exception& err)
-		{
-			Locator::vm::value().StopAllTasks();
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to read challenge file at {}: {}", challengePath.generic_string(),
-			                    err.what());
-		}
-	}
-	return LoadMap(path, loading::LoadingClock::Mode::Tips, change);
+	return Locator::landSystem::value().LoadMapWithFreshScripts(path, change);
 }
 
 void Game::LoadTestbed() noexcept
 {
-	const ecs::systems::InspectorLoading loading("testbed");
-	// No script runs on the testbed: the story's would set its time of day and stop its clock a few turns in
-	if (Locator::vm::has_value())
-	{
-		Locator::vm::value().StopAllTasks();
-	}
-	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(land_change::Kind::Testbed);
-	_landPath = k_TestbedLandPath;
-	RenderLoadingFrame();
-	InitializeLevel(flat_land::Build());
-	SetUpLandscape();
-	RenderLoadingFrame();
-
-	// Looking down over the middle of the map, from the south, a little to its east
-	const auto& land = Locator::terrainSystem::value();
-	const auto middle = (land.GetExtent().minimum + land.GetExtent().maximum) * 0.5f;
-	const auto ground = land.GetHeightAt(middle);
-	const float x = middle.x + flat_land::k_CameraAside;
-	Locator::camera::value()
-	    .SetOrigin({x, ground + flat_land::k_CameraHeight, middle.y - flat_land::k_CameraBack})
-	    .SetFocus({x, ground, middle.y});
-
-	// The testbed has no temple to give its player influence, so a source of influence over its middle gives them the
-	// reach a citadel would: the miracles cast only in influence may be cast there, and nowhere beyond. Their worship
-	// stands behind them with prayer power to spare, which the miracles still draw from. A dispenser of every miracle
-	// stands in a grid in front of the camera.
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto influence = registry.Create();
-	registry.Assign<ecs::components::Transform>(influence, glm::vec3(middle.x, ground, middle.y), glm::mat3(1.0f),
-	                                            glm::vec3(1.0f));
-	registry.Assign<ecs::components::InfluenceSource>(influence, PlayerNames::PLAYER_ONE, k_TestbedInfluenceRadius);
-	registry.Each<const ecs::components::Player>([&registry](entt::entity entity, const ecs::components::Player& player) {
-		if (player.name == PlayerNames::PLAYER_ONE)
-		{
-			registry.AssignOrReplace<ecs::components::PrayerPower>(entity, k_TestbedPrayer, false);
-		}
-	});
-	testbed_dispensers::PlaceGrid(middle);
-	// The loading screen ends with the camera and the testbed's things in place, so that the first frame drawn behind
-	// it draws what the game's first frames draw
-	EndLoadingScreen();
-
-	StartNewLand(land_change::Kind::Testbed);
-
-	// The testbed comes with its window of scenarios to try out on it
-	if (Locator::debugGui::has_value() && _testbedWindow)
-	{
-		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
-	}
+	Locator::landSystem::value().LoadTestbed();
 }
 
 bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
                          const std::function<bool()>& restore) noexcept
 {
-	const ecs::systems::InspectorLoading loading(landPath.filename().generic_string());
-	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
-	BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
-	PrepareNewLand(land_change::Kind::SavedGame);
-	_landPath = landPath;
-	RenderLoadingFrame();
-	try
-	{
-		// The testbed's flat land comes from no file: it is built again
-		if (landPath == k_TestbedLandPath)
-		{
-			InitializeLevel(flat_land::Build());
-			SetUpLandscape();
-		}
-		else
-		{
-			LoadLandscape(landscape);
-		}
-	}
-	catch (const std::exception& e)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The landscape {} of the saved game does not load: {}",
-		                    landscape.generic_string(), e.what());
-		EndLoadingScreen();
-		return false;
-	}
-	timer.Step("landscape");
-
-	// The saved world takes the place of every entity that the land made, the hand and the sky included. The players
-	// that go with them are forgotten.
-	auto& registry = Locator::entitiesRegistry::value();
-	registry.Reset();
-	Locator::playerSystem::value().RegisterPlayers();
-	const bool restored = restore();
-	timer.Step("saved world");
-
-	// The systems find their entities among the loaded ones, and the things go back into the map's cells
-	Locator::playerSystem::value().RegisterPlayers();
-	Locator::handSystem::value().FindAfterLoad();
-	Locator::skySystem::value().FindAfterLoad();
-	Locator::cameraBookmarkSystem::value().FindAfterLoad();
-	if (Locator::appleBarrelSystem::has_value())
-	{
-		Locator::appleBarrelSystem::value().FindAfterLoad();
-	}
-	if (Locator::templeExteriorSystem::has_value())
-	{
-		Locator::templeExteriorSystem::value().FindAfterLoad();
-	}
-	if (Locator::entitiesMap::has_value())
-	{
-		Locator::entitiesMap::value().FileResidents();
-	}
-	if (Locator::objectDrawListSystem::has_value())
-	{
-		Locator::objectDrawListSystem::value().Reset();
-	}
-	RemakeModelsAfterLoad();
-	registry.SetDirty();
-	// Each load starts a game: the player is as good or evil as their profile keeps them, not as the save keeps them
-	if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
-	{
-		SetPlayerAlignmentFromProfile();
-	}
-	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
-	player_statistics::GameStarts(registry);
-	// Each load starts a game: the square of the player of this computer takes the symbol of the profile played now. The
-	// save keeps no symbol.
-	MakePlayersSymbols();
-	RenderLoadingFrame();
-	StartNewLand(land_change::Kind::SavedGame);
-	EndLoadingScreen();
-	return restored;
+	return Locator::landSystem::value().LoadSavedLand(landPath, landscape, restore);
 }
 
-void Game::RemakeModelsAfterLoad()
+void Game::StartLandAudio()
 {
-	// The game made some models while it played: the worship sites' with their temple's skin, the
-	// broken buildings' and the models of things in high detail. A load in a game that did not make them makes them again.
-	if (Locator::worshipSiteSystem::has_value())
-	{
-		Locator::worshipSiteSystem::value().RemakeModelsAfterLoad();
-	}
-	if (Locator::buildingDamageSystem::has_value())
-	{
-		Locator::buildingDamageSystem::value().RemakeModelsAfterLoad();
-	}
-	if (Locator::highDetailSystem::has_value())
-	{
-		Locator::highDetailSystem::value().RemakeModelsAfterLoad();
-	}
-	// The log tells of the models that are still not there, so that the code that makes each one can make it again too
-	const auto& meshes = Locator::resources::value().GetMeshes();
-	size_t missing = 0;
-	entt::id_type first = 0;
-	Locator::entitiesRegistry::value().Each<const ecs::components::Mesh>([&](const ecs::components::Mesh& mesh) {
-		if (!meshes.Contains(mesh.id))
-		{
-			first = missing == 0 ? mesh.id : first;
-			++missing;
-		}
-	});
-	if (missing > 0)
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "After the load, {} things have a model that is not there, the first {}",
-		                   missing, first);
-	}
-}
-
-void Game::PrepareNewLand(land_change::Kind change)
-{
-	const bool toTestbed = change == land_change::Kind::Testbed;
-	const auto rules = land_change::RulesFor(change);
-	// The start-of-game question is about the land that goes now. Close the question with no answer. Then release the
-	// pause that the question holds. If the question stays open, the hand stays hidden on the next land. A new game
-	// asks the question again.
-	if (_interface && _interface->WithdrawSkipBox())
-	{
-		Locator::time::value().SetPaused(false);
-	}
-	CloseMenuForNewLand();
-	// A land that goes while the player is in the temple closes it first, so that nothing of its rooms, such as the
-	// creature's room's flames and smoke, keeps entities of the land after they have gone
-	if (Locator::temple::has_value())
-	{
-		Locator::temple::value().CloseForNewLand();
-	}
-	// The player's creature is kept with its mind and body before anything of the land goes, for a later land's script
-	// to load it again, a new game's included: it is the creature the profile keeps. The players keep what is theirs
-	// rather than the land's, such as their alignment, from one land to the next of a game; a new game makes them
-	// afresh. Nothing is carried onto the testbed or off it: its creatures never replace the player's own kept creature,
-	// and its players start afresh each time, with none of the last scenario's alignment, miracles or statistics.
-	const bool carryOver = !toTestbed && _landPath != k_TestbedLandPath;
-	if (Locator::creatureCarryOverSystem::has_value())
-	{
-		if (carryOver)
-		{
-			Locator::creatureCarryOverSystem::value().KeepPlayersCreature();
-		}
-		Locator::creatureCarryOverSystem::value().Reset();
-		// The land to come keeps the player's creature in their files as it lives, but for the testbed
-		Locator::creatureCarryOverSystem::value().SetLandKeepsCreatures(!toTestbed);
-		// A new game is played as the profile picked now: the profile picked during the last game took over only now,
-		// once that game's creature was kept for the profile it was played as
-		if (rules.gameStarts)
-		{
-			Locator::creatureCarryOverSystem::value().StartGame();
-		}
-	}
-	// As a game starts, the real-world weather asks the lobby for the weather of today, when the player turned it on
-	if (rules.gameStarts && !toTestbed && Locator::realWeatherSystem::has_value())
-	{
-		ecs::RealWeatherLand land;
-		Locator::realWeatherSystem::value().StartGame(land);
-	}
-	if (Locator::playerSystem::has_value())
-	{
-		if (carryOver && rules.playersCarried)
-		{
-			Locator::playerSystem::value().KeepForNextLand();
-		}
-		else
-		{
-			Locator::playerSystem::value().ForgetKept();
-		}
-	}
-	// The players' hearts beat on from land to land; a new game starts them calm
-	if (Locator::heartbeatSystem::has_value())
-	{
-		if (carryOver && rules.heartbeatsCarried)
-		{
-			Locator::heartbeatSystem::value().KeepForNextLand();
-		}
-		else
-		{
-			Locator::heartbeatSystem::value().ForgetKept();
-		}
-	}
-	// The last land's scripts forget what they held: the land's objects go with it before anything could be let go back
-	// into the game
-	if (Locator::scriptObjects::has_value())
-	{
-		Locator::scriptObjects::value().ClearForNewLand();
-	}
-	// A new land has no weather of the last one
-	if (Locator::weatherSystem::has_value())
-	{
-		Locator::weatherSystem::value().Reset();
-		Locator::snowSystem::value().Reset();
-		Locator::waterRingSystem::value().Reset();
-	}
-	// The scripts' hold on the screen goes on through the story's change of land: a fade to black made on the last land
-	// stays black while the next loads, for that land's scripts to fade in. It goes when the scripts start again
-	if (!rules.scriptScreenKept)
-	{
-		Locator::cinematicDirectorSystem::value().Reset();
-	}
-	// The opening's light and hand go
-	Locator::introSystem::value().ReleaseAll();
-	// Nor the explorers' boat
-	Locator::boatLaunchSystem::value().Stop();
-	// Nor does any script keep the camera, the game's speed or the dialogue
-	if (Locator::camera::has_value())
-	{
-		auto& scriptControl = Locator::scriptControlSystem::value();
-		if (const auto owner = scriptControl.GetCameraOwner(); owner != 0)
-		{
-			scriptControl.EndCameraControl(Locator::camera::value(), owner);
-		}
-		scriptControl.Reset();
-	}
-	Locator::dialogueControlSystem::value().Reset();
-	// The camera's bookmarks a script put away come back (a land's first load makes them anew)
-	if (Locator::cameraBookmarkSystem::has_value())
-	{
-		Locator::cameraBookmarkSystem::value().SetEnabled(true);
-	}
-	// The advisors carry on through the story's change of land, out or on their way home as they were. The land menu
-	// starting the scripts again sends them home, and a new game starts them at home, out of sight
-	if (Locator::advisorSystem::has_value())
-	{
-		switch (rules.advisors)
-		{
-		case land_change::Advisors::CarryOn:
-			break;
-		case land_change::Advisors::SentHome:
-			SendAdvisorsHome(false);
-			break;
-		case land_change::Advisors::Afresh:
-			Locator::advisorSystem::value().Reset();
-			break;
-		}
-	}
-	// The help's texts stay through the story's change of land, still to be read: the game's turns start again from
-	// nothing on the next land, so a text timed by turns reads as read only once they pass its end on the last land, and
-	// is clicked away only once they pass when it came. Its voices stop with every other sound. When the scripts start
-	// again, the texts go with them
-	if (rules.helpTextsKept)
-	{
-		Locator::helpTextSystem::value().StopVoices();
-	}
-	else
-	{
-		Locator::helpTextSystem::value().Reset();
-	}
-	Locator::guidanceSystem::value().Reset();
-	Locator::cameraHelpSystem::value().Get().ResetForNewLand();
-	// The turns of a new land start from zero, and so does the turn of the last autosave
-	if (Locator::saveGameSystem::has_value())
-	{
-		Locator::saveGameSystem::value().NewLand();
-	}
-	Locator::influenceSystem::value().Reset();
-	// Nor a scare of its fish. The creatures' footprints stay and fade on the new land, as in the game.
-	Locator::fishFarmSystem::value().Reset();
-	// Nor its miracles, nor their particle effects, nor its fires
-	Locator::magicSystem::value().Reset();
-	Locator::miracleFxSystem::value().Reset();
-	Locator::fireSystem::value().Reset();
-	// Nor the beat of its scrolls
-	Locator::scriptHighlightSystem::value().Reset();
-	Locator::tipBubbleSystem::value().Reset();
-	Locator::handDemoSystem::value().Reset();
-	// The commands that the players made on the old land do nothing on the new land
-	Locator::playerCommandSystem::value().Reset();
-	Locator::creatureFightSystem::value().Reset();
-	Locator::explosionSystem::value().Reset();
-	Locator::magicSystem::value().SetIgnoreInfluence(false);
-	Locator::animalSystem::value().Reset();
-	if (Locator::appleBarrelSystem::has_value())
-	{
-		Locator::appleBarrelSystem::value().Reset();
-	}
-	Locator::magicShieldSystem::value().Reset();
-	Locator::forestSystem::value().Reset();
-	// Nor its fireflies, nor what they give
-	Locator::fireflySystem::value().Reset();
-	Locator::reactionSystem::value().Reset();
-	Locator::teleportSystem::value().Reset();
-	Locator::gestureEvents::value().Reset();
-	Locator::particleSystem::value().Reset();
-	// Nor its bodies in the physics
-	if (Locator::dynamicsSystem::has_value())
-	{
-		Locator::dynamicsSystem::value().ResetSimulation();
-	}
-	// Nor its drops, dust, smoke and motes
-	if (Locator::liquidParticleSystem::has_value())
-	{
-		Locator::liquidParticleSystem::value().Clear();
-	}
-	// Nor its broken buildings and their pieces
-	if (Locator::buildingDamageSystem::has_value())
-	{
-		Locator::buildingDamageSystem::value().Reset();
-	}
-	// Nor anything in the hand
-	if (Locator::handGrabSystem::has_value())
-	{
-		Locator::handGrabSystem::value().Reset();
-	}
-
-	// Every sound stops as the land goes, however it changes: the music at once, without fading, the atmosphere, and
-	// every sound and voice still playing. They go before their entities do, which would leave them playing on
-	if (Locator::audio::has_value())
-	{
-		Locator::audio::value().Stop();
-	}
-
-	// The sky goes on as it was: it is kept while every entity goes, and made again after
-	Locator::skySystem::value().KeepForNextLand();
-	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
-	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
-	Locator::time::value().RestartTurns();
-	// Reset everything. Deletes all entities and their components
-	Locator::entitiesRegistry::value().Reset();
-	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:
-	// a thing that the hand held asks for two frames when it goes.
-	if (Locator::objectDrawListSystem::has_value())
-	{
-		Locator::objectDrawListSystem::value().Reset();
-	}
-	Locator::skySystem::value().Initialize();
-	// TODO(#661): split entities that are permanent from map entities and move hand and camera to init
-	// We need a hand for the player
-	Locator::handSystem::value().Initialize();
-
-	// create our camera
-	auto& config = Locator::config::value();
-	const auto aspect = Locator::windowing::has_value() ? Locator::windowing::value().GetAspectRatio() : 1.0f;
-	Locator::camera::value().SetProjectionMatrixPerspective(config.cameraXFov, aspect, config.cameraNearClip);
-}
-
-void Game::StartPlayerAtProfileAlignment()
-{
-	if (!Locator::playerProfileSystem::has_value() || !Locator::playerSystem::has_value())
-	{
-		return;
-	}
-	SetPlayerAlignmentFromProfile();
-	// The players' statistics note the alignments they start the game at, and the towns on the land
-	player_statistics::GameStarts(Locator::entitiesRegistry::value());
-}
-
-void Game::SetPlayerAlignmentFromProfile()
-{
-	if (!Locator::playerProfileSystem::has_value() || !Locator::playerSystem::has_value())
-	{
-		return;
-	}
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	const auto alignment = profile_alignment::Starting(profile.has_value() ? profile->alignment : 0.0);
-	Locator::alignmentSystem::value().SetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer(), alignment);
-}
-
-void Game::KeepAlignmentInProfile()
-{
-	// The player's alignment is kept with their profile every so often as they play, never the testbed's
-	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
-	    !Locator::playerSystem::has_value())
-	{
-		return;
-	}
-	auto& players = Locator::playerSystem::value();
-	if (players.KeepAlignmentAt(Locator::time::value().GetTurn()))
-	{
-		Locator::playerProfileSystem::value().SetCurrentAlignment(
-		    Locator::alignmentSystem::value().GetPlayerAlignment(players.GetLocalPlayer()));
-	}
-}
-
-void Game::StartNewLand(land_change::Kind change)
-{
-	// With the land and its towns ready, the creatures' map of the land gets its regions
-	ecs::creature_exploration_land::MakeMap();
-	_lastGameLoopTime = machine_clock::Ticks();
-	_turnDeltaTime = 0ns;
-	auto& clock = Locator::time::value();
-	if (land_change::RulesFor(change).gameClockRunsOn)
-	{
-		// The story's next land counts its turns from 0 again, but the game's clock runs on through the change at the
-		// speed it had. The clock is then far ahead of the new turns, and the next turn gives that time up as it does
-		// whenever the game falls more than two seconds behind
-		clock.RestartTurns();
-	}
-	else
-	{
-		// The game starts running, at the normal speed, as Black & White does
-		clock.StartGameClock(false);
-		SetGameSpeed(Game::k_TurnDurationMultiplierNormal);
-	}
-
 	if (!_atmosAudio)
 	{
 		_atmosAudio = std::make_unique<audio::AtmosAudio>();
@@ -5734,40 +4137,31 @@ void Game::StartNewLand(land_change::Kind change)
 	_gameMusic->Reset();
 }
 
-void Game::StartStoryScripts()
+void Game::ShowLoadingFrame()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
-	// The question comes whether or not the story started
-	const bool asked = AskNewGameChoice();
-	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
-	// scene and fade the picture in from black some turns later. When the game was held for the question, the land is
-	// left as it is: the scripts that skip the opening fade it themselves.
-	if (started && !asked)
+	RenderLoadingFrame();
+}
+
+bool Game::WithdrawSkipBox()
+{
+	return _interface && _interface->WithdrawSkipBox();
+}
+
+void Game::MakeSymbolSheet()
+{
+	MakePlayersSymbols();
+}
+
+void Game::TestbedLoaded()
+{
+	if (Locator::debugGui::has_value() && _testbedWindow)
 	{
-		Locator::cinematicDirectorSystem::value().StartStory();
+		Locator::debugGui::value().OpenWindow(debug::gui::k_TestbedScenariosWindow);
 	}
 }
 
-bool Game::AskNewGameChoice()
+bool Game::AskStartQuestion(bool hasCreature)
 {
-	// Every new game starts with nothing skipped, and every player is asked
-	auto& skip = Locator::tutorialSkipSystem::value();
-	skip.Set({});
-	const bool hasCreature = Locator::playerProfileSystem::value().CurrentProfileHasCreature();
-	// For developers and agents: the question answered at once, as though the player had answered it before the
-	// story's first turn. Keeping the old creature without one is an answer the box doesn't offer.
-	if (const auto answer = new_game_choice::AnswerAtOnce(_newGameStart, hasCreature); answer.has_value())
-	{
-		if (*answer != _newGameStart->answer)
-		{
-			SPDLOG_LOGGER_WARN(spdlog::get("game"),
-			                   "The current profile has no creature to keep: skipping all of the creature tutorial instead");
-		}
-		skip.Set(new_game_choice::SkipFor(*answer));
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "New game started with the start-of-game question answered {}",
-		                   static_cast<int>(*answer));
-		return true;
-	}
 	if (!_interface)
 	{
 		return false;
@@ -5778,48 +4172,20 @@ bool Game::AskNewGameChoice()
 	return true;
 }
 
+std::optional<std::filesystem::path> Game::ChallengeFile()
+{
+	return ChallengePath();
+}
+
 std::optional<std::filesystem::path> Game::MapScriptLand() const
 {
-	auto& fileSystem = Locator::filesystem::value();
-	const auto mapScript = fileSystem.GetPath<filesystem::Path::Scripts>() / lhscriptx::map_script::k_FileName;
-	if (!fileSystem.Exists(mapScript))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the map script {}", mapScript.generic_string());
-		return std::nullopt;
-	}
-	const auto data = fileSystem.ReadAll(mapScript);
-	std::vector<std::string> lands;
-	try
-	{
-		lands = lhscriptx::map_script::FeatureScripts(std::string(reinterpret_cast<const char*>(data.data()), data.size()));
-	}
-	catch (const std::exception& e)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", mapScript.generic_string(), e.what());
-		return std::nullopt;
-	}
-	if (lands.empty())
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map script {} names no land script", mapScript.generic_string());
-		return std::nullopt;
-	}
-	const auto land = filesystem::FileSystemInterface::FixPath(lands.front());
-	if (!fileSystem.Exists(land))
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Could not find the land script {}", lands.front());
-		return std::nullopt;
-	}
-	// The map script writes the path in lower case. Use the name of the file as it is on the disk where the system
-	// can give it.
-	const auto found = fileSystem.FindPath(land);
-	std::error_code error;
-	auto onDisk = std::filesystem::canonical(found, error);
-	return error ? found : onDisk;
+	return ecs::systems::MapScriptLand();
 }
 
 bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noexcept
 {
 	_newGameStart = start;
+	Locator::landSystem::value().SetNewGameStart(start);
 	_startTestbed = false;
 	// A new game begins on the land that the map script names
 	const auto land = MapScriptLand();
@@ -5833,7 +4199,7 @@ bool Game::StartNewGame(std::optional<new_game_choice::NewGameStart> start) noex
 	}
 	try
 	{
-		StartStoryScripts();
+		Locator::landSystem::value().StartStoryScripts();
 	}
 	catch (const std::exception& err)
 	{
@@ -6270,43 +4636,11 @@ void Game::KeepProfileKeys()
 
 void Game::ReadTattooPictures()
 {
-	if (!Locator::tattooEditorSystem::has_value() || !Locator::profileFolderSystem::has_value() ||
-	    !Locator::playerProfileSystem::has_value())
-	{
-		return;
-	}
-	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
-	if (!profile.has_value())
-	{
-		return;
-	}
-	auto& editor = Locator::tattooEditorSystem::value();
-	auto pictures = editor.GetPictures();
-	const auto player = gui::ToUtf16(profile->name);
-	const auto& folder = Locator::profileFolderSystem::value();
-	tattoo_pictures::Read(pictures,
-	                      [&folder, &player](const std::string& file) { return folder.ReadPlayerFile(player, file); });
-	if (pictures == editor.GetPictures())
-	{
-		return;
-	}
-	editor.SetPictures(pictures);
 	// The symbols' picture and the tattoo designs change with the pictures. The game loads them one time only
 	// (vanilla-bugs 380), and openblack fixes this.
-	if (_interface)
+	if (const auto pictures = simulation::ReadTattooPictures(); pictures.has_value() && _interface)
 	{
-		_interface->SetSymbolPictures(pictures);
-	}
-	if (Locator::resources::value().GetCreatureSkinArt().Contains(creature_skin::k_ArtId))
-	{
-		LoadCreatureSkinArt();
-		// The masks of the player's creature take the new pictures, and every creature is painted again
-		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(PlayerNames::PLAYER_ONE))
-		{
-			Locator::creatureSkinSystem::value().RemakeTattooMasks(*creature, creature_tattoo::Sheet::OwnPictures);
-		}
-		Locator::entitiesRegistry::value().Each<ecs::components::CreatureTattoos>(
-		    [](ecs::components::CreatureTattoos& tattoos) { ++tattoos.revision; });
+		_interface->SetSymbolPictures(*pictures);
 	}
 }
 
@@ -6370,33 +4704,6 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	};
 	replace("raw/PlayersSymbols", std::move(players.colours));
 	replace("raw/PlayersSymbolsa", std::move(players.alpha));
-}
-
-void Game::LoadCreatureSkinArt()
-{
-	using filesystem::Path;
-	auto& fileSystem = Locator::filesystem::value();
-	try
-	{
-		const auto data = fileSystem.GetPath<Path::Data>();
-		auto& arts = Locator::resources::value().GetCreatureSkinArt();
-		arts.Erase(creature_skin::k_ArtId);
-		arts.Load(creature_skin::k_ArtId, resources::CreatureSkinArtLoader::FromDiskTag {},
-		          resources::CreatureSkinArtLoader::Paths {
-		              .symbols = fileSystem.GetPath<Path::Textures>() / "OriginalChooseSymbol.raw",
-		              .freshDamage = data / "damage_new256.raw",
-		              .freshDamageAlpha = data / "damage_new256A.raw",
-		              .oldDamage = data / "damage_old256.raw",
-		              .oldDamageAlpha = data / "damage_old256A.raw",
-		              .palette = data / "tattoocols.raw",
-		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
-		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
-		          });
-	}
-	catch (std::runtime_error& err)
-	{
-		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "{}", err.what());
-	}
 }
 
 void Game::NameCreatureAfterProfile()
@@ -6594,21 +4901,7 @@ void Game::ShowMenuOnStart()
 
 void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 {
-	Locator::config::value().rightHandedHand = !settings.leftHanded;
-	Locator::config::value().pushScrolling = settings.pushScrolling;
-	if (Locator::creatureHelpSystem::has_value())
-	{
-		Locator::creatureHelpSystem::value().SetHelpOn(settings.creatureHelp);
-	}
-	if (Locator::chlapi::has_value())
-	{
-		Locator::chlapi::value().SetPlayerHelpLevel(static_cast<uint32_t>(std::max(settings.helpLevel, 0)));
-	}
-	if (Locator::helpTextSystem::has_value())
-	{
-		Locator::helpTextSystem::value().SetTextChoices(
-		    {.textDraw = settings.storyText, .topToBottom = settings.textFromBottom, .readSpeed = settings.readSpeed});
-	}
+	simulation::ApplyPlayerSettings(settings);
 	if (_interface)
 	{
 		constexpr int k_Levels = 4;
@@ -6618,37 +4911,7 @@ void Game::ApplyPlayerSettings(const player_profiles::Settings& settings)
 
 void Game::LoadLandscape(const std::filesystem::path& path)
 {
-	auto& fileSystem = Locator::filesystem::value();
-
-	auto fixedName = fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path));
-
-	if (!fileSystem.Exists(fixedName))
-	{
-		throw std::runtime_error("Could not find landscape " + path.generic_string());
-	}
-	LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
-	_landscapePath = path;
-	InitializeLevel(fixedName);
-	SetUpLandscape();
-}
-
-void Game::SetUpLandscape()
-{
-	// A land starts at noon on the game's cycle of day and night, which its script may change, under new clouds
-	auto& sky = Locator::skySystem::value();
-	sky.GetClock().Reset();
-	sky.SetTime(sky.GetClock().GetScriptTime());
-	Locator::cloudSystem::value().Reset();
-
-	// There is always a player active
-	Locator::playerSystem::value().AddPlayer(ecs::archetypes::PlayerArchetype::Create(PlayerNames::PLAYER_ONE));
-
-	Locator::cameraBookmarkSystem::value().Initialize();
-	Locator::playerSystem::value().RegisterPlayers();
-	if (Locator::cameraPathSystem::value().IsPathing())
-	{
-		Locator::cameraPathSystem::value().Stop();
-	}
+	Locator::landSystem::value().LoadLandscape(path);
 }
 
 void Game::SetTime(float time) noexcept
@@ -6798,83 +5061,6 @@ void Game::LoadHandAnimation()
 	}
 	_handAnimation = std::move(animation);
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loaded the hand animations of {}", path.string());
-}
-
-void Game::LoadCreatureRigs()
-{
-	auto& fileSystem = Locator::filesystem::value();
-	const auto directory = fileSystem.GetPath<filesystem::Path::Data>() / "CTR";
-	const auto specPath = fileSystem.GetPath<filesystem::Path::Data>() / "ctrspec27.txt";
-	if (!fileSystem.Exists(specPath))
-	{
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The creatures are not animated: {} is missing", specPath.string());
-		return;
-	}
-	const auto specDirectory = fileSystem.FindPath(specPath).parent_path();
-	const auto meshDirectory = fileSystem.GetPath<filesystem::Path::CreatureMesh>();
-	auto& rigs = Locator::resources::value().GetCreatureRigs();
-	fileSystem.Iterate(directory, false, [&](const std::filesystem::path& path) {
-		if (string_utils::LowerCase(path.extension().string()) != ".cbn")
-		{
-			return;
-		}
-		// Only the header of the species' animations is read now, for which species they are; the rest when the species
-		// is first wanted
-		pack::PackFile pack;
-		const auto stream = fileSystem.GetData(path);
-		const auto block =
-		    pack.ReadFile(*stream, {"Creature"}) == pack::PackResult::Success ? pack.GetUnreadBlock("Creature") : std::nullopt;
-		if (!block.has_value())
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Unable to read the Creature block of {}", path.string());
-			return;
-		}
-		if (block->size < sizeof(morph::MorphHeader))
-		{
-			return;
-		}
-		// The species is the one the base mesh named in the header is of
-		morph::MorphHeader header {};
-		stream->clear();
-		stream->seekg(static_cast<std::streamoff>(block->offset));
-		stream->read(reinterpret_cast<char*>(&header), sizeof(header));
-		const auto species = creature::GetSpeciesFromMeshName(header.baseMeshName.data());
-		if (!*stream || species == CreatureType::Unknown)
-		{
-			return;
-		}
-		// The creature paints its skins from the files of its base, evil and good meshes when it first shows.
-		// Register them, so that the game loads them behind the loading screen.
-		auto& files = Locator::resources::value().GetL3DFiles();
-		const auto registerSkins = [&files, &meshDirectory](const std::array<char, 0x20>& field) {
-			const std::string_view raw(field.data(), field.size());
-			const std::string name(raw.substr(0, raw.find(char {})));
-			if (!name.empty())
-			{
-				const auto skinPath = meshDirectory / (name + ".l3d");
-				RegisterFile(files, creature_skin::MeshFileId(name), skinPath, resources::L3DFileLoader::FromDiskTag {},
-				             skinPath);
-			}
-		};
-		registerSkins(header.baseMeshName);
-		registerSkins(header.variantMeshNames.at(static_cast<size_t>(creature::CreatureRig::Mesh::Evil) - 1));
-		registerSkins(header.variantMeshNames.at(static_cast<size_t>(creature::CreatureRig::Mesh::Good) - 1));
-		rigs.Register(
-		    creature::GetRigId(species),
-		    [path, block = *block, specDirectory, meshDirectory] {
-			    const auto file = Locator::filesystem::value().GetData(path);
-			    std::vector<uint8_t> bytes(block.size);
-			    file->seekg(static_cast<std::streamoff>(block.offset));
-			    file->read(reinterpret_cast<char*>(bytes.data()), static_cast<std::streamsize>(bytes.size()));
-			    if (!*file)
-			    {
-				    throw std::runtime_error("Unable to read the Creature block of " + path.string());
-			    }
-			    return resources::CreatureRigLoader {}(resources::CreatureRigLoader::FromBufferTag {}, bytes, specDirectory,
-			                                           meshDirectory);
-		    },
-		    block->size);
-	});
 }
 
 void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSeconds)

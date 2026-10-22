@@ -31,6 +31,10 @@ public:
 
 	/// The frames each second that the statistics of the game keep
 	[[nodiscard]] virtual int32_t FrameRate() const = 0;
+
+	/// The audio of a turn of the temple, while the player is in the temple and the world is paused. A view with no
+	/// audio does nothing.
+	virtual void PlayTempleAudioTurn() {}
 };
 
 /// A view that does nothing, for a world with no player in front of it. It gives the statistics a fixed frame rate.

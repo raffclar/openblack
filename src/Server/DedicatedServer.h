@@ -21,7 +21,10 @@
 
 #include <spdlog/common.h>
 
-#include "Game.h"
+#include "Debug/SimRun.h"
+#include "EngineConfig.h"
+#include "Simulation/WorldStart.h"
+#include "Story/NewGameChoice.h"
 
 namespace openblack::server
 {
@@ -62,9 +65,12 @@ struct ServerSettings
 	spdlog::level::level_enum logLevel {spdlog::level::info};
 };
 
-/// The arguments of the game for a run of the server: no window, no device for the renderer or the audio, and a clock
-/// with a fixed frame time that waits for the wall clock unless the run is fast
-[[nodiscard]] Arguments GameArgumentsFor(const ServerSettings& settings);
+/// The configuration of the engine for the server: no window, no device for the renderer or the audio
+[[nodiscard]] EngineConfig ServerConfig(const ServerSettings& settings);
+
+/// The clock of the server: each frame takes a fixed game time and, unless the run is fast, waits until the wall clock
+/// gives that time. No pointer moves the hand.
+[[nodiscard]] sim_run::Request SimulationFor(const ServerSettings& settings);
 
 /// The line of the log for the checksum of one turn, which the tools read
 [[nodiscard]] std::string ChecksumLine(uint32_t turn, uint64_t checksum);

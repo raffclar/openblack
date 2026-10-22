@@ -51,6 +51,7 @@
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/VideoSystemInterface.h"
 #include "Editor/EditorEntities.h"
 #include "EntityDescription.h"
@@ -967,12 +968,11 @@ std::string GameLevels::Load(std::string_view name, LoadHow how)
 
 std::string GameLevels::LoadTestbed()
 {
-	auto* game = Game::Instance();
-	if (game == nullptr)
+	if (!Locator::landSystem::has_value())
 	{
 		return "there is no game to load into";
 	}
-	game->LoadTestbed();
+	Locator::landSystem::value().LoadTestbed();
 	return {};
 }
 
@@ -997,13 +997,12 @@ std::string GameLevels::NewGame(std::string_view start)
 
 std::string GameLevels::Current() const
 {
-	const auto* game = Game::Instance();
-	if (game == nullptr || game->GetLandPath().empty())
+	if (!Locator::landSystem::has_value() || Locator::landSystem::value().GetLandPath().empty())
 	{
 		return {};
 	}
-	const auto& path = game->GetLandPath();
-	if (path == "testbed")
+	const auto& path = Locator::landSystem::value().GetLandPath();
+	if (path == ecs::systems::k_TestbedLandPath)
 	{
 		return "testbed";
 	}

@@ -279,11 +279,9 @@ WorldTextView PrepareWorldTextCanvas(Canvas& canvas)
 }
 } // namespace
 
-std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings,
-                                                     const creature_tattoo::Pictures& pictures)
+TextDatabase GameInterface::LoadTexts()
 {
 	auto& fileSystem = Locator::filesystem::value();
-
 	TextDatabase texts;
 	for (const auto* script : k_TextScripts)
 	{
@@ -298,6 +296,13 @@ std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerN
 			texts.AddScript(data);
 		}
 	}
+	return texts;
+}
+
+std::unique_ptr<GameInterface> GameInterface::Create(std::u16string_view playerName, MenuSettings settings,
+                                                     const creature_tattoo::Pictures& pictures)
+{
+	auto texts = LoadTexts();
 
 	auto font = LoadFont(k_Font);
 	if (!font)
