@@ -1,0 +1,51 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index f6c7018..cac5bc3 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -5,6 +5,10 @@
+ 
+ #include "bgfx_p.h"
+ 
++#if BX_PLATFORM_EMSCRIPTEN
++#	include <emscripten.h>
++#endif // BX_PLATFORM_EMSCRIPTEN
++
+ #if BGFX_CONFIG_RENDERER_WEBGPU
+ #	if BX_PLATFORM_OSX
+ #		include <MetalKit/MetalKit.h>
+@@ -2031,6 +2035,11 @@ WGPU_IMPORT
+ 
+ 			while (!s_done)
+ 			{
++#if BX_PLATFORM_EMSCRIPTEN
++				// In the browser the map completes only when the thread gives control back to the browser.
++				// This needs JSPI or Asyncify at the link.
++				emscripten_sleep(0);
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 				wgpuInstanceProcessEvents(m_instance);
+ 			}
+ 		}
+@@ -2091,6 +2100,11 @@ WGPU_IMPORT
+ 
+ 			while (!s_done)
+ 			{
++#if BX_PLATFORM_EMSCRIPTEN
++				// In the browser the map completes only when the thread gives control back to the browser.
++				// This needs JSPI or Asyncify at the link.
++				emscripten_sleep(0);
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 				wgpuInstanceProcessEvents(m_instance);
+ 			}
+ 		}
+@@ -2300,6 +2314,11 @@ WGPU_IMPORT
+ 
+ 			while (!s_done)
+ 			{
++#if BX_PLATFORM_EMSCRIPTEN
++				// In the browser the map completes only when the thread gives control back to the browser.
++				// This needs JSPI or Asyncify at the link.
++				emscripten_sleep(0);
++#endif // BX_PLATFORM_EMSCRIPTEN
+ 				wgpuInstanceProcessEvents(m_instance);
+ 			}
+ 

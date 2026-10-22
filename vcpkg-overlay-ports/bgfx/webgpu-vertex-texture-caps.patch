@@ -1,0 +1,13 @@
+diff --git a/bgfx/src/renderer_webgpu.cpp b/bgfx/src/renderer_webgpu.cpp
+index 25073bc..6c518af 100644
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -701,6 +701,8 @@ namespace bgfx { namespace wgpu
+ 			uint32_t caps = 0
+ 				| BGFX_CAPS_FORMAT_TEXTURE_2D
+ 				| BGFX_CAPS_FORMAT_TEXTURE_CUBE
++				// WebGPU can read each texture that it samples in a vertex shader too.
++				| BGFX_CAPS_FORMAT_TEXTURE_VERTEX
+ 				| (supports3D ? BGFX_CAPS_FORMAT_TEXTURE_3D : 0)
+ 				;
+ 
