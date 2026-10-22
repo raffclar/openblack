@@ -111,6 +111,17 @@ struct UvRect
 /// for an evil player
 [[nodiscard]] UvRect EmptyPicture(float alignment);
 
+/// The pictures that the room reads again after a save into a slot. The room always reads the small pictures again. It
+/// reads the large picture again only when the picture of the slot shows in high detail.
+struct PicturesToRead
+{
+	bool smallPictures;
+	bool largePicture;
+
+	bool operator==(const PicturesToRead&) const = default;
+};
+[[nodiscard]] PicturesToRead PicturesAfterSave(uint32_t slot, std::optional<uint32_t> highDetail);
+
 /// The help texts of the room's tooltips, by their numbers
 inline constexpr uint32_t k_SaveText = 0xE9C;
 inline constexpr uint32_t k_LoadText = 0xE9D;

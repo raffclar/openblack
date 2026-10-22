@@ -136,6 +136,20 @@ void TempleSaveGameRoom::ReadSmallPictures(const ReadPicture& read)
 	}
 }
 
+void TempleSaveGameRoom::ReadPicturesAfterSave(uint32_t slot, const ReadPicture& read)
+{
+	const auto pictures = rules::PicturesAfterSave(slot, _highDetail);
+	if (pictures.smallPictures)
+	{
+		ReadSmallPictures(read);
+	}
+	// The picture in high detail shows the new save at once, not the picture that the slot had before the save
+	if (pictures.largePicture)
+	{
+		ReadLargePicture(slot, read);
+	}
+}
+
 void TempleSaveGameRoom::ReadLargePicture(uint32_t slot, const ReadPicture& read)
 {
 	Destroy(_large);
