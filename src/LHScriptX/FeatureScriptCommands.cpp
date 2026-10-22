@@ -65,6 +65,7 @@
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
@@ -820,7 +821,7 @@ void FeatureScriptCommands::CreateFlock(int32_t id, glm::vec3 position, glm::vec
 
 void FeatureScriptCommands::LoadLandscape(const std::string& path)
 {
-	Game::Instance()->LoadLandscape(path);
+	Locator::landSystem::value().LoadLandscape(path);
 }
 
 void FeatureScriptCommands::Version([[maybe_unused]] float version)

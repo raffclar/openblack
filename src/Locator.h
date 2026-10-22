@@ -217,6 +217,7 @@ class FireflySystemInterface;
 class GestureSystemInterface;
 class MiracleFxSystemInterface;
 class PauseTextSystemInterface;
+class LandSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
 class RewardSystemInterface;
@@ -392,6 +393,7 @@ struct Locator
 	using gestureSystem = entt::locator<ecs::systems::GestureSystemInterface>;
 	using miracleFxSystem = entt::locator<ecs::systems::MiracleFxSystemInterface>;
 	using pauseTextSystem = entt::locator<ecs::systems::PauseTextSystemInterface>;
+	using landSystem = entt::locator<ecs::systems::LandSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;

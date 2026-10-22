@@ -35,6 +35,7 @@
 #include "Debug/SimRun.h"
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameFrameOrder.h"
 #include "GameSession.h"
@@ -51,6 +52,7 @@
 #include "LandChange.h"
 #include "LaunchSwitches.h"
 #include "Magic/HandHoldPoser.h"
+#include "Simulation/FrameBody.h"
 #include "Simulation/TurnBody.h"
 #include "Story/NewGameChoice.h"
 #include "Windowing/SizeFollower.h"
@@ -218,8 +220,8 @@ struct Arguments
 };
 
 /// The game on this computer: the window, the view of the player and the loop of the frames. The world turns in the
-/// simulation, with the game as the view of its turns.
-class Game: public simulation::TurnViewInterface
+/// simulation, with the game as the view of its turns and of the land's loads.
+class Game: public simulation::TurnViewInterface, public ecs::systems::LandViewInterface, public simulation::FrameViewInterface
 {
 public:
 	/// Makes the sheet of the players' symbols that the world shows, with the symbol of the player's profile. A
@@ -257,11 +259,27 @@ public:
 	virtual ~Game() noexcept;
 
 	bool ProcessEvents(const SDL_Event& event) noexcept;
-	bool GameLogicLoop() noexcept;
 	/// The steps of the game turn that the view of the player does: the sounds, the music, the tooltips and the help
 	void PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition) override;
 	/// The frames each second that the statistics of the game keep
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
+	/// The audio of a turn of the temple
+	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	/// The parts of the land's loads that the view of the player does
+	void ShowLoadingFrame() override;
+	bool WithdrawSkipBox() override;
+	void MakeSymbolSheet() override;
+	void StartLandAudio() override;
+	void TestbedLoaded() override;
+	bool AskStartQuestion(bool hasCreature) override;
+	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
+	/// The parts of the effects of a frame that the view of the player does
+	void UpdateAdvisors() override;
+	[[nodiscard]] bool TakeDialogueClick() override;
+	[[nodiscard]] bool DialogueSkipKeyDown() const override;
+	void UpdateSingAlong(bool inTemple) override;
+	[[nodiscard]] bool DialogueWordsDrawn() const override;
+	void CloseMenuForCinema() override;
 	/// What the steps of one frame share
 	struct FrameState
 	{
@@ -379,7 +397,7 @@ public:
 	[[nodiscard]] bool IsPaused() const;
 	/// This computer's hand is drawn this frame: no menu is open over the game and the interface is not given over to a
 	/// cinematic
-	[[nodiscard]] bool IsHandDrawn() const;
+	[[nodiscard]] bool IsHandDrawn() const override;
 	/// The scenario asked for on the command line, once: the scenarios' window runs it as the game starts
 	/// The game ends after this frame. Unlike the window's events, which say each time whether to go on, nothing takes
 	/// it back
@@ -389,7 +407,7 @@ public:
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
 	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
-	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const { return _turnDeltaTime; }
+	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
 	void SetMousePosition(glm::ivec2 position)
@@ -413,9 +431,9 @@ public:
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
-	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept { return _landPath; }
+	[[nodiscard]] const std::filesystem::path& GetLandPath() const noexcept;
 	/// The land's file, as the land's script asked for it
-	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept { return _landscapePath; }
+	[[nodiscard]] const std::filesystem::path& GetLandscapePath() const noexcept;
 
 	static Game* Instance() { return sInstance; }
 
@@ -437,12 +455,12 @@ private:
 	/// Picks the tip of the day and makes its picture; the first time, fades the tips screen in over a second
 	void StartTipOfTheDay();
 	/// The tips screen, or the banner, shows while a land loads, drawn again at the loading's redraw points
-	void BeginLoadingScreen(loading::LoadingClock::Mode look);
+	void BeginLoadingScreen(loading::LoadingClock::Mode look) override;
 	/// A redraw point inside the loading: the tips screen is drawn and shown if it is due, or at once when drawNow is true.
 	/// drawUnder, when given, draws first in a frame that is shown. Returns whether a frame was shown.
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
-	void EndLoadingScreen();
+	void EndLoadingScreen() override;
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
 	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();
@@ -474,24 +492,6 @@ private:
 	void LoadHelpRecord();
 	/// The game writes the help record of the player to their folder in the profile folder
 	void SaveHelpRecord();
-
-	/// Clears the last land for the next, keeping what the reason for the change keeps. The testbed is a workbench
-	/// outside the game: nothing is carried onto it or off it, so each testbed load starts as the first one after launch
-	/// does.
-	void PrepareNewLand(land_change::Kind change);
-	/// After a load, the models that the game made as it played are made again for the loaded things
-	void RemakeModelsAfterLoad();
-	/// What every land starts with once its landscape is loaded: the sky's clock, a player and the land's physics
-	void SetUpLandscape();
-	/// Starts the game clock, the atmosphere's sounds and the music on the new land. The story moving on keeps the game's
-	/// clock running and restarts only its turns
-	void StartNewLand(land_change::Kind change);
-	/// A new game's player starts as good or evil as their profile last kept them
-	void StartPlayerAtProfileAlignment();
-	/// The player is as good or evil as their profile keeps them, as each game starts
-	void SetPlayerAlignmentFromProfile();
-	/// Every so often as they play, the player's alignment is kept with their profile for their next new game
-	void KeepAlignmentInProfile();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
@@ -545,11 +545,6 @@ private:
 	/// The player closed the window. The game ends at the end of a frame outside a script's cut scene.
 	bool _closeAsked {false};
 
-	/// The machine's ticks at the last turn, as the game reads them
-	uint32_t _lastGameLoopTime {0};
-	/// When the scripts last took a turn inside the temple, in real time
-	std::optional<uint32_t> _lastTempleTurnTime;
-	std::chrono::steady_clock::duration _turnDeltaTime;
 	uint32_t _frameCount {0};
 	/// The frame rate the game's statistics take, over a few seconds of frames drawn
 	statistics::FrameRateMeter _statisticsFrameRate;
@@ -689,21 +684,16 @@ private:
 	/// What moves each species' body, from Data/CTR's .cbn files, by the species their base mesh names
 	static void LoadCreatureRigs();
 	/// Acts on what the player chose in the game's menu: continuing restores the pause it had before it opened
-	/// Starts the story's scripts of a new game on the first land, and asks the player what to skip
-	void StartStoryScripts();
 	/// The challenge file: in its usual folder, or in the folder that the settings file of the -SETTINGS: switch names.
 	/// The game reads the settings file one time, at the first call.
 	[[nodiscard]] const std::filesystem::path& ChallengePath();
-	/// As a new game starts: asks the player what to skip. Whether the question was put (or answered at once by the
-	/// developers' start), which leaves the land as it is rather than black at its start
-	bool AskNewGameChoice();
 	void HandleInterfaceAction();
 	/// The main menu's tattoo editor: its button shows while it may, and the creature it shows is posed each frame
 	void UpdateTattooMenu(float milliseconds);
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.
-	void CloseMenuForNewLand();
+	void CloseMenuForNewLand() override;
 	/// The options the player keeps with their profile take effect: the hand, the help, the texts and the tooltips
 	void ApplyPlayerSettings(const player_profiles::Settings& settings);
 	/// The game and the Controls page take the bindings of the profile played
@@ -786,7 +776,7 @@ private:
 	/// The words of the marks over creatures that learn, placed on the screen for the interface
 	void PlaceLearningTexts();
 	/// The names display grows in or out over a frame of so many milliseconds of game time
-	void UpdateVillagerLabels(float milliseconds);
+	void UpdateVillagerLabels(float milliseconds) override;
 	/// The floating numbers and the villagers' labels are given to the interface where they show from the camera the
 	/// frame is drawn from, which is the inspector's while it shows one (a held camera, a picture's)
 	void PlaceScreenLabels();
@@ -805,8 +795,6 @@ private:
 	hand_blend::ChangeTracker _handBlend;
 	/// The game's own interface, null without the game's files for it
 	std::unique_ptr<gui::GameInterface> _interface;
-	std::filesystem::path _landscapePath;
-	std::filesystem::path _landPath;
 	/// The pause that the menu holds while it is open
 	gui::MenuPause _menuPause;
 	/// Whether the menu was open in the last frame
