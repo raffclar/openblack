@@ -13,6 +13,7 @@
 
 #include <cctype>
 #include <cmath>
+#include <ctime>
 
 #include <algorithm>
 #include <array>
@@ -177,6 +178,15 @@ std::u16string DateNow()
 	}
 #endif
 	const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
+#if defined(__EMSCRIPTEN__)
+	// The C++ library of the web build has no time zone data. The C library gives the local time of the browser.
+	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
+	std::tm local {};
+	localtime_r(&seconds, &local);
+	std::array<char, 128> text {};
+	const auto length = std::strftime(text.data(), text.size(), "%H:%M:%S %A, %d %B %Y", &local);
+	return gui::ToUtf16(std::string(text.data(), length));
+#else
 	try
 	{
 		const std::chrono::zoned_time local {std::chrono::current_zone(), now};
@@ -186,6 +196,7 @@ std::u16string DateNow()
 	{
 		return gui::ToUtf16(std::format("{:%H:%M:%S %A, %d %B %Y}", now));
 	}
+#endif
 }
 
 /// The full path of a folder in the profile folder. This does not make the folder: the writer makes it on its own

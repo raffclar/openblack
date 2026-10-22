@@ -1634,7 +1634,7 @@ void AddBreederOffers(std::vector<Scenario>& all)
 void AddRivalCreatureLoads(std::vector<Scenario>& all)
 {
 	using Argument = ScriptArgument;
-	constexpr glm::vec2 k_Place {20.0f, 0.0f};
+	static constexpr glm::vec2 k_Place {20.0f, 0.0f};
 	const auto load = [](std::string_view script, float scale) {
 		return Command {.kind = Kind::RunScript,
 		                .delaySeconds = 0.5f,

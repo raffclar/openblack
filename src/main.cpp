@@ -16,7 +16,6 @@
 #include <typeinfo>
 #include <vector>
 
-#include <SDL_messagebox.h>
 #include <cxxopts.hpp>
 
 #ifdef _WIN32
@@ -29,11 +28,16 @@
 #endif
 
 #include "Common/CrashHandler.h"
+#include "Common/FatalMessage.h"
+#include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
 #include "EngineConfig.h"
 #include "Game.h"
 #include "LaunchSwitches.h"
+#if defined(__EMSCRIPTEN__)
+#include "Web/WebPlatform.h"
+#endif
 
 namespace
 {
@@ -169,6 +173,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 #else
 		graphicsBackend = openblack::GraphicsBackend::Vulkan;
 #endif
+		if constexpr (openblack::k_Platform == openblack::Platform::Web)
+		{
+			// A web browser has WebGL 2 only
+			graphicsBackend = openblack::GraphicsBackend::OpenGLES;
+		}
 
 		// allow user to specify a renderer
 		if (result.count("backend-type") != 0)
@@ -232,7 +241,15 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		}
 
 		args.executablePath = argv[0];
+#if defined(__EMSCRIPTEN__)
 		if (result.count("game-path") == 0)
+		{
+			// In a web browser the game reads the folder that the page gives
+			args.gamePath = std::string(openblack::web::k_GamePath);
+		}
+		else
+#endif
+		    if (result.count("game-path") == 0)
 		{
 #ifdef _WIN32
 			// if we're on windows we can find the install path
@@ -441,6 +458,13 @@ int main(int argc, char* argv[]) noexcept
 	    "\n";
 	// clang-format on
 
+#if defined(__EMSCRIPTEN__)
+	if (!openblack::web::PrepareFileSystem())
+	{
+		return EXIT_FAILURE;
+	}
+#endif
+
 	try
 	{
 		openblack::Arguments args;
@@ -468,7 +492,7 @@ int main(int argc, char* argv[]) noexcept
 			                                      typeid(e).name());
 		}
 		std::cerr << e.what() << std::endl;
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Fatal error", e.what(), nullptr);
+		openblack::ShowFatalMessage("Fatal error", e.what());
 		return EXIT_FAILURE;
 	}
 

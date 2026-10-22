@@ -83,6 +83,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/EventManager.h"
+#include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -4337,10 +4338,7 @@ bool Game::Initialize() noexcept
 	if (!fileSystem.IsPathValid(_gamePath))
 	{
 		// no key, don't guess, let the user know to set the command param
-		SDL_ShowSimpleMessageBox(SDL_MESSAGEBOX_ERROR, "Game Path missing",
-		                         "Game path was not supplied, use the -g "
-		                         "command parameter to set it.",
-		                         nullptr);
+		ShowFatalMessage("Game Path missing", "Game path was not supplied, use the -g command parameter to set it.");
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "Failed to find the GameDir.");
 		return false;
 	}

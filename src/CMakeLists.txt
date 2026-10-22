@@ -12,6 +12,11 @@ if (NOT OPENBLACK_INSPECTOR)
        "/Inspector/|/InspectorSystem[.]h$"
   )
 endif ()
+# The code that connects the game to a browser page is built only for the web
+if (NOT EMSCRIPTEN)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Web/")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Web/")
+endif ()
 if (APPLE)
   file(GLOB_RECURSE OPENBLACK_OBJC_SOURCES "${CMAKE_CURRENT_LIST_DIR}/*.mm")
   list(APPEND OPENBLACK_SOURCES "${OPENBLACK_OBJC_SOURCES}")
@@ -180,6 +185,13 @@ target_link_libraries(
          gamesave
 )
 target_include_directories(openblack_lib PRIVATE ${CXXOPTS_INCLUDE_DIRS})
+if (EMSCRIPTEN)
+  # The user folder of the web build is a back end of the WebAssembly file system of Emscripten. It needs the headers of
+  # that file system, which are not in the public headers of Emscripten.
+  target_include_directories(
+    openblack_lib PRIVATE "${EMSCRIPTEN_ROOT_PATH}/system/lib/wasmfs"
+  )
+endif ()
 
 if (WIN32)
   # The crash handler's stack traces and minidumps
@@ -384,19 +396,56 @@ else ()
   endif ()
 
   if (EMSCRIPTEN)
-    # Must be run from project root using `emrun --no_browser --serve_after_close --serve_after_exit .`
-    # Browser should point to http://localhost:6931/emscripten-vcpkg/bin/Debug/openblack.html?-g&relative/path/to/game/files
-    set_target_properties(
+    # The web build. The game runs on a worker thread of its own (PROXY_TO_PTHREAD), so its loops that wait, its threads
+    # and its file reads that wait work as on the desktop. The main thread of the page only gives the input to the game
+    # and shows the canvas. The game draws into the canvas with WebGL 2.
+    #
+    # The build has no part that sends data over the network: no emrun, no FETCH and no files that the page loads before
+    # the game starts. The page gives the user's game folder from the disk (see web/page).
+    target_link_options(
       openblack
-      PROPERTIES
-        COMPILE_FLAGS_DEBUG "-g3 -gsource-map"
-        LINK_FLAGS_DEBUG "-g3 -gsource-map"
-        COMPILE_FLAGS "-s USE_SDL=2 -fexceptions"
-        #COMPILE_FLAGS "-s USE_SDL=2 -s USE_PTHREADS=1"
-        LINK_FLAGS
-        "-s USE_SDL=2 -s FULL_ES3=1 -s GL_ASSERTIONS=1 -s USE_WEBGL2=1 -s TOTAL_MEMORY=128MB -fexceptions --emrun"
-        #LINK_FLAGS "-s USE_SDL=2 -s FULL_ES3=1 -s GL_ASSERTIONS=1 -s USE_WEBGL2=1 -s USE_PTHREADS=1 -s TOTAL_MEMORY=128MB --emrun"
-        SUFFIX ".html"
+      PRIVATE
+      -pthread
+      -fwasm-exceptions
+      -sWASMFS=1
+      -sPROXY_TO_PTHREAD=1
+      -sPTHREAD_POOL_SIZE=20
+      -sOFFSCREENCANVAS_SUPPORT=1
+      -sMIN_WEBGL_VERSION=2
+      -sMAX_WEBGL_VERSION=2
+      -sFULL_ES3=1
+      -sINITIAL_MEMORY=1024MB
+      -sALLOW_MEMORY_GROWTH=1
+      -sMAXIMUM_MEMORY=4GB
+      -sSTACK_SIZE=8MB
+      -sDEFAULT_PTHREAD_STACK_SIZE=2MB
+      -sEXIT_RUNTIME=1
+      -sENVIRONMENT=web,worker
+      "--pre-js=${CMAKE_SOURCE_DIR}/web/page/pre.js"
+      "--post-js=${CMAKE_SOURCE_DIR}/web/page/post.js"
+    )
+    set_target_properties(openblack PROPERTIES SUFFIX ".js")
+    set_property(
+      TARGET openblack
+      APPEND
+      PROPERTY LINK_DEPENDS "${CMAKE_SOURCE_DIR}/web/page/pre.js"
+               "${CMAKE_SOURCE_DIR}/web/page/post.js"
+    )
+    # The page files go next to the game
+    file(
+      GLOB
+      OPENBLACK_WEB_PAGE_FILES
+      "${CMAKE_SOURCE_DIR}/web/page/*.html"
+      "${CMAKE_SOURCE_DIR}/web/page/*.css"
+      "${CMAKE_SOURCE_DIR}/web/page/launcher*.js"
+      "${CMAKE_SOURCE_DIR}/web/page/*-worker.js"
+    )
+    add_custom_command(
+      TARGET openblack
+      POST_BUILD
+      COMMAND ${CMAKE_COMMAND} -E copy_if_different ${OPENBLACK_WEB_PAGE_FILES}
+              $<TARGET_FILE_DIR:openblack>
+      COMMENT "Copy the web page of the game"
     )
   elseif (APPLE)
     set(OPENBLACK_ICON_SOURCE_DIR ${CMAKE_SOURCE_DIR}/assets/resource/icon)

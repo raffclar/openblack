@@ -79,10 +79,18 @@
         },
         "VCPKG_CHAINLOAD_TOOLCHAIN_FILE": {
           "type": "FILEPATH",
-          "value": "$env{EMSDK}/cmake/Modules/Platform/Emscripten.cmake"
+          "value": "${sourceDir}/web/cmake/emscripten-openblack.cmake"
+        },
+        "VCPKG_OVERLAY_TRIPLETS": {
+          "type": "PATH",
+          "value": "${sourceDir}/web/triplets"
+        },
+        "VCPKG_OVERLAY_PORTS": {
+          "type": "PATH",
+          "value": "${sourceDir}/web/ports"
         },
         "OPENBLACK_USE_VCPKG": true,
-        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten"
+        "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-openblack"
       },
       "environment": {
           "VCPKG_ROOT": "./vcpkg"

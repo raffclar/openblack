@@ -82,6 +82,8 @@ EXCResult EXCFile::Open(const std::vector<uint8_t>& buffer)
 	    .useHeightAboveLand = Read<uint32_t>(bytes, 16) != 0,
 	    .maxAltitude = Read<float>(bytes, 20),
 	    .heightAboveLand = Read<float>(bytes, 24),
+	    .fence = {},
+	    .exclusions = {},
 	};
 	const auto corners = Read<int32_t>(bytes, 28);
 	auto at = k_HeaderSize;
