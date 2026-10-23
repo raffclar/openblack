@@ -55,6 +55,9 @@ public:
 
 	/// Once a game turn: routes are planned and the creatures move
 	virtual void ProcessTurn() = 0;
+	/// At the start of the turn of the living: the creatures whose route searches run share the search steps of the
+	/// turn
+	virtual void ShareSearchSteps() {}
 	/// In the creature's own turn, after its mind: it plans its route and walks, runs and turns
 	virtual void CreatureTurn(entt::entity /*creature*/) {}
 	/// Once a frame: the creatures are placed and their legs posed between the last two turns, by how far through the

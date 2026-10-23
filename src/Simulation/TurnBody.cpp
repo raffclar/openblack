@@ -540,9 +540,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::forestSystem::value().GrowForests();
 		break;
 	case Step::CreaturesTurnStart:
-		// The parts of the creatures' turns that are not for one creature: the turns that the bodies live, the posts of
-		// the leashes, the feedback that reaches the minds, and what creatures that are gone held
+		// The parts of the creatures' turns that are not for one creature: the turns that the bodies live, the share of
+		// the route search steps, the posts of the leashes, the feedback that reaches the minds, and what creatures that
+		// are gone held
 		Locator::creaturePhysiologySystem::value().BeginTurn();
+		Locator::creatureLocomotionSystem::value().ShareSearchSteps();
 		Locator::leashSystem::value().BeginTurn();
 		Locator::creatureMindSystem::value().BeginTurn();
 		Locator::creatureObjectActionSystem::value().BeginTurn();
