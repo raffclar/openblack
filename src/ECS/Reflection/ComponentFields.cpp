@@ -156,6 +156,7 @@
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/ForestMember.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/GroundMark.h"
@@ -1309,6 +1310,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ForestMember::forest>("forest")
 	    .Field<&components::ForestMember::growing>("growing")
 	    .Field<&components::ForestMember::listed>("listed");
+	Reflect<components::GodHand>(context).Field<&components::GodHand::player>("player");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
 	Reflect<components::StandInGraves>(context)
 	    .Field<&components::StandInGraves::count>("count")

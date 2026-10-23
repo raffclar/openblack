@@ -82,6 +82,12 @@ namespace
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
 /// What the game tells the player when a save did not write its world files completely
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
+/// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
+constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+/// The words of a resynchronisation (user decision MI-4). The game has no text for them.
+constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
+/// The words stand at the middle of the top of the dialog space, in the dialog's middle text size
+constexpr int k_ResyncTop = 20;
 /// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
 constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
 /// The dialogs' font, the first of the game's fonts
@@ -448,6 +454,12 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 void GameInterface::ShowSaveProblem()
 {
 	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_SaveProblemText)));
+}
+
+void GameInterface::AskOutOfSync()
+{
+	_saveGameBoxes->Ask(std::u16string(_texts.Get(k_OutOfSyncText)));
+	_outOfSyncAsked = true;
 }
 
 void GameInterface::OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd)
@@ -1031,6 +1043,15 @@ void GameInterface::Update(float deltaSeconds)
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
+	// The answer to the out-of-sync box: Yes plays on, No leaves the game
+	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())
+	{
+		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
+		{
+			_outOfSyncAsked = false;
+			_outOfSyncAnswer = *answer == SaveGameBoxes::Answer::Yes;
+		}
+	}
 	_multiplayerBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
@@ -1162,6 +1183,11 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_musicControls->Draw(_painter);
 		_canvas.SetOrigin(glm::vec2(0.0f));
 		_storyHistoryBox->Draw(_painter);
+		if (_resyncShown)
+		{
+			_painter.DrawText({0, k_ResyncTop}, DialogPainter::k_Size.x, DialogPainter::Justify::Centre, k_ResyncText,
+			                  DialogPainter::k_MidTextSize, DialogPainter::k_TextColour);
+		}
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
 		if (_menu->IsVisible())

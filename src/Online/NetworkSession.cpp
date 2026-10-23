@@ -76,54 +76,62 @@ void NetworkSession::Open(bool resume)
 	const auto generation = _generation;
 	_stream = std::make_unique<TurnStream>(_sockets, [this] { return static_cast<uint64_t>(_clock()); });
 	_state = resume ? State::Reconnecting : State::Connecting;
-	_stream->Open(_settings.request, TurnStreamHandlers {
-	                                     .opened =
-	                                         [this, generation, resume] {
-		                                         if (generation != _generation)
-		                                         {
-			                                         return;
-		                                         }
-		                                         if (resume && _joined.has_value())
-		                                         {
-			                                         _stream->SendText(game_socket::ToJson(game_socket::Resume {
-			                                             .session = _joined->session, .turn = _turnsDone}));
-		                                         }
-		                                         else
-		                                         {
-			                                         _stream->SendText(game_socket::ToJson(game_socket::Join {
-			                                             .ticket = _settings.ticket, .gamePassword = _settings.gamePassword}));
-			                                         _state = State::Joining;
-		                                         }
-	                                         },
-	                                     .turn =
-	                                         [this, generation](const turn_codec::TurnBundle& turn) {
-		                                         if (generation == _generation)
-		                                         {
-			                                         Turn(turn);
-		                                         }
-	                                         },
-	                                     .checksum =
-	                                         [this, generation](const turn_codec::TurnChecksum& checksum) {
-		                                         if (generation == _generation)
-		                                         {
-			                                         ServerChecksum(checksum);
-		                                         }
-	                                         },
-	                                     .text =
-	                                         [this, generation](std::string_view text) {
-		                                         if (generation == _generation)
-		                                         {
-			                                         Text(text);
-		                                         }
-	                                         },
-	                                     .closed =
-	                                         [this, generation](const WebSocketClosed& closed) {
-		                                         if (generation == _generation)
-		                                         {
-			                                         Closed(closed);
-		                                         }
-	                                         },
-	                                 });
+	_stream->Open(_settings.request,
+	              TurnStreamHandlers {
+	                  .opened =
+	                      [this, generation, resume] {
+		                      if (generation != _generation)
+		                      {
+			                      return;
+		                      }
+		                      if (resume && _joined.has_value())
+		                      {
+			                      _stream->SendText(game_socket::ToJson(game_socket::Resume {
+			                          .session = _joined->session, .turn = _turnsDone, .world = _wantsWorld}));
+		                      }
+		                      else
+		                      {
+			                      _stream->SendText(game_socket::ToJson(
+			                          game_socket::Join {.ticket = _settings.ticket, .gamePassword = _settings.gamePassword}));
+			                      _state = State::Joining;
+		                      }
+	                      },
+	                  .turn =
+	                      [this, generation](const turn_codec::TurnBundle& turn) {
+		                      if (generation == _generation)
+		                      {
+			                      Turn(turn);
+		                      }
+	                      },
+	                  .checksum =
+	                      [this, generation](const turn_codec::TurnChecksum& checksum) {
+		                      if (generation == _generation)
+		                      {
+			                      ServerChecksum(checksum);
+		                      }
+	                      },
+	                  .worldPart =
+	                      [this, generation](const turn_codec::WorldPart& part) {
+		                      if (generation == _generation)
+		                      {
+			                      WorldPart(part);
+		                      }
+	                      },
+	                  .text =
+	                      [this, generation](std::string_view text) {
+		                      if (generation == _generation)
+		                      {
+			                      Text(text);
+		                      }
+	                      },
+	                  .closed =
+	                      [this, generation](const WebSocketClosed& closed) {
+		                      if (generation == _generation)
+		                      {
+			                      Closed(closed);
+		                      }
+	                      },
+	              });
 	_nextPing = _clock() + k_PingMicroseconds;
 }
 
@@ -196,6 +204,16 @@ void NetworkSession::Text(std::string_view text)
 		}
 		Log(spdlog::level::info,
 		    fmt::format("Back in the game at turn {}; the server is at turn {}", _turnsDone, resumed->turn));
+		if (resumed->world)
+		{
+			// The server's world state of its turn comes first, and the turns from there
+			_wantsWorld = false;
+			_worldTurn = resumed->turn;
+			_worldParts.clear();
+			_world.reset();
+			_turns.clear();
+			_playout.Reset();
+		}
 		SendWaiting();
 	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
@@ -229,6 +247,7 @@ void NetworkSession::ComeBack(bool resync)
 	if (resync)
 	{
 		Log(spdlog::level::warn, fmt::format("Resynchronising... (try {} of {})", _resync.Tries(), ResyncRule::k_MostTries));
+		_wantsWorld = true;
 	}
 	DropStream();
 	_lostAt = _clock();
@@ -306,7 +325,7 @@ void NetworkSession::Send(const player_commands::Action& action)
 
 bool NetworkSession::HasTurn(uint32_t turn) const
 {
-	if (_state != State::Playing && _state != State::Reconnecting)
+	if ((_state != State::Playing && _state != State::Reconnecting) || _worldTurn.has_value())
 	{
 		return false;
 	}
@@ -342,6 +361,44 @@ void NetworkSession::Turn(const turn_codec::TurnBundle& turn)
 	}
 	_playout.Arrived(turn.turn, _clock());
 	_turns.emplace(turn.turn, turn);
+}
+
+void NetworkSession::WorldPart(const turn_codec::WorldPart& part)
+{
+	if (!_worldTurn.has_value() || part.turn != *_worldTurn || part.part != _worldParts.size())
+	{
+		return;
+	}
+	_worldParts.push_back(part.bytes);
+	if (_worldParts.size() < part.parts)
+	{
+		return;
+	}
+	WorldState world {.turn = part.turn, .bytes = {}};
+	for (const auto& bytes : _worldParts)
+	{
+		world.bytes.insert(world.bytes.end(), bytes.begin(), bytes.end());
+	}
+	_worldParts.clear();
+	Log(spdlog::level::info,
+	    fmt::format("The world state of turn {} came from the game server ({} bytes)", world.turn, world.bytes.size()));
+	_world = std::move(world);
+}
+
+std::optional<NetworkSession::WorldState> NetworkSession::TakeWorld()
+{
+	return std::exchange(_world, std::nullopt);
+}
+
+void NetworkSession::WorldLoaded(uint32_t turn)
+{
+	_worldTurn.reset();
+	_turnsDone = turn;
+	std::erase_if(_turns, [turn](const auto& entry) { return entry.first < turn; });
+	// The checksums of the parted world are of no use
+	_localChecksums.clear();
+	std::erase_if(_serverChecksums, [turn](const auto& entry) { return entry.first <= turn; });
+	Log(spdlog::level::info, fmt::format("The world goes on from the server's world of turn {}", turn));
 }
 
 void NetworkSession::LocalChecksum(uint32_t turn, uint64_t checksum)

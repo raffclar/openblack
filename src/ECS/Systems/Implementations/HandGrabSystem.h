@@ -47,6 +47,8 @@ public:
 	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
+	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
+	void ProcessHandTurn();
 	void PlaceHeldForTurn() override;
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void ForceDrop() override;

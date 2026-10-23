@@ -120,7 +120,10 @@ public:
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
 	[[nodiscard]] const ResyncRule& Resync() const { return _resync; }
 	/// True while the game shows "Resynchronising..." (MI-4)
-	[[nodiscard]] bool ShowsResync() const { return _resync.GetState() == ResyncRule::State::Resyncing; }
+	[[nodiscard]] bool ShowsResync() const
+	{
+		return _resync.GetState() == ResyncRule::State::Resyncing || _worldTurn.has_value();
+	}
 	[[nodiscard]] const Compares& GetCompares() const { return _compares; }
 	[[nodiscard]] const TurnPlayout& Playout() const { return _playout; }
 	[[nodiscard]] std::optional<uint64_t> RoundTrip() const;
@@ -131,6 +134,19 @@ public:
 	/// The number of times that the client came back after a loss or a resync
 	[[nodiscard]] uint32_t Resumes() const { return _resumes; }
 
+	/// The server's world state at the start of a turn, once all its parts came
+	struct WorldState
+	{
+		uint32_t turn {0};
+		std::vector<uint8_t> bytes;
+	};
+	/// The world state that came after a resync, once. The world loads it, then tells the session with WorldLoaded.
+	[[nodiscard]] std::optional<WorldState> TakeWorld();
+	/// The world of this computer loaded the server's world state of the turn, and goes on from there
+	void WorldLoaded(uint32_t turn);
+	/// True from a resume with the server's world until the world loaded it
+	[[nodiscard]] bool WaitsForWorld() const { return _worldTurn.has_value(); }
+
 	/// The time between pings
 	static constexpr int64_t k_PingMicroseconds = 1'000'000;
 
@@ -140,6 +156,7 @@ private:
 	void Closed(const WebSocketClosed& closed);
 	void Turn(const turn_codec::TurnBundle& turn);
 	void ServerChecksum(const turn_codec::TurnChecksum& checksum);
+	void WorldPart(const turn_codec::WorldPart& part);
 	void Compare(uint32_t turn);
 	void FinishWith(End end);
 	void DropStream();
@@ -178,6 +195,12 @@ private:
 	uint32_t _generation {0};
 	/// The socket closes at the next update
 	bool _dropStream {false};
+	/// The next resume asks for the server's world, because this computer's world parted
+	bool _wantsWorld {false};
+	/// The turn of the world state that comes, and its parts so far
+	std::optional<uint32_t> _worldTurn;
+	std::vector<std::vector<uint8_t>> _worldParts;
+	std::optional<WorldState> _world;
 };
 
 [[nodiscard]] std::string_view StateName(NetworkSession::State state) noexcept;

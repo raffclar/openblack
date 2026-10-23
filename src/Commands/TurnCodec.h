@@ -32,6 +32,8 @@
 /// - Checksum (both ways): turn (u32), checksum (u64). The server sends its checksum of each turn, and each client sends
 ///   its own.
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.
+/// - World part (server to one client): turn (u32), part (u16), parts (u16), then the bytes of the part to the end of
+///   the frame. The parts of a turn, in order, are the server's world state at the start of that turn.
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
 ///   angles of the start.
@@ -39,7 +41,7 @@ namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 4;
+inline constexpr uint8_t k_Version = 5;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -52,6 +54,7 @@ enum class FrameKind : uint8_t
 	Checksum = 3,
 	Ping = 4,
 	Pong = 5,
+	WorldPart = 6,
 };
 
 /// The tag of each command on the wire. The numbers never change, also when the commands change their order.
@@ -69,6 +72,7 @@ enum class CommandTag : uint8_t
 	HandReport = 10,
 	HandTwist = 11,
 	PlayerLeft = 17,
+	PlayerJoined = 23,
 };
 
 /// The sizes of the parts of the frames, in bytes
@@ -85,7 +89,12 @@ inline constexpr size_t k_TurnBody = 6;
 inline constexpr size_t k_Stamp = 4;
 inline constexpr size_t k_Checksum = k_Header + 12;
 inline constexpr size_t k_Ping = k_Header + 12;
+/// The turn, the part and the count of the parts of a world part, before its bytes
+inline constexpr size_t k_WorldPartHead = k_Header + 8;
 } // namespace sizes
+
+/// The most bytes of the world state in one world part
+inline constexpr size_t k_WorldPartBytes = 60 * 1024;
 
 /// The commands of one client, as it sends them to the server
 struct CommandBlock
@@ -133,7 +142,16 @@ struct Pong
 	uint64_t time {0};
 };
 
-using Frame = std::variant<CommandBlock, TurnBundle, TurnChecksum, Ping, Pong>;
+/// A part of the server's world state at the start of a turn, for a client that comes back
+struct WorldPart
+{
+	uint32_t turn {0};
+	uint16_t part {0};
+	uint16_t parts {0};
+	std::vector<uint8_t> bytes;
+};
+
+using Frame = std::variant<CommandBlock, TurnBundle, TurnChecksum, Ping, Pong, WorldPart>;
 
 enum class DecodeError : uint8_t
 {
@@ -175,6 +193,8 @@ struct DecodeResult
 [[nodiscard]] bool Append(const Frame& frame, std::vector<uint8_t>& out);
 /// The bytes of a frame. It is empty when the frame breaks a limit.
 [[nodiscard]] std::vector<uint8_t> Encode(const Frame& frame);
+/// The world parts of a world state at the start of a turn: at least one, each with at most k_WorldPartBytes
+[[nodiscard]] std::vector<WorldPart> SplitWorld(uint32_t turn, std::span<const uint8_t> state);
 /// Reads a frame. It accepts only a whole frame of this version with all values in their ranges.
 [[nodiscard]] DecodeResult Decode(std::span<const uint8_t> bytes);
 

@@ -40,6 +40,7 @@ public:
 	NetworkGameSystem& operator=(NetworkGameSystem&&) = delete;
 
 	bool Join(NetworkJoin join) override;
+	void PlayAlone() override;
 	void Leave() override;
 	void Update() override;
 	[[nodiscard]] bool InGame() const override;
@@ -47,6 +48,8 @@ public:
 
 private:
 	void Detach();
+	/// Loads the world state that the server sent after a resync
+	void LoadWorld(const online::NetworkSession::WorldState& world);
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
@@ -55,6 +58,8 @@ private:
 	std::unique_ptr<online::NetworkSession> _session;
 	bool _started {false};
 	bool _endLogged {false};
+	std::optional<uint32_t> _partAt;
+	bool _partAgain {false};
 };
 
 } // namespace openblack::ecs::systems

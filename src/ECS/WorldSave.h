@@ -76,10 +76,20 @@ struct ClockState
 /// Whether the file keeps the whole world, or only the creatures of an older save
 [[nodiscard]] bool HasWholeWorld(const gamesave::WorldFile& file);
 
+/// What a load of the whole world is for
+enum class LoadKind : uint8_t
+{
+	/// A saved game: the load forgets what the game keeps in no save, such as the sounds that played
+	SavedGame,
+	/// The world state of a game server: the load puts back the world exactly, so that it turns as the server's world.
+	/// Only the parts that show the world on one computer, such as the emitters of the sounds, start again.
+	WorldState,
+};
+
 /// Puts back the entities, their components and the context of the registry. The registry must have no live entity.
 /// Returns nothing when the blocks do not read.
-[[nodiscard]] std::optional<reflection::WorldLoadReport> LoadEntities(const entt::meta_ctx& reflection,
-                                                                      const gamesave::WorldFile& file);
+[[nodiscard]] std::optional<reflection::WorldLoadReport>
+LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, LoadKind kind = LoadKind::SavedGame);
 
 /// The camera that a save keeps: the camera of the world. Inside the temple that is the camera that the player left
 /// outside, not the camera of the temple's rooms.

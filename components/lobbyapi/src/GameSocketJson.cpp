@@ -138,7 +138,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	{
 		Resume resume;
 		uint64_t turn = 0;
-		if (!ReadString(object, "session", resume.session) || !ReadUnsigned(object, "turn", k_MostTurn, turn))
+		if (!ReadString(object, "session", resume.session) || !ReadUnsigned(object, "turn", k_MostTurn, turn) ||
+		    !ReadBool(object, "world", resume.world, false))
 		{
 			return std::nullopt;
 		}
@@ -216,11 +217,12 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Resumed)
 	{
 		uint64_t turn = 0;
-		if (!ReadUnsigned(object, "turn", k_MostTurn, turn))
+		bool world = false;
+		if (!ReadUnsigned(object, "turn", k_MostTurn, turn) || !ReadBool(object, "world", world, false))
 		{
 			return std::nullopt;
 		}
-		return Resumed {.turn = static_cast<uint32_t>(turn)};
+		return Resumed {.turn = static_cast<uint32_t>(turn), .world = world};
 	}
 	if (type == k_PlayerState)
 	{
@@ -281,6 +283,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, Resume>)
 		    {
 			    object = Json {{"type", k_Resume}, {"session", value.session}, {"turn", value.turn}};
+			    if (value.world)
+			    {
+				    object["world"] = true;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Ready>)
 		    {
@@ -314,6 +320,10 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, Resumed>)
 		    {
 			    object = Json {{"type", k_Resumed}, {"turn", value.turn}};
+			    if (value.world)
+			    {
+				    object["world"] = true;
+			    }
 		    }
 		    else
 		    {

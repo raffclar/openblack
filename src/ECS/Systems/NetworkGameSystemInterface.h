@@ -31,6 +31,10 @@ struct NetworkJoin
 	/// Tests on this computer only: a PEM file of more certificate authorities, for a test server on a loopback address.
 	/// The join refuses it for any other address.
 	std::optional<std::string> testAuthorities;
+	/// Tests: at this turn the world draws one synced random number more, so that it parts from the server's world
+	std::optional<uint32_t> partAt;
+	/// Tests: the world parts again after each load of the server's world
+	bool partAgain {false};
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
@@ -45,6 +49,8 @@ public:
 	virtual bool Join(NetworkJoin join) = 0;
 	/// The player leaves the network game
 	virtual void Leave() = 0;
+	/// After the session ended: the world of this computer turns alone from now on, with no server
+	virtual void PlayAlone() = 0;
 	/// Once a frame: moves the session on
 	virtual void Update() = 0;
 	/// True from the join until the session ends

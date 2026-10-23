@@ -143,6 +143,13 @@ void TurnStream::Received(std::span<const uint8_t> bytes)
 			_handlers.checksum(*checksum);
 		}
 	}
+	else if (const auto* part = std::get_if<turn_codec::WorldPart>(&frame))
+	{
+		if (_handlers.worldPart)
+		{
+			_handlers.worldPart(*part);
+		}
+	}
 	else if (const auto* ping = std::get_if<turn_codec::Ping>(&frame))
 	{
 		// The server measures the round trip of each client with its own pings

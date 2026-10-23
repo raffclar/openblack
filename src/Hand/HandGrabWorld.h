@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/mat3x3.hpp>
@@ -44,6 +45,31 @@ namespace openblack::hand_grab
 class HandGrabWorldInterface
 {
 public:
+	/// While it lives, the world acts with the hand of a player (see SetActingPlayer)
+	class ActingPlayer
+	{
+	public:
+		ActingPlayer(HandGrabWorldInterface& world, std::optional<PlayerNames> player)
+		    : _world(world)
+		    , _before(world.GetActingPlayer())
+		{
+			if (player.has_value())
+			{
+				_world.SetActingPlayer(player);
+			}
+		}
+		~ActingPlayer() { _world.SetActingPlayer(_before); }
+		ActingPlayer(const ActingPlayer&) = delete;
+		ActingPlayer& operator=(const ActingPlayer&) = delete;
+		ActingPlayer(ActingPlayer&&) = delete;
+		ActingPlayer& operator=(ActingPlayer&&) = delete;
+
+	private:
+		HandGrabWorldInterface& _world;
+		std::optional<PlayerNames> _before;
+	};
+
+public:
 	virtual ~HandGrabWorldInterface() = default;
 
 	/// The things, and the hand's own state, which is kept on the hand
@@ -51,6 +77,13 @@ public:
 	[[nodiscard]] virtual entt::entity Hand() const = 0;
 	/// The player whose hand it is
 	[[nodiscard]] virtual PlayerNames HandPlayer() const = 0;
+	/// A command of a turn acts with the hand of its player: Hand and HandPlayer give that hand until the command ends.
+	/// With none, they give the hand of the first player, which the turns read on every computer.
+	virtual void SetActingPlayer([[maybe_unused]] std::optional<PlayerNames> player) {}
+	[[nodiscard]] virtual std::optional<PlayerNames> GetActingPlayer() const { return std::nullopt; }
+	/// The player of the hand that this computer moves with its pointer, when it is not the first player: the input and
+	/// the frames of this computer act with that hand
+	[[nodiscard]] virtual std::optional<PlayerNames> OwnHandPlayer() const { return std::nullopt; }
 
 	/// The thing the interface picks under the cursor, none over the land or nothing
 	[[nodiscard]] virtual std::optional<entt::entity> ObjectUnderCursor() const = 0;
@@ -195,6 +228,11 @@ public:
 	[[nodiscard]] virtual Pose PoseOf(entt::entity object) const = 0;
 	/// The place of the hand in the world: where the last report of its player put it. The turns measure from here.
 	[[nodiscard]] virtual glm::vec3 ReportedHandPlace() const { return PoseOf(Hand()).origin; }
+	/// Where the last report of its player put a hand
+	[[nodiscard]] virtual glm::vec3 ReportedPlaceOf([[maybe_unused]] entt::entity hand) const { return ReportedHandPlace(); }
+	/// The players of a network game, other than the first, whose gods have hands of their own, in the order of the
+	/// players
+	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;

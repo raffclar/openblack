@@ -33,6 +33,9 @@ public:
 	[[nodiscard]] virtual bool HasTurn(uint32_t turn) const = 0;
 	/// The commands of all the players for the turn, in the order of the server
 	[[nodiscard]] virtual std::vector<Command> TakeTurn(uint32_t turn) = 0;
+	/// True when this computer is behind the turns of the server: the turn after this one is here too. The server itself,
+	/// which closes each turn when its world asks for it, is never behind.
+	[[nodiscard]] virtual bool IsBehind(uint32_t turn) const { return HasTurn(turn + 1); }
 };
 
 } // namespace openblack::player_commands

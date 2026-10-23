@@ -30,12 +30,15 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/UserData.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -157,6 +160,7 @@ private:
 	/// The frame rate that the statistics of the game keep, by the clock of the machine as the game reads it
 	statistics::FrameRateMeter _frameRate;
 	uint32_t _frameCount {0};
+	bool _reloaded {false};
 	std::chrono::steady_clock::time_point _frameStart;
 	/// Gives false when the game of the network ended
 	std::function<NetworkStep()> _beforeTurns;
@@ -354,6 +358,62 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
+	// The tools check that a world state loads into the same world: the server loads its own world once
+	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
+	    Locator::saveGameSystem::has_value())
+	{
+		_reloaded = true;
+		auto& saves = Locator::saveGameSystem::value();
+		entt::meta_ctx reflection;
+		ecs::reflection::RegisterComponents(reflection);
+		const auto hash = [&reflection] {
+			return synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), reflection,
+			                            synced_state::PresentationParts(), true);
+		};
+		// The order of each storage, which the turns follow as they go through the entities
+		const auto orders = [] {
+			std::vector<std::pair<std::string, uint64_t>> out;
+			for (const auto& [id, storage] : Locator::entitiesRegistry::value().Underlying().storage())
+			{
+				uint64_t order = 1469598103934665603ull;
+				for (const auto entity : storage)
+				{
+					order = (order ^ entt::to_integral(entity)) * 1099511628211ull;
+				}
+				out.emplace_back(std::string(storage.info().name()), order);
+			}
+			std::ranges::sort(out);
+			return out;
+		};
+		const auto ordersBefore = orders();
+		const auto before = hash();
+		const auto drawsBefore = Locator::gameRandom::value().GetSyncedDraws();
+		const auto state = saves.WorldState();
+		const bool loaded = saves.LoadWorldState(state);
+		const auto after = hash();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The world state of turn {} ({} bytes) loaded again: {}, synced state the same: {}, draws {} and {}",
+		                   *_settings.reloadAt, state.size(), loaded, before.hash == after.hash, drawsBefore,
+		                   Locator::gameRandom::value().GetSyncedDraws());
+		const auto ordersAfter = orders();
+		for (const auto& [name, order] : ordersBefore)
+		{
+			const auto found = std::ranges::find(ordersAfter, name, &std::pair<std::string, uint64_t>::first);
+			if (found == ordersAfter.end() || found->second != order)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the order of {}", name);
+			}
+		}
+		// The parts that the load did not put back as they were
+		for (const auto& [name, value] : before.parts)
+		{
+			const auto found = std::ranges::find(after.parts, name, &std::pair<std::string, uint64_t>::first);
+			if (found == after.parts.end() || found->second != value)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the part {}", name);
+			}
+		}
+	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
 	Locator::playerCommandSystem::value().SendOpenBlock();
@@ -441,6 +501,10 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	// The server's clock never pauses: a paused clock of the server parted its world from the clients' (Land 1, turn 49).
 	Locator::playerCommandSystem::value().SetSource(&host);
+	// A client whose world parted gets the world of the server, at the start of the next turn
+	host.SetWorldState([] {
+		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
+	});
 	world.SetNetwork([&host, role = network.get()] {
 		role->Update();
 		if (host.GameOver())

@@ -13,6 +13,7 @@
 
 #include <iterator>
 #include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
@@ -105,6 +106,14 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::handSystem::has_value())
 			    {
 				    openblack::Locator::handSystem::value().Report(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, PlayerJoined>)
+		    {
+			    // The god of the player gets hands of its own
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    std::ignore = openblack::Locator::handSystem::value().MakeHandsOf(command.player);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, PlayerLeft>)

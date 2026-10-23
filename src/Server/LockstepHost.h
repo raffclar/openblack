@@ -101,12 +101,18 @@ public:
 	/// Once a frame, after the poll of the sockets: the start of the game and the end of the time to come back
 	void Update();
 
+	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
+	using WorldState = std::function<std::vector<uint8_t>()>;
+	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
 	/// The world turns when the game started and a god's player is connected
 	[[nodiscard]] bool HasTurn(uint32_t turn) const override;
 	/// Closes the turn: the blocks that came since the last turn, in the order that they came, go to every client
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
+	/// The world of the server turns by its own clock
+	[[nodiscard]] bool IsBehind(uint32_t /*turn*/) const override { return false; }
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -160,6 +166,8 @@ private:
 	std::vector<turn_codec::StampedBlock> _pending;
 	/// The slots whose god leaves at the next turn
 	std::vector<uint8_t> _leaving;
+	/// The slots of the gods that get their hands at the first turn
+	std::vector<uint8_t> _joining;
 	/// The bytes of each turn, to send again to a player who comes back
 	std::map<uint32_t, std::vector<uint8_t>> _history;
 	/// The server's checksum of each turn
@@ -167,6 +175,7 @@ private:
 	/// The clients' checksums of the turns that the server did not do yet, by seat
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
+	WorldState _worldState;
 };
 
 } // namespace openblack::server

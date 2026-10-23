@@ -547,6 +547,9 @@ private:
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
+	/// The out-of-sync box was asked; the player answered No to it
+	bool _outOfSyncAsked {false};
+	bool _leaveNetworkGame {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

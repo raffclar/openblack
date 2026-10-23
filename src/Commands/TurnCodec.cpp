@@ -146,6 +146,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.moved);
 	               },
 	               [](const PlayerLeft& /*command*/) {},
+	               [](const PlayerJoined& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -228,6 +229,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::PlayerLeft:
 		action = PlayerLeft {};
 		return DecodeError::None;
+	case CommandTag::PlayerJoined:
+		action = PlayerJoined {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -284,6 +288,7 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	                      [](const TurnChecksum& /*checksum*/) { return true; },
 	                      [](const Ping& /*ping*/) { return true; },
 	                      [](const Pong& /*pong*/) { return true; },
+	                      [](const WorldPart& part) { return part.part < part.parts && part.bytes.size() <= k_WorldPartBytes; },
 	                  },
 	                  frame);
 }
@@ -320,6 +325,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandReport& /*command*/) { return CommandTag::HandReport; },
 	                      [](const HandTwist& /*command*/) { return CommandTag::HandTwist; },
 	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
+	                      [](const PlayerJoined& /*command*/) { return CommandTag::PlayerJoined; },
 	                  },
 	                  action);
 }
@@ -340,6 +346,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
 	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
 	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
+	                                     [](const PlayerJoined& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;
@@ -362,6 +369,7 @@ size_t SizeOf(const Frame& frame) noexcept
 	        [](const TurnChecksum& /*checksum*/) { return k_Checksum; },
 	        [](const Ping& /*ping*/) { return k_Ping; },
 	        [](const Pong& /*pong*/) { return k_Ping; },
+	        [](const WorldPart& part) { return k_WorldPartHead + part.bytes.size(); },
 	    },
 	    frame);
 }
@@ -416,6 +424,16 @@ bool Append(const Frame& frame, std::vector<uint8_t>& out)
 		               writer.Number(pong.id);
 		               writer.Number(pong.time);
 	               },
+	               [&](const WorldPart& part) {
+		               writer.Byte(static_cast<uint8_t>(FrameKind::WorldPart));
+		               writer.Number(part.turn);
+		               writer.Number(part.part);
+		               writer.Number(part.parts);
+		               for (const auto byte : part.bytes)
+		               {
+			               writer.Byte(byte);
+		               }
+	               },
 	           },
 	           frame);
 	return true;
@@ -429,6 +447,28 @@ std::vector<uint8_t> Encode(const Frame& frame)
 		out.clear();
 	}
 	return out;
+}
+
+std::vector<WorldPart> SplitWorld(uint32_t turn, std::span<const uint8_t> state)
+{
+	const auto count = std::max<size_t>(1, (state.size() + k_WorldPartBytes - 1) / k_WorldPartBytes);
+	std::vector<WorldPart> parts;
+	if (count > std::numeric_limits<uint16_t>::max())
+	{
+		return parts;
+	}
+	parts.reserve(count);
+	for (size_t i = 0; i < count; ++i)
+	{
+		const auto from = i * k_WorldPartBytes;
+		const auto length = std::min(k_WorldPartBytes, state.size() - std::min(from, state.size()));
+		const auto bytes = state.subspan(std::min(from, state.size()), length);
+		parts.push_back({.turn = turn,
+		                 .part = static_cast<uint16_t>(i),
+		                 .parts = static_cast<uint16_t>(count),
+		                 .bytes = std::vector<uint8_t>(bytes.begin(), bytes.end())});
+	}
+	return parts;
 }
 
 DecodeResult Decode(std::span<const uint8_t> bytes)
@@ -511,6 +551,28 @@ DecodeResult Decode(std::span<const uint8_t> bytes)
 	{
 		const auto id = in.Number<uint32_t>();
 		frame = Pong {.id = id, .time = in.Number<uint64_t>()};
+		break;
+	}
+	case FrameKind::WorldPart:
+	{
+		WorldPart part;
+		part.turn = in.Number<uint32_t>();
+		part.part = in.Number<uint16_t>();
+		part.parts = in.Number<uint16_t>();
+		if (in.Bad())
+		{
+			return Fail(DecodeError::Truncated);
+		}
+		if (part.part >= part.parts || in.Left() > k_WorldPartBytes)
+		{
+			return Fail(DecodeError::Value);
+		}
+		part.bytes.reserve(in.Left());
+		while (!in.AtEnd())
+		{
+			part.bytes.push_back(in.Byte());
+		}
+		frame = std::move(part);
 		break;
 	}
 	default:

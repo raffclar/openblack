@@ -310,6 +310,7 @@
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/OpenPage.h"
 #include "Online/WebSocketInterface.h"
 #include "Parsers/InfoFile.h"
@@ -1417,7 +1418,7 @@ void Game::UpdateHandToolTipAnchor()
 		return;
 	}
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
 	if (handTransform == nullptr)
 	{
@@ -2083,7 +2084,14 @@ bool Game::Update() noexcept
 		return false;
 	}
 	// A game that joined from the command line stops when its network game ends: its world turns no more
-	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame())
+	// After the out-of-sync box, the game stops on No and plays on with Yes
+	if (_leaveNetworkGame)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the game stops");
+		return false;
+	}
+	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame() &&
+	    !_outOfSyncAsked)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game ended: the game stops");
 		return false;
@@ -2265,7 +2273,34 @@ void Game::UpdateOnline()
 	// The network game takes the turns and the checksums that came, and comes back after a loss
 	if (Locator::networkGame::has_value())
 	{
-		Locator::networkGame::value().Update();
+		auto& network = Locator::networkGame::value();
+		network.Update();
+		const auto* session = network.Session();
+		if (_interface)
+		{
+			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
+			_interface->ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
+			// After the last try the game asks whether the player plays on, as the game asks when the checksums differ
+			// A run of the tools asks nothing: the game stops as its network game ends
+			const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
+			if (session != nullptr && !network.InGame() && session->GetEnd() == online::NetworkSession::End::OutOfSync &&
+			    !_outOfSyncAsked && !toolRun)
+			{
+				_outOfSyncAsked = true;
+				_interface->AskOutOfSync();
+			}
+			if (const auto answer = _interface->TakeOutOfSyncAnswer(); answer.has_value())
+			{
+				if (*answer)
+				{
+					network.PlayAlone();
+				}
+				else
+				{
+					_leaveNetworkGame = true;
+				}
+			}
+		}
 	}
 }
 
@@ -2551,7 +2586,7 @@ void Game::ReportHand()
 	_handReportTurn = turn;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
 	if (transform == nullptr)
 	{
@@ -2883,8 +2918,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		if (auto* trace = Locator::handSystem::value().GetTrace(); trace != nullptr && trace->Enabled())
 		{
 			trace->BeginFrame(_frameCount, std::chrono::duration<float>(deltaTime).count());
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity))
 			{
 				trace->Note("frame start", transform->position);
@@ -2903,9 +2938,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
-				const auto handEntity =
-				    Locator::handSystem::value()
-				        .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				const auto handEntity = Locator::handSystem::value()
+				                            .GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 				auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
 				if (!_stillHandAt.has_value())
 				{
@@ -3101,8 +3135,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		}
 		bool holdingSeed = false;
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (auto* handTransform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity))
 			{
 				const magic::HandHoldPoser::Frame holdFrame {
@@ -3204,8 +3238,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				_handAnimation->Update(deltaTime, state, cycle, _mousePosition, leash_snap::PinchShare(ropeHand));
 			}
 
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			auto& registry = Locator::entitiesRegistry::value();
 			auto* hand = registry.TryGet<ecs::components::Hand>(handEntity);
 			if (hand != nullptr)
@@ -3253,8 +3287,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (auto* handTransform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity))
 			{
 				const float handSize = HandAnimation::SizeAtDistance(
@@ -5510,7 +5544,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	const auto screen = glm::vec2(Locator::windowing::value().GetSize());
 	// Where the posed hand is drawn: by its first bone, at the wrist
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* handTransform = registry.TryGet<ecs::components::Transform>(handEntity);
 	if (handTransform == nullptr)
@@ -5686,7 +5720,7 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		frame->visible = glm::vec3(model * glm::vec4(_handAnimation->LeafBoneCentre(), 1.0f));
 		// The wrist as it is drawn: after the blend of the drawn pose, which the animation's own bones do not have
 		const auto handEntity =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::Hand>(handEntity);
 		const auto& bones = drawn != nullptr ? drawn->boneMatrices : _handAnimation->GetBoneMatrices();
 		if (!bones.empty())
