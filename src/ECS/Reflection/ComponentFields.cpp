@@ -208,6 +208,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Reward.h"
@@ -1662,6 +1663,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
+	Reflect<components::ReportedHand>(context)
+	    .Field<&components::ReportedHand::collidePoint>("collidePoint")
+	    .Field<&components::ReportedHand::handPoint>("handPoint")
+	    .Field<&components::ReportedHand::camera>("camera")
+	    .Field<&components::ReportedHand::focus>("focus");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)

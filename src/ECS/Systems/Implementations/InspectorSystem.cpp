@@ -15,6 +15,7 @@
 
 #include <chrono>
 #include <filesystem>
+#include <fstream>
 #include <optional>
 #include <span>
 #include <string>
@@ -35,6 +36,7 @@
 #include "Inspector/GameInput.h"
 #include "Inspector/GameProviders.h"
 #include "Inspector/GameWorldEdit.h"
+#include "Inspector/InputControl.h"
 #include "Inspector/RunControl.h"
 #include "Inspector/SimRecorder.h"
 #include "Locator.h"
@@ -270,6 +272,16 @@ void InspectorSystem::EndLoading()
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
 	_game->Loaded();
+	// A tool's recorded input starts at the first frame of the land
+	if (_replayOnLoad.has_value())
+	{
+		std::string error;
+		if (!_input->Replay(*_replayOnLoad, inspector::InputEvent::Timing::Mouse, error).has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input does not replay: {}", error);
+		}
+		_replayOnLoad.reset();
+	}
 }
 
 void InspectorSystem::AnswerWhileLoading()
@@ -421,6 +433,22 @@ std::optional<std::string> InspectorSystem::StartSimRecord(const std::filesystem
 {
 	_sim->SetHashParts(hashParts);
 	return _sim->StartRecord(path, every, limits);
+}
+
+std::optional<std::string> InspectorSystem::ReplayOnLoad(const std::filesystem::path& path)
+{
+	std::ifstream file(path);
+	if (!file.is_open())
+	{
+		return "the file of the recorded input does not open: " + path.string();
+	}
+	auto events = inspector::Json::parse(file, nullptr, false);
+	if (events.is_discarded() || !events.is_array())
+	{
+		return "the file of the recorded input is not a list of {frame, event}: " + path.string();
+	}
+	_replayOnLoad = std::move(events);
+	return std::nullopt;
 }
 
 void InspectorSystem::PauseOnLoad(bool pause)

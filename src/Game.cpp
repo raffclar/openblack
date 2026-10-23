@@ -319,6 +319,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Serializer/FotFile.h"
+#include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
@@ -1003,9 +1004,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				case keys::BookmarkKey::Set:
 				{
 					// The bookmark keeps the place of the hand, or the thing under the hand
-					const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
-					const auto left = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
-					const auto right = positions[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
+					const auto left = Locator::handSystem::value().GetDrawnHandPosition();
+					const auto right =
+					    Locator::handSystem::value()
+					        .GetPlayerHandPositions()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)];
 					if (left.has_value() || right.has_value())
 					{
 						std::optional<entt::entity> thing;
@@ -2131,6 +2133,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::Turns:
 		return PlayTurns();
 	case Step::SendCommands:
+		ReportHand();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
 	case Step::FrameTime:
@@ -2521,6 +2524,53 @@ const std::filesystem::path& Game::GetLandPath() const noexcept
 const std::filesystem::path& Game::GetLandscapePath() const noexcept
 {
 	return Locator::landSystem::value().GetLandscapePath();
+}
+
+void Game::ReportHand()
+{
+	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
+	const auto turn = Locator::time::value().GetTurn();
+	if (_handReportTurn == turn)
+	{
+		return;
+	}
+	_handReportTurn = turn;
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand =
+	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
+	if (transform == nullptr)
+	{
+		return;
+	}
+	// A new hand, as on a new land, has no report yet
+	if (hand != _reportedHand)
+	{
+		_reportedHand = hand;
+		_lastHandReport = {};
+	}
+	const auto& camera = Locator::camera::value();
+	auto [collidePoint, handPoint, cameraPoint, focus] = _lastHandReport;
+	handPoint = transform->position;
+	// The point that the interface picks under the cursor stays as it was while the cursor picks nothing
+	if (Locator::pickingSystem::has_value())
+	{
+		collidePoint = Locator::pickingSystem::value().GetPick().point.value_or(collidePoint);
+	}
+	cameraPoint = camera.GetOrigin();
+	focus = camera.GetFocus();
+	const std::array report {collidePoint, handPoint, cameraPoint, focus};
+	if (report == _lastHandReport)
+	{
+		return;
+	}
+	_lastHandReport = report;
+	Locator::playerCommandSystem::value().Submit(player_commands::HandReport {
+	    .collidePoint = collidePoint,
+	    .handPoint = handPoint,
+	    .camera = cameraPoint,
+	    .focus = focus,
+	});
 }
 
 bool Game::PlayTurns()
@@ -3659,6 +3709,31 @@ void Game::StartFightTools()
 		    error.has_value())
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
+		}
+	}
+	// A tool's run can give the hand recorded input from the first frame of the land
+	if (_simulation.has_value() && _simulation->inputPath.has_value() && Locator::inspector::has_value())
+	{
+		if (const auto error = Locator::inspector::value().ReplayOnLoad(*_simulation->inputPath); error.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input cannot start: {}", *error);
+		}
+	}
+	// A tool's run can write the commands of each turn, for a dedicated server that does the same commands
+	if (_simulation.has_value() && _simulation->commandsPath.has_value())
+	{
+		_commandLog = std::make_unique<command_log::Writer>(*_simulation->commandsPath);
+		if (_commandLog->IsOpen())
+		{
+			Locator::playerCommandSystem::value().SetTurnListener(
+			    [log = _commandLog.get()](uint32_t turn, std::span<const player_commands::Command> commands) {
+				    log->Write(turn, commands);
+			    });
+		}
+		else
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the commands cannot open: {}",
+			                    _simulation->commandsPath->string());
 		}
 	}
 	if (_fightTranscriptFolder.has_value() && Locator::fightTranscript::has_value())

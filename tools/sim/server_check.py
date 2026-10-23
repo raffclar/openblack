@@ -1,11 +1,16 @@
 """Checks that the dedicated server plays the same turns as the game.
 
-The script runs apps/openblack-server for some turns at its own pace (10 turns a second), with a seed. Then it runs the
-game in the fast simulation mode with the same seed, the same land, the same frame time and a still hand, and records
-the checksum of each turn. Each turn of the server must have the same checksum as the same turn of the game.
+The script runs the game in the fast simulation mode with a seed, and records the checksum of each turn and the commands
+of each turn (--sim-commands). Then it runs apps/openblack-server at its own pace (10 turns a second) with the same seed,
+the same land and the same frame time. The server does the commands of the game at the same turns (--commands), as if
+the game sent them over the network. Each turn of the server must have the same checksum as the same turn of the game.
 
     python tools/sim/server_check.py --turns 100
     python tools/sim/server_check.py --turns 100 --config RelWithDebInfo --out E:/runs/server
+    python tools/sim/server_check.py --turns 150 --frame-ms 20 --input tools/sim/hand_inputs/land1.json
+
+The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
+the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -76,6 +81,14 @@ def game_checksums(record):
     return turns
 
 
+def count_lines(path):
+    """The number of lines of a file, 0 when there is no file"""
+    if not os.path.exists(path):
+        return 0
+    with open(path, encoding="utf-8") as file:
+        return sum(1 for line in file if line.strip())
+
+
 def compare(server, game, turns):
     """The turns of the server whose checksum the game does not have or does not match, and the turns compared"""
     compared = [turn for turn in sorted(server) if turn <= turns]
@@ -99,6 +112,10 @@ def main():
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, and the hash of each field")
+    parser.add_argument("--input", help="a JSON file of recorded input, [{frame, event}...], for the game's hand")
+    parser.add_argument("--no-relay", action="store_true",
+                        help="the server plays first and gets no commands of the game (the hand reports part them)")
+    parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
     options = parser.parse_args()
 
     folder = options.bin or default_bin(options.config)
@@ -115,6 +132,17 @@ def main():
             os.remove(path)
 
     where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    events = None
+    if options.input:
+        with open(options.input, encoding="utf-8") as file:
+            events = json.load(file)
+        if isinstance(events, dict):
+            events = events.get("events", [])
+    relay = not options.no_relay
+    commands = os.path.join(game_dir, "commands.jsonl")
+    if os.path.exists(commands):
+        os.remove(commands)
+
     server_command = [server_exe, "-g", options.game_path] + where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
                       "-l", server_log]
@@ -124,27 +152,52 @@ def main():
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
     if options.hash_fields:
         server_command.append("--record-fields")
-    started = time.monotonic()
-    code = run(server_command, server_dir)
-    server_seconds = time.monotonic() - started
-    if code != 0:
-        print(f"the server ended with exit code {code}; see {server_log}")
-        return 1
+    if relay:
+        server_command += ["--commands", commands]
 
     # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more
+    draw_every = options.draw_every if options.draw_every is not None else (1 if events is not None else 0)
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
-                    "--sim-fast", "--sim-draw-every", "0", "--sim-frame-ms", str(options.frame_ms),
-                    "--sim-until-turn", str(options.turns + 1), "--sim-still-hand", "--sim-record", record,
+                    "--sim-fast", "--sim-draw-every", str(draw_every), "--sim-frame-ms", str(options.frame_ms),
+                    "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
                     "-l", game_log] + where
+    if events is None:
+        game_command.append("--sim-still-hand")
+    else:
+        game_command += ["--sim-input", os.path.abspath(options.input)]
+    if relay:
+        game_command += ["--sim-commands", commands]
     if options.hash_fields:
         game_command.append("--sim-hash-fields")
     elif options.hash_parts:
         game_command.append("--sim-hash-parts")
-    code = run(game_command, game_dir)
-    if code != 0:
-        print(f"the game ended with exit code {code}; see {game_log}")
-        return 1
+
+    def play_server():
+        started = time.monotonic()
+        code = run(server_command, server_dir)
+        if code != 0:
+            print(f"the server ended with exit code {code}; see {server_log}")
+        return code, time.monotonic() - started
+
+    def play_game():
+        code = run(game_command, game_dir)
+        if code != 0:
+            print(f"the game ended with exit code {code}; see {game_log}")
+        return code
+
+    server_seconds = 0.0
+    if relay:
+        # The server needs the commands of the game
+        if play_game() != 0:
+            return 1
+        code, server_seconds = play_server()
+        if code != 0:
+            return 1
+    else:
+        code, server_seconds = play_server()
+        if code != 0 or play_game() != 0:
+            return 1
 
     server = server_checksums(server_log)
     game = game_checksums(record)
@@ -154,6 +207,7 @@ def main():
         "seed": options.seed,
         "server_seconds": round(server_seconds, 1),
         "server_turns": len(server),
+        "command_turns": count_lines(commands) if relay else None,
         "game_turns": len(game),
         "compared": len(compared),
         "different": different[:20],

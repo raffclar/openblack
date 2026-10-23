@@ -153,6 +153,7 @@ constexpr float k_CreatureTapShare = 0.4f;
 /// How far a tap reaches
 constexpr float k_TapReach = 1e6f;
 
+/// The player's hand in the world, as the reports of the player put it. The turns measure from here.
 std::optional<glm::vec3> HandPoint()
 {
 	if (!Locator::handSystem::has_value())
@@ -160,6 +161,23 @@ std::optional<glm::vec3> HandPoint()
 		return std::nullopt;
 	}
 	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
+/// This computer's hand where the frames draw it, none off the land. The ropes and the hold of a rope go from here.
+std::optional<glm::vec3> DrawnHandPoint()
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
+	if (transform == nullptr || transform->position == glm::vec3(0.0f))
+	{
+		return std::nullopt;
+	}
+	return transform->position;
 }
 
 float CreatureHeight(const Creature& creature)
@@ -1507,7 +1525,7 @@ void LeashSystem::Update(float seconds)
 	UpdateMarkers();
 	UpdatePosts(seconds);
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = HandPoint();
+	const auto hand = DrawnHandPoint();
 	registry.Each<CreatureLeash, const Creature, const Transform>(
 	    [&](entt::entity entity, CreatureLeash& leashes, const Creature& /*creature*/, const Transform& /*transform*/) {
 		    if (!leashes.worn.has_value())
@@ -1639,7 +1657,7 @@ leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
 
 bool LeashSystem::PressRope(PlayerNames player)
 {
-	const auto hand = HandPoint();
+	const auto hand = DrawnHandPoint();
 	auto* worn = player == k_LocalPlayer && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
 	if (worn == nullptr || !hand.has_value())
 	{
@@ -1668,7 +1686,7 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	}
 	_ropeHand = leash_snap::Hand::Away;
 	auto* worn = HeldLeash(player);
-	const auto hand = HandPoint();
+	const auto hand = DrawnHandPoint();
 	if (worn == nullptr)
 	{
 		return;

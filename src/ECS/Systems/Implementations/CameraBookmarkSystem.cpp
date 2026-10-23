@@ -50,14 +50,12 @@ namespace
 /// The place of the player's hand on the land, or the camera's focus when the hand is not on the land
 glm::vec3 HandPoint(const Camera& camera)
 {
+	// The keys of this computer's player measure from the hand that this computer draws
 	if (Locator::handSystem::has_value())
 	{
-		for (const auto& position : Locator::handSystem::value().GetPlayerHandPositions())
+		if (const auto position = Locator::handSystem::value().GetDrawnHandPosition(); position.has_value())
 		{
-			if (position.has_value())
-			{
-				return *position;
-			}
+			return *position;
 		}
 	}
 	return camera.GetFocus();

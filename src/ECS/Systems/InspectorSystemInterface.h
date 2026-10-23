@@ -58,6 +58,12 @@ public:
 	[[nodiscard]] virtual fight_autopilot::AutopilotInterface* GetFightAutopilot() { return nullptr; }
 	/// Each land or scenario loaded from now on starts paused, before any of its frames, for a tool that steps it
 	virtual void PauseOnLoad([[maybe_unused]] bool pause) {}
+	/// Tools: the next land or scenario that starts makes this recorded input from its first frame on. The file is a list of
+	/// {frame, event}, as input.record answers it. An error, or none.
+	[[nodiscard]] virtual std::optional<std::string> ReplayOnLoad([[maybe_unused]] const std::filesystem::path& path)
+	{
+		return "this inspector makes no input";
+	}
 	/// Starts the run record of a simulation run in a file, with a record every so many turns, and with the hash of each
 	/// component when asked: an error, or none
 	[[nodiscard]] virtual std::optional<std::string>

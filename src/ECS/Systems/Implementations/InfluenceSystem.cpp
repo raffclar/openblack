@@ -161,7 +161,18 @@ float CitadelReach(entt::entity temple)
 	return Globals().playerInfluenceMultiplier * stored->reach;
 }
 
-/// The player's hand in the world, if it is in it
+/// The player's hand in the world, if it is in it, as the reports of the player put it. The turns measure from here.
+std::optional<glm::vec3> ReportedHandPosition()
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
+/// This computer's hand where the frames draw it, if it is in the world. Only the frames of this computer measure from
+/// here.
 std::optional<glm::vec3> HandPosition()
 {
 	if (!Locator::handSystem::has_value())
@@ -178,15 +189,15 @@ std::optional<glm::vec3> HandPosition()
 	return transform->position;
 }
 
-/// Where a player's hand is in the world: this computer's player's is the hand the mouse moves. The computer's gods
-/// have no hand in the world yet, so theirs keep nothing past the border.
+/// Where a player's hand is in the world: this computer's player's is the hand that the reports put. The computer's
+/// gods have no hand in the world yet, so theirs keep nothing past the border.
 std::optional<glm::vec3> HandOf(PlayerNames player)
 {
 	if (!Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() != player)
 	{
 		return std::nullopt;
 	}
-	return HandPosition();
+	return ReportedHandPosition();
 }
 
 /// A player's entity on this land, if they are on it

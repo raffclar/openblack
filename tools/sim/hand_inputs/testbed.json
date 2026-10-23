@@ -1,0 +1,1333 @@
+[
+{
+"frame": 10,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+790,
+600
+]
+}
+},
+{
+"frame": 11,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+790,
+608
+]
+}
+},
+{
+"frame": 12,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+789,
+616
+]
+}
+},
+{
+"frame": 13,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+788,
+623
+]
+}
+},
+{
+"frame": 14,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+787,
+631
+]
+}
+},
+{
+"frame": 15,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+785,
+639
+]
+}
+},
+{
+"frame": 16,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+783,
+646
+]
+}
+},
+{
+"frame": 17,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+780,
+654
+]
+}
+},
+{
+"frame": 18,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+777,
+661
+]
+}
+},
+{
+"frame": 19,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+774,
+668
+]
+}
+},
+{
+"frame": 20,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+770,
+675
+]
+}
+},
+{
+"frame": 21,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+766,
+682
+]
+}
+},
+{
+"frame": 22,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+761,
+688
+]
+}
+},
+{
+"frame": 23,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+757,
+694
+]
+}
+},
+{
+"frame": 24,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+751,
+700
+]
+}
+},
+{
+"frame": 25,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+746,
+706
+]
+}
+},
+{
+"frame": 26,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+740,
+711
+]
+}
+},
+{
+"frame": 27,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+734,
+717
+]
+}
+},
+{
+"frame": 28,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+728,
+721
+]
+}
+},
+{
+"frame": 29,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+722,
+726
+]
+}
+},
+{
+"frame": 30,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+715,
+730
+]
+}
+},
+{
+"frame": 31,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+708,
+734
+]
+}
+},
+{
+"frame": 32,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+701,
+737
+]
+}
+},
+{
+"frame": 33,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+694,
+740
+]
+}
+},
+{
+"frame": 34,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+686,
+743
+]
+}
+},
+{
+"frame": 35,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+679,
+745
+]
+}
+},
+{
+"frame": 36,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+671,
+747
+]
+}
+},
+{
+"frame": 37,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+663,
+748
+]
+}
+},
+{
+"frame": 38,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+656,
+749
+]
+}
+},
+{
+"frame": 39,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+648,
+750
+]
+}
+},
+{
+"frame": 40,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+640,
+750
+]
+}
+},
+{
+"frame": 41,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+632,
+750
+]
+}
+},
+{
+"frame": 42,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+624,
+749
+]
+}
+},
+{
+"frame": 43,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+617,
+748
+]
+}
+},
+{
+"frame": 44,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+609,
+747
+]
+}
+},
+{
+"frame": 45,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+601,
+745
+]
+}
+},
+{
+"frame": 46,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+594,
+743
+]
+}
+},
+{
+"frame": 47,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+586,
+740
+]
+}
+},
+{
+"frame": 48,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+579,
+737
+]
+}
+},
+{
+"frame": 49,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+572,
+734
+]
+}
+},
+{
+"frame": 50,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+565,
+730
+]
+}
+},
+{
+"frame": 51,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+558,
+726
+]
+}
+},
+{
+"frame": 52,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+552,
+721
+]
+}
+},
+{
+"frame": 53,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+546,
+717
+]
+}
+},
+{
+"frame": 54,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+540,
+711
+]
+}
+},
+{
+"frame": 55,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+534,
+706
+]
+}
+},
+{
+"frame": 56,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+529,
+700
+]
+}
+},
+{
+"frame": 57,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+523,
+694
+]
+}
+},
+{
+"frame": 58,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+519,
+688
+]
+}
+},
+{
+"frame": 59,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+514,
+682
+]
+}
+},
+{
+"frame": 60,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+510,
+675
+]
+}
+},
+{
+"frame": 61,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+506,
+668
+]
+}
+},
+{
+"frame": 62,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+503,
+661
+]
+}
+},
+{
+"frame": 63,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+500,
+654
+]
+}
+},
+{
+"frame": 64,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+497,
+646
+]
+}
+},
+{
+"frame": 65,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+495,
+639
+]
+}
+},
+{
+"frame": 66,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+493,
+631
+]
+}
+},
+{
+"frame": 67,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+492,
+623
+]
+}
+},
+{
+"frame": 68,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+491,
+616
+]
+}
+},
+{
+"frame": 69,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+490,
+608
+]
+}
+},
+{
+"frame": 70,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+490,
+600
+]
+}
+},
+{
+"frame": 71,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+490,
+592
+]
+}
+},
+{
+"frame": 72,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+491,
+584
+]
+}
+},
+{
+"frame": 73,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+492,
+577
+]
+}
+},
+{
+"frame": 74,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+493,
+569
+]
+}
+},
+{
+"frame": 75,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+495,
+561
+]
+}
+},
+{
+"frame": 76,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+497,
+554
+]
+}
+},
+{
+"frame": 77,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+500,
+546
+]
+}
+},
+{
+"frame": 78,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+503,
+539
+]
+}
+},
+{
+"frame": 79,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+506,
+532
+]
+}
+},
+{
+"frame": 80,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+510,
+525
+]
+}
+},
+{
+"frame": 81,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+514,
+518
+]
+}
+},
+{
+"frame": 82,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+519,
+512
+]
+}
+},
+{
+"frame": 83,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+523,
+506
+]
+}
+},
+{
+"frame": 84,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+529,
+500
+]
+}
+},
+{
+"frame": 85,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+534,
+494
+]
+}
+},
+{
+"frame": 86,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+540,
+489
+]
+}
+},
+{
+"frame": 87,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+546,
+483
+]
+}
+},
+{
+"frame": 88,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+552,
+479
+]
+}
+},
+{
+"frame": 89,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+558,
+474
+]
+}
+},
+{
+"frame": 90,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+565,
+470
+]
+}
+},
+{
+"frame": 91,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+572,
+466
+]
+}
+},
+{
+"frame": 92,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+579,
+463
+]
+}
+},
+{
+"frame": 93,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+586,
+460
+]
+}
+},
+{
+"frame": 94,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+594,
+457
+]
+}
+},
+{
+"frame": 95,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+601,
+455
+]
+}
+},
+{
+"frame": 96,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+609,
+453
+]
+}
+},
+{
+"frame": 97,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+617,
+452
+]
+}
+},
+{
+"frame": 98,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+624,
+451
+]
+}
+},
+{
+"frame": 99,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+632,
+450
+]
+}
+},
+{
+"frame": 100,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+640,
+450
+]
+}
+},
+{
+"frame": 101,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+648,
+450
+]
+}
+},
+{
+"frame": 102,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+656,
+451
+]
+}
+},
+{
+"frame": 103,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+663,
+452
+]
+}
+},
+{
+"frame": 104,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+671,
+453
+]
+}
+},
+{
+"frame": 105,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+679,
+455
+]
+}
+},
+{
+"frame": 106,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+686,
+457
+]
+}
+},
+{
+"frame": 107,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+694,
+460
+]
+}
+},
+{
+"frame": 108,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+701,
+463
+]
+}
+},
+{
+"frame": 109,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+708,
+466
+]
+}
+},
+{
+"frame": 110,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+715,
+470
+]
+}
+},
+{
+"frame": 111,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+722,
+474
+]
+}
+},
+{
+"frame": 112,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+728,
+479
+]
+}
+},
+{
+"frame": 113,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+734,
+483
+]
+}
+},
+{
+"frame": 114,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+740,
+489
+]
+}
+},
+{
+"frame": 115,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+746,
+494
+]
+}
+},
+{
+"frame": 116,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+751,
+500
+]
+}
+},
+{
+"frame": 117,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+757,
+506
+]
+}
+},
+{
+"frame": 118,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+761,
+512
+]
+}
+},
+{
+"frame": 119,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+766,
+518
+]
+}
+},
+{
+"frame": 120,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+770,
+525
+]
+}
+},
+{
+"frame": 121,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+774,
+532
+]
+}
+},
+{
+"frame": 122,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+777,
+539
+]
+}
+},
+{
+"frame": 123,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+780,
+546
+]
+}
+},
+{
+"frame": 124,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+783,
+554
+]
+}
+},
+{
+"frame": 125,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+785,
+561
+]
+}
+},
+{
+"frame": 126,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+787,
+569
+]
+}
+},
+{
+"frame": 127,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+788,
+577
+]
+}
+},
+{
+"frame": 128,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+789,
+584
+]
+}
+},
+{
+"frame": 129,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+790,
+592
+]
+}
+},
+{
+"frame": 130,
+"event": {
+"kind": "pointer",
+"timing": "mouse",
+"position": [
+790,
+600
+]
+}
+}
+]

@@ -9,6 +9,9 @@
 
 #pragma once
 
+#include <map>
+#include <utility>
+
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -23,8 +26,10 @@ class PlayerCommandSystem final: public PlayerCommandSystemInterface
 public:
 	void Submit(player_commands::Action action) override;
 	void SendOpenBlock() override;
-	void RunSent() override;
+	void RunSent(uint32_t turn) override;
 	void Reset() override;
+	void SetTurnListener(TurnListener listener) override { _listener = std::move(listener); }
+	void Receive(uint32_t turn, std::vector<player_commands::Command> commands) override;
 	void SetSender(PlayerNames player) override { _sender = player; }
 	[[nodiscard]] PlayerNames GetSender() const override { return _sender; }
 	[[nodiscard]] size_t PendingCount() const override { return _queue.OpenCount() + _queue.SentCount(); }
@@ -32,6 +37,9 @@ public:
 private:
 	player_commands::CommandQueue _queue;
 	PlayerNames _sender {PlayerNames::PLAYER_ONE};
+	TurnListener _listener;
+	/// The commands from other computers, by the turn that does them
+	std::map<uint32_t, std::vector<player_commands::Command>> _received;
 };
 
 } // namespace openblack::ecs::systems

@@ -138,6 +138,12 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.place);
 	               },
 	               [&out](const LeashPostTap& command) { out.Entity(command.post); },
+	               [&out](const HandReport& command) {
+		               out.Vector(command.collidePoint);
+		               out.Vector(command.handPoint);
+		               out.Vector(command.camera);
+		               out.Vector(command.focus);
+	               },
 	           },
 	           action);
 }
@@ -198,6 +204,14 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::LeashPostTap:
 		action = LeashPostTap {.post = in.Entity()};
 		return DecodeError::None;
+	case CommandTag::HandReport:
+	{
+		const auto collidePoint = in.Vector();
+		const auto handPoint = in.Vector();
+		const auto camera = in.Vector();
+		action = HandReport {.collidePoint = collidePoint, .handPoint = handPoint, .camera = camera, .focus = in.Vector()};
+		return DecodeError::None;
+	}
 	}
 	return in.Bad() ? DecodeError::Truncated : DecodeError::Command;
 }
@@ -279,6 +293,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandGive& /*command*/) { return CommandTag::HandGive; },
 	                      [](const LeashOrder& /*command*/) { return CommandTag::LeashOrder; },
 	                      [](const LeashPostTap& /*command*/) { return CommandTag::LeashPostTap; },
+	                      [](const HandReport& /*command*/) { return CommandTag::HandReport; },
 	                  },
 	                  action);
 }
@@ -296,6 +311,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandGive& /*command*/) { return 2 * k_Entity; },
 	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
+	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
 	                                 },
 	                                 action);
 	return 1 + fields;

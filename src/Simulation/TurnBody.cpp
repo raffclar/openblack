@@ -393,7 +393,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::PlayerCommands:
 		// The world does the commands that the players sent
-		Locator::playerCommandSystem::value().RunSent();
+		Locator::playerCommandSystem::value().RunSent(turn);
 		break;
 	case Step::HandStillness:
 		// The player's input comes first in the turn: the game counts the turns that the hand stays in one place

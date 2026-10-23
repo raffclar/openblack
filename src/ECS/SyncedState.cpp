@@ -126,9 +126,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
     {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
-    // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera
-    {.component = "Transform", .field = "rotation", .marker = "Hand"},
-    {.component = "Transform", .field = "scale", .marker = "Hand"},
+    // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
+    // The world reads the hand only from the reports of its player (ReportedHand).
+    {.component = "Transform", .field = "", .marker = "Hand"},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The hand's size follows its distance from the camera in each frame. Only the frames read it.
     {.component = "HandGrab", .field = "handSize", .marker = ""},
