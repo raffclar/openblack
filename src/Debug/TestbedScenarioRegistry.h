@@ -109,6 +109,8 @@ enum class Facet : uint8_t
 	Tutorial,
 	/// The interface over the game: the words at the top of the screen while it is paused, slower or quicker
 	Interface,
+	/// The maps and the rules of a network game
+	Multiplayer,
 
 	_Count
 };
@@ -126,8 +128,19 @@ enum class Weather : uint8_t
 };
 [[nodiscard]] std::string_view Name(Weather weather);
 
+/// The land that a scenario starts on
+enum class Land : uint8_t
+{
+	/// The flat testbed
+	Testbed,
+	/// The network map for 32 gods, with a citadel and a village in each slot. Its land and its things come from the
+	/// map, so the scenario puts nothing of the testbed on it.
+	GodsRingMap,
+};
+
 struct Environment
 {
+	Land land {Land::Testbed};
 	/// The hour of the day, as scripts give it, and whether the clock then runs on or stands still
 	float hour {12.0f};
 	bool clockRuns {true};
@@ -1268,6 +1281,8 @@ void AddCreatureDanceScenarios(std::vector<Scenario>& all);
 void AddCreatureLearningScenarios(std::vector<Scenario>& all);
 /// Creatures going to the places of their map of the land: a hill and its ridge, and the beach
 void AddCreatureExplorationScenarios(std::vector<Scenario>& all);
+/// The network map for 32 gods, with a citadel and a village in each slot
+void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 
 /// Every scenario, in the order the window lists them
 [[nodiscard]] std::span<const Scenario> All();

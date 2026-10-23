@@ -33,6 +33,7 @@ public:
 	void SwitchOn(PlayerNames player, bool on) override;
 	void SetCreatureLike(PlayerNames player, PlayerNames like) override;
 	void ProcessTurn() override;
+	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 
 private:
 	/// The computer mind of the player, made with the player when the land has none
