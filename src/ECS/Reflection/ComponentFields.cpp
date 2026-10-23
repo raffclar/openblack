@@ -1678,7 +1678,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ReportedHand::collidePoint>("collidePoint")
 	    .Field<&components::ReportedHand::handPoint>("handPoint")
 	    .Field<&components::ReportedHand::camera>("camera")
-	    .Field<&components::ReportedHand::focus>("focus");
+	    .Field<&components::ReportedHand::focus>("focus")
+	    .Field<&components::ReportedHand::pickedObject>("pickedObject");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)

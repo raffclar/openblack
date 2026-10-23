@@ -647,8 +647,10 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	contact->frameCursor = cursorPixel;
 	const auto up = TurnHand(*contact, onBody, cursorMovedAcross, normal, transform.position, seconds);
 
-	// The creature looks at the hand, or at the camera with the hand near its middle
-	if (parts.has_value() && Locator::camera::has_value())
+	// The creature looks at the hand, or at the camera with the hand near its middle. In a network game the turn sets
+	// the look from the reported hand.
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	if (!networkGame && parts.has_value() && Locator::camera::has_value())
 	{
 		const auto look = feedback::HeldLookPoint(position, middle, camera, rayDirection, height);
 		registry.Get<CreatureAnimation>(creatureEntity).lookAt = look;
@@ -658,6 +660,43 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 		}
 	}
 	return HandPose {.position = position, .onBody = onBody, .cycle = contact->cycle, .scale = handScale, .up = up};
+}
+
+void CreatureHandSystem::LookAtReportedHand()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto creatureEntity = GetLockedCreature();
+	if (!creatureEntity.has_value() || IsHeldByCommand() ||
+	    !registry.AllOf<Creature, CreatureAnimation, Transform>(*creatureEntity))
+	{
+		return;
+	}
+	const auto& handSystem = Locator::handSystem::value();
+	const auto hand = handSystem.GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
+	const auto camera = handSystem.GetReportedCamera();
+	if (!hand.has_value() || !camera.has_value())
+	{
+		return;
+	}
+	const auto& creature = registry.Get<const Creature>(*creatureEntity);
+	const auto& transform = registry.Get<const Transform>(*creatureEntity);
+	const auto parts = PartsOf(creature, registry.Get<const CreatureAnimation>(*creatureEntity), transform);
+	if (!parts.has_value())
+	{
+		return;
+	}
+	const auto middle = parts->at(static_cast<size_t>(feedback::BodyPart::Groin));
+	const auto height = feedback::k_HeightAtSizeOne * ShownSize(creature);
+	const auto look = feedback::ReportedLookPoint(*hand, middle, camera->origin, height);
+	if (!look.has_value())
+	{
+		return;
+	}
+	registry.Get<CreatureAnimation>(*creatureEntity).lookAt = *look;
+	if (auto* eyes = registry.TryGet<CreatureEyes>(*creatureEntity))
+	{
+		eyes->lookAt = *look;
+	}
 }
 
 glm::vec3 CreatureHandSystem::TurnHand(HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,

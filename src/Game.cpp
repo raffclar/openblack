@@ -2598,6 +2598,19 @@ void Game::ReportHand()
 	{
 		_reportedHand = hand;
 		_lastHandReport = {};
+		_lastHandPick = entt::null;
+	}
+	// In a network game the thing under the cursor goes too, when it changes, so that every computer counts the same
+	// time that the hand stays over the creature
+	if (Locator::time::value().IsNetworkGame() && Locator::pickingSystem::has_value())
+	{
+		const auto picked = Locator::pickingSystem::value().GetPick().object;
+		const auto object = picked.has_value() && registry.Valid(*picked) ? *picked : entt::entity {entt::null};
+		if (object != _lastHandPick)
+		{
+			_lastHandPick = object;
+			Locator::playerCommandSystem::value().Submit(player_commands::HandPick {.object = object});
+		}
 	}
 	const auto& camera = Locator::camera::value();
 	auto [collidePoint, handPoint, cameraPoint, focus] = _lastHandReport;

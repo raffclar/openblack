@@ -245,6 +245,13 @@ void Run(const Command& command)
 				    openblack::Locator::handSystem::value().Report(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, HandPick>)
+		    {
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    openblack::Locator::handSystem::value().ReportPick(command.player, action.object);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))

@@ -36,6 +36,19 @@ using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 
+namespace
+{
+/// The report of a hand. A hand with no report yet gets an empty one.
+ReportedHand& ReportedOf(ecs::Registry& registry, entt::entity hand)
+{
+	if (auto* reported = registry.TryGet<ReportedHand>(hand))
+	{
+		return *reported;
+	}
+	return registry.Assign<ReportedHand>(hand);
+}
+} // namespace
+
 bool HandSystem::Initialize() noexcept
 {
 	_hands[static_cast<size_t>(Side::Left)] =
@@ -99,12 +112,30 @@ void HandSystem::Report([[maybe_unused]] PlayerNames player, const player_comman
 	{
 		return;
 	}
-	registry.AssignOrReplace<ReportedHand>(hand, ReportedHand {
-	                                                 .collidePoint = report.collidePoint,
-	                                                 .handPoint = report.handPoint,
-	                                                 .camera = report.camera,
-	                                                 .focus = report.focus,
-	                                             });
+	auto& reported = ReportedOf(registry, hand);
+	reported.collidePoint = report.collidePoint;
+	reported.handPoint = report.handPoint;
+	reported.camera = report.camera;
+	reported.focus = report.focus;
+}
+
+void HandSystem::ReportPick([[maybe_unused]] PlayerNames player, entt::entity object)
+{
+	// There is one human, with the left hand of this computer
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	if (registry.Valid(hand))
+	{
+		ReportedOf(registry, hand).pickedObject = object;
+	}
+}
+
+entt::entity HandSystem::GetReportedPick() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? reported->pickedObject : entt::null;
 }
 
 std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera() const noexcept

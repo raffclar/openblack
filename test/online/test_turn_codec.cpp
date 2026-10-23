@@ -70,6 +70,7 @@ std::vector<Action> EachCommand()
 	                      .interruptsAfter = 0.25f},
 	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
+	    HandPick {.object = Entity(23)},
 	};
 }
 
@@ -93,7 +94,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 22)
+	switch (bits(random) % 23)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -148,6 +149,8 @@ Action RandomAction(std::mt19937& random)
 		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
 		                         .interruptsAfter = number()};
 	}
+	case 21:
+		return HandPick {.object = entity()};
 	case 20:
 		return SeedGesture {.kind = static_cast<SeedGesture::Kind>(bits(random) % 3),
 		                    .level = static_cast<int8_t>(bits(random))};
@@ -230,7 +233,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21, 15, 3};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21, 15, 3, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
