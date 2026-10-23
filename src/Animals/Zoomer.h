@@ -50,6 +50,15 @@ private:
 	float _c2 {0.0f};
 	float _c3 {0.0f};
 	float _c4 {0.0f};
+
+public:
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Zoomer& self, Visitor&& visit)
+	{
+		visit(self._value, self._speed, self._target, self._targetSpeed, self._elapsed, self._duration, self._start,
+		      self._startSpeed, self._c2, self._c3, self._c4);
+	}
 };
 
 } // namespace openblack::animals

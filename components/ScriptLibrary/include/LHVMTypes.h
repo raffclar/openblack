@@ -75,6 +75,13 @@ struct VMValue
 	    : uintVal(value)
 	{
 	}
+
+	/// Gives the bits of the value to a visitor: each member of the union has all four bytes
+	template <typename Visitor>
+	static void VisitPlainFields(const VMValue& self, Visitor&& visit)
+	{
+		visit(self.uintVal);
+	}
 };
 static_assert(sizeof(VMValue) == 4);
 
