@@ -82,6 +82,7 @@
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/BufferedLogSink.h"
+#include "Common/BuildVersion.h"
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -565,6 +566,7 @@ Game::Game(Arguments&& args) noexcept
     , _simulation(args.simulation)
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
+    , _networkGame(args.networkGame)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -958,7 +960,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			window.SetDisplayMode(windowing::DisplayMode::Fullscreen);
 			break;
 		case SDLK_p:
-			Locator::time::value().SetPaused(!IsPaused());
+			Locator::time::value().SetPlayerPause(!IsPaused());
 			break;
 		default:
 		{
@@ -3605,6 +3607,11 @@ bool Game::Initialize() noexcept
 		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
 		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
 	}
+	if (_networkGame)
+	{
+		Locator::time::value().SetNetworkGame(true);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world plays as a network game");
+	}
 	// The debug inspector answers from the first frame; the game carries on without it if it can't listen. Until then,
 	// while the game's data loads, it answers that the game is loading
 	std::optional<ecs::systems::InspectorLoading> loadingData;
@@ -3834,16 +3841,15 @@ Game::RunStart Game::StartRun() noexcept
 {
 	auto& config = Locator::config::value();
 
-	// The game has no skirmish box and no network game yet, so these switches start the game as with no switch. The
-	// network game does the same when its library does not start.
+	// The game has no skirmish box yet, so that switch starts the game as with no switch. The -MULTIPLAYER switch opens
+	// the multiplayer front end before the first frame, in the temple of the land that starts, when the player has a
+	// profile.
 	switch (launch_switches::FirstGameOf(_launchSwitches))
 	{
 	case launch_switches::FirstGame::Skirmish:
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -SKIRMISH switch: the skirmish box is not available yet");
 		break;
 	case launch_switches::FirstGame::Multiplayer:
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The -MULTIPLAYER switch: the network game is not available");
-		break;
 	case launch_switches::FirstGame::Plain:
 	case launch_switches::FirstGame::NewGame:
 		break;
@@ -3859,6 +3865,9 @@ Game::RunStart Game::StartRun() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame. A first start always starts a new game.
 		const bool hadProfile = HasPlayerProfiles();
+		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch
+		_frontEndOnStart =
+		    hadProfile && launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Multiplayer;
 		AskForNewPlayer();
 		// A plain start continues from the save on exit of the player. The continue loads the save once the scripts are
 		// ready, because the save keeps the state of the scripts.
@@ -3965,6 +3974,16 @@ void Game::BeforeFirstFrame(bool continued)
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{
 		PlayLogoEffect();
+	}
+	// The -MULTIPLAYER switch: the multiplayer front end opens in place of the menu
+	if (std::exchange(_frontEndOnStart, false))
+	{
+		if (OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -MULTIPLAYER switch: the multiplayer front end opens");
+			return;
+		}
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
 	}
 	// A game that continued from the save on exit starts under the menu
 	if (game_session::ShowsMenuOnStart(game_session::Start::Continue, continued))
@@ -4242,7 +4261,7 @@ bool Game::AskStartQuestion(bool hasCreature)
 		return false;
 	}
 	// The game waits, paused, for the answer
-	Locator::time::value().SetPaused(true);
+	Locator::time::value().SetPlayerPause(true);
 	_interface->ShowSkipBox(hasCreature);
 	return true;
 }
@@ -4350,7 +4369,7 @@ void Game::HandleInterfaceAction()
 	if (const auto answer = _interface->TakeSkipBoxAnswer(); answer.has_value())
 	{
 		Locator::tutorialSkipSystem::value().Set(new_game_choice::SkipFor(*answer));
-		Locator::time::value().SetPaused(false);
+		Locator::time::value().SetPlayerPause(false);
 	}
 
 	// The edits on the Players page are kept with the profile played, before anything its buttons do
@@ -4406,7 +4425,7 @@ void Game::HandleInterfaceAction()
 	// The menu pauses the game while it is open
 	if (const auto pause = _menuPause.Follow(_interface->GetMenu().IsOpen()); pause.has_value())
 	{
-		Locator::time::value().SetPaused(*pause);
+		Locator::time::value().SetPlayerPause(*pause);
 		if (!_menuPause.IsHeld())
 		{
 			_menuClosedAt = std::chrono::steady_clock::now();
@@ -4534,7 +4553,8 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	{
 		settings.profileName = gui::ToUtf16(profile->name);
 	}
-	settings.gameVersion = std::string(gui::multiplayer::k_GameVersion);
+	// A game server of another build shows "(Wrong Version)" in the game list
+	settings.gameVersion = std::string(build_version::Text());
 	auto maps = gui::ReadOnlineMapTexts();
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
@@ -4632,7 +4652,7 @@ void Game::CloseMenuForNewLand()
 	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
 	if (const auto pause = _menuPause.Release(); pause.has_value())
 	{
-		Locator::time::value().SetPaused(*pause);
+		Locator::time::value().SetPlayerPause(*pause);
 		_menuClosedAt = std::chrono::steady_clock::now();
 	}
 }

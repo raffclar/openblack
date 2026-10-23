@@ -193,13 +193,14 @@ def main():
     if relay:
         server_command += ["--commands", commands]
 
-    # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more
+    # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more. The server's
+    # world is a network game, so the game plays as one too
     draw_every = options.draw_every if options.draw_every is not None else (1 if events is not None else 0)
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
                     "--sim-fast", "--sim-draw-every", str(draw_every), "--sim-frame-ms", str(options.frame_ms),
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
-                    "-l", game_log] + where
+                    "-l", game_log, "--sim-network-game"] + where
     if events is None:
         game_command.append("--sim-still-hand")
     else:

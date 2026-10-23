@@ -208,6 +208,8 @@ bool ServerWorld::Initialize()
 	Locator::rng::value().SetRunSeed(_settings.seed);
 	Locator::time::value().RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Seeded run: seed {}, date pinned", _settings.seed);
+	// The server's world is the world of a network game
+	Locator::time::value().SetNetworkGame(true);
 	// Each frame takes a fixed game time from the first, so that the server plays the same turns at any speed
 	Locator::simulation::value().SetSettings(_simulation.settings);
 	if (_simulation.frameTime.has_value())

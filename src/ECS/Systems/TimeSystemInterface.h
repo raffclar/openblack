@@ -75,10 +75,18 @@ public:
 	/// Pausing stops the game clock; unpausing starts it again from where it stopped
 	virtual void SetPaused(bool paused) = 0;
 	[[nodiscard]] virtual bool IsPaused() const = 0;
+	/// The player's pause: the P key, the in-game menu, the start-of-game question and the films. It stops the clock as
+	/// SetPaused does, but a network game ignores it and its clock continues to run.
+	virtual void SetPlayerPause(bool paused) = 0;
 	/// The temple holds the game clock while the player is in it. A hold stops the clock as a pause does, but it
-	/// does not change the player's pause. The frame's game time is none from the moment that the hold starts.
+	/// does not change the player's pause. The frame's game time is none from the moment that the hold starts. A network
+	/// game ignores the hold.
 	virtual void SetHeld(bool held) = 0;
 	[[nodiscard]] virtual bool IsHeld() const = 0;
+	/// A network game: the world of each computer must follow only the seed and the commands of the players. Its clock
+	/// never stops for one player, and its turns read no part of a frame
+	virtual void SetNetworkGame(bool networkGame) = 0;
+	[[nodiscard]] virtual bool IsNetworkGame() const = 0;
 	/// The game's speed: 1 is normal and 2 twice as fast. The time already gone keeps the speed it went at
 	virtual void SetSpeed(float speed) = 0;
 	[[nodiscard]] virtual float GetSpeed() const = 0;
@@ -104,6 +112,13 @@ public:
 	/// The date a seeded run pins unless given another: 1 January 2001, 12:00 UTC
 	static constexpr int64_t k_DeterministicDate = 978350400;
 };
+
+/// Whether the player's pause or the temple's hold stops the game clock. In a network game the other players continue
+/// to play, so nothing that one player does stops the clock.
+[[nodiscard]] constexpr bool PlayerCanStopClock(bool networkGame) noexcept
+{
+	return !networkGame;
+}
 
 /// What the hand and the camera step by in a frame: the frame's real time, except while a script holds the widescreen
 /// for a cut scene, when they keep to the game's time. Inside the temple, where the world is paused, the rooms' camera

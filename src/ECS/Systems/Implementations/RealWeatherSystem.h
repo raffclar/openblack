@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <chrono>
 #include <functional>
 #include <optional>
 #include <vector>
@@ -33,8 +34,10 @@ public:
 	using ReadPresets = std::function<std::optional<std::vector<uint8_t>>()>;
 	/// The date of today on the computer, as the game asks the lobby for it
 	using Today = std::function<lobby_api::Date()>;
+	/// The real time, which the wait for the answer is measured by
+	using Clock = std::function<std::chrono::steady_clock::time_point()>;
 
-	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today);
+	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today, Clock clock);
 
 	void StartGame(RealWeatherLandInterface& land) override;
 	void ProcessTurn(RealWeatherLandInterface& land) override;
@@ -60,6 +63,9 @@ private:
 	LobbyClientSystemInterface& _lobby;
 	ReadPresets _readPresets;
 	Today _today;
+	Clock _clock;
+	/// When the game asked for the weather of this game
+	std::chrono::steady_clock::time_point _askedAt {};
 
 	std::vector<real_weather::Preset> _presets;
 	std::optional<lobby_api::RealWeather> _weather;

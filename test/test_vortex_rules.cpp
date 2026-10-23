@@ -31,6 +31,21 @@ TEST(VortexRules, ElapsedSecondsCountsTurnsAndThePartOfOne)
 	EXPECT_FLOAT_EQ(ElapsedSeconds(0, 0.0f, k_MillisecondsPerTurn), 0.0f);
 }
 
+TEST(VortexRules, ANetworkGamesTurnReadsNoPartOfAFrame)
+{
+	// Single player: the turn and the frame read the part that the last frame measured
+	static_assert(TurnFractionFor(0.4f, true, false) == 0.4f);
+	static_assert(TurnFractionFor(0.4f, false, false) == 0.4f);
+	// A network game: the turn reads whole turns only, the frame still reads the part for what it draws
+	static_assert(TurnFractionFor(0.4f, true, true) == 0.0f);
+	static_assert(TurnFractionFor(0.4f, false, true) == 0.4f);
+	// Two frame rates give two parts, but the same seconds in a network game's turn
+	EXPECT_EQ(ElapsedSeconds(48, TurnFractionFor(0.2f, true, true), k_MillisecondsPerTurn),
+	          ElapsedSeconds(48, TurnFractionFor(0.7f, true, true), k_MillisecondsPerTurn));
+	EXPECT_NE(ElapsedSeconds(48, TurnFractionFor(0.2f, true, false), k_MillisecondsPerTurn),
+	          ElapsedSeconds(48, TurnFractionFor(0.7f, true, false), k_MillisecondsPerTurn));
+}
+
 TEST(VortexRules, AFadeIsOverOnTheSeventiethTurn)
 {
 	// The game's thousandth of a second is a float a hair over a thousandth, so 70 turns are just over 7 seconds

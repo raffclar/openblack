@@ -14,8 +14,8 @@
 namespace openblack::ecs
 {
 
-/// The weather of the land in the game: the weather system of the locator, and the land that it is over. openblack has
-/// no network game yet, so a game is never a multiplayer game.
+/// The weather of the land in the game: the weather system of the locator, and the land that it is over. The game is a
+/// multiplayer game when the clock plays a network game.
 class RealWeatherLand final: public systems::RealWeatherLandInterface
 {
 public:
@@ -25,7 +25,7 @@ public:
 	[[nodiscard]] bool StormLives(entt::entity storm) const override;
 	void EndStorm(entt::entity storm) override;
 	[[nodiscard]] glm::vec3 IslandCentre() const override;
-	[[nodiscard]] bool IsMultiplayer() const override { return false; }
+	[[nodiscard]] bool IsMultiplayer() const override;
 };
 
 } // namespace openblack::ecs

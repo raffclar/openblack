@@ -39,6 +39,8 @@ enum class Stage : uint8_t
 	WaitingForStart,
 	LanGameList,
 	NotRegistered,
+	/// The chat of the room of 32 gods, a line from each god
+	RoomChat32,
 	_Count
 };
 
