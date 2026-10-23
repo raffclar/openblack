@@ -24,6 +24,7 @@
 #include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Physics/Body.h"
@@ -227,10 +228,14 @@ public:
 	{
 		return {};
 	}
-	/// Where a thing about to leave a hand starts from: its body at its place, lifted out of the land and, when asked, laid
-	/// along its slope; its model's axes (scaled) and origin. None for a thing without a body.
-	[[nodiscard]] virtual std::optional<std::pair<glm::mat3, glm::vec3>> ReleasePose([[maybe_unused]] entt::entity object,
-	                                                                                 [[maybe_unused]] bool alignToSlope)
+	/// Where a thing about to leave a hand starts. Its body starts at `drawn` (the turn of the model with no scale, and its
+	/// origin), or at its Transform when there is no drawn place, at its own size. The body comes up out of the land and,
+	/// when asked, lies along the slope. The result is the spin of the body, the origin of its model and the angles of
+	/// its turn. None for a thing without a body.
+	[[nodiscard]] virtual std::optional<player_commands::ThrowStart>
+	StartOfThrow([[maybe_unused]] entt::entity object,
+	             [[maybe_unused]] const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn,
+	             [[maybe_unused]] bool alignToSlope)
 	{
 		return std::nullopt;
 	}

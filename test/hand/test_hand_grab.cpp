@@ -10,6 +10,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <bit>
 
 #include <glm/geometric.hpp>
@@ -383,6 +384,22 @@ TEST(HandGrab, AThrowIsFastAcrossTheGround)
 	EXPECT_TRUE(IsFastRelease({1.0f, 0.1f, 0.0f}));
 	EXPECT_TRUE(PotPours({2.0f, 1.0f, 0.0f}));
 	EXPECT_FALSE(PotPours({2.0f, 1.0f, 0.1f}));
+}
+
+// A hand that holds a thing has no spin: each part of the spin is a positive zero, also where the inertia has a
+// negative part. With a spin, each part adds the rows in the order first, third, second.
+TEST(HandGrab, TheSpinOfALetGoIsTheInertiaTimesTheHandsSpin)
+{
+	const std::array<std::array<float, 3>, 3> inertia {{{2.0f, -1.0f, 0.5f}, {-1.0f, 3.0f, -0.25f}, {0.5f, -0.25f, 4.0f}}};
+	const auto still = SpinMomentum(inertia, glm::vec3(0.0f));
+	for (glm::length_t part = 0; part < 3; ++part)
+	{
+		EXPECT_EQ(std::bit_cast<uint32_t>(still[part]), 0U);
+	}
+	const auto turning = SpinMomentum(inertia, {1.0f, 2.0f, 3.0f});
+	EXPECT_EQ(turning.x, (2.0f * 1.0f + 0.5f * 3.0f) + -1.0f * 2.0f);
+	EXPECT_EQ(turning.y, (-1.0f * 1.0f + -0.25f * 3.0f) + 3.0f * 2.0f);
+	EXPECT_EQ(turning.z, (0.5f * 1.0f + 4.0f * 3.0f) + -0.25f * 2.0f);
 }
 
 TEST(HandGrab, AThrowLeavesAtARecordedVelocityElseTheSpringsCappedAtTheMost)

@@ -364,6 +364,19 @@ glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool sprin
 	return velocity;
 }
 
+glm::vec3 hand_grab::SpinMomentum(const std::array<std::array<float, 3>, 3>& inertia, glm::vec3 spin)
+{
+	// Each part is the sum down one column of the inertia: the first row, then the third, then the second
+	glm::vec3 momentum;
+	for (glm::length_t part = 0; part < 3; ++part)
+	{
+		const auto column = static_cast<size_t>(part);
+		const float sum = ((inertia[0][column] * spin.x) + (inertia[2][column] * spin.z)) + (inertia[1][column] * spin.y);
+		momentum[part] = sum + 0.0f;
+	}
+	return momentum;
+}
+
 bool hand_grab::PotPours(glm::vec3 velocity)
 {
 	return glm::dot(velocity, velocity) <= k_PourSpeedSquared;

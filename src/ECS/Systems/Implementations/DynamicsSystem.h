@@ -72,7 +72,8 @@ public:
 	void RaiseClearOfWhatIsUnder(PhysicsEntry& entry) override;
 	void SettleOnLand(PhysicsEntry& entry, bool noPullDown, bool alignToSlope) override;
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override;
-	[[nodiscard]] std::optional<std::pair<glm::mat3, glm::vec3>> ReleasePose(entt::entity object, bool alignToSlope) override;
+	[[nodiscard]] std::optional<player_commands::ThrowStart>
+	StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn, bool alignToSlope) override;
 	float PushObject(entt::entity object) override;
 	[[nodiscard]] const physics::Ground* GetGround() const override;
 	[[nodiscard]] std::vector<physics::Ellipsoid> CreatureSkeleton(entt::entity creature) override;
@@ -98,7 +99,10 @@ private:
 	[[nodiscard]] physics_classes::ClassFacts FactsOf(entt::entity object) const;
 	/// A body for an object at its place, moving or resting; none for an object without a shape
 	std::unique_ptr<physics::Body> MakePieceBody(entt::entity piece, const physics::Material& material);
-	[[nodiscard]] std::unique_ptr<physics::Body> MakeBody(entt::entity object, const physics_classes::ClassFacts& facts);
+	/// The body of a thing at its Transform, or at `place` (a turn with no scale, and an origin) when there is one
+	[[nodiscard]] std::unique_ptr<physics::Body>
+	MakeBody(entt::entity object, const physics_classes::ClassFacts& facts,
+	         const std::optional<std::pair<glm::mat3, glm::vec3>>& place = std::nullopt);
 	/// The creature's body: an obstacle of its bones' ellipsoids, as it stands posed now
 	[[nodiscard]] std::unique_ptr<physics::Body> MakeCreatureBody(entt::entity creature, const physics::Material& material);
 	/// The list grows by a few slots when it is full, before a body is added to it

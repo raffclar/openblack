@@ -64,12 +64,26 @@ struct HandTake
 	entt::entity object;
 };
 
+/// Where a thing starts when the hand lets go of it. The computer of the player that lets go makes these values from the
+/// thing as that computer last drew it in the hand: a globe turns to the camera of that player. The command sends the
+/// values to all the computers, thus each computer starts the same path.
+struct ThrowStart
+{
+	/// The spin of the thing, as the bodies count the turn
+	glm::vec3 angularMomentum {0.0f};
+	/// The origin of the thing's model
+	glm::vec3 origin {0.0f};
+	/// The angles of the thing's turn about x, y and z. The game turns about z first, then about x, then about y.
+	glm::vec3 angles {0.0f};
+};
+
 /// The hand lets go of the thing that it holds. It puts the thing down, or throws it at the velocity that the hand had
-/// when the player let go of the button.
+/// when the player let go of the button. The thing starts from the start in the command.
 struct HandLetGo
 {
 	entt::entity object;
 	glm::vec3 velocity;
+	ThrowStart start {};
 };
 
 /// The hand taps a thing

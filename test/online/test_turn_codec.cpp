@@ -38,7 +38,10 @@ std::vector<Action> EachCommand()
 	    LeashTap {.creature = Entity(0x01020304)},
 	    CreatureFeedback {.creature = Entity(7), .amount = -0.75f},
 	    HandTake {.object = Entity(8)},
-	    HandLetGo {.object = Entity(9), .velocity = {1.5f, -2.25f, 1e-30f}},
+	    HandLetGo {
+	        .object = Entity(9),
+	        .velocity = {1.5f, -2.25f, 1e-30f},
+	        .start = {.angularMomentum = {0.0f, -0.0f, 2.0f}, .origin = {100.5f, 7.0f, -9.0f}, .angles = {0.1f, -3.1f, 1.5f}}},
 	    HandTap {.object = entt::null},
 	    HandGive {.creature = Entity(10), .object = Entity(11)},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
@@ -77,7 +80,9 @@ Action RandomAction(std::mt19937& random)
 	case 3:
 		return HandTake {.object = entity()};
 	case 4:
-		return HandLetGo {.object = entity(), .velocity = vector()};
+		return HandLetGo {.object = entity(),
+		                  .velocity = vector(),
+		                  .start = {.angularMomentum = vector(), .origin = vector(), .angles = vector()}};
 	case 5:
 		return HandTap {.object = entity()};
 	case 6:
@@ -145,7 +150,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 17, 5, 9, 18, 5};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -204,7 +209,11 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	        .sequence = 77,
 	        .actions =
 	            {
-	                HandLetGo {.object = Entity(42), .velocity = {-0.0f, 1.0f, denormal}},
+	                HandLetGo {.object = Entity(42),
+	                           .velocity = {-0.0f, 1.0f, denormal},
+	                           .start = {.angularMomentum = {-0.0f, 0.0f, 5.0f},
+	                                     .origin = {11.0f, 12.0f, 13.0f},
+	                                     .angles = {0.5f, -0.25f, 2.0f}}},
 	                CreatureFeedback {.creature = Entity(43), .amount = 2.0f},
 	                LeashOrder {.kind = LeashOrder::Kind::Tie, .object = Entity(44), .place = {1.0f, 2.0f, 3.0f}},
 	                LeashKey {.key = creature_leash::LeashKey::PreviousLeash},
@@ -212,9 +221,9 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	    }},
 	};
 	auto bytes = Encode(turn);
-	ASSERT_EQ(bytes.size(), 58u);
+	ASSERT_EQ(bytes.size(), 94u);
 	// The test puts NaNs in the bytes, because a NaN constant of the compiler can lose its signalling bit. The velocity's
-	// y is at byte 21, and the amount is at byte 34.
+	// y is at byte 21, and the amount is at byte 70.
 	const auto put = [&bytes](size_t at, uint32_t value) {
 		for (size_t i = 0; i < 4; ++i)
 		{
@@ -223,7 +232,21 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	};
 	ASSERT_EQ(bytes[12], static_cast<uint8_t>(CommandTag::HandLetGo));
 	put(21, 0x7F800001U);
-	put(34, 0xFFC12345U);
+	put(70, 0xFFC12345U);
+	// After the velocity come the spin, the origin and the angles of the start, in this order
+	const auto at = [&bytes](size_t from) {
+		uint32_t value = 0;
+		for (size_t i = 0; i < 4; ++i)
+		{
+			value |= static_cast<uint32_t>(bytes[from + i]) << (8 * i);
+		}
+		return value;
+	};
+	EXPECT_EQ(at(29), 0x80000000U);
+	EXPECT_EQ(at(37), std::bit_cast<uint32_t>(5.0f));
+	EXPECT_EQ(at(41), std::bit_cast<uint32_t>(11.0f));
+	EXPECT_EQ(at(53), std::bit_cast<uint32_t>(0.5f));
+	EXPECT_EQ(at(61), std::bit_cast<uint32_t>(2.0f));
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
 	EXPECT_EQ(Encode(*decoded.frame), bytes);
@@ -238,6 +261,9 @@ TEST(TurnCodec, TheFieldsOfTheCommandsComeBackExactly)
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.x), 0x80000000U);
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.y), 0x7F800001U);
 	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.z), std::bit_cast<uint32_t>(denormal));
+	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.start.angularMomentum.x), 0x80000000U);
+	EXPECT_EQ(letGo.start.origin, glm::vec3(11.0f, 12.0f, 13.0f));
+	EXPECT_EQ(letGo.start.angles, glm::vec3(0.5f, -0.25f, 2.0f));
 	EXPECT_EQ(std::bit_cast<uint32_t>(std::get<CreatureFeedback>(block.actions[1]).amount), 0xFFC12345U);
 	const auto& order = std::get<LeashOrder>(block.actions[2]);
 	EXPECT_EQ(order.kind, LeashOrder::Kind::Tie);
@@ -379,16 +405,17 @@ TEST(TurnCodec, RandomChangesToTheBytesNeverGiveAFrameWithOtherBytes)
 
 TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 {
-	// The report of multiplayer-32-1: about 84 bytes of commands, hand and camera a player, and about 2.7 KB a turn
+	// The report of multiplayer-32-1: about 84 bytes of commands, hand and camera a player, and about 2.7 KB a turn.
+	// Since that report, the let-go has its start: 36 bytes more.
 	const auto commands = BusyCommands();
 	size_t commandBytes = 0;
 	for (const auto& action : commands)
 	{
 		commandBytes += SizeOf(action);
 	}
-	EXPECT_EQ(commandBytes, 35u);
+	EXPECT_EQ(commandBytes, 71u);
 	const auto playerBytes = commandBytes + k_PlannedHandReport;
-	EXPECT_EQ(playerBytes, 84u);
+	EXPECT_EQ(playerBytes, 120u);
 
 	TurnBundle turn {.turn = 1, .blocks = {}};
 	for (size_t player = 0; player < 32; ++player)
@@ -398,16 +425,16 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	const auto encoded = Encode(turn);
 	// The commands of today without the hand report
 	EXPECT_EQ(encoded.size(), sizes::k_Header + sizes::k_TurnBody + 32 * (sizes::k_Stamp + commandBytes));
-	EXPECT_EQ(encoded.size(), 1256u);
-	// With the planned hand report: 2824 bytes. The stamps and the counts add about 5 percent to the 2688 bytes
-	// (32 x 84) of the report.
+	EXPECT_EQ(encoded.size(), 2408u);
+	// With the planned hand report: 3976 bytes. The stamps and the counts add less than 4 percent to the 3840 bytes
+	// (32 x 120) of the report.
 	const auto withReport = encoded.size() + 32 * k_PlannedHandReport;
-	EXPECT_EQ(withReport, 2824u);
-	EXPECT_LT(withReport * 100, 2688u * 106);
+	EXPECT_EQ(withReport, 3976u);
+	EXPECT_LT(withReport * 100, 3840u * 104);
 
 	// The block that one busy client sends, and its checksum
 	const auto up = Encode(CommandBlock {.sequence = 0, .turn = 1, .actions = commands});
-	EXPECT_EQ(up.size() + k_PlannedHandReport, 93u);
+	EXPECT_EQ(up.size() + k_PlannedHandReport, 129u);
 	EXPECT_EQ(Encode(TurnChecksum {.turn = 1, .checksum = 2}).size(), 14u);
 	EXPECT_EQ(Encode(Ping {.id = 1, .time = 2}).size(), 14u);
 }
