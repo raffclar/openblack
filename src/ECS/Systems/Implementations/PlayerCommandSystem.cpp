@@ -20,6 +20,7 @@
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -102,6 +103,29 @@ void Run(const Command& command)
 			    if (openblack::Locator::handSystem::has_value())
 			    {
 				    openblack::Locator::handSystem::value().Report(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, MiracleRequest> || std::is_same_v<Kind, MiracleRepeat>)
+		    {
+			    if (!openblack::Locator::spellIconSystem::has_value())
+			    {
+				    return;
+			    }
+			    // The turn checks again that an icon of the player may give the miracle, then asks for it. A repeat asks
+			    // for the last miracle that went into the player's hand, as the player is at this turn.
+			    auto& icons = openblack::Locator::spellIconSystem::value();
+			    auto seed = openblack::SpellSeedType::None;
+			    if constexpr (std::is_same_v<Kind, MiracleRequest>)
+			    {
+				    seed = action.seed;
+			    }
+			    else
+			    {
+				    seed = icons.LastSeedGained(command.player);
+			    }
+			    if (icons.ValidForRequest(command.player, seed))
+			    {
+				    icons.RequestSeed(command.player, seed);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)

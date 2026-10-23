@@ -145,6 +145,8 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.object);
 		               out.Vector(command.moved);
 	               },
+	               [&out](const MiracleRequest& command) { out.Byte(static_cast<uint8_t>(command.seed)); },
+	               [](const MiracleRepeat& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -224,6 +226,19 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = HandTwist {.object = object, .moved = in.Vector()};
 		return DecodeError::None;
 	}
+	case CommandTag::MiracleRequest:
+	{
+		const auto seed = in.Byte();
+		if (seed > static_cast<uint8_t>(SpellSeedType::BeamExplosion))
+		{
+			return DecodeError::Value;
+		}
+		action = MiracleRequest {.seed = static_cast<SpellSeedType>(seed)};
+		return DecodeError::None;
+	}
+	case CommandTag::MiracleRepeat:
+		action = MiracleRepeat {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -315,6 +330,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPostTap& /*command*/) { return CommandTag::LeashPostTap; },
 	                      [](const HandReport& /*command*/) { return CommandTag::HandReport; },
 	                      [](const HandTwist& /*command*/) { return CommandTag::HandTwist; },
+	                      [](const MiracleRequest& /*command*/) { return CommandTag::MiracleRequest; },
+	                      [](const MiracleRepeat& /*command*/) { return CommandTag::MiracleRepeat; },
 	                  },
 	                  action);
 }
@@ -334,6 +351,8 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
 	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
+	                                     [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

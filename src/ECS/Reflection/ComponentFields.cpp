@@ -1630,6 +1630,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::Player::handTookFrom>("handTookFrom")
 	    .Field<&components::Player::damageFrom>("damageFrom")
 	    .Field<&components::Player::lastCast>("lastCast")
+	    .Field<&components::Player::lastSeedGained>("lastSeedGained")
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");

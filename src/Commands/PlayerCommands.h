@@ -151,9 +151,22 @@ struct HandTwist
 	glm::vec3 moved;
 };
 
+/// The miracle selection chose a miracle: the player's icons give the miracle of the seed to the hand, or one of them
+/// starts to charge it. The turn checks again that an icon may do it.
+struct MiracleRequest
+{
+	SpellSeedType seed;
+};
+
+/// The R gesture or the R key: the player's icons give the last miracle that went into the player's hand again, or one
+/// of them starts to charge it. The turn reads that miracle and checks again that an icon may do it.
+struct MiracleRepeat
+{
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist>;
+                            LeashPostTap, HandReport, HandTwist, MiracleRequest, MiracleRepeat>;
 
 /// A command and the player that sent it
 struct Command

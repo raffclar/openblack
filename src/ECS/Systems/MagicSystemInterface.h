@@ -275,6 +275,9 @@ public:
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
+	/// The seed of the last miracle that came into the hand from a worship site, none on a new land. The R gesture
+	/// calls this miracle again.
+	[[nodiscard]] virtual SpellSeedType GetLastSeedGained() const { return SpellSeedType::None; }
 	[[nodiscard]] virtual HandResult GetLastHandResult() const = 0;
 	/// Once a frame, once the hand is posed: where the held miracle's in-hand effect sits, and how large the hand is
 	/// drawn, which is how large the effect is

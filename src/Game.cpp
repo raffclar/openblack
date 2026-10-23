@@ -302,6 +302,7 @@
 #include "Help/Spirits.h"
 #include "Help/TurnCheer.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
 #include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
@@ -943,6 +944,24 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// A window resized, maximised or restored is followed by the next frame drawn (FollowWindowSize)
 		break;
 	case SDL_KEYDOWN:
+		// The M key opens the miracle selection, and the R key calls the last miracle again, while no action has the
+		// key. In the temple the keys do other things.
+		if ((event.key.keysym.scancode == SDL_SCANCODE_M || event.key.keysym.scancode == SDL_SCANCODE_R) && !inTemple &&
+		    Locator::gestureSystem::has_value() &&
+		    input::ActionsForKeyDown(Locator::gameActionSystem::value().GetKeyBindings(), event.key.keysym.scancode,
+		                             event.key.keysym.mod) == input::BindableActionMap::NONE)
+		{
+			auto& gestures = Locator::gestureSystem::value();
+			if (event.key.keysym.scancode == SDL_SCANCODE_M)
+			{
+				gestures.OpenSelectionByKey(PlayerNames::PLAYER_ONE);
+			}
+			else
+			{
+				gestures.RepeatMiracleByKey(PlayerNames::PLAYER_ONE);
+			}
+			break;
+		}
 		switch (event.key.keysym.sym)
 		{
 		case SDLK_ESCAPE:

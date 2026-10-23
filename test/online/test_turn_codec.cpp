@@ -51,6 +51,8 @@ std::vector<Action> EachCommand()
 	                .camera = {7.0f, 8.0f, 9.0f},
 	                .focus = {10.0f, 11.0f, 12.0f}},
 	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
+	    MiracleRequest {.seed = SpellSeedType::Heal},
+	    MiracleRepeat {},
 	};
 }
 
@@ -74,7 +76,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 11)
+	switch (bits(random) % 13)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -98,8 +100,12 @@ Action RandomAction(std::mt19937& random)
 		return LeashPostTap {.post = entity()};
 	case 9:
 		return HandReport {.collidePoint = vector(), .handPoint = vector(), .camera = vector(), .focus = vector()};
-	default:
+	case 10:
 		return HandTwist {.object = entity(), .moved = vector()};
+	case 11:
+		return MiracleRequest {.seed = static_cast<SpellSeedType>(bits(random) % 30)};
+	default:
+		return MiracleRepeat {};
 	}
 }
 
@@ -159,7 +165,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 2, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -199,7 +205,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 3), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>((i * 3) % 32), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -470,4 +476,20 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	EXPECT_EQ(up.size() + k_HandReport, 129u);
 	EXPECT_EQ(Encode(TurnChecksum {.turn = 1, .checksum = 2}).size(), 14u);
 	EXPECT_EQ(Encode(Ping {.id = 1, .time = 2}).size(), 14u);
+}
+
+TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
+{
+	const auto bytes =
+	    Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {MiracleRequest {.seed = SpellSeedType::BeamExplosion}}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	const auto& block = std::get<CommandBlock>(*decoded.frame);
+	EXPECT_EQ(std::get<MiracleRequest>(block.actions.at(0)).seed, SpellSeedType::BeamExplosion);
+
+	// A seed number after the last seed of the game is refused
+	auto wrong = bytes;
+	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }
