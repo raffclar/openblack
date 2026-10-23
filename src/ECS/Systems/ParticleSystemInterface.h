@@ -125,6 +125,9 @@ public:
 	virtual void SetDrawOffset(EffectId id, glm::vec3 offset) = 0;
 	/// An effect of the temple's rooms, drawn while the player is in the temple rather than with the world's
 	virtual void SetInTemple(EffectId id) = 0;
+	/// An effect that the world and the temple do not draw. Only CollectEffectDrawFrame draws it, as for the seeds
+	/// pictured over the gestures' hints.
+	virtual void SetDrawnAlone(EffectId /*id*/) {}
 	/// The live shield holding a point, its sphere grown by a margin, if any
 	[[nodiscard]] virtual std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const = 0;
 	/// How many particle sounds are playing or dying away, for the debug window
@@ -186,6 +189,11 @@ public:
 	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple
 	/// only the temple's effects are drawn, and outside it only the world's.
 	virtual void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const = 0;
+	/// Clears the frame and fills it with what one effect draws, none if the effect does not run
+	virtual void CollectEffectDrawFrame(EffectId /*id*/, float /*turnFraction*/, particles::draw::Frame& frame) const
+	{
+		frame.Clear();
+	}
 	[[nodiscard]] virtual DrawStats GetDrawStats() const = 0;
 	[[nodiscard]] virtual std::vector<EffectInfo> GetEffects() const = 0;
 	/// The particle files' names, for the debug window

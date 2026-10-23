@@ -1174,6 +1174,14 @@ void ParticleSystem::SetInTemple(EffectId id)
 	}
 }
 
+void ParticleSystem::SetDrawnAlone(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->drawnAlone = true;
+	}
+}
+
 void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 {
 	if (const auto it = FindRunning(id); it != _effects.end())
@@ -1426,10 +1434,9 @@ void ParticleSystem::ResolveTextures(const particles::Effect& effect)
 	}
 }
 
-void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const
+particles::draw::Sources ParticleSystem::DrawSources() const
 {
-	frame.Clear();
-	const particles::draw::Sources sources {
+	return {
 	    .textures = [this](std::string_view texture) -> std::optional<std::pair<entt::id_type, entt::id_type>> {
 		    const auto found = _textures.find(texture);
 		    if (found == _textures.end())
@@ -1447,27 +1454,47 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	    .objectPosition = [this](entt::entity object) { return _world.ObjectPosition(object); },
 	    .gameMilliseconds = _world.GameMilliseconds(),
 	};
+}
+
+void ParticleSystem::AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
+                                const particles::draw::Sources& sources) const
+{
+	_walk.Clear();
+	running.effect->Walk(turnFraction, _walk);
+	if (running.drawOffset != glm::vec3(0.0f))
+	{
+		for (auto& atom : _walk.atoms)
+		{
+			atom.position += running.drawOffset * atom.offsetWeight;
+		}
+		for (auto& joint : _walk.joints)
+		{
+			joint.position += running.drawOffset * joint.offsetWeight;
+		}
+	}
+	particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(), sources);
+}
+
+void ParticleSystem::CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const
+{
+	frame.Clear();
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		AddRunning(*it, turnFraction, frame, DrawSources());
+	}
+}
+
+void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const
+{
+	frame.Clear();
+	const auto sources = DrawSources();
 	for (const auto& running : _effects)
 	{
-		if (running.inTemple != inTemple)
+		if (running.inTemple != inTemple || running.drawnAlone)
 		{
 			continue;
 		}
-		_walk.Clear();
-		running.effect->Walk(turnFraction, _walk);
-		if (running.drawOffset != glm::vec3(0.0f))
-		{
-			for (auto& atom : _walk.atoms)
-			{
-				atom.position += running.drawOffset * atom.offsetWeight;
-			}
-			for (auto& joint : _walk.joints)
-			{
-				joint.position += running.drawOffset * joint.offsetWeight;
-			}
-		}
-		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
-		                           sources);
+		AddRunning(running, turnFraction, frame, sources);
 	}
 	// The land's light sheets and the players' symbols over their artefacts are the world's
 	if (!inTemple)

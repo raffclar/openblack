@@ -7813,6 +7813,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 	{
 		DrawAdvisors(desc);
 		DrawGestureHintCollars(desc);
+		DrawGestureHintSeeds(desc);
 	}
 
 	// The sun's glare over everything else in the view

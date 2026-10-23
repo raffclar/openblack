@@ -11,6 +11,8 @@
 
 #include <vector>
 
+#include <SDL_scancode.h>
+
 #include "Input/BindableActions.h"
 #include "TestbedScenarioRegistry.h"
 
@@ -210,6 +212,48 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::WShape)},
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::Scribble)},
 	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::RShape)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "miracles.selection_keys",
+	    .name = "The M and R keys ask a worship site for a miracle",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site "
+	        "is built and each icon holds the full charge of its miracle. The M key is pressed on the keyboard, and the "
+	        "hand draws a W. Then a scribble drops the water miracle, and the R key is pressed on the keyboard.",
+	    .expected = "The M key opens the miracle selection: white sparks come out of the hand, and the hints show the "
+	                "gestures of the two miracles. The W closes the selection, and at the next turn the water miracle "
+	                "comes into the hand. The scribble shakes the hand and drops the miracle. The R key asks the water "
+	                "icon again: at the next turn the icon starts to charge, and its charge goes up in the tooltip.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::PressPlainKey, .delaySeconds = 3.0f, .value = static_cast<size_t>(SDL_SCANCODE_M)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 2.0f, .value = static_cast<size_t>(GestureType::WShape)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::PressPlainKey, .delaySeconds = 9.0f, .value = static_cast<size_t>(SDL_SCANCODE_R)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
+	    .id = "interface.hint_selection_globe",
+	    .name = "The globe over the hint of the spiral",
+	    .facet = Facet::Interface,
+	    .description = "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the "
+	                   "site is built and each icon holds the full charge of its miracle. The hand is empty.",
+	    .expected = "The hint along the bottom right of the screen shows the spiral. Over the spiral, a small globe "
+	                "shows, as the globe of a miracle looks. The R has no hint until a miracle comes into the hand.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});

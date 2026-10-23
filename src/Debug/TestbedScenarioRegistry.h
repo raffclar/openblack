@@ -958,6 +958,9 @@ struct Command
 		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
+		/// The player presses a key (value, the key's scancode) on the keyboard and lets it go. The key goes through the
+		/// queue of the window's events, as the real keyboard's keys do. Needs no creature.
+		PressPlainKey,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
