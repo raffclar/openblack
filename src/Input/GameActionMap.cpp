@@ -26,6 +26,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InjectedInput.h"
 #include "Locator.h"
 #include "ScriptedMouse.h"
@@ -57,6 +58,14 @@ void WarpMouse(int x, int y)
 		return;
 	}
 	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), x, y);
+}
+
+// The clock that the help times the messages of the mouse with: the game's ticks, which follow the fixed frame time
+// in a deterministic run
+uint32_t HelpClockNow()
+{
+	using openblack::Locator;
+	return Locator::time::has_value() ? Locator::time::value().GetTicks() : SDL_GetTicks();
 }
 
 glm::ivec2 WindowSize()
@@ -811,7 +820,7 @@ void GameActionMap::Frame()
 		    .cursorFrozen = _cursorFreeze.IsFrozen(),
 		    .playerMouseBlocked = _playerMouseBlocked,
 		});
-		_helpMouseMoves.Wait(SDL_GetTicks(), glm::ivec2(_mousePosition), stillMessages);
+		_helpMouseMoves.Wait(HelpClockNow(), glm::ivec2(_mousePosition), stillMessages);
 	}
 	_mouseMotion.NewFrame();
 	_pushMotion = glm::ivec2(0);
@@ -968,7 +977,9 @@ void GameActionMap::ProcessEvent(const SDL_Event& event)
 		// The help counts the player's own movements of the mouse, not the moves of a hand demonstration
 		if (!_playerMouseBlocked && !_cursorFreeze.IsFrozen())
 		{
-			_helpMouseMoves.Message(event.motion.timestamp, {event.motion.x, event.motion.y});
+			const bool fixedFrameTime = Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value();
+			_helpMouseMoves.Message(help::MessageTime(event.motion.timestamp, SDL_GetTicks(), HelpClockNow(), fixedFrameTime),
+			                        {event.motion.x, event.motion.y});
 		}
 		// While the window has the mouse, its own movement was taken as the event came in
 		if (!_pointerScaled)
