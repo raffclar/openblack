@@ -179,18 +179,21 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
 	};
-	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin) {
+	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin, bool synced) {
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
-		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
+		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle, synced);
 	};
 	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
-	// loaded vortex keeps the effect of the save, with the things that it carries.
+	// loaded vortex keeps the effect of the save, with the things that it carries. Its random numbers are the shared
+	// ones, because the turns step it.
 	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect)
 	{
-		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
+		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre, true);
 	}
-	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
-	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
+	// The frames step the swirl and the effect over the land. Their random numbers are only this computer's, so that the
+	// frames of each computer do not change the world.
+	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround, false);
+	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre, false);
 	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
 	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
