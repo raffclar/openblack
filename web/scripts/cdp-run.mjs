@@ -12,6 +12,9 @@
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
 //   --eval <expression>      at the end, print the value of this expression on the page
+//   --checksums <file>       write the checksum line of each turn of the game (--sim-checksums - in the game's
+//                            arguments) to this file, as the game makes them
+//   --checksum-turns <count> with --checksums, stop once the game made the lines of this many turns (before the time)
 //   --actions <file.json>    after the click, send these steps of input to the page, as of a user. The file is a list of
 //                            steps, each with "at" (the seconds after the click) and "do":
 //                            {"do": "mouse", "type": "mouseMoved" | "mousePressed" | "mouseReleased", "x", "y", "button"}
@@ -252,6 +255,25 @@ const runStep = async (step) => {
 const steps = option('--actions') ? JSON.parse(readFileSync(option('--actions'), 'utf8')) : [];
 steps.sort((a, b) => a.at - b.at);
 
+// The checksum lines of the game, which the page keeps (see openblackChecksums in launcher.js)
+const checksumsFile = option('--checksums');
+const checksumTurns = Number(option('--checksum-turns', '0'));
+let checksumCount = 0;
+let checksumTurnLines = 0;
+let checksumPoll = 0;
+if (checksumsFile) {
+  writeFileSync(checksumsFile, '');
+}
+const takeChecksums = async () => {
+  const got = await evaluate(`globalThis.openblackChecksums?.(${checksumCount})`);
+  if (got && got.lines.length > 0) {
+    appendFileSync(checksumsFile, got.lines.map((line) => `${line}\n`).join(''));
+    checksumCount += got.lines.length;
+    checksumTurnLines += got.lines.filter((line) => line.startsWith('{"turn":')).length;
+  }
+  return checksumTurns > 0 && checksumTurnLines >= checksumTurns;
+};
+
 let taken = 0;
 let end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
@@ -270,11 +292,22 @@ while (Date.now() < end || taken < Math.min(shots, 1)) {
     await runStep(steps.shift());
     continue;
   }
+  if (checksumsFile && Date.now() >= checksumPoll) {
+    checksumPoll = Date.now() + 1000;
+    if (await takeChecksums()) {
+      end = Date.now();
+      record(`[checksums] ${checksumCount} lines`);
+    }
+  }
   if (Date.now() >= end) {
     next = 0;
     continue;
   }
   await sleep(10);
+}
+if (checksumsFile) {
+  await takeChecksums();
+  console.log(`checksums ${checksumCount} in ${checksumsFile}`);
 }
 if (option('--eval')) {
   console.log(`eval: ${JSON.stringify(await evaluate(option('--eval')))}`);

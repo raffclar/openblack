@@ -16,6 +16,7 @@
 #include <array>
 
 #include "3D/MapCoords.h"
+#include "Common/PortableMath.h"
 
 namespace openblack::creature_mode
 {
@@ -85,8 +86,8 @@ std::optional<glm::vec3> MarkedPlaceInWorld(glm::vec3 templePosition, float yAng
 	}
 	const auto local = glm::vec3(markedPlaces[place][3]);
 	// The rows of the turn about the vertical, each scaled by the size of the temple
-	const auto cosine = static_cast<float>(std::cos(static_cast<double>(yAngle)));
-	const auto sine = static_cast<float>(std::sin(static_cast<double>(yAngle)));
+	const auto cosine = static_cast<float>(portable_math::Cos(static_cast<double>(yAngle)));
+	const auto sine = static_cast<float>(portable_math::Sin(static_cast<double>(yAngle)));
 	const std::array<glm::vec3, 3> rows {
 	    glm::vec3(scale * cosine, scale * -0.0f, scale * sine),
 	    glm::vec3(scale * 0.0f, scale * 1.0f, scale * 0.0f),

@@ -50,6 +50,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/PlayerProfiles.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSaveState.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -265,7 +266,7 @@ ecs::save_files::SaveStep SlotPictureStep(std::filesystem::path pictures, uint32
 /// The heading of a thing that its turn about the vertical gives
 float HeadingOf(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[2][0], rotation[2][2]);
+	return portable_math::Atan2(rotation[2][0], rotation[2][2]);
 }
 
 /// The creatures in the order that the game made them, which names their mind files
@@ -574,7 +575,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	if (auto* transform = registry.TryGet<Transform>(entity))
 	{
 		transform->position = WorldPosition(object.position.position);
-		transform->rotation = glm::eulerAngleY(saved.heading);
+		transform->rotation = portable_math::EulerAngleY(saved.heading);
 		// It keeps the exact map position of the save, which its metres cannot keep far from the corner of the map
 		ecs::thing_map_place::Keep(registry, entity,
 		                           {.x = object.position.position.x, .z = object.position.position.z, .altitude = 0.0f});

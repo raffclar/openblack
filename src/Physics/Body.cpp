@@ -20,6 +20,7 @@
 #include <glm/vec2.hpp>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 #include "Ground.h"
@@ -765,7 +766,7 @@ StepResult Body::Integrate()
 	const float angle = openblack::x87::LengthZyx(step);
 	if (k_MinRotationStep < angle)
 	{
-		_axes = glm::mat3(glm::rotate(glm::mat4(1.0f), angle, step / angle)) * _axes;
+		_axes = glm::mat3(openblack::portable_math::Rotate(glm::mat4(1.0f), angle, step / angle)) * _axes;
 	}
 	_centre += velocity * k_StepSeconds;
 	return resting ? StepResult::Knocked : StepResult::Moved;

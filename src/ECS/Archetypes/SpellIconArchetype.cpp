@@ -20,6 +20,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SpellIcon.h"
@@ -114,9 +115,9 @@ entt::entity SpellIconArchetype::CreateCentreHand(entt::entity centre, entt::ent
 	// the centre
 	position.y += LandHeightAt({position.x, position.z}) - LandHeightAt({placed.position.x, placed.position.z});
 	const auto turned = placed.rotation * glm::mat3(point);
-	const float yAngle = std::atan2(turned[0].z, turned[0].x);
+	const float yAngle = portable_math::Atan2(turned[0].z, turned[0].x);
 	const auto entity =
-	    MakeIcon(position, glm::mat3(glm::eulerAngleY(-yAngle)), placed.scale.x, SpellIconInfo::TownCentre, seed);
+	    MakeIcon(position, glm::mat3(portable_math::EulerAngleY(-yAngle)), placed.scale.x, SpellIconInfo::TownCentre, seed);
 	registry.Assign<TownCentreIcon>(
 	    entity, TownCentreIcon {.centre = centre, .town = town, .hand = static_cast<uint8_t>(hand), .seed = seed});
 	return entity;

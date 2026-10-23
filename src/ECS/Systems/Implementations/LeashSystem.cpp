@@ -37,6 +37,7 @@
 #include "Camera/CameraBookmarks.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHelp.h"
@@ -2435,7 +2436,7 @@ void LeashSystem::UpdateMarkers()
 	const auto size = Locator::cameraBookmarkSystem::has_value() ? Locator::cameraBookmarkSystem::value().GetMarkerHalfSize()
 	                                                             : camera_bookmarks::MarkerHalfSize(0);
 	// The footprint turns a quarter turn to the left, in the plane that faces the camera
-	const auto quarterTurn = glm::mat3(glm::rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
+	const auto quarterTurn = glm::mat3(portable_math::Rotate(orders::k_FootprintTurn, glm::vec3(0.0f, 0.0f, 1.0f)));
 	std::vector<std::pair<entt::entity, CreatureLeash::Order>> marked;
 	registry.Each<const CreatureLeash>([&marked](entt::entity creature, const CreatureLeash& leashes) {
 		if (leashes.order.has_value() && leashes.order->ring != entt::null)

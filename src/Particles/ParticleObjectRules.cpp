@@ -23,6 +23,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/PortableMath.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleEffect.h"
@@ -169,7 +170,8 @@ public:
 			const float age = effect.AtomAge(atom);
 			if (_doScaling)
 			{
-				const float pulse = std::max(0.0f, std::cos(age * _pulseSpeed * k_TwoPi) * _pulseMagnitude * 0.5f + 1.0f);
+				const float pulse =
+				    std::max(0.0f, openblack::portable_math::Cos(age * _pulseSpeed * k_TwoPi) * _pulseMagnitude * 0.5f + 1.0f);
 				const float ramp =
 				    age < _ageMaxSize ? age / _ageMaxSize : 1.0f - (age - _ageMaxSize) / (_ageZeroSize - _ageMaxSize);
 				atom.ruleScale = std::clamp(ramp, 0.0f, 1.0f) * pulse;

@@ -37,6 +37,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingSiteRules.h"
@@ -179,7 +180,7 @@ entt::entity StorePile(entt::entity pit, entt::entity& slot, PotInfo type, size_
 	}
 	// Turned as the pit is, which is turned about the vertical
 	const auto& transform = registry.Get<const Transform>(pit);
-	const float yaw = std::atan2(transform.rotation[0].z, transform.rotation[0].x);
+	const float yaw = portable_math::Atan2(transform.rotation[0].z, transform.rotation[0].x);
 	const auto offset = glm::vec3(glm::mat4(transform.rotation) * metrics.at(place)[3]);
 	slot = ecs::archetypes::PotArchetype::CreateEmpty(transform.position + offset, yaw, type);
 	return slot;

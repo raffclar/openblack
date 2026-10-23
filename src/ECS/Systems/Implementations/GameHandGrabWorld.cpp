@@ -32,6 +32,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableMath.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
@@ -787,7 +788,7 @@ void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
 	// The hole is as wide as the tree's model is wide and deep, a share of it, and turned as the tree was
 	const auto half = mesh->GetBoundingBox().Size() * 0.5f;
 	const float scale = (half.x + half.z) * transform->scale.x * k_RootsHoleShare;
-	const float yaw = std::atan2(-transform->rotation[0].z, transform->rotation[0].x);
+	const float yaw = portable_math::Atan2(-transform->rotation[0].z, transform->rotation[0].x);
 	Locator::explosionSystem::value().AddRubble(transform->position, yaw, scale);
 }
 

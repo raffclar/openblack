@@ -30,6 +30,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/MagicPile.h"
@@ -284,7 +285,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 				    shape = visuals::PhialScale(receiveType, globe.phialPhase);
 			    }
 			    const auto at = globe.middle + glm::vec3(0.0f, seed.meshHeight * drawn, 0.0f);
-			    globe.seedPlacement = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(globe.spin) *
+			    globe.seedPlacement = glm::translate(glm::mat4(1.0f), at) * portable_math::EulerAngleY(globe.spin) *
 			                          glm::scale(glm::mat4(1.0f), seed.scale * drawn * size * shape);
 		    }
 		    // The miracle's own effect plays in the globe, faint as the globe is

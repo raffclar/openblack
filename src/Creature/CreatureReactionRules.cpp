@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 using namespace openblack::creature_reaction;
@@ -31,7 +32,7 @@ constexpr float k_HalfTurn = 3.1415927f;
 float HeadingOf(float x, float z)
 {
 	const float across = -z;
-	const auto atan = [](float ratio) { return static_cast<float>(std::atan(static_cast<double>(ratio))); };
+	const auto atan = [](float ratio) { return static_cast<float>(portable_math::Atan(static_cast<double>(ratio))); };
 	if (!(across < x) && !(-x > across))
 	{
 		return atan(x / across);

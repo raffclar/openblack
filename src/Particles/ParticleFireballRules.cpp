@@ -26,6 +26,7 @@
 
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "ParticleArchive.h"
 #include "ParticleBlast.h"
@@ -479,8 +480,8 @@ public:
 		}
 		const float fade = std::clamp(effect.AtomAge(atom) / timeToFade, 0.0f, 1.0f);
 		const float angle = data.a.x * (1.0f - fade) * effect.GetDt();
-		const float c = std::cos(angle);
-		const float s = std::sin(angle);
+		const float c = openblack::portable_math::Cos(angle);
+		const float s = openblack::portable_math::Sin(angle);
 		const auto v = atom.velocity;
 		atom.velocity = {c * v.x - s * v.z, v.y, c * v.z + s * v.x};
 		return true;

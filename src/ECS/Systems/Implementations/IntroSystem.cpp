@@ -24,6 +24,7 @@
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/IntroHand.h"
@@ -197,7 +198,7 @@ void IntroSystem::PlaceHand(const glm::vec3& position, float yaw)
 	hand->scale = rules::k_HandScale;
 	auto& transform = registry.Get<Transform>(_hand);
 	transform.position = position;
-	transform.rotation = glm::mat3(glm::eulerAngleY(-yaw));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(-yaw));
 	transform.scale = glm::vec3(rules::k_HandScale);
 	registry.SetDirty();
 }
