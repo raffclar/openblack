@@ -41,6 +41,8 @@ enum class Stage : uint8_t
 	NotRegistered,
 	/// The chat of the room of 32 gods, a line from each god
 	RoomChat32,
+	/// The join of a full room, which the player comes into as an observer
+	FullRoomObserver,
 	_Count
 };
 

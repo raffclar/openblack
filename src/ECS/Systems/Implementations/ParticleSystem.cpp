@@ -1361,6 +1361,10 @@ void ParticleSystem::Reset()
 	_gestureChain = k_NoEffect;
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 }
 
 void ParticleSystem::FindTextureStems()

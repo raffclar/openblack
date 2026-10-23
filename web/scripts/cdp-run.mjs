@@ -11,6 +11,8 @@
 //   --shot-every <ms>        the time between two screenshots (default 500)
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
+//   --trust-spki <hash>      tests on this computer only: trust the certificate of a test server with this key (the
+//                            base64 SHA-256 of its public key), as for a test lobby on 127.0.0.1
 //   --eval <expression>      at the end, print the value of this expression on the page
 //   --actions <file.json>    after the click, send these steps of input to the page, as of a user. The file is a list of
 //                            steps, each with "at" (the seconds after the click) and "do":
@@ -57,7 +59,9 @@ const chrome = spawn(chromePath, [
   '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run',
   '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync',
   '--metrics-recording-only', '--disable-component-update', `--window-size=${width},${height}`,
-  '--autoplay-policy=user-gesture-required', ...graphics, 'about:blank',
+  '--autoplay-policy=user-gesture-required', ...graphics,
+  ...(option('--trust-spki', '') ? [`--ignore-certificate-errors-spki-list=${option('--trust-spki', '')}`] : []),
+  'about:blank',
 ], { stdio: 'ignore' });
 console.log(`chrome pid ${chrome.pid} port ${port}`);
 

@@ -146,6 +146,13 @@ CurlHttpClient::CurlHttpClient(ClientIdentity identity)
 	_identity = std::move(identity);
 }
 
+CurlHttpClient::CurlHttpClient(std::optional<ClientIdentity> identity, std::filesystem::path testAuthorities)
+    : CurlHttpClient()
+{
+	_identity = std::move(identity);
+	_testAuthorities = testAuthorities.string();
+}
+
 CurlHttpClient::~CurlHttpClient()
 {
 	for (auto& transfer : _transfers)
@@ -188,7 +195,7 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 	curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
 	// The TLS rules: TLS 1.2 at the oldest, AEAD cipher suites only, and a check of the certificate and the host name
-	tls_settings::Apply(easy);
+	tls_settings::Apply(easy, _testAuthorities.has_value() ? _testAuthorities->c_str() : nullptr);
 	if (_identity.has_value())
 	{
 		// The libcurl handle keeps its own copy of each text

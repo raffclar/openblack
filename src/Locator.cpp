@@ -440,8 +440,24 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	// The browser cannot send headers in the handshake
 	constexpr auto k_PushAuth = online::PushAuth::Subprotocol;
 #else
-	Locator::httpClient::emplace<online::CurlHttpClient>();
-	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	// Tests on this computer only: a lobby on a loopback address with a certificate of a test authority
+	const auto testAuthorities = Locator::config::has_value() ? Locator::config::value().lobbyTestAuthorities : std::nullopt;
+	const bool loopbackLobby = Locator::config::has_value() && Locator::config::value().lobbyOrigin.has_value() &&
+	                           online::http_policy::IsLoopbackAddress(*Locator::config::value().lobbyOrigin);
+	if (testAuthorities.has_value() && loopbackLobby)
+	{
+		Locator::httpClient::emplace<online::CurlHttpClient>(std::nullopt, std::filesystem::path(*testAuthorities));
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>(*testAuthorities);
+	}
+	else
+	{
+		if (testAuthorities.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a lobby on a loopback address");
+		}
+		Locator::httpClient::emplace<online::CurlHttpClient>();
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	}
 	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
 	Locator::networkGame::emplace<NetworkGameSystem>(

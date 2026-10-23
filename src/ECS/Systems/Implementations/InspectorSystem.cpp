@@ -366,7 +366,9 @@ void InspectorSystem::Service()
 		// A request answered here may load a land, while the loading helper answers the others
 		_server->Poll([this](std::string_view line) {
 			auto answer = _inspector.Handle(line);
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
+			// The letters of input.text can be a password: the log does not keep the request
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes",
+			                    line.find("\"input.text\"") == std::string_view::npos ? line : "input.text", answer.size());
 			return answer;
 		});
 	}

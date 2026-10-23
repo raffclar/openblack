@@ -9,6 +9,8 @@
 
 #include "Registry.h"
 
+#include <utility>
+
 #include "Locator.h"
 #include "Systems/RenderingSystemInterface.h"
 
@@ -48,10 +50,16 @@ void Registry::Reset()
 {
 	SetLayoutDirty();
 	_registry.clear();
+	// The store of the ids forgets the ids of the entities that went, so that the next ids are those of a new registry.
+	// The components' stores, their signals and the context stay.
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_registry.storage<entt::entity>().clear();
+	}
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
-};
+}
 
 void Registry::SetDirty()
 {

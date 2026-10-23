@@ -60,6 +60,8 @@ struct NetworkSettings
 	std::optional<std::filesystem::path> clientKey;
 	/// The name of the room in the list of the lobby
 	std::string roomName {"Game"};
+	/// Tests on this computer only: a PEM file of more certificate authorities for a lobby on a loopback address
+	std::optional<std::filesystem::path> lobbyTestAuthorities;
 };
 
 /// What the command line of the dedicated server gives
@@ -73,6 +75,8 @@ struct ServerSettings
 	bool testbed {false};
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
+	/// The text of --skip-opening, which the game server sends to the clients in the start of the game
+	std::string openingName;
 	/// The seed of every random number of the world. The date of the world is pinned with it.
 	uint32_t seed {1};
 	/// The server stops when the world gets to this turn. None for a server that runs until a signal stops it.

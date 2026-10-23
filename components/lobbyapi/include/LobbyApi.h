@@ -92,6 +92,9 @@ struct Session
 	int64_t refreshTokenExpires {0};
 	/// "account"
 	AccountRef account;
+	/// "email_required": the account has no email address. The lobby refuses every other call with 403
+	/// "email_required" until the player adds an address on the account page of the site.
+	bool emailRequired {false};
 };
 
 /// A clan of the account in GET /api/v1/me
@@ -213,6 +216,17 @@ struct ServerList
 	std::vector<ServerEntry> servers;
 };
 
+/// The roles of a join ticket
+constexpr std::string_view k_GodRole = "god";
+constexpr std::string_view k_ObserverRole = "observer";
+
+/// The body of POST /api/v1/servers/{id}/tickets
+struct TicketRequest
+{
+	/// "role": "god" takes a god slot. "observer" only watches, takes no slot and can join a full room.
+	std::string role {k_GodRole};
+};
+
 /// POST /api/v1/servers/{id}/tickets (201)
 struct JoinTicket
 {
@@ -222,7 +236,24 @@ struct JoinTicket
 	std::string ticket;
 	/// "expires": 60 seconds after the lobby made it
 	int64_t expires {0};
+	/// "role": the role that the ticket gives
+	std::string role {k_GodRole};
 };
+
+/// The codes of the problems that the front end tells the player about
+namespace problems
+{
+/// The account has no email address (403)
+constexpr std::string_view k_EmailRequired = "email_required";
+/// The gods fill the room of the server. An observer ticket can still join (409).
+constexpr std::string_view k_ServerFull = "server_full";
+/// The admins of the server banned the account (403)
+constexpr std::string_view k_BannedFromServer = "banned_from_server";
+/// The game of the server started (409)
+constexpr std::string_view k_GameStarted = "game_started";
+/// The room of the server is locked (409)
+constexpr std::string_view k_ServerLocked = "server_locked";
+} // namespace problems
 
 /// A clan in a list. Not in the contract of the lobby yet: the shape of the plan.
 struct ClanSummary
