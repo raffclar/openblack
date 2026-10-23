@@ -113,7 +113,7 @@ struct NewGameStart
 {
 	if (text == "ask")
 	{
-		return NewGameStart {.ask = true};
+		return NewGameStart {.ask = true, .answer = std::nullopt};
 	}
 	if (text == "normal")
 	{
