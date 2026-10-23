@@ -3112,8 +3112,12 @@ void Trample(ecs::Registry& registry, entt::entity only)
 	std::vector<entt::entity> starting;
 	registry.Each<const Creature, const Transform, const CreatureAnimation>(
 	    [&](entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation) {
+		    if (creature != only)
+		    {
+			    return;
+		    }
 		    const auto* points = PointsOf(body);
-		    if (creature != only || points == nullptr)
+		    if (points == nullptr)
 		    {
 			    return;
 		    }
