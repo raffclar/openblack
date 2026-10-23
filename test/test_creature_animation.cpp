@@ -606,3 +606,34 @@ TEST(CreatureAnimation, TheBlendAndTheStandAdjustmentGiveTheBitsOfTheOldWay)
 		EXPECT_TRUE(SameBits(creature_animation::Blend(base, a, b), reference::Blend(base, a, b))) << "round " << round;
 	}
 }
+
+// A skeleton of many bones samples as a small one does, and a bone that the list holds twice takes its last place
+TEST(SkeletalAnimation, ManyBonesAndATwiceListedBoneSample)
+{
+	for (const size_t count : {size_t {3}, size_t {200}})
+	{
+		std::vector<uint32_t> parents(count, skeletal_animation::k_NoParent);
+		const std::vector<glm::mat4> rest(count, glm::mat4(1.0f));
+		const auto skeleton = skeletal_animation::Skeleton::FromRestMatrices(parents, rest);
+		const auto last = static_cast<uint32_t>(count - 1);
+		Animation animation {.duration = 1000,
+		                     .looping = true,
+		                     .rotatedJoints = {last, last},
+		                     .translatedJoints = {last, last},
+		                     .frames = {{.eulerAngles = {glm::vec3(0.0f), glm::vec3(0.0f, 0.5f, 0.0f)},
+		                                 .translations = {glm::vec3(1.0f, 0, 0), glm::vec3(7.0f, 0, 0)}}}};
+		const auto poses = skeletal_animation::SampleCycle(animation, animation, 0, skeleton);
+		ASSERT_EQ(poses.size(), count);
+		EXPECT_FLOAT_EQ(poses[last].translation.x, 7.0f) << count;
+		const auto turned = skeletal_animation::RotationYXZ(glm::vec3(0.0f, 0.5f, 0.0f));
+		for (size_t r = 0; r < 3; ++r)
+		{
+			for (size_t c = 0; c < 3; ++c)
+			{
+				EXPECT_NEAR(poses[last].rotation.at(r).at(c), turned.at(r).at(c), k_Tolerance) << count;
+				EXPECT_NEAR(poses[0].rotation.at(r).at(c), skeletal_animation::k_Identity.at(r).at(c), k_Tolerance) << count;
+			}
+		}
+		EXPECT_FLOAT_EQ(poses[0].translation.x, 0.0f) << count;
+	}
+}
