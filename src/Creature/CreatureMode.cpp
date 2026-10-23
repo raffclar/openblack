@@ -74,16 +74,16 @@ std::optional<creature_physiology::Faint> PassOutFrom(const creature_panel::Valu
 
 namespace
 {
-/// The marked place of the pen in the world, as the game turns, scales and moves it. Each step is a float step, in the
-/// game's order of operations.
-std::optional<glm::vec3> PenInWorld(glm::vec3 templePosition, float yAngle, float scale,
-                                    std::span<const glm::mat4> markedPlaces)
+/// A marked place of the temple's mesh in the world, as the game turns, scales and moves it. Each step is a float step,
+/// in the game's order of operations.
+std::optional<glm::vec3> MarkedPlaceInWorld(glm::vec3 templePosition, float yAngle, float scale,
+                                            std::span<const glm::mat4> markedPlaces, size_t place)
 {
-	if (markedPlaces.size() <= k_TemplePenPlace)
+	if (markedPlaces.size() <= place)
 	{
 		return std::nullopt;
 	}
-	const auto local = glm::vec3(markedPlaces[k_TemplePenPlace][3]);
+	const auto local = glm::vec3(markedPlaces[place][3]);
 	// The rows of the turn about the vertical, each scaled by the size of the temple
 	const auto cosine = static_cast<float>(std::cos(static_cast<double>(yAngle)));
 	const auto sine = static_cast<float>(std::sin(static_cast<double>(yAngle)));
@@ -97,7 +97,26 @@ std::optional<glm::vec3> PenInWorld(glm::vec3 templePosition, float yAngle, floa
 	const float z = ((local.x * rows[0].z + local.y * rows[1].z) + local.z * rows[2].z) + templePosition.z;
 	return glm::vec3(x, y, z);
 }
+
+std::optional<glm::vec3> PenInWorld(glm::vec3 templePosition, float yAngle, float scale,
+                                    std::span<const glm::mat4> markedPlaces)
+{
+	return MarkedPlaceInWorld(templePosition, yAngle, scale, markedPlaces, k_TemplePenPlace);
+}
+
+map_coords::MapCoords OnGround(glm::vec3 world)
+{
+	return map_coords::MapCoords {.x = map_coords::ToFixed(world.x), .z = map_coords::ToFixed(world.z), .altitude = 0.0f};
+}
 } // namespace
+
+map_coords::MapCoords CitadelCreatureHomeOnMap(glm::vec3 templePosition, float yAngle, float scale,
+                                               std::span<const glm::mat4> markedPlaces)
+{
+	// A mesh that marks no such place gives the place of the temple itself
+	return OnGround(
+	    MarkedPlaceInWorld(templePosition, yAngle, scale, markedPlaces, k_CitadelCreatureHomePlace).value_or(templePosition));
+}
 
 std::optional<map_coords::MapCoords> TemplePenOnMap(glm::vec3 templePosition, float yAngle, float scale,
                                                     std::span<const glm::mat4> markedPlaces)

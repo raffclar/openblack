@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <exception>
 #include <filesystem>
@@ -63,6 +64,7 @@
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -393,6 +395,21 @@ bool LandSystem::LoadGodsRingMap()
 	catch (const std::exception& e)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the map for 32 gods: {}", e.what());
+	}
+	// As at the start of a network game, each slot whose god no human plays gets a computer god. On this computer alone,
+	// the local player is the one human.
+	if (Locator::computerPlayerSystem::has_value() && Locator::playerSystem::has_value())
+	{
+		std::vector<PlayerNames> gods;
+		for (const auto& slot : slots)
+		{
+			if (slot.god.has_value())
+			{
+				gods.push_back(*slot.god);
+			}
+		}
+		const std::array humans {Locator::playerSystem::value().GetLocalPlayer()};
+		Locator::computerPlayerSystem::value().FillEmptySlots(gods, humans);
 	}
 	// As on a land, the things go into their map cells before the footpaths, and then the towns find their worship
 	// sites and their forests

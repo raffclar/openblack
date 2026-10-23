@@ -124,4 +124,26 @@ void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& st
 	}
 }
 
+bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
+{
+	return !human && !computer && citadel;
+}
+
+void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)
+{
+	for (const auto god : gods)
+	{
+		const bool human = std::ranges::find(humans, god) != humans.end();
+		if (!SlotHasNoPlayer(human, world.IsComputerPlayer(god), world.HasCitadel(god)))
+		{
+			continue;
+		}
+		// The game takes the name before the species
+		const auto nameText = world.GameRand(k_SlotNameChoices);
+		const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
+		world.SwitchOn(god);
+		world.MakeSlotCreature(god, species, nameText, k_SlotCreatureStage);
+	}
+}
+
 } // namespace openblack::computer_player
