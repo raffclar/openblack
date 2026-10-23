@@ -388,7 +388,7 @@ std::optional<float> GamePhysicsHooksWorld::CatchMs(entt::entity creature) const
 
 std::optional<entt::entity> GamePhysicsHooksWorld::HandHeldCreature() const
 {
-	return Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetCreature() : std::nullopt;
+	return Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetLockedCreature() : std::nullopt;
 }
 
 bool GamePhysicsHooksWorld::HasCreatureActions() const

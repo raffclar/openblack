@@ -70,6 +70,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -763,8 +764,10 @@ void world_objects::LeaveGhost(entt::entity object)
 	}
 	auto model = glm::translate(glm::mat4(1.0f), transform->position) * glm::mat4(transform->rotation);
 	model = glm::scale(model, transform->scale);
-	const auto ghost = registry.Create();
-	registry.Assign<DestructionGhost>(ghost, DestructionGhost {.mesh = mesh->id, .model = model});
+	if (Locator::explosionSystem::has_value())
+	{
+		Locator::explosionSystem::value().AddGhost(DestructionGhost {.mesh = mesh->id, .model = model});
+	}
 }
 
 void world_objects::DestroyedByEffect(entt::entity object, const EffectDeath& death)

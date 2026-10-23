@@ -262,6 +262,9 @@ public:
 	virtual void HoldFireBall(uint32_t nowMs, uint32_t turn) = 0;
 	/// The action button came up: let go quickly, the fireball pressed is tapped
 	virtual void ReleaseFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// At the turn: the tap or the take of a fireball that the hand sent (player_commands::HandTap, HandTake). Another
+	/// player's ball is caught into the empty hand; the player's own slips through.
+	virtual void DoCatchFireBall(PlayerNames /*player*/, entt::entity /*ball*/) {}
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took

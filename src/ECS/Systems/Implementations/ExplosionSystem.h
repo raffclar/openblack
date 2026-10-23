@@ -31,6 +31,8 @@ public:
 	[[nodiscard]] bool IsShaking() const override { return !_shakes.empty(); }
 	void Update(float milliseconds) override;
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
+	void AddGhost(const components::DestructionGhost& ghost) override { _ghosts.push_back(ghost); }
+	[[nodiscard]] std::span<const components::DestructionGhost> Ghosts() const override { return _ghosts; }
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -38,6 +40,7 @@ public:
 private:
 	std::vector<camera_shake::Shake> _shakes;
 	std::vector<dust_puff::Puff> _puffs;
+	std::vector<components::DestructionGhost> _ghosts;
 };
 
 } // namespace openblack::ecs::systems

@@ -53,6 +53,17 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "drawnAt", .marker = ""},
     {.component = "VillagerPose", .field = "easedHeading", .marker = ""},
     {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
+    {.component = "VillagerPose", .field = "detailedHeading", .marker = ""},
+    {.component = "VillagerPose", .field = "slopeLift", .marker = ""},
+    // The frames pose a villager's bones only while it is in view
+    {.component = "VillagerPose", .field = "bones", .marker = ""},
+    {.component = "VillagerPose", .field = "clipBones", .marker = ""},
+    {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The seeds of the miracle icons spin, and their phials pulse, as the frames draw them
+    {.component = "IconSeed", .field = "spin", .marker = ""},
+    {.component = "IconSeed", .field = "ringSpin", .marker = ""},
+    {.component = "IconSeed", .field = "phialFrame", .marker = ""},
+    {.component = "IconSeed", .field = "phialPhase", .marker = ""},
     // The puffs of smoke, the clouds, the mists, the sky and the lights
     {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
     {.component = "ChimneySmoke", .field = "state", .marker = ""},
@@ -160,6 +171,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "lastTarget", .marker = ""},
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},
+    {.component = "HandGrab", .field = "locking", .marker = ""},
+    // The frames hold the hand to a creature; the world has the hold from the lock (HandLockedCreature)
+    {.component = "HandOnCreature", .field = "", .marker = ""},
+    // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
+    {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
+    {.component = "VillageTotem", .field = "gripped", .marker = ""},
+    {.component = "VillageTotem", .field = "held", .marker = ""},
     {.component = "HandGrab", .field = "scoopStream", .marker = ""},
     {.component = "HandGrab", .field = "scoopSound", .marker = ""},
     {.component = "HandGrab", .field = "scoopAnchor", .marker = ""},

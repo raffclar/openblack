@@ -111,14 +111,14 @@ std::optional<uint32_t> AnimatedStaticSystem::GateStoneValue(entt::entity object
 	return animated_static::GateStoneValue(still->gateStones);
 }
 
-bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
+bool AnimatedStaticSystem::TakesGateStone(entt::entity plinth, entt::entity stone) const
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(plinth) || !registry.Valid(stone) || !Locator::infoConstants::has_value())
 	{
 		return false;
 	}
-	auto* still = registry.TryGet<AnimatedStatic>(plinth);
+	const auto* still = registry.TryGet<const AnimatedStatic>(plinth);
 	const auto* mobile = registry.TryGet<const MobileStatic>(stone);
 	if (still == nullptr || mobile == nullptr || still->type != AnimatedStaticInfo::GateStonePlinth)
 	{
@@ -126,12 +126,21 @@ bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
 	}
 	const auto& infos = Locator::infoConstants::value().mobileStatic;
 	const auto index = static_cast<size_t>(mobile->type);
-	if (index >= infos.size() || !animated_static::IsGateStoneKind(infos[index].mobileType))
+	return index < infos.size() && animated_static::IsGateStoneKind(infos[index].mobileType);
+}
+
+bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	if (!TakesGateStone(plinth, stone))
 	{
 		return false;
 	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& still = registry.Get<AnimatedStatic>(plinth);
+	const auto& infos = Locator::infoConstants::value().mobileStatic;
+	const auto index = static_cast<size_t>(registry.Get<const MobileStatic>(stone).type);
 	// A full plinth still takes the stone, which is then lost
-	[[maybe_unused]] const bool laid = animated_static::AddGateStone(still->gateStones, infos[index].meshId);
+	[[maybe_unused]] const bool laid = animated_static::AddGateStone(still.gateStones, infos[index].meshId);
 	return true;
 }
 

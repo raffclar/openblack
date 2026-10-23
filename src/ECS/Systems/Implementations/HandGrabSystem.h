@@ -49,6 +49,9 @@ public:
 	void ProcessTurn() override;
 	void PlaceHeldForTurn() override;
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
+	void DoLock(PlayerNames player, entt::entity object) override;
+	void DoApply(PlayerNames player, entt::entity target) override;
+	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
@@ -113,6 +116,12 @@ private:
 	/// The pick-up sound of a thing, and the cry of a villager
 	void PlayTakeSounds(entt::entity object);
 	/// A press on a pile scoops a handful out of it, which grows while the button is held; whether it did
+	/// Whether a press on a thing scoops from it: a pile, a field or a fish farm with something to give, inside the
+	/// player's influence. The frame asks it, and sends the lock.
+	[[nodiscard]] bool Scoopable(entt::entity source) const;
+	/// Whether the held thing can be used on a target, as ApplyTo uses it, with no change. The frame asks it, and sends the
+	/// use.
+	[[nodiscard]] bool AppliesTo(const components::HandGrab& grab, entt::entity target) const;
 	bool StartScoop(components::HandGrab& grab, entt::entity source);
 	/// A game turn of scooping: whether the scoop goes on
 	bool Scoop(components::HandGrab& grab);

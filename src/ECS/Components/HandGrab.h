@@ -134,6 +134,8 @@ struct HandGrab
 	/// scoops flowing into it, and where over the land the hand stays as it scoops
 	entt::entity scoopSource {entt::null};
 	uint32_t scoopTurns {0};
+	/// What the hand sent a lock on to, which it scoops from once a turn does the lock
+	entt::entity locking {entt::null};
 	std::optional<uint32_t> scoopStream;
 	/// The scooping sound's loop while it plays
 	entt::entity scoopSound {entt::null};

@@ -12,10 +12,12 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 
 #include <glm/vec3.hpp>
 
 #include "Blast/DustPuff.h"
+#include "ECS/Components/DestructionGhost.h"
 #include "ECS/Systems/SavedStateInterface.h"
 
 namespace openblack::particles::draw
@@ -48,6 +50,11 @@ public:
 	virtual void Update(float milliseconds) = 0;
 	/// The dust drawn this frame, added to the particles' frame
 	virtual void CollectDrawFrame(particles::draw::Frame& frame) const = 0;
+	/// A ghost of a thing that has just gone flickers out where it stood. The ghosts are drawn only, and are no things of
+	/// the world.
+	virtual void AddGhost(const components::DestructionGhost& ghost) = 0;
+	/// The ghosts that flicker out now
+	[[nodiscard]] virtual std::span<const components::DestructionGhost> Ghosts() const = 0;
 	/// A new land: no rubble, no dust, no shaking
 	virtual void Reset() = 0;
 };

@@ -91,6 +91,13 @@ public:
 	virtual void DoLetGo(PlayerNames /*player*/, const player_commands::HandLetGo& /*letGo*/) {}
 	/// The hand taps a thing
 	virtual void DoTap(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand locks on to a pile, a field or a fish farm, and starts to scoop from it
+	/// (player_commands::HandLock)
+	virtual void DoLock(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand uses the thing that it holds on a target (player_commands::HandApply)
+	virtual void DoApply(PlayerNames /*player*/, entt::entity /*target*/) {}
+	/// At the turn: the lock ends, and with it the scoop (player_commands::HandUnlock)
+	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
 	/// The hand gives the thing that it holds to a creature
