@@ -3990,6 +3990,8 @@ void Game::BeforeFirstFrame(bool continued)
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game cannot join the game server");
 		}
+		// The game is in a network game already, so the -MULTIPLAYER switch does not open the front end
+		_frontEndOnStart = false;
 	}
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))

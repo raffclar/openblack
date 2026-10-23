@@ -13,6 +13,10 @@ lockstep). At the end it compares the checksum of each turn on the server and on
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
+The game reads its vanilla switches anywhere in its command line, as the original game did, so a path with "-multiplayer"
+or "/multiplayer" in it opens the multiplayer front end (the -MULTIPLAYER switch). The script copies the programs into
+its output folder and refuses an output folder with such a name.
+
 Every program starts with no console window of its own, the clients with --background. The script stops only the
 processes that it started, by their own process ids.
 """
@@ -24,6 +28,7 @@ import hashlib
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -65,6 +70,20 @@ def pae(*pieces):
         out.append(len(piece).to_bytes(8, "little"))
         out.append(piece)
     return b"".join(out)
+
+
+SWITCH_IN_PATH = re.compile(r"[-/\\]multiplayer", re.IGNORECASE)
+
+
+def copy_programs(folder, out):
+    """The server, the game and their libraries, in a folder whose path has no switch of the game"""
+    target = os.path.join(out, "bin")
+    os.makedirs(target, exist_ok=True)
+    for name in os.listdir(folder):
+        if name.lower().endswith(".dll") or name in ("openblack.exe", "openblack-server.exe", "openblack",
+                                                       "openblack-server"):
+            shutil.copy2(os.path.join(folder, name), os.path.join(target, name))
+    return target
 
 
 def make_ticket_key(folder):
@@ -254,17 +273,21 @@ def main():
     parser.add_argument("--input", help="recorded input for the first client's hand")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
     options.hash_parts = options.hash_parts or options.hash_fields
 
-    folder = options.bin or default_bin(options.config)
+    out = os.path.abspath(options.out)
+    if SWITCH_IN_PATH.search(out):
+        print(f"the output folder {out} has a switch of the game in its path; choose another folder")
+        return 1
+    folder = copy_programs(options.bin or default_bin(options.config), out)
     exe = ".exe" if os.name == "nt" else ""
     server_exe = os.path.join(folder, "openblack-server" + exe)
     game_exe = os.path.join(folder, "openblack" + exe)
-    out = os.path.abspath(options.out)
     keys_dir = os.path.join(out, "keys")
     os.makedirs(keys_dir, exist_ok=True)
     key, kid, keys_file = make_ticket_key(keys_dir)
@@ -273,7 +296,7 @@ def main():
 
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
-    client_dirs = [os.path.join(out, "client1"), os.path.join(out, "client2")]
+    client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
     for path in [server_log] + [os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")]:
         if os.path.exists(path):
             os.remove(path)
@@ -282,7 +305,7 @@ def main():
     server_command = [server_exe, "-g", options.game_path] + where + [
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log,
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
-        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", "2",
+        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
         "--come-back-seconds", str(options.come_back_seconds)]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
@@ -326,9 +349,9 @@ def main():
         started = time.monotonic()
         stopped_second = False
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
-            if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[1])):
+            if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
                 break
-            if (options.stop_second_after is not None and not stopped_second
+            if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
                 stopped_second = True

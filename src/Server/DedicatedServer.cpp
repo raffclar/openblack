@@ -123,7 +123,16 @@ public:
 	/// Plays one frame of the world. Gives false when the world is at its last turn.
 	[[nodiscard]] bool Frame();
 	/// The game role, which gives the turns of a network game
-	void SetNetwork(std::function<bool()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
+	/// What the game role lets the world do in a frame
+	enum class NetworkStep : uint8_t
+	{
+		/// The game ended
+		Stop,
+		/// The world waits: before the start, and with no god's player. No step of the world runs, not even its clock.
+		Wait,
+		Play,
+	};
+	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -150,7 +159,7 @@ private:
 	uint32_t _frameCount {0};
 	std::chrono::steady_clock::time_point _frameStart;
 	/// Gives false when the game of the network ended
-	std::function<bool()> _beforeTurns;
+	std::function<NetworkStep()> _beforeTurns;
 };
 
 bool ServerWorld::Initialize()
@@ -312,6 +321,27 @@ bool ServerWorld::Frame()
 	auto& profiler = Locator::profiler::value();
 	auto& clock = Locator::time::value();
 	auto& land = Locator::landSystem::value();
+	// The game role takes the joins and the commands, and starts or holds the world
+	if (_beforeTurns)
+	{
+		const auto step = _beforeTurns();
+		if (step == NetworkStep::Stop)
+		{
+			return false;
+		}
+		if (step == NetworkStep::Wait)
+		{
+			// The world waits as it is, so that it is the same as the clients' worlds when the turns start
+			if (Locator::inspector::has_value())
+			{
+				Locator::inspector::value().Service();
+			}
+			std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::microseconds>(
+			    clock.GetFixedFrameTime().value_or(std::chrono::microseconds(100'000))));
+			_frameStart = std::chrono::steady_clock::now();
+			return true;
+		}
+	}
 	// The clock of the frame, and the inspector of the tools before the frame's turn
 	profiler.Frame();
 	clock.Update();
@@ -323,11 +353,6 @@ bool ServerWorld::Frame()
 	if (Locator::handDemoSystem::has_value())
 	{
 		Locator::handDemoSystem::value().Update();
-	}
-	// The game role takes the joins and the commands, and starts or holds the world
-	if (_beforeTurns && !_beforeTurns())
-	{
-		return false;
 	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
@@ -413,23 +438,17 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		return false;
 	}
 	auto& host = network->Host();
-	// The world turns only with the turns that the host closes, and waits for the start
+	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
+	// The server's clock never pauses: a paused clock of the server parted its world from the clients' (Land 1, turn 49).
 	Locator::playerCommandSystem::value().SetSource(&host);
-	Locator::time::value().SetPaused(true);
 	world.SetNetwork([&host, role = network.get()] {
 		role->Update();
 		if (host.GameOver())
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
-			return false;
+			return ServerWorld::NetworkStep::Stop;
 		}
-		auto& clock = Locator::time::value();
-		const bool turns = host.HasTurn(clock.GetTurn());
-		if (clock.IsPaused() == turns)
-		{
-			clock.SetPaused(!turns);
-		}
-		return true;
+		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
 	Locator::syncChecksumSystem::value().SetTurnListener(
 	    [&host, onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
