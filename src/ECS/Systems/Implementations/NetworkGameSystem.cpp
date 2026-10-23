@@ -116,7 +116,8 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	_started = false;
 	_endLogged = false;
 
-	// A network game: the clock never stops for one player, and the world waits for the server's start
+	// A network game: the clock never stops for one player. The clock of this computer waits for the server's start, so
+	// that the frames of the wait take no game time.
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);
 	clock.SetPaused(true);
