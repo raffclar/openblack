@@ -1705,3 +1705,9 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_instance_upload graphics/test_instance_upload.cpp
 )
+openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
+target_link_libraries(test_gods_ring_map PRIVATE lnd)
+openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
+target_link_libraries(test_gods_ring_land PRIVATE lnd)
+openblack_setup_and_add_test(test_online_map_file test_online_map_file.cpp)
+target_link_libraries(test_online_map_file PRIVATE onlinemap)

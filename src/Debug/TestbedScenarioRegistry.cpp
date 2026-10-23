@@ -10485,6 +10485,7 @@ std::vector<Scenario> Build()
 	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
+	AddGodsRingMapScenarios(all);
 	return all;
 }
 
@@ -10635,10 +10636,10 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 std::string_view testbed_scenarios::Name(Facet facet)
 {
 	constexpr std::array<std::string_view, k_FacetCount> k_Names {
-	    "Idle",     "Expressions", "Senses", "Needs",    "Growth",    "Appearance",    "Light",
-	    "Movement", "Footprints",  "Audio",  "Objects",  "Hand",      "Leash",         "Combat",
-	    "Mind",     "Particles",   "Editor", "Miracles", "Benchmark", "Creature Mode", "Physics",
-	    "Nature",   "Animals",     "Sky",    "Advisors", "Story",     "Tutorial",      "Interface",
+	    "Idle",       "Expressions", "Senses",    "Needs",         "Growth",      "Appearance", "Light",   "Movement",
+	    "Footprints", "Audio",       "Objects",   "Hand",          "Leash",       "Combat",     "Mind",    "Particles",
+	    "Editor",     "Miracles",    "Benchmark", "Creature Mode", "Physics",     "Nature",     "Animals", "Sky",
+	    "Advisors",   "Story",       "Tutorial",  "Interface",     "Multiplayer",
 	};
 	return k_Names.at(static_cast<size_t>(facet));
 }
@@ -10879,11 +10880,13 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		problems.emplace_back("hour or body time out of range");
 	}
-	if (scenario.creatures.empty() && scenario.particles.empty() && scenario.miracles.empty() && scenario.dispensers.empty() &&
-	    scenario.birdFlocks.empty() && scenario.temples.empty() && !environment.dispenserGrid && !scenario.crowd.has_value() &&
-	    !environment.playerAlignment.has_value() && scenario.throws.empty() && scenario.objects.empty() &&
-	    scenario.vortices.empty() && scenario.rewards.empty() && scenario.fireflyRewards.empty() &&
-	    scenario.landStorms.empty() && scenario.highlights.empty() && scenario.landScript.empty() &&
+	// A land other than the testbed brings its own things
+	if (environment.land == Land::Testbed && scenario.creatures.empty() && scenario.particles.empty() &&
+	    scenario.miracles.empty() && scenario.dispensers.empty() && scenario.birdFlocks.empty() && scenario.temples.empty() &&
+	    !environment.dispenserGrid && !scenario.crowd.has_value() && !environment.playerAlignment.has_value() &&
+	    scenario.throws.empty() && scenario.objects.empty() && scenario.vortices.empty() && scenario.rewards.empty() &&
+	    scenario.fireflyRewards.empty() && scenario.landStorms.empty() && scenario.highlights.empty() &&
+	    scenario.landScript.empty() &&
 	    std::ranges::none_of(scenario.commands, [](const Command& command) { return NeedsNoCreature(command.kind); }))
 	{
 		problems.emplace_back("no creatures, things, particles, miracles, dispensers, birds, temples, vortices, reward "

@@ -4112,6 +4112,11 @@ void Game::LoadTestbed() noexcept
 	Locator::landSystem::value().LoadTestbed();
 }
 
+bool Game::LoadGodsRingMap() noexcept
+{
+	return Locator::landSystem::value().LoadGodsRingMap();
+}
+
 bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
                          const std::function<bool()>& restore) noexcept
 {
