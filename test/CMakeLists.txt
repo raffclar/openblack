@@ -1707,3 +1707,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
+openblack_setup_and_add_test(test_film_surface graphics/test_film_surface.cpp)

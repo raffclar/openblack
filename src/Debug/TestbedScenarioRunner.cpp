@@ -3047,6 +3047,17 @@ void Runner::Give(const Command& command)
 		}
 		return;
 	}
+	if (command.kind == Kind::PlayIntroFilm)
+	{
+		if (Locator::videoSystem::has_value())
+		{
+			auto& videos = Locator::videoSystem::value();
+			videos.Play("Data/INTRO.bik");
+			videos.ScheduleIntro();
+		}
+		Log(fmt::format("{:.1f}s: the intro film plays", _seconds));
+		return;
+	}
 	if (command.kind == Kind::PlayFallingSpellFilm)
 	{
 		// The script's film starts and the script's fade goes at once
@@ -3472,6 +3483,7 @@ void Runner::Give(const Command& command)
 	case Kind::FlyToBookmark:
 	case Kind::TabToTown:
 	case Kind::PlayFallingSpellFilm:
+	case Kind::PlayIntroFilm:
 	case Kind::RunHelpMessage:
 	case Kind::EndGuidanceWaits:
 	case Kind::ProfileFolderCheck:
