@@ -446,7 +446,8 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakePieceBody(entt::entity piece,
 	return body;
 }
 
-std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, const physics_classes::ClassFacts& facts)
+std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, const physics_classes::ClassFacts& facts,
+                                                        const std::optional<std::pair<glm::mat3, glm::vec3>>& place)
 {
 	auto& registry = Entities();
 	if (facts.body == BodyKind::None)
@@ -471,8 +472,8 @@ std::unique_ptr<physics::Body> DynamicsSystem::MakeBody(entt::entity object, con
 	}
 	entt::id_type meshId = 0;
 	float scale = transform->scale.x;
-	glm::mat3 axes = transform->rotation;
-	glm::vec3 origin = transform->position;
+	glm::mat3 axes = place.has_value() ? place->first : transform->rotation;
+	glm::vec3 origin = place.has_value() ? place->second : transform->position;
 	if (facts.body == BodyKind::ShieldDome)
 	{
 		// The dome's solid shape stands where it was raised at its full size, unturned

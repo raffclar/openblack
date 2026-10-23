@@ -12,6 +12,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
+#include "Common/X87Angle.h"
 #include "DynamicsSystem.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/DeadTree.h"
@@ -62,18 +63,27 @@ void DynamicsSystem::ConsiderToyPlay(entt::entity object, const FromHand& releas
 // What happens as a hand, or a creature's hand, lets go of what it held. Whether it is put down where it is or flies is
 // decided here, as the game decides it for every kind of thing; each kind's own part is in its hooks.
 
-std::optional<std::pair<glm::mat3, glm::vec3>> DynamicsSystem::ReleasePose(entt::entity object, bool alignToSlope)
+std::optional<player_commands::ThrowStart>
+DynamicsSystem::StartOfThrow(entt::entity object, const std::optional<std::pair<glm::mat3, glm::vec3>>& drawn,
+                             bool alignToSlope)
 {
-	auto body = MakeBody(object, FactsOf(object));
+	auto body = MakeBody(object, FactsOf(object), drawn);
 	const auto* land = Land();
 	if (body == nullptr || land == nullptr)
 	{
 		return std::nullopt;
 	}
+	// The hand holds the thing with no spin
+	const auto angularMomentum = hand_grab::SpinMomentum(body->Inertia(), glm::vec3(0.0f));
 	// Lifted out of the land, never pulled down to it
 	body->SettleOnLand(*land, true, alignToSlope);
-	const auto pose = body->ObjectPose();
-	return std::pair {pose.axes, pose.origin};
+	// The angles come from the turn of the body, which has no scale
+	const auto& axes = body->Axes();
+	return player_commands::ThrowStart {
+	    .angularMomentum = angularMomentum,
+	    .origin = body->ObjectPose().origin,
+	    .angles = x87::GameAnglesYxz(axes[0], axes[2]),
+	};
 }
 
 FromHandResult DynamicsSystem::LetGoFromHand(entt::entity object, const FromHand& release)

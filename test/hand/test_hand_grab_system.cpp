@@ -10,6 +10,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <bit>
 #include <functional>
 #include <map>
 #include <numbers>
@@ -235,7 +236,15 @@ public:
 		}
 		return result;
 	}
-	[[nodiscard]] std::optional<Pose> ReleasePose(entt::entity, bool) override { return std::nullopt; }
+	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override
+	{
+		startsAsked.emplace_back(object, alignToSlope);
+		return throwStart;
+	}
+	void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) override
+	{
+		startedFrom.emplace_back(object, start);
+	}
 	std::optional<uint32_t> PourPot(entt::entity pot, PlayerNames) override
 	{
 		poured.push_back(pot);
@@ -365,6 +374,7 @@ public:
 	FromHandResult LetGoFromHand(entt::entity object, const FromHand& release) override
 	{
 		released.emplace_back(object, release.velocity);
+		releasedSpins.push_back(release.angularMomentum);
 		return {.accepted = true};
 	}
 	[[nodiscard]] bool PlayerHasNoWindResistance(PlayerNames) const override { return false; }
@@ -415,6 +425,11 @@ public:
 	std::vector<glm::vec3> fishStreams;
 	std::vector<std::pair<entt::entity, entt::entity>> takenWhole;
 	std::vector<std::pair<entt::entity, glm::vec3>> released;
+	std::vector<glm::vec3> releasedSpins;
+	/// The start that the world gives for a throw, and the starts that the hand asked for and used
+	player_commands::ThrowStart throwStart;
+	std::vector<std::pair<entt::entity, bool>> startsAsked;
+	std::vector<std::pair<entt::entity, player_commands::ThrowStart>> startedFrom;
 	std::vector<std::pair<entt::entity, glm::vec3>> twists;
 	uint32_t streams {0};
 	std::vector<uint32_t> stopped;
@@ -487,7 +502,7 @@ protected:
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandLetGo>)
 			    {
-				    system->DoLetGo(player, command.object, command.velocity);
+				    system->DoLetGo(player, command);
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandTap>)
 			    {
@@ -1949,6 +1964,67 @@ TEST_F(HandGrabSystemWithWorld, ALetGoWaitsForItsTurnWithTheVelocityOfTheRelease
 	EXPECT_EQ(world->released.front().first, rock);
 	EXPECT_EQ(world->released.front().second, letGo.velocity);
 	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+// The release asks the world where the thing starts, as this computer drew it, and the command takes the start. The
+// turn that does the command puts the thing at the start and lets it go with the spin of the start. The hand does not
+// ask again at the turn.
+TEST_F(HandGrabSystemWithWorld, ALetGoTakesTheStartOfTheReleaseToItsTurn)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	world->throwStart = {
+	    .angularMomentum = {0.5f, -0.0f, 1.0e-40f}, .origin = {1.0f, 2.0f, 3.0f}, .angles = {0.25f, -1.5f, 3.0f}};
+	deferCommands = true;
+	world->sent.clear();
+	Press();
+	Frame(10, {5.0f, 0.0f, 0.0f});
+	Frame(10, {10.0f, 0.0f, 0.0f});
+	Release();
+	ASSERT_EQ(world->sent.size(), 1u);
+	const auto letGo = std::get<player_commands::HandLetGo>(world->sent.front());
+	ASSERT_EQ(world->startsAsked.size(), 1u);
+	EXPECT_EQ(world->startsAsked.front().first, rock);
+	// A fast throw does not lie along the slope
+	EXPECT_FALSE(world->startsAsked.front().second);
+	EXPECT_EQ(letGo.start.origin, world->throwStart.origin);
+	EXPECT_EQ(letGo.start.angles, world->throwStart.angles);
+	EXPECT_TRUE(world->startedFrom.empty());
+	RunWaiting();
+	EXPECT_EQ(world->startsAsked.size(), 1u);
+	ASSERT_EQ(world->startedFrom.size(), 1u);
+	EXPECT_EQ(world->startedFrom.front().first, rock);
+	EXPECT_EQ(world->startedFrom.front().second.origin, world->throwStart.origin);
+	EXPECT_EQ(world->startedFrom.front().second.angles, world->throwStart.angles);
+	ASSERT_EQ(world->releasedSpins.size(), 1u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(world->releasedSpins.front().y), 0x80000000U);
+	EXPECT_EQ(world->releasedSpins.front().x, 0.5f);
+}
+
+// A hand that must let go puts the thing down from where it is: it asks for no start and goes to none
+TEST_F(HandGrabSystemWithWorld, AForcedDropHasNoStart)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	ASSERT_EQ(system->GetHeld(), std::optional(rock));
+	system->ForceDrop();
+	EXPECT_TRUE(world->startsAsked.empty());
+	EXPECT_TRUE(world->startedFrom.empty());
+	ASSERT_EQ(world->releasedSpins.size(), 1u);
+	EXPECT_EQ(world->releasedSpins.front(), glm::vec3(0.0f));
 }
 
 // A short press sends the tap. The world taps the thing at the turn that does the command.

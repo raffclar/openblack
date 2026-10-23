@@ -58,6 +58,9 @@ struct OneOffSpellSeed
 	/// The globe's model as the last frame drew it, turned about its middle to face the camera, none before the first
 	/// frame. The world keeps the globe at its Transform, which the camera does not change.
 	std::optional<glm::mat4> drawnModel;
+	/// The turn of the drawn model, with no scale. A throw starts from this turn and the origin of the drawn model, thus
+	/// the world gets the drawn place only through the throw command.
+	std::optional<glm::mat3> drawnTurn;
 	/// Where its dispenser made it, none for one put down by itself
 	entt::entity dispenser {entt::null};
 };

@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -84,8 +85,8 @@ public:
 	/// The commands of the hand, which the world does at the start of a turn, for the player that sent them. The hand
 	/// takes the thing that it waited for.
 	virtual void DoTake(PlayerNames /*player*/, entt::entity /*object*/) {}
-	/// The hand lets go of the thing that it holds, at the velocity of the throw
-	virtual void DoLetGo(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*velocity*/) {}
+	/// The hand lets go of the thing that it holds, at the velocity of the throw, from the start in the command
+	virtual void DoLetGo(PlayerNames /*player*/, const player_commands::HandLetGo& /*letGo*/) {}
 	/// The hand taps a thing
 	virtual void DoTap(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// The hand gives the thing that it holds to a creature

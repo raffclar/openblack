@@ -86,7 +86,8 @@ public:
 	void SetPose(entt::entity object, const Pose& pose) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
-	[[nodiscard]] std::optional<Pose> ReleasePose(entt::entity object, bool alignToSlope) override;
+	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;
+	void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) override;
 	std::optional<uint32_t> PourPot(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] std::optional<PotFacts> PotFactsOf(entt::entity pot) const override;
 	[[nodiscard]] hand_grab::ScoopFacts ScoopFactsOf(PotInfo handful) const override;
