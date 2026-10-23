@@ -570,12 +570,15 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	init.swapChain.numBackBuffers = k_BackBuffers;
 	init.callback = dynamic_cast<bgfx::CallbackI*>(bgfxCallback.get());
 
-	if constexpr (k_Platform == Platform::Web)
+#if defined(__EMSCRIPTEN__)
+	// In the browser, only the thread that owns the canvas can draw into it. The web platform gives the canvas to a
+	// render thread of its own, which then draws the frames of bgfx while this thread prepares the next frame. When that
+	// thread does not start, a call to renderFrame before init makes bgfx draw on this thread.
+	if (!web::StartRenderThread())
 	{
-		// The browser gives the WebGL context of the canvas only to the game thread. A call to renderFrame before init
-		// makes bgfx draw on this thread, with no render thread of its own.
 		bgfx::renderFrame();
 	}
+#endif
 	if (!bgfx::init(init))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Failed to initialize bgfx.");
@@ -707,6 +710,9 @@ Renderer::~Renderer() noexcept
 	_shaderManager.reset();
 	bgfx::frame();
 	bgfx::shutdown();
+#if defined(__EMSCRIPTEN__)
+	web::WaitForRenderThreadStop();
+#endif
 }
 
 namespace
