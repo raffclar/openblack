@@ -121,9 +121,24 @@ FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMa
 {
 }
 
-void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade)
+FrameStatsLog::~FrameStatsLog()
+{
+	const auto run = _run.Peek();
+	if (auto logger = spdlog::get("game"); logger && run.count > 0)
+	{
+		SPDLOG_LOGGER_INFO(
+		    logger,
+		    "Frame stats of the run: {} frames, avg {:.2f} ms p95 {:.2f} p99 {:.2f} max {:.2f}; {} frames of {:.0f} ms or more",
+		    run.count, run.average, run.p95, run.p99, run.max, run.slow, k_SpikeMilliseconds);
+	}
+}
+
+void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade, uint32_t turn)
 {
 	_frames.Add(milliseconds);
+	_run.Add(milliseconds);
+	const bool turnFrame = _lastTurn.has_value() && *_lastTurn != turn;
+	_lastTurn = turn;
 	++_frameNumber;
 	const auto cpuMilliseconds = ThreadCpuMilliseconds();
 	const auto onCpu = cpuMilliseconds - std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
@@ -164,9 +179,10 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 		// A slow frame: which stages took its time, and what the renderer waited for
 		SPDLOG_LOGGER_INFO(
 		    spdlog::get("game"),
-		    "Frame spike: frame {} took {:.2f} ms, {:.2f} ms of it on the processor; render submit {:.2f} wait {:.2f}; "
-		    "{} draws; {} new resources; {} new pipelines; stages (ms):{}",
-		    _frameNumber, milliseconds, onCpu, static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
+		    "Frame spike: frame {} took {:.2f} ms, {:.2f} ms of it on the processor; turn {}{}; render submit {:.2f} wait "
+		    "{:.2f}; {} draws; {} new resources; {} new pipelines; stages (ms):{}",
+		    _frameNumber, milliseconds, onCpu, turn, turnFrame ? " played" : "",
+		    static_cast<double>(stats->cpuTimeEnd - stats->cpuTimeBegin) * toMsCpu,
 		    static_cast<double>(stats->waitRender) * toMsCpu, stats->numDraw, newResources, newPipelines, spikeStages);
 	}
 	if (_views)

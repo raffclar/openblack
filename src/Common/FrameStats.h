@@ -24,8 +24,15 @@ struct Summary
 	float average {0.0f};
 	/// 95 frames in 100 took this long or less
 	float p95 {0.0f};
+	/// 99 frames in 100 took this long or less
+	float p99 {0.0f};
 	float max {0.0f};
+	/// How many frames took the slow time or more
+	size_t slow {0};
 };
+
+/// A frame that takes this time or more is too slow for 100 frames a second
+constexpr float k_SlowMilliseconds = 10.0f;
 
 /// Sums up a run of frame times; an empty run gives an empty summary
 [[nodiscard]] Summary Summarise(std::span<const float> milliseconds);
@@ -38,6 +45,8 @@ public:
 	[[nodiscard]] size_t Count() const { return _times.size(); }
 	/// Sums up the frames collected so far and starts again
 	[[nodiscard]] Summary Take();
+	/// Sums up the frames collected so far and keeps them
+	[[nodiscard]] Summary Peek() const;
 
 private:
 	std::vector<float> _times;
