@@ -197,8 +197,11 @@ public:
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
 
-	/// Letting go: where it starts from as it leaves the hand, lifted out of the land and laid along it or not
-	[[nodiscard]] virtual std::optional<Pose> ReleasePose(entt::entity object, bool alignToSlope) = 0;
+	/// Letting go, on the computer of the player that lets go: where the thing starts as it leaves the hand. The thing
+	/// starts as this computer last drew it, comes up out of the land, and lies along the land or not.
+	[[nodiscard]] virtual player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) = 0;
+	/// Letting go, on every computer: the thing goes to the start that the command has, at its own size
+	virtual void StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start) = 0;
 	/// A pot let go slowly is poured out where it is: what it holds goes to what takes it there or into a pile, and the
 	/// pot goes
 	virtual std::optional<uint32_t> PourPot(entt::entity pot, PlayerNames player) = 0;

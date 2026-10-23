@@ -1608,6 +1608,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::OneOffSpellSeed::phialPhase>("phialPhase")
 	    .Field<&components::OneOffSpellSeed::seedPlacement>("seedPlacement")
 	    .Field<&components::OneOffSpellSeed::drawnModel>("drawnModel")
+	    .Field<&components::OneOffSpellSeed::drawnTurn>("drawnTurn")
 	    .Field<&components::OneOffSpellSeed::dispenser>("dispenser");
 	Reflect<components::InPhysics> {context};
 	Reflect<components::Immovable> {context};

@@ -57,7 +57,7 @@ public:
 	void Reset() override;
 	void InterfaceTurn(uint32_t nowMs, uint32_t turn) override;
 	void DoTake(PlayerNames player, entt::entity object) override;
-	void DoLetGo(PlayerNames player, entt::entity object, glm::vec3 velocity) override;
+	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
 	void DoTap(PlayerNames player, entt::entity object) override;
 	void DoGive(PlayerNames player, entt::entity creature, entt::entity object) override;
 
@@ -138,7 +138,10 @@ private:
 	static void ForgetOffer(components::HandGrab& grab);
 	/// The hand lets go of what it holds at a velocity, put down or thrown; made to, it starts from where it is held
 	/// and is never planted again
-	void LetGo(components::HandGrab& grab, glm::vec3 velocity, bool forced);
+	/// Lets go of the thing that the hand holds. With no start, the hand must let go: the thing goes from where it is.
+	void LetGo(components::HandGrab& grab, glm::vec3 velocity, const std::optional<player_commands::ThrowStart>& start);
+	/// Where a thing that the hand lets go of at a velocity starts, as this computer drew it last
+	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, glm::vec3 velocity);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
 	void Empty(components::HandGrab& grab);
 

@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <string_view>
 
@@ -331,6 +332,10 @@ struct TugResult
 /// The velocity a throw leaves the hand at: a hand demonstration's recorded throw while it stands, else the spring's
 /// while the spring is on, else none; never faster than the most a throw can be
 [[nodiscard]] glm::vec3 ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity);
+/// The spin of a thing as it leaves the hand, as the bodies count the turn: the body's inertia, as rows, times the spin
+/// of the hand. The game adds the parts of each row in the order x, z, y, then a zero. A hand that holds a thing has no
+/// spin, thus each part is a positive zero.
+[[nodiscard]] glm::vec3 SpinMomentum(const std::array<std::array<float, 3>, 3>& inertia, glm::vec3 spin);
 /// Whether a pot let go at a velocity is poured out where it is
 [[nodiscard]] bool PotPours(glm::vec3 velocity);
 /// The twist a throw gets from how far the hand moved since letting go, for a body of a mass at a speed: a turning force

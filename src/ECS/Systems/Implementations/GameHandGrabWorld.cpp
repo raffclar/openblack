@@ -32,6 +32,7 @@
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
 #include "ECS/AltarOffering.h"
@@ -863,19 +864,49 @@ glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat
 	return hand_grab::AxesAtSize(axes, scale);
 }
 
-std::optional<hand_grab::HandGrabWorldInterface::Pose> GameHandGrabWorld::ReleasePose(entt::entity object, bool alignToSlope)
+player_commands::ThrowStart GameHandGrabWorld::ThrowStartOf(entt::entity object, bool alignToSlope)
 {
-	if (!Locator::dynamicsSystem::has_value())
+	const auto& registry = Locator::entitiesRegistry::value();
+	// A globe starts as it was last drawn, turned to this player's camera. Any other thing starts at its Transform.
+	std::optional<std::pair<glm::mat3, glm::vec3>> drawn;
+	if (const auto* globe = registry.TryGet<const OneOffSpellSeed>(object);
+	    globe != nullptr && globe->drawnTurn.has_value() && globe->drawnModel.has_value())
 	{
-		return std::nullopt;
+		drawn = std::pair {*globe->drawnTurn, glm::vec3((*globe->drawnModel)[3])};
 	}
-	const auto pose = Locator::dynamicsSystem::value().ReleasePose(object, alignToSlope);
-	if (!pose.has_value())
+	if (Locator::dynamicsSystem::has_value())
 	{
-		return std::nullopt;
+		if (const auto start = Locator::dynamicsSystem::value().StartOfThrow(object, drawn, alignToSlope))
+		{
+			return *start;
+		}
 	}
-	// The body's axes are of unit length: at the thing's own size again
-	return Pose {.axes = UnstretchedAxes(object, pose->first), .origin = pose->second};
+	// A thing with no body starts where it is
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (!drawn.has_value() && transform != nullptr)
+	{
+		drawn = std::pair {transform->rotation, transform->position};
+	}
+	if (!drawn.has_value())
+	{
+		return {};
+	}
+	return {.origin = drawn->second, .angles = x87::GameTurnMatrixAngles(drawn->first)};
+}
+
+void GameHandGrabWorld::StartThrowFrom(entt::entity object, const player_commands::ThrowStart& start)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* transform = registry.TryGet<Transform>(object);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	// The turn comes from the angles, and the thing keeps its own size across
+	transform->rotation = x87::GameTurnMatrix(start.angles.x, start.angles.y, start.angles.z);
+	transform->scale = glm::vec3(transform->scale.x);
+	transform->position = start.origin;
+	registry.SetDirty();
 }
 
 std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames player)

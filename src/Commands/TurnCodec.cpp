@@ -126,6 +126,9 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandLetGo& command) {
 		               out.Entity(command.object);
 		               out.Vector(command.velocity);
+		               out.Vector(command.start.angularMomentum);
+		               out.Vector(command.start.origin);
+		               out.Vector(command.start.angles);
 	               },
 	               [&out](const HandTap& command) { out.Entity(command.object); },
 	               [&out](const HandGive& command) {
@@ -172,7 +175,14 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandLetGo:
 	{
 		const auto object = in.Entity();
-		action = HandLetGo {.object = object, .velocity = in.Vector()};
+		const auto velocity = in.Vector();
+		const auto angularMomentum = in.Vector();
+		const auto origin = in.Vector();
+		action = HandLetGo {
+		    .object = object,
+		    .velocity = velocity,
+		    .start = {.angularMomentum = angularMomentum, .origin = origin, .angles = in.Vector()},
+		};
 		return DecodeError::None;
 	}
 	case CommandTag::HandTap:
@@ -291,7 +301,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashTap& /*command*/) { return k_Entity; },
 	                                     [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
 	                                     [](const HandTake& /*command*/) { return k_Entity; },
-	                                     [](const HandLetGo& /*command*/) { return k_Entity + k_Vector; },
+	                                     [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
 	                                     [](const HandTap& /*command*/) { return k_Entity; },
 	                                     [](const HandGive& /*command*/) { return 2 * k_Entity; },
 	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },

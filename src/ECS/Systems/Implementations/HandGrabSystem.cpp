@@ -482,7 +482,10 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		    .from = grab->spring.Position(),
 		};
 		grab->state = HandGrab::State::LettingGo;
-		_world->SendCommand(player_commands::HandLetGo {.object = grab->object, .velocity = velocity});
+		// The thing starts as this computer drew it last, and comes up out of the land. The command sends the start to
+		// every computer.
+		_world->SendCommand(player_commands::HandLetGo {
+		    .object = grab->object, .velocity = velocity, .start = ThrowStartOf(grab->object, velocity)});
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -506,18 +509,25 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	return std::nullopt;
 }
 
-void HandGrabSystem::DoLetGo(PlayerNames player, entt::entity object, glm::vec3 velocity)
+player_commands::ThrowStart HandGrabSystem::ThrowStartOf(entt::entity object, glm::vec3 velocity)
+{
+	// It lies along the slope when the hand lets go slowly, but not a tree of any kind
+	const bool anyTree = _world->Entities().AnyOf<Tree, DeadTree>(object);
+	return _world->ThrowStartOf(object, !(anyTree || hand_grab::IsFastRelease(velocity)));
+}
+
+void HandGrabSystem::DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo)
 {
 	auto* grab = Grab();
 	if (grab == nullptr || player != _world->HandPlayer() || grab->state != HandGrab::State::LettingGo ||
-	    grab->object != object)
+	    grab->object != letGo.object)
 	{
 		return;
 	}
 	// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the border,
 	// before the throw
 	_world->HeldThingUsedOnLand(player);
-	LetGo(*grab, velocity, false);
+	LetGo(*grab, letGo.velocity, letGo.start);
 }
 
 bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
@@ -1076,8 +1086,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	registry.SetDirty();
 }
 
-void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
+void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, const std::optional<player_commands::ThrowStart>& start)
 {
+	// A let-go with no start is one that the hand must do: the thing goes from where it is, and is not planted again
+	const bool forced = !start.has_value();
 	auto& registry = _world->Entities();
 	const auto object = grab.object;
 	Empty(grab);
@@ -1093,15 +1105,10 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 	_world->CountHelpEvent(help::profile::k_Throw);
 	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this.
 	_world->ForgetGesturePath();
-	if (!forced)
+	if (start.has_value())
 	{
-		// It starts from where it is drawn in the hand, lifted out of the land, and laid along the slope when let go
-		// slowly, unless it is any kind of tree
-		const bool anyTree = registry.AnyOf<Tree, DeadTree>(object);
-		if (const auto pose = _world->ReleasePose(object, !(anyTree || hand_grab::IsFastRelease(velocity))))
-		{
-			_world->SetPose(object, *pose);
-		}
+		// It starts from the start that the player's computer sent
+		_world->StartThrowFrom(object, *start);
 	}
 	const auto player = _world->HandPlayer();
 	if (!forced && registry.AllOf<Pot>(object))
@@ -1120,11 +1127,13 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 		registry.SetDirty();
 		return;
 	}
-	const auto result = _world->LetGoFromHand(object, {
-	                                                      .velocity = velocity,
-	                                                      .player = player,
-	                                                      .dontReplant = forced,
-	                                                  });
+	const auto result =
+	    _world->LetGoFromHand(object, {
+	                                      .velocity = velocity,
+	                                      .angularMomentum = start.has_value() ? start->angularMomentum : glm::vec3(0.0f),
+	                                      .player = player,
+	                                      .dontReplant = forced,
+	                                  });
 	if (result.accepted)
 	{
 		grab.lastDropped = object;
@@ -1593,7 +1602,7 @@ void HandGrabSystem::ForceDrop()
 		EndScoop(*grab);
 	}
 	// Put down from where it is held, with no speed, and never planted again
-	LetGo(*grab, glm::vec3(0.0f), true);
+	LetGo(*grab, glm::vec3(0.0f), std::nullopt);
 }
 
 bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
@@ -1607,7 +1616,7 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 	{
 		EndScoop(*grab);
 	}
-	LetGo(*grab, velocity, false);
+	LetGo(*grab, velocity, ThrowStartOf(grab->object, velocity));
 	return true;
 }
 

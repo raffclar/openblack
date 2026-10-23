@@ -70,7 +70,7 @@ void Run(const Command& command)
 			    }
 			    else if constexpr (std::is_same_v<Kind, HandLetGo>)
 			    {
-				    hand.DoLetGo(command.player, action.object, action.velocity);
+				    hand.DoLetGo(command.player, action);
 			    }
 			    else if constexpr (std::is_same_v<Kind, HandTap>)
 			    {

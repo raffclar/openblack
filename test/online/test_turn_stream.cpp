@@ -114,7 +114,11 @@ TEST(TurnStream, TwoClientsGetTheSameTurnsThroughTheRelay)
 	relay.Join(one, PlayerNames::PLAYER_ONE);
 	relay.Join(two, PlayerNames::PLAYER_TWO);
 
-	const std::vector<Action> fromOne {HandLetGo {.object = Entity(5), .velocity = {0.1f, -0.0f, 3.0e38f}}};
+	const std::vector<Action> fromOne {HandLetGo {.object = Entity(5),
+	                                              .velocity = {0.1f, -0.0f, 3.0e38f},
+	                                              .start = {.angularMomentum = {-0.0f, 0.0f, 0.0f},
+	                                                        .origin = {2000.25f, 31.5f, 1999.0f},
+	                                                        .angles = {0.1f, 2.9f, -0.3f}}}};
 	const std::vector<Action> fromTwo {LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1, 2, 3}},
 	                                   HandTap {.object = Entity(6)}};
 	ASSERT_TRUE(one.stream.SendCommands(99, fromOne));
@@ -138,7 +142,12 @@ TEST(TurnStream, TwoClientsGetTheSameTurnsThroughTheRelay)
 	EXPECT_EQ(turn.blocks[2].sender, PlayerNames::PLAYER_TWO);
 	EXPECT_EQ(turn.blocks[2].sequence, 0);
 	EXPECT_EQ(turn.blocks[2].actions.size(), 2u);
-	EXPECT_EQ(std::bit_cast<uint32_t>(std::get<HandLetGo>(turn.blocks[0].actions[0]).velocity.y), 0x80000000U);
+	const auto& letGo = std::get<HandLetGo>(turn.blocks[0].actions[0]);
+	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.velocity.y), 0x80000000U);
+	// Each computer gets the start of the thrower's computer, bit for bit
+	EXPECT_EQ(std::bit_cast<uint32_t>(letGo.start.angularMomentum.x), 0x80000000U);
+	EXPECT_EQ(letGo.start.origin, glm::vec3(2000.25f, 31.5f, 1999.0f));
+	EXPECT_EQ(letGo.start.angles, glm::vec3(0.1f, 2.9f, -0.3f));
 	EXPECT_EQ(relay.checksums, (std::vector<std::pair<PlayerNames, uint64_t>> {{PlayerNames::PLAYER_ONE, 0xABCDEF}}));
 	// The second turn has no commands
 	const auto second = turn_codec::Decode(one.turns[1]);

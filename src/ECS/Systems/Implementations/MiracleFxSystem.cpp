@@ -241,6 +241,7 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    glm::mat4 drawnModel(facing * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
 		    drawnModel[3] = glm::vec4(drawnOrigin, 1.0f);
 		    globe.drawnModel = drawnModel;
+		    globe.drawnTurn = facing;
 		    globe.position = globe.middle - centre * transform.scale;
 		    const auto& seed = magic::GetSpellSeedInfo(info, globe.seedType);
 		    if (visuals::IsPhialSeed(globe.seedType))

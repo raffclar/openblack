@@ -6079,6 +6079,30 @@ void AddHand(std::vector<Scenario>& all)
 	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// A healing dispenser floats its globe in the middle of the screen, in the player's influence on flat land. The hand
+	// takes the globe and throws it at once.
+	all.push_back({
+	    .id = "hand.globe_throw",
+	    .name = "Throwing a one-shot globe",
+	    .facet = Facet::Hand,
+	    .description = "The hand holds the Action button on the dispenser's globe until it takes it. Then it makes ready "
+	                   "low on the screen and throws the globe with a quick upward sweep of the pointer.",
+	    .expected = "The globe leaves the hand turned as it was last drawn, with its dome to the camera, and from the same "
+	                "place. It does not jump or turn as it leaves the hand. It flies off and lands, whole.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-16.0f, 14.0f, 0.0f}, .look = {0.0f, 2.0f, 0.0f}},
+	    .dispensers = {{.type = MagicType::Heal, .offset = {0.0f, 0.0f}}},
+	    .commands =
+	        {// Takes the dispenser's globe, holding the button past a tap
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.31f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.6f, .value = 3},
+	         // Makes ready low on the screen and sweeps up, letting go as the sweep ends
+	         {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.45f, 0.85f}},
+	         {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	         {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	         {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
 	// A dispenser floats a heal globe in front of the camera, in the player's influence, and the pointer rests on it
 	all.push_back({
 	    .id = "hand.globe_tooltip",
