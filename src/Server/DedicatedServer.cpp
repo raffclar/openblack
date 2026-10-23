@@ -591,6 +591,7 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		{
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);
 		}
+		network->Close();
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 		world->SetNetwork({});
 		network.reset();

@@ -512,6 +512,29 @@ std::string ToJson(const UseClanRequest& request)
 	return Dump(object);
 }
 
+std::string ToJson(const ServerStatus& status)
+{
+	auto players = Json::array();
+	for (const auto& player : status.players)
+	{
+		players.push_back(Json {
+		    {"account", player.account},
+		    {"role", player.role},
+		    {"clan", player.clan.has_value() ? Json(*player.clan) : Json(nullptr)},
+		});
+	}
+	return Dump(Json {
+	    {"hostname", status.hostname},
+	    {"land", status.land},
+	    {"gamemode", status.gamemode},
+	    {"locked", status.locked},
+	    {"password", status.password},
+	    {"maxplayers", status.maxplayers},
+	    {"gamever", status.gamever},
+	    {"players", players},
+	});
+}
+
 std::optional<AccountNameCheck> ParseAccountNameCheck(std::string_view text)
 {
 	return ParseWith<AccountNameCheck>(text, [](const Json& object, AccountNameCheck& out) {

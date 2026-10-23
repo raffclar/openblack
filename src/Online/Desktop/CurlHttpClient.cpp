@@ -140,6 +140,12 @@ CurlHttpClient::CurlHttpClient()
 	_multi = std::make_unique<Multi>();
 }
 
+CurlHttpClient::CurlHttpClient(ClientIdentity identity)
+    : CurlHttpClient()
+{
+	_identity = std::move(identity);
+}
+
 CurlHttpClient::~CurlHttpClient()
 {
 	for (auto& transfer : _transfers)
@@ -183,6 +189,14 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
 	// The TLS rules: TLS 1.2 at the oldest, AEAD cipher suites only, and a check of the certificate and the host name
 	tls_settings::Apply(easy);
+	if (_identity.has_value())
+	{
+		// The libcurl handle keeps its own copy of each text
+		curl_easy_setopt(easy, CURLOPT_SSLCERTTYPE, "PEM");
+		curl_easy_setopt(easy, CURLOPT_SSLCERT, _identity->certificate.string().c_str());
+		curl_easy_setopt(easy, CURLOPT_SSLKEYTYPE, "PEM");
+		curl_easy_setopt(easy, CURLOPT_SSLKEY, _identity->key.string().c_str());
+	}
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
