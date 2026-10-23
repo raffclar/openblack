@@ -9,6 +9,10 @@
 
 #include "CreatureTeleportAgendas.h"
 
+#include <cstddef>
+
+#include <algorithm>
+
 #include "3D/MapCoords.h"
 #include "Magic/TeleportRules.h"
 
@@ -46,4 +50,17 @@ std::vector<Step> openblack::creature_mind::AfterTeleport(std::optional<glm::vec
 	}
 	agenda.push_back({.kind = Step::Kind::StopTeleportControl});
 	return agenda;
+}
+
+bool openblack::creature_mind::StoneControls(const IdleMind& mind)
+{
+	if (mind.step >= mind.agenda.size())
+	{
+		return false;
+	}
+	return std::ranges::any_of(mind.agenda.begin() + static_cast<std::ptrdiff_t>(mind.step), mind.agenda.end(),
+	                           [](const Step& step) {
+		                           return step.kind == Step::Kind::Teleport || step.kind == Step::Kind::Transported ||
+		                                  step.kind == Step::Kind::StopTeleportControl;
+	                           });
 }

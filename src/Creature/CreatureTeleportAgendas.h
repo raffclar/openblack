@@ -42,4 +42,8 @@ inline constexpr std::string_view k_AfterTeleportAction = "MoveToPos";
 /// holds the creature refused the walk.
 [[nodiscard]] std::vector<Step> AfterTeleport(std::optional<glm::vec2> destination);
 
+/// Whether a stone controls the creature that has this mind: its plan still has a step of the teleport to do. When the
+/// creature stops its plan, or does the last step of the teleport, the stone no longer controls it, at that time.
+[[nodiscard]] bool StoneControls(const IdleMind& mind);
+
 } // namespace openblack::creature_mind

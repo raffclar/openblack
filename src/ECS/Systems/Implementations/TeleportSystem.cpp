@@ -152,16 +152,7 @@ std::optional<glm::vec3> CreatureWalkingTo(entt::entity creature)
 bool UnderStoneControl(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
-	if (mind == nullptr || mind->idle.step >= mind->idle.agenda.size())
-	{
-		return false;
-	}
-	using Kind = creature_mind::Step::Kind;
-	return std::ranges::any_of(mind->idle.agenda.begin() + static_cast<std::ptrdiff_t>(mind->idle.step),
-	                           mind->idle.agenda.end(), [](const creature_mind::Step& step) {
-		                           return step.kind == Kind::Teleport || step.kind == Kind::Transported ||
-		                                  step.kind == Kind::StopTeleportControl;
-	                           });
+	return mind != nullptr && creature_mind::StoneControls(mind->idle);
 }
 
 /// Where a creature walks after the jump, as its map position in metres. The area that holds the creature refuses a
@@ -281,6 +272,26 @@ void TeleportSystem::RemoveStone(entt::entity stone)
 		}
 	}
 	registry.Destroy(stone);
+}
+
+void TeleportSystem::RemoveStonesOf(entt::entity spell)
+{
+	if (!Locator::entitiesRegistry::has_value() || spell == entt::null)
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	std::vector<entt::entity> stones;
+	registry.Each<const TeleportStone>([&](entt::entity entity, const TeleportStone& stone) {
+		if (stone.spell == spell)
+		{
+			stones.push_back(entity);
+		}
+	});
+	for (const auto stone : stones)
+	{
+		RemoveStone(stone);
+	}
 }
 
 bool TeleportSystem::CanPlaceStone(glm::vec3 point) const

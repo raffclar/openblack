@@ -46,6 +46,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSaveState.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -421,7 +422,8 @@ bool CarriedByTeleport(entt::entity creature)
 /// was going, or until its plan stops
 bool TravelsByTeleport(const Registry& registry, entt::entity creature)
 {
-	return registry.AllOf<TeleportTraveller>(creature);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	return registry.AllOf<TeleportTraveller>(creature) && mind != nullptr && creature_mind::StoneControls(mind->idle);
 }
 
 using ForcedPlan = CreatureMindSystemInterface::ForcedPlan;
