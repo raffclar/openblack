@@ -4065,7 +4065,8 @@ bool Game::RunFrame() noexcept
 		ecs::challenge_pictures::Collect(
 		    Locator::entitiesRegistry::value(),
 		    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
-		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }},
+		    ecs::challenge_pictures::ProfileFiles());
 		// The pictures of the saved games whose screens are back
 		if (Locator::saveGameSystem::has_value())
 		{

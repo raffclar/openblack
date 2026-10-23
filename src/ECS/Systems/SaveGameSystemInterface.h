@@ -14,9 +14,12 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <ChallengePictureFiles.h>
 
 namespace openblack::ecs::systems
 {
@@ -106,6 +109,12 @@ public:
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
 	/// Takes the pictures of the screen that are back, and writes the picture files with them
 	virtual void CollectPictures(const Screens& screens) = 0;
+	/// Keeps the picture of the challenge at a place of the challenge room in the challenge picture files of the game
+	/// that the player plays now. The writer writes the two files that change on its own thread.
+	virtual void PutChallengePicture(uint32_t place, std::span<const uint8_t> picture) = 0;
+	/// The compressed blocks of the picture of the challenge at a place, as the files of the game that the player plays
+	/// now hold them
+	[[nodiscard]] virtual gamesave::ChallengePictureCells ChallengePictureCells(uint32_t place) = 0;
 	/// Shows the box of a save or a load at once, as a frame of its own: whether it loads, and whether it makes the
 	/// screen darker
 	using ShowBox = std::function<void(bool loading, bool darken)>;

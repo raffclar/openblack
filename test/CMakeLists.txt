@@ -885,6 +885,7 @@ openblack_setup_and_add_test(test_statistics_rules test_statistics_rules.cpp)
 openblack_setup_and_add_test(
   test_challenge_pictures test_challenge_pictures.cpp
 )
+target_link_libraries(test_challenge_pictures PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
   test_vortex_crossing_rules test_vortex_crossing_rules.cpp
 )
@@ -1707,3 +1708,6 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
+openblack_setup_and_add_test(
+  test_challenge_picture_files test_challenge_picture_files.cpp
+)
