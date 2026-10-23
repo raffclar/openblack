@@ -469,6 +469,18 @@ void InitializeOnline(const player_profiles::Store& profiles)
 #else
 		    return std::make_unique<online::CurlWebSocketClient>(authorities);
 #endif
+	    },
+	    [creatureMinds = profiles.creatureMinds]() -> std::vector<uint8_t> {
+		    // The creature of the player's profile goes to the other players before a network game starts
+		    const auto file =
+		        Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().CreatureFile() : std::nullopt;
+		    if (!file.has_value() || !creatureMinds.has_value())
+		    {
+			    return {};
+		    }
+		    auto& fileSystem = Locator::filesystem::value();
+		    const auto path = *creatureMinds / *file;
+		    return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
 	    });
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),

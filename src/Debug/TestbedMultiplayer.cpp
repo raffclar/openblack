@@ -430,6 +430,7 @@ public:
 	void BeginPlay() override {}
 	[[nodiscard]] bool InGame() const override { return _session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &_session; }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return _session.TakeStartEvent(); }
 
 private:
 	online::NetworkSession _session;

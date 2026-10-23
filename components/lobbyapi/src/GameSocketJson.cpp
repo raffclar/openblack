@@ -9,10 +9,12 @@
 
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
 #include "GameSocket.h"
+#include "JoinTicket.h"
 
 namespace openblack::game_socket
 {
@@ -30,6 +32,12 @@ constexpr std::string_view k_Refused = "room.refused";
 constexpr std::string_view k_Start = "game.start";
 constexpr std::string_view k_Resumed = "room.resumed";
 constexpr std::string_view k_PlayerState = "player.state";
+constexpr std::string_view k_StartQuery = "start.query";
+constexpr std::string_view k_StartReply = "start.reply";
+constexpr std::string_view k_StartCancel = "start.cancel";
+constexpr std::string_view k_StartStop = "start.stop";
+constexpr std::string_view k_StartTransfer = "start.transfer";
+constexpr std::string_view k_StartCreature = "start.creature";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -239,6 +247,68 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return PlayerState {.slot = static_cast<uint8_t>(slot), .state = *known};
 	}
+	if (type == k_StartQuery)
+	{
+		StartQuery query;
+		if (!ReadString(object, "land", query.land, false) || !ReadBool(object, "testbed", query.testbed, false) ||
+		    !ReadUnsigned(object, "checksum", std::numeric_limits<uint64_t>::max(), query.checksum))
+		{
+			return std::nullopt;
+		}
+		return query;
+	}
+	if (type == k_StartReply)
+	{
+		StartReply reply;
+		if (!ReadBool(object, "have", reply.have) ||
+		    !ReadUnsigned(object, "checksum", std::numeric_limits<uint64_t>::max(), reply.checksum, false))
+		{
+			return std::nullopt;
+		}
+		return reply;
+	}
+	if (type == k_StartCancel)
+	{
+		return StartCancel {};
+	}
+	if (type == k_StartStop)
+	{
+		return StartStop {};
+	}
+	if (type == k_StartTransfer)
+	{
+		return StartTransfer {};
+	}
+	if (type == k_StartCreature)
+	{
+		StartCreature creature;
+		std::string file;
+		if (!ReadString(object, "file", file, false))
+		{
+			return std::nullopt;
+		}
+		// Base64 holds 3 bytes in 4 characters: a longer text is a file that is too large
+		if (file.size() > (k_MostCreatureFileBytes + 2) / 3 * 4)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(file);
+		if (!bytes.has_value() || bytes->size() > k_MostCreatureFileBytes)
+		{
+			return std::nullopt;
+		}
+		creature.file = std::move(*bytes);
+		if (const auto* slotMember = Member(object, "slot"); slotMember != nullptr && !slotMember->is_null())
+		{
+			uint64_t slot = 0;
+			if (!ReadUnsigned(object, "slot", k_MostSlots - 1, slot))
+			{
+				return std::nullopt;
+			}
+			creature.slot = static_cast<uint8_t>(slot);
+		}
+		return creature;
+	}
 	return std::nullopt;
 }
 
@@ -325,9 +395,38 @@ std::string ToJson(const Frame& frame)
 		    {
 			    object = Json {{"type", k_Resumed}, {"turn", value.turn}};
 		    }
-		    else
+		    else if constexpr (std::is_same_v<Kind, PlayerState>)
 		    {
 			    object = Json {{"type", k_PlayerState}, {"slot", value.slot}, {"state", StateName(value.state)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartQuery>)
+		    {
+			    object = Json {
+			        {"type", k_StartQuery}, {"land", value.land}, {"testbed", value.testbed}, {"checksum", value.checksum}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartReply>)
+		    {
+			    object = Json {{"type", k_StartReply}, {"have", value.have}, {"checksum", value.checksum}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartCancel>)
+		    {
+			    object = Json {{"type", k_StartCancel}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartStop>)
+		    {
+			    object = Json {{"type", k_StartStop}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartTransfer>)
+		    {
+			    object = Json {{"type", k_StartTransfer}};
+		    }
+		    else
+		    {
+			    object = Json {{"type", k_StartCreature}, {"file", join_ticket::EncodeBase64Url(value.file)}};
+			    if (value.slot.has_value())
+			    {
+				    object["slot"] = *value.slot;
+			    }
 		    }
 		    return Dump(object);
 	    },

@@ -142,6 +142,16 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_MPFE_ERROR_ALREADY_IN_ROOM";
 	case Message::WaitingForStart:
 		return "HELP_TEXT_DIALOG_ADDITION_145";
+	case Message::WaitingForTransfer:
+		return "HELP_TEXT_DIALOG_ADDITION_144";
+	case Message::SendingStartData:
+		return "HELP_TEXT_DIALOG_ADDITION_121";
+	case Message::StillDownloading:
+		return "HELP_TEXT_DIALOG_ADDITION_132";
+	case Message::OthersDownloading:
+		return "HELP_TEXT_DIALOG_ADDITION_130";
+	case Message::KickedFromGame:
+		return "HELP_TEXT_MPFER_KICKEDYOUGAME";
 	case Message::None:
 		return {};
 	}
@@ -770,6 +780,12 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	auto& shown = _message.emplace();
 	shown.message = message;
 	shown.text = Text(MessageTextName(message));
+	if (message == Message::KickedFromGame)
+	{
+		const auto name = _frontEnd->GetMessageName();
+		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
+		shown.text = FormatText(shown.text, nameArgument);
+	}
 	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))

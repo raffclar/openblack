@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <memory>
+#include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -20,6 +21,7 @@
 #include "Commands/TurnCodec.h"
 #include "LoopbackSockets.h"
 #include "Online/NetworkSession.h"
+#include "Online/StartRules.h"
 #include "Server/LockstepHost.h"
 
 using namespace openblack;
@@ -58,10 +60,14 @@ struct FakeWorld
 	}
 };
 
+/// The land file of the server in the test
+const std::vector<uint8_t> k_LandFile = {'L', 'A', 'N', 'D', '\n', '1', '\n'};
+
 /// One client computer: its WSS client, its session and its world
 struct Computer
 {
-	Computer(LoopbackSockets& network, int64_t& now, std::string ticket)
+	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
+	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'})
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -70,7 +76,14 @@ struct Computer
 		    .ticket = std::move(ticket),
 		    .gamePassword = {},
 		    .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		    .readLand = [this](std::string_view land) -> std::optional<std::vector<uint8_t>> {
+			    askedLand = std::string(land);
+			    return this->landFile;
+		    },
+		    .readCreature = [this] { return this->creature; },
 		});
+		this->landFile = std::move(landFile);
+		this->creature = std::move(creature);
 		session.SetReady(true);
 	}
 
@@ -88,6 +101,9 @@ struct Computer
 		}
 	}
 
+	std::optional<std::vector<uint8_t>> landFile;
+	std::vector<uint8_t> creature;
+	std::string askedLand;
 	std::unique_ptr<LoopbackSockets::Client> sockets;
 	NetworkSession session;
 	FakeWorld world;
@@ -123,6 +139,7 @@ protected:
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
 		    server::HostSettings {.start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0},
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
 		                          .godsToStart = gods,
 		                          .godSlots = 7,
 		                          .comeBackMicroseconds = comeBack,
@@ -177,7 +194,7 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	EXPECT_EQ(serverWorld.turns, 0u);
 
 	Computer bob(network, now, "god:bob");
-	Frames({&alice, &bob}, 3);
+	Frames({&alice, &bob}, 6);
 	EXPECT_TRUE(host->Started());
 	EXPECT_EQ(bob.session.GetJoined()->slot, 1);
 	ASSERT_TRUE(alice.session.GetStart().has_value());
@@ -190,7 +207,7 @@ TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
 	MakeHost(2);
 	Computer alice(network, now, "god:alice");
 	Computer bob(network, now, "god:bob");
-	Frames({&alice, &bob}, 4);
+	Frames({&alice, &bob}, 7);
 	ASSERT_TRUE(host->Started());
 	for (int i = 0; i < 600; ++i)
 	{
@@ -241,7 +258,7 @@ TEST_F(LockstepTest, TheServerRefusesBadTicketsLateJoinersAndTheCommandsOfObserv
 	EXPECT_FALSE(host->Started());
 
 	Computer alice(network, now, "god:alice");
-	Frames({&watcher, &alice}, 3);
+	Frames({&watcher, &alice}, 6);
 	ASSERT_TRUE(host->Started());
 	// The observer gets the turns too, and sends no command
 	watcher.session.Send(HandTap {.object = Entity(1)});
@@ -260,7 +277,7 @@ TEST_F(LockstepTest, AClientCannotSendTheLeaveOfTheServer)
 {
 	MakeHost(1);
 	Computer alice(network, now, "god:alice");
-	Frames({&alice}, 3);
+	Frames({&alice}, 6);
 	alice.session.Send(PlayerLeft {});
 	alice.session.Send(HandTap {.object = Entity(2)});
 	Frames({&alice}, 3);
@@ -361,4 +378,83 @@ TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 	EXPECT_EQ(alice.session.GetCompares().firstDifferent, 21u);
 	ASSERT_TRUE(host->Seats()[0].compares.firstDifferent.has_value());
 	EXPECT_EQ(*host->Seats()[0].compares.firstDifferent, 21u);
+}
+
+TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice", k_LandFile, {'A', 'L'});
+	Computer bob(network, now, "god:bob", k_LandFile, {});
+	Computer watcher(network, now, "observer:watcher", std::nullopt, {'W'});
+	Frames({&alice, &bob, &watcher}, 8);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.askedLand, "Land1.txt");
+	// The observer has no god: its reply does not stop the start, and it sends no creature
+	EXPECT_EQ(watcher.askedLand, "Land1.txt");
+	for (const auto* computer : {&alice, &bob, &watcher})
+	{
+		const auto& creatures = computer->session.StartCreatures();
+		ASSERT_EQ(creatures.size(), 2u);
+		EXPECT_EQ(creatures.at(0), (std::vector<uint8_t> {'A', 'L'}));
+		EXPECT_TRUE(creatures.at(1).empty());
+	}
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::HasLand);
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::Transfer);
+	EXPECT_FALSE(alice.session.TakeStartEvent().has_value());
+}
+
+TEST_F(LockstepTest, AGodWithoutTheLandStopsTheStartAndIsNotReady)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob", std::nullopt);
+	Frames({&alice, &bob}, 8);
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	EXPECT_FALSE(host->Seats()[1].ready);
+	EXPECT_TRUE(host->Seats()[0].ready);
+	EXPECT_EQ(bob.session.TakeStartEvent(), online::StartEvent::LacksLand);
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::HasLand);
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::Cancelled);
+	// Both players stay in the room
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Waiting);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
+}
+
+TEST_F(LockstepTest, AGodWithAnotherLandFileIsRemovedFromTheRoom)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob", std::vector<uint8_t> {'X'});
+	Frames({&alice, &bob}, 8);
+	EXPECT_FALSE(host->Started());
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Ended);
+	EXPECT_EQ(bob.session.RefusedReason(), "kicked");
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Open);
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::HasLand);
+	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::Cancelled);
+}
+
+TEST_F(LockstepTest, AGodWhoLeavesDuringTheStartStopsIt)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob");
+	// The start begins, then Bob leaves before the game starts
+	for (int i = 0; i < 8 && !host->Starting(); ++i)
+	{
+		Frame({&alice, bob.get()});
+	}
+	ASSERT_TRUE(host->Starting());
+	bob->session.Leave();
+	bob->Frame();
+	Frames({&alice}, 6);
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	bool stopped = false;
+	while (const auto event = alice.session.TakeStartEvent())
+	{
+		stopped = stopped || *event == online::StartEvent::Stopped;
+	}
+	EXPECT_TRUE(stopped);
 }

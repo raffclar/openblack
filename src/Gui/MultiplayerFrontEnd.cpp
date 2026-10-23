@@ -91,6 +91,11 @@ void MultiplayerFrontEnd::Update()
 		_services.lan->Poll();
 	}
 	FollowSession();
+	FollowStart();
+	if (_flow.box == Box::GameList)
+	{
+		FollowSelectedGame();
+	}
 	// The lobby ended the session, for example after a ban: the game list and the room need it
 	if (_loggedIn && _flow.kind == LobbyKind::Internet && _services.lobby != nullptr &&
 	    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedOut && !IsStarted())
@@ -153,13 +158,70 @@ void MultiplayerFrontEnd::FollowSession()
 	_busy = false;
 	if (_joined)
 	{
-		// The room's server went, or the player could not come back to it
+		// The server removed the player, the room's server went, or the player could not come back to it
+		const bool kicked = session->GetEnd() == online::NetworkSession::End::Refused && session->RefusedReason() == "kicked";
 		_joined = false;
+		if (kicked)
+		{
+			ShowKicked();
+			return;
+		}
 		Show(Message::HostLeft);
 		return;
 	}
 	const auto refusal = session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
 	Show(JoinFailureMessage(refusal, _flow.kind));
+}
+
+void MultiplayerFrontEnd::FollowStart()
+{
+	if (_services.network == nullptr)
+	{
+		return;
+	}
+	while (const auto event = _services.network->TakeStartEvent())
+	{
+		if (!_joined || IsStarted())
+		{
+			continue;
+		}
+		// The boxes of the start have no button: they go when the next step comes
+		const bool waiting = _message == Message::WaitingForTransfer || _message == Message::SendingStartData;
+		switch (*event)
+		{
+		case online::StartEvent::HasLand:
+			Show(Message::WaitingForTransfer);
+			break;
+		case online::StartEvent::LacksLand:
+			// The server took the player's Ready
+			_ready = false;
+			Show(Message::StillDownloading);
+			break;
+		case online::StartEvent::Transfer:
+			Show(Message::SendingStartData);
+			break;
+		case online::StartEvent::Cancelled:
+			// A player who does not have the land keeps its own box
+			if (waiting)
+			{
+				Show(Message::OthersDownloading);
+			}
+			break;
+		case online::StartEvent::Stopped:
+			// A player left during the start: the boxes of the start go, with no message
+			if (waiting)
+			{
+				_message = _ready ? Message::WaitingForStart : Message::None;
+			}
+			break;
+		}
+	}
+}
+
+void MultiplayerFrontEnd::ShowKicked()
+{
+	_messageName = _room.has_value() ? ToUtf16(_room->hostname) : std::u16string();
+	Show(Message::KickedFromGame);
 }
 
 bool MultiplayerFrontEnd::TakeLeft()
@@ -294,9 +356,17 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 		_message = Message::None;
 		break;
 	case Message::HostLeft:
+	case Message::KickedFromGame:
 		LeaveRoom();
 		_flow.box = Box::GameList;
 		EnterGameList();
+		break;
+	case Message::OthersDownloading:
+		// The player is still ready, and waits for the next start
+		if (_ready)
+		{
+			_message = Message::WaitingForStart;
+		}
 		break;
 	default:
 		break;
@@ -386,13 +456,37 @@ std::vector<size_t> MultiplayerFrontEnd::GetShownGames() const
 
 void MultiplayerFrontEnd::SelectGame(std::optional<size_t> game)
 {
-	_selectedGame = game.has_value() && *game < GetGames().size() ? game : std::nullopt;
+	const auto games = GetGames();
+	_selectedGame = game.has_value() && *game < games.size() ? game : std::nullopt;
+	_selectedId = _selectedGame.has_value() ? games[*_selectedGame].id : std::string();
+}
+
+void MultiplayerFrontEnd::FollowSelectedGame()
+{
+	if (!_selectedGame.has_value() || _selectedId.empty())
+	{
+		return;
+	}
+	const auto games = GetGames();
+	if (*_selectedGame < games.size() && games[*_selectedGame].id == _selectedId)
+	{
+		return;
+	}
+	const auto found = std::ranges::find(games, _selectedId, &lobby_api::ServerEntry::id);
+	if (found == games.end())
+	{
+		_selectedGame.reset();
+		_selectedId.clear();
+		return;
+	}
+	_selectedGame = static_cast<size_t>(found - games.begin());
 }
 
 void MultiplayerFrontEnd::EnterGameList()
 {
 	_flow.box = Box::GameList;
 	_selectedGame.reset();
+	_selectedId.clear();
 	_filter.clear();
 	if (_flow.kind == LobbyKind::Lan)
 	{
@@ -433,7 +527,7 @@ void MultiplayerFrontEnd::RefreshGames()
 			Show(Message::ConnectionFailed);
 		}
 		// A list that shrank loses the pick of a game that went
-		SelectGame(_selectedGame);
+		FollowSelectedGame();
 	});
 }
 
@@ -656,6 +750,20 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 			_room->gamemode = change->gamemode;
 		}
 		_seats = Seats(_room->players);
+		return;
+	}
+	if (event.type == lobby_api::events::k_ServerBanned)
+	{
+		// A ban of the room's server takes the player out of the room before the start, as a kick from the game does
+		const auto ban = lobby_api::ParseServerBanned(event.data);
+		if (!ban.has_value() || ban->server != _room->id || IsStarted())
+		{
+			return;
+		}
+		++_generation;
+		_busy = false;
+		ShowKicked();
+		LeaveRoom();
 		return;
 	}
 	if (event.type == lobby_api::events::k_RoomClanChosen)

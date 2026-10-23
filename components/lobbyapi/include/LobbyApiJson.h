@@ -68,6 +68,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<RoomChange> ParseRoomChange(std::string_view data);
 /// The data of "room.clan_chosen"
 [[nodiscard]] std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data);
+/// The data of "server.banned"
+[[nodiscard]] std::optional<ServerBanned> ParseServerBanned(std::string_view data);
 /// The data of "servers.changed" or of "servers.removed"
 [[nodiscard]] std::optional<ServerChange> ParseServerChange(std::string_view type, std::string_view data);
 [[nodiscard]] std::optional<PushPosition> ParsePushPosition(std::string_view data);

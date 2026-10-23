@@ -9,6 +9,7 @@
 
 #include <string>
 #include <variant>
+#include <vector>
 
 #include <GameSocket.h>
 #include <gtest/gtest.h>
@@ -88,4 +89,36 @@ TEST(GameSocket, BadFramesDoNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"king","session":"s","slot":1})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","session":"s","slot":32})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"player.state","slot":1,"state":"gone"})").has_value());
+}
+
+TEST(GameSocket, TheFramesOfTheStartGoToJsonAndBack)
+{
+	const auto query =
+	    RoundTrip(StartQuery {.land = "Playgrounds/TwoGods.txt", .testbed = false, .checksum = 0xFFFFFFFF00000001ull});
+	EXPECT_EQ(query.land, "Playgrounds/TwoGods.txt");
+	EXPECT_EQ(query.checksum, 0xFFFFFFFF00000001ull);
+	const auto reply = RoundTrip(StartReply {.have = true, .checksum = 123});
+	EXPECT_TRUE(reply.have);
+	EXPECT_EQ(reply.checksum, 123u);
+	RoundTrip(StartCancel {});
+	RoundTrip(StartStop {});
+	RoundTrip(StartTransfer {});
+	const auto fromClient = RoundTrip(StartCreature {.slot = std::nullopt, .file = {0, 1, 2, 255}});
+	EXPECT_FALSE(fromClient.slot.has_value());
+	EXPECT_EQ(fromClient.file, (std::vector<uint8_t> {0, 1, 2, 255}));
+	const auto toClient = RoundTrip(StartCreature {.slot = 31, .file = {}});
+	EXPECT_EQ(toClient.slot, 31);
+	EXPECT_TRUE(toClient.file.empty());
+}
+
+TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
+{
+	const std::vector<uint8_t> largest(k_MostCreatureFileBytes, 7);
+	EXPECT_TRUE(Parse(ToJson(StartCreature {.slot = std::nullopt, .file = largest})).has_value());
+	const std::vector<uint8_t> tooLarge(k_MostCreatureFileBytes + 1, 7);
+	EXPECT_FALSE(Parse(ToJson(StartCreature {.slot = std::nullopt, .file = tooLarge})).has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"!!"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","slot":32})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.reply"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.query","land":"Land1.txt"})").has_value());
 }

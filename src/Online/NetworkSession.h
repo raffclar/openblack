@@ -16,6 +16,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <GameSocket.h>
@@ -42,6 +43,27 @@ struct NetworkSessionSettings
 	std::string name;
 	/// How long the client tries to come back after it lost the socket. The server keeps the god for 5 minutes.
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
+	/// Reads the file of a land in the Scripts folder of the game, for the check of the land before the start. None when
+	/// the land is not on this computer. With no reader, the client has no land but the testbed.
+	std::function<std::optional<std::vector<uint8_t>>(std::string_view land)> readLand;
+	/// Reads the creature file of the player, which goes to the other players before the start. Empty when the player
+	/// has no creature, and with no reader.
+	std::function<std::vector<uint8_t>()> readCreature;
+};
+
+/// A step of the start of the game that the front end shows to the player
+enum class StartEvent : uint8_t
+{
+	/// The server asked for the land, and this computer has it
+	HasLand,
+	/// The server asked for the land, and this computer does not have it. The server takes the player's Ready.
+	LacksLand,
+	/// Each player has the land: the creature files go to all players
+	Transfer,
+	/// A player does not have the land, so the game does not start
+	Cancelled,
+	/// A player left the room during the start, so the game does not start
+	Stopped,
 };
 
 /// The client of a network game: it joins the room of a game server with a ticket, sends the commands of its player at
@@ -118,6 +140,11 @@ public:
 	[[nodiscard]] End GetEnd() const { return _end; }
 	[[nodiscard]] const std::optional<game_socket::Joined>& GetJoined() const { return _joined; }
 	[[nodiscard]] const std::optional<game_socket::Start>& GetStart() const { return _start; }
+	/// The next step of the start since the last call, one time each
+	[[nodiscard]] std::optional<StartEvent> TakeStartEvent();
+	/// The creature files of the gods that the server sent before the start, by god slot. An empty file is a god with no
+	/// creature.
+	[[nodiscard]] const std::map<uint8_t, std::vector<uint8_t>>& StartCreatures() const { return _startCreatures; }
 	/// The reason that the server gave for a refusal
 	[[nodiscard]] const std::string& RefusedReason() const { return _refusedReason; }
 	[[nodiscard]] const ResyncRule& Resync() const { return _resync; }
@@ -139,6 +166,8 @@ public:
 private:
 	void Open(bool resume);
 	void Text(std::string_view text);
+	/// The frames of the steps of the start
+	void StartFrame(const game_socket::Frame& frame);
 	void Closed(const WebSocketClosed& closed);
 	void Turn(const turn_codec::TurnBundle& turn);
 	void ServerChecksum(const turn_codec::TurnChecksum& checksum);
@@ -158,6 +187,8 @@ private:
 	bool _ready {false};
 	std::optional<game_socket::Joined> _joined;
 	std::optional<game_socket::Start> _start;
+	std::vector<StartEvent> _startEvents;
+	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	std::string _refusedReason;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;

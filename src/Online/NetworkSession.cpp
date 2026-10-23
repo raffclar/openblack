@@ -18,6 +18,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Online/StartRules.h"
+
 namespace openblack::online
 {
 namespace
@@ -64,6 +66,8 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_end = End::None;
 	_joined.reset();
 	_start.reset();
+	_startEvents.clear();
+	_startCreatures.clear();
 	_turns.clear();
 	_playout.Reset();
 	_turnsDone = 0;
@@ -207,6 +211,80 @@ void NetworkSession::Text(std::string_view text)
 		Log(spdlog::level::warn, fmt::format("The game server refused the client: {}", refused->reason));
 		FinishWith(End::Refused);
 	}
+	else if (_state == State::Waiting)
+	{
+		StartFrame(*frame);
+	}
+}
+
+void NetworkSession::StartFrame(const game_socket::Frame& frame)
+{
+	if (const auto* query = std::get_if<game_socket::StartQuery>(&frame))
+	{
+		// The server names a land in the Scripts folder of the game, never a path out of it
+		std::optional<std::vector<uint8_t>> landFile;
+		if (!query->testbed && _settings.readLand && start_rules::IsLandPath(query->land))
+		{
+			landFile = _settings.readLand(query->land);
+		}
+		const auto reply = start_rules::Reply(*query, landFile);
+		Log(spdlog::level::info, reply.have ? fmt::format("This computer has the land of the game ({})", query->land)
+		                                    : fmt::format("This computer does not have the land {}", query->land));
+		_stream->SendText(game_socket::ToJson(reply));
+		if (!reply.have)
+		{
+			// The server takes the Ready of a player who cannot play the land
+			_ready = false;
+		}
+		_startEvents.push_back(reply.have ? StartEvent::HasLand : StartEvent::LacksLand);
+	}
+	else if (std::holds_alternative<game_socket::StartTransfer>(frame))
+	{
+		_startCreatures.clear();
+		// An observer has no god, so it has no creature to send
+		if (_joined.has_value() && _joined->role == game_socket::Role::God)
+		{
+			auto file = _settings.readCreature ? _settings.readCreature() : std::vector<uint8_t> {};
+			if (file.size() > game_socket::k_MostCreatureFileBytes)
+			{
+				Log(spdlog::level::warn, fmt::format("The creature file of {} bytes is too large to send", file.size()));
+				file.clear();
+			}
+			Log(spdlog::level::info, fmt::format("This computer sends a creature file of {} bytes", file.size()));
+			_stream->SendText(game_socket::ToJson(game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file)}));
+		}
+		_startEvents.push_back(StartEvent::Transfer);
+	}
+	else if (const auto* creature = std::get_if<game_socket::StartCreature>(&frame))
+	{
+		if (creature->slot.has_value())
+		{
+			_startCreatures[*creature->slot] = creature->file;
+		}
+	}
+	else if (std::holds_alternative<game_socket::StartCancel>(frame))
+	{
+		Log(spdlog::level::info, "A player does not have the land: the start stops");
+		_startCreatures.clear();
+		_startEvents.push_back(StartEvent::Cancelled);
+	}
+	else if (std::holds_alternative<game_socket::StartStop>(frame))
+	{
+		Log(spdlog::level::info, "A player left during the start: the start stops");
+		_startCreatures.clear();
+		_startEvents.push_back(StartEvent::Stopped);
+	}
+}
+
+std::optional<StartEvent> NetworkSession::TakeStartEvent()
+{
+	if (_startEvents.empty())
+	{
+		return std::nullopt;
+	}
+	const auto event = _startEvents.front();
+	_startEvents.erase(_startEvents.begin());
+	return event;
 }
 
 void NetworkSession::Closed(const WebSocketClosed& closed)

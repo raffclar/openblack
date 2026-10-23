@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/NetworkSession.h"
@@ -32,7 +33,10 @@ public:
 	/// the platform has no such client.
 	using MakeTestClient = std::function<std::unique_ptr<online::WebSocketClientInterface>(const std::string& authorities)>;
 
-	NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient);
+	/// Reads the creature file of the player's profile. Empty when the player has no creature.
+	using ReadCreature = std::function<std::vector<uint8_t>()>;
+
+	NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient, ReadCreature readCreature);
 	~NetworkGameSystem() override;
 	NetworkGameSystem(const NetworkGameSystem&) = delete;
 	NetworkGameSystem& operator=(const NetworkGameSystem&) = delete;
@@ -47,6 +51,10 @@ public:
 	void Update() override;
 	[[nodiscard]] bool InGame() const override;
 	[[nodiscard]] const online::NetworkSession* Session() const override { return _session.get(); }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override
+	{
+		return _session ? _session->TakeStartEvent() : std::nullopt;
+	}
 
 private:
 	void Detach();
@@ -55,6 +63,7 @@ private:
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
+	ReadCreature _readCreature;
 	/// The WSS client of a test join, which only the session uses
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;

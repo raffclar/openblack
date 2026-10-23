@@ -206,6 +206,9 @@ public:
 	void SetReady(bool ready);
 
 	// For the testbed
+	/// The name in the message box of a message with a name: the room's server for KickedFromGame
+	[[nodiscard]] const std::u16string& GetMessageName() const noexcept { return _messageName; }
+
 	/// Puts the front end on a box, as if the player had come to it
 	void ShowBox(multiplayer::Box box, multiplayer::LobbyKind kind);
 
@@ -218,13 +221,20 @@ private:
 	void RoomOpened(std::string ticket, std::u16string password);
 	/// Follows the session of the network game: the join, a refusal, a loss
 	void FollowSession();
+	/// Shows the steps of the start that the server makes
+	void FollowStart();
+	/// The server removed the player from the room: the box names the server
+	void ShowKicked();
 	void UpdateRoom();
+	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
+	void FollowSelectedGame();
 	[[nodiscard]] const online::NetworkSession* Session() const;
 
 	Services _services;
 	Settings _settings;
 	multiplayer::Flow _flow;
 	multiplayer::Message _message {multiplayer::Message::None};
+	std::u16string _messageName;
 	bool _left {false};
 	bool _busy {false};
 	std::optional<size_t> _connection;
@@ -234,6 +244,8 @@ private:
 
 	std::u16string _loginName;
 	std::optional<size_t> _selectedGame;
+	/// The id of the picked game: the list changes on the push channel, and the pick stays on its game
+	std::string _selectedId;
 	std::u16string _filter;
 	/// The game of the room, by its id, and a copy for the LAN
 	std::optional<lobby_api::ServerEntry> _room;

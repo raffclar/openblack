@@ -9,12 +9,14 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <optional>
 #include <string>
 #include <string_view>
 #include <variant>
+#include <vector>
 
 /// The JSON text frames of the game socket between a client and a game server, after the socket opens and next to the
 /// binary frames of the turns (see the turn codec of the game). Each frame is an object with a "type" member. Nothing
@@ -78,7 +80,7 @@ struct Joined
 /// Server to client: "room.refused". The server closes the socket after this frame.
 struct Refused
 {
-	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync"
+	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked"
 	std::string reason;
 };
 
@@ -118,7 +120,62 @@ struct PlayerState
 	State state {State::Away};
 };
 
-using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState>;
+/// The start of the game has steps. When the gods are ready, the server asks each player in the room if it has the
+/// land (start.query). Each player replies with the checksum of its land file (start.reply). When a player does not
+/// have the land, the server stops the start (start.cancel). When a checksum is not the server's, the server also
+/// removes that player from the room (room.refused "kicked"). When all players have the land, the server asks the gods
+/// for their creatures (start.transfer). Each god sends its creature file (start.creature), and the server sends each
+/// creature file to all players. When a player leaves during these steps, the server stops the start (start.stop).
+/// After the last creature file, the server sends game.start.
+
+/// Server to client: "start.query". The gods are ready, and the server asks if the player has the land of the game.
+struct StartQuery
+{
+	/// The script of the land under the Scripts folder of the game, or none for the testbed
+	std::string land;
+	bool testbed {false};
+	/// The checksum of the server's land file
+	uint64_t checksum {0};
+};
+
+/// Client to server: "start.reply"
+struct StartReply
+{
+	/// The player has the land
+	bool have {false};
+	/// The checksum of the player's land file
+	uint64_t checksum {0};
+};
+
+/// Server to client: "start.cancel". A player does not have the land, so the game does not start.
+struct StartCancel
+{
+};
+
+/// Server to client: "start.stop". A player left the room during the start, so the game does not start.
+struct StartStop
+{
+};
+
+/// Server to client: "start.transfer". All players have the land. Each god sends its creature file.
+struct StartTransfer
+{
+};
+
+/// The largest creature file that a start.creature frame holds
+inline constexpr size_t k_MostCreatureFileBytes = 512 * 1024;
+
+/// "start.creature". Client to server: the creature file of the player's god, empty when the player has no creature.
+/// Server to client: the creature file of the god of a slot.
+struct StartCreature
+{
+	/// The god's slot. None from a client.
+	std::optional<uint8_t> slot;
+	std::vector<uint8_t> file;
+};
+
+using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
+                           StartCancel, StartStop, StartTransfer, StartCreature>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);
