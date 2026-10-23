@@ -70,6 +70,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -390,6 +391,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// they hold goes back into their hands as their last turn posed them
 		Locator::creatureLocomotionSystem::value().Update(1.0f);
 		Locator::creatureObjectActionSystem::value().ShowHeldAtTurnEnd();
+		// A miracle's pile has no height of its own, so the turn sees it on the land as the land is now
+		if (Locator::miracleFxSystem::has_value())
+		{
+			Locator::miracleFxSystem::value().PlacePilesOnLand();
+		}
 		break;
 	case Step::PlayerCommands:
 		// The world does the commands that the players sent

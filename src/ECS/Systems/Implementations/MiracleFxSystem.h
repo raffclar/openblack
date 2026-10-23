@@ -51,6 +51,7 @@ public:
 	[[nodiscard]] entt::id_type BubbleMesh() override;
 	[[nodiscard]] entt::id_type BandMesh() override;
 	void UpdateGlobes(float gameSeconds) override;
+	void PlacePilesOnLand() override;
 
 private:
 	/// The hand: its bands fly and spin, and it glows while it holds a miracle
