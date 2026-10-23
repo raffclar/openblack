@@ -13,6 +13,7 @@
 #include <utility>
 
 #include <LobbyApiJson.h>
+#include <spdlog/spdlog.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
@@ -733,6 +734,11 @@ void MultiplayerFrontEnd::HandleEvent(const lobby_api::PushEvent& event)
 		const auto seat = std::ranges::find(_seats, line->from.id, [](const Seat& s) { return s.account.id; });
 		const auto god = seat != _seats.end() ? seat->god : 0;
 		_chat.push_back(ChatLine(ToUtf16(line->from.name), ClampChat(ToUtf16(line->text)), own, god));
+		// The log keeps who spoke, never the words
+		if (auto logger = spdlog::get("game"))
+		{
+			logger->info("A chat line from {} came on the room's channel", line->from.name);
+		}
 		return;
 	}
 	if (event.type == lobby_api::events::k_RoomChanged)

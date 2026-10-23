@@ -342,8 +342,22 @@ public:
 	}
 	bool SendBinary(online::WebSocketId id, std::span<const uint8_t>) override { return IsOpen(id); }
 	void Close(online::WebSocketId id, uint16_t) override { _sockets.erase(id); }
+	/// The server sends a frame to each open socket at the next frame
+	void ServerSends(const game_socket::Frame& frame) { _toClients.push_back(game_socket::ToJson(frame)); }
 	void Poll() override
 	{
+		auto toClients = std::move(_toClients);
+		_toClients.clear();
+		for (const auto& text : toClients)
+		{
+			for (auto& [id, socket] : _sockets)
+			{
+				if (socket.open && socket.handlers.text)
+				{
+					socket.handlers.text(text);
+				}
+			}
+		}
 		auto joins = std::move(_joins);
 		_joins.clear();
 		for (const auto& [id, observer] : joins)
@@ -401,6 +415,7 @@ private:
 	std::vector<online::WebSocketId> _opening;
 	/// The joins to let in, and whether the ticket is an observer's
 	std::vector<std::pair<online::WebSocketId, bool>> _joins;
+	std::vector<std::string> _toClients;
 	online::WebSocketId _nextId {0};
 };
 
@@ -540,6 +555,30 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.Next();
 		frontEnd.SetReady(true);
 		break;
+	case Stage::StartTransfer:
+	case Stage::StartCancelled:
+	case Stage::KickedFromGame:
+	{
+		// The demonstration's server makes the steps of the start that the stage shows
+		frontEnd.Next();
+		frontEnd.SetReady(true);
+		auto& sockets = demo.sockets;
+		sockets.ServerSends(game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+		if (demo.stage == Stage::StartTransfer)
+		{
+			sockets.ServerSends(game_socket::StartTransfer {});
+		}
+		else if (demo.stage == Stage::StartCancelled)
+		{
+			sockets.ServerSends(game_socket::StartCancel {});
+		}
+		else
+		{
+			sockets.ServerSends(game_socket::StartCancel {});
+			sockets.ServerSends(game_socket::Refused {.reason = "kicked"});
+		}
+		break;
+	}
 	default:
 		break;
 	}
