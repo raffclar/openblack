@@ -181,6 +181,25 @@ void block_texture::BuildBlockTexels(std::span<const lnd::LNDCell> cells, const 
 	PaintCellTexels(cells, sources, {0, 0}, {k_BlockCells, k_BlockCells}, texels);
 }
 
+void block_texture::PutCellTexels(std::span<const uint16_t> part, glm::ivec2 firstCell, glm::ivec2 cellCount,
+                                  std::span<uint16_t> block)
+{
+	const auto rows = cellCount.x * k_TexelsPerCell;
+	const auto columns = cellCount.y * k_TexelsPerCell;
+	if (cellCount.x <= 0 || cellCount.y <= 0 || firstCell.x < 0 || firstCell.y < 0 ||
+	    firstCell.x + cellCount.x > k_BlockCells || firstCell.y + cellCount.y > k_BlockCells ||
+	    part.size() < static_cast<size_t>(rows) * columns || block.size() < static_cast<size_t>(k_Side) * k_Side)
+	{
+		return;
+	}
+	for (int x = 0; x < rows; ++x)
+	{
+		const auto row = part.subspan(static_cast<size_t>(x) * columns, static_cast<size_t>(columns));
+		const auto at = static_cast<size_t>(((firstCell.x * k_TexelsPerCell + x) * k_Side) + (firstCell.y * k_TexelsPerCell));
+		std::ranges::copy(row, block.begin() + static_cast<std::ptrdiff_t>(at));
+	}
+}
+
 void block_texture::ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba)
 {
 	const auto count = std::min(texels.size(), rgba.size() / 4);

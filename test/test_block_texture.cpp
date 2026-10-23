@@ -233,3 +233,46 @@ TEST(BlockTexture, BuildBlocksPaintsEachBlockAsBuildBlockInOrder)
 	std::iota(inOrder.begin(), inOrder.end(), size_t {0});
 	EXPECT_EQ(order, inOrder);
 }
+
+TEST(BlockTexture, PutCellTexelsMakesAKeptBlockAsANewPaintOfIt)
+{
+	const std::array countries = {SingleMaterialCountry(0), SingleMaterialCountry(1)};
+	std::vector<uint16_t> materials(k_MapTexels * 2);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x80);
+	const block_texture::Sources sources {countries, materials, noise, bump};
+	auto cells = FlatCells(0);
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = static_cast<uint8_t>(2 + (i % 19));
+		cells[i].properties.country = static_cast<uint8_t>((i / 7) % 2);
+	}
+	std::vector<uint16_t> kept(static_cast<size_t>(block_texture::k_Side) * block_texture::k_Side);
+	block_texture::BuildBlockTexels(cells, sources, kept);
+
+	// Two corners change height: x 7 and 8, z 10. The land paints again the cells that touch them, x 6 to 8 and z 9 to
+	// 10.
+	for (const int x : {7, 8})
+	{
+		cells[static_cast<size_t>((x * block_texture::k_CellsPerSide) + 10)].altitude = 40;
+	}
+	const glm::ivec2 first {6, 9};
+	const glm::ivec2 count {3, 2};
+	std::vector<uint16_t> part(static_cast<size_t>(count.x * count.y) * 16 * 16);
+	block_texture::PaintCellTexels(cells, sources, first, count, part);
+	block_texture::PutCellTexels(part, first, count, kept);
+
+	std::vector<uint16_t> fresh(kept.size());
+	block_texture::BuildBlockTexels(cells, sources, fresh);
+	EXPECT_EQ(kept, fresh);
+}
+
+TEST(BlockTexture, PutCellTexelsLeavesABlockAsItIsForARectangleOutsideIt)
+{
+	std::vector<uint16_t> block(static_cast<size_t>(block_texture::k_Side) * block_texture::k_Side, 7);
+	const std::vector<uint16_t> part(static_cast<size_t>(2 * 2) * 16 * 16, 9);
+	block_texture::PutCellTexels(part, {15, 0}, {2, 2}, block);
+	EXPECT_TRUE(std::ranges::all_of(block, [](uint16_t texel) { return texel == 7; }));
+}
