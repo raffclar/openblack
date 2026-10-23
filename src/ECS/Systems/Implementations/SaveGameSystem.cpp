@@ -80,6 +80,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -763,15 +764,14 @@ gamesave::ObjectKey Translate(const ObjectRefKeys& keys, gamesave::ObjectKey key
 /// Whether the land's file of the game's saved game is the land that is open
 bool IsOpenLand(std::string_view landscape)
 {
-	const auto* instance = Game::Instance();
-	if (instance == nullptr)
+	if (!Locator::landSystem::has_value())
 	{
 		return false;
 	}
 	auto saved = std::string(landscape);
 	std::ranges::replace(saved, '\\', '/');
 	const auto savedName = std::filesystem::path(saved).filename().string();
-	auto open = instance->GetLandscapePath().generic_string();
+	auto open = Locator::landSystem::value().GetLandscapePath().generic_string();
 	std::ranges::replace(open, '\\', '/');
 	const auto openName = std::filesystem::path(open).filename().string();
 	return std::ranges::equal(savedName, openName, [](char a, char b) {
@@ -853,10 +853,11 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	                          .creatureInTemple = 0,
 	                          .lastAutosaveTurn = _lastAutosaveTurn,
 	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
-	if (const auto* instance = Game::Instance(); instance != nullptr)
+	if (Locator::landSystem::has_value())
 	{
-		game.landscape = instance->GetLandPath().generic_string();
-		game.landscapeFile = instance->GetLandscapePath().generic_string();
+		const auto& lands = Locator::landSystem::value();
+		game.landscape = lands.GetLandPath().generic_string();
+		game.landscapeFile = lands.GetLandscapePath().generic_string();
 	}
 	if (Locator::creatureCaveSystem::has_value())
 	{
@@ -1203,15 +1204,15 @@ bool SaveGameSystem::Load(uint32_t slot)
 
 void SaveGameSystem::StartLandAgain() const
 {
-	auto* instance = Game::Instance();
-	if (instance == nullptr || instance->GetLandPath().empty())
+	if (!Locator::landSystem::has_value() || Locator::landSystem::value().GetLandPath().empty())
 	{
 		return;
 	}
+	auto& lands = Locator::landSystem::value();
 	SPDLOG_LOGGER_WARN(Log(), "The load did not happen; the land {} starts again as a new game",
-	                   instance->GetLandPath().generic_string());
-	const auto land = instance->GetLandPath();
-	std::ignore = instance->LoadMapWithFreshScripts(land, land_change::Kind::NewGame);
+	                   lands.GetLandPath().generic_string());
+	const auto land = lands.GetLandPath();
+	std::ignore = lands.LoadMapWithFreshScripts(land, land_change::Kind::NewGame);
 }
 
 const entt::meta_ctx& SaveGameSystem::Reflection()
@@ -1226,8 +1227,7 @@ const entt::meta_ctx& SaveGameSystem::Reflection()
 
 bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game)
 {
-	auto* instance = Game::Instance();
-	if (instance == nullptr || (game.landscapeFile.empty() && game.landscape.empty()))
+	if (!Locator::landSystem::has_value() || (game.landscapeFile.empty() && game.landscape.empty()))
 	{
 		SPDLOG_LOGGER_WARN(Log(), "Slot {} keeps no landscape, so its world cannot load", slot);
 		return false;
@@ -1239,7 +1239,7 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	{
 		Locator::vm::value().StopAllTasks();
 	}
-	const bool loaded = instance->LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world]() {
+	const bool loaded = Locator::landSystem::value().LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world]() {
 		return ecs::world_save::LoadEntities(reflection, world).has_value();
 	});
 	if (!loaded)
@@ -1596,11 +1596,11 @@ bool SaveGameSystem::InstantSave(uint32_t slot)
 
 bool SaveGameSystem::SaveOnExit(bool quitting)
 {
-	const auto* game = Game::Instance();
 	const auto& context = Locator::entitiesRegistry::value().Context();
 	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, or a game that is over
-	if (game == nullptr || game->GetLandPath().empty() || game->GetLandPath() == "testbed" || context.gameOver ||
-	    context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
+	const auto* lands = Locator::landSystem::has_value() ? &Locator::landSystem::value() : nullptr;
+	if (lands == nullptr || lands->GetLandPath().empty() || lands->GetLandPath() == ecs::systems::k_TestbedLandPath ||
+	    context.gameOver || context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
 	{
 		return false;
 	}

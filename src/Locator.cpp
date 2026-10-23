@@ -118,6 +118,7 @@
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
+#include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
 #include "ECS/Systems/Implementations/MagicShieldSystem.h"
@@ -263,6 +264,7 @@ using openblack::ecs::systems::HighDetailSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandShadeSystem;
+using openblack::ecs::systems::LandSystem;
 using openblack::ecs::systems::LeashSystem;
 using openblack::ecs::systems::LiquidParticleSystem;
 using openblack::ecs::systems::LivingActionSystem;
@@ -593,6 +595,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
 	Locator::scriptHighlightSystem::emplace<ecs::systems::ScriptHighlightSystem>();
+	// The land loads and plays its turns for the game and for the dedicated server both
+	Locator::landSystem::emplace<LandSystem>();
 	return true;
 }
 
@@ -716,6 +720,7 @@ void openblack::ShutDownServices()
 
 	// The inspector goes first: its providers read the services below
 	Locator::inspector::reset();
+	Locator::landSystem::reset();
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();

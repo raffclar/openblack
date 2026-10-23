@@ -197,6 +197,7 @@
 #include "ECS/Systems/Implementations/VillagerScript.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -3403,7 +3404,7 @@ void StartMusic() // 044 START_MUSIC
 
 void StopMusic() // 045 STOP_MUSIC
 {
-	if (auto* gameMusic = Game::Instance()->GetGameMusic())
+	if (auto* gameMusic = ScriptGameMusic())
 	{
 		gameMusic->StartScriptMusic(audio::MusicType::None);
 	}
@@ -3429,7 +3430,7 @@ void AttachMusic() // 046 ATTACH_MUSIC
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "ATTACH_MUSIC: no music type {}", music);
 	}
-	auto* gameMusic = Game::Instance()->GetGameMusic();
+	auto* gameMusic = ScriptGameMusic();
 	if (object && gameMusic != nullptr)
 	{
 		gameMusic->AttachMusic(*object, static_cast<audio::MusicType>(music));
@@ -3439,7 +3440,7 @@ void AttachMusic() // 046 ATTACH_MUSIC
 void DetachMusic() // 047 DETACH_MUSIC
 {
 	const auto object = PopMusicObject("DETACH_MUSIC");
-	if (auto* gameMusic = Game::Instance()->GetGameMusic(); object && gameMusic != nullptr)
+	if (auto* gameMusic = ScriptGameMusic(); object && gameMusic != nullptr)
 	{
 		gameMusic->DetachMusic(*object);
 	}
@@ -5415,7 +5416,7 @@ void MoveMusic() // 149 MOVE_MUSIC
 {
 	const auto to = PopMusicObject("MOVE_MUSIC");
 	const auto from = PopMusicObject("MOVE_MUSIC");
-	if (auto* gameMusic = Game::Instance()->GetGameMusic(); from && to && gameMusic != nullptr)
+	if (auto* gameMusic = ScriptGameMusic(); from && to && gameMusic != nullptr)
 	{
 		gameMusic->MoveMusic(*from, *to);
 	}
@@ -5445,8 +5446,8 @@ void LoadMap() // 152 LOAD_MAP
 	const auto& fileSystem = Locator::filesystem::value();
 	try
 	{
-		Game::Instance()->LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
-		                          loading::LoadingClock::Mode::PleaseWait);
+		Locator::landSystem::value().LoadMap(fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path)),
+		                                     loading::LoadingClock::Mode::PleaseWait, land_change::Kind::Story);
 	}
 	catch (const std::exception& e)
 	{
@@ -9509,7 +9510,7 @@ void EnableDisableAlignmentMusic() // 445 ENABLE_DISABLE_ALIGNMENT_MUSIC
 {
 	const auto enable = Pop().intVal != 0;
 	SPDLOG_LOGGER_DEBUG(spdlog::get("scripting"), "The land's music is turned {}", enable ? "on" : "off");
-	if (auto* gameMusic = Game::Instance()->GetGameMusic())
+	if (auto* gameMusic = ScriptGameMusic())
 	{
 		gameMusic->SetAlignmentMusicEnabled(enable);
 	}

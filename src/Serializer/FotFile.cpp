@@ -31,11 +31,6 @@
 using namespace openblack;
 using namespace openblack::filesystem;
 
-FotFile::FotFile(Game& game)
-    : _game(game)
-{
-}
-
 namespace
 {
 
