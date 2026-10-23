@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <entt/core/hashed_string.hpp>
+#include <fmt/format.h>
 #include <gtest/gtest.h>
 
 #include "3D/CreatureBody.h"
@@ -37,4 +41,22 @@ TEST(CreatureBody, TheCreatureTablesStartWithTheGiantApe)
 	EXPECT_EQ(InfoRow(CreatureType::GiantApe), 0u);
 	EXPECT_EQ(InfoRow(CreatureType::Cow), 1u);
 	EXPECT_EQ(InfoRow(CreatureType::Gorilla), 16u);
+}
+
+TEST(CreatureBody, TheIdsAreTheHashesOfTheirTexts)
+{
+	// The ids are made without a text on the heap. They must stay the hashes of the texts that the caches use.
+	for (uint32_t species = 0; species <= 255; ++species)
+	{
+		const auto type = static_cast<CreatureType>(species);
+		const auto rig = fmt::format("creature/{}/rig", static_cast<uint8_t>(type));
+		EXPECT_EQ(GetRigId(type), entt::hashed_string(rig.c_str()).value());
+		for (uint32_t look = 0; look <= static_cast<uint32_t>(A::Thin); ++look)
+		{
+			const auto mesh = fmt::format("creature/{}/{}", static_cast<uint8_t>(type), look);
+			EXPECT_EQ(GetIdFromType(type, static_cast<A>(look)), entt::hashed_string(mesh.c_str()).value());
+		}
+	}
+	EXPECT_EQ(GetIdFromType(CreatureType::Cow, static_cast<A>(4'000'000'000U)),
+	          entt::hashed_string("creature/1/4000000000").value());
 }

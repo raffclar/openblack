@@ -53,3 +53,17 @@ TEST(LandBlock, ItsHighestAltitudeIsTheHighestCellWhenItWasLoaded)
 	block.SetCellAltitude(7, 200);
 	EXPECT_EQ(block.GetHighestAltitude(), 90);
 }
+
+TEST(LandBlock, ACellThatAlreadyHasTheAltitudeDoesNotChange)
+{
+	openblack::lnd::LNDBlock loaded {};
+	loaded.cells.at(7).altitude = 40;
+	openblack::LandBlock block;
+	block.SetLndBlock(loaded);
+	EXPECT_FALSE(block.SetCellAltitude(7, 40));
+	EXPECT_TRUE(block.SetCellAltitude(7, 41));
+	EXPECT_EQ(block.GetLndBlock()->cells.at(7).altitude, 41);
+	EXPECT_FALSE(block.SetCellAltitude(7, 41));
+	// A place past the block's cells changes nothing
+	EXPECT_FALSE(block.SetCellAltitude(loaded.cells.size(), 9));
+}
