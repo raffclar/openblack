@@ -162,6 +162,7 @@ public:
 	void TakeOff(entt::entity /*creature*/) override {}
 	bool Toggle(entt::entity /*creature*/) override { return false; }
 	bool ChangeType(entt::entity /*creature*/, LeashType /*type*/) override { return false; }
+	bool PickType(PlayerNames /*player*/, LeashType /*type*/) override { return false; }
 	bool TieTo(entt::entity /*creature*/, entt::entity /*object*/) override { return false; }
 	void UntieToHand(entt::entity /*creature*/) override {}
 	void SetWorks(entt::entity /*creature*/, bool /*works*/) override {}

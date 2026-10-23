@@ -528,7 +528,7 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	case Purpose::PickLeash:
 		if (creature.has_value())
 		{
-			leashes->ChangeType(*creature, request.leash);
+			leashes->PickType(frame.player, request.leash);
 		}
 		_picker.Close();
 		break;

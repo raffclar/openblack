@@ -663,9 +663,47 @@ bool LeashSystem::PutOnFor(PlayerNames player, entt::entity creature, LeashType 
 	leashes->worn->ropeStarted = false;
 	if (const auto* body = registry.TryGet<const Creature>(creature))
 	{
+		// The leash that goes on becomes the picked leash at the temple of the creature's player
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
 	return true;
+}
+
+void LeashSystem::PickPost(PlayerNames owner, LeashType worn)
+{
+	// A player with no temple has no posts, and nothing changes
+	Locator::entitiesRegistry::value().Each<LeashPost>([owner, worn](LeashPost& post) {
+		if (post.owner != owner)
+		{
+			return;
+		}
+		if (const auto picked = leash::PostPickedFor(post.type, worn); picked.has_value())
+		{
+			post.selected = *picked;
+		}
+	});
+}
+
+bool LeashSystem::PlayerCanChangeType(entt::entity creature) const
+{
+	const auto* spells = Locator::entitiesRegistry::value().TryGet<const CreatureSpells>(creature);
+	if (spells == nullptr)
+	{
+		return true;
+	}
+	return leash::PlayerCanChangeType(spells->spells.IsActive(creature_spells::Spell::Nice),
+	                                  spells->spells.IsActive(creature_spells::Spell::Nasty));
+}
+
+bool LeashSystem::PickType(PlayerNames player, LeashType type)
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value() || !PlayerCanChangeType(*creature))
+	{
+		return false;
+	}
+	return ChangeType(*creature, type);
 }
 
 void LeashSystem::TakeOff(entt::entity creature)
@@ -736,7 +774,7 @@ bool LeashSystem::Carry(PlayerNames player, entt::entity creature, const leash::
 		UntieToHand(creature);
 		return true;
 	case Kind::ChangeType:
-		return ChangeType(creature, command.type);
+		return PlayerCanChangeType(creature) && ChangeType(creature, command.type);
 	}
 	return false;
 }
@@ -813,17 +851,11 @@ bool LeashSystem::ChangeType(entt::entity creature, LeashType type)
 		}
 	}
 	// Its player's posts show the leash picked
-	const auto* body = registry.TryGet<const Creature>(creature);
-	if (body != nullptr)
+	if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
 	{
+		PickPost(body->owner, type);
 		ForgetLocalGesturePath(body->owner);
 	}
-	registry.Each<LeashPost>([leashes, body](LeashPost& post) {
-		if (body != nullptr && post.owner == body->owner)
-		{
-			post.selected = post.type == leashes->selected;
-		}
-	});
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Creature {}'s picked leash is now the {} leash", entt::to_integral(creature),
 	                   leash::Name(type));
 	return true;
@@ -844,6 +876,12 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		{
 			return false;
 		}
+	}
+	else if (const auto* body = registry.TryGet<const Creature>(creature); body != nullptr)
+	{
+		// A tie puts the worn leash on again: the worn leash becomes the picked leash at the temple again
+		PickPost(body->owner, TypeOf(creature));
+		ForgetLocalGesturePath(body->owner);
 	}
 	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	auto& worn = *leashes->worn;
@@ -1188,7 +1226,8 @@ bool LeashSystem::TapPost(entt::entity post)
 			other.selected = &other == tapped;
 		}
 	});
-	if (creature.has_value())
+	// The tap changes the picked leash at once, but the creature keeps its leash while a nice or nasty spell is on it
+	if (creature.has_value() && PlayerCanChangeType(*creature))
 	{
 		ChangeType(*creature, tapped->type);
 	}
@@ -1884,8 +1923,17 @@ void LeashSystem::DoOrder(PlayerNames player, const player_commands::LeashOrder&
 		break;
 	}
 	case LeashOrder::Kind::Untie:
-		UntieToHand(*creature);
+	{
+		// The hand takes the tied leash off and puts it on again, held in the hand. Thus the leash becomes the picked
+		// leash at the temple again.
+		const auto type = TypeOf(*creature);
+		if (TiedTo(*creature).has_value())
+		{
+			TakeOff(*creature);
+			PutOnFor(player, *creature, type);
+		}
 		break;
+	}
 	}
 }
 

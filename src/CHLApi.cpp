@@ -5897,12 +5897,17 @@ void AttachObjectLeashToHand() // 186 ATTACH_OBJECT_LEASH_TO_HAND
 	{
 		return;
 	}
+	// The leash goes back to the hand and on again, so its leash becomes the picked leash at the temple again
 	auto& leashes = Locator::leashSystem::value();
 	if (leashes.TiedTo(creature).has_value())
 	{
 		leashes.UntieToHand(creature);
 	}
-	else if (!leashes.IsLeashed(creature))
+	if (leashes.IsLeashed(creature))
+	{
+		leashes.PutOn(creature, leashes.TypeOf(creature));
+	}
+	else
 	{
 		leashes.Toggle(creature);
 	}
