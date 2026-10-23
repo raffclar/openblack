@@ -9,6 +9,10 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstddef>
+#include <cstring>
+
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -748,4 +752,24 @@ TEST(ScriptObjectsSystem, AReleasedAnimalGoesBackToItsOwnLife)
 	system->ReleaseFromScript(free);
 	EXPECT_EQ(world->releasedAnimals, std::vector {animal});
 	EXPECT_FALSE(world->IsControlled(animal));
+}
+
+TEST(ScriptObjectTable, TheBytesOfTheTableHaveNoUnsetPadding)
+{
+	// The table is made in memory that holds other bytes, as a copy on the stack can be
+	alignas(Table) std::array<std::byte, sizeof(Table)> memory {};
+	memory.fill(std::byte {0xAB});
+	auto* table = std::construct_at(reinterpret_cast<Table*>(memory.data()));
+	ASSERT_TRUE(table->Register(7, true).has_value());
+	*table = Table {};
+	ASSERT_TRUE(table->Register(9, false).has_value());
+	std::array<std::byte, sizeof(Table)> bytes {};
+	std::memcpy(bytes.data(), table, sizeof(Table));
+	std::destroy_at(table);
+	for (size_t place = 0; place < k_Places; ++place)
+	{
+		EXPECT_EQ(bytes.at((place * sizeof(Place)) + 7), std::byte {0}) << "place " << place;
+	}
+	EXPECT_EQ(bytes.at(sizeof(Table) - 2), std::byte {0});
+	EXPECT_EQ(bytes.at(sizeof(Table) - 1), std::byte {0});
 }
