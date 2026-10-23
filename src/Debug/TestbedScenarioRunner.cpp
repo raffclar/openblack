@@ -194,6 +194,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -884,9 +885,9 @@ void Runner::Start(const Scenario& scenario)
 	}
 
 	// A fresh testbed: the last one's creatures, objects, footprints, weather and scripts all go with it
-	if (auto* game = Game::Instance(); game != nullptr)
+	if (Locator::landSystem::has_value())
 	{
-		game->LoadTestbed();
+		Locator::landSystem::value().LoadTestbed();
 	}
 	if (!Locator::terrainSystem::has_value())
 	{

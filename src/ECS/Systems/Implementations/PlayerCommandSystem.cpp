@@ -19,6 +19,7 @@
 #include "ECS/Components/MagicFireBall.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
@@ -114,6 +115,32 @@ void Run(const Command& command)
 			    if (openblack::Locator::creatureHandSystem::has_value() && registry.Valid(action.creature))
 			    {
 				    openblack::Locator::creatureHandSystem::value().DoBruise(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightGround>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoGroundPress(command.player, action.creature,
+				                                                                   action.point, action.replace);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightMove>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoMove(
+				        command.player, action.target,
+				        {.kind = static_cast<openblack::creature_fight::Move::Kind>(action.kind), .value = action.value},
+				        action.replace);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightCharge>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoCharge(command.player,
+				                                                              static_cast<float>(action.heldMs));
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, TotemShare>)

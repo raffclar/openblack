@@ -14,6 +14,7 @@
 #include <limits>
 #include <type_traits>
 
+#include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
 
 namespace openblack::turn_codec
@@ -22,6 +23,9 @@ namespace
 {
 
 using namespace player_commands;
+
+/// The last kind of a fight move, so that a command with another kind does not read
+constexpr auto k_LastFightMoveKind = static_cast<uint8_t>(creature_fight::Move::Kind::Spell);
 
 static_assert(sizeof(entt::id_type) == sizes::k_Entity, "An entity goes on the wire as 32 bits");
 static_assert(std::numeric_limits<float>::is_iec559, "A float goes on the wire as its IEEE 754 bits");
@@ -161,6 +165,18 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.totem);
 		               out.Float(command.share);
 	               },
+	               [&out](const FightGround& command) {
+		               out.Entity(command.creature);
+		               out.Vector(command.point);
+		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
+	               },
+	               [&out](const FightMove& command) {
+		               out.Entity(command.target);
+		               out.Byte(command.kind);
+		               out.Number(command.value);
+		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
+	               },
+	               [&out](const FightCharge& command) { out.Number(command.heldMs); },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -272,6 +288,34 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = TotemShare {.totem = totem, .share = in.Float()};
 		return DecodeError::None;
 	}
+	case CommandTag::FightGround:
+	{
+		const auto creature = in.Entity();
+		const auto point = in.Vector();
+		const auto replace = in.Byte();
+		if (replace > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = FightGround {.creature = creature, .point = point, .replace = replace != 0};
+		return DecodeError::None;
+	}
+	case CommandTag::FightMove:
+	{
+		const auto target = in.Entity();
+		const auto kind = in.Byte();
+		const auto value = in.Number<uint32_t>();
+		const auto replace = in.Byte();
+		if (kind > k_LastFightMoveKind || replace > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = FightMove {.target = target, .kind = kind, .value = value, .replace = replace != 0};
+		return DecodeError::None;
+	}
+	case CommandTag::FightCharge:
+		action = FightCharge {.heldMs = in.Number<uint32_t>()};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -368,6 +412,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandApply& /*command*/) { return CommandTag::HandApply; },
 	                      [](const TotemShare& /*command*/) { return CommandTag::TotemShare; },
 	                      [](const CreatureBruise& /*command*/) { return CommandTag::CreatureBruise; },
+	                      [](const FightGround& /*command*/) { return CommandTag::FightGround; },
+	                      [](const FightMove& /*command*/) { return CommandTag::FightMove; },
+	                      [](const FightCharge& /*command*/) { return CommandTag::FightCharge; },
 	                  },
 	                  action);
 }
@@ -392,6 +439,9 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandApply& /*command*/) { return k_Entity; },
 	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
 	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	                                     [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
+	                                     [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
+	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

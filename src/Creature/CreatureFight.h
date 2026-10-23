@@ -626,8 +626,6 @@ struct Fighter
 	/// It was told to hurry: the span of each turn is two times as long until the fight ends (see TestSpanMs)
 	bool hurried {false};
 	MoveQueue queue;
-	/// The sparkles marking the moves the player queued, in step with the queue
-	marks::MarkList marks;
 	float health {1.0f};
 	float stamina {1.0f};
 	Control control {Control::Computer};
@@ -640,6 +638,9 @@ void Enter(Fighter& fighter, State state, std::optional<size_t> animation = std:
 /// The player (or a script) adds a move: a creature the computer was fighting with is given back to the player, and
 /// the computer waits 15 seconds
 bool PlayerMove(Fighter& fighter, const Move& move, bool replace);
+/// As PlayerMove, with the sparkles that mark the queued moves on the computer of the player: a move in place of the
+/// queue keeps only the newest sparkle
+bool PlayerMove(Fighter& fighter, marks::MarkList& marks, const Move& move, bool replace);
 
 /// What to do with the move at the front of the queue
 struct Order
@@ -662,6 +663,8 @@ struct Order
 /// The move at the front of the queue taken off it, if one can be made now: only in range of the opponent, in the
 /// stance or blocking (when anything ends the block), and a blow only once its charge is known
 [[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, bool inRange);
+/// As TakeOrder, with the sparkles that mark the queued moves: the sparkle of each move taken off the queue goes
+[[nodiscard]] std::optional<Order> TakeOrder(Fighter& fighter, marks::MarkList& marks, bool inRange);
 
 // The computer's choices
 

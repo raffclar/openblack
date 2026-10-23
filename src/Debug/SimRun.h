@@ -69,6 +69,8 @@ struct Request
 	bool startPaused {false};
 	/// The file of recorded input that the first land makes from its first frame on, as input.record answers it
 	std::optional<std::filesystem::path> inputPath;
+	/// Tools: the input made from the first frame of the first land on goes to this file as the game ends
+	std::optional<std::filesystem::path> recordInputPath;
 	/// The file to write the commands of each turn to, for a dedicated server that does the same commands (command_log)
 	std::optional<std::filesystem::path> commandsPath;
 

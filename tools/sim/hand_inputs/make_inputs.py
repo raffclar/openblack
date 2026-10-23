@@ -9,6 +9,14 @@ it: the game puts its camera there before the first frame of the land.
 
 writes land1.json, testbed.json, twogods.json and twogods_totem.json beside this script. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
+
+fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
+which the server plays too. To record it again:
+
+    python tools/sim/server_check.py --scenario combat.recorded_presses --turns 400 --frame-ms 20 --server-fast
+        --hash-parts --input <a file with one pointer event, [640, 900] at frame 0> --game-args "--fight-autopilot
+        sequence --fight-autopilot-sequence 1:high,2.5:block,4:step_forward,5.5:middle,7:step_back,8.5:low,10:step_left,
+        11.5:step_right,13:high --sim-record-input fight.json"
 """
 
 import json

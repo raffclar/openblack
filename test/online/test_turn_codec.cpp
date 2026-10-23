@@ -57,6 +57,9 @@ std::vector<Action> EachCommand()
 	    TotemShare {.totem = Entity(17), .share = 0.75f},
 	    CreatureBruise {.creature = Entity(18),
 	                    .wound = creature_marks::Mark {.u = 1, .v = 2, .skin = 3, .age = 0, .type = 0, .column = 7}},
+	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
+	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
+	    FightCharge {.heldMs = 1200},
 	};
 }
 
@@ -80,7 +83,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 16)
+	switch (bits(random) % 19)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -114,6 +117,15 @@ Action RandomAction(std::mt19937& random)
 		return HandApply {.target = entity()};
 	case 14:
 		return TotemShare {.totem = entity(), .share = number()};
+	case 15:
+		return FightGround {.creature = entity(), .point = vector(), .replace = bits(random) % 2 == 0};
+	case 16:
+		return FightMove {.target = entity(),
+		                  .kind = static_cast<uint8_t>(bits(random) % 7),
+		                  .value = bits(random),
+		                  .replace = bits(random) % 2 == 0};
+	case 17:
+		return FightCharge {.heldMs = bits(random)};
 	default:
 	{
 		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
@@ -183,7 +195,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -223,7 +235,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 2), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>((i * 2) % 32), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -356,6 +368,14 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto order = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {LeashOrder {.kind = LeashOrder::Kind::Untie}}});
 	order[10] = 4;
 	EXPECT_EQ(Decode(order).error, DecodeError::Value);
+
+	// A fight move of a kind that no move has, or a button flag that is not 0 or 1
+	auto move = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {FightMove {.target = Entity(1), .kind = 6}}});
+	move[14] = 7;
+	EXPECT_EQ(Decode(move).error, DecodeError::Value);
+	move[14] = 6;
+	move.back() = 2;
+	EXPECT_EQ(Decode(move).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;

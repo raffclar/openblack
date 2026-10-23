@@ -50,6 +50,7 @@ int main(int argc, char* argv[])
 		("g,game-path", "The folder of the game's data.", cxxopts::value<std::string>())
 		("s,start-level", "The script of the land under the game's Scripts folder.", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "The flat testbed in place of a land.")
+		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
 		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
@@ -80,6 +81,11 @@ int main(int argc, char* argv[])
 		settings.gamePath = result["game-path"].as<std::string>();
 		settings.land = result["start-level"].as<std::string>();
 		settings.testbed = result.count("testbed") != 0;
+		if (result.count("scenario") != 0)
+		{
+			settings.scenario = result["scenario"].as<std::string>();
+			settings.testbed = true;
+		}
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(result["skip-opening"].as<std::string>());
 		settings.seed = result["seed"].as<uint32_t>();
 		if (result.count("turns") != 0)

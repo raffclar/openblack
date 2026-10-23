@@ -190,9 +190,43 @@ struct CreatureBruise
 	std::optional<creature_marks::Mark> wound;
 };
 
+/// A press of the hand on the ground of the arena while the hand directs the fight of the player's creature. The turn
+/// makes the creature step towards the point, from where the creature stands and the way that it faces then.
+struct FightGround
+{
+	entt::entity creature;
+	/// The point on the ground that the hand pressed
+	glm::vec3 point;
+	/// The Move button makes the step in place of the queued moves; the Action button adds it after them
+	bool replace;
+};
+
+/// A move of the player's fighting creature that the hand or a gesture of the player gives: a press on the opponent or
+/// on the player's creature, the special move or a miracle of the fight. The turn adds the move to the queue of the
+/// sending player's creature.
+struct FightMove
+{
+	/// What the hand pressed on: the opponent or the player's own creature, or the creature of a gesture
+	entt::entity target;
+	/// The kind of the move (a creature_fight::Move::Kind) and its value: the animation or the miracle
+	uint8_t kind;
+	uint32_t value;
+	/// The move goes in place of the queued moves (the Move button), or after them
+	bool replace;
+};
+
+/// The player let go of the button that pressed on a body in a fight: the blow that waits last in the queue of the
+/// sending player's creature gets the charge
+struct FightCharge
+{
+	/// How long the button was held, in milliseconds
+	uint32_t heldMs;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise>;
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge>;
 
 /// A command and the player that sent it
 struct Command

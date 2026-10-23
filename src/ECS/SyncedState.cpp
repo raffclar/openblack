@@ -109,6 +109,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
     {.component = "*", .field = "", .marker = "ScriptHighlightGlow"},
+    // The clouds of a storm gather and drift in the frames by the local random numbers, as the game draws them. The
+    // rain and the storm's turns read the storm, not its clouds.
+    {.component = "*", .field = "", .marker = "StormCloud"},
+    // The sparkles of the moves that the player queued in a fight: only the computer of the player adds them, as the
+    // game draws them. The turns read the queue, not its sparkles.
+    {.component = "CreatureFighting", .field = "marks", .marker = ""},
+    // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
+    {.component = "HandGlow", .field = "", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},

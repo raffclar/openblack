@@ -3716,6 +3716,11 @@ void Game::StartFightTools()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
 		}
 	}
+	// A tool's run can record the input of the hand from the first frame of the land, for a later run to make again
+	if (_simulation.has_value() && _simulation->recordInputPath.has_value() && Locator::inspector::has_value())
+	{
+		Locator::inspector::value().RecordInputOnLoad(*_simulation->recordInputPath);
+	}
 	// A tool's run can give the hand recorded input from the first frame of the land
 	if (_simulation.has_value() && _simulation->inputPath.has_value() && Locator::inspector::has_value())
 	{
