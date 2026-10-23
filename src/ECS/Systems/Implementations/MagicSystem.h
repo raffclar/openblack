@@ -21,6 +21,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/AreaEffect.h"
@@ -185,6 +186,7 @@ public:
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
 	void DoCatchFireBall(PlayerNames player, entt::entity ball) override;
 	bool DoApplySeed(PlayerNames player, entt::entity target) override;
+	void DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture) override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
@@ -202,6 +204,8 @@ public:
 	void SendFireBallCommand(entt::entity ball, bool take);
 	/// A ready fire seed in the hand put to a fireball takes it in, the seed a twentieth stronger; whether it did
 	bool AbsorbFireBall(entt::entity ball);
+	/// A gesture on the seed in the hand goes as a command of the player, which the turn does (DoSeedGesture)
+	void SendSeedGesture(const player_commands::SeedGesture& gesture);
 	/// Whether the miracle in the hand is a ready fire seed, which takes in a fireball
 	[[nodiscard]] bool AbsorbsFireBalls() const;
 	[[nodiscard]] HandResult GetLastHandResult() const override { return _lastHandResult; }

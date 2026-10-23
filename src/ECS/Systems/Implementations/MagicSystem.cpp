@@ -2967,30 +2967,62 @@ void MagicSystem::TakeGestures()
 			_circle = Circle {.centre = centre, .radius = event.radius, .turn = _turn};
 			break;
 		}
+		// The gestures on the seed in the hand go as commands of the player, which the turn does
 		case GestureEvent::Kind::PowerUp:
-			PowerUpHeldSeed(event.powerUpLevel);
+			SendSeedGesture(
+			    {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = static_cast<int8_t>(event.powerUpLevel)});
 			break;
 		case GestureEvent::Kind::Scribble:
-		{
-			// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
-			const auto* seed = _held.has_value() && EntityRegistry().Valid(*_held)
-			                       ? EntityRegistry().TryGet<const SpellSeed>(*_held)
-			                       : nullptr;
-			if (seed != nullptr && magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) ==
-			                           magic::ScribbleResult::StopPowerUp)
-			{
-				PowerUpHeldSeed(-1);
-			}
-			else
-			{
-				DiscardHeldSeed();
-			}
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Scribble, .level = 0});
 			break;
-		}
 		case GestureEvent::Kind::Shake:
-			DiscardHeldSeed();
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Shake, .level = 0});
 			break;
 		}
+	}
+}
+
+void MagicSystem::SendSeedGesture(const player_commands::SeedGesture& gesture)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(gesture);
+		return;
+	}
+	DoSeedGesture(PlayerNames::PLAYER_ONE, gesture);
+}
+
+void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture)
+{
+	// There is one human, with the hand of this computer
+	if (player != PlayerNames::PLAYER_ONE)
+	{
+		return;
+	}
+	switch (gesture.kind)
+	{
+	case player_commands::SeedGesture::Kind::PowerUp:
+		PowerUpHeldSeed(gesture.level);
+		break;
+	case player_commands::SeedGesture::Kind::Scribble:
+	{
+		// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
+		const auto* seed =
+		    _held.has_value() && EntityRegistry().Valid(*_held) ? EntityRegistry().TryGet<const SpellSeed>(*_held) : nullptr;
+		if (seed != nullptr &&
+		    magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) == magic::ScribbleResult::StopPowerUp)
+		{
+			PowerUpHeldSeed(-1);
+		}
+		else
+		{
+			DiscardHeldSeed();
+		}
+		break;
+	}
+	case player_commands::SeedGesture::Kind::Shake:
+		DiscardHeldSeed();
+		break;
 	}
 }
 

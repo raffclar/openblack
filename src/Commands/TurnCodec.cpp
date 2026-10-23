@@ -178,6 +178,10 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
 	               },
 	               [&out](const FightCharge& command) { out.Number(command.heldMs); },
+	               [&out](const SeedGesture& command) {
+		               out.Byte(static_cast<uint8_t>(command.kind));
+		               out.Byte(static_cast<uint8_t>(command.level));
+	               },
 	               [&out](const HandClick& command) {
 		               out.Entity(command.thing);
 		               out.Byte(static_cast<uint8_t>(command.release ? 1 : 0));
@@ -334,6 +338,17 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::FightCharge:
 		action = FightCharge {.heldMs = in.Number<uint32_t>()};
 		return DecodeError::None;
+	case CommandTag::SeedGesture:
+	{
+		const auto kind = in.Byte();
+		const auto level = static_cast<int8_t>(in.Byte());
+		if (kind > static_cast<uint8_t>(SeedGesture::Kind::Shake))
+		{
+			return DecodeError::Value;
+		}
+		action = SeedGesture {.kind = static_cast<SeedGesture::Kind>(kind), .level = level};
+		return DecodeError::None;
+	}
 	case CommandTag::HandClick:
 	{
 		HandClick click {};
@@ -478,6 +493,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const FightCharge& /*command*/) { return CommandTag::FightCharge; },
 	                      [](const CreatureReaction& /*command*/) { return CommandTag::CreatureReaction; },
 	                      [](const HandClick& /*command*/) { return CommandTag::HandClick; },
+	                      [](const SeedGesture& /*command*/) { return CommandTag::SeedGesture; },
 	                  },
 	                  action);
 }
@@ -507,6 +523,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
 	                                     [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
 	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
+	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

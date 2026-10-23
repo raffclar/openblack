@@ -118,6 +118,13 @@ void Run(const Command& command)
 				    openblack::Locator::creatureHandSystem::value().DoBruise(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, SeedGesture>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoSeedGesture(command.player, action);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
 			    if (openblack::Locator::handGrabSystem::has_value())

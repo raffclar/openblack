@@ -256,10 +256,25 @@ struct HandClick
 	int32_t placeZ;
 };
 
+/// A gesture of the hand on the miracle in the hand: a power-up, a scribble or a shake. The turn powers the seed up,
+/// stops its power-up or drops it.
+struct SeedGesture
+{
+	enum class Kind : uint8_t
+	{
+		PowerUp,
+		Scribble,
+		Shake,
+	};
+	Kind kind;
+	/// The level of a power-up
+	int8_t level;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick>;
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture>;
 
 /// A command and the player that sent it
 struct Command

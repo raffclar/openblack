@@ -31,6 +31,11 @@ namespace openblack::magic
 struct EffectSource;
 } // namespace openblack::magic
 
+namespace openblack::player_commands
+{
+struct SeedGesture;
+} // namespace openblack::player_commands
+
 namespace openblack::ecs::systems
 {
 
@@ -268,6 +273,8 @@ public:
 	/// At the turn: the use of the miracle in the hand on a thing that the hand sent (player_commands::HandApply). A ready
 	/// fire seed takes in a fireball. Whether the miracle in the hand took the command.
 	virtual bool DoApplySeed(PlayerNames /*player*/, entt::entity /*target*/) { return false; }
+	/// At the turn: a gesture on the miracle in the hand that the hand sent (player_commands::SeedGesture)
+	virtual void DoSeedGesture(PlayerNames /*player*/, const player_commands::SeedGesture& /*gesture*/) {}
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
