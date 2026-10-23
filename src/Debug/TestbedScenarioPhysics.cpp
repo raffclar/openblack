@@ -8,14 +8,15 @@
  *******************************************************************************/
 
 // The testbed's physics scenarios: things lying still, one thing thrown, a crowd of things thrown and dropped together,
-// buildings broken by thrown rocks, rocks split by hard landings, a creature struck and things dropped into the sea. Each throw
-// is the player's hand's, so the same rules run as in a game; run with --frame-stats to see what a frame costs while they fly
-// and once they have come to rest.
+// buildings broken by thrown rocks, rocks split by hard landings, a creature struck, things dropped into the sea and a
+// pause while things fly. Each throw is the player's hand's, so the same rules run as in a game; run with --frame-stats to
+// see what a frame costs while they fly and once they have come to rest.
 
 #include <cmath>
 
 #include <array>
 #include <numbers>
+#include <optional>
 #include <vector>
 
 #include "3D/FlatLand.h"
@@ -474,6 +475,27 @@ void AddTempleStruck(std::vector<Scenario>& all)
 	});
 }
 
+void AddPauseInFlight(std::vector<Scenario>& all)
+{
+	all.push_back({
+	    .id = "physics.pause_in_flight",
+	    .name = "A pause while things fly",
+	    .facet = Facet::Physics,
+	    .description = "A rock is thrown across the field and a ball is thrown up. Half a second later, while both "
+	                   "fly, the game pauses, as the pause key does. Press P to continue the game.",
+	    .expected = "While the game is paused, the rock and the ball stay where they are in the air, and their shadows "
+	                "stay with them. The camera, the hand and the pause words still move. When the game continues, both "
+	                "continue to fly from where they stopped, as if no time passed, and land as they do with no pause.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Field - glm::vec2 {40.0f}, k_Field + glm::vec2 {40.0f}}},
+	    .objects = {{.type = MobileStaticInfo::RockChalk, .offset = k_Field},
+	                {.type = MobileObjectInfo::Ball, .offset = k_Field + glm::vec2 {10.0f, 0.0f}}},
+	    .commands = {{.kind = Command::Kind::PauseGame, .delaySeconds = 1.5f, .value = 1}},
+	    .throws = {Inward(0, std::numbers::pi_v<float>, 1.0f, std::nullopt),
+	               {.object = 1, .height = 2.0f, .velocity = {0.0f, 20.0f, 0.0f}, .delaySeconds = 1.0f}},
+	});
+}
+
 } // namespace
 
 void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
@@ -491,4 +513,5 @@ void testbed_scenarios::AddPhysicsScenarios(std::vector<Scenario>& all)
 	AddCreatureWithForcedPlan(all);
 	AddSinking(all);
 	AddTempleStruck(all);
+	AddPauseInFlight(all);
 }
