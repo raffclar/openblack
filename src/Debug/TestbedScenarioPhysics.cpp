@@ -481,7 +481,7 @@ void AddPauseInFlight(std::vector<Scenario>& all)
 	    .id = "physics.pause_in_flight",
 	    .name = "A pause while things fly",
 	    .facet = Facet::Physics,
-	    .description = "A rock is thrown across the field and a toy ball is thrown high. Half a second later, while both "
+	    .description = "A rock is thrown across the field and a ball is thrown up. Half a second later, while both "
 	                   "fly, the game pauses, as the pause key does. Press P to continue the game.",
 	    .expected = "While the game is paused, the rock and the ball stay where they are in the air, and their shadows "
 	                "stay with them. The camera, the hand and the pause words still move. When the game continues, both "
