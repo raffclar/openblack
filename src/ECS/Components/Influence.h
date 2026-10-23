@@ -50,6 +50,8 @@ struct CitadelInfluence
 struct VirtualInfluence
 {
 	virtual_influence::State state;
+	/// The hum and the mana path that the frames of this computer show
+	virtual_influence::Shown shown;
 	entt::entity hum {entt::null};
 };
 
