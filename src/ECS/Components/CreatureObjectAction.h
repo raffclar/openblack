@@ -66,8 +66,10 @@ struct CreatureObjectAction
 	/// Pointing: the creature turned to face the point first, which changes how it chooses its arm
 	bool pointTurned {false};
 
-	/// Where the hand gets to in the reaching animations, and how far the creature can reach, measured as it starts
+	/// Where the hand gets to in the reaching animations in the model's own size, measured as it starts. Each use
+	/// multiplies them by the scale that the creature has then.
 	std::optional<creature_reach::Points> reach;
+	/// How far the creature can reach at its scale of the last step
 	float maxReach {0.0f};
 	/// How many times it has walked or turned to get in reach
 	uint32_t attempts {0};
