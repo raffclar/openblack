@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/Platform.h"
+#include "DisplayScaling.h"
 #include "Web/WebPointer.h"
 #include "WindowFit.h"
 #include "WindowState.h"
@@ -88,6 +89,15 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 
 	SDL_LogSetOutputFunction(LogFromSdl, nullptr);
 
+#if defined(_WIN32)
+	// Windows does not stretch the window above 100% scale, so the picture stays sharp. Set this before SDL starts
+	// its video part
+	for (const auto& hint : k_WindowsDisplayScalingHints)
+	{
+		SDL_SetHint(std::string(hint.name).c_str(), std::string(hint.value).c_str());
+	}
+#endif
+
 	// Initialize SDL
 	if (SDL_WasInit(0) == 0)
 	{
@@ -147,6 +157,18 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 
 	_window = std::move(window);
+#if defined(_WIN32)
+	float dpi = 0.0f;
+	const int display = SDL_GetWindowDisplayIndex(_window.get());
+	if (display >= 0 && SDL_GetDisplayDPI(display, &dpi, nullptr, nullptr) == 0)
+	{
+		// The log shows the scale of the monitor, and if Windows lets the game use the real pixels of each monitor
+		const bool realPixels =
+		    AreDpiAwarenessContextsEqual(GetThreadDpiAwarenessContext(), DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2) != FALSE;
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window opens on a monitor of {} DPI ({}% scale). Real pixels: {}", dpi,
+		                   static_cast<int>(dpi * 100.0f / 96.0f + 0.5f), realPixels);
+	}
+#endif
 	// The window listens to the pointer lock of the page from now. Before this, a lock of the pointer would not reach it.
 	if constexpr (k_Platform == Platform::Web)
 	{
