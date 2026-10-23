@@ -221,11 +221,11 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 		component.reaction = Locator::reactionSystem::value().Create(
 		    {.initiator = stone, .type = Reaction::ReactToTeleport, .player = player, .position = position});
 	}
-	// Its swirling pool, with its hum
+	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
 	if (Locator::particleSystem::has_value())
 	{
 		auto& particles = Locator::particleSystem::value();
-		component.pool = particles.Start(ParticleType::TeleportVortex, position, 1.0f, true);
+		component.pool = particles.Start(ParticleType::TeleportVortex, position, 1.0f);
 		if (component.pool != ParticleSystemInterface::k_NoEffect)
 		{
 			particles.SetPlayer(component.pool, static_cast<int>(player));
