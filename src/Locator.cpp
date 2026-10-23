@@ -467,7 +467,8 @@ void InitializeOnline(const player_profiles::Store& profiles)
 			    return std::nullopt;
 		    }
 	    },
-	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); });
+	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
+	    []() { return std::chrono::steady_clock::now(); });
 }
 
 } // namespace

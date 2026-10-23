@@ -477,3 +477,56 @@ TEST(GameClock, AFixedFrameTimeWithAPartOfAMillisecondAddsThePartsUp)
 	EXPECT_TRUE(std::ranges::all_of(steps, [](uint32_t step) { return step == 16u || step == 17u; }));
 	EXPECT_EQ(clock.time.GetFixedFrameTime(), std::optional(std::chrono::microseconds(16700)));
 }
+
+TEST(GameClock, ThePlayersPauseStopsTheClockInASinglePlayerGame)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.time.SetPlayerPause(true);
+	EXPECT_TRUE(clock.time.IsPaused());
+	clock.now += 500;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	clock.time.SetPlayerPause(false);
+	EXPECT_FALSE(clock.time.IsPaused());
+}
+
+TEST(GameClock, ANetworkGameNeverStopsForThePlayersPauseOrTheTempleHold)
+{
+	static_assert(openblack::ecs::systems::PlayerCanStopClock(false));
+	static_assert(!openblack::ecs::systems::PlayerCanStopClock(true));
+	Clock clock;
+	clock.time.SetNetworkGame(true);
+	EXPECT_TRUE(clock.time.IsNetworkGame());
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	// The P key, the menu, the start question and the films ask for the player's pause: the clock runs on
+	clock.time.SetPlayerPause(true);
+	EXPECT_FALSE(clock.time.IsPaused());
+	// The temple's hold does not stop the clock
+	clock.time.SetHeld(true);
+	EXPECT_FALSE(clock.time.IsHeld());
+	clock.now += 100;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 100);
+	// The land's own start and the tools still stop the clock
+	clock.time.SetPaused(true);
+	clock.now += 100;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+}
+
+TEST(GameClock, AHoldThatStartedBeforeTheNetworkGameEnds)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.time.SetHeld(true);
+	EXPECT_TRUE(clock.time.IsHeld());
+	clock.time.SetNetworkGame(true);
+	EXPECT_FALSE(clock.time.IsHeld());
+	clock.now += 100;
+	EXPECT_TRUE(clock.Frame());
+}

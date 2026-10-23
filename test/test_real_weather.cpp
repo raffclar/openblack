@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -164,14 +165,22 @@ lobby_api::RealWeather Weather(int32_t type, int32_t temperature = 7, int32_t vi
 	        .country = "gb"};
 }
 
+/// The real time of the tests, which a test moves on by hand
+struct FakeClock
+{
+	std::chrono::steady_clock::time_point now {};
+};
+
 /// A system with a file of presets: type 2 with a storm, type 4 that sets the overcast and the rain
-RealWeatherSystem MakeSystem(FakeLobby& lobby, bool turnedOn = true)
+RealWeatherSystem MakeSystem(FakeLobby& lobby, bool turnedOn = true, FakeClock* clock = nullptr)
 {
 	auto file = FileOf({
 	    PresetBytes(2, true).Change(k_Rain, 0, 40.0f).Change(k_CloudCount, 0, 2.0f).Change(k_CloudHeight, 0, 200.0f),
 	    PresetBytes(4).Change(k_Overcast, 0, 30.0f).Change(k_Rain, 0, 10.0f),
 	});
-	return RealWeatherSystem(turnedOn, lobby, [file]() { return std::optional(file); }, []() { return k_Today; });
+	return RealWeatherSystem(
+	    turnedOn, lobby, [file]() { return std::optional(file); }, []() { return k_Today; },
+	    [clock]() { return clock != nullptr ? clock->now : std::chrono::steady_clock::time_point {}; });
 }
 
 } // namespace
@@ -367,7 +376,9 @@ TEST(RealWeatherSystem, WithoutThePresetsItAsksNothing)
 {
 	FakeLobby lobby;
 	FakeLand land;
-	RealWeatherSystem system(true, lobby, []() { return std::optional<std::vector<uint8_t>> {}; }, []() { return k_Today; });
+	RealWeatherSystem system(
+	    true, lobby, []() { return std::optional<std::vector<uint8_t>> {}; }, []() { return k_Today; },
+	    []() { return std::chrono::steady_clock::time_point {}; });
 	system.StartGame(land);
 	EXPECT_FALSE(lobby.weather);
 }
@@ -463,4 +474,36 @@ TEST(RealWeatherSystem, AnAnswerForAnEarlierGameIsIgnored)
 	system.ProcessTurn(land);
 	EXPECT_FALSE(system.IsApplied());
 	EXPECT_EQ(land.background.temperature, 0);
+}
+
+TEST(RealWeatherSystem, AnAnswerWithinTenSecondsChangesTheLand)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	FakeClock clock;
+	auto system = MakeSystem(lobby, true, &clock);
+	system.StartGame(land);
+	clock.now += RealWeatherSystemInterface::k_AnswerTimeout;
+	lobby.Answer(Weather(4, 30));
+	system.ProcessTurn(land);
+	EXPECT_TRUE(system.IsApplied());
+	EXPECT_EQ(land.background.temperature, 30);
+}
+
+TEST(RealWeatherSystem, AnAnswerAfterTenSecondsLeavesTheLandsOwnWeather)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	land.background = {.temperature = 3};
+	FakeClock clock;
+	auto system = MakeSystem(lobby, true, &clock);
+	system.StartGame(land);
+	// The game does not wait: turns play while the question is open
+	system.ProcessTurn(land);
+	clock.now += RealWeatherSystemInterface::k_AnswerTimeout + std::chrono::milliseconds(1);
+	lobby.Answer(Weather(4, 30));
+	system.ProcessTurn(land);
+	EXPECT_FALSE(system.IsApplied());
+	EXPECT_FALSE(system.GetWeather().has_value());
+	EXPECT_EQ(land.background.temperature, 3);
 }
