@@ -219,6 +219,44 @@ struct CameraKeyState
 	return !minimised || pictureWanted;
 }
 
+/// The state of the window and the run that decides which steps of the graphics a frame does
+struct GraphicsWindow
+{
+	/// The window is minimised
+	bool minimised {false};
+	/// The inspector, a challenge, the creature's page or a saved game waits for a picture of this frame
+	bool pictureWanted {false};
+	/// Each frame takes a fixed game time, as in a tool's simulation run
+	bool fixedFrameTime {false};
+};
+
+/// Whether the frame does this step. A minimised window stops the graphics, but the turns continue.
+///
+/// The camera steps and the hand step make the camera and the hand that the player reports to the turns. Thus:
+/// - A frame that only draws a picture for a minimised window does not move the camera or the hand. The time when the
+///   picture is necessary does not change the world.
+/// - A run with a fixed frame time does all of its steps, whatever the desktop does with the window. Two such runs
+///   with the same seed give the same turns.
+[[nodiscard]] constexpr bool DoesStep(Step step, GraphicsWindow window)
+{
+	if (!IsGraphics(step) || !window.minimised || window.fixedFrameTime)
+	{
+		return true;
+	}
+	if (!window.pictureWanted)
+	{
+		return false;
+	}
+	for (const auto& place : k_Frame)
+	{
+		if (place.step == step)
+		{
+			return place.stage == Stage::DrawStart || place.stage == Stage::Draw;
+		}
+	}
+	return false;
+}
+
 /// Does each step of the frame, in the order of the frame. A step that returns false stops the frame.
 template <typename Do>
 bool PlayFrame(Do&& step)

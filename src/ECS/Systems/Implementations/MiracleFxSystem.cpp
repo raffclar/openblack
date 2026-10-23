@@ -103,8 +103,8 @@ HandMiracleFx* HandFx()
 	{
 		return nullptr;
 	}
-	auto* found = registry.TryGet<HandMiracleFx>(hand);
-	return found != nullptr ? found : &registry.Assign<HandMiracleFx>(hand);
+	// The hand gets its effects when it is made or loaded, not in a frame
+	return registry.TryGet<HandMiracleFx>(hand);
 }
 
 void PlaySound(entt::id_type id, std::optional<pack::AudioBankLoop> voicePlayType = std::nullopt)
