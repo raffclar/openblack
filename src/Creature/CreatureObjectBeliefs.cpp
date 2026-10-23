@@ -159,7 +159,7 @@ namespace
 {
 /// Every belief that the pools hold, the newest first. The sort moves pointers to the beliefs, not the beliefs. It
 /// compares the same values in the same sequence as a sort of the beliefs, thus it gives the same order.
-std::vector<const Belief*> HeldNewestFirst(const std::array<BeliefPool, k_KindCount>& pools, size_t count)
+std::vector<const Belief*> NewestFirstOf(const std::array<BeliefPool, k_KindCount>& pools, size_t count)
 {
 	std::vector<const Belief*> held;
 	held.reserve(count);
@@ -188,14 +188,24 @@ std::vector<Belief> Copies(std::span<const Belief* const> held)
 
 std::vector<Belief> Store::NewestFirst() const
 {
-	return Copies(HeldNewestFirst(_pools, _index.size()));
+	return Copies(HeldNewestFirst());
 }
 
 std::vector<Belief> Store::InListOrder() const
 {
-	auto held = HeldNewestFirst(_pools, _index.size());
+	return Copies(HeldInListOrder());
+}
+
+std::vector<const Belief*> Store::HeldNewestFirst() const
+{
+	return NewestFirstOf(_pools, _index.size());
+}
+
+std::vector<const Belief*> Store::HeldInListOrder() const
+{
+	auto held = NewestFirstOf(_pools, _index.size());
 	std::ranges::stable_partition(held, [](const Belief* belief) { return InListOfWholeThings(belief->kind); });
-	return Copies(held);
+	return held;
 }
 
 std::vector<Belief> Store::All() const
