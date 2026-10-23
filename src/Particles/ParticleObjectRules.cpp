@@ -106,6 +106,13 @@ struct EmitterState
 	float owed {0.0f};
 	int emitted {0};
 	glm::vec3 point {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const EmitterState& self, Visitor&& visit)
+	{
+		visit(self.owed, self.emitted, self.point);
+	}
 };
 
 /// Atoms let out at random points of the model of the object the collection's parent atom is kept on, at the most

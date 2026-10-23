@@ -600,6 +600,13 @@ public:
 		glm::vec3 position {0.0f};
 		float scale {1.0f};
 		glm::mat3 rotation {1.0f};
+
+		/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+		template <typename Visitor>
+		static void VisitPlainFields(const Sample& self, Visitor&& visit)
+		{
+			visit(self.position, self.scale, self.rotation);
+		}
 	};
 	/// Where the parent was over the last turns, newest at the head of the ring
 	struct History

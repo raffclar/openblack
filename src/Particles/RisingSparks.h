@@ -42,6 +42,13 @@ struct Spark
 	int32_t ageMilliseconds {0};
 	/// Its turn in the picture, in radians
 	float angle {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Spark& self, Visitor&& visit)
+	{
+		visit(self.ageMilliseconds, self.angle);
+	}
 };
 
 struct Sparks
@@ -49,6 +56,13 @@ struct Sparks
 	std::array<Spark, k_Sparks> sparks {};
 	/// The picture the first spark starts at, of 32
 	uint32_t firstPicture {0};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Sparks& self, Visitor&& visit)
+	{
+		visit(self.sparks, self.firstPicture);
+	}
 };
 
 /// A random angle up to a whole turn, and a random number below 32, from the game's local random numbers
@@ -77,6 +91,13 @@ struct FrameMilliseconds
 	float carried {0.0f};
 	/// The whole milliseconds this frame adds
 	[[nodiscard]] uint32_t Take(float frameMilliseconds);
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const FrameMilliseconds& self, Visitor&& visit)
+	{
+		visit(self.carried);
+	}
 };
 
 } // namespace openblack::particles::rising_sparks

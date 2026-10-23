@@ -119,6 +119,10 @@ struct MoveStep
 
 	bool operator==(const MoveStep&) const = default;
 };
+/// The three fields have four bytes each, so the value has no gaps
+static_assert(sizeof(MoveStep) == 2 * sizeof(int32_t) + sizeof(float));
+template <>
+inline constexpr bool k_HasNoGaps<MoveStep> = true;
 
 /// What a moving thing and a thing that walks around obstacles add
 struct MovePart

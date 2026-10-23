@@ -1705,3 +1705,5 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_instance_upload graphics/test_instance_upload.cpp
 )
+# The plain types of the saves that the gap test checks come from these libraries
+target_link_libraries(test_plain_image PRIVATE psys ScriptLibrary edt)
