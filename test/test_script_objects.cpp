@@ -9,10 +9,6 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
-#include <cstddef>
-#include <cstring>
-
-#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -754,22 +750,35 @@ TEST(ScriptObjectsSystem, AReleasedAnimalGoesBackToItsOwnLife)
 	EXPECT_FALSE(world->IsControlled(animal));
 }
 
-TEST(ScriptObjectTable, TheBytesOfTheTableHaveNoUnsetPadding)
+TEST(ScriptObjectsSystem, TheSavedTableHasZeroInItsGapsAndKeepsItsLayout)
 {
-	// The table is made in memory that holds other bytes, as a copy on the stack can be
-	alignas(Table) std::array<std::byte, sizeof(Table)> memory {};
-	memory.fill(std::byte {0xAB});
-	auto* table = std::construct_at(reinterpret_cast<Table*>(memory.data()));
-	ASSERT_TRUE(table->Register(7, true).has_value());
-	*table = Table {};
-	ASSERT_TRUE(table->Register(9, false).has_value());
-	std::array<std::byte, sizeof(Table)> bytes {};
-	std::memcpy(bytes.data(), table, sizeof(Table));
-	std::destroy_at(table);
+	auto [world, system] = MakeSystem();
+	const auto made = world->Add(3);
+	const auto found = world->Add(4);
+	system->Register(made, true);
+	system->Register(found, false);
+	system->AddReference(found);
+	const auto clean = system->SaveTable();
+	// Each place is the object (4 bytes), three flags and one spare byte; then the next place (2 bytes) and 2 spare bytes
+	ASSERT_EQ(clean.size(), size_t {k_Places} * 8 + 4);
+	EXPECT_EQ(clean.at(8 + 0), static_cast<uint8_t>(entt::to_integral(made)));
+	EXPECT_EQ(clean.at(8 + 4), 1);
+	EXPECT_EQ(clean.at(16 + 0), static_cast<uint8_t>(entt::to_integral(found)));
+	EXPECT_EQ(clean.at(16 + 5), 1);
+	EXPECT_EQ(clean.at(16 + 6), 1);
+
+	// A save of an older build has other bytes in the gaps: it loads, and the next save has zero in the gaps
+	auto dirty = clean;
 	for (size_t place = 0; place < k_Places; ++place)
 	{
-		EXPECT_EQ(bytes.at((place * sizeof(Place)) + 7), std::byte {0}) << "place " << place;
+		EXPECT_EQ(clean.at(place * 8 + 7), 0) << "place " << place;
+		dirty.at(place * 8 + 7) = 0xC9;
 	}
-	EXPECT_EQ(bytes.at(sizeof(Table) - 2), std::byte {0});
-	EXPECT_EQ(bytes.at(sizeof(Table) - 1), std::byte {0});
+	EXPECT_EQ(clean.at(clean.size() - 2), 0);
+	EXPECT_EQ(clean.at(clean.size() - 1), 0);
+	dirty.at(dirty.size() - 2) = 0xC9;
+	dirty.at(dirty.size() - 1) = 0x48;
+	auto [otherWorld, other] = MakeSystem();
+	ASSERT_TRUE(other->LoadTable(dirty));
+	EXPECT_EQ(other->SaveTable(), clean);
 }

@@ -88,8 +88,8 @@ public:
 	[[nodiscard]] glm::vec2 GetMapPosition() const;
 	[[nodiscard]] const std::unique_ptr<lnd::LNDBlock>& GetLndBlock() const { return _block; };
 	void SetLndBlock(const lnd::LNDBlock& block);
-	/// Sets the altitude of one of the block's 17 by 17 cells, [x * 17 + z]
-	void SetCellAltitude(size_t index, uint8_t altitude);
+	/// Sets the altitude of one of the block's 17 by 17 cells, [x * 17 + z]. Returns true when the altitude changed.
+	bool SetCellAltitude(size_t index, uint8_t altitude);
 	/// The highest altitude of the block's cells when the land was loaded. A later change of the cells' altitudes does
 	/// not change it.
 	[[nodiscard]] uint8_t GetHighestAltitude() const noexcept { return _highestAltitude; }

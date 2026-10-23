@@ -52,6 +52,14 @@ private:
 	/// The segment's length up to t = i / 127, as a share of its whole length times 127; the last is 1
 	std::array<float, 128> _table {};
 	float _t {0.0f};
+
+public:
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const WayRunner& self, Visitor&& visit)
+	{
+		visit(self._segment, self._table, self._t);
+	}
 };
 
 /// A thing walking a track as a script told it to: it goes where the track's camera looks, 100 milliseconds of the

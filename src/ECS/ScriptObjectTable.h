@@ -35,11 +35,14 @@ struct Place
 	uint8_t count {0};
 	/// Ever filled since the table was last cleared: a place is only free when it has never been used
 	bool used {false};
-	/// The byte that fills the place to a whole number of words. It is always 0, so that a copy of the table's bytes
-	/// is the same in each run.
-	uint8_t unused {0};
+
+	/// Gives each field to a visitor, so that a save writes zero into the spare byte after the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Place& self, Visitor&& visit)
+	{
+		visit(self.object, self.createdByScript, self.count, self.used);
+	}
 };
-static_assert(sizeof(Place) == 8);
 
 /// What a reference did to an object
 enum class Referenced : uint8_t
@@ -80,12 +83,16 @@ public:
 	/// The scripts' program starts again: every place is free and the next search starts at the first
 	void Clear();
 
+	/// Gives each field to a visitor, so that a save writes zero into the gaps of the places and after the last field
+	template <typename Visitor>
+	static void VisitPlainFields(const Table& self, Visitor&& visit)
+	{
+		visit(self._places, self._next);
+	}
+
 private:
 	std::array<Place, k_Places> _places {};
 	uint16_t _next {1};
-	/// The bytes that fill the table to a whole number of words, always 0 (see Place::unused)
-	uint16_t _unused {0};
 };
-static_assert(sizeof(Table) == (k_Places * sizeof(Place)) + 4);
 
 } // namespace openblack::ecs::script_objects

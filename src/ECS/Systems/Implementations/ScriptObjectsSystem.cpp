@@ -34,6 +34,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Dances.h"
+#include "ECS/Reflection/PlainImage.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -641,10 +642,12 @@ bool ScriptObjectsSystem::Disband(entt::entity container)
 
 std::vector<uint8_t> ScriptObjectsSystem::SaveTable() const
 {
-	// The table is plain data: its bytes keep it whole
+	// The table is plain data: its bytes keep it whole. The gaps between the fields are zero, so that the same table
+	// always gives the same bytes.
 	static_assert(std::is_trivially_copyable_v<script_objects::Table>);
+	const auto image = ecs::reflection::PlainImage(_table);
 	std::vector<uint8_t> bytes(sizeof(_table));
-	std::memcpy(bytes.data(), &_table, sizeof(_table));
+	std::memcpy(bytes.data(), image.bytes.data(), sizeof(_table));
 	return bytes;
 }
 
