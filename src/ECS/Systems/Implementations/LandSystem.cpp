@@ -927,9 +927,15 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	}
 
 	// A network game waits for the commands of the turn from the game server
-	if (!Locator::playerCommandSystem::value().TurnReady(clock.GetTurn()))
+	const auto& commands = Locator::playerCommandSystem::value();
+	if (!commands.TurnReady(clock.GetTurn()))
 	{
 		return;
+	}
+	// A network game that is behind the server's turns catches up, one turn a frame
+	if (commands.HasSource() && commands.TurnReady(clock.GetTurn() + 1))
+	{
+		clock.ResetTimerToTurn();
 	}
 	if (!clock.IsTurnDue())
 	{

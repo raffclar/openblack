@@ -278,9 +278,9 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    # The server plays further than the clients, so that it still sends turns while they finish
+    # The server ends when every god left; its last turn is only a limit for a run that goes wrong
     server_command = [server_exe, "-g", options.game_path] + where + [
-        "--seed", str(options.seed), "-n", str(options.turns + 100), "-l", server_log,
+        "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log,
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", "2",
         "--come-back-seconds", str(options.come_back_seconds)]

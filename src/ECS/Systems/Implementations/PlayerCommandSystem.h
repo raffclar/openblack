@@ -35,6 +35,7 @@ public:
 	[[nodiscard]] size_t PendingCount() const override { return _queue.OpenCount() + _queue.SentCount(); }
 	void SetSource(player_commands::TurnCommandSourceInterface* source) override;
 	[[nodiscard]] bool TurnReady(uint32_t turn) const override { return _source == nullptr || _source->HasTurn(turn); }
+	[[nodiscard]] bool HasSource() const override { return _source != nullptr; }
 
 private:
 	player_commands::CommandQueue _queue;

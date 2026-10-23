@@ -61,6 +61,8 @@ public:
 	/// True when the turn can start: always in a single player game, and in a network game when the source has the
 	/// commands of the turn
 	[[nodiscard]] virtual bool TurnReady(uint32_t turn) const = 0;
+	/// True in a network game
+	[[nodiscard]] virtual bool HasSource() const = 0;
 };
 
 } // namespace openblack::ecs::systems
