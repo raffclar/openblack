@@ -190,7 +190,6 @@ public:
 	[[nodiscard]] magic::PourPose GetHandPour(float fraction) const override { return magic::PourPoseAt(_pour, fraction); }
 	[[nodiscard]] HandCastState GetHandCastState() const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return _held; }
-	[[nodiscard]] SpellSeedType GetLastSeedGained() const override { return _lastSeedGained; }
 	/// The nearest fireball the ray passes through that the hand may hold now, if any
 	/// What the cursor picked under the hand, while the hand is over the world
 	[[nodiscard]] std::optional<entt::entity> PickedUnderHand() const;
@@ -415,8 +414,6 @@ private:
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
 	std::optional<entt::entity> _held;
-	/// The seed of the last miracle that came into the hand from a worship site
-	SpellSeedType _lastSeedGained {SpellSeedType::None};
 	magic::CastInput _input;
 	/// The action button is down
 	bool _actionDown {false};
