@@ -4203,7 +4203,7 @@ bool Game::RunFrame() noexcept
 		if (frameStats.has_value())
 		{
 			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
-			                  Locator::rendererInterface::value().GetPipelinesMade());
+			                  Locator::rendererInterface::value().GetPipelinesMade(), Locator::time::value().GetTurn());
 		}
 		frameStart = frameEnd;
 		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene

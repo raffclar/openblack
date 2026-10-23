@@ -13,6 +13,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <string>
 
 #include "Common/FrameStats.h"
@@ -30,13 +31,19 @@ class FrameStatsLog
 public:
 	/// pipelinesMade: how many pipelines the renderer made before the first frame
 	FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade);
+	/// Logs the summary of all the frames of the run
+	~FrameStatsLog();
+	FrameStatsLog(const FrameStatsLog&) = delete;
+	FrameStatsLog& operator=(const FrameStatsLog&) = delete;
+	FrameStatsLog(FrameStatsLog&&) = delete;
+	FrameStatsLog& operator=(FrameStatsLog&&) = delete;
 
-	/// After each frame, with how long the frame took, the profiler that timed its stages and how many pipelines the
-	/// renderer made since it started
-	void Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade);
+	/// After each frame, with how long the frame took, the profiler that timed its stages, how many pipelines the
+	/// renderer made since it started and the game turn at the end of the frame
+	void Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade, uint32_t turn);
 
 	/// The log shows each frame that takes this time or more, with its stages
-	static constexpr float k_SpikeMilliseconds = 10.0f;
+	static constexpr float k_SpikeMilliseconds = frame_stats::k_SlowMilliseconds;
 
 private:
 	void Report();
@@ -45,6 +52,10 @@ private:
 	bool _views;
 	frame_stats::Window _frames;
 	frame_stats::Window _gpu;
+	/// All the frames of the run
+	frame_stats::Window _run;
+	/// The game turn at the end of the last frame, to know the frames that play a turn
+	std::optional<uint32_t> _lastTurn;
 	std::array<double, static_cast<size_t>(openblack::Profiler::Stage::_count)> _stageTotals {};
 	std::array<double, static_cast<size_t>(openblack::Profiler::Stage::_count)> _stageMax {};
 	std::map<std::string, double> _viewTotals;

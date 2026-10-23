@@ -71,3 +71,24 @@ TEST(FrameStats, WindowStartsAgainAfterTaking)
 	EXPECT_EQ(second.count, 1u);
 	EXPECT_FLOAT_EQ(second.max, 9.0f);
 }
+
+TEST(FrameStats, HundredFramesTakeTheNinetyNinthAndCountTheSlowOnes)
+{
+	// 1 ms to 100 ms: the frames of 10 ms and more are slow
+	std::vector<float> times(100);
+	std::iota(times.begin(), times.end(), 1.0f);
+	const auto summary = Summarise(times);
+	EXPECT_FLOAT_EQ(summary.p99, 99.0f);
+	EXPECT_EQ(summary.slow, 91u);
+}
+
+TEST(FrameStats, PeekKeepsTheFrames)
+{
+	Window window;
+	window.Add(12.0f);
+	window.Add(2.0f);
+	const auto peeked = window.Peek();
+	EXPECT_EQ(peeked.count, 2u);
+	EXPECT_EQ(peeked.slow, 1u);
+	EXPECT_EQ(window.Count(), 2u);
+}
