@@ -1461,6 +1461,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CitadelInfluence::drawnRadius>("drawnRadius");
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
+	    .Field<&components::VirtualInfluence::shown>("shown")
 	    .Field<&components::VirtualInfluence::hum>("hum");
 	Reflect<components::InterfaceLimits>(context)
 	    .Field<&components::InterfaceLimits::onlyHighlights>("onlyHighlights")
@@ -3667,14 +3668,15 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::villager_death::DeathCounts::total>("total")
 	    .Field<&openblack::villager_death::DeathCounts::byPlayer>("byPlayer")
 	    .Field<&openblack::villager_death::DeathCounts::byReason>("byReason", {k_DeathReasonNames});
+	Reflect<openblack::virtual_influence::Shown>(context, ValueOnly {})
+	    .Field<&openblack::virtual_influence::Shown::soundFraction>("soundFraction")
+	    .Field<&openblack::virtual_influence::Shown::soundStarted>("soundStarted")
+	    .Field<&openblack::virtual_influence::Shown::manaPathStart>("manaPathStart")
+	    .Field<&openblack::virtual_influence::Shown::manaPathEmission>("manaPathEmission");
 	Reflect<openblack::virtual_influence::State>(context, ValueOnly {})
 	    .Field<&openblack::virtual_influence::State::anchor>("anchor")
 	    .Field<&openblack::virtual_influence::State::turnHand>("turnHand")
 	    .Field<&openblack::virtual_influence::State::lastInsideTurn>("lastInsideTurn")
 	    .Field<&openblack::virtual_influence::State::fraction>("fraction")
-	    .Field<&openblack::virtual_influence::State::soundFraction>("soundFraction")
-	    .Field<&openblack::virtual_influence::State::soundStarted>("soundStarted")
-	    .Field<&openblack::virtual_influence::State::disabled>("disabled")
-	    .Field<&openblack::virtual_influence::State::manaPathStart>("manaPathStart")
-	    .Field<&openblack::virtual_influence::State::manaPathEmission>("manaPathEmission");
+	    .Field<&openblack::virtual_influence::State::disabled>("disabled");
 }
