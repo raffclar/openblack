@@ -27,4 +27,9 @@ constexpr std::string_view k_ProfileFolderName = "Profiles";
 /// game. This does not make the folder. There is no folder when the system cannot give the working folder.
 [[nodiscard]] std::optional<std::filesystem::path> ProfileFolder();
 
+/// The file of the settings of this computer, next to the profile folder. When the profile folder is a link to a folder
+/// in another place (as in the web build, to the site's private storage), the file is next to that folder. There is no
+/// file when the system cannot give the working folder.
+[[nodiscard]] std::optional<std::filesystem::path> SettingsFile();
+
 } // namespace openblack::user_data

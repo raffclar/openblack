@@ -57,7 +57,8 @@ constexpr int k_ArrowSize = 32;
 constexpr int k_CheckBoxTop = 450;
 
 constexpr std::array k_DetailTexts = {"HELP_TEXT_DIALOG_DETAIL_00", "HELP_TEXT_DIALOG_DETAIL_01", "HELP_TEXT_DIALOG_DETAIL_02",
-                                      "HELP_TEXT_DIALOG_DETAIL_03", "HELP_TEXT_DIALOG_DETAIL_04"};
+                                      "HELP_TEXT_DIALOG_DETAIL_03", "HELP_TEXT_DIALOG_DETAIL_04", "HELP_TEXT_DIALOG_DETAIL_05",
+                                      "HELP_TEXT_DIALOG_DETAIL_06"};
 constexpr std::array k_HelpTexts = {"HELP_TEXT_DIALOG_NOHELP", "HELP_TEXT_DIALOG_LOWHELP", "HELP_TEXT_DIALOG_MIDDLEHELP",
                                     "HELP_TEXT_DIALOG_HIGHHELP", "HELP_TEXT_DIALOG_ALLHELP"};
 constexpr std::array k_StoryTexts = {"HELP_TEXT_DIALOG_NOTEXT", "HELP_TEXT_DIALOG_STORYTEXT", "HELP_TEXT_DIALOG_ALLTEXT"};
@@ -230,7 +231,8 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
 	read(_helpLabels, k_HelpTexts);
 	read(_storyLabels, k_StoryTexts);
 	read(_toolTipLabels, k_ToolTipTexts);
-	_settings.detail = std::clamp(_settings.detail, 0, static_cast<int>(_detailLabels.size()) - 1);
+	_settings.detailLevels = std::clamp(_settings.detailLevels, 1, static_cast<int>(_detailLabels.size()));
+	_settings.detail = std::clamp(_settings.detail, 0, _settings.detailLevels - 1);
 	_detailTold = _settings.detail;
 	_settings.helpLevel = std::clamp(_settings.helpLevel, 0, static_cast<int>(_helpLabels.size()) - 1);
 	_settings.storyText = std::clamp(_settings.storyText, 0, static_cast<int>(_storyLabels.size()) - 1);
@@ -334,14 +336,13 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	                     std::u16string(texts.Get("HELP_TEXT_DIALOG_VIDEOCONTROL")), Layout::Centre);
 	// The detail: the button and the right arrow step it on, the left arrow back
 	// The game reads the detail once, when it starts: a change here takes effect the next time it starts. The player is
-	// told so (HELP_TEXT_DIALOG_VIDEOCHANGE) as they leave the page by Back, a tab or Escape.
-	// TODO(raffclar): openblack keeps no settings between runs yet, so the choice is lost when the game closes; start the
-	// game with --detail-level to pick one.
+	// told so (HELP_TEXT_DIALOG_VIDEOCHANGE) as they leave the page by Back, a tab or Escape. The settings of this
+	// computer keep the choice. The selector steps through as many levels as those settings say.
 	auto& detail = page.Add<Button>(
 	    DialogRect {.min = {k_SelectorLeft, 350}, .max = {k_SelectorLeft + k_SelectorWidth, 350 + k_SelectorHeight}},
 	    _detailLabels.at(static_cast<size_t>(_settings.detail)), k_Mid);
 	const auto stepDetail = [this, &detail](int step) {
-		const auto count = static_cast<int>(_detailLabels.size());
+		const auto count = _settings.detailLevels;
 		_settings.detail = (_settings.detail + step + count) % count;
 		detail.label = _detailLabels.at(static_cast<size_t>(_settings.detail));
 		SettingsChanged();

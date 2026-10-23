@@ -117,8 +117,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::unordered_set<entt::id_type> sideRoomMeshIds;
 	std::unordered_map<entt::id_type, TempleRoom> roomMeshIds;
 	const auto currentRoom = temple.GetCurrentRoom();
-	const bool templeReflected =
-	    graphics::detail_level::TempleReflected(graphics::detail_level::For(Locator::config::value().detailLevel));
+	const bool templeReflected = graphics::detail_level::TempleReflected(Locator::config::value().detail);
 	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &prep, &mirroredMeshIds, &reflectiveMeshIds, &doorMeshIds, &otherRoomMeshIds, &waterMeshIds, &sideRoomMeshIds,
 	     &roomMeshIds, mainRoomDoorsOnly, currentRoom,
