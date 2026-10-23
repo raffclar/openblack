@@ -84,9 +84,14 @@ void Paint(std::span<uint16_t> texels, glm::ivec2 block, const L3DMesh::Footprin
 
 const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 {
+	if (_lastFootprint.has_value() && _lastFootprint->first == mesh)
+	{
+		return _lastFootprint->second;
+	}
 	const auto found = _footprints.find(mesh);
 	if (found != _footprints.end())
 	{
+		_lastFootprint = *found;
 		return found->second;
 	}
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -102,6 +107,7 @@ const L3DMesh::Footprint* LandFootprints::FootprintOf(entt::id_type mesh)
 		}
 	}
 	_footprints.emplace(mesh, footprint);
+	_lastFootprint = std::pair(mesh, footprint);
 	return footprint;
 }
 
@@ -113,6 +119,7 @@ void LandFootprints::Reset(size_t blockCount)
 	_groundPrints.clear();
 	_groundPrintThings.clear();
 	_footprints.clear();
+	_lastFootprint.reset();
 	_dirty.clear();
 	_ownTexels.clear();
 	_painted.assign(blockCount, false);
@@ -143,7 +150,7 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 void LandFootprints::FindChangedThings()
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	for (auto& [entity, known] : _known)
+	for (auto& known : _known)
 	{
 		known.seen = false;
 	}
@@ -153,17 +160,17 @@ void LandFootprints::FindChangedThings()
 	registry.Each<const MapCellResident, const MeshComponent, const Transform>(
 	    [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh, const Transform& transform) {
 		    const auto* footprint = FootprintOf(mesh.id);
-		    const auto found = _known.find(entity);
-		    if (found != _known.end())
+		    if (_known.contains(entity))
 		    {
-			    if (footprint != nullptr && found->second.mesh == mesh.id && found->second.cells == resident.cells &&
-			        SameTransform(found->second.transform, transform))
+			    auto& known = _known.get(entity);
+			    if (footprint != nullptr && known.mesh == mesh.id && known.cells == resident.cells &&
+			        SameTransform(known.transform, transform))
 			    {
-				    found->second.seen = true;
+				    known.seen = true;
 				    return;
 			    }
-			    MarkBlocks(found->second.lowBlock, found->second.highBlock);
-			    _known.erase(found);
+			    MarkBlocks(known.lowBlock, known.highBlock);
+			    _known.erase(entity);
 		    }
 		    if (footprint == nullptr)
 		    {
@@ -180,16 +187,16 @@ void LandFootprints::FindChangedThings()
 		                                  .highBlock = highBlock,
 		                                  .seen = true});
 	    });
-	for (auto it = _known.begin(); it != _known.end();)
+	std::vector<entt::entity> unseen;
+	for (const auto [entity, known] : _known.each())
 	{
-		if (it->second.seen)
+		if (!known.seen)
 		{
-			++it;
-			continue;
+			MarkBlocks(known.lowBlock, known.highBlock);
+			unseen.push_back(entity);
 		}
-		MarkBlocks(it->second.lowBlock, it->second.highBlock);
-		it = _known.erase(it);
 	}
+	_known.erase(unseen.begin(), unseen.end());
 }
 
 void LandFootprints::FindChangedRivers()
@@ -331,9 +338,9 @@ void LandFootprints::PaintBlock(size_t block)
 	{
 		const auto& transform = registry.Get<const Transform>(entity);
 		const auto* footprint = FootprintOf(registry.Get<const MeshComponent>(entity).id);
-		const auto known = _known.find(entity);
-		const auto placement = known != _known.end() && SameTransform(known->second.transform, transform)
-		                           ? known->second.placement
+		const auto* known = _known.contains(entity) ? &_known.get(entity) : nullptr;
+		const auto placement = known != nullptr && SameTransform(known->transform, transform)
+		                           ? known->placement
 		                           : PlacementFor(registry, entity, transform);
 		Paint(_texels, position, *footprint, placement, footprint_paint::Mix::Colour);
 	}
