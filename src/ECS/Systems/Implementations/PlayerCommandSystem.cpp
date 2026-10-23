@@ -117,6 +117,13 @@ void Run(const Command& command)
 				    openblack::Locator::creatureHandSystem::value().DoBruise(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureReaction>)
+		    {
+			    if (openblack::Locator::creatureHandSystem::has_value())
+			    {
+				    openblack::Locator::creatureHandSystem::value().DoReaction(command.player, action);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, FightGround>)
 		    {
 			    if (openblack::Locator::creatureFightSystem::has_value())

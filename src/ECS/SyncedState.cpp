@@ -117,6 +117,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureFighting", .field = "marks", .marker = ""},
     // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
     {.component = "HandGlow", .field = "", .marker = ""},
+    // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
+    // shows
+    {.component = "HandLastFeedback", .field = "", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},

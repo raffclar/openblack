@@ -75,6 +75,7 @@ enum class CommandTag : uint8_t
 	FightGround = 17,
 	FightMove = 18,
 	FightCharge = 19,
+	CreatureReaction = 20,
 };
 
 /// The sizes of the parts of the frames, in bytes

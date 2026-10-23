@@ -60,6 +60,14 @@ std::vector<Action> EachCommand()
 	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
 	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
 	    FightCharge {.heldMs = 1200},
+	    CreatureReaction {.creature = Entity(21),
+	                      .animation = 0x0A0B0C0D,
+	                      .mirrored = true,
+	                      .pullsFace = true,
+	                      .face = 3,
+	                      .faceMs = 2000.0f,
+	                      .cue = 15,
+	                      .interruptsAfter = 0.25f},
 	};
 }
 
@@ -83,7 +91,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 19)
+	switch (bits(random) % 20)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -126,6 +134,18 @@ Action RandomAction(std::mt19937& random)
 		                  .replace = bits(random) % 2 == 0};
 	case 17:
 		return FightCharge {.heldMs = bits(random)};
+	case 18:
+	{
+		const bool face = bits(random) % 2 == 0;
+		return CreatureReaction {.creature = entity(),
+		                         .animation = bits(random),
+		                         .mirrored = bits(random) % 2 == 0,
+		                         .pullsFace = face,
+		                         .face = face ? static_cast<uint8_t>(bits(random) % 12) : uint8_t {0},
+		                         .faceMs = face ? number() : 0.0f,
+		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
+		                         .interruptsAfter = number()};
+	}
 	default:
 	{
 		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
@@ -195,7 +215,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -376,6 +396,11 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	move[14] = 6;
 	move.back() = 2;
 	EXPECT_EQ(Decode(move).error, DecodeError::Value);
+	// A reaction with no face keeps the bytes of the face empty
+	auto reaction = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
+	reaction[20] = 1;
+	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;

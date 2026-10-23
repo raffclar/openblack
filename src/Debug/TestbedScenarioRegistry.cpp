@@ -5443,6 +5443,27 @@ void AddHand(std::vector<Scenario>& all)
 	    .commands = sweeps,
 	});
 
+	// The creature that the recorded input of the hand strokes and slaps for the dedicated server's check
+	// (tools/sim/hand_inputs/strokes.json). The creature help is off, so that the hand over the creature, which only the
+	// computer of that hand counts, does not start a help script on one computer only.
+	all.push_back({
+	    .id = "hand.recorded_strokes",
+	    .name = "A tiger for the recorded strokes and slaps",
+	    .facet = Facet::Hand,
+	    .description = "The player's tiger faces the camera in the middle of the screen, with the creature help off. The "
+	                   "dedicated server and the game both play this scenario, and the game makes the recorded input of "
+	                   "tools/sim/hand_inputs/strokes.json: the hand holds the tiger, strokes it, slaps it and lets go.",
+	    .expected = "The strokes play the pleased animations and the slaps the reeling ones. In a network game each "
+	                "reaction plays at the next turn, on every computer at the same turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .commands = {{.kind = Kind::CallNative,
+	                  .delaySeconds = 0.0f,
+	                  .script = "SET_CREATURE_HELP",
+	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
+	});
+
 	// The carried leash round the wrist while the hand strokes and slaps: slow sweeps stroke, fast sweeps slap
 	std::vector<Command> collarHand {Leash(0, LeashType::Rope, 0.5f),
 	                                 Leash(0, LeashType::Evil, 0.5f),

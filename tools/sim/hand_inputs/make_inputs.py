@@ -7,7 +7,8 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, testbed.json, twogods.json and twogods_totem.json beside this script. The twogods inputs play on the
+writes land1.json, testbed.json, twogods.json, twogods_totem.json and strokes.json beside this script. strokes.json
+plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes). The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
 fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
@@ -185,6 +186,34 @@ def two_gods_totem():
     return script.events
 
 
+def strokes():
+    """The testbed scenario hand.recorded_strokes: the hand holds the player's tiger by its middle, strokes it with slow
+    moves up and down, slaps it with fast sweeps across the screen, and lets go"""
+    script = Script()
+    script.wait(10)
+    script.move((640, 512), 10)
+    script.wait(40)
+    script.press()
+    script.wait(30)
+    # Slow strokes up and down the body
+    for _ in range(3):
+        script.move((640, 470), 20)
+        script.move((640, 540), 20)
+    script.move((640, 512), 10)
+    script.wait(20)
+    # Fast sweeps across the middle, each a slap
+    for across in (900, 380, 900, 380):
+        script.move((across, 512), 3)
+        script.wait(40)
+    script.move((640, 512), 10)
+    script.wait(20)
+    script.release()
+    script.wait(60)
+    script.move((640, 900), 20)
+    script.wait(40)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -201,6 +230,7 @@ def main():
     write("testbed", testbed())
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
+    write("strokes", strokes())
 
 
 if __name__ == "__main__":

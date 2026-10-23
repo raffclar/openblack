@@ -223,10 +223,28 @@ struct FightCharge
 	uint32_t heldMs;
 };
 
+/// A stroke or a slap of the creature that the hand holds, in a network game: every computer plays the creature's
+/// reaction at the same turn
+struct CreatureReaction
+{
+	entt::entity creature;
+	/// The animation of the reaction and whether it plays mirrored
+	uint32_t animation;
+	bool mirrored;
+	/// The face that the reaction pulls, if it pulls one: the face (a creature_face::Face), how long and why (a
+	/// creature_face::Cue)
+	bool pullsFace;
+	uint8_t face;
+	float faceMs;
+	uint8_t cue;
+	/// The share of the way through what the body plays that the reaction can stop it at
+	float interruptsAfter;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge>;
+                            FightGround, FightMove, FightCharge, CreatureReaction>;
 
 /// A command and the player that sent it
 struct Command

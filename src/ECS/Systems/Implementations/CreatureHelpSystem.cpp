@@ -234,7 +234,7 @@ void CreatureHelpSystem::Raise(entt::entity creature, const help::Message& messa
 	    .outOrAsleep = OutOrAsleep(registry, creature),
 	    .dialogueTaken = DialogueTaken(),
 	    .handOnCreature =
-	        Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature,
+	        Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature,
 	    .raisedThisTurn = _toldTurn == turn,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .inDevelopmentScript = mind != nullptr && mind->inDevelopmentScript,
