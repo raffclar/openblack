@@ -213,7 +213,7 @@ private:
 		/// A phial's pulse and its texture's frame
 		float phialPhase;
 		float phialFrame;
-		/// How faint a phial is drawn, of 255
+		/// How faint a phial is drawn, of 255. A seed drawn at once is drawn at this alpha too.
 		uint8_t phialAlpha;
 		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
 		float ownerAlignment;
