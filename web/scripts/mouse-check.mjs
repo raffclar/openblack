@@ -13,7 +13,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { inflateSync } from 'node:zlib';
+
+import { changedShare } from './png.mjs';
 
 const [chromePath, pageUrl, gameFolder, out, ...rest] = process.argv.slice(2);
 if (!chromePath || !pageUrl || !gameFolder || !out) {
@@ -93,84 +94,6 @@ const run = (name, args, steps, seconds) => {
 // The values of the eval steps in their order
 const evals = (text) => [...text.matchAll(/\[eval\] .* = (.*)$/gm)].map((m) => JSON.parse(m[1]));
 const count = (text, part) => text.split(part).length - 1;
-
-// A small PNG reader for the screenshots of Chrome: 8 bits a channel, RGB or RGBA, no interlace
-function readPng(file) {
-  const data = readFileSync(file);
-  let offset = 8;
-  let width = 0;
-  let height = 0;
-  let channels = 0;
-  const parts = [];
-  while (offset < data.length) {
-    const length = data.readUInt32BE(offset);
-    const type = data.toString('ascii', offset + 4, offset + 8);
-    const body = data.subarray(offset + 8, offset + 8 + length);
-    if (type === 'IHDR') {
-      width = body.readUInt32BE(0);
-      height = body.readUInt32BE(4);
-      channels = { 2: 3, 6: 4 }[body[9]];
-      if (body[8] !== 8 || !channels || body[12] !== 0) {
-        throw new Error(`${file}: not an 8-bit RGB or RGBA PNG without interlace`);
-      }
-    } else if (type === 'IDAT') {
-      parts.push(body);
-    }
-    offset += length + 12;
-  }
-  const raw = inflateSync(Buffer.concat(parts));
-  const stride = width * channels;
-  const pixels = Buffer.alloc(stride * height);
-  for (let y = 0; y < height; ++y) {
-    const filter = raw[y * (stride + 1)];
-    const line = raw.subarray(y * (stride + 1) + 1, (y + 1) * (stride + 1));
-    for (let x = 0; x < stride; ++x) {
-      const left = x >= channels ? pixels[y * stride + x - channels] : 0;
-      const up = y > 0 ? pixels[(y - 1) * stride + x] : 0;
-      const upLeft = x >= channels && y > 0 ? pixels[(y - 1) * stride + x - channels] : 0;
-      let value = line[x];
-      if (filter === 1) {
-        value += left;
-      } else if (filter === 2) {
-        value += up;
-      } else if (filter === 3) {
-        value += (left + up) >> 1;
-      } else if (filter === 4) {
-        const p = left + up - upLeft;
-        const pa = Math.abs(p - left);
-        const pb = Math.abs(p - up);
-        const pc = Math.abs(p - upLeft);
-        value += pa <= pb && pa <= pc ? left : pb <= pc ? up : upLeft;
-      }
-      pixels[y * stride + x] = value & 0xff;
-    }
-  }
-  return { width, height, channels, pixels };
-}
-
-// The share of the pixels whose colour changed by more than 24 in one channel
-function changedShare(folder, a, b) {
-  const first = path.join(folder, `${a}.png`);
-  const second = path.join(folder, `${b}.png`);
-  if (!existsSync(first) || !existsSync(second)) {
-    return -1;
-  }
-  const x = readPng(first);
-  const y = readPng(second);
-  if (x.width !== y.width || x.height !== y.height) {
-    return 1;
-  }
-  let changed = 0;
-  for (let i = 0; i < x.width * x.height; ++i) {
-    for (let c = 0; c < 3; ++c) {
-      if (Math.abs(x.pixels[i * x.channels + c] - y.pixels[i * y.channels + c]) > 24) {
-        ++changed;
-        break;
-      }
-    }
-  }
-  return changed / (x.width * x.height);
-}
 
 const results = [];
 const check = (name, pass, detail) => {

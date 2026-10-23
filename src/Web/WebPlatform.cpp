@@ -9,10 +9,14 @@
 
 #include "WebPlatform.h"
 
+#include <cstdlib>
+
 #include <atomic>
 #include <filesystem>
+#include <fstream>
 #include <functional>
 #include <iostream>
+#include <memory>
 #include <optional>
 #include <string>
 #include <system_error>
@@ -24,6 +28,7 @@
 #include <pthread.h>
 #include <unistd.h>
 
+#include "Common/BuildVersion.h"
 #include "Common/UserData.h"
 
 // clang-format off
@@ -75,7 +80,12 @@ EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
 		channel.port2.postMessage(0);
 	});
 });
-EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
+// The text of the version file of the page (version.txt), which the page gives to the game threads. Null without it.
+EM_JS(char*, openblack_page_version, (), {
+	const text = globalThis.openblackWeb && globalThis.openblackWeb.version;
+	return typeof text === 'string' ? stringToNewUTF8(text) : 0;
+});
+EM_JS_DEPS(openblack_web_platform, "$UTF8ToString,$stringToNewUTF8");
 // clang-format on
 
 namespace
@@ -209,6 +219,19 @@ bool LinkStoredProfiles(const std::filesystem::path& profiles)
 	return !error;
 }
 
+/// Put the version file of the page into the working folder, where the game reads it as the version file next to the
+/// game. Without the file of the page, the game finds no version file.
+void WritePageVersion()
+{
+	const std::unique_ptr<char, decltype(&free)> text(openblack_page_version(), free);
+	if (!text)
+	{
+		return;
+	}
+	std::ofstream file(std::filesystem::path(k_WorkingFolder) / build_version::k_FileName, std::ios::binary);
+	file << text.get();
+}
+
 } // namespace
 
 bool openblack::web::PrepareFileSystem()
@@ -220,6 +243,8 @@ bool openblack::web::PrepareFileSystem()
 	{
 		std::cerr << "The web build cannot use the working folder " << k_WorkingFolder << ": " << error.message() << '\n';
 	}
+
+	WritePageVersion();
 
 	const auto profiles = std::filesystem::path(k_WorkingFolder) / user_data::k_ProfileFolderName;
 	if (!LinkStoredProfiles(profiles))

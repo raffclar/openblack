@@ -22,6 +22,7 @@
 //                            {"do": "synth-move", "dx", "dy", "count", "ms", "buttons"}
 //                            {"do": "synth-button", "type": "mousedown" | "mouseup", "button": 0 | 1 | 2}
 //                            {"do": "wait-log", "text": "...", "seconds": 60}
+//                            {"do": "resize", "width": 1920, "height": 1080}   (the new size of the window)
 //                            The wait-log step waits until the game log of the page has the text (at most the
 //                            seconds), and then moves the times of all the next steps and the end later by the wait.
 //                            The synth steps send page events to the game canvas. Use them while the pointer is
@@ -224,6 +225,10 @@ const runStep = async (step) => {
       buttons: ${step.type === 'mouseup' ? 0 : [1, 4, 2][step.button ?? 0]} }))`);
     break;
   }
+  case 'resize':
+    await send('Emulation.setDeviceMetricsOverride', { width: step.width, height: step.height, deviceScaleFactor: 1,
+      mobile: false });
+    break;
   case 'eval':
     record(`[eval] ${step.expression} = ${JSON.stringify(await evaluate(step.expression))}`);
     break;

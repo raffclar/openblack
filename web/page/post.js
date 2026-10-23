@@ -15,7 +15,9 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
   };
   const give = (worker) => {
-    worker.postMessage({ openblackWeb: { folder: openblackWeb.folder, storage: openblackWeb.storage } });
+    worker.postMessage({
+      openblackWeb: { folder: openblackWeb.folder, storage: openblackWeb.storage, version: openblackWeb.version },
+    });
     worker.addEventListener('message', show);
   };
   PThread.unusedWorkers.forEach(give);
