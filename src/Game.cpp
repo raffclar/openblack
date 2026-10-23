@@ -567,6 +567,7 @@ Game::Game(Arguments&& args) noexcept
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
+    , _networkJoin(args.networkJoin)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -2254,6 +2255,11 @@ void Game::UpdateOnline()
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
+	}
+	// The network game takes the turns and the checksums that came, and comes back after a loss
+	if (Locator::networkGame::has_value())
+	{
+		Locator::networkGame::value().Update();
 	}
 }
 
@@ -3970,6 +3976,14 @@ void Game::StartPlayView()
 
 void Game::BeforeFirstFrame(bool continued)
 {
+	// A join from the command line: the land loaded, so the game joins the server and waits for its start
+	if (auto join = std::exchange(_networkJoin, std::nullopt); join.has_value() && Locator::networkGame::has_value())
+	{
+		if (!Locator::networkGame::value().Join(std::move(*join)))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game cannot join the game server");
+		}
+	}
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{

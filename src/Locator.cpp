@@ -101,6 +101,7 @@
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
+#include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
@@ -275,6 +276,7 @@ using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
+using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
@@ -442,6 +444,16 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
 	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
+	Locator::networkGame::emplace<NetworkGameSystem>(
+	    Locator::webSocketClient::value(),
+	    [](const std::string& authorities) -> std::unique_ptr<online::WebSocketClientInterface> {
+#if defined(__EMSCRIPTEN__)
+		    static_cast<void>(authorities);
+		    return nullptr;
+#else
+		    return std::make_unique<online::CurlWebSocketClient>(authorities);
+#endif
+	    });
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
@@ -725,6 +737,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();
+	Locator::networkGame::reset();
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();

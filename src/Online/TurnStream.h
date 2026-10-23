@@ -28,6 +28,8 @@ struct TurnStreamHandlers
 	std::function<void()> opened;
 	/// A turn from the server, with the commands of all the players
 	std::function<void(const turn_codec::TurnBundle& turn)> turn;
+	/// The checksum of the server's world after a turn
+	std::function<void(const turn_codec::TurnChecksum& checksum)> checksum;
 	/// A JSON text frame of the game socket: the room before the start, joins, leaves and the end of the game
 	std::function<void(std::string_view text)> text;
 	std::function<void(const WebSocketClosed& closed)> closed;

@@ -209,6 +209,7 @@ class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
 class LobbyClientSystemInterface;
+class NetworkGameSystemInterface;
 class RealWeatherSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
@@ -384,6 +385,8 @@ struct Locator
 	using webSocketClient = entt::locator<online::WebSocketClientInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The network game of this computer: the session with a game server, which gives the turns of the world
+	using networkGame = entt::locator<ecs::systems::NetworkGameSystemInterface>;
 	/// The real-world weather of a single-player game, off unless the player turns it on
 	using realWeatherSystem = entt::locator<ecs::systems::RealWeatherSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;

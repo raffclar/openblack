@@ -178,6 +178,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -242,6 +243,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 #include "Particles/LightSheet.h"
 #include "Profiler.h"
@@ -372,6 +374,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
@@ -619,33 +622,59 @@ Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
-	provider->Add(Query("online",
-	                    "The web client, the WSS client and the lobby client: the requests that wait, the open sockets, "
-	                    "the session and the push channel"),
-	              [](const QueryContext& /*context*/) {
-		              Json result {
-		                  {"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0},
-		                  {"websockets", Locator::webSocketClient::has_value() ? Locator::webSocketClient::value().Count() : 0},
-		              };
-		              if (!Locator::lobbyClient::has_value())
-		              {
-			              result["lobby"] = nullptr;
-			              return QueryResult::Value(std::move(result));
-		              }
-		              const auto& lobby = Locator::lobbyClient::value();
-		              const auto state = lobby.GetState();
-		              const auto account = lobby.GetAccount();
-		              result["lobby"] = Json {
-		                  {"configured", lobby.IsConfigured()},
-		                  {"state", state == ecs::systems::LobbySessionState::LoggedIn    ? "logged_in"
-		                            : state == ecs::systems::LobbySessionState::LoggingIn ? "logging_in"
-		                                                                                  : "logged_out"},
-		                  {"account", account.has_value() ? Json(account->name) : Json(nullptr)},
-		                  {"push_open", lobby.IsPushOpen()},
-		                  {"known_servers", lobby.GetKnownServers().size()},
-		              };
-		              return QueryResult::Value(std::move(result));
-	              });
+	provider->Add(
+	    Query("online", "The web client, the WSS client, the lobby client and the network game: the requests that wait, "
+	                    "the open sockets, the session, the push channel, and the turns and checksums of the game server"),
+	    [](const QueryContext& /*context*/) {
+		    Json result {
+		        {"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0},
+		        {"websockets", Locator::webSocketClient::has_value() ? Locator::webSocketClient::value().Count() : 0},
+		    };
+		    const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+		    if (session == nullptr)
+		    {
+			    result["network_game"] = nullptr;
+		    }
+		    else
+		    {
+			    const auto& compares = session->GetCompares();
+			    const auto& joined = session->GetJoined();
+			    const auto roundTrip = session->RoundTrip();
+			    result["network_game"] = Json {
+			        {"state", online::StateName(session->GetState())},
+			        {"end", online::EndName(session->GetEnd())},
+			        {"role", joined.has_value() ? Json(game_socket::RoleName(joined->role)) : Json(nullptr)},
+			        {"slot", joined.has_value() && joined->slot.has_value() ? Json(*joined->slot) : Json(nullptr)},
+			        {"turns_done", session->TurnsDone()},
+			        {"checksums_compared", compares.compared},
+			        {"checksums_same", compares.same},
+			        {"first_different", compares.firstDifferent.has_value() ? Json(*compares.firstDifferent) : Json(nullptr)},
+			        {"resyncing", session->ShowsResync()},
+			        {"resync_tries", session->Resync().Tries()},
+			        {"resumes", session->Resumes()},
+			        {"buffer_ms", static_cast<double>(session->Playout().BufferMicroseconds()) / 1000.0},
+			        {"round_trip_ms", roundTrip.has_value() ? Json(static_cast<double>(*roundTrip) / 1000.0) : Json(nullptr)},
+			    };
+		    }
+		    if (!Locator::lobbyClient::has_value())
+		    {
+			    result["lobby"] = nullptr;
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& lobby = Locator::lobbyClient::value();
+		    const auto state = lobby.GetState();
+		    const auto account = lobby.GetAccount();
+		    result["lobby"] = Json {
+		        {"configured", lobby.IsConfigured()},
+		        {"state", state == ecs::systems::LobbySessionState::LoggedIn    ? "logged_in"
+		                  : state == ecs::systems::LobbySessionState::LoggingIn ? "logging_in"
+		                                                                        : "logged_out"},
+		        {"account", account.has_value() ? Json(account->name) : Json(nullptr)},
+		        {"push_open", lobby.IsPushOpen()},
+		        {"known_servers", lobby.GetKnownServers().size()},
+		    };
+		    return QueryResult::Value(std::move(result));
+	    });
 	provider->Add(
 	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
 	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
