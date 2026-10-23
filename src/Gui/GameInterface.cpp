@@ -86,7 +86,7 @@ constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED
 constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
 /// The words of a resynchronisation (user decision MI-4). The game has no text for them.
 constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
-/// The words stand at the middle of the top of the dialog space, in the dialog's middle text size
+/// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
 constexpr int k_ResyncTop = 20;
 /// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
 constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
@@ -1185,8 +1185,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)
 		{
-			_painter.DrawText({0, k_ResyncTop}, DialogPainter::k_Size.x, DialogPainter::Justify::Centre, k_ResyncText,
-			                  DialogPainter::k_MidTextSize, DialogPainter::k_TextColour);
+			_painter.DrawText({DialogPainter::k_Size.x / 2, k_ResyncTop}, DialogPainter::k_Size.x,
+			                  DialogPainter::Justify::Centre, k_ResyncText, DialogPainter::k_MidTextSize,
+			                  DialogPainter::k_TextColour);
 		}
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
