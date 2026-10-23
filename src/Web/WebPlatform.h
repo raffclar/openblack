@@ -40,12 +40,22 @@ constexpr std::string_view k_WorkingFolder = "/work";
 
 /// Call before the renderer draws a frame. When the renderer draws more than one frame in a frame of RunFrames, as a
 /// loading screen does, the frame that the canvas has goes to the page as an image before the next frame replaces it.
+/// With a render thread (see StartRenderThread), this function does nothing.
 void BeforeFrame();
 
 /// Call after the renderer drew a frame. When a frame of RunFrames draws one frame only, the browser shows it when the
 /// game thread gives control back. All other frames go to the page as images, because the game thread does not give
-/// control back to the browser while it draws them.
+/// control back to the browser while it draws them. With a render thread, this function does nothing.
 void PresentFrame();
+
+/// Start the thread that draws the frames of the renderer. This thread owns the canvas, and it gives control back to
+/// the browser after each frame, so that the browser shows each frame. Call before the renderer starts. Returns false
+/// when the thread did not start: the game thread then draws.
+[[nodiscard]] bool StartRenderThread();
+
+/// Wait until the render thread draws no more frames. Call after the renderer stops. The thread stays until the program
+/// ends, because it owns the canvas.
+void WaitForRenderThreadStop();
 
 /// Show a message from the game on the page, under the game's picture
 void ShowPageMessage(std::string_view title, std::string_view text);
