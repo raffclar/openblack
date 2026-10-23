@@ -59,6 +59,12 @@
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
 
+// The game role has sockets and TLS, which only the desktop builds have
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#define OPENBLACK_GAME_ROLE 1
+#include "Server/Desktop/GameRole.h"
+#endif
+
 namespace openblack::server
 {
 namespace
@@ -116,6 +122,8 @@ public:
 	[[nodiscard]] bool StartLand();
 	/// Plays one frame of the world. Gives false when the world is at its last turn.
 	[[nodiscard]] bool Frame();
+	/// The game role, which gives the turns of a network game
+	void SetNetwork(std::function<bool()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -141,6 +149,8 @@ private:
 	statistics::FrameRateMeter _frameRate;
 	uint32_t _frameCount {0};
 	std::chrono::steady_clock::time_point _frameStart;
+	/// Gives false when the game of the network ended
+	std::function<bool()> _beforeTurns;
 };
 
 bool ServerWorld::Initialize()
@@ -314,6 +324,11 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
+	// The game role takes the joins and the commands, and starts or holds the world
+	if (_beforeTurns && !_beforeTurns())
+	{
+		return false;
+	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
 	Locator::playerCommandSystem::value().SendOpenBlock();
@@ -378,6 +393,64 @@ bool ServerWorld::Frame()
 	_frameStart = frameEnd;
 	return true;
 }
+
+#if defined(OPENBLACK_GAME_ROLE)
+/// Starts the game role after the land loaded: the clients start the same land with the same seed
+bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
+{
+	network = std::make_unique<GameRole>();
+	const game_socket::Start start {
+	    .land = Locator::landSystem::value().GetLandPath().filename().string(),
+	    .testbed = settings.testbed,
+	    .seed = settings.seed,
+	    .turn = Locator::time::value().GetTurn(),
+	};
+	if (const auto error = network->Start(*settings.network, start); error.has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
+		network.reset();
+		return false;
+	}
+	auto& host = network->Host();
+	// The world turns only with the turns that the host closes, and waits for the start
+	Locator::playerCommandSystem::value().SetSource(&host);
+	Locator::time::value().SetPaused(true);
+	world.SetNetwork([&host, role = network.get()] {
+		role->Update();
+		if (host.GameOver())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+			return false;
+		}
+		auto& clock = Locator::time::value();
+		const bool turns = host.HasTurn(clock.GetTurn());
+		if (clock.IsPaused() == turns)
+		{
+			clock.SetPaused(!turns);
+		}
+		return true;
+	});
+	Locator::syncChecksumSystem::value().SetTurnListener(
+	    [&host, onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    if (onTurn)
+		    {
+			    onTurn(turn.turn, turn.checksum);
+		    }
+		    // Every client gets the checksum of the server's world
+		    host.TurnChecksum(turn.turn, turn.checksum);
+	    });
+	return true;
+}
+#else
+bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/)
+{
+	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
+	return false;
+}
+#endif
 
 } // namespace
 
@@ -468,7 +541,16 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 	});
 
 	int exitCode = EXIT_SUCCESS;
+#if defined(OPENBLACK_GAME_ROLE)
+	std::unique_ptr<GameRole> network;
+#else
+	std::unique_ptr<int> network;
+#endif
 	if (!world->StartLand())
+	{
+		exitCode = EXIT_FAILURE;
+	}
+	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn))
 	{
 		exitCode = EXIT_FAILURE;
 	}
@@ -483,6 +565,18 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		}
 	}
 	checksums.SetTurnListener({});
+#if defined(OPENBLACK_GAME_ROLE)
+	if (network)
+	{
+		for (const auto& line : network->Host().SummaryLines())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);
+		}
+		Locator::playerCommandSystem::value().SetSource(nullptr);
+		world->SetNetwork({});
+		network.reset();
+	}
+#endif
 	world.reset();
 	return exitCode;
 }

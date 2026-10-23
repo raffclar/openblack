@@ -51,6 +51,7 @@ std::vector<Action> EachCommand()
 	                .camera = {7.0f, 8.0f, 9.0f},
 	                .focus = {10.0f, 11.0f, 12.0f}},
 	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
+	    PlayerLeft {},
 	};
 }
 
@@ -74,7 +75,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 11)
+	switch (bits(random) % 12)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -98,8 +99,10 @@ Action RandomAction(std::mt19937& random)
 		return LeashPostTap {.post = entity()};
 	case 9:
 		return HandReport {.collidePoint = vector(), .handPoint = vector(), .camera = vector(), .focus = vector()};
-	default:
+	case 10:
 		return HandTwist {.object = entity(), .moved = vector()};
+	default:
+		return PlayerLeft {};
 	}
 }
 
@@ -159,13 +162,15 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), i + 1) << i;
+		// The tags are 1 to 11 in the order of the commands. The leave of the server has tag 17.
+		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i]) ? 17 : i + 1;
+		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
 
@@ -199,7 +204,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 3), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>(i * 2), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});

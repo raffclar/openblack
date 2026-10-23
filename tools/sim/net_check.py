@@ -1,0 +1,371 @@
+"""Checks that two real clients play one network game through apps/openblack-server on this computer.
+
+The script makes a test key pair for the join tickets and a test certificate authority with a certificate for
+127.0.0.1, all in the output folder (never the live keys of the lobby). It starts the game server with --listen on a free
+port of 127.0.0.1 (wss), then two openblack clients with --join and a ticket each. The first client plays recorded hand
+input (--input), the second keeps a still hand. The world turns only with the turns of the server (authoritative
+lockstep). At the end it compares the checksum of each turn on the server and on both clients.
+
+    python tools/sim/net_check.py --testbed --input tools/sim/hand_inputs/testbed.json --turns 600
+    python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
+    python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
+
+With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
+started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
+
+Every program starts with no console window of its own, the clients with --background. The script stops only the
+processes that it started, by their own process ids.
+"""
+
+import argparse
+import base64
+import datetime
+import hashlib
+import json
+import os
+import re
+import subprocess
+import sys
+import time
+
+from cryptography import x509
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.asymmetric import ec
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
+from cryptography.x509.oid import NameOID
+import ipaddress
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
+DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
+CHECKSUM_LINE = re.compile(r"turn (\d+) checksum ([0-9a-f]{16})")
+LISTEN_LINE = re.compile(r"The game server listens on [0-9.]+:(\d+)")
+SERVER_ID = "net-check-1"
+# The input of the first client starts after this many frames (50 s at 20 ms), when both clients loaded and the game
+# started
+INPUT_OFFSET_FRAMES = 2500
+RUN_LIMIT_SECONDS = 900
+
+
+def worktree_root():
+    return os.path.normpath(os.path.join(HERE, "..", ".."))
+
+
+def default_bin(config):
+    return os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()), "bin", config)
+
+
+def b64(data):
+    return base64.urlsafe_b64encode(data).rstrip(b"=").decode("ascii")
+
+
+def pae(*pieces):
+    out = [len(pieces).to_bytes(8, "little")]
+    for piece in pieces:
+        out.append(len(piece).to_bytes(8, "little"))
+        out.append(piece)
+    return b"".join(out)
+
+
+def make_ticket_key(folder):
+    """A test Ed25519 key pair, and the keys file in the shape of the lobby's /api/v1/ticket-keys"""
+    key = Ed25519PrivateKey.generate()
+    public = key.public_key().public_bytes(serialization.Encoding.Raw, serialization.PublicFormat.Raw)
+    paserk = "k4.public." + b64(public)
+    kid = "k4.pid." + b64(hashlib.blake2b(b"k4.pid." + paserk.encode("ascii"), digest_size=33).digest())
+    path = os.path.join(folder, "ticket-keys.json")
+    with open(path, "w", encoding="utf-8") as file:
+        json.dump({"keys": [{"kid": kid, "public_key": paserk, "use": "current"}]}, file)
+    return key, kid, path
+
+
+def make_ticket(key, kid, account, name, role, lifetime):
+    """A PASETO v4.public join ticket as the lobby makes one, for this test server"""
+    now = datetime.datetime.now(datetime.timezone.utc).replace(microsecond=0)
+    claims = {
+        "iss": "bwgame-service", "sub": str(account), "aud": SERVER_ID,
+        "iat": now.isoformat(), "nbf": now.isoformat(),
+        "exp": (now + datetime.timedelta(seconds=lifetime)).isoformat(),
+        "jti": b64(os.urandom(16)), "name": name, "clans": [], "admin": False, "role": role,
+    }
+    message = json.dumps(claims, separators=(",", ":")).encode("utf-8")
+    footer = json.dumps({"kid": kid}, separators=(",", ":")).encode("utf-8")
+    header = b"v4.public."
+    signature = key.sign(pae(header, message, footer, b""))
+    return header.decode() + b64(message + signature) + "." + b64(footer)
+
+
+def make_certificates(folder):
+    """A test certificate authority and a server certificate for 127.0.0.1"""
+    now = datetime.datetime.now(datetime.timezone.utc)
+    ca_key = ec.generate_private_key(ec.SECP256R1())
+    ca_name = x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "openblack net_check test CA")])
+    ca = (x509.CertificateBuilder().subject_name(ca_name).issuer_name(ca_name).public_key(ca_key.public_key())
+          .serial_number(x509.random_serial_number()).not_valid_before(now - datetime.timedelta(minutes=5))
+          .not_valid_after(now + datetime.timedelta(days=1))
+          .add_extension(x509.BasicConstraints(ca=True, path_length=0), critical=True)
+          .add_extension(x509.KeyUsage(digital_signature=False, content_commitment=False, key_encipherment=False,
+                                       data_encipherment=False, key_agreement=False, key_cert_sign=True, crl_sign=True,
+                                       encipher_only=False, decipher_only=False), critical=True)
+          .add_extension(x509.SubjectKeyIdentifier.from_public_key(ca_key.public_key()), critical=False)
+          .sign(ca_key, hashes.SHA256()))
+    key = ec.generate_private_key(ec.SECP256R1())
+    cert = (x509.CertificateBuilder().subject_name(x509.Name([x509.NameAttribute(NameOID.COMMON_NAME, "127.0.0.1")]))
+            .issuer_name(ca_name).public_key(key.public_key()).serial_number(x509.random_serial_number())
+            .not_valid_before(now - datetime.timedelta(minutes=5)).not_valid_after(now + datetime.timedelta(days=1))
+            .add_extension(x509.SubjectAlternativeName([x509.IPAddress(ipaddress.ip_address("127.0.0.1"))]),
+                           critical=False)
+            .add_extension(x509.BasicConstraints(ca=False, path_length=None), critical=True)
+            .add_extension(x509.ExtendedKeyUsage([x509.oid.ExtendedKeyUsageOID.SERVER_AUTH]), critical=False)
+            .add_extension(x509.AuthorityKeyIdentifier.from_issuer_public_key(ca_key.public_key()), critical=False)
+            .sign(ca_key, hashes.SHA256()))
+    paths = {name: os.path.join(folder, name) for name in ("ca.pem", "server.pem", "server.key")}
+    with open(paths["ca.pem"], "wb") as file:
+        file.write(ca.public_bytes(serialization.Encoding.PEM))
+    with open(paths["server.pem"], "wb") as file:
+        file.write(cert.public_bytes(serialization.Encoding.PEM))
+    with open(paths["server.key"], "wb") as file:
+        file.write(key.private_bytes(serialization.Encoding.PEM, serialization.PrivateFormat.PKCS8,
+                                     serialization.NoEncryption()))
+    return paths
+
+
+def start(command, cwd):
+    """Starts a program with no console window of its own"""
+    os.makedirs(cwd, exist_ok=True)
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    return subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+
+
+def stop(process):
+    """Stops a program that the script started, by its own process id"""
+    if process.poll() is None:
+        process.kill()
+        process.wait()
+
+
+def wait_for_port(log, process, limit=180):
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        if process.poll() is not None:
+            return None
+        if os.path.exists(log):
+            with open(log, encoding="utf-8", errors="replace") as file:
+                match = LISTEN_LINE.search(file.read())
+            if match:
+                return int(match.group(1))
+        time.sleep(0.5)
+    return None
+
+
+def wait_for_line(log, text, process, limit=300):
+    end = time.monotonic() + limit
+    while time.monotonic() < end:
+        if process.poll() is not None:
+            return False
+        if os.path.exists(log):
+            with open(log, encoding="utf-8", errors="replace") as file:
+                if text in file.read():
+                    return True
+        time.sleep(0.5)
+    return False
+
+
+def server_checksums(log):
+    turns = {}
+    with open(log, encoding="utf-8", errors="replace") as file:
+        for line in file:
+            match = CHECKSUM_LINE.search(line)
+            if match:
+                turns[int(match.group(1))] = match.group(2)
+    return turns
+
+
+def record_checksums(record):
+    turns = {}
+    if not os.path.exists(record):
+        return turns
+    with open(record, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            value = json.loads(line)
+            synced = value.get("synced")
+            if isinstance(synced, dict) and "checksum" in synced and "turn" in value:
+                turns[int(value["turn"])] = synced["checksum"]
+    return turns
+
+
+def parted_parts(first, other, turn):
+    """The parts whose hash differs between two clients' records at a turn"""
+    def synced(path):
+        if not os.path.exists(path):
+            return {}
+        with open(path, encoding="utf-8") as file:
+            for line in file:
+                line = line.strip()
+                if line:
+                    value = json.loads(line)
+                    if value.get("turn") == turn:
+                        return value.get("synced", {})
+        return {}
+    ours, theirs = synced(first), synced(other)
+    names = set(ours.get("parts", {})) | set(theirs.get("parts", {}))
+    return sorted(name for name in names if ours.get("parts", {}).get(name) != theirs.get("parts", {}).get(name))
+
+
+def lines_with(log, words):
+    if not os.path.exists(log):
+        return []
+    with open(log, encoding="utf-8", errors="replace") as file:
+        return [line.strip() for line in file if any(word in line for word in words)]
+
+
+def shifted_input(path, folder):
+    """The recorded input with its frames moved after the start of the network game"""
+    with open(path, encoding="utf-8") as file:
+        value = json.load(file)
+    events = value.get("events", []) if isinstance(value, dict) else value
+    for event in events:
+        event["frame"] = event["frame"] + INPUT_OFFSET_FRAMES
+    if isinstance(value, dict):
+        value["events"] = events
+    else:
+        value = events
+    out = os.path.join(folder, "input.json")
+    with open(out, "w", encoding="utf-8") as file:
+        json.dump(value, file)
+    return out
+
+
+def main():
+    parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
+    parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
+    parser.add_argument("--seed", type=int, default=1)
+    parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--testbed", action="store_true")
+    parser.add_argument("--opening", default="cow")
+    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
+    parser.add_argument("--config", default="RelWithDebInfo")
+    parser.add_argument("--bin")
+    parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
+    parser.add_argument("--out", default=os.path.join(os.getcwd(), "net-check"))
+    parser.add_argument("--input", help="recorded input for the first client's hand")
+    parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
+    parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
+    parser.add_argument("--hash-parts", action="store_true",
+                        help="the clients' records keep the hash of each component, to find what parted")
+    options = parser.parse_args()
+    options.hash_parts = options.hash_parts or options.hash_fields
+
+    folder = options.bin or default_bin(options.config)
+    exe = ".exe" if os.name == "nt" else ""
+    server_exe = os.path.join(folder, "openblack-server" + exe)
+    game_exe = os.path.join(folder, "openblack" + exe)
+    out = os.path.abspath(options.out)
+    keys_dir = os.path.join(out, "keys")
+    os.makedirs(keys_dir, exist_ok=True)
+    key, kid, keys_file = make_ticket_key(keys_dir)
+    certs = make_certificates(keys_dir)
+    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+
+    server_dir = os.path.join(out, "server")
+    server_log = os.path.join(server_dir, "server.log")
+    client_dirs = [os.path.join(out, "client1"), os.path.join(out, "client2")]
+    for path in [server_log] + [os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")]:
+        if os.path.exists(path):
+            os.remove(path)
+
+    # The server ends when every god left; its last turn is only a limit for a run that goes wrong
+    server_command = [server_exe, "-g", options.game_path] + where + [
+        "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log,
+        "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
+        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", "2",
+        "--come-back-seconds", str(options.come_back_seconds)]
+    if options.hash_parts:
+        server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
+        if options.hash_fields:
+            server_command.append("--record-fields")
+    processes = []
+    try:
+        server = start(server_command, server_dir)
+        processes.append(server)
+        port = wait_for_port(server_log, server)
+        if port is None:
+            print(f"the server did not listen; see {server_log}")
+            return 1
+        url = f"wss://127.0.0.1:{port}/game/{SERVER_ID}"
+        clients = []
+        for index, client_dir in enumerate(client_dirs):
+            os.makedirs(client_dir, exist_ok=True)
+            # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
+            ticket = make_ticket(key, kid, 100 + index, f"Player{index + 1}", "god", 600)
+            command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
+                       "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(options.turns),
+                       "--sim-record", os.path.join(client_dir, "record.jsonl"), "--sim-record-every", "1",
+                       "--inspect-lock-input", "-n", "4000000000", "--background",
+                       "-l", os.path.join(client_dir, "client.log"),
+                       "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]] + where
+            if options.hash_fields:
+                command.append("--sim-hash-fields")
+            elif options.hash_parts:
+                command.append("--sim-hash-parts")
+            if index == 0 and options.input:
+                command += ["--sim-input", shifted_input(options.input, client_dir)]
+            else:
+                command.append("--sim-still-hand")
+            clients.append(start(command, client_dir))
+            processes.append(clients[-1])
+            if index == 0:
+                # The world has one human hand for now (the first god slot), so the client with the input joins first
+                if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[0]):
+                    print(f"the first client did not join; see {client_dir}")
+                    return 1
+        started = time.monotonic()
+        stopped_second = False
+        while time.monotonic() - started < RUN_LIMIT_SECONDS:
+            if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[1])):
+                break
+            if (options.stop_second_after is not None and not stopped_second
+                    and time.monotonic() - started > options.stop_second_after):
+                stop(clients[1])
+                stopped_second = True
+            time.sleep(0.5)
+        # The server stops at its last turn; give it the time to write its summary
+        end = time.monotonic() + 60
+        while server.poll() is None and time.monotonic() < end:
+            time.sleep(0.5)
+    finally:
+        for process in processes:
+            stop(process)
+
+    server_turns = server_checksums(server_log)
+    summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
+    all_same = True
+    for index, client_dir in enumerate(client_dirs):
+        client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
+        compared = [turn for turn in sorted(client_turns) if turn in server_turns]
+        different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
+        parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
+                             different[0]) if different and options.hash_parts else None
+        expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
+        same = not different and len(compared) >= expected
+        all_same = all_same and same
+        summary["clients"].append({
+            "client": index + 1, "turns": len(client_turns), "compared": len(compared),
+            "different": different[:20], "same": same, "parts_against_server": parts,
+            "session": lines_with(os.path.join(client_dir, "client.log"),
+                                  ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
+        })
+    summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the"])
+    summary["same"] = all_same
+    with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
+        json.dump(summary, file, indent=2)
+    print(json.dumps(summary, indent=2))
+    return 0 if all_same else 1
+
+
+if __name__ == "__main__":
+    sys.exit(main())

@@ -66,6 +66,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SkyDome", .field = "", .marker = ""},
     // The moon's phase comes from the date of the computer's clock, as in the game
     {.component = "Moon", .field = "", .marker = ""},
+    // The hum and the mana path of the hand past the border follow the hand that this computer draws
+    {.component = "VirtualInfluence", .field = "shown", .marker = ""},
+    {.component = "VirtualInfluence", .field = "hum", .marker = ""},
     {.component = "VillageLight", .field = "flicker", .marker = ""},
     {.component = "VillageLight", .field = "flickerTimer", .marker = ""},
     {.component = "VillageLight", .field = "glowSize", .marker = ""},

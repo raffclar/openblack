@@ -567,6 +567,7 @@ Game::Game(Arguments&& args) noexcept
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
+    , _networkJoin(args.networkJoin)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -2081,6 +2082,12 @@ bool Game::Update() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
 		return false;
 	}
+	// A game that joined from the command line stops when its network game ends: its world turns no more
+	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game ended: the game stops");
+		return false;
+	}
 	const auto& config = Locator::config::value();
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
@@ -2262,6 +2269,11 @@ void Game::UpdateOnline()
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
+	}
+	// The network game takes the turns and the checksums that came, and comes back after a loss
+	if (Locator::networkGame::has_value())
+	{
+		Locator::networkGame::value().Update();
 	}
 }
 
@@ -3978,6 +3990,15 @@ void Game::StartPlayView()
 
 void Game::BeforeFirstFrame(bool continued)
 {
+	// A join from the command line: the land loaded, so the game joins the server and waits for its start
+	if (auto join = std::exchange(_networkJoin, std::nullopt); join.has_value() && Locator::networkGame::has_value())
+	{
+		_joinedFromCommandLine = Locator::networkGame::value().Join(std::move(*join));
+		if (!_joinedFromCommandLine)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game cannot join the game server");
+		}
+	}
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{
