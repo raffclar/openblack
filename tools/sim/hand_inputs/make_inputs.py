@@ -7,7 +7,7 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, testbed.json, twogods.json, twogods_totem.json and strokes.json beside this script. strokes.json
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json and strokes.json beside this script. strokes.json
 plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes). The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
@@ -137,6 +137,11 @@ def testbed():
     return script.events
 
 
+# The camera of land1_camera.json: turned from where Land 1 starts it and further back, so that the story's scripts read
+# a camera that only the player's reports give the server
+LAND1_TURNED_CAMERA = {"yaw": 120, "pitch": 40, "distance": 90}
+
+
 # The camera of twogods.json: 35 m from the store of the player's first town, looking down at 40 degrees
 TWO_GODS_STORE_CAMERA = {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}
 
@@ -227,6 +232,7 @@ def write(name, events, camera=None):
 
 def main():
     write("land1", land1())
+    write("land1_camera", land1(), LAND1_TURNED_CAMERA)
     write("testbed", testbed())
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)

@@ -51,6 +51,9 @@ public:
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void DoLock(PlayerNames player, entt::entity object) override;
 	void DoApply(PlayerNames player, entt::entity target) override;
+	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
+	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
+	void ForgetClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;

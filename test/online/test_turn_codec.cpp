@@ -68,6 +68,7 @@ std::vector<Action> EachCommand()
 	                      .faceMs = 2000.0f,
 	                      .cue = 15,
 	                      .interruptsAfter = 0.25f},
+	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
 	};
 }
 
@@ -91,7 +92,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 20)
+	switch (bits(random) % 21)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -145,6 +146,16 @@ Action RandomAction(std::mt19937& random)
 		                         .faceMs = face ? number() : 0.0f,
 		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
 		                         .interruptsAfter = number()};
+	}
+	case 19:
+	{
+		const bool release = bits(random) % 2 == 0;
+		const bool place = release && bits(random) % 2 == 0;
+		return HandClick {.thing = entity(),
+		                  .release = release,
+		                  .hasPlace = place,
+		                  .placeX = place ? static_cast<int32_t>(bits(random)) : 0,
+		                  .placeZ = place ? static_cast<int32_t>(bits(random)) : 0};
 	}
 	default:
 	{
@@ -215,7 +226,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21, 15};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -401,6 +412,11 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
 	reaction[20] = 1;
 	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
+	// A press of the hand has no place
+	auto click = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {HandClick {.thing = Entity(1)}}});
+	EXPECT_EQ(Decode(click).error, DecodeError::None);
+	click[15] = 1;
+	EXPECT_EQ(Decode(click).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;

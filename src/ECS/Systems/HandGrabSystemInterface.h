@@ -96,6 +96,8 @@ public:
 	virtual void DoLock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the hand uses the thing that it holds on a target (player_commands::HandApply)
 	virtual void DoApply(PlayerNames /*player*/, entt::entity /*target*/) {}
+	/// The turn of a click of the hand that a player sent in a network game: the click that the scripts read
+	virtual void DoClick(PlayerNames /*player*/, const player_commands::HandClick& /*click*/, uint32_t /*turn*/) {}
 	/// At the turn: the lock ends, and with it the scoop (player_commands::HandUnlock)
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)

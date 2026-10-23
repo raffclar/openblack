@@ -26,6 +26,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
 
@@ -115,6 +116,14 @@ void Run(const Command& command)
 			    if (openblack::Locator::creatureHandSystem::has_value() && registry.Valid(action.creature))
 			    {
 				    openblack::Locator::creatureHandSystem::value().DoBruise(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandClick>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoClick(command.player, action,
+				                                                        openblack::Locator::time::value().GetTurn());
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, CreatureReaction>)

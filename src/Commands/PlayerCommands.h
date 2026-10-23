@@ -241,10 +241,25 @@ struct CreatureReaction
 	float interruptsAfter;
 };
 
+/// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of
+/// every computer read the same click
+struct HandClick
+{
+	/// The thing that the hand clicked, or none
+	entt::entity thing;
+	/// The click is the let go of a press: with no thing, the place on the land is clicked, or with no place the thing
+	/// is forgotten
+	bool release;
+	/// The place on the land of a let go, in the fixed units of the map
+	bool hasPlace;
+	int32_t placeX;
+	int32_t placeZ;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction>;
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick>;
 
 /// A command and the player that sent it
 struct Command

@@ -178,6 +178,13 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
 	               },
 	               [&out](const FightCharge& command) { out.Number(command.heldMs); },
+	               [&out](const HandClick& command) {
+		               out.Entity(command.thing);
+		               out.Byte(static_cast<uint8_t>(command.release ? 1 : 0));
+		               out.Byte(static_cast<uint8_t>(command.hasPlace ? 1 : 0));
+		               out.Number(static_cast<uint32_t>(command.placeX));
+		               out.Number(static_cast<uint32_t>(command.placeZ));
+	               },
 	               [&out](const CreatureReaction& command) {
 		               out.Entity(command.creature);
 		               out.Number(command.animation);
@@ -327,6 +334,25 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::FightCharge:
 		action = FightCharge {.heldMs = in.Number<uint32_t>()};
 		return DecodeError::None;
+	case CommandTag::HandClick:
+	{
+		HandClick click {};
+		click.thing = in.Entity();
+		const auto release = in.Byte();
+		const auto hasPlace = in.Byte();
+		click.placeX = static_cast<int32_t>(in.Number<uint32_t>());
+		click.placeZ = static_cast<int32_t>(in.Number<uint32_t>());
+		// A press clicks a thing and has no place; no place has its bytes empty
+		const bool placeEmpty = hasPlace != 0 || (click.placeX == 0 && click.placeZ == 0);
+		if (release > 1 || hasPlace > 1 || (release == 0 && hasPlace != 0) || !placeEmpty)
+		{
+			return DecodeError::Value;
+		}
+		click.release = release != 0;
+		click.hasPlace = hasPlace != 0;
+		action = click;
+		return DecodeError::None;
+	}
 	case CommandTag::CreatureReaction:
 	{
 		CreatureReaction reaction {};
@@ -451,6 +477,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const FightMove& /*command*/) { return CommandTag::FightMove; },
 	                      [](const FightCharge& /*command*/) { return CommandTag::FightCharge; },
 	                      [](const CreatureReaction& /*command*/) { return CommandTag::CreatureReaction; },
+	                      [](const HandClick& /*command*/) { return CommandTag::HandClick; },
 	                  },
 	                  action);
 }
@@ -479,6 +506,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
 	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
 	                                     [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
+	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                                 },
 	                                 action);
 	return 1 + fields;
