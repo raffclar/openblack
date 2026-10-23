@@ -37,4 +37,13 @@ enum class LandShadow : uint8_t
 /// shields, seeds and vortices, street lights and anything living cast none.
 [[nodiscard]] LandShadow LandShadowOf(const Registry& registry, entt::entity entity);
 
+/// Whether the shadow that LandShadowOf gives a thing can change while the thing keeps all its components: a building's
+/// shadow starts when its building ends, and an abode's shadow also depends on its type
+[[nodiscard]] bool LandShadowChangesInPlace(const Registry& registry, entt::entity entity);
+
+/// A count that increases each time a thing with a mesh and a transform gets or loses a component that its land shadow
+/// depends on. While the count stays the same, the things that can cast into the land stay the same, and the shadow of
+/// each can change only with its transform, its mesh, its map cells, or (see LandShadowChangesInPlace) its state.
+[[nodiscard]] uint64_t LandShadowCastersVersion(Registry& registry);
+
 } // namespace openblack::ecs

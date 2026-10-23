@@ -22,6 +22,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/SameBits.h"
 #include "Common/WorkerPool.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
@@ -74,10 +75,24 @@ struct Caster
 	}
 };
 
+/// A thing that casts no shadow now, but can start to cast without a change of its components: its shadow now, and its
+/// transform and mesh if a move can make it cast
+struct MayCast
+{
+	entt::entity entity;
+	LandShadow shadow;
+	bool shadowChangesInPlace;
+	const MeshComponent* mesh;
+	const Transform* transform;
+};
+
 /// Gathers the casters of one kind of thing. A thing has to be in the map's cells to cast (one carried by the hand
-/// casts none), except a worship site and its altar, which stand at the temple without being filed in them.
+/// casts none), except a worship site and its altar, which stand at the temple without being filed in them. A thing
+/// that can start to cast without a change of its components goes into the second list: one whose shadow is none or
+/// not wanted now but can change in place, and a worship site or altar off the map, which can move onto it.
 template <typename Kind>
-void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters)
+void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted, std::vector<Caster>& casters,
+                   std::vector<MayCast>& mayCast)
 {
 	registry.Each<const Kind, const MeshComponent, const Transform>(
 	    // Kinds without data aren't passed in
@@ -88,6 +103,14 @@ void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted
 		    const bool leaves = shadow == LandShadow::Leaves;
 		    if (shadow == LandShadow::None || (leaves ? !wanted.leaves : !wanted.shapes))
 		    {
+			    if (ecs::LandShadowChangesInPlace(registry, entity))
+			    {
+				    mayCast.push_back({.entity = entity,
+				                       .shadow = shadow,
+				                       .shadowChangesInPlace = true,
+				                       .mesh = nullptr,
+				                       .transform = nullptr});
+			    }
 			    return;
 		    }
 		    const auto* resident = registry.TryGet<const MapCellResident>(entity);
@@ -102,6 +125,11 @@ void GatherCasters(const ecs::Registry& registry, LandShadowBake::Casters wanted
 			    if (static_cast<uint32_t>(cell.x) >= map_coords::k_MapCells ||
 			        static_cast<uint32_t>(cell.y) >= map_coords::k_MapCells)
 			    {
+				    mayCast.push_back({.entity = entity,
+				                       .shadow = shadow,
+				                       .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, entity),
+				                       .mesh = &mesh,
+				                       .transform = &transform});
 				    return;
 			    }
 			    cellUnder = static_cast<uint32_t>(cell.x) * map_coords::k_MapCells + static_cast<uint32_t>(cell.y);
@@ -233,6 +261,8 @@ void LandShadowBake::Reset()
 	_texture.reset();
 	_texels = {0, 0};
 	_baked.clear();
+	_watched.clear();
+	_castersVersion.reset();
 	_leaves.clear();
 	_shapes.clear();
 	_dirty.clear();
@@ -406,27 +436,37 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 
 	ApplyFinishedBake();
 
+	// While no thing that can cast changed, and no block waits for its bake, there is nothing to bake
 	const auto& registry = Locator::entitiesRegistry::value();
+	const auto castersVersion = ecs::LandShadowCastersVersion(Locator::entitiesRegistry::value());
+	const auto meshCount = Locator::resources::value().GetMeshes().Size();
+	if (!_bakeAll && _dirty.empty() && _castersVersion == castersVersion && _meshCount == meshCount &&
+	    WatchedUnchanged(registry))
+	{
+		return;
+	}
+
 	std::vector<Caster> found;
+	std::vector<MayCast> mayCast;
 	if (casters.leaves)
 	{
-		GatherCasters<ecs::components::Tree>(registry, casters, found);
-		GatherCasters<ecs::components::BigForest>(registry, casters, found);
+		GatherCasters<ecs::components::Tree>(registry, casters, found, mayCast);
+		GatherCasters<ecs::components::BigForest>(registry, casters, found, mayCast);
 	}
 	if (casters.shapes)
 	{
 		using namespace ecs::components;
-		GatherCasters<Abode>(registry, casters, found);
-		GatherCasters<Temple>(registry, casters, found);
-		GatherCasters<WorshipSite>(registry, casters, found);
-		GatherCasters<WorshipAltar>(registry, casters, found);
-		GatherCasters<SpellDispenser>(registry, casters, found);
-		GatherCasters<Feature>(registry, casters, found);
-		GatherCasters<MobileStatic>(registry, casters, found);
-		GatherCasters<TeleportStone>(registry, casters, found);
-		GatherCasters<MobileObject>(registry, casters, found);
-		GatherCasters<Ball>(registry, casters, found);
-		GatherCasters<RewardOnLand>(registry, casters, found);
+		GatherCasters<Abode>(registry, casters, found, mayCast);
+		GatherCasters<Temple>(registry, casters, found, mayCast);
+		GatherCasters<WorshipSite>(registry, casters, found, mayCast);
+		GatherCasters<WorshipAltar>(registry, casters, found, mayCast);
+		GatherCasters<SpellDispenser>(registry, casters, found, mayCast);
+		GatherCasters<Feature>(registry, casters, found, mayCast);
+		GatherCasters<MobileStatic>(registry, casters, found, mayCast);
+		GatherCasters<TeleportStone>(registry, casters, found, mayCast);
+		GatherCasters<MobileObject>(registry, casters, found, mayCast);
+		GatherCasters<Ball>(registry, casters, found, mayCast);
+		GatherCasters<RewardOnLand>(registry, casters, found, mayCast);
 	}
 	// A thing of more than one kind is gathered once
 	std::ranges::sort(found, {}, &Caster::entity);
@@ -474,6 +514,34 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 			++it;
 		}
 	}
+
+	// What the next frames check before they look at the casters again
+	_watched.clear();
+	_watched.reserve(found.size() + mayCast.size());
+	std::ranges::transform(found, std::back_inserter(_watched), [this, &registry](const Caster& caster) {
+		return Watched {
+		    .entity = caster.entity,
+		    .shadow = caster.shadow,
+		    .shadowChangesInPlace = ecs::LandShadowChangesInPlace(registry, caster.entity),
+		    .watchesPlace = true,
+		    .transform = *caster.transform,
+		    .mesh = caster.mesh->id,
+		    .cells = caster.resident != nullptr ? &_baked.at(caster.entity).cells : nullptr,
+		};
+	});
+	std::ranges::transform(mayCast, std::back_inserter(_watched), [](const MayCast& thing) {
+		return Watched {
+		    .entity = thing.entity,
+		    .shadow = thing.shadow,
+		    .shadowChangesInPlace = thing.shadowChangesInPlace,
+		    .watchesPlace = thing.transform != nullptr,
+		    .transform = thing.transform != nullptr ? *thing.transform : Transform {},
+		    .mesh = thing.mesh != nullptr ? thing.mesh->id : entt::id_type {0},
+		    .cells = nullptr,
+		};
+	});
+	_castersVersion = castersVersion;
+	_meshCount = meshCount;
 
 	// A bake on the other threads that is still running holds back the next one: the blocks changed since then wait
 	if (_bake.valid())
@@ -593,6 +661,34 @@ void LandShadowBake::Update(bool rowsFromFarEnd, Casters casters)
 		return;
 	}
 	_bake = std::async(std::launch::async, [job = std::move(job)] { return Bake(job); });
+}
+
+bool LandShadowBake::WatchedUnchanged(const ecs::Registry& registry) const
+{
+	// Find the component pools one time, not for each thing
+	const auto& pools = registry.Underlying();
+	const auto* transforms = pools.storage<Transform>();
+	const auto* meshes = pools.storage<MeshComponent>();
+	const auto* residents = pools.storage<MapCellResident>();
+	if (transforms == nullptr || meshes == nullptr || residents == nullptr)
+	{
+		return _watched.empty();
+	}
+	return std::ranges::all_of(_watched, [&registry, transforms, meshes, residents](const Watched& thing) {
+		if (thing.shadowChangesInPlace && ecs::LandShadowOf(registry, thing.entity) != thing.shadow)
+		{
+			return false;
+		}
+		if (!thing.watchesPlace)
+		{
+			return true;
+		}
+		if (!same_bits::SameBits(transforms->get(thing.entity), thing.transform) || meshes->get(thing.entity).id != thing.mesh)
+		{
+			return false;
+		}
+		return thing.cells == nullptr || same_bits::SameWords(residents->get(thing.entity).cells, *thing.cells);
+	});
 }
 
 void LandShadowBake::ApplyFinishedBake()

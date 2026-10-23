@@ -14,6 +14,7 @@
 #include <array>
 #include <future>
 #include <memory>
+#include <optional>
 #include <span>
 #include <unordered_map>
 #include <vector>
@@ -93,6 +94,22 @@ private:
 		glm::vec2 castHigh {0.0f};
 	};
 
+	/// A thing that the last full look at the casters found, and what its shadow depends on that can change while its
+	/// components stay the same
+	struct Watched
+	{
+		entt::entity entity;
+		/// Its shadow then, checked again for a thing whose shadow can change in place
+		ecs::LandShadow shadow;
+		bool shadowChangesInPlace;
+		/// Whether its transform, mesh and cells are kept: those of a caster, or of a thing that a move can make cast
+		bool watchesPlace;
+		ecs::components::Transform transform;
+		entt::id_type mesh;
+		/// The map cells it was filed in, as kept for its bake, or none for a thing that is never filed
+		const std::vector<uint32_t>* cells;
+	};
+
 	/// A copy of a caster, as it was when its bake started
 	struct BakeCaster
 	{
@@ -132,6 +149,8 @@ private:
 	/// Puts the blocks of the bake on the other threads into the texture, if the bake is done
 	void ApplyFinishedBake();
 
+	/// Whether no watched thing changed what its shadow depends on since the last full look at the casters
+	[[nodiscard]] bool WatchedUnchanged(const ecs::Registry& registry) const;
 	void MarkBlocksOf(std::span<const uint32_t> cells);
 	/// The triangles of a model that cast its shadow, found once
 	std::span<const LeafTriangle> LeavesOf(entt::id_type meshId);
@@ -143,6 +162,11 @@ private:
 	bool _rowsFromFarEnd {false};
 	Casters _casters {};
 	std::unordered_map<entt::entity, Baked> _baked;
+	/// The things that the last full look at the casters found, the count of the casters' changes and the number of
+	/// models then. While all stay the same, the bake does not look at the casters again.
+	std::vector<Watched> _watched;
+	std::optional<uint64_t> _castersVersion;
+	size_t _meshCount {0};
 	std::unordered_map<entt::id_type, std::vector<LeafTriangle>> _leaves;
 	std::unordered_map<entt::id_type, std::vector<ShapeTriangle>> _shapes;
 	/// The land blocks to bake again, by their index along x and z

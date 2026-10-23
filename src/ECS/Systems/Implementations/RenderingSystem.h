@@ -21,6 +21,7 @@
 
 #include "3D/AllMeshes.h"
 #include "3D/AxisAlignedBoundingBox.h"
+#include "Graphics/InstanceUpload.h"
 #include "RenderingSystemCommon.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -117,6 +118,9 @@ private:
 		float widthShare {1.0f};
 	};
 	std::vector<PlacedTree> _placedTrees;
+	/// What the instance buffers of the things and of the trees hold, so that only their changes are uploaded
+	graphics::instance_upload::Mirror<RenderContext::ObjectInstance> _uploadedInstances;
+	graphics::instance_upload::Mirror<RenderContext::TreeInstanceData> _uploadedTreeInstances;
 	/// The bounding box of each mesh the distance bands have looked at, kept while the draw lists are
 	std::unordered_map<entt::id_type, std::optional<AxisAlignedBoundingBox>> _meshBoxes;
 	/// The bounding box of a mesh, none when it isn't loaded
