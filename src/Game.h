@@ -288,6 +288,8 @@ public:
 	bool PlayFrameStep(game_frame::Step step, FrameState& frame);
 	/// Whether this frame moves the camera, puts the hand under the cursor and draws the world: not while the window is
 	/// minimised, unless a picture of the frame is necessary
+	/// The state of the window and the run for the steps of the graphics in this frame
+	[[nodiscard]] game_frame::GraphicsWindow FrameGraphicsWindow() const;
 	[[nodiscard]] bool DoesFrameGraphics() const;
 	/// The clock of the frame, the debug inspector and the time that the frame takes
 	void StartFrame(FrameState& frame);
@@ -367,6 +369,9 @@ public:
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
+	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village
+	/// in each slot. The village comes from a land of the game for network play. Returns false when that land is not there.
+	bool LoadGodsRingMap() noexcept;
 	/// Loads a saved game: the saved land's landscape with no map script (the flat land for the testbed), then `restore`
 	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts.
 	/// Returns whether the landscape loaded and `restore` gave true.

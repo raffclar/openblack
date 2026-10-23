@@ -21,6 +21,9 @@
 //                            {"do": "shot", "name": "grip"}    {"do": "eval", "expression": "..."}
 //                            {"do": "synth-move", "dx", "dy", "count", "ms", "buttons"}
 //                            {"do": "synth-button", "type": "mousedown" | "mouseup", "button": 0 | 1 | 2}
+//                            {"do": "wait-log", "text": "...", "seconds": 60}
+//                            The wait-log step waits until the game log of the page has the text (at most the
+//                            seconds), and then moves the times of all the next steps and the end later by the wait.
 //                            The synth steps send page events to the game canvas. Use them while the pointer is
 //                            locked: headless Chrome gives no movement for its own mouse events then.
 import { spawn } from 'node:child_process';
@@ -224,6 +227,24 @@ const runStep = async (step) => {
   case 'eval':
     record(`[eval] ${step.expression} = ${JSON.stringify(await evaluate(step.expression))}`);
     break;
+  case 'wait-log': {
+    const until = Date.now() + (step.seconds ?? 60) * 1000;
+    const expression = `(globalThis.openblackLogText?.() ?? document.getElementById('log')?.textContent ?? '')
+      .includes(${JSON.stringify(step.text)})`;
+    let found = false;
+    while (!found && Date.now() < until) {
+      found = await evaluate(expression);
+      if (!found) {
+        await sleep(100);
+      }
+    }
+    record(`[wait-log] ${found ? 'found' : 'NOT FOUND'}: ${step.text}`);
+    const late = Math.max(0, Date.now() - (clicked + step.at * 1000));
+    clicked += late;
+    end += late;
+    next += late;
+    break;
+  }
   default:
     record(`[step] unknown step ${step.do}`);
   }
@@ -232,7 +253,7 @@ const steps = option('--actions') ? JSON.parse(readFileSync(option('--actions'),
 steps.sort((a, b) => a.at - b.at);
 
 let taken = 0;
-const end = clicked + seconds * 1000;
+let end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
 while (Date.now() < end || taken < Math.min(shots, 1)) {
   if (taken < shots && Date.now() >= next) {

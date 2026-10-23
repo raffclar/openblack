@@ -13,6 +13,7 @@
 
 #include <array>
 #include <optional>
+#include <span>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -106,5 +107,39 @@ public:
 
 /// The start of a computer mind on the land, in the order of the game
 void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state);
+
+/// The number of species that the start of a network game chooses from for the creature of a slot with no player, by
+/// the species number from 0
+constexpr uint32_t k_SlotSpeciesChoices = 11;
+/// The number of help texts that the start of a network game chooses from for the name of that creature
+constexpr uint32_t k_SlotNameChoices = 99;
+/// The stage of development that the creature of a slot with no player grows to at once
+constexpr uint32_t k_SlotCreatureStage = 12;
+
+/// At the start of a network game, the slot of a god is a slot with no player when the god has a citadel, and no human
+/// and no computer mind plays the god
+[[nodiscard]] bool SlotHasNoPlayer(bool human, bool computer, bool citadel);
+
+/// What the start of a network game reads and changes in the game when it fills the slots with no player
+class SlotWorld
+{
+public:
+	virtual ~SlotWorld() = default;
+
+	[[nodiscard]] virtual bool HasCitadel(PlayerNames player) const = 0;
+	/// The player is marked as a computer player
+	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames player) const = 0;
+	/// The computer mind of the player switches on, as a land script switches it on
+	virtual void SwitchOn(PlayerNames player) = 0;
+	/// Makes the creature of the player at the creature home of its citadel, names it with the words of the help text
+	/// and grows it to the stage
+	virtual void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) = 0;
+	virtual uint32_t GameRand(uint32_t range) = 0;
+};
+
+/// At the start of a network game, in the order of the gods: each slot with no player gets a computer god. The game
+/// takes a random help text for the name and a random species, switches the mind of the god on, and makes its creature
+/// fully grown at the creature home of its citadel.
+void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
 
 } // namespace openblack::computer_player

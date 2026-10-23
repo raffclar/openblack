@@ -813,3 +813,16 @@ TEST(TestbedScenarios, CoversCastingThroughTheHand)
 		EXPECT_TRUE(withoutEffects.contains(type)) << static_cast<int>(type);
 	}
 }
+
+TEST(TestbedScenarios, TheMapForThirtyTwoGodsHasScenariosThatLoadIt)
+{
+	for (const auto id : {"multiplayer.gods_ring_map", "multiplayer.gods_ring_slot"})
+	{
+		const auto* scenario = Find(id);
+		ASSERT_NE(scenario, nullptr) << id;
+		EXPECT_EQ(scenario->environment.land, Land::GodsRingMap) << id;
+		EXPECT_EQ(scenario->facet, Facet::Multiplayer) << id;
+		EXPECT_FALSE(scenario->environment.dispenserGrid) << id;
+	}
+	EXPECT_EQ(Name(Facet::Multiplayer), "Multiplayer");
+}

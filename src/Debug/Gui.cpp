@@ -654,6 +654,15 @@ bool Gui::ShowMenu() noexcept
 				ImGui::SetTooltip("A flat plane over the whole map with a lake north of the middle, for trying out how "
 				                  "creatures move, are animated, drink and wade, and what the water reflects");
 			}
+			if (ImGui::MenuItem("Map for 32 Gods"))
+			{
+				game.LoadGodsRingMap();
+			}
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("The network map for 32 gods on this computer alone: a round island with a citadel and "
+				                  "a village in each of its 32 slots");
+			}
 			ImGui::EndMenu();
 		}
 

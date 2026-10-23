@@ -11,22 +11,27 @@
 
 #include "LandSystem.h"
 
+#include <cmath>
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <exception>
 #include <filesystem>
 #include <optional>
+#include <span>
 #include <stdexcept>
 #include <string>
 #include <system_error>
 #include <vector>
 
 #include <LHVM.h>
+#include <OnlineMapFile.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/FlatLand.h"
+#include "3D/GodsRingLand.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
@@ -59,6 +64,7 @@
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -114,6 +120,7 @@
 #include "LHScriptX/Script.h"
 #include "Level.h"
 #include "Locator.h"
+#include "Online/GodsRingMap.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
@@ -337,6 +344,105 @@ void LandSystem::LoadTestbed()
 	View().TestbedLoaded();
 }
 
+bool LandSystem::LoadGodsRingMap()
+{
+	const InspectorLoading loading {std::string(gods_ring_map::k_File)};
+	// The village of each slot comes from a land of the game for network play, which the player has
+	std::optional<gods_ring_map::VillageTemplate> village;
+	try
+	{
+		auto& fileSystem = Locator::filesystem::value();
+		const std::filesystem::path templatePath(gods_ring_map::k_TemplateMap);
+		if (fileSystem.Exists(templatePath))
+		{
+			const auto bytes = fileSystem.ReadAll(templatePath);
+			if (const auto file = onlinemap::Parse(std::as_bytes(std::span(bytes))); file.has_value())
+			{
+				village = gods_ring_map::ReadTemplate(file->script, gods_ring_map::k_TemplateGod, gods_ring_land::k_MapMiddle);
+			}
+		}
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} does not load: {}", gods_ring_map::k_TemplateMap, e.what());
+	}
+	if (!village.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The map for 32 gods needs the village of the land {}",
+		                    gods_ring_map::k_TemplateMap);
+		return false;
+	}
+
+	// No script of the story runs on the map, as on the testbed
+	if (Locator::vm::has_value())
+	{
+		Locator::vm::value().StopAllTasks();
+	}
+	View().BeginLoadingScreen(loading::LoadingClock::Mode::Tips);
+	PrepareNewLand(land_change::Kind::Testbed);
+	_landPath = gods_ring_map::k_File;
+	View().ShowLoadingFrame();
+	InitializeLevel(gods_ring_land::Build());
+	SetUpLandscape();
+	View().ShowLoadingFrame();
+
+	const auto slots = gods_ring_map::LayOutSlots(gods_ring_land::k_MapMiddle);
+	try
+	{
+		lhscriptx::Script script;
+		script.Load(gods_ring_map::MapScript(*village, slots), [this]() { View().ShowLoadingFrame(); });
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the map for 32 gods: {}", e.what());
+	}
+	// As at the start of a network game, each slot whose god no human plays gets a computer god. On this computer alone,
+	// the local player is the one human.
+	if (Locator::computerPlayerSystem::has_value() && Locator::playerSystem::has_value())
+	{
+		std::vector<PlayerNames> gods;
+		for (const auto& slot : slots)
+		{
+			if (slot.god.has_value())
+			{
+				gods.push_back(*slot.god);
+			}
+		}
+		const std::array humans {Locator::playerSystem::value().GetLocalPlayer()};
+		Locator::computerPlayerSystem::value().FillEmptySlots(gods, humans);
+	}
+	// As on a land, the things go into their map cells before the footpaths, and then the towns find their worship
+	// sites and their forests
+	Locator::entitiesMap::value().Sync();
+	if (Locator::footpathSystem::has_value())
+	{
+		Locator::footpathSystem::value().ProcessObstacleChanges();
+	}
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		Locator::worshipSiteSystem::value().LandLaidOut();
+	}
+	if (Locator::forestSystem::has_value())
+	{
+		Locator::forestSystem::value().MakeScenicForests();
+		Locator::forestSystem::value().AssignForestsToTowns();
+	}
+	View().MakeSymbolSheet();
+
+	// The camera looks at the first slot's village from beyond its citadel
+	const auto& first = slots.front();
+	const glm::vec2 outward {std::cos(first.outward), std::sin(first.outward)};
+	const auto& land = Locator::terrainSystem::value();
+	const auto eye = first.citadel + (outward * gods_ring_map::k_StartCameraBack);
+	const auto focus = first.citadel - (outward * gods_ring_map::k_StartCameraAhead);
+	Locator::camera::value()
+	    .SetOrigin({eye.x, land.GetHeightAt(eye) + gods_ring_map::k_StartCameraHeight, eye.y})
+	    .SetFocus({focus.x, land.GetHeightAt(focus), focus.y});
+	View().EndLoadingScreen();
+	StartNewLand(land_change::Kind::Testbed);
+	return true;
+}
+
 bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
                                const std::function<bool()>& restore)
 {
@@ -352,6 +458,11 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 		if (landPath == k_TestbedLandPath)
 		{
 			InitializeLevel(flat_land::Build());
+			SetUpLandscape();
+		}
+		else if (gods_ring_map::IsThisMap(landPath.generic_string()))
+		{
+			InitializeLevel(gods_ring_land::Build());
 			SetUpLandscape();
 		}
 		else

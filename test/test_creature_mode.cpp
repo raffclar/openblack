@@ -578,3 +578,23 @@ TEST(CreatureCave, TattoosGoOnAndComeOff)
 	EXPECT_TRUE(removed->tattoo.Empty());
 	EXPECT_FALSE(creature_cave::Remove(slots, 4).has_value());
 }
+
+TEST(CreatureMode, CitadelCreatureHomeIsTheFirstMarkedPlaceOnTheGround)
+{
+	auto places = FakeMarkedPlaces(16, {0.0f, 0.0f, 0.0f});
+	places[0][3] = glm::vec4(10.0f, 5.0f, 0.0f, 1.0f);
+	// A quarter turn back about the vertical: the mesh's +x goes to the world's -z
+	const auto home =
+	    creature_mode::CitadelCreatureHomeOnMap({100.0f, 3.0f, 200.0f}, -std::numbers::pi_v<float> / 2.0f, 2.0f, places);
+	EXPECT_NEAR(map_coords::ToMetres(home.x), 100.0f, 1e-3f);
+	EXPECT_NEAR(map_coords::ToMetres(home.z), 180.0f, 1e-3f);
+	EXPECT_EQ(home.altitude, 0.0f);
+}
+
+TEST(CreatureMode, CitadelCreatureHomeWithNoMarkedPlaceIsTheTemplesPlace)
+{
+	const auto home = creature_mode::CitadelCreatureHomeOnMap({1.00001f, 7.0f, -1.00001f}, 1.0f, 1.0f, {});
+	EXPECT_EQ(home.x, 6553);
+	EXPECT_EQ(home.z, -6553);
+	EXPECT_EQ(home.altitude, 0.0f);
+}
