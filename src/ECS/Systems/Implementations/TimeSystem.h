@@ -76,8 +76,11 @@ public:
 
 	void SetPaused(bool paused) override;
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
+	void SetPlayerPause(bool paused) override;
 	void SetHeld(bool held) override;
 	[[nodiscard]] bool IsHeld() const override { return _held; }
+	void SetNetworkGame(bool networkGame) override;
+	[[nodiscard]] bool IsNetworkGame() const override { return _networkGame; }
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
@@ -119,6 +122,7 @@ private:
 	uint32_t _turn {0};
 	bool _paused {true};
 	bool _held {false};
+	bool _networkGame {false};
 	float _speed {1.0f};
 	uint32_t _turnsThisFrame {0};
 	// The frame clock: the timer at the last frame, the turn then, and the time past that turn

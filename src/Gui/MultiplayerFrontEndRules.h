@@ -61,10 +61,6 @@ enum class RoomTab : uint8_t
 };
 inline constexpr size_t k_RoomTabCount = 4;
 
-/// The version of this client that a game server must have, else the game list shows "(Wrong Version)". The game
-/// servers give it as "gamever" in the lobby's list.
-inline constexpr std::string_view k_GameVersion = "openblack-1";
-
 /// The most characters of the name and the password in the login box
 inline constexpr size_t k_MostLoginCharacters = 32;
 /// The most characters of a line in the chat box
@@ -179,10 +175,16 @@ struct Seat
 /// The places of the room's players: the gods are numbered in the order of the list, the observers are 0
 [[nodiscard]] std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players);
 
-/// The colour of a god's lines in the chat: the observers grey, the gods red, green, blue and yellow. Gods past the
-/// fourth take the four colours again in the same order.
+/// The most gods in a game, each with a chat colour of its own
+inline constexpr int32_t k_MostGods = 32;
+/// The colour of a god's lines in the chat, as 32-bit 0xAARRGGBB: the observers (and any number that is not a god's)
+/// grey, gods 1 to 4 red, green, blue and yellow, and gods 5 to 32 a colour of their own each
+[[nodiscard]] uint32_t GodColourBits(int32_t god) noexcept;
+/// The colour of a god's lines in the chat
 [[nodiscard]] glm::vec4 GodColour(int32_t god) noexcept;
-/// The colour of the player's own lines in the chat: light grey
+/// The colour of the player's own lines in the chat: light grey, as 0xAARRGGBB
+[[nodiscard]] uint32_t OwnLineColourBits() noexcept;
+/// The colour of the player's own lines in the chat
 [[nodiscard]] glm::vec4 OwnLineColour() noexcept;
 
 /// A line of the chat box

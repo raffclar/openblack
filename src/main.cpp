@@ -13,6 +13,7 @@
 #include <memory>
 #include <span>
 #include <string>
+#include <string_view>
 #include <typeinfo>
 #include <vector>
 
@@ -27,6 +28,7 @@
 // clang-format on
 #endif
 
+#include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Common/FatalMessage.h"
 #include "Common/Platform.h"
@@ -61,6 +63,15 @@ std::string CommandLineText(int argc, char** argv)
 	}
 	return text;
 }
+
+/// Whether the command line asks for the version: the --version option or the original game's -VERSION switch
+bool AsksForVersion(int argc, char** argv)
+{
+	const auto arguments = std::span(argv, static_cast<size_t>(argc));
+	return std::ranges::any_of(arguments.subspan(1),
+	                           [](const char* argument) { return std::string_view(argument) == "--version"; }) ||
+	       openblack::launch_switches::Scan(CommandLineText(argc, argv)).version;
+}
 } // namespace
 
 bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& returnCode)
@@ -83,6 +94,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	// clang-format off
 	options.add_options()
 		("h,help", "Display this help message.")
+		("version", "Write the version of openblack (the semantic version and the git commit) and exit. A game server of another version shows \"Wrong Version\" in the game list. The original game's -VERSION switch does the same.")
 		("g,game-path", "Path to the Data/ and Scripts/ directories of the original Black & White game. (Required)", cxxopts::value<std::string>())
 		("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
@@ -118,8 +130,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
-		("lobby", "The https:// origin of the lobby for the online services, such as https://bw.example.org. Without it, the game has no online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>())
-		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is off by default, as in the original game, and needs --lobby and a login.")
+		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
+		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
@@ -127,6 +139,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. It can have a part of a millisecond, such as 16.7 for 60 frames a second. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<double>())
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
+		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 	;
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options()
@@ -286,6 +299,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		{
 			args.seed = result["seed"].as<uint32_t>();
 		}
+		args.networkGame = result.count("sim-network-game") != 0;
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
 		{
 			openblack::sim_run::Request simulation {};
@@ -335,11 +349,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
-		if (result.count("lobby") != 0)
-		{
-			args.lobbyOrigin = result["lobby"].as<std::string>();
-		}
-		args.useInternetWeather = result.count("internet-weather") != 0;
+		args.lobbyOrigin = result["lobby"].as<std::string>();
+		args.useInternetWeather = result["internet-weather"].as<bool>();
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;
@@ -473,6 +484,13 @@ int main(int argc, char* argv[]) noexcept
 		openblack::crash_handler::Install();
 	}
 	openblack::system_libraries::LoadBeforeDrivers();
+
+	// The version goes to the standard output alone, with no banner, so that a tool can read it
+	if (AsksForVersion(argc, argv))
+	{
+		std::cout << "openblack " << openblack::build_version::Text() << std::endl;
+		return EXIT_SUCCESS;
+	}
 
 	// clang-format off
 	std::cout <<

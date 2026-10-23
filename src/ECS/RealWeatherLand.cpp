@@ -13,6 +13,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Camera/ZoomToPlaces.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "Locator.h"
 
@@ -65,6 +66,11 @@ glm::vec3 RealWeatherLand::IslandCentre() const
 		// No land is loaded
 		return glm::vec3 {0.0f};
 	}
+}
+
+bool RealWeatherLand::IsMultiplayer() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 } // namespace openblack::ecs
