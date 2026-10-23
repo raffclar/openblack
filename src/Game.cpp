@@ -550,6 +550,7 @@ Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
     , _playVideo(args.playVideo)
+    , _filmSurface(args.filmSurface)
     , _preIntro(args.preIntro || args.launchSwitches.preIntroVideo)
     , _skipLogos(args.skipLogos)
     , _logoEffectAsked(args.logoEffect)
@@ -3935,6 +3936,18 @@ Game::RunStart Game::StartRun() noexcept
 
 void Game::StartPlayView()
 {
+	if (_filmSurface == "555")
+	{
+		Locator::videoSystem::value().SetFilmSurface(graphics::film_surface::Format::Rgb555);
+	}
+	else if (_filmSurface == "565")
+	{
+		Locator::videoSystem::value().SetFilmSurface(graphics::film_surface::Format::Rgb565);
+	}
+	else if (_filmSurface == "none")
+	{
+		Locator::videoSystem::value().SetFilmSurface(std::nullopt);
+	}
 	if (_playVideo == "intro")
 	{
 		Locator::videoSystem::value().Play("Data/INTRO.bik");
