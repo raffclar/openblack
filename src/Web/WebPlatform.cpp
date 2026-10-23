@@ -228,7 +228,8 @@ void WritePageVersion()
 	{
 		return;
 	}
-	std::ofstream file(std::filesystem::path(k_WorkingFolder) / build_version::k_FileName, std::ios::binary);
+	std::ofstream file(std::filesystem::path(openblack::web::k_WorkingFolder) / openblack::build_version::k_FileName,
+	                   std::ios::binary);
 	file << text.get();
 }
 
