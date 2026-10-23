@@ -65,6 +65,7 @@ enum class CommandTag : uint8_t
 	LeashOrder = 8,
 	LeashPostTap = 9,
 	HandReport = 10,
+	HandTwist = 11,
 };
 
 /// The sizes of the parts of the frames, in bytes

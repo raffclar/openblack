@@ -296,7 +296,7 @@ void HandGrabSystem::DoTap(PlayerNames player, entt::entity object)
 	{
 		return;
 	}
-	_world->TapThing(object, _world->PoseOf(_world->Hand()).origin, player);
+	_world->TapThing(object, _world->ReportedHandPlace(), player);
 }
 
 HandClicked* HandGrabSystem::Clicked()
@@ -508,9 +508,9 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 
 void HandGrabSystem::DoLetGo(PlayerNames player, entt::entity object, glm::vec3 velocity)
 {
+	// Every computer lets go of what the hand holds, whatever the hand of this computer does now
 	auto* grab = Grab();
-	if (grab == nullptr || player != _world->HandPlayer() || grab->state != HandGrab::State::LettingGo ||
-	    grab->object != object)
+	if (grab == nullptr || player != _world->HandPlayer() || !Holds(*grab) || grab->object != object)
 	{
 		return;
 	}
@@ -857,6 +857,10 @@ void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 	grab.holdDistance = hand_grab::HoldDistance(hold.loweringMultiplier, _world->SizeOf(object).height, grab.handSize);
 	grab.stretch.Reset(1.0f);
 	grab.tug = tug;
+	const auto& before = _world->Entities().Get<const Transform>(object);
+	grab.pullPosition = before.position;
+	grab.pullRotation = before.rotation;
+	grab.pullScale = before.scale;
 }
 
 glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
@@ -952,14 +956,19 @@ void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 
 void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 {
+	// Every computer takes the thing into the hand, whatever the hand of this computer does now. Only a hand that holds
+	// nothing takes.
 	auto* grab = Grab();
-	if (grab == nullptr || player != _world->HandPlayer() || grab->state != HandGrab::State::Taking || grab->object != object)
+	if (grab == nullptr || player != _world->HandPlayer() || Holds(*grab))
 	{
 		return;
 	}
 	if (!Exists(object))
 	{
-		Empty(*grab);
+		if (grab->object == object)
+		{
+			Empty(*grab);
+		}
 		return;
 	}
 	Take(*grab, object, true, false);
@@ -1011,7 +1020,7 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	}
 
 	// The people and animals about the hand see it pick something up
-	const auto handPosition = _world->PoseOf(_world->Hand()).origin;
+	const auto handPosition = _world->ReportedHandPlace();
 	_world->CreateReaction(
 	    {.initiator = _world->Hand(), .type = Reaction::ReactToHandPickUp, .player = player, .position = handPosition});
 	// A burning thing keeps burning in the hand, out of its blaze; the people round it flee one that isn't a villager
@@ -1063,7 +1072,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	_world->SetPose(object, pose);
 	// The thing keeps its place on the map while it is held, where a tree takes its light
 	registry.AssignOrReplace<HeldLight>(object, HeldLight {.takenAt = pose.origin});
-	registry.AssignOrReplace<InHand>(object, InHand {.hand = _world->Hand()});
+	const auto& held = registry.Get<const Transform>(object);
+	registry.AssignOrReplace<InHand>(object, InHand {.hand = _world->Hand(), .rotation = held.rotation, .scale = held.scale});
 	grab.state = HandGrab::State::Holding;
 	grab.object = object;
 	grab.tug.reset();
@@ -1088,7 +1098,9 @@ void HandGrabSystem::LetGo(HandGrab& grab, glm::vec3 velocity, bool forced)
 	{
 		return;
 	}
+	// Out of the hand it keeps no light of the hand, on every computer
 	registry.Remove<InHand>(object);
+	registry.Remove<HeldLight>(object);
 	// The help counts each thing that the hand lets go of, also a pour or a drop that the hand must do
 	_world->CountHelpEvent(help::profile::k_Throw);
 	// The hand starts the path of its gesture again. A thing that is gone when the hand lets go does not do this.
@@ -1218,10 +1230,11 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 		case hand_grab::Countdown::Running:
 			break;
 		case hand_grab::Countdown::RunOut:
-			if (const auto body = _world->BodyOf(grab->released); body.has_value() && frame.cursorGround.has_value())
+			// The hand sends the twist with its motion. The turn turns the body by its mass and speed then.
+			if (Exists(grab->released) && frame.cursorGround.has_value())
 			{
-				const auto moved = *frame.cursorGround - grab->lastTarget;
-				_world->TwistBody(grab->released, hand_grab::ReleaseSpinTorque(body->mass, body->speed, moved));
+				_world->SendCommand(
+				    player_commands::HandTwist {.object = grab->released, .moved = *frame.cursorGround - grab->lastTarget});
 			}
 			grab->releaseSpinMs.reset();
 			grab->released = entt::null;
@@ -1557,7 +1570,7 @@ void HandGrabSystem::ProcessTurn()
 	if (grab->scoopSource != entt::null)
 	{
 		++grab->scoopTurns;
-		const auto hand = _world->PoseOf(_world->Hand()).origin;
+		const auto hand = _world->ReportedHandPlace();
 		if (!Exists(grab->scoopSource) || !_world->InInfluence(_world->HandPlayer(), hand) || !Scoop(*grab))
 		{
 			EndScoop(*grab);
@@ -1570,6 +1583,41 @@ void HandGrabSystem::ProcessTurn()
 	{
 		_world->HeatHeld(grab->object);
 	}
+}
+
+void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved)
+{
+	if (player != _world->HandPlayer() || !Exists(object))
+	{
+		return;
+	}
+	if (const auto body = _world->BodyOf(object); body.has_value())
+	{
+		_world->TwistBody(object, hand_grab::ReleaseSpinTorque(body->mass, body->speed, moved));
+	}
+}
+
+void HandGrabSystem::PlaceHeldForTurn()
+{
+	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
+	// that it had as the hand took it.
+	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
+	if (const auto* grab = Grab(); grab != nullptr &&
+	                               (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
+	                               grab->tug.has_value() && Exists(grab->object))
+	{
+		auto& pulled = _world->Entities().Get<Transform>(grab->object);
+		pulled.position = grab->pullPosition;
+		pulled.rotation = grab->pullRotation;
+		pulled.scale = grab->pullScale;
+	}
+	const auto hand = _world->ReportedHandPlace();
+	auto& registry = _world->Entities();
+	registry.Each<const InHand, Transform>([hand](const InHand& inHand, Transform& transform) {
+		transform.position = hand;
+		transform.rotation = inHand.rotation;
+		transform.scale = inHand.scale;
+	});
 }
 
 void HandGrabSystem::SetRecordedThrow(glm::vec3 velocity)

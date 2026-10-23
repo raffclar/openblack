@@ -81,6 +81,41 @@ def game_checksums(record):
     return turns
 
 
+def synced_records(record):
+    """The synced part of each turn's record: the hash of each component, the seed and the draws"""
+    turns = {}
+    with open(record, encoding="utf-8") as file:
+        for line in file:
+            line = line.strip()
+            if not line:
+                continue
+            value = json.loads(line)
+            synced = value.get("synced")
+            if isinstance(synced, dict) and "turn" in value:
+                turns[int(value["turn"])] = synced
+    return turns
+
+
+def compare_parts(server, game, turns, ignored):
+    """The turns at which a part other than the ignored ones, the seed or the draws differ, and the parts that differ"""
+    different = []
+    parts = {}
+    for turn in sorted(server):
+        if turn > turns or turn not in game:
+            continue
+        ours, theirs = game[turn], server[turn]
+        names = set(ours.get("parts", {})) | set(theirs.get("parts", {}))
+        # A field's part is named after its component and a full stop
+        differ = [name for name in names
+                  if name.split(".")[0] not in ignored and ours.get("parts", {}).get(name) != theirs.get("parts", {}).get(name)]
+        differ += [key for key in ("seed", "draws") if ours.get(key) != theirs.get(key)]
+        if differ:
+            different.append(turn)
+            for name in differ:
+                parts.setdefault(name, turn)
+    return different, parts
+
+
 def count_lines(path):
     """The number of lines of a file, 0 when there is no file"""
     if not os.path.exists(path):
@@ -116,6 +151,9 @@ def main():
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
+    parser.add_argument("--ignore-parts", default="",
+                        help="with --hash-parts, components (comma separated) left out of a second comparison of the "
+                             "turns, for a difference that waits on a decision")
     options = parser.parse_args()
 
     folder = options.bin or default_bin(options.config)
@@ -215,6 +253,14 @@ def main():
         "same_until": (different[0] - 1) if different else (compared[-1] if compared else 0),
         "same": not different and len(compared) >= options.turns,
     }
+    ignored = {name for name in options.ignore_parts.split(",") if name}
+    if ignored and (options.hash_parts or options.hash_fields):
+        others, parts = compare_parts(synced_records(os.path.join(server_dir, "record.jsonl")), synced_records(record),
+                                      options.turns, ignored)
+        summary["ignored"] = sorted(ignored)
+        summary["different_without_ignored"] = others[:20]
+        summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
+        summary["same_without_ignored"] = not others and len(compared) >= options.turns
     with open(os.path.join(out, "server_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     print(json.dumps(summary))

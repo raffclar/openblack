@@ -47,6 +47,7 @@ std::vector<Action> EachCommand()
 	                .handPoint = {4.0f, 5.0f, 6.0f},
 	                .camera = {7.0f, 8.0f, 9.0f},
 	                .focus = {10.0f, 11.0f, 12.0f}},
+	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
 	};
 }
 
@@ -70,7 +71,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 10)
+	switch (bits(random) % 11)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -90,8 +91,10 @@ Action RandomAction(std::mt19937& random)
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
 	case 8:
 		return LeashPostTap {.post = entity()};
-	default:
+	case 9:
 		return HandReport {.collidePoint = vector(), .handPoint = vector(), .camera = vector(), .focus = vector()};
+	default:
+		return HandTwist {.object = entity(), .moved = vector()};
 	}
 }
 
@@ -151,7 +154,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 17, 5, 9, 18, 5, 49};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 17, 5, 9, 18, 5, 49, 17};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)

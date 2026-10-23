@@ -90,6 +90,13 @@ void Run(const Command& command)
 				    openblack::Locator::leashSystem::value().DoOrder(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, HandTwist>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoTwist(command.player, action.object, action.moved);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, HandReport>)
 		    {
 			    if (openblack::Locator::handSystem::has_value())

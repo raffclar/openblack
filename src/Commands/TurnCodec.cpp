@@ -138,6 +138,10 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.place);
 	               },
 	               [&out](const LeashPostTap& command) { out.Entity(command.post); },
+	               [&out](const HandTwist& command) {
+		               out.Entity(command.object);
+		               out.Vector(command.moved);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -204,6 +208,12 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::LeashPostTap:
 		action = LeashPostTap {.post = in.Entity()};
 		return DecodeError::None;
+	case CommandTag::HandTwist:
+	{
+		const auto object = in.Entity();
+		action = HandTwist {.object = object, .moved = in.Vector()};
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -294,6 +304,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashOrder& /*command*/) { return CommandTag::LeashOrder; },
 	                      [](const LeashPostTap& /*command*/) { return CommandTag::LeashPostTap; },
 	                      [](const HandReport& /*command*/) { return CommandTag::HandReport; },
+	                      [](const HandTwist& /*command*/) { return CommandTag::HandTwist; },
 	                  },
 	                  action);
 }
@@ -312,6 +323,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
+	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
 	                                 },
 	                                 action);
 	return 1 + fields;

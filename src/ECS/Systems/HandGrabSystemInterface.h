@@ -70,6 +70,8 @@ public:
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;
 	/// Each game turn: what it holds stays where the hand is for the game, and is dropped once it is gone
 	virtual void ProcessTurn() = 0;
+	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
+	virtual void PlaceHeldForTurn() {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
 	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves
@@ -88,6 +90,8 @@ public:
 	virtual void DoLetGo(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*velocity*/) {}
 	/// The hand taps a thing
 	virtual void DoTap(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
+	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
 	/// The hand gives the thing that it holds to a creature
 	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.

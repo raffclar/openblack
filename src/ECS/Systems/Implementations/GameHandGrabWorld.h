@@ -83,6 +83,7 @@ public:
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;
+	[[nodiscard]] glm::vec3 ReportedHandPlace() const override;
 	void SetPose(entt::entity object, const Pose& pose) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 

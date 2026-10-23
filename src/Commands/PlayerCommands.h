@@ -128,9 +128,18 @@ struct HandReport
 	bool operator==(const HandReport& other) const = default;
 };
 
+/// The twist of a thing that the hand let go, after the hand moved a little: the turn turns the thing's body about
+/// the level axis across the motion of the hand since the let go
+struct HandTwist
+{
+	entt::entity object;
+	/// How far the hand moved since it let go of the thing
+	glm::vec3 moved;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport>;
+                            LeashPostTap, HandReport, HandTwist>;
 
 /// A command and the player that sent it
 struct Command

@@ -58,7 +58,7 @@ class Script:
 
 
 def land1():
-    """Land 1 from the sea: takes a rock and throws it, takes a second rock and puts it down, taps a bush, and moves
+    """Land 1 from the sea: taps a rock, takes a second rock and puts it down, takes a third rock and throws it, taps a bush, and moves
     over the land"""
     script = Script()
     script.wait(10)
@@ -78,6 +78,14 @@ def land1():
     script.wait(15)
     script.release()
     script.wait(20)
+    # Take a third rock and throw it
+    script.move((973, 451), 25)
+    script.press()
+    script.wait(60)
+    script.move((900, 360), 30)
+    script.move((600, 520), 4)
+    script.release()
+    script.wait(20)
     # Tap the bush
     script.move((976, 463), 25)
     script.press()
@@ -93,18 +101,36 @@ def land1():
 
 
 def testbed():
-    """The testbed: the hand moves over the land and the dispensers, takes and throws, and casts"""
+    """The testbed: the hand moves over the land, takes a globe from its dispenser and throws it, which casts its
+    miracle, and takes a second globe and puts it down on the land"""
     script = Script()
     script.wait(10)
-    script.circle((640, 600), 150, 120, 1.0)
+    script.circle((640, 470), 120, 80, 1.0)
+    # Take a globe and throw it far over the land
+    script.move((656, 551), 30)
+    script.press()
+    script.wait(60)
+    script.move((650, 480), 30)
+    script.move((640, 380), 4)
+    script.release()
+    script.wait(60)
+    # Take a second globe and put it down
+    script.move((560, 551), 30)
+    script.press()
+    script.wait(60)
+    script.move((479, 440), 60)
+    script.wait(20)
+    script.release()
+    script.wait(40)
+    script.circle((560, 470), 80, 80, 1.0)
     return script.events
 
 
 def main():
     for name, events in (("land1", land1()), ("testbed", testbed())):
-        with open(os.path.join(HERE, name + ".json"), "w", encoding="utf-8") as file:
-            json.dump(events, file, indent=0)
-            file.write("\n")
+        # One event a line
+        with open(os.path.join(HERE, name + ".json"), "w", encoding="utf-8", newline="\n") as file:
+            file.write("[\n" + ",\n".join(json.dumps(event) for event in events) + "\n]\n")
         print(name, len(events), "events,", events[-1]["frame"] + 1, "frames")
 
 

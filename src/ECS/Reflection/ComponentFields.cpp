@@ -1338,7 +1338,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandClicked::place>("place")
 	    .Field<&components::HandClicked::placeTurn>("placeTurn");
 	Reflect<components::HandGlow>(context).Field<&components::HandGlow::rgb>("rgb");
-	Reflect<components::InHand>(context).Field<&components::InHand::hand>("hand");
+	Reflect<components::InHand>(context)
+	    .Field<&components::InHand::hand>("hand")
+	    .Field<&components::InHand::rotation>("rotation")
+	    .Field<&components::InHand::scale>("scale");
 	Reflect<components::HeldLight>(context)
 	    .Field<&components::HeldLight::takenAt>("takenAt")
 	    .Field<&components::HeldLight::drawn>("drawn")
@@ -1358,6 +1361,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandGrab::pulling>("pulling")
 	    .Field<&components::HandGrab::grips>("grips")
 	    .Field<&components::HandGrab::tug>("tug")
+	    .Field<&components::HandGrab::pullPosition>("pullPosition")
+	    .Field<&components::HandGrab::pullRotation>("pullRotation")
+	    .Field<&components::HandGrab::pullScale>("pullScale")
 	    .Field<&components::HandGrab::stretch>("stretch")
 	    .Field<&components::HandGrab::holdDistance>("holdDistance")
 	    .Field<&components::HandGrab::pullPlanePoint>("pullPlanePoint")

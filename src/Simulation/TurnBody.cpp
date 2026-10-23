@@ -391,6 +391,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// they hold goes back into their hands as their last turn posed them
 		Locator::creatureLocomotionSystem::value().Update(1.0f);
 		Locator::creatureObjectActionSystem::value().ShowHeldAtTurnEnd();
+		// What the god's hand holds goes to where the last report put the hand
+		if (Locator::handGrabSystem::has_value())
+		{
+			Locator::handGrabSystem::value().PlaceHeldForTurn();
+		}
 		// A miracle's pile has no height of its own, so the turn sees it on the land as the land is now
 		if (Locator::miracleFxSystem::has_value())
 		{
