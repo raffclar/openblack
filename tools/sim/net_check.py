@@ -291,6 +291,7 @@ def main():
     parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
@@ -330,7 +331,8 @@ def main():
     os.makedirs(keys_dir, exist_ok=True)
     key, kid, keys_file = make_ticket_key(keys_dir)
     certs = make_certificates(keys_dir)
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
 
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
@@ -398,7 +400,7 @@ def main():
             camera = options.camera1 if index == 0 else options.camera2
             if camera:
                 log = os.path.join(client_dirs[index], "client.log")
-                if wait_for_line(log, "The network game starts", client):
+                if wait_for_line(log, "Joined the game server", client):
                     set_camera(client.pid, camera)
         started = time.monotonic()
         stopped_second = False

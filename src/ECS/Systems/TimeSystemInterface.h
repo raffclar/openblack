@@ -61,6 +61,9 @@ public:
 	virtual void StartTurn() = 0;
 	/// Works out the frame's game time and how far through its turn the game is, after the frame's turns
 	virtual void UpdateFrame() = 0;
+	/// Between two turns of one frame, as a computer that catches up does them: the frame clock takes the time of the
+	/// turn, as the frame after a turn does, and the frame keeps its count of turns
+	virtual void CatchUpFrame() {}
 
 	[[nodiscard]] virtual uint32_t GetTurn() const = 0;
 	/// How far the game is through the turn after the last one played, from 0 to 0.99

@@ -101,6 +101,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
+		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super. Without it, the settings.json of this computer gives the level, if it keeps one; the same holds for the window's size and mode and the vertical sync.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
@@ -371,6 +372,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
 		args.startTestbed = result.count("testbed") != 0;
+		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;

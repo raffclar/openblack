@@ -253,6 +253,11 @@ void TimeSystem::ResetTimerToTurn()
 void TimeSystem::UpdateFrame()
 {
 	_turnsThisFrame = 0;
+	CatchUpFrame();
+}
+
+void TimeSystem::CatchUpFrame()
+{
 	if (Stopped())
 	{
 		// The fraction stays as it was

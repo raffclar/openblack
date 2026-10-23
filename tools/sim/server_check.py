@@ -136,6 +136,7 @@ def main():
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=100.0)
@@ -170,7 +171,8 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
     events = None
     if options.input:
         with open(options.input, encoding="utf-8") as file:

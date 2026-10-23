@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <string>
 
 #include <glm/vec3.hpp>
@@ -28,6 +30,8 @@ struct LearningMarker
 	float size {1.0f};
 	/// Milliseconds it has shown for
 	float milliseconds {0.0f};
+	/// The game turn that made it. It goes at the turn when its life is over, the same turn on every computer.
+	uint32_t madeTurn {0};
 };
 
 } // namespace openblack::ecs::components

@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;
+	void CatchUpFrame() override;
 
 	[[nodiscard]] uint32_t GetTurn() const override { return _turn; }
 	[[nodiscard]] float GetTurnFraction() const override { return _turnFraction; }

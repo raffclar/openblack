@@ -53,6 +53,25 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "drawnAt", .marker = ""},
     {.component = "VillagerPose", .field = "easedHeading", .marker = ""},
     {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
+    {.component = "VillagerPose", .field = "slopeLift", .marker = ""},
+    // Only the villagers near the camera of a computer get their posed bones
+    {.component = "VillagerPose", .field = "bones", .marker = ""},
+    {.component = "VillagerPose", .field = "clipBones", .marker = ""},
+    // What the player at this computer heard of the guidance: the game picks it by the camera of this computer and its
+    // own random numbers
+    {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The number of a miracle's particle effect counts the effects that this computer started, also those that only
+    // show the world on this computer
+    {.component = "Spell", .field = "effect", .marker = ""},
+    // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
+    {.component = "LearningMarker", .field = "", .marker = ""},
+    // The frames move the hair of a creature. Only the draw reads it.
+    {.component = "CreatureHair", .field = "", .marker = ""},
+    // The frames turn and pulse the seed over a worship site's icon. Only the draw reads them.
+    {.component = "IconSeed", .field = "spin", .marker = ""},
+    {.component = "IconSeed", .field = "ringSpin", .marker = ""},
+    {.component = "IconSeed", .field = "phialFrame", .marker = ""},
+    {.component = "IconSeed", .field = "phialPhase", .marker = ""},
     // The puffs of smoke, the clouds, the mists, the sky and the lights
     {.component = "ChimneySmoke", .field = "puffs", .marker = ""},
     {.component = "ChimneySmoke", .field = "state", .marker = ""},

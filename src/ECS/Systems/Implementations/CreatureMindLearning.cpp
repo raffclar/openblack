@@ -139,6 +139,7 @@
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerCamera.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -2276,9 +2277,9 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 	// Only the player of the creature looks at it
 	if (self.owner == PlayerNames::PLAYER_ONE && Locator::camera::has_value())
 	{
-		const auto& camera = Locator::camera::value();
+		const auto camera = ecs::player_camera::Of();
 		const auto* at = registry.TryGet<const Transform>(creature);
-		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera.origin, camera.focus, at->position);
 	}
 	return facts;
 }
@@ -2963,7 +2964,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	creature_plan_actions::Situation situation;
 	if (Locator::camera::has_value())
 	{
-		const auto eye = Locator::camera::value().GetOrigin();
+		const auto eye = ecs::player_camera::Of().origin;
 		situation.camera = glm::vec2(eye.x, eye.z);
 	}
 	Situate(creature, situation);
@@ -3369,7 +3370,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
 			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
-			const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : transform->position;
+			const auto eye = Locator::camera::has_value() ? ecs::player_camera::Of().origin : transform->position;
 			agenda = creature_leash_orders::Hold(
 			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
 			    creature_leash_orders::HoldSeconds(_random.GameFloatRand(creature_leash_orders::k_HoldExtraSeconds),
@@ -3404,7 +3405,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			if (Locator::camera::has_value())
 			{
-				const auto eye = Locator::camera::value().GetOrigin();
+				const auto eye = ecs::player_camera::Of().origin;
 				situation.camera = glm::vec2(eye.x, eye.z);
 			}
 			Situate(creature, situation);
@@ -3673,7 +3674,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 	// Every agenda that faces the player can be made: also when a plan starts again after a hold, or is forced
 	if (Locator::camera::has_value())
 	{
-		situation.eye = Locator::camera::value().GetOrigin();
+		situation.eye = ecs::player_camera::Of().origin;
 		situation.camera = glm::vec2(situation.eye->x, situation.eye->z);
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -3750,8 +3751,8 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	if (at != nullptr && body != nullptr && Locator::camera::has_value() && Locator::playerSystem::has_value() &&
 	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
 	{
-		const auto& camera = Locator::camera::value();
-		situation.lookedAt = creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+		const auto camera = ecs::player_camera::Of();
+		situation.lookedAt = creature_attention::IsLookingAt(camera.origin, camera.focus, at->position);
 	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
 	{
@@ -3759,9 +3760,9 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	}
 	if (at != nullptr && situation.playerHand.has_value() && Locator::camera::has_value())
 	{
-		const auto& camera = Locator::camera::value();
+		const auto camera = ecs::player_camera::Of();
 		situation.awayFromHand =
-		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera.GetOrigin(), camera.GetFocus());
+		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera.origin, camera.focus);
 	}
 }
 
@@ -5065,9 +5066,9 @@ void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindSt
 		return;
 	}
 	const auto marker = registry.Create();
-	registry.Assign<LearningMarker>(
-	    marker,
-	    ecs::learning_marker::Start(HeadPoint(registry, creature), ShownSize(*body) * creature_mode::k_HeightPerSize, *share));
+	registry.Assign<LearningMarker>(marker, ecs::learning_marker::Start(HeadPoint(registry, creature),
+	                                                                    ShownSize(*body) * creature_mode::k_HeightPerSize,
+	                                                                    *share, turn));
 }
 
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
@@ -5287,7 +5288,7 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	creature_plan_actions::Situation situation;
 	if (Locator::camera::has_value())
 	{
-		const auto eye = Locator::camera::value().GetOrigin();
+		const auto eye = ecs::player_camera::Of().origin;
 		situation.camera = glm::vec2(eye.x, eye.z);
 	}
 	Situate(creature, situation);
@@ -5567,6 +5568,6 @@ bool CreatureMindSystem::LookedAtByItsPlayer(entt::entity creature)
 	{
 		return false;
 	}
-	const auto& camera = Locator::camera::value();
-	return creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), transform->position);
+	const auto camera = ecs::player_camera::Of();
+	return creature_attention::IsLookingAt(camera.origin, camera.focus, transform->position);
 }

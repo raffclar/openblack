@@ -131,7 +131,8 @@ public:
 	{
 		/// The game ended
 		Stop,
-		/// The world waits: before the start, and with no god's player. No step of the world runs, not even its clock.
+		/// The world waits: before the start, and with no god's player. The clock stands still: the frames take no game
+		/// time and no turn comes.
 		Wait,
 		Play,
 	};
@@ -273,7 +274,14 @@ bool ServerWorld::Initialize()
 bool ServerWorld::StartLand()
 {
 	auto& land = Locator::landSystem::value();
-	if (_settings.testbed)
+	if (_settings.godsRingMap)
+	{
+		if (!land.LoadGodsRingMap())
+		{
+			return false;
+		}
+	}
+	else if (_settings.testbed)
 	{
 		land.LoadTestbed();
 	}
@@ -292,8 +300,8 @@ bool ServerWorld::StartLand()
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground
-	const bool startStory =
-	    !_settings.testbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	const bool startStory = !_settings.testbed && !_settings.godsRingMap &&
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
 	if (!land.StartChallengeScripts(startStory))
 	{
 		return false;
@@ -333,17 +341,12 @@ bool ServerWorld::Frame()
 		{
 			return false;
 		}
-		if (step == NetworkStep::Wait)
+		// While the world waits, its clock stands still and its frames take no game time, as the clocks of the clients
+		// stand still until the start. Thus the frames before the first turn are the same as theirs.
+		const bool wait = step == NetworkStep::Wait;
+		if (clock.IsPaused() != wait)
 		{
-			// The world waits as it is, so that it is the same as the clients' worlds when the turns start
-			if (Locator::inspector::has_value())
-			{
-				Locator::inspector::value().Service();
-			}
-			std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::microseconds>(
-			    clock.GetFixedFrameTime().value_or(std::chrono::microseconds(100'000))));
-			_frameStart = std::chrono::steady_clock::now();
-			return true;
+			clock.SetPaused(wait);
 		}
 	}
 	// The clock of the frame, and the inspector of the tools before the frame's turn
@@ -499,7 +502,6 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	auto& host = network->Host();
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
-	// The server's clock never pauses: a paused clock of the server parted its world from the clients' (Land 1, turn 49).
 	Locator::playerCommandSystem::value().SetSource(&host);
 	// A client whose world parted gets the world of the server, at the start of the next turn
 	host.SetWorldState([] {

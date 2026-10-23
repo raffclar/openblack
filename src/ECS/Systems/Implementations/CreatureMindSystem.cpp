@@ -102,9 +102,11 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerCamera.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -827,7 +829,7 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	constexpr float k_NoLookWhileMovingWithin = 10.0f;
 	if (gaze.camera)
 	{
-		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+		return Locator::camera::has_value() ? std::optional(ecs::player_camera::Of().origin) : std::nullopt;
 	}
 	if (gaze.hand)
 	{
@@ -841,7 +843,7 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		{
 			return NearestHand(registry, creature);
 		}
-		return Locator::camera::has_value() ? std::optional(Locator::camera::value().GetOrigin()) : std::nullopt;
+		return Locator::camera::has_value() ? std::optional(ecs::player_camera::Of().origin) : std::nullopt;
 	}
 	if (gaze.feet)
 	{
@@ -1127,7 +1129,7 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 	{
 		return std::nullopt;
 	}
-	const auto eye = Locator::camera::value().GetOrigin();
+	const auto eye = ecs::player_camera::Of().origin;
 	const glm::vec2 point {eye.x, eye.z};
 	const auto offset = point - glm::vec2(transform->position.x, transform->position.z);
 	// How far away the camera is: the game's table distance along the ground
@@ -1157,7 +1159,7 @@ std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& reg
 	{
 		return {std::nullopt, false};
 	}
-	const auto focus = Locator::camera::value().GetFocus();
+	const auto focus = ecs::player_camera::Of().focus;
 	const auto from = map_coords::FromMetres(glm::vec2(transform->position.x, transform->position.z));
 	const auto to = map_coords::FromMetres(glm::vec2(focus.x, focus.z));
 	// The way the body faces: its heading, or the way its rotation faces before it walks
@@ -1273,7 +1275,7 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	}
 	if (Locator::camera::has_value())
 	{
-		view.camera = targetOf(Locator::camera::value().GetOrigin());
+		view.camera = targetOf(ecs::player_camera::Of().origin);
 	}
 	return view;
 }
@@ -1975,6 +1977,8 @@ void CreatureMindSystem::ProcessTurn()
 void CreatureMindSystem::BeginTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The marks over learning creatures whose life is over go at the turn, the same turn on every computer
+	ecs::learning_marker::RemoveDone(registry, Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u);
 	// The feedback of a release reaches each mind before the minds think, when its wait is over
 	std::vector<std::pair<entt::entity, float>> arrived;
 	registry.Each<CreatureMindState>([&arrived](entt::entity entity, CreatureMindState& mind) {
@@ -2025,7 +2029,7 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	};
 	const auto view =
 	    Locator::camera::has_value()
-	        ? std::optional(View {.origin = Locator::camera::value().GetOrigin(), .focus = Locator::camera::value().GetFocus()})
+	        ? std::optional(View {.origin = ecs::player_camera::Of().origin, .focus = ecs::player_camera::Of().focus})
 	        : std::nullopt;
 	SetUpMind(entity, creature, mind);
 	if (mind.pendingFile != nullptr)
@@ -2953,7 +2957,7 @@ void CreatureMindSystem::HandTookHold(entt::entity creature)
 	// It stops and turns to face the player's eye
 	if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 	{
-		const auto eye = Locator::camera::value().GetOrigin();
+		const auto eye = ecs::player_camera::Of().origin;
 		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 	}
 	mind->showDesireOnHold = true;
@@ -3053,7 +3057,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	{
 		if (Locator::creatureLocomotionSystem::has_value() && Locator::camera::has_value())
 		{
-			const auto eye = Locator::camera::value().GetOrigin();
+			const auto eye = ecs::player_camera::Of().origin;
 			Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(eye.x, eye.z));
 		}
 		return;
@@ -3533,7 +3537,7 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		break;
 	case creature_giving::Use::Throw:
 	{
-		const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+		const auto eye = Locator::camera::has_value() ? ecs::player_camera::Of().origin : glm::vec3(0.0f);
 		ForcePlan(creature, {.desire = Desire::PlayWithPlayer,
 		                     .action = k_ThrowGivenAction,
 		                     .object = object,

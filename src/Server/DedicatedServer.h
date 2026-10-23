@@ -63,6 +63,8 @@ struct ServerSettings
 	std::string land {k_DefaultStartLevel};
 	/// The flat testbed in place of a land
 	bool testbed {false};
+	/// The network map for 32 gods in place of a land
+	bool godsRingMap {false};
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The seed of every random number of the world. The date of the world is pinned with it.

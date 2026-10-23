@@ -579,7 +579,8 @@ Game::Game(Arguments&& args) noexcept
     , _newGameAsked(args.newGame || launch_switches::FirstGameOf(args.launchSwitches) == launch_switches::FirstGame::NewGame)
     , _continueAsked(args.continueGame)
     , _launchSwitches(args.launchSwitches)
-    , _startTestbed(args.startTestbed || args.scenario.has_value())
+    , _startTestbed(args.startTestbed || args.startGodsRingMap || args.scenario.has_value())
+    , _startGodsRingMap(args.startGodsRingMap)
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
     , _fightAutopilot(args.fightAutopilot)
@@ -2695,6 +2696,14 @@ void Game::UpdateScreenMarks()
 	UpdateFloatingNumbers(milliseconds * 0.001f);
 }
 
+void Game::CatchUpFrame()
+{
+	// The frame steps that change the world, as the frame after a turn does them, with no draw
+	Locator::time::value().CatchUpFrame();
+	simulation::PlayCreaturePoses();
+	simulation::PlayFrameEffects(*this);
+}
+
 void Game::UpdateFrameEffects()
 {
 	// The game is the view of the effects of the frame
@@ -3954,7 +3963,15 @@ Game::RunStart Game::StartRun() noexcept
 	}
 
 	auto start = game_session::Start::NewGame;
-	if (_startTestbed)
+	if (_startGodsRingMap)
+	{
+		// The map for 32 gods, as a network game plays it
+		if (!LoadGodsRingMap())
+		{
+			return RunStart::Failed;
+		}
+	}
+	else if (_startTestbed)
 	{
 		LoadTestbed();
 	}
