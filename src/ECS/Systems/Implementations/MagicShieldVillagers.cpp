@@ -210,6 +210,8 @@ void MagicShieldSystem::RemoveReactions(entt::entity object, Reaction type)
 			ids.push_back(id);
 		}
 	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(ids);
 	for (const auto id : ids)
 	{
 		RemoveReaction(id, true);

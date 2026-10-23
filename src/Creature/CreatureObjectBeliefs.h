@@ -12,10 +12,13 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -132,15 +135,20 @@ public:
 	template <typename Gone>
 	void ForgetIf(Gone gone)
 	{
-		std::vector<entt::entity> forgotten;
+		// The store forgets them in the order of their kinds and places. The order of the index is different on each
+		// C++ library, and the marker of the oldest belief moves on as each belief goes.
+		std::vector<std::pair<BeliefPlace, entt::entity>> forgotten;
 		for (const auto& [thing, at] : _index)
 		{
 			if (gone(thing))
 			{
-				forgotten.push_back(thing);
+				forgotten.emplace_back(at, thing);
 			}
 		}
-		for (const auto thing : forgotten)
+		std::ranges::sort(forgotten, [](const auto& a, const auto& b) {
+			return std::tie(a.first.kind, a.first.slot) < std::tie(b.first.kind, b.first.slot);
+		});
+		for (const auto& [at, thing] : forgotten)
 		{
 			Forget(thing);
 		}
