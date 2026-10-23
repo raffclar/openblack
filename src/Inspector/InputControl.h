@@ -198,6 +198,10 @@ public:
 
 	[[nodiscard]] const InputTimeline& Timeline() const { return _timeline; }
 
+	/// Makes recorded input again, frame for frame, from the coming frame on, behind any input still to come. The frame
+	/// it starts at, or none with why not.
+	std::optional<uint64_t> Replay(const Json& events, InputEvent::Timing timing, std::string& error);
+
 	/// Input made for other requests (gui.press clicking a control of the game's dialogs), all at the frame they start
 	/// at, behind any input still to come. Empty when it was made or scheduled, else why not
 	std::string Send(std::span<const InputEvent> events);

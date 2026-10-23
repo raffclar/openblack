@@ -11,8 +11,8 @@
 
 #include <cstdint>
 
+#include <list>
 #include <optional>
-#include <span>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -63,8 +63,11 @@ public:
 	void DetachObjectSound(entt::entity entity, entt::id_type sound) override;
 	void ForgetSavedSounds() override;
 
-	/// The sounds at points that wait or play, the oldest first
-	[[nodiscard]] std::span<const PointSound> PointSounds() const { return _points; }
+	/// The sounds at points that wait or play, the newest first
+	[[nodiscard]] std::vector<PointSound> PointSounds() const;
+	/// The tags of objects and the sounds at points in the order of their turn, the newest first. A tag of an object is
+	/// its entity; a sound at a point is entt::null.
+	[[nodiscard]] std::vector<entt::entity> TurnOrder() const;
 
 private:
 	/// Whether a tag's sound is heard if it starts now
@@ -73,12 +76,27 @@ private:
 	/// camera the caller already did the test of the reach. The tag owns its sound, so the voice rules never find the
 	/// voice of another sound for it.
 	void StartPointSound(PointSound& point, std::optional<glm::vec3> camera) const;
-	/// One turn of each sound at a point: a delayed sound starts when it reaches the camera, and a sound goes when it
-	/// no longer plays
-	void ProcessPointSounds(const glm::vec3& camera);
+	/// One turn of a sound at a point: a delayed sound starts when it reaches the camera. True when the sound goes,
+	/// because it no longer plays.
+	[[nodiscard]] bool ProcessPointSound(PointSound& point, const glm::vec3& camera) const;
+	/// One turn of the tag of an object: its sound follows the object, or starts. True when the tag goes, because its
+	/// object is gone.
+	[[nodiscard]] bool ProcessObjectTag(entt::entity entity, components::SoundTag& tag, const glm::vec3& camera) const;
+	/// Puts the tags that came into the world with no call to this system (the tags of new objects and of a loaded
+	/// world) at the start of the list, and removes the tags that left it
+	void FindTags();
+
+	/// A tag in the list: the tag of an object, or a sound at a point
+	struct Entry
+	{
+		entt::entity tag {entt::null};
+		std::optional<PointSound> point;
+	};
 
 	ConditionsSource _conditions;
-	std::vector<PointSound> _points;
+	/// The one list of the tags of objects and the sounds at points. A new tag goes at the start, and each turn does the
+	/// tags from the start of the list, the newest first.
+	std::list<Entry> _tags;
 };
 
 } // namespace openblack::ecs::systems

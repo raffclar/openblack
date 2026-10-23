@@ -47,6 +47,8 @@ public:
 	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
+	void PlaceHeldForTurn() override;
+	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;

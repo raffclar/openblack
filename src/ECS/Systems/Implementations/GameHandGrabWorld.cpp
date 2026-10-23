@@ -824,6 +824,16 @@ void GameHandGrabWorld::SetUpPotReaction(entt::entity pot, PlayerNames player)
 	}
 }
 
+glm::vec3 GameHandGrabWorld::ReportedHandPlace() const
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return glm::vec3(0.0f);
+	}
+	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)].value_or(
+	    glm::vec3(0.0f));
+}
+
 hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PoseOf(entt::entity object) const
 {
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);
@@ -916,8 +926,8 @@ std::optional<uint32_t> GameHandGrabWorld::PourPot(entt::entity pot, PlayerNames
 	{
 		return std::nullopt;
 	}
-	// It pours out of the hand where the hand is
-	const auto hand = PoseOf(Hand()).origin;
+	// It pours out of the hand where the last report put the hand
+	const auto hand = ReportedHandPlace();
 	std::optional<uint32_t> pour;
 	if (Locator::particleSystem::has_value() && player == HandPlayer())
 	{

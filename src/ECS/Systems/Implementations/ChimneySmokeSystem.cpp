@@ -34,21 +34,14 @@ chimney_smoke::Random GameRandom()
 	return [](float a, float b) { return Locator::gameRandom::value().CrtRandom(a, b); };
 }
 
-/// The player's hand in the world, if it is in it
+/// The player's hand in the world, if it is in it, as the reports of the player put it
 std::optional<glm::vec3> HandPosition()
 {
 	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.TryGet<const Transform>(hand);
-	if (transform == nullptr || transform->position == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return transform->position;
+	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 

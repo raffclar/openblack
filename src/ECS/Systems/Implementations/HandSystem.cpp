@@ -21,6 +21,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
@@ -60,12 +61,42 @@ void HandSystem::ProcessTurn()
 	{
 		return;
 	}
-	const auto* transform = registry.TryGet<const Transform>(hand);
+	// The world counts the stillness of the hand that the reports give, as each computer has the same reports
+	const auto* reported = registry.TryGet<const ReportedHand>(hand);
 	auto* stillness = registry.TryGet<HandStillness>(hand);
-	if (transform != nullptr && stillness != nullptr)
+	if (reported != nullptr && stillness != nullptr)
 	{
-		hand_stillness::Step(*stillness, transform->position);
+		hand_stillness::Step(*stillness, reported->handPoint);
 	}
+}
+
+std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
+	if (transform == nullptr || transform->position == glm::zero<glm::vec3>())
+	{
+		return std::nullopt;
+	}
+	return transform->position;
+}
+
+void HandSystem::Report([[maybe_unused]] PlayerNames player, const player_commands::HandReport& report)
+{
+	// There is one human, with the left hand of this computer
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	if (!registry.Valid(hand))
+	{
+		return;
+	}
+	registry.AssignOrReplace<ReportedHand>(hand, ReportedHand {
+	                                                 .collidePoint = report.collidePoint,
+	                                                 .handPoint = report.handPoint,
+	                                                 .camera = report.camera,
+	                                                 .focus = report.focus,
+	                                             });
 }
 
 uint32_t HandSystem::GetHandStillTurns() const noexcept
@@ -86,9 +117,14 @@ HandSystem::GetPlayerHandPositions() const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto hands = GetPlayerHands();
+	// The left hand is where the reports put it. The right hand has no reports, and its Transform never moves.
+	const auto left = hands[static_cast<size_t>(Side::Left)];
+	const auto right = hands[static_cast<size_t>(Side::Right)];
+	const auto* reported = registry.Valid(left) ? registry.TryGet<const ReportedHand>(left) : nullptr;
+	const auto* rightAt = registry.Valid(right) ? registry.TryGet<const Transform>(right) : nullptr;
 	std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> result = {
-	    registry.Get<Transform>(hands[static_cast<size_t>(Side::Left)]).position,
-	    registry.Get<Transform>(hands[static_cast<size_t>(Side::Right)]).position,
+	    reported != nullptr ? reported->handPoint : glm::zero<glm::vec3>(),
+	    rightAt != nullptr ? rightAt->position : glm::zero<glm::vec3>(),
 	};
 	// TODO(#693): Hand Getter should return an optional if the hand doesn't have a valid position
 	// When the position is zero, it probably means it's not on the map (e.g. mouse is in the sky)

@@ -54,6 +54,7 @@
 #include "Locator.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
@@ -222,6 +223,24 @@ bool ServerWorld::Initialize()
 		{
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
 		}
+	}
+	// A tool can give the commands that a game did at each turn, which the server then does at the same turns
+	if (_settings.commandsPath.has_value())
+	{
+		auto turns = command_log::ReadFile(*_settings.commandsPath);
+		if (!turns.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the commands does not read: {}",
+			                    _settings.commandsPath->string());
+			return false;
+		}
+		auto& commands = Locator::playerCommandSystem::value();
+		for (auto& [turn, turnCommands] : *turns)
+		{
+			commands.Receive(turn, std::move(turnCommands));
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Commands of {} turns from {}", turns->size(),
+		                   _settings.commandsPath->string());
 	}
 	return simulation::RegisterWorldData(*this);
 }

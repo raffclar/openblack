@@ -523,3 +523,24 @@ TEST_F(SoundTags, AfterALoadOnlyTheObjectsOwnSoundsComeBack)
 	EXPECT_EQ(Audio().emitters.size(), before + 1);
 	EXPECT_TRUE(registry.Get<ecs::components::SoundTag>(lantern).emitter != entt::null);
 }
+
+// The tags of objects and the sounds at points are one list: a new tag goes first, and each turn does the newest first
+TEST_F(SoundTags, ATurnDoesTheTagsAndThePointSoundsInOneListTheNewestFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto first = _tags.AttachObjectSound(CreateObjectAt({20.0f, 0.0f, 0.0f}), k_Sound, true);
+	_tags.CreatePointSound(k_Sound, {50.0f, 0.0f, 0.0f}, true);
+	const auto second = _tags.AttachObjectSound(CreateObjectAt({30.0f, 0.0f, 0.0f}), k_Sound, true);
+	EXPECT_EQ(_tags.TurnOrder(), (std::vector<entt::entity> {second, entt::null, first}));
+
+	// An object that comes with its own tag joins the list at the start on the next turn
+	const auto lantern = CreateObjectAt({40.0f, 0.0f, 0.0f});
+	registry.Assign<ecs::components::SoundTag>(lantern, k_Sound, glm::vec3(0.0f), true);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(_tags.TurnOrder(), (std::vector<entt::entity> {lantern, second, entt::null, first}));
+
+	// A tag that goes leaves the others in their order
+	_tags.DetachObjectSound(registry.Get<ecs::components::SoundTag>(second).owner, k_Sound);
+	_tags.ProcessTurn(glm::vec3(0.0f));
+	EXPECT_EQ(_tags.TurnOrder(), (std::vector<entt::entity> {lantern, entt::null, first}));
+}

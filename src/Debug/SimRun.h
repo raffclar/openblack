@@ -67,6 +67,10 @@ struct Request
 	HashDetail hashParts {HashDetail::None};
 	/// Each land starts paused, before any of its frames, for a tool that steps it through the inspector
 	bool startPaused {false};
+	/// The file of recorded input that the first land makes from its first frame on, as input.record answers it
+	std::optional<std::filesystem::path> inputPath;
+	/// The file to write the commands of each turn to, for a dedicated server that does the same commands (command_log)
+	std::optional<std::filesystem::path> commandsPath;
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };

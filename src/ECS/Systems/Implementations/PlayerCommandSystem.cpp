@@ -11,12 +11,14 @@
 
 #include "PlayerCommandSystem.h"
 
+#include <iterator>
 #include <type_traits>
 #include <utility>
 
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "Locator.h"
 
@@ -88,6 +90,20 @@ void Run(const Command& command)
 				    openblack::Locator::leashSystem::value().DoOrder(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, HandTwist>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoTwist(command.player, action.object, action.moved);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandReport>)
+		    {
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    openblack::Locator::handSystem::value().Report(command.player, action);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
@@ -111,12 +127,28 @@ void PlayerCommandSystem::SendOpenBlock()
 	_queue.Send();
 }
 
-void PlayerCommandSystem::RunSent()
+void PlayerCommandSystem::RunSent(uint32_t turn)
 {
-	for (const auto& command : _queue.TakeSent())
+	auto commands = _queue.TakeSent();
+	if (const auto received = _received.find(turn); received != _received.end())
+	{
+		commands.insert(commands.end(), received->second.begin(), received->second.end());
+		_received.erase(received);
+	}
+	if (_listener)
+	{
+		_listener(turn, commands);
+	}
+	for (const auto& command : commands)
 	{
 		Run(command);
 	}
+}
+
+void PlayerCommandSystem::Receive(uint32_t turn, std::vector<Command> commands)
+{
+	auto& waiting = _received[turn];
+	waiting.insert(waiting.end(), std::make_move_iterator(commands.begin()), std::make_move_iterator(commands.end()));
 }
 
 void PlayerCommandSystem::Reset()

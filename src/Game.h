@@ -94,6 +94,10 @@ namespace online
 {
 class LanDiscoveryInterface;
 }
+namespace command_log
+{
+class Writer;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -307,6 +311,8 @@ public:
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
+	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
+	void ReportHand();
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -521,6 +527,8 @@ private:
 	std::optional<FightAutopilotRequest> _fightAutopilot;
 	std::optional<std::filesystem::path> _fightTranscriptFolder;
 	std::optional<sim_run::Request> _simulation;
+	/// The file that a tool's run writes the commands of each turn to
+	std::unique_ptr<command_log::Writer> _commandLog;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -614,6 +622,11 @@ private:
 	std::optional<glm::vec3> _cursorWorldPosition;
 	/// Where the hand started, where a tool's run can keep it (sim_run::Settings::stillHand)
 	std::optional<glm::vec3> _stillHandAt;
+	/// The last report of the hand and the camera that this computer sent, its hand and its turn
+	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
+	std::array<glm::vec3, 4> _lastHandReport {};
+	entt::entity _reportedHand {entt::null};
+	std::optional<uint32_t> _handReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land

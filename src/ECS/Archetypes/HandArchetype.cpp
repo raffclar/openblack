@@ -17,6 +17,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
@@ -41,6 +42,8 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	// What its player last clicked, for the scripts. It is part of the hand from the start, so that the world is the same
 	// whether or not a frame of the hand ran.
 	registry.Assign<HandClicked>(entity);
+	// Where the reports of its player put the hand and the camera for the world
+	registry.Assign<ReportedHand>(entity);
 
 	return entity;
 }
