@@ -3013,6 +3013,46 @@ void AddMovement(std::vector<Scenario>& all)
 	                 {.kind = Kind::HoldRouteSearch, .creature = 0, .delaySeconds = 14.0f, .value = 0}},
 	});
 
+	// Two pockets of tall conifers side by side, each open behind its tiger: the two searches for the routes run at the
+	// same time and share the search steps of each turn
+	std::vector<ObjectSetup> twoPockets;
+	for (const float side : {-130.0f, 130.0f})
+	{
+		for (const auto& tree : pocket)
+		{
+			auto moved = tree;
+			moved.offset.x = (tree.offset.x * 0.5f) + side;
+			twoPockets.push_back(moved);
+		}
+	}
+	all.push_back({
+	    .id = "movement.route_search_share",
+	    .name = "Two creatures share the route search",
+	    .facet = Facet::Movement,
+	    .description = "Two small tigers stand in two pockets of tall conifers that are open behind them. Both are told "
+	                   "to walk to a point beyond the far end of their pockets at the same time.",
+	    .expected = "The two searches share the search steps of each turn, and both tigers find their routes after the "
+	                "same number of turns. Both tigers start to walk in the same turn. Each tiger walks out of the open end "
+	                "of its pocket and round to its point.",
+	    .framing = {.shot = Shot::Overview, .include = {{-180.0f, 120.0f}, {180.0f, -60.0f}}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-130.0f, 0.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .size = 0.6f,
+	                                 .needs = Content(),
+	                                 .hold = true,
+	                                 .pauseMind = true},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {130.0f, 0.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .size = 0.6f,
+	                                 .needs = Content(),
+	                                 .hold = true,
+	                                 .pauseMind = true}},
+	    .objects = twoPockets,
+	    .commands = {Go(Kind::WalkTo, 0, {-130.0f, 100.0f}, 1.0f, false), Go(Kind::WalkTo, 1, {130.0f, 100.0f}, 0.0f, false)},
+	});
+
 	all.push_back({
 	    .id = "movement.walk_step_off",
 	    .name = "Step off into the walk",
