@@ -23,6 +23,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Audio/Sound.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -201,7 +202,7 @@ std::vector<glm::vec2> Circle(glm::vec2 centre, float radius, size_t points)
 	for (size_t i = 0; i < points; ++i)
 	{
 		const auto angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(points);
-		circle.emplace_back(centre + (radius * glm::vec2(std::cos(angle), std::sin(angle))));
+		circle.emplace_back(centre + (radius * glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle))));
 	}
 	return circle;
 }
@@ -3302,7 +3303,7 @@ void AddMovement(std::vector<Scenario>& all)
 	{
 		// Each piece runs round the ring
 		const glm::vec2 out = point - k_Pen;
-		const float yaw = glm::degrees(std::atan2(out.y, out.x)) + 90.0f;
+		const float yaw = glm::degrees(portable_math::Atan2(out.y, out.x)) + 90.0f;
 		pen.push_back({.type = MobileStaticInfo::CeltFenceShort, .offset = point, .yawDegrees = yaw});
 	}
 	pen.push_back({.type = VillagerInfo::CelticForesterMale,
@@ -4645,7 +4646,7 @@ void AddObjects(std::vector<Scenario>& all)
 		for (int i = 0; i < 8; ++i)
 		{
 			const auto angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
-			const glm::vec2 at {std::sin(angle) * 6.0f, std::cos(angle) * 6.0f};
+			const glm::vec2 at {portable_math::Sin(angle) * 6.0f, portable_math::Cos(angle) * 6.0f};
 			if (i % 3 == 0)
 			{
 				round.push_back({.type = MobileObjectInfo::Cart, .offset = at});
@@ -7249,7 +7250,8 @@ void AddCombat(std::vector<Scenario>& all)
 		{
 			const auto angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Villagers);
 			crowd.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
-			                 .offset = glm::vec2 {20.0f, 35.0f} + (k_RingRadius * glm::vec2 {std::cos(angle), std::sin(angle)}),
+			                 .offset = glm::vec2 {20.0f, 35.0f} +
+			                           (k_RingRadius * glm::vec2 {portable_math::Cos(angle), portable_math::Sin(angle)}),
 			                 .joinTown = true});
 		}
 		auto strong = red(PlayerNames::PLAYER_ONE, 0.9f, -0.6f);
@@ -8183,7 +8185,7 @@ void AddMind(std::vector<Scenario>& all)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
 			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .offset = {k_RingRadius * portable_math::Sin(angle), k_RingRadius * portable_math::Cos(angle)},
 			                   .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
@@ -8214,9 +8216,10 @@ void AddMind(std::vector<Scenario>& all)
 		for (int i = 0; i < k_Huts; ++i)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
-			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
-			                   .yawDegrees = glm::degrees(angle)});
+			objects.push_back(
+			    {.type = AbodeInfo::CelticHut,
+			     .offset = {k_RingRadius * portable_math::Sin(angle), -60.0f + k_RingRadius * portable_math::Cos(angle)},
+			     .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
 		    .id = "mind.pick_up_no_way",
@@ -8245,9 +8248,10 @@ void AddMind(std::vector<Scenario>& all)
 		for (int i = 0; i < k_Huts; ++i)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
-			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
-			                   .yawDegrees = glm::degrees(angle)});
+			objects.push_back(
+			    {.type = AbodeInfo::CelticHut,
+			     .offset = {k_RingRadius * portable_math::Sin(angle), -60.0f + k_RingRadius * portable_math::Cos(angle)},
+			     .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
 		    .id = "mind.stomp_no_way",
@@ -8274,7 +8278,7 @@ void AddMind(std::vector<Scenario>& all)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
 			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .offset = {k_RingRadius * portable_math::Sin(angle), k_RingRadius * portable_math::Cos(angle)},
 			                   .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
@@ -11163,11 +11167,12 @@ CameraPlacement testbed_scenarios::Overview(glm::vec3 centre, glm::vec2 halfSize
 	constexpr float k_Margin = 25.0f;
 	const auto halfAngles = glm::clamp(fieldOfView * 0.5f, 0.1f, 1.5f);
 	// The near side of the box is closer to the camera than its middle, so its width takes a wider angle
-	const auto across = ((halfSize.x + k_Margin) / std::tan(halfAngles.x)) + ((halfSize.y + k_Margin) * std::cos(k_Pitch));
-	const auto upAndDown = (halfSize.y + k_Margin) * std::sin(k_Pitch) / std::tan(halfAngles.y);
+	const auto across =
+	    ((halfSize.x + k_Margin) / portable_math::Tan(halfAngles.x)) + ((halfSize.y + k_Margin) * portable_math::Cos(k_Pitch));
+	const auto upAndDown = (halfSize.y + k_Margin) * portable_math::Sin(k_Pitch) / portable_math::Tan(halfAngles.y);
 	const auto distance = distanceFactor * std::max({across, upAndDown, k_MinDistance});
 	return {
-	    .origin = centre + glm::vec3(0.0f, distance * std::sin(k_Pitch), -distance * std::cos(k_Pitch)),
+	    .origin = centre + glm::vec3(0.0f, distance * portable_math::Sin(k_Pitch), -distance * portable_math::Cos(k_Pitch)),
 	    .focus = centre,
 	};
 }

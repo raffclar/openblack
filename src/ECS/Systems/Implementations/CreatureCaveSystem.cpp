@@ -27,6 +27,7 @@
 #include "3D/ScreenPick.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CaveCreature.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureLearning.h"
@@ -408,7 +409,7 @@ void CreatureCaveSystem::MakeCaveCreature(entt::entity creature)
 	const auto heading = cave_creature::HeadingTowards(position, places->fire);
 
 	const auto copy = registry.Create();
-	registry.Assign<Transform>(copy, position, glm::mat3(glm::eulerAngleY(heading.Yaw())),
+	registry.Assign<Transform>(copy, position, glm::mat3(portable_math::EulerAngleY(heading.Yaw())),
 	                           glm::vec3(archetypes::CreatureArchetype::DrawnScale(body->species, size)));
 	registry.Assign<CreatureCopy>(copy, creature, size);
 	const cave_creature::State state {.rest = rest, .heading = heading};
@@ -524,7 +525,7 @@ void CreatureCaveSystem::UpdateCaveCreature(float milliseconds)
 		                            .blendedWith = turn.blendedWith,
 		                            .blendWeight = turn.blendWeight});
 	}
-	transform->rotation = glm::mat3(glm::eulerAngleY(state.heading.Yaw()));
+	transform->rotation = glm::mat3(portable_math::EulerAngleY(state.heading.Yaw()));
 	if (Locator::creatureAnimationSystem::has_value())
 	{
 		Locator::creatureAnimationSystem::value().PoseCopy(*_caveCreature, frameMs);

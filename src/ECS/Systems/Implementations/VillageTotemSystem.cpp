@@ -18,6 +18,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/SeeThrough.h"
@@ -86,7 +87,7 @@ void VillageTotemSystem::AddToPlayer(entt::entity totem)
 		const float angle = gutils::Get3DAngleFromXZ(glm::vec2(transform.position.x, transform.position.z),
 		                                             glm::vec2(site->position.x, site->position.z)) +
 		                    gutils::k_ScawenOffset;
-		transform.rotation = glm::mat3(glm::eulerAngleY(-angle));
+		transform.rotation = glm::mat3(portable_math::EulerAngleY(-angle));
 		if (auto* iconTransform = registry.TryGet<Transform>(totemComponent->icon))
 		{
 			iconTransform->rotation = transform.rotation;

@@ -17,6 +17,7 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/matrix.hpp>
 
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 
 using namespace openblack::creature_fight::marks;
@@ -186,7 +187,8 @@ glm::vec3 openblack::creature_fight::marks::ToWorld(const glm::mat4& frame, cons
 glm::mat4 openblack::creature_fight::marks::GroundFrame(const glm::vec3& position, GameHeading heading)
 {
 	// The frame turns as the drawn body does
-	return glm::rotate(glm::translate(glm::mat4(1.0f), position), heading.Yaw(), glm::vec3(0.0f, 1.0f, 0.0f));
+	return openblack::portable_math::Rotate(glm::translate(glm::mat4(1.0f), position), heading.Yaw(),
+	                                        glm::vec3(0.0f, 1.0f, 0.0f));
 }
 
 bool Pace::Advance(float realMs)

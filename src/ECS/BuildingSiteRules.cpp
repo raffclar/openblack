@@ -18,6 +18,7 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 using namespace openblack::building_site;
@@ -259,7 +260,8 @@ Places building_site::OutlinePlaces(std::span<const Triangle> modelTriangles, co
 		for (size_t i = 0; i < k_Places; ++i)
 		{
 			const float angle = static_cast<float>(static_cast<int32_t>(i)) * k_PlaceStep;
-			const auto ray = glm::vec3(std::cos(angle) * reach + centre.x, centre.y, std::sin(angle) * reach + centre.z);
+			const auto ray =
+			    glm::vec3(portable_math::Cos(angle) * reach + centre.x, centre.y, portable_math::Sin(angle) * reach + centre.z);
 			// The upright plane holding the ray
 			auto flat = glm::vec3(ray.x - centre.x, 0.0f, ray.z - centre.z);
 			flat /= std::sqrt(flat.x * flat.x + flat.z * flat.z);
@@ -298,8 +300,8 @@ Places building_site::CirclePlaces(glm::vec3 centre, float reach, const std::fun
 	float angle = 0.0f;
 	for (auto& place : places)
 	{
-		place.x = std::sin(angle) * reach + centre.x;
-		place.z = std::cos(angle) * reach + centre.z;
+		place.x = portable_math::Sin(angle) * reach + centre.x;
+		place.z = portable_math::Cos(angle) * reach + centre.z;
 		place.y = landHeight({place.x, place.z});
 		angle = angle + k_PlaceStep;
 	}

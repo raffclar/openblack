@@ -11,6 +11,7 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -78,7 +79,7 @@ entt::entity SpellDispenserArchetype::Create(const glm::vec3& position, MagicTyp
 	const auto& info = Locator::infoConstants::value().abode.at(static_cast<size_t>(building));
 	const auto entity = registry.Create();
 	const auto& transform =
-	    registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
+	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(info.meshId), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.meshId, transform);
 	registry.Assign<Fixed>(entity, point, radius);

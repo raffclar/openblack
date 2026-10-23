@@ -178,6 +178,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend
     {.component = "Tree", .field = "bendSlot", .marker = ""},
+    // A field's crop sways as one of the trees' sways, which each computer picks with its own local random number. Only
+    // the frames read it.
+    {.component = "Swayable", .field = "swaySlot", .marker = "Field"},
     // The light of a held thing as this computer last drew it
     {.component = "HeldLight", .field = "drawn", .marker = ""},
     {.component = "HeldLight", .field = "point", .marker = ""},
@@ -221,7 +224,7 @@ bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_vie
 }
 
 Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
-            bool byField)
+            bool byField, const ecs::reflection::RowVisitor& visit)
 {
 	// The parts that only some entities have, by the storage of their marker component
 	std::vector<std::pair<const PresentationPart*, const entt::sparse_set*>> marked;
@@ -251,7 +254,7 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 			return componentMatches && fieldMatches && marker->contains(entity);
 		});
 	};
-	const auto hashes = ecs::reflection::HashWorld(registry, context, keep, byField);
+	const auto hashes = ecs::reflection::HashWorld(registry, context, keep, byField, visit);
 	Hash result {.hash = k_HashOffset, .parts = {}};
 	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
 	result.parts.emplace_back("entities", hashes.entities);

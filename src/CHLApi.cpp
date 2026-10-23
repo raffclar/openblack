@@ -60,6 +60,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
@@ -1637,7 +1638,7 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 		locomotion->fromHeading = heading;
 		locomotion->toHeading = heading;
 	}
-	transform.rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	registry.SetDirty();
 }
 

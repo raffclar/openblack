@@ -12,6 +12,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandMiracleFx.h"
@@ -33,7 +34,7 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
 
-	const auto rotation = glm::mat3(glm::eulerAngleXYZ(xAngleRadians, yAngleRadians, zAngleRadians));
+	const auto rotation = glm::mat3(portable_math::EulerAngleXYZ(xAngleRadians, yAngleRadians, zAngleRadians));
 	registry.Assign<Hand>(entity, rightHanded);
 	registry.Assign<Transform>(entity, position, rotation, glm::vec3(scale));
 	registry.Assign<Mesh>(entity, Hand::k_MeshId, static_cast<int8_t>(0), static_cast<int8_t>(0));

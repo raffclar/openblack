@@ -21,6 +21,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleMiracleMaths.h"
@@ -226,7 +227,7 @@ public:
 		const auto n = static_cast<float>(arc.atoms.size());
 		const float t = effect.AtomAge(spark);
 		const float scale =
-		    ((std::sin(phase - k_SparkPulseSpeed * t) + 1.0f) * k_SparkPulse + k_SparkPulseBase) * k_SparkScale * r;
+		    ((portable_math::Sin(phase - k_SparkPulseSpeed * t) + 1.0f) * k_SparkPulse + k_SparkPulseBase) * k_SparkScale * r;
 		const float alpha = std::clamp((1.0f - t / sparkLife) * k_SparkAlphaScale, 0.0f, 255.0f);
 		const auto m = maths::OrientAlong(spark.position, glm::mat3(1.0f));
 		const float pi = std::numbers::pi_v<float>;
@@ -234,8 +235,10 @@ public:
 		for (auto& joint : arc.atoms)
 		{
 			const float u = index / n;
-			const float across = std::sin(static_cast<float>(wiggles) * u * pi) * std::sin(4.0f * t + phase) * wiggle;
-			const float along = std::sin(static_cast<float>(wiggles + 1) * u * pi) * std::sin(2.0f * t + phase) * wiggle;
+			const float across =
+			    portable_math::Sin(static_cast<float>(wiggles) * u * pi) * portable_math::Sin(4.0f * t + phase) * wiggle;
+			const float along =
+			    portable_math::Sin(static_cast<float>(wiggles + 1) * u * pi) * portable_math::Sin(2.0f * t + phase) * wiggle;
 			const auto p = m[0] * (r * across) + m[1] * (u * r) + m[2] * (r * along);
 			joint->ruleScale = scale;
 			joint->velocity = (p - joint->position) / std::max(effect.GetDt(), k_MinimumStep);
