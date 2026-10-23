@@ -6,8 +6,11 @@
 //    pointer, the second Escape opens the game menu, and a click locks the pointer again.
 //
 // Usage: node mouse-check.mjs <chrome.exe> <page url> <game folder> <output folder> [--renderer webgpu|webgl2]
+//        [--dpr <ratio>]
 //   The page url is the address of index.html, for example http://127.0.0.1:8641/index.html. The game data stays on
 //   this computer: the page reads it from the game folder.
+// The device pixel ratio (default 1) gives the screen more pixels for each CSS pixel. The game then draws at the CSS
+// size times the ratio, and it reads the mouse in these pixels.
 // The exit code is 0 when all the checks pass.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
@@ -23,12 +26,20 @@ if (!chromePath || !pageUrl || !gameFolder || !out) {
 }
 const at = rest.indexOf('--renderer');
 const renderer = at >= 0 ? rest[at + 1] : 'webgpu';
+const ratioAt = rest.indexOf('--dpr');
+const pixelRatio = ratioAt >= 0 ? Number(rest[ratioAt + 1]) : 1;
+// The names of the result files. A run at a ratio of 1 keeps the names of the runs before the ratio option.
+const tag = pixelRatio === 1 ? renderer : `${renderer}-dpr${pixelRatio}`;
 const here = path.dirname(fileURLToPath(import.meta.url));
 
-// The window is 1280x1024, the default size of the game. The pointer speed of the game at this size is 0.8 of the
-// movement of the mouse (see src/Input/PointerSpeed.h).
-const k_PointerScale = 0.8;
+// The window is 1280x1024 CSS pixels, the default size of the game. At a ratio of 1, the pointer speed of the game at
+// this size is 0.8 of the movement of the mouse (see src/Input/PointerSpeed.h). At a ratio of 2 the game has 2 pixels
+// for each CSS pixel of the movement, and its pointer speed at 2560x2048 pixels is 1.6. Thus, in CSS pixels, the
+// pointer moves 0.8 times the ratio for each CSS pixel of the movement.
+const k_PointerScale = 0.8 * pixelRatio;
 const k_LockAt = [640, 330];
+// The place of the click in the pixels of the game
+const lockPixels = k_LockAt.map((value) => Math.floor(value * pixelRatio));
 // The OK button of the name box at 1280x1024
 const k_NameBoxOk = [290, 700];
 const k_MoveSteps = 25;
@@ -77,13 +88,13 @@ const testbedSteps = [
 ];
 
 const run = (name, args, steps, seconds) => {
-  const folder = path.join(out, `${renderer}-${name}`);
-  const actions = path.join(out, `${renderer}-${name}-actions.json`);
+  const folder = path.join(out, `${tag}-${name}`);
+  const actions = path.join(out, `${tag}-${name}-actions.json`);
   writeFileSync(actions, JSON.stringify(steps, null, 1));
   const query = `renderer=${renderer}&args=${encodeURIComponent(args)}`;
   const url = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}${query}`;
   const result = spawnSync(process.execPath, [path.join(here, 'cdp-run.mjs'), chromePath, url, String(seconds), folder,
-    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--actions', actions], { encoding: 'utf8', timeout: 600000 });
+    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--dpr', String(pixelRatio), '--actions', actions], { encoding: 'utf8', timeout: 600000 });
   if (result.status !== 0) {
     console.log(`${name}: cdp-run failed (${result.status}): ${result.stdout}${result.stderr}`);
   }
@@ -98,7 +109,7 @@ const count = (text, part) => text.split(part).length - 1;
 const results = [];
 const check = (name, pass, detail) => {
   results.push({ name, pass, detail });
-  console.log(`${pass ? 'PASS' : 'FAIL'} ${renderer} ${name}${detail ? `: ${detail}` : ''}`);
+  console.log(`${pass ? 'PASS' : 'FAIL'} ${tag} ${name}${detail ? `: ${detail}` : ''}`);
 };
 
 const box = run('name-box', '--skip-logos --profile-folder /work/mouse-check', nameBoxSteps, 14);
@@ -106,7 +117,7 @@ const boxEvals = evals(box.console);
 check('name box shown', box.console.includes('[wait-log] found: asking the new player'));
 check('click locks the pointer', boxEvals[0] === 'canvas', `lock element ${boxEvals[0]}`);
 check('game follows the lock',
-  box.log.includes(`The page locked the pointer: the game moves its own pointer from ${k_LockAt[0]}, ${k_LockAt[1]}`));
+  box.log.includes(`The page locked the pointer: the game moves its own pointer from ${lockPixels[0]}, ${lockPixels[1]}`));
 check('keys, locked moves and a locked click answer the name box',
   box.log.includes(`Made the player profile "${k_Name}"`));
 
@@ -127,6 +138,6 @@ check('a click locks the pointer again', bedEvals[2] === 'canvas' && count(bed.l
   `lock element ${bedEvals[2]}`);
 
 const failed = results.filter((r) => !r.pass).length;
-writeFileSync(path.join(out, `${renderer}-results.json`), JSON.stringify(results, null, 1));
-console.log(`${renderer}: ${results.length - failed} of ${results.length} checks pass`);
+writeFileSync(path.join(out, `${tag}-results.json`), JSON.stringify(results, null, 1));
+console.log(`${tag}: ${results.length - failed} of ${results.length} checks pass`);
 process.exit(failed === 0 ? 0 : 1);

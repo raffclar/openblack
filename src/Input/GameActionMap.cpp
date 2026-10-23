@@ -65,6 +65,17 @@ glm::ivec2 WindowSize()
 	return Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(1, 1);
 }
 
+/// A place in the window's units (CSS pixels on the web) in pixels of the back buffer
+glm::ivec2 WindowPointToPixels(glm::ivec2 point)
+{
+	using openblack::Locator;
+	if (!Locator::windowing::has_value())
+	{
+		return point;
+	}
+	return openblack::windowing::PointToPixels(point, Locator::windowing::value().GetPixelScale());
+}
+
 } // namespace
 
 GameActionMap::GameActionMap()
@@ -319,7 +330,12 @@ uint32_t GameActionMap::PointerState(glm::ivec2* position) const
 	}
 	if (position != nullptr)
 	{
-		return SDL_GetMouseState(&position->x, &position->y);
+		const auto buttons = SDL_GetMouseState(&position->x, &position->y);
+		if constexpr (k_Platform == Platform::Web)
+		{
+			*position = WindowPointToPixels(*position);
+		}
+		return buttons;
 	}
 	return SDL_GetMouseState(nullptr, nullptr);
 }
@@ -413,8 +429,9 @@ void GameActionMap::FollowPagePointerLock()
 	{
 		// The pointer starts at the click that took the pointer. When the page does not know the click, the pointer starts
 		// where the game's cursor was, or in the middle of the window before the game saw the cursor.
-		const auto start =
-		    web::PointerLockClick().value_or(_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
+		const auto click = web::PointerLockClick();
+		const auto start = click.has_value() ? WindowPointToPixels(*click)
+		                                     : (_playerCursorSeen ? glm::ivec2(_mousePosition) : RestingPointer(WindowSize()));
 		_scaledPointer.Place(start);
 		_pointerScaled = true;
 		_playerCursorSeen = true;
@@ -494,6 +511,36 @@ void GameActionMap::StopScaledPointer()
 	}
 }
 
+void GameActionMap::ToBackBufferPixels(SDL_Event& event)
+{
+	if (!Locator::windowing::has_value())
+	{
+		return;
+	}
+	const auto scale = Locator::windowing::value().GetPixelScale();
+	if (event.type == SDL_MOUSEMOTION)
+	{
+		const auto at = windowing::PointToPixels({event.motion.x, event.motion.y}, scale);
+		const auto by = _movementPixels.Move({event.motion.xrel, event.motion.yrel}, scale);
+		event.motion.x = at.x;
+		event.motion.y = at.y;
+		event.motion.xrel = by.x;
+		event.motion.yrel = by.y;
+	}
+	else if (event.type == SDL_MOUSEBUTTONDOWN || event.type == SDL_MOUSEBUTTONUP)
+	{
+		const auto at = windowing::PointToPixels({event.button.x, event.button.y}, scale);
+		event.button.x = at.x;
+		event.button.y = at.y;
+	}
+	else if (event.type == SDL_MOUSEWHEEL)
+	{
+		const auto at = windowing::PointToPixels({event.wheel.mouseX, event.wheel.mouseY}, scale);
+		event.wheel.mouseX = at.x;
+		event.wheel.mouseY = at.y;
+	}
+}
+
 void GameActionMap::PointPlayerEvent(SDL_Event& event)
 {
 	if (IsInjected(event))
@@ -504,6 +551,7 @@ void GameActionMap::PointPlayerEvent(SDL_Event& event)
 	// action map, so the lock state is read here too.
 	if constexpr (k_Platform == Platform::Web)
 	{
+		ToBackBufferPixels(event);
 		FollowPagePointerLock();
 	}
 	else

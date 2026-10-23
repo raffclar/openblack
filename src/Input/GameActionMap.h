@@ -26,6 +26,7 @@
 #include "MouseMotion.h"
 #include "PlatformKeys.h"
 #include "PointerSpeed.h"
+#include "Windowing/WindowPixels.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp"
@@ -176,5 +177,10 @@ private:
 	/// On the web, the first Escape frees the pointer and the game does not see it. Returns true when the event is that
 	/// Escape.
 	[[nodiscard]] bool EscapeFreesPointer(const SDL_Event& event);
+	/// The movements of the player's mouse in pixels of the back buffer. On the web the page gives them in CSS pixels.
+	windowing::MovementToPixels _movementPixels;
+	/// On the web, change the places and the movements of a mouse event of the player from CSS pixels to pixels of the
+	/// back buffer. On the desktop the event does not change.
+	void ToBackBufferPixels(SDL_Event& event);
 };
 } // namespace openblack::input

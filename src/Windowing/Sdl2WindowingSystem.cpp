@@ -21,6 +21,7 @@
 #include "DisplayScaling.h"
 #include "Web/WebPointer.h"
 #include "WindowFit.h"
+#include "WindowPixels.h"
 #include "WindowState.h"
 
 #if defined(SDL_VIDEO_DRIVER_WAYLAND)
@@ -173,6 +174,10 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	if constexpr (k_Platform == Platform::Web)
 	{
 		web::AllowPointerLock();
+		const auto pixels = GetSize();
+		const auto scale = GetPixelScale();
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The game draws at {}x{} pixels, {} pixels for each CSS pixel", pixels.x,
+		                   pixels.y, scale.x);
 	}
 	if (displayMode == DisplayMode::Windowed)
 	{
@@ -372,11 +377,8 @@ Sdl2WindowingSystem& Sdl2WindowingSystem::SetTitle(const std::string& str)
 
 float Sdl2WindowingSystem::GetAspectRatio() const
 {
-	int width;
-	int height;
-	SDL_GetWindowSize(_window.get(), &width, &height);
-
-	return static_cast<float>(width) / static_cast<float>(height);
+	const auto size = GetSize();
+	return static_cast<float>(size.x) / static_cast<float>(size.y);
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetPosition(glm::ivec2 position)
@@ -447,8 +449,31 @@ bool Sdl2WindowingSystem::IsWindowed() const
 glm::ivec2 Sdl2WindowingSystem::GetSize() const
 {
 	glm::ivec2 result;
-	SDL_GetWindowSize(_window.get(), &result.x, &result.y);
+	// In a web browser the window size is in CSS pixels. The game draws at the full resolution of the screen: the CSS
+	// size times the device pixel ratio, which SDL follows at each resize event of the page.
+	if constexpr (k_Platform == Platform::Web)
+	{
+		SDL_GetWindowSizeInPixels(_window.get(), &result.x, &result.y);
+	}
+	else
+	{
+		SDL_GetWindowSize(_window.get(), &result.x, &result.y);
+	}
 	return result;
+}
+
+glm::vec2 Sdl2WindowingSystem::GetPixelScale() const
+{
+	if constexpr (k_Platform == Platform::Web)
+	{
+		glm::ivec2 units;
+		SDL_GetWindowSize(_window.get(), &units.x, &units.y);
+		return PixelScale(units, GetSize());
+	}
+	else
+	{
+		return glm::vec2(1.0f);
+	}
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::Show()

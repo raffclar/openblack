@@ -400,6 +400,14 @@ void Gui::NewFrame() noexcept
 	ImGui::SetCurrentContext(_imgui);
 	ImGui_ImplSDL2_NewFrame();
 	ImGuiIO& io = ImGui::GetIO();
+	// The debug windows use the pixels of the back buffer, as the game does. On the web, SDL gives the size in CSS
+	// pixels, and the game gives the mouse events to the windows in pixels of the back buffer. A window that is
+	// minimised keeps the size of 0 that SDL gives.
+	if (Locator::windowing::has_value() && io.DisplaySize.x > 0.0f && io.DisplaySize.y > 0.0f)
+	{
+		const auto size = Locator::windowing::value().GetSize();
+		io.DisplaySize = ImVec2(static_cast<float>(size.x), static_cast<float>(size.y));
+	}
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
 	ImGui::NewFrame();
 }
