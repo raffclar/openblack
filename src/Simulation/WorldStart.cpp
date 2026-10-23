@@ -289,7 +289,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
 			    // the two is loaded: both together are more meshes than the renderer holds.
 			    const auto stem = f.stem().string();
-			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
+			    const bool lightmaps = config.detail.templeLightmaps;
 			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
 			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
 			    if (!name.has_value())
@@ -954,7 +954,7 @@ void LoadCreatureSkinArt()
 		              .oldDamageAlpha = data / "damage_old256A.raw",
 		              .palette = data / "tattoocols.raw",
 		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
-		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
+		              .lowDetail = Locator::config::value().detail.lowResTextures,
 		          });
 	}
 	catch (std::runtime_error& err)
@@ -1019,7 +1019,9 @@ ProfileMenu ProfileMenuSettings()
 	auto& audio = Locator::audio::value();
 	settings.sfxVolume = audio.GetSfxVolume();
 	settings.musicVolume = audio.GetMusicVolume();
-	settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
+	const auto& config = Locator::config::value();
+	settings.detailLevels = config.maxDetailLevel;
+	settings.detail = graphics::detail_level::MenuLevel(config.detailLevel, config.maxDetailLevel);
 	return {.playerName = std::move(playerName), .settings = std::move(settings)};
 }
 

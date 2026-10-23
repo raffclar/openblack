@@ -18,6 +18,7 @@
 #include <utility>
 
 #include "Creature/BonusCreatures.h"
+#include "Graphics/DetailLevel.h"
 #include "Graphics/LandDetail.h"
 #include "Windowing/WindowingInterface.h"
 
@@ -130,6 +131,13 @@ struct EngineConfig
 	float cameraNearClip {1.0f};
 	/// The game's graphics detail level, 0 to 6, read once at start-up (see graphics::detail_level)
 	uint8_t detailLevel {4};
+	/// What the detail level turns on and off: the level's table, with this computer's own values for the custom level
+	graphics::detail_level::Settings detail {graphics::detail_level::For(4)};
+	/// How many detail levels the options' selector steps through, from this computer's settings
+	uint8_t maxDetailLevel {graphics::detail_level::k_MenuLevels};
+	/// The volumes of the sound effects and the music that this computer keeps, if it keeps them (0 to 1)
+	std::optional<float> keptEffectsVolume;
+	std::optional<float> keptMusicVolume;
 	/// Debug: the land's detail lines in place of the detail level's (see graphics::land_detail)
 	std::optional<graphics::land_detail::Lines> landDetailLines;
 

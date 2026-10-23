@@ -20,6 +20,8 @@
 #include <sstream>
 #include <string>
 
+#include <ComputerSettings.h>
+
 #include "Common/GameRandom.h"
 #include "Gui/TextDatabase.h"
 
@@ -453,6 +455,19 @@ Store StoreFor(const RunOptions& options)
 	}
 	return {
 	    .folder = options.userFolder, .creatureMinds = *options.userFolder / "Scripts" / "CreatureMind", .developer = false};
+}
+
+std::optional<std::filesystem::path> SettingsFileFor(const RunOptions& options, std::optional<std::filesystem::path> playerFile)
+{
+	if (options.profileFolder.has_value())
+	{
+		return *options.profileFolder / computer_settings::k_FileName;
+	}
+	if (options.automated)
+	{
+		return std::nullopt;
+	}
+	return playerFile;
 }
 
 } // namespace openblack::player_profiles

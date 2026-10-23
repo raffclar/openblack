@@ -88,6 +88,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Common/UserData.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
@@ -161,6 +162,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -336,6 +338,24 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+/// The window mode of a name in the settings of this computer
+windowing::DisplayMode DisplayModeOf(std::string_view name, windowing::DisplayMode otherwise)
+{
+	if (name == "windowed")
+	{
+		return windowing::DisplayMode::Windowed;
+	}
+	if (name == "fullscreen")
+	{
+		return windowing::DisplayMode::Fullscreen;
+	}
+	if (name == "borderless")
+	{
+		return windowing::DisplayMode::Borderless;
+	}
+	return otherwise;
+}
 
 /// Notes in the hand's debugging trace that a part of the frame put the hand at a position (see hand_trace::HandTrace)
 void TraceHand(std::string_view writer, const glm::vec3& position)
@@ -588,14 +608,29 @@ Game::Game(Arguments&& args) noexcept
 	config.useInternetWeather = args.useInternetWeather;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
-	config.resolution = {args.windowWidth, args.windowHeight};
-	config.displayMode = args.displayMode;
+	// The settings of this computer give what the command line did not
+	InitializeComputerSettings(player_profiles::SettingsFileFor(
+	    {.profileFolder = _profileFolder, .userFolder = user_data::ProfileFolder(), .automated = _automatedRun},
+	    user_data::SettingsFile()));
+	const auto& kept = Locator::computerSettingsSystem::value().GetSettings();
+	const auto start = computer_settings::Resolve({.width = static_cast<uint16_t>(args.windowWidth),
+	                                               .height = static_cast<uint16_t>(args.windowHeight),
+	                                               .vsync = args.vsync,
+	                                               .detailLevel = args.detailLevel},
+	                                              args.givenOnCommandLine, kept);
+	config.resolution = {start.width, start.height};
+	config.displayMode =
+	    args.givenOnCommandLine.windowMode ? args.displayMode : DisplayModeOf(start.windowMode, args.displayMode);
 	config.noDraw = args.noDraw;
 	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
-	config.vsync = args.vsync;
+	config.vsync = start.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
-	config.detailLevel = args.detailLevel;
+	config.detailLevel = start.detailLevel;
+	config.detail = graphics::detail_level::WithCustom(start.detailLevel, kept.customDetail);
+	config.maxDetailLevel = start.maxDetailLevel;
+	config.keptEffectsVolume = kept.effectsVolume;
+	config.keptMusicVolume = kept.musicVolume;
 	config.guiScale = args.guiScale;
 }
 
@@ -3418,6 +3453,15 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
+	// The sound starts at the volumes that this computer keeps
+	if (config.keptEffectsVolume.has_value())
+	{
+		Locator::audio::value().SetSfxVolume(*config.keptEffectsVolume);
+	}
+	if (config.keptMusicVolume.has_value())
+	{
+		Locator::audio::value().SetMusicVolume(*config.keptMusicVolume);
+	}
 	// The renderer starts at the window's size
 	if (Locator::windowing::has_value())
 	{
@@ -4303,6 +4347,16 @@ void Game::HandleInterfaceAction()
 		auto& audio = Locator::audio::value();
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
+		// The detail and the volumes are kept for this computer, as the options show them
+		if (Locator::computerSettingsSystem::has_value())
+		{
+			Locator::computerSettingsSystem::value().Keep({
+			    .detailLevel = static_cast<uint8_t>(settings.detail),
+			    .maxDetailLevel = Locator::config::value().maxDetailLevel,
+			    .effectsVolume = settings.sfxVolume,
+			    .musicVolume = settings.musicVolume,
+			});
+		}
 		const auto kept = gui::ToProfileSettings(settings);
 		ApplyPlayerSettings(kept);
 		// The player's options are kept with their profile

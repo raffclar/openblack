@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <filesystem>
+#include <optional>
 #include <string>
 
 #include <entt/locator/locator.hpp>
@@ -158,6 +159,7 @@ class SharkSystemInterface;
 class VideoSystemInterface;
 class HelpTextSystemInterface;
 class HelpProfileSystemInterface;
+class ComputerSettingsSystemInterface;
 class CreatureHelpSystemInterface;
 class GuidanceSystemInterface;
 class HelpMessageSystemInterface;
@@ -245,6 +247,8 @@ bool InitializeGame(const player_profiles::Store& profiles) noexcept;
 void InitializeLevel(const std::filesystem::path& path);
 /// Starts a level on land that is generated rather than read from a file, as the flat testbed is
 void InitializeLevel(const LandData& land);
+/// The settings of this computer, read from the file when there is one (see computer_settings)
+void InitializeComputerSettings(std::optional<std::filesystem::path> file);
 void ShutDownServices();
 /// Starts the debug inspector's server on a port of 127.0.0.1 (any free one for 0): false, with why in the log, if it
 /// can't listen. Only in builds with the inspector.
@@ -351,6 +355,7 @@ struct Locator
 	using videoSystem = entt::locator<ecs::systems::VideoSystemInterface>;
 	using helpTextSystem = entt::locator<ecs::systems::HelpTextSystemInterface>;
 	using helpProfileSystem = entt::locator<ecs::systems::HelpProfileSystemInterface>;
+	using computerSettingsSystem = entt::locator<ecs::systems::ComputerSettingsSystemInterface>;
 	using creatureHelpSystem = entt::locator<ecs::systems::CreatureHelpSystemInterface>;
 	using helpMessageSystem = entt::locator<ecs::systems::HelpMessageSystemInterface>;
 	using guidanceSystem = entt::locator<ecs::systems::GuidanceSystemInterface>;

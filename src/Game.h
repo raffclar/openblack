@@ -22,6 +22,7 @@
 #include <string_view>
 #include <utility>
 
+#include <ComputerSettings.h>
 #include <glm/mat4x4.hpp>
 #include <spdlog/common.h>
 
@@ -129,6 +130,9 @@ struct Arguments
 	/// The game's graphics detail level, 0 to 6
 	uint8_t detailLevel {4};
 	openblack::windowing::DisplayMode displayMode;
+	/// Which of the window's size and mode, the vertical sync and the detail level the command line gave: the others
+	/// come from the settings of this computer when it keeps them
+	computer_settings::GivenOnCommandLine givenOnCommandLine;
 	GraphicsBackend graphicsBackend;
 	std::string gamePath;
 	float guiScale;

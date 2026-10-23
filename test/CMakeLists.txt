@@ -1705,3 +1705,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_instance_upload graphics/test_instance_upload.cpp
 )
+openblack_setup_and_add_test(test_computer_settings test_computer_settings.cpp)

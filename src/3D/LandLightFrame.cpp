@@ -84,7 +84,7 @@ FrameLightTable FrameLandLightTable()
 	}
 	const auto& haze = table.GetHaze();
 	light.haze = {
-	    .on = Locator::config::has_value() && graphics::detail_level::Fog(Locator::config::value().detailLevel),
+	    .on = Locator::config::has_value() && Locator::config::value().detail.fog,
 	    .nearDepth = haze.nearDistance,
 	    .farDepth = haze.farDistance,
 	    .k = static_cast<int32_t>(haze.k),

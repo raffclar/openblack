@@ -551,7 +551,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_fadingThings.clear();
 	_goneThings.clear();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
+	const float modelDetail = Locator::config::value().detail.modelDetail;
 
 	const auto& vegetation = Locator::vegetation::value();
 
@@ -1425,7 +1425,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& vegetation = Locator::vegetation::value();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
-	const float modelDetail = graphics::detail_level::ModelDetail(Locator::config::value().detailLevel);
+	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	using Group = PlacedTree::Group;
 	// Every far tree turns the same way, by the camera's heading
