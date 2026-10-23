@@ -1723,3 +1723,12 @@ openblack_setup_and_add_test(test_network_commands test_network_commands.cpp)
 openblack_setup_and_add_test(test_lobby_status online/test_lobby_status.cpp)
 openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
+openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
+# A background run never touches the pointer of the system: every call of it is behind the background gate
+if (Python3_Interpreter_FOUND)
+  add_test(
+    NAME test_system_pointer_calls
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
+            ${CMAKE_SOURCE_DIR}
+  )
+endif ()
