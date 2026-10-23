@@ -197,6 +197,8 @@ void MagicShieldSystem::Strip(entt::entity object, MagicShield& shieldObject)
 			ids.push_back(id);
 		}
 	}
+	// In the order that the reactions were made, the same on every computer
+	std::ranges::sort(ids);
 	for (const auto id : ids)
 	{
 		RemoveReaction(id, true);
