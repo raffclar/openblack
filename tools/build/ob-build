@@ -147,7 +147,7 @@ find_tools() {
 		die "ninja not found; set OB_NINJA"
 	find_sccache
 	# One vcpkg for every worktree (never a worktree's own copy), so packages' ABI hashes agree in the shared binary cache
-	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-C:/projects/openblack/vcpkg}")
+	VCPKG_ROOT_DIR=$(cygpath -m "${OB_VCPKG_ROOT:-E:/openblack/vcpkg-5de6d1f}")
 	[ -f "$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake" ] || die "no vcpkg at $VCPKG_ROOT_DIR; set OB_VCPKG_ROOT"
 }
 
@@ -307,13 +307,19 @@ configure_args() {
 		"-DCMAKE_TOOLCHAIN_FILE=$VCPKG_ROOT_DIR/scripts/buildsystems/vcpkg.cmake"
 		-DOPENBLACK_USE_VCPKG=ON -DVCPKG_TARGET_TRIPLET=x64-windows
 		"-DVCPKG_INSTALLED_DIR=$OB_VCPKG_INSTALLED" -DVCPKG_MANIFEST_INSTALL=ON
-		"-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports"
 		# vcpkg's working folders are the build folder's own too: two configures sharing them race
 		"-DVCPKG_INSTALL_OPTIONS=--x-buildtrees-root=$B/vcpkg-buildtrees;--x-packages-root=$B/vcpkg-packages"
 		"-DOPENBLACK_WARNINGS_AS_ERRORS=$werror"
 		"-DOPENBLACK_COMPILE_JOBS=${OB_COMPILE_JOBS:-8}" "-DOPENBLACK_LINK_JOBS=${OB_LINK_JOBS:-4}"
 		-DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 	)
+	# The worktree's own vcpkg overlay ports, when it has them; vcpkg refuses an overlay folder that doesn't exist, so a
+	# branch without one also drops any overlay a previous configure left in the build folder's cache
+	if [ -d "$WT/vcpkg-overlay-ports" ]; then
+		ARGS+=("-DVCPKG_OVERLAY_PORTS=$WT/vcpkg-overlay-ports")
+	else
+		ARGS+=(-UVCPKG_OVERLAY_PORTS)
+	fi
 	# Debug links incrementally: on E: (outside %TEMP%) the incremental state stays right, and a one-file change relinks in
 	# seconds. The game keeps full debug information; the test program links with /DEBUG:FASTLINK (test/CMakeLists.txt)
 	local kind
@@ -447,6 +453,14 @@ do_build() {
 		targets+=(--target "$1")
 		shift
 	done
+	# An incremental link's state file can't grow past 1 GiB: a link whose .ilk reaches it hangs. A fresh openblack_tests.ilk
+	# is already ~1000 MiB and openblack.ilk ~720 MiB, and one relink can push either over, so any past 500 MiB is
+	# dropped, so that link is a full one (a couple of minutes) instead
+	local ilk
+	while IFS= read -r ilk; do
+		note "dropping $ilk ($(($(stat -c %s "$ilk") / 1048576)) MiB, near the 1 GiB incremental-link limit)"
+		rm -f "$ilk"
+	done < <(find "$B" -maxdepth 3 -name '*.ilk' -size +500M 2>/dev/null)
 	local t0=$SECONDS
 	local args=(--build "$B" --config "$CONFIG" "${targets[@]}")
 	[ ${#extra[@]} = 0 ] || args+=(-- "${extra[@]}")
