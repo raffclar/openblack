@@ -1735,8 +1735,9 @@ std::optional<creature_planner::UsedChoice> UsedFor(entt::entity creature, Targe
 		return std::nullopt;
 	}
 	std::vector<creature_planner::UsedCandidate> candidates;
-	for (const auto& belief : mind->beliefs.InListOrder())
+	for (const auto* kept : mind->beliefs.HeldInListOrder())
 	{
+		const auto& belief = *kept;
 		const auto acted = ActedThingOf(registry, belief.thing);
 		if (!acted.has_value())
 		{
@@ -2600,8 +2601,9 @@ CreatureMindSystem::ChooseActivity(entt::entity creature, const CreatureMindStat
 	const auto& rules = tables->rules.at(static_cast<size_t>(desire));
 	std::vector<ChosenActivity> found;
 	std::vector<float> worth;
-	for (const auto& belief : mind.beliefs.NewestFirst())
+	for (const auto* held : mind.beliefs.HeldNewestFirst())
 	{
+		const auto& belief = *held;
 		const auto kind = creature_activity::WholeOf(belief.kind);
 		if (!kind.has_value() || belief.thing == creature || !registry.Valid(belief.thing))
 		{
@@ -2684,17 +2686,60 @@ std::vector<creature_planner::ObjectCandidate>
 CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
                                           const std::function<bool(entt::entity)>& suitsAction)
 {
+	BelievedFacts unkept;
+	return BelievedThingsToActOn(creature, mind, desire, suitsAction, unkept);
+}
+
+std::vector<creature_planner::ObjectCandidate>
+CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindState& mind, Desire desire,
+                                          const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept)
+{
 	std::vector<creature_planner::ObjectCandidate> found;
-	const auto& registry = Locator::entitiesRegistry::value();
-	for (const auto& belief : mind.beliefs.InListOrder())
+	// The facts stay true while the creature comes across nothing. The test of a thing for the desire reads only the
+	// beliefs and the world, and nothing else in the planning of a desire changes them.
+	if (kept.foundAt == _comeAcrossCount)
 	{
-		const auto thing = ActedThingOf(registry, belief.thing);
-		if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing) || !suitsAction(*thing))
+		for (auto& suiting : kept.suiting)
+		{
+			if (!suitsAction(suiting.thing))
+			{
+				continue;
+			}
+			if (!suiting.worth.has_value())
+			{
+				suiting.worth = GoalWorth(creature, mind, desire, suiting.thing, std::nullopt);
+			}
+			found.push_back(*suiting.worth);
+		}
+		return found;
+	}
+	// The tests come in the same sequence as without the kept facts
+	const auto startAt = _comeAcrossCount;
+	kept.suiting.clear();
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The tests can come across things and change the beliefs. Thus the code takes the things to examine first.
+	const auto held = mind.beliefs.HeldInListOrder();
+	std::vector<entt::entity> believed;
+	believed.reserve(held.size());
+	std::ranges::transform(held, std::back_inserter(believed), &creature_object_beliefs::Belief::thing);
+	for (const auto believedThing : believed)
+	{
+		const auto thing = ActedThingOf(registry, believedThing);
+		if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing))
 		{
 			continue;
 		}
-		found.push_back(GoalWorth(creature, mind, desire, *thing, std::nullopt));
+		auto& suiting = kept.suiting.emplace_back(BelievedFacts::Suiting {.thing = *thing});
+		if (!suitsAction(*thing))
+		{
+			continue;
+		}
+		suiting.worth = GoalWorth(creature, mind, desire, *thing, std::nullopt);
+		found.push_back(*suiting.worth);
 	}
+	// When the creature comes across a thing during this search, the facts can change. The next action then does not
+	// use them.
+	kept.foundAt = _comeAcrossCount == startAt ? std::optional(startAt) : std::nullopt;
 	return found;
 }
 
@@ -3154,6 +3199,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			return best;
 		};
+		// The facts about the believed things that one action finds, for the next actions of the desire
+		BelievedFacts believed;
 		const auto findObject =
 		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
 			const auto* executor = executorOf(candidate);
@@ -3178,7 +3225,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			else
 			{
-				found = BelievedThingsToActOn(creature, mind, desire, suits);
+				found = BelievedThingsToActOn(creature, mind, desire, suits, believed);
 			}
 			return mostUseful(found);
 		};
@@ -3901,6 +3948,7 @@ void CreatureMindSystem::SituateHome(entt::entity creature, creature_plan_action
 	situation.hasTemple = situation.templeHeart.has_value();
 	// Every other creature counts, of any player, dead or alive
 	std::vector<float> others;
+	others.reserve(registry.Size<Creature>());
 	registry.Each<const Creature, const Transform>([&](entt::entity other, const Creature&, const Transform& place) {
 		if (other != creature)
 		{
