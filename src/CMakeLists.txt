@@ -217,6 +217,7 @@ target_link_libraries(
           helpstats
           creaturehtml
           lhp
+          onlinemap
           imgui::imgui
           imgui_user
           ScriptLibrary
@@ -230,6 +231,8 @@ target_link_libraries(
   PUBLIC spdlog::spdlog
          # The JSON shapes of the lobby's API are part of the lobby client
          lobbyapi
+         # The settings file of this computer
+         computersettings
          # The mind file's types are part of the creature mind component
          creaturemind
          # The saved game's files are part of the saved game component

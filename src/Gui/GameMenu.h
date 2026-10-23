@@ -39,8 +39,10 @@ struct MenuSettings
 	/// 0 to 1
 	float sfxVolume {1.0f};
 	float musicVolume {1.0f};
-	/// HELP_TEXT_DIALOG_DETAIL_00 to _04, Minimum to Maximum Detail (graphics::detail_level)
+	/// HELP_TEXT_DIALOG_DETAIL_00 to _06, Minimum to Super Detail (graphics::detail_level)
 	int detail {4};
+	/// How many detail levels the selector steps through, 1 to 7, as the settings of this computer say (5 by default)
+	int detailLevels {5};
 	bool autoSave {true};
 	bool pushScrolling {false};
 	/// HELP_TEXT_DIALOG_NOHELP to ALLHELP
@@ -327,7 +329,7 @@ private:
 	std::u16string _quitGameQuestion;
 	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
 	std::u16string _videoChange;
-	std::array<std::u16string, 5> _detailLabels;
+	std::array<std::u16string, 7> _detailLabels;
 	std::array<std::u16string, 5> _helpLabels;
 	std::array<std::u16string, 3> _storyLabels;
 	std::array<std::u16string, 4> _toolTipLabels;

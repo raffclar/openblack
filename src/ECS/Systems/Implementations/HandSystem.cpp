@@ -19,6 +19,7 @@
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
@@ -99,6 +100,12 @@ void HandSystem::FindAfterLoad()
 		}
 		_hands.at(side) = entity;
 	});
+	// A world from an older save can have a hand with no miracle effects. The load gives them to the hand.
+	if (const auto left = _hands.at(static_cast<size_t>(Side::Left));
+	    registry.Valid(left) && !registry.AllOf<HandMiracleFx>(left))
+	{
+		registry.Assign<HandMiracleFx>(left);
+	}
 }
 
 void HandSystem::ProcessTurn()

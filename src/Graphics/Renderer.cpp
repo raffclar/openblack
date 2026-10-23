@@ -868,7 +868,7 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 			const object_draw_list::Block box {
 			    .corner = block->GetMapPosition(),
 			    .highestAltitude = std::ranges::max(cells, {}, &lnd::LNDCell::altitude).altitude,
-			    .reflected = detail_level::For(Locator::config::value().detailLevel).landReflection,
+			    .reflected = Locator::config::value().detail.landReflection,
 			};
 			const auto& camera = Locator::camera::value();
 			situation.onBlock = true;
@@ -1459,8 +1459,8 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool landLit =
 				    desc.landLightAndHaze && !desc.isSky && !desc.drawAll && !inTemple && _landLightTexture.has_value();
 				// Below Medium detail the sun lights only the creatures and the hand
-				const bool unlit = desc.unlit || picture ||
-				                   (!desc.alwaysLit && !detail_level::For(Locator::config::value().detailLevel).objectLighting);
+				const bool unlit =
+				    desc.unlit || picture || (!desc.alwaysLit && !Locator::config::value().detail.objectLighting);
 				const glm::vec4 u_landLight {landLit ? 1.0f : 0.0f, desc.landLightScale, unlit ? 1.0f : 0.0f,
 				                             desc.landColourAdded ? 0.0f : 1.0f};
 				// A held thing mirrored in the sea takes the land's light of the frame before
@@ -1535,9 +1535,9 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				// the reflection
 				const bool mainView = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Translucent;
 				const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-				SetObjectGroundShadowUniforms(
-				    *program, desc.groundShadows && detail_level::For(Locator::config::value().detailLevel).objectShadows &&
-				                  mainView && !inTemple && !desc.isSky && !desc.drawAll && desc.morphTargets == nullptr);
+				SetObjectGroundShadowUniforms(*program, desc.groundShadows && Locator::config::value().detail.objectShadows &&
+				                                            mainView && !inTemple && !desc.isSky && !desc.drawAll &&
+				                                            desc.morphTargets == nullptr);
 			}
 			if (has(MeshUniform::LightRule))
 			{
@@ -2463,7 +2463,7 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 {
 	// The lower detail levels draw no light shafts
 	if (desc.viewId == RenderPass::Reflection || !Locator::temple::has_value() || !Locator::temple::value().Active() ||
-	    !detail_level::TempleLightShafts(detail_level::For(Locator::config::value().detailLevel)))
+	    !detail_level::TempleLightShafts(Locator::config::value().detail))
 	{
 		return;
 	}
@@ -2625,7 +2625,7 @@ void Renderer::PaintLandFootprints(const DrawSceneDesc& drawDesc) const
 void Renderer::SetSeaUniforms(const ShaderProgram& waterShader, const Camera& camera) const
 {
 	const auto& config = Locator::config::value();
-	const float waterTiling = detail_level::WaterTiling(config.detailLevel);
+	const float waterTiling = config.detail.waterTiling;
 	const bool still = waterTiling == 0.0f;
 
 	glm::vec4 u_seaParams {still ? sea_rows::k_StillPeriod : sea_rows::Period(waterTiling), 0.0f, 0.0f, 0.0f};
@@ -2870,7 +2870,7 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const glm::vec4 skyLight {0.0f, 500000.0f, 0.0f, 210.0f};
 
 	// The clouds' colour follows the sky's alignment, in the land's light at full luminosity
-	const bool cloudsShown = detail_level::Clouds(Locator::config::value().detailLevel);
+	const bool cloudsShown = Locator::config::value().detail.clouds;
 	uint32_t fullLight = 0xFFFFFF;
 	if (_landLightTable)
 	{
@@ -4034,7 +4034,7 @@ void Renderer::DrawSunGlare(const Camera& camera) const
 		const auto* dome =
 		    Locator::entitiesRegistry::value().TryGet<ecs::components::SkyDome>(Locator::skySystem::value().GetDome());
 		alpha = sun::GlareAlpha(_sunGlare, placement->alpha, dome != nullptr ? dome->overcast : 0.0f,
-		                        detail_level::Fog(Locator::config::value().detailLevel));
+		                        Locator::config::value().detail.fog);
 	}
 	DrawCelestialMesh(RenderPass::Main, {
 	                                        .meshId = body->meshId,
@@ -4193,12 +4193,12 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	}
 	// What the frame shades the land with: the land light table is still the one of the frame before
 	const auto& camera = *drawDesc.camera;
-	const auto detail = Locator::config::value().detailLevel;
+	const auto& detail = Locator::config::value().detail;
 	ecs::systems::LandShadeFrame frame {
 	    .viewProjection = camera.GetViewProjectionMatrix(),
 	    .nearPlane = camera.GetNearClip(),
-	    .landReflection = detail_level::For(detail).landReflection,
-	    .cloudShadows = detail_level::CloudShadows(detail),
+	    .landReflection = detail.landReflection,
+	    .cloudShadows = detail.cloudShadows,
 	    .skyAlpha = clouds::Colour(Locator::alignmentSystem::value().GetSkyAlignment(), 0xFFFFFF) >> 24u,
 	    .landColour = _landLightTable ? _landLightTable->GetLandColour() : 0xFFFFFFu,
 	    .fullLightGreen =
@@ -4937,17 +4937,17 @@ TextureHandle Renderer::UpdateLandLight() const
 		const auto [skyType, alignment, overcast, flash] = dome->landLight;
 		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
 		const auto& haze = _landLightTable->GetHaze();
-		const auto detailLevel = Locator::config::value().detailLevel;
+		const auto& detail = Locator::config::value().detail;
 		// The lower detail levels draw no haze at all
-		const float hazeOn = detail_level::Fog(detailLevel) ? 1.0f : 0.0f;
+		const float hazeOn = detail.fog ? 1.0f : 0.0f;
 		_haze = {glm::vec4(haze.nearDistance, haze.farDistance, haze.k, hazeOn), glm::vec4(haze.colour, 0.0f)};
 		_skyTint = sky_dome::TintOf({
 		    .hazeColour = haze.colour,
 		    .overcast = overcast,
 		    .flash = flash,
 		    .darkness = sky_dome::Darkness(alignment + 1.0f),
-		    .fog = detail_level::Fog(detailLevel),
-		    .weather = detail_level::Weather(detailLevel),
+		    .fog = detail.fog,
+		    .weather = detail.weather,
 		});
 		const auto& texels = _landLightTable->GetTexels();
 		bgfx::updateTexture2D(toBgfx(*_landLightTexture), 0, 0, 0, 0, LandLightTable::k_Size, 1,
@@ -5737,7 +5737,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	const auto& config = Locator::config::value();
 	auto& frame = _landDetail;
 	frame.lines = config.landDetailLines.value_or(land_detail::For(config.detailLevel));
-	const bool coarseLand = detail_level::For(config.detailLevel).coarseLand;
+	const bool coarseLand = config.detail.coarseLand;
 
 	const auto origin = drawDesc.camera->GetOrigin();
 	const auto forward = drawDesc.camera->GetForward();
@@ -5753,7 +5753,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 	// in the sea, the box reaches as far under the water as it stands over it, so it holds the block's reflection too.
 	const auto viewProjection = drawDesc.camera->GetViewProjectionMatrix();
 	const auto nearPlane = drawDesc.camera->GetNearClip();
-	const bool reflected = detail_level::For(config.detailLevel).landReflection;
+	const bool reflected = config.detail.landReflection;
 	frame.inView.resize(blocks.size());
 	for (size_t i = 0; i < blocks.size(); ++i)
 	{
@@ -6118,8 +6118,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 		auto section = profiler.BeginScoped(desc.viewId == RenderPass::Reflection ? Profiler::Stage::ReflectionDrawIsland
 		                                                                          : Profiler::Stage::MainPassDrawIsland);
 		// Below High detail the sea doesn't mirror the land
-		const bool landShown =
-		    desc.viewId != RenderPass::Reflection || detail_level::For(Locator::config::value().detailLevel).landReflection;
+		const bool landShown = desc.viewId != RenderPass::Reflection || Locator::config::value().detail.landReflection;
 		if (desc.drawIsland && landShown)
 		{
 			auto& island = Locator::terrainSystem::value();
@@ -6226,7 +6225,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			const ProgramUniform blockUniform {*terrainShader, "u_block"};
 			const ProgramUniform blockNeighboursUniform {*terrainShader, "u_blockNeighbours"};
 			const ProgramUniform coarsePageUniform {*terrainShader, "u_coarsePage"};
-			const bool coarseLand = detail_level::For(Locator::config::value().detailLevel).coarseLand;
+			const bool coarseLand = Locator::config::value().detail.coarseLand;
 			const ProgramUniform vortexGroundUniform {*terrainShader, "u_vortexGround"};
 			const ProgramUniform groundShadowBlockUniform {*terrainShader, "u_groundShadowBlock"};
 			const bool groundShadowed = desc.viewId == RenderPass::Main;
@@ -7761,8 +7760,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
 						    const bool inReflection = desc.viewId == RenderPass::Reflection;
 						    if ((inReflection ? !inMainRoom : !drawn) ||
-						        !detail_level::TempleGlowsShown(detail_level::For(Locator::config::value().detailLevel),
-						                                        inReflection))
+						        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
 						    {
 							    return;
 						    }

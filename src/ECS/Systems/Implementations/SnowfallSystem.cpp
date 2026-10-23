@@ -64,9 +64,8 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 {
 	std::vector<snowfall::Tile> tiles;
 	// Snow is part of the weather setting
-	const auto detail = Locator::config::value().detailLevel;
-	if (!graphics::detail_level::Weather(detail) || !Locator::terrainSystem::has_value() ||
-	    !Locator::weatherSystem::has_value())
+	const auto& detail = Locator::config::value().detail;
+	if (!detail.weather || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
 	{
 		return tiles;
 	}
@@ -81,7 +80,7 @@ std::vector<snowfall::Tile> SnowfallSystem::TakeTiles(const rain::View& view)
 		float key;
 	};
 	std::vector<Snowed> snowed;
-	for (const auto& origin : weather_blocks::InView(island, view, graphics::detail_level::For(detail).landReflection))
+	for (const auto& origin : weather_blocks::InView(island, view, detail.landReflection))
 	{
 		for (const auto& quarter :
 		     std::array {glm::vec2(0.0f, 0.0f), glm::vec2(0.0f, 1.0f), glm::vec2(1.0f, 0.0f), glm::vec2(1.0f, 1.0f)})

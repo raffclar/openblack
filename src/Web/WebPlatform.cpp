@@ -161,15 +161,15 @@ void SendFrame()
 /// One frame of RunFrames. Returns false after the last frame.
 bool RunOneFrame(const std::function<bool()>& frame)
 {
-	if (GetRenderThread().running.load())
-	{
-		return frame();
-	}
 	auto& state = GetPresentState();
 	state.inRunFrame = true;
 	state.framesDrawn = 0;
 	const bool goOn = frame();
 	state.inRunFrame = false;
+	if (GetRenderThread().running.load())
+	{
+		return goOn;
+	}
 	if (state.framesDrawn == 1)
 	{
 		// The browser shows this frame while the game thread waits for the next display frame
@@ -295,17 +295,23 @@ void openblack::web::BeforeFrame()
 
 void openblack::web::PresentFrame()
 {
-	if (GetRenderThread().running.load())
-	{
-		return;
-	}
 	auto& state = GetPresentState();
 	if (state.inRunFrame)
 	{
 		++state.framesDrawn;
-		return;
 	}
-	SendFrame();
+	else if (!GetRenderThread().running.load())
+	{
+		SendFrame();
+	}
+	// The page sends its input events to the game thread as calls that wait in the queue of the thread. The thread does
+	// these calls when it gives control back to the browser, which it does only between two frames of RunFrames. A
+	// start-up screen, such as the new player's name box, and a loading screen draw their frames in a loop of their own
+	// and read the input between them. Thus, after such a frame, the thread does the waiting calls at once.
+	if (!state.inRunFrame || state.framesDrawn > 1)
+	{
+		emscripten_current_thread_process_queued_calls();
+	}
 }
 
 void openblack::web::ShowPageMessage(std::string_view title, std::string_view text)

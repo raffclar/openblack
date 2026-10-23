@@ -41,6 +41,13 @@ struct HandSpin
 	/// The hand's sideways acceleration across the land, smoothed
 	float lateral {0.0f};
 	float spin {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const HandSpin& self, Visitor&& visit)
+	{
+		visit(self.lastStep, self.lateral, self.spin);
+	}
 };
 /// The sideways acceleration is smoothed so that it gets this share of the way in a tenth of a second
 inline constexpr float k_HandLateralShare = 0.2f;

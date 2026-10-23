@@ -89,6 +89,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
+#include "Common/UserData.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureHandRules.h"
@@ -162,6 +163,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
+#include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -339,6 +341,24 @@ using namespace std::chrono_literals;
 
 namespace
 {
+
+/// The window mode of a name in the settings of this computer
+windowing::DisplayMode DisplayModeOf(std::string_view name, windowing::DisplayMode otherwise)
+{
+	if (name == "windowed")
+	{
+		return windowing::DisplayMode::Windowed;
+	}
+	if (name == "fullscreen")
+	{
+		return windowing::DisplayMode::Fullscreen;
+	}
+	if (name == "borderless")
+	{
+		return windowing::DisplayMode::Borderless;
+	}
+	return otherwise;
+}
 
 /// Notes in the hand's debugging trace that a part of the frame put the hand at a position (see hand_trace::HandTrace)
 void TraceHand(std::string_view writer, const glm::vec3& position)
@@ -593,14 +613,29 @@ Game::Game(Arguments&& args) noexcept
 	config.useInternetWeather = args.useInternetWeather;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
-	config.resolution = {args.windowWidth, args.windowHeight};
-	config.displayMode = args.displayMode;
+	// The settings of this computer give what the command line did not
+	InitializeComputerSettings(player_profiles::SettingsFileFor(
+	    {.profileFolder = _profileFolder, .userFolder = user_data::ProfileFolder(), .automated = _automatedRun},
+	    user_data::SettingsFile()));
+	const auto& kept = Locator::computerSettingsSystem::value().GetSettings();
+	const auto start = computer_settings::Resolve({.width = static_cast<uint16_t>(args.windowWidth),
+	                                               .height = static_cast<uint16_t>(args.windowHeight),
+	                                               .vsync = args.vsync,
+	                                               .detailLevel = args.detailLevel},
+	                                              args.givenOnCommandLine, kept);
+	config.resolution = {start.width, start.height};
+	config.displayMode =
+	    args.givenOnCommandLine.windowMode ? args.displayMode : DisplayModeOf(start.windowMode, args.displayMode);
 	config.noDraw = args.noDraw;
 	config.background = args.background;
 	config.graphicsBackend = args.noDraw ? GraphicsBackend::Noop : args.graphicsBackend;
-	config.vsync = args.vsync;
+	config.vsync = start.vsync;
 	config.clockedAudio = args.simulation.has_value() && args.simulation->frameTime.has_value();
-	config.detailLevel = args.detailLevel;
+	config.detailLevel = start.detailLevel;
+	config.detail = graphics::detail_level::WithCustom(start.detailLevel, kept.customDetail);
+	config.maxDetailLevel = start.maxDetailLevel;
+	config.keptEffectsVolume = kept.effectsVolume;
+	config.keptMusicVolume = kept.musicVolume;
 	config.guiScale = args.guiScale;
 }
 
@@ -2100,20 +2135,28 @@ bool Game::Update() noexcept
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
 
+game_frame::GraphicsWindow Game::FrameGraphicsWindow() const
+{
+	game_frame::GraphicsWindow window {
+	    .minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised(),
+	    .fixedFrameTime = Locator::time::has_value() && Locator::time::value().GetFixedFrameTime().has_value(),
+	};
+	if (window.minimised)
+	{
+		// The pictures that the debug inspector, a challenge, the creature's page or a saved game wait for
+		window.pictureWanted =
+		    (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount) ||
+		    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+		    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+		    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	}
+	return window;
+}
+
 bool Game::DoesFrameGraphics() const
 {
-	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
-	if (!minimised)
-	{
-		return true;
-	}
-	// The pictures that the debug inspector, a challenge, the creature's page or a saved game wait for
-	const bool pictureWanted =
-	    (_requestScreenshot.has_value() && _requestScreenshot->first == _frameCount) ||
-	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
-	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
-	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
-	return game_frame::DoesGraphics(minimised, pictureWanted);
+	const auto window = FrameGraphicsWindow();
+	return game_frame::DoesGraphics(window.minimised, window.pictureWanted);
 }
 
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
@@ -2121,7 +2164,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	using game_frame::Step;
 	// While the window is minimised the turns, the keys and the film's clock continue, but the camera, the start of the draw,
 	// the hand and the world's draw stop
-	if (game_frame::IsGraphics(step) && !DoesFrameGraphics())
+	if (!game_frame::DoesStep(step, FrameGraphicsWindow()))
 	{
 		return true;
 	}
@@ -3516,6 +3559,15 @@ bool Game::Initialize() noexcept
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");
 		return false;
 	}
+	// The sound starts at the volumes that this computer keeps
+	if (config.keptEffectsVolume.has_value())
+	{
+		Locator::audio::value().SetSfxVolume(*config.keptEffectsVolume);
+	}
+	if (config.keptMusicVolume.has_value())
+	{
+		Locator::audio::value().SetMusicVolume(*config.keptMusicVolume);
+	}
 	// The renderer starts at the window's size
 	if (Locator::windowing::has_value())
 	{
@@ -4263,6 +4315,11 @@ void Game::LoadTestbed() noexcept
 	Locator::landSystem::value().LoadTestbed();
 }
 
+bool Game::LoadGodsRingMap() noexcept
+{
+	return Locator::landSystem::value().LoadGodsRingMap();
+}
+
 bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
                          const std::function<bool()>& restore) noexcept
 {
@@ -4454,6 +4511,16 @@ void Game::HandleInterfaceAction()
 		auto& audio = Locator::audio::value();
 		audio.SetSfxVolume(settings.sfxVolume);
 		audio.SetMusicVolume(settings.musicVolume);
+		// The detail and the volumes are kept for this computer, as the options show them
+		if (Locator::computerSettingsSystem::has_value())
+		{
+			Locator::computerSettingsSystem::value().Keep({
+			    .detailLevel = static_cast<uint8_t>(settings.detail),
+			    .maxDetailLevel = Locator::config::value().maxDetailLevel,
+			    .effectsVolume = settings.sfxVolume,
+			    .musicVolume = settings.musicVolume,
+			});
+		}
 		const auto kept = gui::ToProfileSettings(settings);
 		ApplyPlayerSettings(kept);
 		// The player's options are kept with their profile

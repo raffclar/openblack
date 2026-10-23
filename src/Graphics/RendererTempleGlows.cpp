@@ -80,7 +80,7 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 		    }
 	    });
 	// The cones step the drift only where the detail level draws them
-	if (detail_level::TempleLightShafts(detail_level::For(Locator::config::value().detailLevel)))
+	if (detail_level::TempleLightShafts(Locator::config::value().detail))
 	{
 		registry.Each<const LightBeam, const TempleInteriorPart>(
 		    [&cones](const LightBeam& /*unused*/, const TempleInteriorPart& part) {

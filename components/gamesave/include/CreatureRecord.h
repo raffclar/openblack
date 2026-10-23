@@ -52,6 +52,10 @@ struct MapCoords
 
 	bool operator==(const MapCoords&) const = default;
 };
+/// The three fields have four bytes each, so the value has no gaps
+static_assert(sizeof(MapCoords) == 2 * sizeof(int32_t) + sizeof(float));
+template <>
+inline constexpr bool k_HasNoGaps<MapCoords> = true;
 
 /// A point in the world, in the game's units
 using Point = std::array<float, 3>;

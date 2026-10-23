@@ -847,9 +847,9 @@ void WeatherSystem::ProcessTemperature(Climate& climate) const
 	const auto target = ((TempMax(info, _season) - minimum) * hourFactor * monthFactor) + minimum;
 	climate.targetTemperature = target;
 
-	// Black & White steps the whole way every turn, so once there the temperature swings back and forth across the
-	// target ten times a second. It settles on the target here instead: the step scales with the temperature, so
-	// near freezing, where rain turns to snow, the swing was too small to matter anyway.
+	// The original game always moves by the full step and does not stop at the target. Thus the temperature goes
+	// back and forth across the target ten times a second. That is a bug of the original game (see the list of its
+	// bugs), so here the temperature stops at the target when the target is one step or less away.
 	const auto step = static_cast<float>(std::abs(Ftol(target))) * k_TemperatureStep;
 	if (std::abs(target - climate.temperature) <= step)
 	{

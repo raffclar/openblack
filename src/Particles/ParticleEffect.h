@@ -152,6 +152,13 @@ struct BeliefSprite
 	glm::vec3 position {0.0f};
 	int32_t amount {0};
 	uint32_t colour {0xFFFFFF};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const BeliefSprite& self, Visitor&& visit)
+	{
+		visit(self.position, self.amount, self.colour);
+	}
 };
 
 /// A village centre as its symbols of belief see it: the top of its totem and how much the village believes in each
@@ -183,6 +190,13 @@ struct SurfacePoint
 {
 	glm::vec3 position {0.0f};
 	glm::vec3 normal {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const SurfacePoint& self, Visitor&& visit)
+	{
+		visit(self.position, self.normal);
+	}
 };
 
 /// A lightning bolt cast from a hand, as the others see it to clash with it. The bolt's effect owns it; the world keeps
@@ -576,6 +590,13 @@ struct DrawState
 	float stretch {1.0f};
 	float alpha {255.0f};
 	float frame {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const DrawState& self, Visitor&& visit)
+	{
+		visit(self.position, self.rotation, self.scale, self.stretch, self.alpha, self.frame);
+	}
 };
 
 /// What a rule keeps for one atom, such as when a condition first held
@@ -605,6 +626,13 @@ struct ObjectGlow
 	glm::vec2 textureFraction {0.0f};
 	/// The game's milliseconds when its shell was made, from which its texture slides
 	uint64_t startedAt {0};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ObjectGlow& self, Visitor&& visit)
+	{
+		visit(self.object, self.zoom, self.argb, self.texture, self.animSpeed, self.textureFraction, self.startedAt);
+	}
 };
 
 /// The shower of sparks an atom sends up from the object it is kept on (see rising_sparks): the sparks are made the first

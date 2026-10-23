@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <span>
+
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -27,6 +29,10 @@ public:
 	virtual void SetCreatureLike(PlayerNames player, PlayerNames like) = 0;
 	/// In the turn of the players: each mind that is switched on and did not start on the land starts
 	virtual void ProcessTurn() = 0;
+	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and
+	/// no computer mind plays gets a computer god. Its mind switches on, and it gets a fully grown creature of a random
+	/// species at the creature home of its citadel. The game makes the player when the land has none yet.
+	virtual void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) = 0;
 };
 
 } // namespace openblack::ecs::systems

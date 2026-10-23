@@ -437,6 +437,13 @@ private:
 		glm::vec3 centre;
 		float radius;
 		uint32_t turn;
+
+		/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+		template <typename Visitor>
+		static void VisitPlainFields(const Circle& self, Visitor&& visit)
+		{
+			visit(self.centre, self.radius, self.turn);
+		}
 	};
 	std::optional<Circle> _circle;
 	/// Game turns since the land started

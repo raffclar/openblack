@@ -246,6 +246,47 @@ TEST(GameFrameOrder, AMinimisedWindowSkipsTheGraphicsUnlessAPictureIsWanted)
 	EXPECT_TRUE(DoesGraphics(true, true));
 }
 
+// A run with a fixed frame time does every step while the desktop minimises its window, so that the camera and the hand
+// that the turns read do not change with the window
+TEST(GameFrameOrder, ARunWithAFixedFrameTimeDoesEveryStepWhileTheWindowIsMinimised)
+{
+	for (const auto& place : k_Frame)
+	{
+		EXPECT_TRUE(DoesStep(place.step, {.minimised = true, .fixedFrameTime = true})) << static_cast<int>(place.step);
+		EXPECT_TRUE(DoesStep(place.step, {.minimised = true, .pictureWanted = true, .fixedFrameTime = true}))
+		    << static_cast<int>(place.step);
+		EXPECT_TRUE(DoesStep(place.step, {.minimised = false})) << static_cast<int>(place.step);
+	}
+}
+
+// A minimised window does no graphics. The turns, the keys and the film's clock continue.
+TEST(GameFrameOrder, AMinimisedWindowDoesOnlyTheStepsThatAreNotGraphics)
+{
+	for (const auto& place : k_Frame)
+	{
+		EXPECT_EQ(DoesStep(place.step, {.minimised = true}), !IsGraphics(place.step)) << static_cast<int>(place.step);
+	}
+}
+
+// A picture for a minimised window draws the world, but the camera and the hand stay where they were. Thus the time
+// when a saved game waits for its picture does not change what the turns read.
+TEST(GameFrameOrder, APictureForAMinimisedWindowDoesNotMoveTheCameraOrTheHand)
+{
+	const GraphicsWindow picture {.minimised = true, .pictureWanted = true};
+	for (const auto step : {Step::CameraMouse, Step::CameraPaths, Step::CameraControllers, Step::Camera, Step::CameraShake,
+	                        Step::Temple, Step::Hand})
+	{
+		EXPECT_FALSE(DoesStep(step, picture)) << static_cast<int>(step);
+	}
+	for (const auto step : {Step::DrawClock, Step::Video, Step::CreaturePoses, Step::HighDetail, Step::GripEffect,
+	                        Step::Entities, Step::ScreenFade, Step::PauseText})
+	{
+		EXPECT_TRUE(DoesStep(step, picture)) << static_cast<int>(step);
+	}
+	EXPECT_TRUE(DoesStep(Step::Turns, picture));
+	EXPECT_TRUE(DoesStep(Step::SendCommands, picture));
+}
+
 TEST(GameFrameOrder, TheKeysSendTheirCommandsBeforeTheTurnsAndTheBlockGoesAfterThem)
 {
 	const auto recorder = PlayOneFrame();
