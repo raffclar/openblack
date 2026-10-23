@@ -71,8 +71,11 @@ PlainBytes<Type> PlainImage(const Type& value)
 	else if constexpr (detail::k_IsOptional<Type>)
 	{
 		using Held = typename Type::value_type;
-		// An option made on the zero bytes keeps zero in the bytes that it does not use
+		// The bytes of the option are set to zero after it is made: a compiler can drop the writes that come before an
+		// object is made (GCC does). Zero bytes are an empty option, and the option keeps zero in the bytes that it
+		// does not use.
 		auto* option = std::construct_at(reinterpret_cast<Type*>(image.bytes.data()));
+		std::memset(image.bytes.data(), 0, sizeof(Type));
 		if (value.has_value())
 		{
 			option->emplace();
