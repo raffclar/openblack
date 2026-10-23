@@ -28,13 +28,14 @@ const k_Second = [1920, 1080];
 // The click that takes the pointer after the change, far from the first window's size
 const k_Click = [1500, 900];
 
-// What the page looks like: the canvas box, the scroll size, the log box and the build link
+// What the page looks like: the canvas box, the scroll size, the log box and the build link. It is on one line, as
+// the log of cdp-run.mjs has one line for each value.
 const k_Layout = `JSON.stringify({ canvas: (({ x, y, width, height }) => [x, y, width, height])(
   document.getElementById('canvas').getBoundingClientRect()), window: [innerWidth, innerHeight],
   scroll: [document.documentElement.scrollWidth, document.documentElement.scrollHeight],
   log: getComputedStyle(document.getElementById('log-box')).display,
   badge: document.querySelector('#build-badge .build-link')?.textContent ?? '',
-  link: document.querySelector('#build-badge .build-link')?.href ?? '' })`;
+  link: document.querySelector('#build-badge .build-link')?.href ?? '' })`.replace(/\s*\n\s*/g, ' ');
 
 const steps = [
   { at: 2, do: 'wait-log', text: 'pipelines made', seconds: 240 },
@@ -75,7 +76,7 @@ const read = (file) => (existsSync(path.join(folder, file)) ? readFileSync(path.
 const consoleText = read('console.log');
 const log = read('page-log.txt');
 const evals = [...consoleText.matchAll(/\[eval\] .* = (.*)$/gm)].map((m) => JSON.parse(m[1]));
-const layouts = evals.filter((value) => typeof value === 'string').map((value) => JSON.parse(value));
+const layouts = evals.filter((value) => typeof value === 'string' && value.startsWith('{')).map((value) => JSON.parse(value));
 const locks = evals.filter((value) => value === 'canvas' || value === 'none');
 
 const results = [];
