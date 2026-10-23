@@ -1720,3 +1720,4 @@ openblack_setup_and_add_test(test_websocket_frames online/test_websocket_frames.
 openblack_setup_and_add_test(test_turn_playout online/test_turn_playout.cpp)
 openblack_setup_and_add_test(test_lockstep online/test_lockstep.cpp)
 openblack_setup_and_add_test(test_network_commands test_network_commands.cpp)
+openblack_setup_and_add_test(test_lobby_status online/test_lobby_status.cpp)

@@ -67,6 +67,10 @@ int main(int argc, char* argv[])
 		("server-id", "The id of the server at the lobby, which the join tickets name.", cxxopts::value<std::string>())
 		("ticket-keys", "The keys that sign the join tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file of the same JSON.", cxxopts::value<std::string>())
 		("gods", "The game starts when this many gods joined and are ready.", cxxopts::value<uint32_t>()->default_value("1"))
+		("lobby-api", "The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room every 5 seconds, so that the lobby lists it.", cxxopts::value<std::string>())
+		("client-cert", "The PEM file of the client certificate that the server shows to the lobby (mutual TLS).", cxxopts::value<std::string>())
+		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
+		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -147,6 +151,19 @@ int main(int argc, char* argv[])
 			}
 			network.godsToStart = result["gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			if (result.count("lobby-api") != 0)
+			{
+				network.lobbyApi = result["lobby-api"].as<std::string>();
+			}
+			if (result.count("client-cert") != 0)
+			{
+				network.clientCertificate = std::filesystem::path(result["client-cert"].as<std::string>());
+			}
+			if (result.count("client-key") != 0)
+			{
+				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
+			}
+			network.roomName = result["room-name"].as<std::string>();
 			settings.network = std::move(network);
 		}
 		openblack::crash_handler::SetLogFile(settings.logFile);

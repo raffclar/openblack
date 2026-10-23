@@ -52,6 +52,14 @@ struct NetworkSettings
 	uint32_t godsToStart {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
+	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
+	/// every 5 seconds, so that the lobby lists the server and gives tickets for it.
+	std::string lobbyApi;
+	/// The client certificate and its key (PEM files) that the server shows to the lobby for mutual TLS
+	std::optional<std::filesystem::path> clientCertificate;
+	std::optional<std::filesystem::path> clientKey;
+	/// The name of the room in the list of the lobby
+	std::string roomName {"Game"};
 };
 
 /// What the command line of the dedicated server gives
