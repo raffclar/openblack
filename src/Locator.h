@@ -220,6 +220,7 @@ class PauseTextSystemInterface;
 class LandSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
+class FloatingNumberSystemInterface;
 class RewardSystemInterface;
 class ScriptObjectsSystemInterface;
 class BuildingDamageSystemInterface;
@@ -396,6 +397,7 @@ struct Locator
 	using landSystem = entt::locator<ecs::systems::LandSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;
+	using floatingNumberSystem = entt::locator<ecs::systems::FloatingNumberSystemInterface>;
 	using rewardSystem = entt::locator<ecs::systems::RewardSystemInterface>;
 	using scriptObjects = entt::locator<ecs::systems::ScriptObjectsSystemInterface>;
 	using buildingDamageSystem = entt::locator<ecs::systems::BuildingDamageSystemInterface>;

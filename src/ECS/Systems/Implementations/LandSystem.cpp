@@ -67,6 +67,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
@@ -607,6 +608,7 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::playerCommandSystem::value().Reset();
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
+	Locator::floatingNumberSystem::value().Reset();
 	Locator::magicSystem::value().SetIgnoreInfluence(false);
 	Locator::animalSystem::value().Reset();
 	if (Locator::appleBarrelSystem::has_value())

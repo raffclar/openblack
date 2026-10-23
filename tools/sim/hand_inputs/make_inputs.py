@@ -2,11 +2,13 @@
 
 The input is a list of {frame, event} as the inspector's input.record answers it. The frames count from the frame
 that input.replay starts at, with frames of 20 ms. The pixels are of a 1280 by 1024 window and of the camera of the
-first frame of the land.
+first frame of the land. An input can also be an object with that list as "events" and a "camera" as camera.set takes
+it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json and testbed.json beside this script.
+writes land1.json, testbed.json, twogods.json and twogods_totem.json beside this script. The twogods inputs play on the
+playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 """
 
 import json
@@ -126,12 +128,71 @@ def testbed():
     return script.events
 
 
+# The camera of twogods.json: 35 m from the store of the player's first town, looking down at 40 degrees
+TWO_GODS_STORE_CAMERA = {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}
+
+
+def two_gods():
+    """The player's first town of the playground: the hand scoops from the food pile of the store, lets go of the
+    button, and puts the handful into the store"""
+    script = Script()
+    script.wait(10)
+    # Scoop from the food pile for 60 frames
+    script.move((712, 437), 20)
+    script.wait(10)
+    script.press()
+    script.wait(60)
+    script.release()
+    script.wait(10)
+    # Put the handful into the store
+    script.move((640, 512), 30)
+    script.wait(10)
+    script.press()
+    script.wait(3)
+    script.release()
+    script.wait(20)
+    script.move((600, 600), 20)
+    script.wait(20)
+    return script.events
+
+
+# The camera of twogods_totem.json: 40 m from the totem of the player's first town, looking down at 30 degrees
+TWO_GODS_TOTEM_CAMERA = {"focus": [2188.23, 93.05, 2317.47], "yaw": 30, "pitch": 30, "distance": 40}
+
+
+def two_gods_totem():
+    """The totem of the player's first town of the playground: the hand takes hold of it, slides it and lets go"""
+    script = Script()
+    script.wait(10)
+    script.move((640, 512), 10)
+    script.wait(20)
+    script.press()
+    script.wait(10)
+    script.move((640, 700), 40)
+    script.wait(10)
+    script.release()
+    script.wait(30)
+    script.move((600, 600), 20)
+    script.wait(40)
+    return script.events
+
+
+def write(name, events, camera=None):
+    # One event a line
+    lines = ",\n".join(json.dumps(event) for event in events)
+    with open(os.path.join(HERE, name + ".json"), "w", encoding="utf-8", newline="\n") as file:
+        if camera is None:
+            file.write("[\n" + lines + "\n]\n")
+        else:
+            file.write('{"camera": ' + json.dumps(camera) + ',\n"events": [\n' + lines + "\n]}\n")
+    print(name, len(events), "events,", events[-1]["frame"] + 1, "frames")
+
+
 def main():
-    for name, events in (("land1", land1()), ("testbed", testbed())):
-        # One event a line
-        with open(os.path.join(HERE, name + ".json"), "w", encoding="utf-8", newline="\n") as file:
-            file.write("[\n" + ",\n".join(json.dumps(event) for event in events) + "\n]\n")
-        print(name, len(events), "events,", events[-1]["frame"] + 1, "frames")
+    write("land1", land1())
+    write("testbed", testbed())
+    write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
+    write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
 
 
 if __name__ == "__main__":

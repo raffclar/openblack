@@ -11,6 +11,8 @@ the game sent them over the network. Each turn of the server must have the same 
 
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
+The input can also be an object with the list as "events" and a "camera" as camera.set takes it: the game puts its camera
+there before the first frame of the land (tools/sim/hand_inputs/twogods.json).
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the

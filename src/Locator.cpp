@@ -83,6 +83,7 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
+#include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/FootpathSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
@@ -591,6 +592,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
+	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
@@ -809,6 +811,7 @@ void openblack::ShutDownServices()
 	Locator::pauseTextSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
+	Locator::floatingNumberSystem::reset();
 	Locator::rewardSystem::reset();
 	Locator::scriptObjects::reset();
 	Locator::buildingDamageSystem::reset();

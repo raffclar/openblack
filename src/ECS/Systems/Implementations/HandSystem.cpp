@@ -99,6 +99,19 @@ void HandSystem::Report([[maybe_unused]] PlayerNames player, const player_comman
 	                                             });
 }
 
+std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	// All the values are zero until the first report
+	if (reported == nullptr || (reported->camera == glm::vec3(0.0f) && reported->focus == glm::vec3(0.0f)))
+	{
+		return std::nullopt;
+	}
+	return ReportedCamera {.origin = reported->camera, .focus = reported->focus};
+}
+
 uint32_t HandSystem::GetHandStillTurns() const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();

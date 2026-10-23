@@ -17,7 +17,6 @@
 #include "Common/GameRandom.h"
 #include "Creature/CreatureDeeds.h"
 #include "ECS/AltarSacrifice.h"
-#include "ECS/Archetypes/FloatingNumberArchetype.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/HandGrab.h"
@@ -31,6 +30,7 @@
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerFire.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
@@ -221,7 +221,10 @@ altar_offering::Answer altar_offering::Offer(entt::entity altar, entt::entity he
 	}
 	if (sacrifice->number && giver.local && giver.pointed.has_value())
 	{
-		archetypes::FloatingNumberArchetype::Create(*giver.pointed, sacrifice->prayer, altar_sacrifice::k_NumberColour);
+		if (Locator::floatingNumberSystem::has_value())
+		{
+			Locator::floatingNumberSystem::value().Add(*giver.pointed, sacrifice->prayer, altar_sacrifice::k_NumberColour);
+		}
 	}
 
 	// It goes from the hand and the world, a tree as a ghost that flickers out

@@ -183,6 +183,7 @@ public:
 	bool PressFireBall(uint32_t nowMs, uint32_t turn) override;
 	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
+	void DoCatchFireBall(PlayerNames player, entt::entity ball) override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
@@ -196,6 +197,8 @@ public:
 	/// A fireball of another player the hand takes hold of, as a tap or a grab starts, is caught into a fireball seed in
 	/// the hand; whether it was
 	bool CatchFireBall(entt::entity ball);
+	/// The tap or the take of a fireball goes as a command of the player, which the turn does (DoCatchFireBall)
+	void SendFireBallCommand(entt::entity ball, bool take);
 	/// A ready fire seed in the hand put to a fireball takes it in, the seed a twentieth stronger; whether it did
 	bool AbsorbFireBall(entt::entity ball);
 	[[nodiscard]] HandResult GetLastHandResult() const override { return _lastHandResult; }

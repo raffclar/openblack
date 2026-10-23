@@ -59,7 +59,8 @@ public:
 	/// Each land or scenario loaded from now on starts paused, before any of its frames, for a tool that steps it
 	virtual void PauseOnLoad([[maybe_unused]] bool pause) {}
 	/// Tools: the next land or scenario that starts makes this recorded input from its first frame on. The file is a list of
-	/// {frame, event}, as input.record answers it. An error, or none.
+	/// {frame, event}, as input.record answers it, or an object with that list as "events" and a "camera" that camera.set
+	/// takes, which puts the camera there before the first frame. An error, or none.
 	[[nodiscard]] virtual std::optional<std::string> ReplayOnLoad([[maybe_unused]] const std::filesystem::path& path)
 	{
 		return "this inspector makes no input";

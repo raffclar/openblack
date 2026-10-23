@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <vector>
 
 #include <glm/vec2.hpp>
 
@@ -45,7 +46,7 @@ constexpr float k_ShadowOffset = 1.0f;
 /// Where its text starts on the screen: it ends where its point is on the screen, there at the text's top
 [[nodiscard]] glm::vec2 TextPlace(glm::vec2 screenPoint, float textWidth);
 
-/// Every number in the registry moves on, and those whose time is up go
-void StepAll(Registry& registry, float seconds);
+/// Every number of the list moves on, and those whose time is up go
+void StepAll(std::vector<components::FloatingNumber>& numbers, float seconds);
 
 } // namespace openblack::ecs::floating_number

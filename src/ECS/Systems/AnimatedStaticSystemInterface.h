@@ -39,6 +39,8 @@ public:
 	/// A gate stone given to the plinth by the hand: true when the plinth takes it, the stone's model then laid in its
 	/// first empty slot (none when it is full). The giver uses the stone up.
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
+	/// Whether the plinth takes the stone when the hand gives it, as LayGateStone tells, but with no change
+	[[nodiscard]] virtual bool TakesGateStone(entt::entity /*plinth*/, entt::entity /*stone*/) const { return false; }
 
 	/// The circles a creature plans its route round for a Norse gate, which stand in for its one bounding circle; none
 	/// for anything else

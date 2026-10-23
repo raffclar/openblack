@@ -616,7 +616,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
 	    Locator::magicSystem::value().IsHandBusy();
 	const bool holdsCreature =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature().has_value();
 	if (!hand_grab::ReadyForObject(holdsSomething, holdsCreature))
 	{
 		return entt::null;
@@ -8358,7 +8358,7 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 		return;
 	}
 	const bool heldCreature =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == object;
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
 	const bool scooped =

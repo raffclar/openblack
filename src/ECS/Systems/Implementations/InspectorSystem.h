@@ -111,6 +111,8 @@ private:
 	std::thread _loadingHelper;
 	/// The recorded input that the next land makes from its first frame on
 	std::optional<inspector::Json> _replayOnLoad;
+	/// Where the camera of the next land stands before its first frame, as camera.set takes it
+	std::optional<inspector::Json> _cameraOnLoad;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };

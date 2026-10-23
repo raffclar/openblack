@@ -41,6 +41,10 @@ public:
 	bool Stroke(entt::entity creature, creature_feedback::BodyPart part) override;
 	bool Slap(entt::entity creature, float heightShare, bool gentle, bool sweepsRight) override;
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override;
+	[[nodiscard]] std::optional<entt::entity> GetLockedCreature() const override;
+	void DoLock(PlayerNames player, entt::entity creature) override;
+	void DoUnlock(PlayerNames player, entt::entity creature) override;
+	void DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise) override;
 	[[nodiscard]] bool IsHeldByCommand() const override;
 	[[nodiscard]] std::optional<entt::entity> CreatureUnderCursor() const override;
 	[[nodiscard]] float GetFeedbackSum() const override;
@@ -75,6 +79,8 @@ private:
 	static glm::vec3 TurnHand(components::HandOnCreature& contact, bool onBody, bool cursorMovedAcross, const glm::vec3& normal,
 	                          const glm::vec3& creaturePosition, float seconds);
 	/// A third hard slap in a row at one height bruises the creature where the line of sight meets its skin
+	/// The world takes a bruise: the slapping player's own creature loses some life and, slapped itself, takes the wound
+	static void ApplyBruise(PlayerNames player, const player_commands::CreatureBruise& bruise);
 	static void Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, uint8_t column);
 
 	/// The camera on the creature while the hand holds it, and where the player's camera was going when it took over

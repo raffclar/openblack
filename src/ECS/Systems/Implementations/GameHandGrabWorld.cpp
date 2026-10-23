@@ -45,7 +45,6 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/HandGrab.h"
-#include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MapCellResident.h"
@@ -72,11 +71,13 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/ScriptHighlightRules.h"
 #include "ECS/Systems/AbodeKnockSystemInterface.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/AnimatedStaticSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -664,9 +665,8 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	// openblack has no alliances between players, so only the creature's own player may give it things. The hand never
 	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
 	const auto giver = HandPlayer();
-	bool heldByHand = false;
-	registry.Each<const HandOnCreature>(
-	    [&heldByHand, target](const HandOnCreature& hand) { heldByHand = heldByHand || hand.creature == target; });
+	const bool heldByHand =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == target;
 	return creature_giving::MayGive({
 	    .creatureHasPlayer = true,
 	    .giverHasPlayer = true,
@@ -695,7 +695,8 @@ bool GameHandGrabWorld::GiveTo(entt::entity creature, entt::entity held, bool le
 	{
 		return false;
 	}
-	const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : glm::vec3(0.0f);
+	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
 	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, glm::vec2(eye.x, eye.z));
 }
 
@@ -1209,6 +1210,31 @@ bool GameHandGrabWorld::TakeIntoStore(entt::entity store, entt::entity object)
 	       Locator::resourceStoreSystem::value().TakeObject(store, object, HandPlayer());
 }
 
+bool GameHandGrabWorld::TakesWhole(entt::entity target, entt::entity held) const
+{
+	if (altar_offering::Takes(target, held))
+	{
+		return true;
+	}
+	if (Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().TakesGateStone(target, held))
+	{
+		return true;
+	}
+	// A store takes what it is worth, but not an animal, a static or a tree that a script made indestructible
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (registry.AllOf<Indestructible>(held) && registry.AnyOf<Animal, MobileStatic, Tree>(held))
+	{
+		return false;
+	}
+	if (!Locator::resourceStoreSystem::has_value())
+	{
+		return false;
+	}
+	const auto& stores = Locator::resourceStoreSystem::value();
+	const auto resource = stores.ResourceOf(held);
+	return resource.type != ResourceType::None && stores.IsStore(target, resource.type);
+}
+
 bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 {
 	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
@@ -1233,7 +1259,7 @@ altar_offering::Answer GameHandGrabWorld::OfferAtAltar(entt::entity altar, entt:
 	return altar_offering::Offer(altar, held,
 	                             {
 	                                 .player = HandPlayer(),
-	                                 .hand = PoseOf(Hand()).origin,
+	                                 .hand = ReportedHandPlace(),
 	                                 .pointed = PickedPoint(),
 	                                 .local = true,
 	                             });

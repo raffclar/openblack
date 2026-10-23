@@ -24,12 +24,14 @@
 
 #include <spdlog/spdlog.h>
 
+#include "3D/LandIslandInterface.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Game.h"
 #include "Input/GameActionMapInterface.h"
+#include "Inspector/CameraControl.h"
 #include "Inspector/ComponentReflection.h"
 #include "Inspector/FightAutopilot.h"
 #include "Inspector/GameControls.h"
@@ -272,6 +274,23 @@ void InspectorSystem::EndLoading()
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
 	_game->Loaded();
+	// A tool's camera stands where the recorded input expects it before the first frame of the land, once a land is there
+	if (_cameraOnLoad.has_value() && Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
+	{
+		std::string error;
+		const auto now = _controls->camera.State();
+		const auto pose =
+		    now.has_value() ? inspector::ResolveCameraPose(*_cameraOnLoad, *now, _controls->camera, error) : std::nullopt;
+		if (pose.has_value())
+		{
+			error = _controls->camera.Set(*pose);
+		}
+		if (!error.empty() || !now.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The camera of the recorded input is not put: {}", error);
+		}
+		_cameraOnLoad.reset();
+	}
 	// A tool's recorded input starts at the first frame of the land
 	if (_replayOnLoad.has_value())
 	{
@@ -443,6 +462,16 @@ std::optional<std::string> InspectorSystem::ReplayOnLoad(const std::filesystem::
 		return "the file of the recorded input does not open: " + path.string();
 	}
 	auto events = inspector::Json::parse(file, nullptr, false);
+	// The object form keeps the list in "events", and can put the camera first
+	if (events.is_object())
+	{
+		if (const auto camera = events.find("camera"); camera != events.end() && camera->is_object())
+		{
+			_cameraOnLoad = *camera;
+		}
+		auto list = events.find("events") != events.end() ? events["events"] : inspector::Json();
+		events = std::move(list);
+	}
 	if (events.is_discarded() || !events.is_array())
 	{
 		return "the file of the recorded input is not a list of {frame, event}: " + path.string();
