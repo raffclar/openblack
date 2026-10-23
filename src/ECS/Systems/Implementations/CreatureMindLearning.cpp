@@ -2719,10 +2719,10 @@ CreatureMindSystem::BelievedThingsToActOn(entt::entity creature, CreatureMindSta
 	const auto& registry = Locator::entitiesRegistry::value();
 	// The tests can come across things and change the beliefs. Thus the code takes the things to examine first.
 	const auto held = mind.beliefs.HeldInListOrder();
-	std::vector<entt::entity> believed;
-	believed.reserve(held.size());
-	std::ranges::transform(held, std::back_inserter(believed), &creature_object_beliefs::Belief::thing);
-	for (const auto believedThing : believed)
+	kept.things.clear();
+	std::ranges::transform(held, std::back_inserter(kept.things), &creature_object_beliefs::Belief::thing);
+	kept.suiting.reserve(kept.things.size());
+	for (const auto believedThing : kept.things)
 	{
 		const auto thing = ActedThingOf(registry, believedThing);
 		if (!thing.has_value() || *thing == creature || !SuitsDesire(creature, mind, desire, *thing))
@@ -3085,6 +3085,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	// The lists of the actions of each desire keep their memory from one desire to the next
 	std::vector<creature_planner::ActionCandidate> candidates;
 	std::vector<const creature_plan_actions::Executor*> executors;
+	BelievedFacts believed;
 	for (const auto desire : goals)
 	{
 		const auto d = static_cast<size_t>(desire);
@@ -3199,8 +3200,8 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 			}
 			return best;
 		};
-		// The facts about the believed things that one action finds, for the next actions of the desire
-		BelievedFacts believed;
+		// The facts about the believed things that one action finds are for the next actions of this desire only
+		believed.foundAt.reset();
 		const auto findObject =
 		    [&](const creature_planner::ActionCandidate& candidate) -> std::optional<creature_planner::ObjectCandidate> {
 			const auto* executor = executorOf(candidate);

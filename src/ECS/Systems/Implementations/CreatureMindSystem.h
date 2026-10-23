@@ -361,6 +361,8 @@ private:
 			std::optional<creature_planner::ObjectCandidate> worth;
 		};
 		std::vector<Suiting> suiting;
+		/// The things of the beliefs, in the order of the lists, as the facts were found
+		std::vector<entt::entity> things;
 		/// The count of the things come across when the facts were found, none before they were found
 		std::optional<uint64_t> foundAt;
 	};
