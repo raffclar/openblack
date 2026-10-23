@@ -58,6 +58,7 @@ int main(int argc, char* argv[])
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("h,help", "Show this help.");
 	// clang-format on
@@ -96,6 +97,10 @@ int main(int argc, char* argv[])
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
+		}
+		if (result.count("commands") != 0)
+		{
+			settings.commandsPath = std::filesystem::path(result["commands"].as<std::string>());
 		}
 		openblack::crash_handler::SetLogFile(settings.logFile);
 	}

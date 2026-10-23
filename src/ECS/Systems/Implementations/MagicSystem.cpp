@@ -1880,7 +1880,9 @@ void MagicSystem::ProcessDispensers()
 		bool stillThere = false;
 		if (dispenser.orb != entt::null && registry.Valid(dispenser.orb))
 		{
-			if (const auto* orb = registry.TryGet<const OneOffSpellSeed>(dispenser.orb))
+			// The turn measures from where the world has the bubble, not from where the frames draw it
+			const auto* orb = registry.TryGet<const Transform>(dispenser.orb);
+			if (orb != nullptr && registry.AllOf<OneOffSpellSeed>(dispenser.orb))
 			{
 				stillThere =
 				    magic::Touching(glm::vec2(transform.position.x, transform.position.z), world_objects::SizeOf(entity).radius,

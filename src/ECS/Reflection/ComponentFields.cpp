@@ -208,6 +208,7 @@
 #include "ECS/Components/Poisoned.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/PrayerPower.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ResourceLastTaken.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Reward.h"
@@ -1337,7 +1338,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandClicked::place>("place")
 	    .Field<&components::HandClicked::placeTurn>("placeTurn");
 	Reflect<components::HandGlow>(context).Field<&components::HandGlow::rgb>("rgb");
-	Reflect<components::InHand>(context).Field<&components::InHand::hand>("hand");
+	Reflect<components::InHand>(context)
+	    .Field<&components::InHand::hand>("hand")
+	    .Field<&components::InHand::rotation>("rotation")
+	    .Field<&components::InHand::scale>("scale");
 	Reflect<components::HeldLight>(context)
 	    .Field<&components::HeldLight::takenAt>("takenAt")
 	    .Field<&components::HeldLight::drawn>("drawn")
@@ -1357,6 +1361,9 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandGrab::pulling>("pulling")
 	    .Field<&components::HandGrab::grips>("grips")
 	    .Field<&components::HandGrab::tug>("tug")
+	    .Field<&components::HandGrab::pullPosition>("pullPosition")
+	    .Field<&components::HandGrab::pullRotation>("pullRotation")
+	    .Field<&components::HandGrab::pullScale>("pullScale")
 	    .Field<&components::HandGrab::stretch>("stretch")
 	    .Field<&components::HandGrab::holdDistance>("holdDistance")
 	    .Field<&components::HandGrab::pullPlanePoint>("pullPlanePoint")
@@ -1663,6 +1670,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	Reflect<components::PrayerPower>(context)
 	    .Field<&components::PrayerPower::chants>("chants")
 	    .Field<&components::PrayerPower::infinite>("infinite");
+	Reflect<components::ReportedHand>(context)
+	    .Field<&components::ReportedHand::collidePoint>("collidePoint")
+	    .Field<&components::ReportedHand::handPoint>("handPoint")
+	    .Field<&components::ReportedHand::camera>("camera")
+	    .Field<&components::ReportedHand::focus>("focus");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)

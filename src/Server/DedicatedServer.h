@@ -60,6 +60,9 @@ struct ServerSettings
 	std::optional<std::filesystem::path> recordPath;
 	/// Tools: the run record also has the hash of each field of each component
 	bool recordFields {false};
+	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same
+	/// turns, as if the game sent them over the network.
+	std::optional<std::filesystem::path> commandsPath;
 	/// The file of the log, or "stdout"
 	std::string logFile {"stdout"};
 	spdlog::level::level_enum logLevel {spdlog::level::info};

@@ -126,9 +126,34 @@ struct LeashPostTap
 	entt::entity post;
 };
 
+/// The report of where the player's hand and camera are. The input of the player moves them, and the world reads them
+/// only from the last report that a turn did.
+struct HandReport
+{
+	/// The point under the cursor that the interface picks
+	glm::vec3 collidePoint;
+	/// The place of the hand
+	glm::vec3 handPoint;
+	/// The place of the camera
+	glm::vec3 camera;
+	/// The point that the camera looks at
+	glm::vec3 focus;
+
+	bool operator==(const HandReport& other) const = default;
+};
+
+/// The twist of a thing that the hand let go, after the hand moved a little: the turn turns the thing's body about
+/// the level axis across the motion of the hand since the let go
+struct HandTwist
+{
+	entt::entity object;
+	/// How far the hand moved since it let go of the thing
+	glm::vec3 moved;
+};
+
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist>;
 
 /// A command and the player that sent it
 struct Command

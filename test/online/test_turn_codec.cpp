@@ -46,6 +46,11 @@ std::vector<Action> EachCommand()
 	    HandGive {.creature = Entity(10), .object = Entity(11)},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
 	    LeashPostTap {.post = Entity(12)},
+	    HandReport {.collidePoint = {1.0f, 2.0f, 3.0f},
+	                .handPoint = {4.0f, 5.0f, 6.0f},
+	                .camera = {7.0f, 8.0f, 9.0f},
+	                .focus = {10.0f, 11.0f, 12.0f}},
+	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
 	};
 }
 
@@ -69,7 +74,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 9)
+	switch (bits(random) % 11)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -89,8 +94,12 @@ Action RandomAction(std::mt19937& random)
 		return HandGive {.creature = entity(), .object = entity()};
 	case 7:
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
-	default:
+	case 8:
 		return LeashPostTap {.post = entity()};
+	case 9:
+		return HandReport {.collidePoint = vector(), .handPoint = vector(), .camera = vector(), .focus = vector()};
+	default:
+		return HandTwist {.object = entity(), .moved = vector()};
 	}
 }
 
@@ -134,9 +143,9 @@ Frame RandomFrame(std::mt19937& random)
 }
 
 /// The commands of a busy player in one turn: the hand lets go of a thing and the creature gets an order on its leash.
-/// The report of the hand and the camera (the place of the hand, the point under it, the camera and its focus: four
-/// vectors and a tag) is not a command yet. The table counts it as 49 bytes.
-constexpr size_t k_PlannedHandReport = 1 + 4 * sizes::k_Vector;
+/// The report of the hand and the camera (the point under the hand, the place of the hand, the camera and its focus:
+/// four vectors and a tag) goes once a turn too. The table counts it as 49 bytes.
+constexpr size_t k_HandReport = 1 + 4 * sizes::k_Vector;
 
 std::vector<Action> BusyCommands()
 {
@@ -150,7 +159,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -403,6 +412,30 @@ TEST(TurnCodec, RandomChangesToTheBytesNeverGiveAFrameWithOtherBytes)
 	}
 }
 
+TEST(TurnCodec, TheReportOfTheHandKeepsTheOrderOfItsPoints)
+{
+	const HandReport report {.collidePoint = {1.0f, 2.0f, 3.0f},
+	                         .handPoint = {4.0f, 5.0f, 6.0f},
+	                         .camera = {7.0f, 8.0f, 9.0f},
+	                         .focus = {10.0f, 11.0f, 12.0f}};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 1, .actions = {report}});
+	ASSERT_EQ(bytes.size(), sizes::k_Header + sizes::k_CommandsBody + k_HandReport);
+	ASSERT_EQ(bytes[9], static_cast<uint8_t>(CommandTag::HandReport));
+	// Twelve floats after the tag: the collide point, the hand, the camera and the focus, each x, y, z
+	for (size_t i = 0; i < 12; ++i)
+	{
+		uint32_t value = 0;
+		for (size_t b = 0; b < 4; ++b)
+		{
+			value |= static_cast<uint32_t>(bytes[10 + 4 * i + b]) << (8 * b);
+		}
+		EXPECT_EQ(std::bit_cast<float>(value), static_cast<float>(i + 1)) << i;
+	}
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	EXPECT_EQ(std::get<HandReport>(std::get<CommandBlock>(*decoded.frame).actions[0]), report);
+}
+
 TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 {
 	// The report of multiplayer-32-1: about 84 bytes of commands, hand and camera a player, and about 2.7 KB a turn.
@@ -414,7 +447,7 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 		commandBytes += SizeOf(action);
 	}
 	EXPECT_EQ(commandBytes, 71u);
-	const auto playerBytes = commandBytes + k_PlannedHandReport;
+	const auto playerBytes = commandBytes + k_HandReport;
 	EXPECT_EQ(playerBytes, 120u);
 
 	TurnBundle turn {.turn = 1, .blocks = {}};
@@ -423,18 +456,18 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 		turn.blocks.push_back({.sender = static_cast<PlayerNames>(player), .sequence = 0, .actions = commands});
 	}
 	const auto encoded = Encode(turn);
-	// The commands of today without the hand report
+	// The commands without the hand report
 	EXPECT_EQ(encoded.size(), sizes::k_Header + sizes::k_TurnBody + 32 * (sizes::k_Stamp + commandBytes));
 	EXPECT_EQ(encoded.size(), 2408u);
-	// With the planned hand report: 3976 bytes. The stamps and the counts add less than 4 percent to the 3840 bytes
+	// With the hand report: 3976 bytes. The stamps and the counts add less than 4 percent to the 3840 bytes
 	// (32 x 120) of the report.
-	const auto withReport = encoded.size() + 32 * k_PlannedHandReport;
+	const auto withReport = encoded.size() + 32 * k_HandReport;
 	EXPECT_EQ(withReport, 3976u);
 	EXPECT_LT(withReport * 100, 3840u * 104);
 
 	// The block that one busy client sends, and its checksum
 	const auto up = Encode(CommandBlock {.sequence = 0, .turn = 1, .actions = commands});
-	EXPECT_EQ(up.size() + k_PlannedHandReport, 129u);
+	EXPECT_EQ(up.size() + k_HandReport, 129u);
 	EXPECT_EQ(Encode(TurnChecksum {.turn = 1, .checksum = 2}).size(), 14u);
 	EXPECT_EQ(Encode(Ping {.id = 1, .time = 2}).size(), 14u);
 }

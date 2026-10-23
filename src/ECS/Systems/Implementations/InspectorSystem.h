@@ -15,6 +15,7 @@
 #include <chrono>
 #include <memory>
 #include <mutex>
+#include <optional>
 #include <string>
 #include <thread>
 
@@ -65,6 +66,7 @@ public:
 	void ShowOverrideToPointer() override;
 	[[nodiscard]] fight_autopilot::AutopilotInterface* GetFightAutopilot() override;
 	void PauseOnLoad(bool pause) override;
+	[[nodiscard]] std::optional<std::string> ReplayOnLoad(const std::filesystem::path& path) override;
 	[[nodiscard]] std::optional<std::string> StartSimRecord(const std::filesystem::path& path, uint32_t every,
 	                                                        const std::optional<std::filesystem::path>& limits,
 	                                                        sim_run::HashDetail hashParts) override;
@@ -107,6 +109,8 @@ private:
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
 	std::thread _loadingHelper;
+	/// The recorded input that the next land makes from its first frame on
+	std::optional<inspector::Json> _replayOnLoad;
 	/// The fight autopilot, which gives its input through the inspector's input
 	std::unique_ptr<inspector::FightAutopilot> _autopilot;
 };

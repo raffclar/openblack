@@ -176,37 +176,45 @@ void MiracleFxSystem::UpdatePiles(float gameSeconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto& info = Locator::infoConstants::value();
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	registry.Each<ResourcePile, const Pot, const Mesh, Transform>([&](entt::entity entity, ResourcePile& pile, const Pot& pot,
-	                                                                  const Mesh& mesh, Transform& transform) {
-		// A miracle's pile stands on the land where it is, as the land is now, sunk or raised from there
-		if (registry.AllOf<MagicPile>(entity) && Locator::terrainSystem::has_value())
-		{
-			transform.position.y = Locator::terrainSystem::value().GetHeightAt({transform.position.x, transform.position.z});
-		}
-		if (pile.height <= 0.0f)
-		{
-			if (!meshes.Contains(mesh.id))
-			{
-				return;
-			}
-			pile.height = meshes.Handle(mesh.id)->GetBoundingBox().Size().y * transform.scale.y;
-		}
-		const auto& potInfo = info.pot.at(static_cast<size_t>(pot.type));
-		const auto target = magic::piles::SunkOffset(
-		    magic::piles::ProportionRaised(potInfo.resourceType, pot.amount, potInfo.maxAmountInPot), pile.height);
-		if (!pile.risen)
-		{
-			pile.rise = magic::piles::SunkRise(pile.height);
-			magic::piles::RiseTo(pile.rise, target);
-			pile.risen = true;
-			pile.shownAmount = pot.amount;
-		}
-		else if (pot.amount != pile.shownAmount)
-		{
-			magic::piles::RiseTo(pile.rise, target);
-			pile.shownAmount = pot.amount;
-		}
-		magic::piles::StepRise(pile.rise, gameSeconds);
+	registry.Each<ResourcePile, const Pot, const Mesh, Transform>(
+	    [&](ResourcePile& pile, const Pot& pot, const Mesh& mesh, Transform& transform) {
+		    if (pile.height <= 0.0f)
+		    {
+			    if (!meshes.Contains(mesh.id))
+			    {
+				    return;
+			    }
+			    pile.height = meshes.Handle(mesh.id)->GetBoundingBox().Size().y * transform.scale.y;
+		    }
+		    const auto& potInfo = info.pot.at(static_cast<size_t>(pot.type));
+		    const auto target = magic::piles::SunkOffset(
+		        magic::piles::ProportionRaised(potInfo.resourceType, pot.amount, potInfo.maxAmountInPot), pile.height);
+		    if (!pile.risen)
+		    {
+			    pile.rise = magic::piles::SunkRise(pile.height);
+			    magic::piles::RiseTo(pile.rise, target);
+			    pile.risen = true;
+			    pile.shownAmount = pot.amount;
+		    }
+		    else if (pot.amount != pile.shownAmount)
+		    {
+			    magic::piles::RiseTo(pile.rise, target);
+			    pile.shownAmount = pot.amount;
+		    }
+		    magic::piles::StepRise(pile.rise, gameSeconds);
+	    });
+}
+
+void MiracleFxSystem::PlacePilesOnLand()
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	// A miracle's pile has no height of its own: it stands on the land where it is, as the land is now
+	const auto& terrain = Locator::terrainSystem::value();
+	Locator::entitiesRegistry::value().Each<const MagicPile, Transform>([&terrain](const MagicPile&, Transform& transform) {
+		transform.position.y = terrain.GetHeightAt({transform.position.x, transform.position.z});
 	});
 }
 

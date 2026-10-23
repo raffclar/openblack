@@ -435,6 +435,41 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	};
 }
 
+std::optional<uint64_t> InputProvider::Replay(const Json& events, InputEvent::Timing timing, std::string& error)
+{
+	if (!events.is_array())
+	{
+		error = "events is a recording, as input.record answers it";
+		return std::nullopt;
+	}
+	std::vector<RecordedInput> recording;
+	for (const auto& each : events)
+	{
+		const auto frame = NumberMember(each, "frame");
+		auto event = each.is_object() && each.contains("event") ? InputEventFromJson(each["event"], error) : std::nullopt;
+		if (!frame.has_value() || *frame < 0.0 || *frame > k_LongestFrames * 10.0 || !event.has_value())
+		{
+			if (error.empty())
+			{
+				error = "each event is {\"frame\": n, \"event\": {...}}";
+			}
+			return std::nullopt;
+		}
+		if (!each["event"].contains("timing"))
+		{
+			event->timing = timing;
+		}
+		recording.push_back({.frame = static_cast<uint64_t>(*frame), .event = *event});
+	}
+	// Behind any input still to come, as every request's
+	const auto start = StartFrame();
+	for (auto& each : recording)
+	{
+		_timeline.Schedule(start + each.frame, std::move(each.event));
+	}
+	return start;
+}
+
 std::optional<glm::ivec2> InputProvider::ScreenPoint(const Json& params, std::string_view key, std::string& error) const
 {
 	const auto it = params.find(key);
@@ -822,28 +857,12 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		{
 			return failed(error);
 		}
-		std::vector<RecordedInput> recording;
-		for (const auto& each : *events)
+		const auto start = Replay(*events, *timing, error);
+		if (!start.has_value())
 		{
-			const auto frame = NumberMember(each, "frame");
-			auto event = each.is_object() && each.contains("event") ? InputEventFromJson(each["event"], error) : std::nullopt;
-			if (!frame.has_value() || *frame < 0.0 || *frame > k_LongestFrames * 10.0 || !event.has_value())
-			{
-				return failed(error.empty() ? "each event is {\"frame\": n, \"event\": {...}}" : error);
-			}
-			if (!each["event"].contains("timing"))
-			{
-				event->timing = *timing;
-			}
-			recording.push_back({.frame = static_cast<uint64_t>(*frame), .event = *event});
+			return failed(error);
 		}
-		// Behind any input still to come, as every request's
-		const auto start = StartFrame();
-		for (auto& each : recording)
-		{
-			_timeline.Schedule(start + each.frame, std::move(each.event));
-		}
-		return QueryResult::Value(Answer({{"scheduled", recording.size()}, {"from_frame", start}}, start));
+		return QueryResult::Value(Answer({{"scheduled", events->size()}, {"from_frame", *start}}, *start));
 	}
 	return failed("no query input." + std::string(query));
 }

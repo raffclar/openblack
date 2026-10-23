@@ -72,6 +72,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
@@ -1057,6 +1058,13 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	Locator::time::value().Start();
 
 	view.StartPlayView();
+
+	// The models of the miracles' globes come with the world: the physics of a thrown globe needs them, also on a computer
+	// that draws no frame
+	if (Locator::miracleFxSystem::has_value())
+	{
+		Locator::miracleFxSystem::value().LoadMeshes();
+	}
 
 	// A simulation run with a fixed frame time loads every resource before its first frame. A thing that waits for its
 	// picture or its model then starts after the same frames each run, at any speed.

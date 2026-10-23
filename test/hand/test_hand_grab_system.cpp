@@ -512,6 +512,10 @@ protected:
 			    {
 				    system->DoGive(player, command.creature, command.object);
 			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandTwist>)
+			    {
+				    system->DoTwist(player, command.object, command.moved);
+			    }
 		    },
 		    action);
 	}
@@ -1295,6 +1299,60 @@ TEST_F(HandGrabSystemWithWorld, WhatIsLetGoGetsItsTwistAFifthOfASecondLater)
 	EXPECT_EQ(world->twists.front().first, rock);
 }
 
+TEST_F(HandGrabSystemWithWorld, TheTwistIsACommandThatTheTurnDoes)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	Press();
+	for (int i = 0; i < 20 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	Release();
+	Frame(10);
+	Press();
+	Frame(10);
+	Release();
+	world->bodies.insert(rock);
+	// The commands wait for their turn from here
+	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
+	Frame(100, {}, {1.0f, 0.0f, 0.0f});
+	Frame(100, {}, {1.0f, 0.0f, 0.0f});
+	EXPECT_TRUE(world->twists.empty());
+	ASSERT_FALSE(waiting.empty());
+	EXPECT_TRUE(std::holds_alternative<player_commands::HandTwist>(waiting.back()));
+	RunWaiting();
+	ASSERT_EQ(world->twists.size(), 1u);
+	EXPECT_EQ(world->twists.front().first, rock);
+}
+
+TEST_F(HandGrabSystemWithWorld, ATakeOfAnotherComputerTakesWithNoPressOfThisHand)
+{
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	// A server, or a computer that did not press: its hand takes at the turn all the same
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), rock);
+	// And lets go of what it holds, though its own hand never let go of the button
+	system->DoLetGo(world->HandPlayer(), rock, glm::vec3(0.0f));
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, TheTurnHasAHeldThingAtTheReportedHandAtItsOwnTurnAndSize)
+{
+	const auto rock = world->AddRock({5.0f, 0.0f, 5.0f});
+	system->DoTake(world->HandPlayer(), rock);
+	ASSERT_EQ(system->GetHeld(), rock);
+	auto& transform = world->registry.Get<Transform>(rock);
+	const auto held = transform;
+	// The frames draw it elsewhere, turned
+	transform.position = {50.0f, 9.0f, 50.0f};
+	transform.rotation = glm::mat3(0.0f, 0.0f, 1.0f, 0.0f, 1.0f, 0.0f, -1.0f, 0.0f, 0.0f);
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, world->ReportedHandPlace());
+	EXPECT_EQ(transform.rotation, held.rotation);
+	EXPECT_EQ(transform.scale, held.scale);
+}
+
 TEST_F(HandGrabSystemWithWorld, AVillagerOfTheHandsPlayerAlarmsThoseAboutIt)
 {
 	const auto villager = world->registry.Create();
@@ -2062,7 +2120,8 @@ TEST_F(HandGrabSystemWithWorld, TheTurnWorkOfTheHandTakesAFlyingThingAfterTheWai
 }
 
 // A take that the hand no longer waits for does nothing at its turn
-TEST_F(HandGrabSystemWithWorld, ATakeForAHandThatWasClearedDoesNothing)
+// A new land clears the hand and its thing goes with the old land: the take that waits does nothing
+TEST_F(HandGrabSystemWithWorld, ATakeOfAThingThatWentWithTheLandDoesNothing)
 {
 	deferCommands = true;
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -2072,9 +2131,9 @@ TEST_F(HandGrabSystemWithWorld, ATakeForAHandThatWasClearedDoesNothing)
 	system->InterfaceTurn(now + 300, (now + 300) / 100);
 	ASSERT_EQ(world->sent.size(), 1u);
 	system->Reset();
+	world->registry.Destroy(rock);
 	RunWaiting();
 	EXPECT_FALSE(system->GetHeld().has_value());
-	EXPECT_FALSE(world->registry.AllOf<InHand>(rock));
 }
 
 // A command of another player does not move this hand
