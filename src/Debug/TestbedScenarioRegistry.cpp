@@ -4314,6 +4314,24 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "villagers.load_in_creature_hand",
+	    .name = "A villager with a load in a creature's hand",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a man in front of it who carries a load of wood. The tiger picks him up, walks "
+	                   "a few steps with him, holds him for three seconds and puts him down, and does it again.",
+	    .expected = "Before the tiger picks him up, the man holds a log of wood in his hand. In the tiger's hand he holds "
+	                "nothing: no log shows. When he is put down he still has the wood, and the log shows in his hand "
+	                "again as he goes about.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-15.0f, -15.0f}, {15.0f, 15.0f}}},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticForesterMale, .offset = {0.0f, -k_Reach}, .woodHeld = 300}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.5f), Go(Kind::WalkTo, 0, {0.0f, 10.0f}, 0.5f),
+	                 Act(Kind::PutDown, 0, 3.0f, true), Go(Kind::WalkTo, 0, {0.0f, 0.0f}, 2.0f)},
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "objects.pickup_kinds",
 	    .name = "The kinds of thing a creature picks up",
 	    .facet = Facet::Objects,

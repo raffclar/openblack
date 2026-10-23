@@ -1033,10 +1033,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			                                         graphics::bone_palette::Append(_renderContext.bonePalette, bones));
 		    }
 		    // What a villager holds is drawn on the bone at the end of its arm, as its clip poses it, with the villager's
-		    // look; not while a hand holds it
-		    if (const auto* person = registry.TryGet<const Villager>(entity); person != nullptr && villagerPose != nullptr &&
-		                                                                      look.z != 1.0f && placed.has_value() &&
-		                                                                      !registry.AllOf<InHand>(entity))
+		    // look; not while a hand or a creature holds it
+		    const auto holder = registry.AllOf<InHand>(entity)           ? openblack::ecs::villager_held::Holder::PlayersHand
+		                        : registry.AllOf<HeldByCreature>(entity) ? openblack::ecs::villager_held::Holder::Creature
+		                                                                 : openblack::ecs::villager_held::Holder::None;
+		    if (const auto* person = registry.TryGet<const Villager>(entity);
+		        person != nullptr && villagerPose != nullptr && look.z != 1.0f && placed.has_value() &&
+		        openblack::ecs::villager_held::DrawsHeldThing(holder))
 		    {
 			    const auto heldMesh = openblack::ecs::villager_held::MeshOf(person->carried);
 			    const auto& rest = meshes.Handle(slots->first)->GetBoneMatrices();
