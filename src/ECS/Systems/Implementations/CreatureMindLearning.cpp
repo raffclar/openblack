@@ -152,6 +152,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -162,6 +163,7 @@
 #include "ECS/TownDesire.h"
 #include "ECS/WorldObjects.h"
 #include "Graphics/Moon.h"
+#include "Gui/TextDatabase.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -4823,6 +4825,23 @@ std::optional<creaturemind::MindFileData> CreatureMindSystem::SaveMind(entt::ent
 	creature_mind_body::ToMindFile(kept, file);
 	// Its name is saved with its mind
 	file.name = body->name;
+	// The file says who saved it: the creature file of the player at this computer when that player owns the creature,
+	// and the profile played
+	std::optional<std::string> ownerFile;
+	std::u16string profile;
+	if (Locator::playerProfileSystem::has_value())
+	{
+		const auto& profiles = Locator::playerProfileSystem::value();
+		if (Locator::playerSystem::has_value() && body->owner == Locator::playerSystem::value().GetLocalPlayer())
+		{
+			ownerFile = profiles.CreatureFile();
+		}
+		if (const auto current = profiles.GetCurrentProfile(); current.has_value())
+		{
+			profile = gui::ToUtf16(current->name);
+		}
+	}
+	creature_mind_model::SetSavedBy(file, ownerFile, profile);
 	return file;
 }
 

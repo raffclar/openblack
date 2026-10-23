@@ -57,6 +57,7 @@
 #include "ECS/Systems/Implementations/ChimneySmokeSystem.h"
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
+#include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
@@ -220,6 +221,7 @@ using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
 using openblack::ecs::systems::ComputerPlayerSystem;
+using openblack::ecs::systems::ComputerSettingsSystem;
 using openblack::ecs::systems::CreatureAnimationSystem;
 using openblack::ecs::systems::CreatureAudioSystem;
 using openblack::ecs::systems::CreatureCarryOverSystem;
@@ -680,6 +682,11 @@ void openblack::InitializeLevel(const LandData& land)
 	InitializeLevelWith(land);
 }
 
+void openblack::InitializeComputerSettings(std::optional<std::filesystem::path> file)
+{
+	Locator::computerSettingsSystem::emplace<ComputerSettingsSystem>(std::move(file));
+}
+
 void openblack::ShutDownServices()
 {
 	// The files of the creature that wait go to the disk while the services that write them are still there
@@ -762,6 +769,7 @@ void openblack::ShutDownServices()
 	Locator::videoSystem::reset();
 	Locator::helpTextSystem::reset();
 	Locator::helpProfileSystem::reset();
+	Locator::computerSettingsSystem::reset();
 	Locator::musicMoodSystem::reset();
 	Locator::simulation::reset();
 	Locator::profileFolderSystem::reset();
