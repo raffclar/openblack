@@ -4305,7 +4305,8 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 		}
 		seen.push_back(entity);
 		auto& entry = _creatureSkins[entity];
-		if (entry.revision == skin.revision && entry.textures.size() == skin.skins.size())
+		const painted_skin::Stamp stamp {.registryResets = drawDesc.entities.GetResets(), .revision = skin.revision};
+		if (!painted_skin::NeedsUpload(entry.stamp, stamp) && entry.textures.size() == skin.skins.size())
 		{
 			return;
 		}
@@ -4335,7 +4336,7 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 			texture->Update(painted.texels.data(), static_cast<uint32_t>(painted.texels.size() * sizeof(painted.texels[0])));
 			entry.drawn.emplace_back(painted.id, texture.get());
 		}
-		entry.revision = skin.revision;
+		entry.stamp = stamp;
 	});
 	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
 	std::ranges::sort(seen);
@@ -4524,7 +4525,9 @@ void Renderer::UploadHandSkins() const
 		_handSkins.clear();
 		return;
 	}
-	if (_handSkinRevision == morph->revision && _handSkins.size() == morph->skins.size())
+	const painted_skin::Stamp stamp {.registryResets = Locator::entitiesRegistry::value().GetResets(),
+	                                 .revision = morph->revision};
+	if (!painted_skin::NeedsUpload(_handSkinStamp, stamp) && _handSkins.size() == morph->skins.size())
 	{
 		return;
 	}
@@ -4543,7 +4546,7 @@ void Renderer::UploadHandSkins() const
 		texture->Update(skin.texels.data(), static_cast<uint32_t>(skin.texels.size() * sizeof(skin.texels[0])));
 		_handSkins.emplace_back(skin.id, texture.get());
 	}
-	_handSkinRevision = morph->revision;
+	_handSkinStamp = stamp;
 }
 
 std::optional<RendererInterface::L3DMeshSubmitDesc::MorphTargets> Renderer::HandMorphTargets() const

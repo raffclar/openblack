@@ -178,6 +178,9 @@ public:
 	/// Every entity made since the registry was last emptied, those destroyed since too: the statistics' count of the
 	/// objects made on the land
 	[[nodiscard]] uint32_t GetEntitiesMade() const noexcept { return _entitiesMade; }
+	/// Goes up each time the registry is emptied, as before a land or a saved world loads. A load can give an entity the
+	/// same id and version that it had before, so a cache that keeps data by entity also keeps this number.
+	[[nodiscard]] uint32_t GetResets() const noexcept { return _resets; }
 	Registry(const Registry&) = delete;
 	Registry& operator=(const Registry&) = delete;
 	virtual ~Registry() = default;
@@ -203,6 +206,7 @@ private:
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 
 	uint32_t _entitiesMade {0};
+	uint32_t _resets {0};
 };
 
 } // namespace openblack::ecs

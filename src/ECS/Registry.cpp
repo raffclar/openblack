@@ -51,6 +51,7 @@ void Registry::Reset()
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
+	++_resets;
 };
 
 void Registry::SetDirty()
