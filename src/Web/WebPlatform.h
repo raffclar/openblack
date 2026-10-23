@@ -45,7 +45,9 @@ void BeforeFrame();
 
 /// Call after the renderer drew a frame. When a frame of RunFrames draws one frame only, the browser shows it when the
 /// game thread gives control back. All other frames go to the page as images, because the game thread does not give
-/// control back to the browser while it draws them. With a render thread, this function does nothing.
+/// control back to the browser while it draws them. With a render thread, the render thread shows all frames. After a
+/// frame that the game thread does not give control back for, the game thread takes the input events of the page that
+/// wait for it.
 void PresentFrame();
 
 /// Start the thread that draws the frames of the renderer. This thread owns the canvas, and it gives control back to
