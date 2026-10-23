@@ -739,7 +739,8 @@ main() {
 		local target=${1:-C:/projects/obtools} file
 		target=$(cygpath -u "$target")
 		mkdir -p "$target"
-		for file in ob-build ob-build.cmd ob-cc.c ob-link.c; do
+		# The launcher sources go first, so a new ob-build never runs without them
+		for file in ob-cc.c ob-link.c ob-build.cmd ob-build; do
 			cp "$OB_SCRIPT_DIR/$file" "$target/.$file.new" && mv -f "$target/.$file.new" "$target/$file" ||
 				die "could not install $file into $target"
 		done
