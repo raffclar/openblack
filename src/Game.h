@@ -545,6 +545,8 @@ private:
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
+	/// The game joined a game server from the command line, and stops when that network game ends
+	bool _joinedFromCommandLine {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

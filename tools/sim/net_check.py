@@ -200,6 +200,8 @@ def record_checksums(record):
 def parted_parts(first, other, turn):
     """The parts whose hash differs between two clients' records at a turn"""
     def synced(path):
+        if not os.path.exists(path):
+            return {}
         with open(path, encoding="utf-8") as file:
             for line in file:
                 line = line.strip()
@@ -252,9 +254,11 @@ def main():
     parser.add_argument("--input", help="recorded input for the first client's hand")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
+    parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
+    options.hash_parts = options.hash_parts or options.hash_fields
 
     folder = options.bin or default_bin(options.config)
     exe = ".exe" if os.name == "nt" else ""
@@ -280,6 +284,10 @@ def main():
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", "2",
         "--come-back-seconds", str(options.come_back_seconds)]
+    if options.hash_parts:
+        server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
+        if options.hash_fields:
+            server_command.append("--record-fields")
     processes = []
     try:
         server = start(server_command, server_dir)
@@ -300,7 +308,9 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]] + where
-            if options.hash_parts:
+            if options.hash_fields:
+                command.append("--sim-hash-fields")
+            elif options.hash_parts:
                 command.append("--sim-hash-parts")
             if index == 0 and options.input:
                 command += ["--sim-input", shifted_input(options.input, client_dir)]
@@ -338,14 +348,14 @@ def main():
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
         different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
-        parts = parted_parts(os.path.join(client_dirs[0], "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
-                             different[0]) if different and index > 0 and options.hash_parts else None
+        parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
+                             different[0]) if different and options.hash_parts else None
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
         same = not different and len(compared) >= expected
         all_same = all_same and same
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
-            "different": different[:20], "same": same, "parts_against_client1": parts,
+            "different": different[:20], "same": same, "parts_against_server": parts,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
