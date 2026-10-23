@@ -218,6 +218,20 @@ void EachBySegment(const Place& place, SegmentPasses passes)
 		passes.registry.Each<Components...>(place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
 	} while (passes.placed++ < passes.last);
 }
+
+/// Uploads the instances that changed since the last upload into the buffer
+template <typename Instance>
+void UploadChanged(bgfx::DynamicVertexBufferHandle buffer, std::span<const Instance> instances,
+                   openblack::graphics::instance_upload::Mirror<Instance>& uploaded)
+{
+	for (const auto& run : uploaded.Take(instances))
+	{
+		// Copied, never referenced: bgfx's render thread reads the update while the next frame refills (and may grow,
+		// freeing the old storage) these instances
+		bgfx::update(buffer, run.first,
+		             bgfx::copy(instances.data() + run.first, static_cast<uint32_t>(run.count * sizeof(Instance))));
+	}
+}
 } // namespace
 
 RenderingSystem::~RenderingSystem() = default;
@@ -370,6 +384,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
 		    .end();
 		_renderContext.instanceUniformBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(instanceCount, layout));
+		_uploadedInstances.Forget();
 		_renderContext.instanceUniforms.resize(instanceCount);
 		_renderContext.instanceLevels.resize(instanceCount);
 	}
@@ -484,6 +499,7 @@ void RenderingSystem::PrepareTreeDrawDescs(bool drawBoundingBox)
 		    .end();
 		_renderContext.treeInstanceUniformBuffer =
 		    graphics::fromBgfx(bgfx::createDynamicVertexBuffer(treeInstanceCount, layout));
+		_uploadedTreeInstances.Forget();
 		_renderContext.treeInstanceData.resize(treeInstanceCount);
 	}
 
@@ -1148,12 +1164,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    }
 	    });
 
-	if (fits && !_renderContext.instanceUniforms.empty())
+	if (fits)
 	{
-		const auto size = static_cast<uint32_t>(_renderContext.instanceUniforms.size() * sizeof(RenderContext::ObjectInstance));
-		// Copied, never referenced: bgfx's render thread reads the update while the next frame refills (and may grow,
-		// freeing the old storage) these instances
-		bgfx::update(toBgfx(_renderContext.instanceUniformBuffer), 0, bgfx::copy(_renderContext.instanceUniforms.data(), size));
+		UploadChanged(toBgfx(_renderContext.instanceUniformBuffer),
+		              std::span<const RenderContext::ObjectInstance>(_renderContext.instanceUniforms), _uploadedInstances);
 	}
 	for (auto& [meshId, desc] : _renderContext.instancedDrawDescs)
 	{
@@ -1634,15 +1648,11 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		}
 	}
 
-	if (fits && !_renderContext.treeInstanceData.empty())
+	if (fits)
 	{
-		const auto size =
-		    static_cast<uint32_t>(_renderContext.treeInstanceData.size() * sizeof(RenderContext::TreeInstanceData));
-
-		// Update the buffer with the combined data, copied: bgfx's render thread reads it while the next frame refills
-		// (and may grow) the trees' instances
-		bgfx::update(toBgfx(_renderContext.treeInstanceUniformBuffer), 0,
-		             bgfx::copy(_renderContext.treeInstanceData.data(), size));
+		UploadChanged(toBgfx(_renderContext.treeInstanceUniformBuffer),
+		              std::span<const RenderContext::TreeInstanceData>(_renderContext.treeInstanceData),
+		              _uploadedTreeInstances);
 	}
 	return fits;
 }
