@@ -289,8 +289,30 @@ void TimeSystem::SetPaused(bool paused)
 	FollowStop(wasStopped);
 }
 
+void TimeSystem::SetPlayerPause(bool paused)
+{
+	if (PlayerCanStopClock(_networkGame))
+	{
+		SetPaused(paused);
+	}
+}
+
+void TimeSystem::SetNetworkGame(bool networkGame)
+{
+	_networkGame = networkGame;
+	// A hold that started before the game became a network game ends
+	if (networkGame && _held)
+	{
+		SetHeld(false);
+	}
+}
+
 void TimeSystem::SetHeld(bool held)
 {
+	if (held && !PlayerCanStopClock(_networkGame))
+	{
+		return;
+	}
 	const bool wasStopped = Stopped();
 	_held = held;
 	// The things that the frame steps after the start of the hold are in the stopped world, so they get no game time

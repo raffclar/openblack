@@ -48,15 +48,24 @@ char16_t Lower(char16_t c)
 	return c >= u'A' && c <= u'Z' ? static_cast<char16_t>(c - u'A' + u'a') : c;
 }
 
-/// The team colours of the game room, as 0xRRGGBB: grey for the observers, then red, green, blue and yellow
-constexpr std::array<uint32_t, 5> k_TeamColours = {0x808080, 0xFF0000, 0x00FF00, 0x0000FF, 0xFFFF00};
+/// The observers' grey, as 0xAARRGGBB
+constexpr uint32_t k_ObserverColour = 0xFF808080;
+/// The chat colour of each of the 32 gods, as 0xAARRGGBB. The first four are the game room's team colours: red, green,
+/// blue and yellow. The others are far from each other, from the grey of the observers and from the player's own lines,
+/// and bright enough to read on the dark chat box. A god earlier in the list is further from the colours before it.
+constexpr std::array<uint32_t, 32> k_GodColours = {
+    0xFFFF0000, 0xFF00FF00, 0xFF0000FF, 0xFFFFFF00, 0xFFFF33BB, 0xFF3377EE, 0xFF11FFBB, 0xFF559900,
+    0xFFDD5566, 0xFFEEFF99, 0xFFEEAAFF, 0xFF00BBFF, 0xFFDD11FF, 0xFF119977, 0xFF66FFFF, 0xFFAA55DD,
+    0xFFAAFF55, 0xFF778844, 0xFFFF7700, 0xFFEEAA88, 0xFFFFCC33, 0xFF00FF77, 0xFFBB7799, 0xFFAAEEBB,
+    0xFF2299AA, 0xFFFF0077, 0xFF7788CC, 0xFFFF77BB, 0xFF00AA55, 0xFFBBCC33, 0xFFFF0044, 0xFF00BB00,
+};
 /// The player's own chat lines
-constexpr uint32_t k_OwnLine = 0xC8C8C8;
+constexpr uint32_t k_OwnLine = 0xFFC8C8C8;
 
-glm::vec4 Colour(uint32_t rgb)
+glm::vec4 Colour(uint32_t argb)
 {
-	return {static_cast<float>((rgb >> 16u) & 0xFFu) / 255.0f, static_cast<float>((rgb >> 8u) & 0xFFu) / 255.0f,
-	        static_cast<float>(rgb & 0xFFu) / 255.0f, 1.0f};
+	return {static_cast<float>((argb >> 16u) & 0xFFu) / 255.0f, static_cast<float>((argb >> 8u) & 0xFFu) / 255.0f,
+	        static_cast<float>(argb & 0xFFu) / 255.0f, static_cast<float>((argb >> 24u) & 0xFFu) / 255.0f};
 }
 
 /// The texts that describe the first three local lands
@@ -328,14 +337,23 @@ std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players)
 	return seats;
 }
 
+uint32_t GodColourBits(int32_t god) noexcept
+{
+	if (god <= 0 || god > static_cast<int32_t>(k_GodColours.size()))
+	{
+		return k_ObserverColour;
+	}
+	return k_GodColours.at(static_cast<size_t>(god - 1));
+}
+
 glm::vec4 GodColour(int32_t god) noexcept
 {
-	if (god <= 0)
-	{
-		return Colour(k_TeamColours[0]);
-	}
-	const auto team = static_cast<size_t>((god - 1) % 4) + 1;
-	return Colour(k_TeamColours.at(team));
+	return Colour(GodColourBits(god));
+}
+
+uint32_t OwnLineColourBits() noexcept
+{
+	return k_OwnLine;
 }
 
 glm::vec4 OwnLineColour() noexcept

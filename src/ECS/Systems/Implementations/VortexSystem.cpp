@@ -105,14 +105,21 @@ bool OnMap(glm::ivec2 cell)
 	       cell.y < LandIslandInterface::k_MapCellsPerSide;
 }
 
+/// Where a vortex's time in its state is read: in the game turn or in a frame
+enum class ReadIn
+{
+	Turn,
+	Frame,
+};
+
 /// Seconds since a vortex's state began, now
-float SecondsInState(const Vortex& vortex)
+float SecondsInState(const Vortex& vortex, ReadIn readIn)
 {
 	const auto& time = Locator::time::value();
 	const auto turn = time.GetTurn();
 	const auto turns = turn >= vortex.stateStartTurn ? turn - vortex.stateStartTurn : 0;
-	return vortex::ElapsedSeconds(turns, time.GetTurnFraction(),
-	                              static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
+	const auto fraction = vortex::TurnFractionFor(time.GetTurnFraction(), readIn == ReadIn::Turn, time.IsNetworkGame());
+	return vortex::ElapsedSeconds(turns, fraction, static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
 }
 
 const GVortexInfo* InfoOf(VortexType type)
@@ -214,7 +221,7 @@ void VortexSystem::UpdateFrame(float gameSeconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
 	registry.Each<Vortex>([this, gameSeconds, particles](entt::entity /*entity*/, Vortex& vortex) {
-		const auto seconds = SecondsInState(vortex);
+		const auto seconds = SecondsInState(vortex, ReadIn::Frame);
 		const auto openness = vortex::Openness(vortex.state, seconds);
 		if (openness != 0.0f)
 		{
@@ -309,7 +316,7 @@ float VortexSystem::GetOpenness(entt::entity vortex) const
 	{
 		return 0.0f;
 	}
-	return vortex::Openness(component->state, static_cast<float>(SecondsInState(*component)));
+	return vortex::Openness(component->state, static_cast<float>(SecondsInState(*component, ReadIn::Frame)));
 }
 
 void VortexSystem::ProcessTurn()
@@ -335,7 +342,7 @@ void VortexSystem::ProcessTurn()
 		{
 			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
-		const auto seconds = SecondsInState(vortex);
+		const auto seconds = SecondsInState(vortex, ReadIn::Turn);
 		switch (vortex::Advance(vortex.state, seconds))
 		{
 		case vortex::Step::Open:

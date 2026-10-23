@@ -131,12 +131,13 @@ def main():
         print(f"the server ended with exit code {code}; see {server_log}")
         return 1
 
-    # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more
+    # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more. The server's
+    # world is a network game, so the game plays as one too
     game_command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed),
                     "--sim-fast", "--sim-draw-every", "0", "--sim-frame-ms", str(options.frame_ms),
                     "--sim-until-turn", str(options.turns + 1), "--sim-still-hand", "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
-                    "-l", game_log] + where
+                    "-l", game_log, "--sim-network-game"] + where
     if options.hash_fields:
         game_command.append("--sim-hash-fields")
     elif options.hash_parts:

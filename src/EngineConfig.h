@@ -151,8 +151,8 @@ struct EngineConfig
 	/// The https:// origin of the lobby (bwgame-service). With none, the game has no online services. The web build
 	/// uses the origin of the page for any value.
 	std::optional<std::string> lobbyOrigin;
-	/// The real-world weather of the player's place changes the weather of a single-player game. It is off unless the
-	/// player turns it on, as in the original game.
-	bool useInternetWeather {false};
+	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
+	/// player turns it off.
+	bool useInternetWeather {true};
 };
 } // namespace openblack

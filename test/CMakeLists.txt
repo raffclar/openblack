@@ -1702,3 +1702,4 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_display_scaling windowing/test_display_scaling.cpp
 )
+openblack_setup_and_add_test(test_build_version test_build_version.cpp)

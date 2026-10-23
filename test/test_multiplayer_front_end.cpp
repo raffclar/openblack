@@ -10,6 +10,7 @@
 // The rules of the multiplayer front end over the temple's future room, and its calls to the lobby client and the game
 // socket, with a fake lobby and a fake socket
 
+#include <cmath>
 #include <cstdint>
 
 #include <array>
@@ -34,6 +35,12 @@ using namespace openblack;
 using namespace openblack::gui;
 using namespace openblack::gui::multiplayer;
 using namespace openblack::ecs::systems;
+
+namespace
+{
+/// The version of the client in these tests, as the build writes it
+constexpr std::string_view k_GameVersion = "0.1.0+0123456789ab";
+} // namespace
 
 namespace
 {
@@ -368,9 +375,14 @@ TEST(MultiplayerRules, ChatLinesHaveTheGodsColours)
 	EXPECT_EQ(other.colour, glm::vec4(1.0f, 0.0f, 0.0f, 1.0f));
 	EXPECT_EQ(GodColour(0), GodColour(-1));
 	EXPECT_EQ(GodColour(4), glm::vec4(1.0f, 1.0f, 0.0f, 1.0f));
-	// The fifth god takes the first god's colour again
-	EXPECT_EQ(GodColour(5), GodColour(1));
-	EXPECT_EQ(GodColour(32), GodColour(4));
+	// The fifth god has a colour of its own, and a number past the last god is grey as the observers
+	EXPECT_NE(GodColour(5), GodColour(1));
+	EXPECT_EQ(GodColour(33), GodColour(0));
+	EXPECT_EQ(GodColourBits(1), 0xFFFF0000u);
+	EXPECT_EQ(GodColourBits(2), 0xFF00FF00u);
+	EXPECT_EQ(GodColourBits(3), 0xFF0000FFu);
+	EXPECT_EQ(GodColourBits(4), 0xFFFFFF00u);
+	EXPECT_EQ(GodColourBits(0), 0xFF808080u);
 	EXPECT_EQ(ClampChat(std::u16string(300, u'x')).size(), 254u);
 }
 
@@ -738,4 +750,68 @@ TEST_F(FrontEndTest, TheListenerGoesWithTheFrontEnd)
 	Make();
 	frontEnd.reset();
 	EXPECT_EQ(lobby.removed, (std::vector<uint32_t> {1}));
+}
+
+namespace
+{
+/// The light of one part of a colour, from 0 to 1, as the sRGB curve has it
+double LinearPart(uint32_t part)
+{
+	const auto value = static_cast<double>(part) / 255.0;
+	return value <= 0.04045 ? value / 12.92 : std::pow((value + 0.055) / 1.055, 2.4);
+}
+
+/// The relative luminance of a colour, 0 for black and 1 for white
+double Luminance(uint32_t argb)
+{
+	return (0.2126 * LinearPart((argb >> 16u) & 0xFFu)) + (0.7152 * LinearPart((argb >> 8u) & 0xFFu)) +
+	       (0.0722 * LinearPart(argb & 0xFFu));
+}
+
+/// A colour in the CIE L*a*b* space, where the distance between two colours is near how different they look
+std::array<double, 3> Lab(uint32_t argb)
+{
+	const auto r = LinearPart((argb >> 16u) & 0xFFu);
+	const auto g = LinearPart((argb >> 8u) & 0xFFu);
+	const auto b = LinearPart(argb & 0xFFu);
+	const auto x = ((0.4124 * r) + (0.3576 * g) + (0.1805 * b)) / 0.95047;
+	const auto y = (0.2126 * r) + (0.7152 * g) + (0.0722 * b);
+	const auto z = ((0.0193 * r) + (0.1192 * g) + (0.9505 * b)) / 1.08883;
+	const auto f = [](double t) { return t > 216.0 / 24389.0 ? std::cbrt(t) : ((24389.0 / 27.0 * t) + 16.0) / 116.0; };
+	return {(116.0 * f(y)) - 16.0, 500.0 * (f(x) - f(y)), 200.0 * (f(y) - f(z))};
+}
+
+double Difference(uint32_t first, uint32_t second)
+{
+	const auto a = Lab(first);
+	const auto b = Lab(second);
+	return std::hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
+}
+} // namespace
+
+TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
+{
+	// Each pair of the 32 gods, the observers' grey and the player's own lines differ clearly
+	std::vector<uint32_t> colours;
+	for (int32_t god = 1; god <= k_MostGods; ++god)
+	{
+		EXPECT_EQ(GodColourBits(god) >> 24u, 0xFFu) << "god " << god;
+		colours.push_back(GodColourBits(god));
+	}
+	colours.push_back(GodColourBits(0));
+	colours.push_back(OwnLineColourBits());
+	constexpr double k_LeastDifference = 25.0;
+	for (size_t i = 0; i < colours.size(); ++i)
+	{
+		for (size_t j = i + 1; j < colours.size(); ++j)
+		{
+			EXPECT_GE(Difference(colours[i], colours[j]), k_LeastDifference) << std::hex << colours[i] << " and " << colours[j];
+		}
+	}
+	// Gods 5 to 32 are bright enough to read on the dark chat box: a contrast of 4.5 to 1 or more with black
+	for (int32_t god = 5; god <= k_MostGods; ++god)
+	{
+		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
+		EXPECT_GE(contrast, 4.5) << "god " << god;
+	}
 }

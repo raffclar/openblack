@@ -47,7 +47,7 @@ VideoSystem::Hooks GameHooks()
 {
 	return {
 	    .isPaused = []() { return Locator::time::value().IsPaused(); },
-	    .setPaused = [](bool paused) { Locator::time::value().SetPaused(paused); },
+	    .setPaused = [](bool paused) { Locator::time::value().SetPlayerPause(paused); },
 	    .isWideScreenOn = []() { return Locator::cinematicDirectorSystem::value().IsWideScreenOn(); },
 	    .setWideScreen = [](bool on) { Locator::cinematicDirectorSystem::value().SetWideScreen(on, 0); },
 	    .snapWideScreen = []() { Locator::cinematicDirectorSystem::value().SnapWideScreen(); },
