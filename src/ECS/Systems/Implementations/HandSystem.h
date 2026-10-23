@@ -32,6 +32,7 @@ public:
 	GetPlayerHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
+	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera() const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;

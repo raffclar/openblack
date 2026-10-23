@@ -108,6 +108,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -2609,10 +2610,11 @@ void MagicSystem::HoldFireBall(uint32_t nowMs, uint32_t turn)
 	}
 	const auto ball = _fireBallPress->ball;
 	_fireBallPress.reset();
+	// The hand sends the take, which catches the ball at the turn
 	if (!_held.has_value() && EntityRegistry().Valid(ball) && EntityRegistry().AllOf<MagicFireBall>(ball) &&
 	    EmptyHandInInfluence())
 	{
-		TapFireBall(ball);
+		SendFireBallCommand(ball, true);
 	}
 }
 
@@ -2636,8 +2638,39 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 		{
 			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
 		}
-		TapFireBall(press.ball);
+		// The hand sends the tap, which catches the ball at the turn
+		SendFireBallCommand(press.ball, false);
 	}
+}
+
+void MagicSystem::SendFireBallCommand(entt::entity ball, bool take)
+{
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		DoCatchFireBall(PlayerNames::PLAYER_ONE, ball);
+		return;
+	}
+	auto& commands = Locator::playerCommandSystem::value();
+	if (take)
+	{
+		commands.Submit(player_commands::HandTake {.object = ball});
+	}
+	else
+	{
+		commands.Submit(player_commands::HandTap {.object = ball});
+	}
+}
+
+void MagicSystem::DoCatchFireBall(PlayerNames player, entt::entity ball)
+{
+	// Every computer catches it into the hand of the player that sent the tap or the take, if the hand is still empty.
+	// The press asked for the player's influence. There is one human, with this computer's hand.
+	if (player != PlayerNames::PLAYER_ONE || !Locator::infoConstants::has_value() || _held.has_value() ||
+	    !EntityRegistry().Valid(ball) || !EntityRegistry().AllOf<MagicFireBall>(ball))
+	{
+		return;
+	}
+	CatchFireBall(ball);
 }
 
 bool MagicSystem::CatchFireBall(entt::entity ball)

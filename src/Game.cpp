@@ -192,6 +192,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -874,8 +875,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				}
 				if (!creatureHand.Grab())
 				{
-					// A creature the hand may not hold: a click on it still asks the leash, which says why not
-					Locator::leashSystem::value().TapCreature(PlayerNames::PLAYER_ONE, *under);
+					// A creature the hand may not hold: a click on it still asks the leash, which says why not. The leash
+					// hears the click at the start of a later turn, as a command of the player.
+					Locator::playerCommandSystem::value().Submit(player_commands::LeashTap {.creature = *under});
 				}
 			}
 		}
@@ -1488,7 +1490,10 @@ std::optional<glm::vec2> Game::OnScreen(glm::vec3 point) const
 
 void Game::UpdateFloatingNumbers(float seconds)
 {
-	ecs::floating_number::StepAll(Locator::entitiesRegistry::value(), seconds);
+	if (Locator::floatingNumberSystem::has_value())
+	{
+		Locator::floatingNumberSystem::value().Step(seconds);
+	}
 }
 
 void Game::UpdateLearningMarks(float milliseconds)
@@ -1544,7 +1549,6 @@ void Game::PlaceScreenLabels()
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
 	// Those on the screen, the furthest first so the nearer are drawn over them
 	struct Placed
 	{
@@ -1553,18 +1557,19 @@ void Game::PlaceScreenLabels()
 	};
 	std::vector<Placed> placed;
 	const auto eye = Locator::camera::value().GetOrigin();
-	registry.Each<const ecs::components::FloatingNumber>(
-	    [this, &placed, eye](entt::entity /*unused*/, const ecs::components::FloatingNumber& number) {
-		    const auto alpha = ecs::floating_number::Alpha(number.life);
-		    const auto screen = OnScreen(number.position);
-		    if (!alpha.has_value() || !screen.has_value())
-		    {
-			    return;
-		    }
-		    placed.push_back(
-		        {.distance = glm::distance(eye, number.position),
-		         .number = {.screen = *screen, .text = gui::ToUtf16(number.text), .colour = number.colour, .alpha = *alpha}});
-	    });
+	const auto floating = Locator::floatingNumberSystem::has_value() ? Locator::floatingNumberSystem::value().Numbers()
+	                                                                 : std::span<const ecs::components::FloatingNumber> {};
+	std::ranges::for_each(floating, [this, &placed, eye](const ecs::components::FloatingNumber& number) {
+		const auto alpha = ecs::floating_number::Alpha(number.life);
+		const auto screen = OnScreen(number.position);
+		if (!alpha.has_value() || !screen.has_value())
+		{
+			return;
+		}
+		placed.push_back(
+		    {.distance = glm::distance(eye, number.position),
+		     .number = {.screen = *screen, .text = gui::ToUtf16(number.text), .colour = number.colour, .alpha = *alpha}});
+	});
 	std::ranges::sort(placed, std::ranges::greater {}, &Placed::distance);
 	std::vector<gui::GameInterface::FloatingNumber> numbers;
 	numbers.reserve(placed.size());

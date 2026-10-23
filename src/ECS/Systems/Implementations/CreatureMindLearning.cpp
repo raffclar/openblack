@@ -140,6 +140,7 @@
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -2274,11 +2275,10 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		break;
 	}
 	// Only the player of the creature looks at it
-	if (self.owner == PlayerNames::PLAYER_ONE && Locator::camera::has_value())
+	if (const auto camera = openblack::ecs::ReportedPlayerCamera(); self.owner == PlayerNames::PLAYER_ONE && camera.has_value())
 	{
-		const auto& camera = Locator::camera::value();
 		const auto* at = registry.TryGet<const Transform>(creature);
-		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
 	return facts;
 }
@@ -2961,10 +2961,9 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto& learnt = *mind.learnt;
 
 	creature_plan_actions::Situation situation;
-	if (Locator::camera::has_value())
+	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
 	{
-		const auto eye = Locator::camera::value().GetOrigin();
-		situation.camera = glm::vec2(eye.x, eye.z);
+		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 	}
 	Situate(creature, situation);
 	const auto random = [this](uint32_t range) { return Random(range); };
@@ -3369,7 +3368,8 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
 			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
-			const auto eye = Locator::camera::has_value() ? Locator::camera::value().GetOrigin() : transform->position;
+			const auto camera = openblack::ecs::ReportedPlayerCamera();
+			const auto eye = camera.has_value() ? camera->origin : transform->position;
 			agenda = creature_leash_orders::Hold(
 			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
 			    creature_leash_orders::HoldSeconds(_random.GameFloatRand(creature_leash_orders::k_HoldExtraSeconds),
@@ -3402,10 +3402,9 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}
-			if (Locator::camera::has_value())
+			if (const auto camera = openblack::ecs::ReportedPlayerCamera())
 			{
-				const auto eye = Locator::camera::value().GetOrigin();
-				situation.camera = glm::vec2(eye.x, eye.z);
+				situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 			}
 			Situate(creature, situation);
 			if (plan.instrument.has_value())
@@ -3671,9 +3670,9 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		situation.stage = mind->developmentPhase;
 	}
 	// Every agenda that faces the player can be made: also when a plan starts again after a hold, or is forced
-	if (Locator::camera::has_value())
+	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
 	{
-		situation.eye = Locator::camera::value().GetOrigin();
+		situation.eye = camera->origin;
 		situation.camera = glm::vec2(situation.eye->x, situation.eye->z);
 	}
 	const auto* body = registry.TryGet<const Creature>(creature);
@@ -3747,21 +3746,20 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	const auto* at = registry.TryGet<const Transform>(creature);
 	const auto* body = registry.TryGet<const Creature>(creature);
 	// Only the local player's camera looks at creatures here
-	if (at != nullptr && body != nullptr && Locator::camera::has_value() && Locator::playerSystem::has_value() &&
+	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	if (at != nullptr && body != nullptr && camera.has_value() && Locator::playerSystem::has_value() &&
 	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
 	{
-		const auto& camera = Locator::camera::value();
-		situation.lookedAt = creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), at->position);
+		situation.lookedAt = creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
 	}
 	if (const auto* mind = registry.TryGet<const CreatureMindState>(creature); mind != nullptr)
 	{
 		situation.handMoving = situation.playerHand.has_value() && creature_player_attention::IsHandMoving(mind->handSpeed);
 	}
-	if (at != nullptr && situation.playerHand.has_value() && Locator::camera::has_value())
+	if (at != nullptr && situation.playerHand.has_value() && camera.has_value())
 	{
-		const auto& camera = Locator::camera::value();
 		situation.awayFromHand =
-		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera.GetOrigin(), camera.GetFocus());
+		    creature_player_attention::AwayFromHand(at->position, *situation.playerHand, camera->origin, camera->focus);
 	}
 }
 
@@ -4140,7 +4138,7 @@ void CreatureMindSystem::PlanTurn()
 	    [&creatures](entt::entity entity, const Creature&, CreatureMindState&) { creatures.push_back(entity); });
 	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
 	const auto held =
-	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetCreature() : std::nullopt;
+	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetLockedCreature() : std::nullopt;
 	for (const auto entity : creatures)
 	{
 		if (auto* mind = registry.TryGet<CreatureMindState>(entity); mind != nullptr && held != entity)
@@ -4159,7 +4157,7 @@ void CreatureMindSystem::PlanCreatureTurn(entt::entity creature)
 	}
 	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
 	const auto held =
-	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetCreature() : std::nullopt;
+	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetLockedCreature() : std::nullopt;
 	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && held != creature)
 	{
 		PlanCreature(creature, *mind);
@@ -5285,10 +5283,9 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	creature_plan_actions::Situation situation;
-	if (Locator::camera::has_value())
+	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
 	{
-		const auto eye = Locator::camera::value().GetOrigin();
-		situation.camera = glm::vec2(eye.x, eye.z);
+		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 	}
 	Situate(creature, situation);
 	const auto desire = context.desire;
@@ -5563,10 +5560,10 @@ bool CreatureMindSystem::LookedAtByItsPlayer(entt::entity creature)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (body == nullptr || transform == nullptr || body->owner != PlayerNames::PLAYER_ONE || !Locator::camera::has_value())
+	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	if (body == nullptr || transform == nullptr || body->owner != PlayerNames::PLAYER_ONE || !camera.has_value())
 	{
 		return false;
 	}
-	const auto& camera = Locator::camera::value();
-	return creature_attention::IsLookingAt(camera.GetOrigin(), camera.GetFocus(), transform->position);
+	return creature_attention::IsLookingAt(camera->origin, camera->focus, transform->position);
 }

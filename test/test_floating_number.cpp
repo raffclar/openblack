@@ -85,14 +85,10 @@ TEST(FloatingNumber, ItsTextEndsAtItsPoint)
 
 TEST(FloatingNumber, ThoseWhoseTimeIsUpGo)
 {
-	ecs::Registry registry;
-	const auto early = registry.Create();
-	registry.Assign<ecs::components::FloatingNumber>(early, ecs::components::FloatingNumber {.life = 0.5f});
-	const auto late = registry.Create();
-	registry.Assign<ecs::components::FloatingNumber>(late, ecs::components::FloatingNumber {.life = 5.0f});
-	fn::StepAll(registry, 1.0f);
-	EXPECT_FALSE(registry.Valid(early));
-	EXPECT_TRUE(registry.Valid(late));
+	std::vector<ecs::components::FloatingNumber> numbers {{.text = "early", .life = 0.5f}, {.text = "late", .life = 5.0f}};
+	fn::StepAll(numbers, 1.0f);
+	ASSERT_EQ(numbers.size(), 1u);
+	EXPECT_EQ(numbers[0].text, "late");
 }
 
 namespace

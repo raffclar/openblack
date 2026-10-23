@@ -362,11 +362,23 @@ bool VillageTotemSystem::Grip(entt::entity totem, PlayerNames player)
 	totemComponent.gripped = true;
 	_gripped = totem;
 	Place(totem);
-	// The player's creature sees the hand take the totem first, then the living near it react to the hand
-	_world->SeeHandTakeTotem(player);
-	// The living near it react to the hand using it
-	_world->ReactToHandUsingTotem(totem, player, StandingAt(totem));
+	// The world sees the hand take hold at the start of a later turn
+	if (!_world->SendCommand(player_commands::HandLock {.object = totem}))
+	{
+		DoGrip(player, totem);
+	}
 	return true;
+}
+
+void VillageTotemSystem::DoGrip(PlayerNames player, entt::entity totem)
+{
+	if (!_world->Entities().Valid(totem) || !_world->Entities().AllOf<VillageTotem>(totem))
+	{
+		return;
+	}
+	// The player's creature sees the hand take the totem first, then the living near it react to the hand using it
+	_world->SeeHandTakeTotem(player);
+	_world->ReactToHandUsingTotem(totem, player, StandingAt(totem));
 }
 
 glm::vec3 VillageTotemSystem::StandingAt(entt::entity totem) const
@@ -409,10 +421,29 @@ void VillageTotemSystem::LetGo()
 	}
 	const auto totem = _gripped;
 	_gripped = entt::null;
-	auto& registry = _world->Entities();
-	auto& totemComponent = registry.Get<VillageTotem>(totem);
+	auto& totemComponent = _world->Entities().Get<VillageTotem>(totem);
 	totemComponent.gripped = false;
 	const float share = totemComponent.held;
+	// The town takes the share at the start of a later turn; until then the totem eases to the share it had
+	totemComponent.held = totemComponent.ease.target;
+	Place(totem);
+	const player_commands::TotemShare command {.totem = totem, .share = share};
+	if (!_world->SendCommand(command))
+	{
+		DoShare(PlayerNames::NEUTRAL, totem, share);
+		return;
+	}
+	_world->SendCommand(player_commands::HandUnlock {.object = totem});
+}
+
+void VillageTotemSystem::DoShare([[maybe_unused]] PlayerNames player, entt::entity totem, float share)
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(totem) || !registry.AllOf<VillageTotem>(totem))
+	{
+		return;
+	}
+	auto& totemComponent = registry.Get<VillageTotem>(totem);
 	const auto at = StandingAt(totem);
 	// Where it was left becomes the town's share, which a town without a worship site refuses. Raised from none at all,
 	// the town's player's creature takes it the player wants to impress.
@@ -428,7 +459,11 @@ void VillageTotemSystem::LetGo()
 	{
 		SetTotemShare(totem, share);
 	}
-	totemComponent.held = totemComponent.ease.target;
+	// The hand of this computer can hold it again meanwhile
+	if (!totemComponent.gripped)
+	{
+		totemComponent.held = totemComponent.ease.target;
+	}
 	Place(totem);
 	// The share it was left at floats up from it in grey
 	_world->FloatNumber(at, village_totem::AsPercentage(share), village_totem::k_LetGoNumberColour);

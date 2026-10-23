@@ -17,6 +17,12 @@
 
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
+#include "Enums.h"
+
+namespace openblack::player_commands
+{
+struct CreatureBruise;
+} // namespace openblack::player_commands
 
 namespace openblack::ecs::systems
 {
@@ -71,6 +77,16 @@ public:
 
 	/// The creature the hand is held to, if any
 	[[nodiscard]] virtual std::optional<entt::entity> GetCreature() const = 0;
+	/// The creature that the world has the player's hand hold, from the turn that did the lock of the press to the turn
+	/// that does its end. The turns read only this, never the creature that the frames hold the hand to.
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedCreature() const { return std::nullopt; }
+	/// At the turn: the player's hand locks on to a creature, which stops and turns to the player's camera
+	/// (player_commands::HandLock)
+	virtual void DoLock(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// At the turn: the lock on the creature ends (player_commands::HandUnlock)
+	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// At the turn: a hard slap bruised a creature (player_commands::CreatureBruise)
+	virtual void DoBruise(PlayerNames /*player*/, const player_commands::CreatureBruise& /*bruise*/) {}
 	/// Whether the hand was put on the creature by a command, so the button letting go leaves it held
 	[[nodiscard]] virtual bool IsHeldByCommand() const = 0;
 	/// The creature the interface picked under the cursor at the last frame drawn, which the hand would take hold of

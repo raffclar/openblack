@@ -364,10 +364,12 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 		{
 			return true;
 		}
-		// On something the held thing can be used on, it is given to it; otherwise ready to throw: the spring takes hold of
-		// the hand the next frame, where the hand then is
-		if (const auto target = _world->ObjectUnderCursor(); target.has_value() && HandInInfluence() && ApplyTo(*grab, *target))
+		// On something the held thing can be used on, the hand sends the use of it, which the turn does; otherwise ready to
+		// throw: the spring takes hold of the hand the next frame, where the hand then is
+		if (const auto target = _world->ObjectUnderCursor();
+		    target.has_value() && HandInInfluence() && AppliesTo(*grab, *target))
 		{
+			_world->SendCommand(player_commands::HandApply {.target = *target});
 			return true;
 		}
 		// Out of the player's influence the press does nothing: the hand keeps hold, and letting go of the button later,
@@ -394,9 +396,11 @@ bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
 	{
 		object = _world->ObjectNearHand();
 	}
-	// A pile is scooped from at once
-	if (object.has_value() && StartScoop(*grab, *object))
+	// A press on a pile, a field or a fish farm sends the lock on to it. The turn that does the lock starts the scoop.
+	if (object.has_value() && Scoopable(*object))
 	{
+		grab->locking = *object;
+		_world->SendCommand(player_commands::HandLock {.object = *object});
 		return true;
 	}
 	if (!object.has_value() || !MayTake(*object))
@@ -489,21 +493,21 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
-		// Letting go of the button ends a scoop; the hand holds its handful. After a pile or a fish farm, but not a field,
-		// the hand shows the amount it holds.
+		// Letting go of the button sends the end of the lock, which ends the scoop at the turn
 		if (grab->scoopSource != entt::null)
 		{
-			if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
-			    handful != nullptr && Exists(grab->scoopSource) && !_world->FieldFactsOf(grab->scoopSource).has_value())
-			{
-				_amountToolTip = handful->amount;
-			}
-			EndScoop(*grab);
+			_world->SendCommand(player_commands::HandUnlock {.object = grab->scoopSource});
+		}
+		break;
+	case HandGrab::State::Empty:
+		// Let go before a turn did the lock, the end of the lock follows it
+		if (grab->locking != entt::null)
+		{
+			_world->SendCommand(player_commands::HandUnlock {.object = grab->locking});
 		}
 		break;
 	case HandGrab::State::Taking:
 	case HandGrab::State::LettingGo:
-	case HandGrab::State::Empty:
 		break;
 	}
 	return std::nullopt;
@@ -530,6 +534,68 @@ void HandGrabSystem::DoLetGo(PlayerNames player, const player_commands::HandLetG
 	LetGo(*grab, letGo.velocity, letGo.start);
 }
 
+bool HandGrabSystem::Scoopable(entt::entity source) const
+{
+	// Only inside the player's influence, and only from what has something to give
+	if (!HandInInfluence())
+	{
+		return false;
+	}
+	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
+	if (const auto field = _world->FieldFactsOf(source))
+	{
+		return field->lockable && std::min(scoop.initial, field->food) >> (field->ripe ? 1u : 0u) != 0;
+	}
+	if (const auto farm = _world->FishFarmOf(source))
+	{
+		return fish_farm::FirstHandful(scoop.initial, *farm) != 0;
+	}
+	// Only a pile is scooped from, never a handful
+	const auto facts = _world->PotFactsOf(source);
+	if (!facts.has_value() || facts->potType == PotType::Pot ||
+	    _world->Entities().Get<const Pot>(source).type == facts->handful)
+	{
+		return false;
+	}
+	return std::min(_world->ScoopFactsOf(facts->handful).initial, facts->amount) != 0;
+}
+
+void HandGrabSystem::DoLock(PlayerNames player, entt::entity object)
+{
+	// Every computer starts the scoop, whatever the hand of this computer does now. Only a hand that holds nothing scoops.
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer())
+	{
+		return;
+	}
+	if (grab->locking == object)
+	{
+		grab->locking = entt::null;
+	}
+	if (Holds(*grab) || !Exists(object))
+	{
+		return;
+	}
+	StartScoop(*grab, object);
+}
+
+void HandGrabSystem::DoUnlock(PlayerNames player, entt::entity object)
+{
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer() || grab->scoopSource != object)
+	{
+		return;
+	}
+	// The scoop ends; the hand holds its handful. After a pile or a fish farm, but not a field, the hand shows the amount it
+	// holds.
+	if (const auto* handful = _world->Entities().TryGet<const Pot>(grab->object);
+	    handful != nullptr && Exists(object) && !_world->FieldFactsOf(object).has_value())
+	{
+		_amountToolTip = handful->amount;
+	}
+	EndScoop(*grab);
+}
+
 bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 {
 	if (const auto field = _world->FieldFactsOf(source))
@@ -541,8 +607,8 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 		return StartFishFarmScoop(grab, source, *farm);
 	}
 	const auto facts = _world->PotFactsOf(source);
-	// Only a pile is scooped from, never a handful, and only inside the player's influence
-	if (!facts.has_value() || facts->potType == PotType::Pot || !HandInInfluence())
+	// Only a pile is scooped from, never a handful. The press asked for the player's influence.
+	if (!facts.has_value() || facts->potType == PotType::Pot)
 	{
 		return false;
 	}
@@ -559,7 +625,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 	}
 	const auto sourcePosition = _world->PoseOf(source).origin;
 	_world->TakeFromPile(source, first);
-	const auto hand = _world->PoseOf(_world->Hand()).origin;
+	const auto hand = _world->ReportedHandPlace();
 	const auto handful = _world->MakeHandful(facts->handful, hand, first, facts->poisoned);
 	if (!Exists(handful))
 	{
@@ -584,7 +650,7 @@ bool HandGrabSystem::StartScoop(HandGrab& grab, entt::entity source)
 
 bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const FieldFacts& facts)
 {
-	if (!facts.lockable || !HandInInfluence())
+	if (!facts.lockable)
 	{
 		return false;
 	}
@@ -600,7 +666,7 @@ bool HandGrabSystem::StartFieldScoop(HandGrab& grab, entt::entity field, const F
 		return false;
 	}
 	_world->TakeFromField(field, first);
-	const auto hand = _world->PoseOf(_world->Hand()).origin;
+	const auto hand = _world->ReportedHandPlace();
 	const auto handful = _world->MakeHandful(PotInfo::HandFood, hand, first, false);
 	if (!Exists(handful))
 	{
@@ -659,10 +725,6 @@ bool HandGrabSystem::ScoopField(HandGrab& grab, const FieldFacts& facts)
 
 bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const fish_farm::Type& type)
 {
-	if (!HandInInfluence())
-	{
-		return false;
-	}
 	// The first handful comes by what a full farm holds, not out of the fish in it
 	const auto scoop = _world->ScoopFactsOf(PotInfo::HandFood);
 	const auto first = fish_farm::FirstHandful(scoop.initial, type);
@@ -670,7 +732,7 @@ bool HandGrabSystem::StartFishFarmScoop(HandGrab& grab, entt::entity farm, const
 	{
 		return false;
 	}
-	const auto hand = _world->PoseOf(_world->Hand()).origin;
+	const auto hand = _world->ReportedHandPlace();
 	const auto handful = _world->MakeHandful(PotInfo::HandFood, hand, first, false);
 	if (!Exists(handful))
 	{
@@ -784,6 +846,39 @@ void HandGrabSystem::EndScoop(HandGrab& grab)
 	grab.scoopTurns = 0;
 }
 
+bool HandGrabSystem::AppliesTo(const HandGrab& grab, entt::entity target) const
+{
+	const auto held = grab.object;
+	if (!Exists(held) || target == held || !Exists(target))
+	{
+		return false;
+	}
+	// A pot goes to a store of what it holds, or into a pile or pot of the same. Anything else goes whole to an altar, a
+	// gate stone plinth or a store.
+	const auto pot = _world->PotFactsOf(held);
+	if (!pot.has_value())
+	{
+		return _world->TakesWhole(target, held);
+	}
+	if (_world->StoresResource(target, pot->resource))
+	{
+		return true;
+	}
+	const auto other = _world->PotFactsOf(target);
+	return other.has_value() && other->resource == pot->resource;
+}
+
+void HandGrabSystem::DoApply(PlayerNames player, entt::entity target)
+{
+	// Every computer uses the held thing on the target, whatever the hand of this computer does now
+	auto* grab = Grab();
+	if (grab == nullptr || player != _world->HandPlayer() || !Holds(*grab))
+	{
+		return;
+	}
+	ApplyTo(*grab, target);
+}
+
 bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 {
 	const auto held = grab.object;
@@ -834,7 +929,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	}
 	else if (const auto other = _world->PotFactsOf(target); other.has_value() && other->resource == pot->resource)
 	{
-		_world->PourAt(pot->resource, _world->PoseOf(_world->Hand()).origin, pot->amount, _world->HandPlayer(), pot->poisoned);
+		_world->PourAt(pot->resource, _world->ReportedHandPlace(), pot->amount, _world->HandPlayer(), pot->poisoned);
 	}
 	else
 	{
@@ -1181,6 +1276,7 @@ void HandGrabSystem::Empty(HandGrab& grab)
 	grab.springPending = false;
 	grab.scoopSource = entt::null;
 	grab.scoopTurns = 0;
+	grab.locking = entt::null;
 }
 
 glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)

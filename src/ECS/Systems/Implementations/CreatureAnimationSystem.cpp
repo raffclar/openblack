@@ -815,7 +815,7 @@ void CreatureAnimationSystem::ProcessTurn()
 void CreatureAnimationSystem::BodyTurn(entt::entity creature)
 {
 	// While the player's hand holds the creature to interact with it, the body keeps its looks
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature)
 	{
 		return;
 	}

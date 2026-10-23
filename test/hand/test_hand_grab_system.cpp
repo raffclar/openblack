@@ -353,6 +353,10 @@ public:
 		registry.Destroy(object);
 		return true;
 	}
+	[[nodiscard]] bool TakesWhole(entt::entity target, entt::entity held) const override
+	{
+		return stores.contains(target) || (plinths.contains(target) && gateStones.contains(held));
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -515,6 +519,18 @@ protected:
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandTwist>)
 			    {
 				    system->DoTwist(player, command.object, command.moved);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandLock>)
+			    {
+				    system->DoLock(player, command.object);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandUnlock>)
+			    {
+				    system->DoUnlock(player, command.object);
+			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandApply>)
+			    {
+				    system->DoApply(player, command.target);
 			    }
 		    },
 		    action);
@@ -2149,4 +2165,48 @@ TEST_F(HandGrabSystemWithWorld, TheHandDoesOnlyTheCommandsOfItsOwnPlayer)
 	EXPECT_FALSE(system->GetHeld().has_value());
 	RunWaiting();
 	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+}
+
+TEST_F(HandGrabSystemWithWorld, APressOnAPileSendsTheLockAndTheTurnStartsTheScoop)
+{
+	deferCommands = true;
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->underCursor = pile;
+	// The press sends the lock and takes nothing from the pile
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandLock>(waiting.front()));
+	EXPECT_EQ(std::get<player_commands::HandLock>(waiting.front()).object, pile);
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_EQ(world->registry.Get<const Pot>(pile).amount, 1000u);
+	// Let go before the turn, the end of the lock follows the lock
+	Release();
+	ASSERT_EQ(waiting.size(), 2u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandUnlock>(waiting.back()));
+	EXPECT_EQ(std::get<player_commands::HandUnlock>(waiting.back()).object, pile);
+	// The turn takes the first handful, then ends the scoop: the hand keeps its handful
+	RunWaiting();
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	EXPECT_EQ(world->registry.Get<const Pot>(pile).amount, 975u);
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
+	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(25u));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->underCursor = pile;
+	EXPECT_TRUE(Press());
+	const auto handful = system->GetHeld();
+	ASSERT_TRUE(handful.has_value());
+	system->DoUnlock(world->HandPlayer(), *handful);
+	system->ProcessTurn();
+	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
 }
