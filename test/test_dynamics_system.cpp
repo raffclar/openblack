@@ -12,12 +12,16 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <cstdint>
+
 #include <algorithm>
 #include <array>
+#include <functional>
 #include <map>
 #include <memory>
 #include <optional>
 #include <stdexcept>
+#include <string_view>
 #include <vector>
 
 #include <LNDFile.h>
@@ -40,6 +44,7 @@
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/DynamicsSystem.h"
+#include "ECS/Systems/Implementations/TimeSystem.h"
 #include "InfoConstants.h"
 #include "Resources/ResourceManager.h"
 
@@ -229,8 +234,17 @@ private:
 
 class DynamicsSystemTest: public ::testing::Test
 {
-protected:
-	void SetUp() override { MakeWorld(FakeWorld::k_LandHeight); }
+public:
+	/// A rock three metres over the land, thrown up and along
+	entt::entity ThrownRock()
+	{
+		const auto rock = Rock({1000.0f, 1000.0f});
+		_world->Entities().Get<Transform>(rock).position.y += 3.0f;
+		_dynamics->InitialisePhysics(rock, {.velocity = {4.0f, 6.0f, 0.0f}});
+		return rock;
+	}
+	[[nodiscard]] Registry& Entities() { return _world->Entities(); }
+	[[nodiscard]] DynamicsSystem& Dynamics() { return *_dynamics; }
 
 	/// The world the system works in: dry land at that height, or the open sea at the sea's level
 	void MakeWorld(float landHeight)
@@ -240,6 +254,9 @@ protected:
 		_dynamics = std::make_unique<DynamicsSystem>(std::move(world));
 		_dynamics->SetClassHooks(std::make_unique<PlainHooks>(_notPutDown));
 	}
+
+protected:
+	void SetUp() override { MakeWorld(FakeWorld::k_LandHeight); }
 
 	/// A rock standing on the land, filed in the map's cells
 	entt::entity Rock(glm::vec2 xz)
@@ -551,4 +568,87 @@ TEST_F(DynamicsSystemTest, ASavedPhysicsCarriesOnAsTheUnsavedOneDoes)
 	}
 	EXPECT_EQ(positions(), unsavedPositions);
 	EXPECT_EQ(state(), unsavedPhysics);
+}
+
+namespace
+{
+/// A frame as the game plays it: the turn if one is due, then the frame's clock, then the bodies drawn between their
+/// last two turns
+void PlayFrame(TimeSystem& clock, DynamicsSystem& dynamics)
+{
+	if (clock.IsTurnDue())
+	{
+		clock.StartTurn();
+		dynamics.ProcessTurn();
+	}
+	clock.UpdateFrame();
+	dynamics.UpdateFrame(clock.GetTurnFraction());
+}
+
+/// Where a thrown rock is at the end of each turn, with frames 16 ms apart. Before the frames of the turn `stopAt`,
+/// `stopOrGo` stops the clock. Then 200 frames pass, and `stopOrGo` starts the clock again.
+std::vector<glm::vec3> FlightByTurn(DynamicsSystemTest& test, int turns, std::optional<uint32_t> stopAt,
+                                    const std::function<void(TimeSystem&, bool)>& stopOrGo,
+                                    const std::function<void(std::string_view)>& failure)
+{
+	uint32_t now = 1000;
+	TimeSystem clock {[&now] { return now; }};
+	clock.StartGameClock(false);
+	const auto rock = test.ThrownRock();
+	auto& registry = test.Entities();
+	std::vector<glm::vec3> places;
+	while (clock.GetTurn() < static_cast<uint32_t>(turns))
+	{
+		const auto turn = clock.GetTurn();
+		if (stopAt.has_value() && turn == *stopAt)
+		{
+			stopAt.reset();
+			stopOrGo(clock, true);
+			const auto held = registry.Get<const Transform>(rock).position;
+			const auto drawn = registry.Get<const PhysicsDrawPose>(rock).origin;
+			for (int frame = 0; frame < 200; ++frame)
+			{
+				now += 16;
+				PlayFrame(clock, test.Dynamics());
+				if (clock.GetTurn() != turn || clock.GetFrameGameTime().count() != 0 ||
+				    registry.Get<const Transform>(rock).position != held ||
+				    registry.Get<const PhysicsDrawPose>(rock).origin != drawn)
+				{
+					failure("the stopped clock let the rock move");
+					return places;
+				}
+			}
+			stopOrGo(clock, false);
+		}
+		now += 16;
+		PlayFrame(clock, test.Dynamics());
+		if (clock.GetTurn() != turn)
+		{
+			places.push_back(registry.Get<const Transform>(rock).position);
+		}
+	}
+	return places;
+}
+} // namespace
+
+TEST_F(DynamicsSystemTest, APauseHoldsAThingInFlightWhereItIsAndItFliesOnAsIfNoTimeWentBy)
+{
+	const auto fail = [](std::string_view why) { ADD_FAILURE() << why; };
+	const auto none = [](TimeSystem& /*clock*/, bool /*stop*/) {};
+	const auto pause = [](TimeSystem& clock, bool stop) { clock.SetPaused(stop); };
+	const auto unpaused = FlightByTurn(*this, 20, std::nullopt, none, fail);
+	ASSERT_EQ(unpaused.size(), 20u);
+	ASSERT_NE(unpaused.front(), unpaused.back()) << "the rock did not fly";
+	MakeWorld(FakeWorld::k_LandHeight);
+	EXPECT_EQ(FlightByTurn(*this, 20, 6, pause, fail), unpaused);
+}
+
+TEST_F(DynamicsSystemTest, TheTemplesHoldOnTheClockHoldsAThingInFlightAsAPauseDoes)
+{
+	const auto fail = [](std::string_view why) { ADD_FAILURE() << why; };
+	const auto none = [](TimeSystem& /*clock*/, bool /*stop*/) {};
+	const auto hold = [](TimeSystem& clock, bool stop) { clock.SetHeld(stop); };
+	const auto unheld = FlightByTurn(*this, 20, std::nullopt, none, fail);
+	MakeWorld(FakeWorld::k_LandHeight);
+	EXPECT_EQ(FlightByTurn(*this, 20, 9, hold, fail), unheld);
 }
