@@ -521,9 +521,11 @@ do_configure() {
 	ensure_sccache
 	check_existing_folder
 	configure_args
-	local stamp="$B/.ob-build-configure"
+	local stamp="$B/.ob-build-configure" key
+	key=$(vcpkg_key)
+	# The packages' inputs are part of the stamp, so a changed vcpkg.json always configures again with an install
 	local wanted
-	wanted=$(printf '%s\n' "$CMAKE" "${ARGS[@]}")
+	wanted=$(printf '%s\n' "$CMAKE" "${ARGS[@]}" "vcpkg $key")
 	if [ $FRESH = 0 ] && [ -f "$B/build.ninja" ] && [ -f "$stamp" ] && [ "$(cat "$stamp")" = "$wanted" ]; then
 		note "$B is already configured (Ninja reconfigures by itself when CMake files change; --fresh forces it)"
 		return 0
@@ -548,10 +550,22 @@ do_configure() {
 	[ $FRESH = 0 ] || fresh=(--fresh)
 	note "configuring $WT into $B with vcpkg $(vcpkg_commit "$VCPKG_ROOT_DIR") from $VCPKG_ROOT_DIR"
 	vcpkg_pin_warning
+	# vcpkg install locks the shared vcpkg folder for every configure on the machine, so configures queue behind each
+	# other. When the folder's packages came from the same inputs, the install is skipped (OB_VCPKG_INSTALL=1 forces it)
+	local run=("${ARGS[@]}") installs=1 i
+	if [ "${OB_VCPKG_INSTALL:-0}" != 1 ] && [ -d "$OB_VCPKG_INSTALLED/x64-windows" ] &&
+		[ "$(cat "$B/.ob-build-vcpkg" 2>/dev/null)" = "$key" ]; then
+		for i in "${!run[@]}"; do
+			[ "${run[$i]}" != -DVCPKG_MANIFEST_INSTALL=ON ] || run[$i]=-DVCPKG_MANIFEST_INSTALL=OFF
+		done
+		installs=0
+		note "the vcpkg packages have the same inputs as at their last install: no vcpkg install"
+	fi
 	local t0=$SECONDS
 	# (no MSYS path conversion: it turns linker flags such as /debug:fastlink into Windows paths)
-	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${fresh[@]}" "${ARGS[@]}" || die "configure failed"
+	MSYS2_ARG_CONV_EXCL="*" "$CMAKE" "${fresh[@]}" "${run[@]}" || die "configure failed"
 	check_packages
+	[ $installs = 0 ] || printf '%s' "$key" >"$B/.ob-build-vcpkg"
 	# Files earlier builds made that the build no longer makes (such as test programs since merged into one) go, so a
 	# stale program can't be run by mistake
 	"$NINJA" -C "$B" -t cleandead >/dev/null 2>&1 || true
@@ -560,6 +574,17 @@ do_configure() {
 }
 
 vcpkg_commit() { git -C "$1" rev-parse --short=9 HEAD 2>/dev/null || echo unknown; }
+
+# A hash of everything the build folder's vcpkg packages come from: the vcpkg commit, the manifest and the overlay ports
+vcpkg_key() {
+	{
+		git -C "$VCPKG_ROOT_DIR" rev-parse HEAD 2>/dev/null
+		cat "$WT/vcpkg.json" "$WT/vcpkg-configuration.json" 2>/dev/null
+		if [ -d "$WT/vcpkg-overlay-ports" ]; then
+			(cd "$WT/vcpkg-overlay-ports" && find . -type f | sort | xargs -r md5sum)
+		fi
+	} | md5sum | cut -c1-32
+}
 
 # Every worktree builds with the main checkout's vcpkg; says so when the worktree's own submodule pin differs
 vcpkg_pin_warning() {
