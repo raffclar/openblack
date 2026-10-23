@@ -18,6 +18,7 @@
 #include "3D/HandMorph.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
@@ -48,9 +49,16 @@ bool HandSystem::Initialize() noexcept
 void HandSystem::FindAfterLoad()
 {
 	_hands = {entt::null, entt::null};
-	Locator::entitiesRegistry::value().Each<const Hand>([this](entt::entity entity, const Hand& hand) {
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Each<const Hand>([this](entt::entity entity, const Hand& hand) {
 		_hands.at(static_cast<size_t>(hand.rightHanded ? Side::Right : Side::Left)) = entity;
 	});
+	// A world from an older save can have a hand with no miracle effects. The load gives them to the hand.
+	if (const auto left = _hands.at(static_cast<size_t>(Side::Left));
+	    registry.Valid(left) && !registry.AllOf<HandMiracleFx>(left))
+	{
+		registry.Assign<HandMiracleFx>(left);
+	}
 }
 
 void HandSystem::ProcessTurn()

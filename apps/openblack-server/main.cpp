@@ -23,6 +23,7 @@
 
 #include <cxxopts.hpp>
 
+#include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
 #include "Server/DedicatedServer.h"
 
@@ -61,6 +62,7 @@ int main(int argc, char* argv[])
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
+		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
 		("h,help", "Show this help.");
 	// clang-format on
 
@@ -71,6 +73,11 @@ int main(int argc, char* argv[])
 		if (result.count("help") != 0)
 		{
 			std::cout << options.help() << std::endl;
+			return EXIT_SUCCESS;
+		}
+		if (result.count("version") != 0)
+		{
+			std::cout << "openblack-server " << openblack::build_version::Text() << std::endl;
 			return EXIT_SUCCESS;
 		}
 		if (result.count("game-path") == 0)

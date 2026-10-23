@@ -14,6 +14,7 @@
 
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
+#include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
@@ -44,6 +45,12 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	registry.Assign<HandClicked>(entity);
 	// Where the reports of its player put the hand and the camera for the world
 	registry.Assign<ReportedHand>(entity);
+	// The bands and the glow of a miracle that the hand of the player holds. They start with the hand, so that no frame
+	// adds a component to the world.
+	if (!rightHanded)
+	{
+		registry.Assign<HandMiracleFx>(entity);
+	}
 
 	return entity;
 }

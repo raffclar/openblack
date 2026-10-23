@@ -22,6 +22,7 @@
 #include <LobbyApi.h>
 #include <LobbyApiJson.h>
 
+#include "Common/BuildVersion.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Online/LanDiscoveryInterface.h"
@@ -39,6 +40,8 @@ namespace
 {
 
 constexpr int64_t k_PlayerId = 7;
+/// The other gods in the big room; the player is the last of its 32 gods
+constexpr int64_t k_BigRoomOthers = 31;
 
 lobby_api::RoomPlayer Player(int64_t id, std::string name, std::string role)
 {
@@ -53,7 +56,7 @@ lobby_api::ServerEntry Server(std::string id, std::string name, std::string land
 	server.land = std::move(land);
 	server.gamemode = "openstaging";
 	server.maxplayers = most;
-	server.gamever = std::string(gui::multiplayer::k_GameVersion);
+	server.gamever = std::string(build_version::Text());
 	server.url = "wss://demo.invalid/game/" + server.id;
 	return server;
 }
@@ -73,10 +76,12 @@ std::vector<lobby_api::ServerEntry> DemoServers()
 	clans.locked = true;
 	clans.players = {Player(13, "Fay", "god"), Player(14, "Gus", "god"), Player(15, "Hal", "god")};
 	auto big = Server("w5", "Thirty-two gods", "mpm_4p_1", 32);
-	for (int64_t i = 0; i < 20; ++i)
+	for (int64_t i = 0; i < k_BigRoomOthers; ++i)
 	{
 		big.players.push_back(Player(100 + i, "God" + std::to_string(i + 1), "god"));
 	}
+	// The player is the last god of the big room
+	big.players.push_back(Player(k_PlayerId, "Alice", "god"));
 	std::vector servers = {bob, fun, test, clans, big};
 	for (auto& server : servers)
 	{
@@ -178,6 +183,15 @@ public:
 			_pending.push_back(Line(9, "Eve", "I am only watching."));
 			_pending.push_back(Line(k_PlayerId, "Alice", "Hi, all!"));
 		}
+		// In the big room each of the other gods says a line, so that the chat shows the colour of each god
+		if (watch && channel == "server-w5")
+		{
+			for (int64_t i = 0; i < k_BigRoomOthers; ++i)
+			{
+				const auto name = "God" + std::to_string(i + 1);
+				_pending.push_back(Line(100 + i, name, "I am god " + std::to_string(i + 1) + ".", channel));
+			}
+		}
 	}
 	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override
 	{
@@ -254,12 +268,13 @@ public:
 private:
 	static std::string ClanName(int64_t clanId) { return clanId == 4 ? "The Clan" : "Other Clan"; }
 
-	lobby_api::PushEvent Line(int64_t id, const std::string& name, const std::string& text)
+	lobby_api::PushEvent Line(int64_t id, const std::string& name, const std::string& text,
+	                          const std::string& channel = "server-w1")
 	{
 		// The text goes through the JSON writer, which escapes it: {"text":"..."} loses its first brace here
 		const auto textMember = lobby_api::ToJson(lobby_api::ChatLineRequest {.text = text}).substr(1);
-		const std::string data =
-		    R"({"channel":"server-w1","from":{"id":)" + std::to_string(id) + R"(,"name":")" + name + R"("},)" + textMember;
+		const std::string data = R"({"channel":")" + channel + R"(","from":{"id":)" + std::to_string(id) + R"(,"name":")" +
+		                         name + R"("},)" + textMember;
 		return {.seq = ++_seq, .type = std::string(lobby_api::events::k_ChatLine), .time = {}, .data = data};
 	}
 
@@ -396,7 +411,16 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		demo.staged = true;
 		return;
 	}
-	frontEnd.SelectGame(0);
+	if (stage == Stage::RoomChat32)
+	{
+		const auto games = frontEnd.GetGames();
+		const auto big = std::ranges::find(games, std::string("w5"), &lobby_api::ServerEntry::id);
+		frontEnd.SelectGame(static_cast<size_t>(std::distance(games.begin(), big)));
+	}
+	else
+	{
+		frontEnd.SelectGame(0);
+	}
 	frontEnd.Join(u"");
 }
 
@@ -463,7 +487,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	    .registerPage = {},
 	    .internetName = u"demo.invalid",
 	    .profileName = std::move(profileName),
-	    .gameVersion = std::string(gui::multiplayer::k_GameVersion),
+	    .gameVersion = std::string(build_version::Text()),
 	    .browser = false,
 	    .localMaps = std::move(localMaps),
 	    .conditionTemplate = std::move(conditionTemplate),

@@ -150,8 +150,8 @@ struct Arguments
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
-	/// The real-world weather changes the weather of a single-player game (off by default, as in the original game)
-	bool useInternetWeather {false};
+	/// The real-world weather changes the weather of a single-player game (on by default)
+	bool useInternetWeather {true};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card
@@ -193,6 +193,9 @@ struct Arguments
 	/// The seed of every random number the game draws, and the date pinned, for a deterministic run; none for a seed of
 	/// the machine's and the wall clock's date
 	std::optional<uint32_t> seed;
+	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
+	/// turns read no part of a frame
+	bool networkGame {false};
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
 	/// connected, from the start, or never
 	input::LockMode inspectInputLock {input::LockMode::Auto};
@@ -282,6 +285,8 @@ public:
 	bool PlayFrameStep(game_frame::Step step, FrameState& frame);
 	/// Whether this frame moves the camera, puts the hand under the cursor and draws the world: not while the window is
 	/// minimised, unless a picture of the frame is necessary
+	/// The state of the window and the run for the steps of the graphics in this frame
+	[[nodiscard]] game_frame::GraphicsWindow FrameGraphicsWindow() const;
 	[[nodiscard]] bool DoesFrameGraphics() const;
 	/// The clock of the frame, the debug inspector and the time that the frame takes
 	void StartFrame(FrameState& frame);
@@ -537,6 +542,9 @@ private:
 	bool _developerProfile {false};
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
+	bool _networkGame {false};
+	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
+	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};

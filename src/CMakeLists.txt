@@ -153,6 +153,28 @@ add_custom_command(
 )
 target_sources(openblack_lib PRIVATE ${OPENBLACK_UNIMPLEMENTED_NATIVES})
 
+# The version of the build: the project's semantic version and the git commit
+# of the sources. The script runs at each build and changes the file only when
+# the commit changes.
+set(OPENBLACK_BUILD_VERSION_SOURCE
+    ${CMAKE_BINARY_DIR}/include/generated/BuildVersion.cpp
+)
+set(OPENBLACK_BUILD_VERSION_COMMAND
+    ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+    -DOUTPUT=${OPENBLACK_BUILD_VERSION_SOURCE} -DVERSION=${PROJECT_VERSION} -P
+    ${CMAKE_SOURCE_DIR}/CMakeModules/WriteBuildVersion.cmake
+)
+execute_process(COMMAND ${OPENBLACK_BUILD_VERSION_COMMAND})
+add_custom_target(
+  openblack_build_version
+  COMMAND ${OPENBLACK_BUILD_VERSION_COMMAND}
+  BYPRODUCTS ${OPENBLACK_BUILD_VERSION_SOURCE}
+  COMMENT "Writing the build version"
+  VERBATIM
+)
+target_sources(openblack_lib PRIVATE ${OPENBLACK_BUILD_VERSION_SOURCE})
+add_dependencies(openblack_lib openblack_build_version)
+
 target_include_directories(
   openblack_lib
   PUBLIC ${CMAKE_CURRENT_LIST_DIR}

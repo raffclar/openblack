@@ -107,6 +107,8 @@ def game_arguments(options, record, log, until_turn, fast, driven):
         args += ["-s", options.land]
         if options.opening:
             args += ["--skip-opening", options.opening]
+    if getattr(options, "network_game", False):
+        args.append("--sim-network-game")
     args += options.extra
     return args
 
@@ -514,6 +516,8 @@ def parse(argv):
                          help="repeat: a frame-rate repeat, with the frame setting of each run in turn, as "
                               "'10,17,20:1' (the frame time in ms, and after a colon the draw every); only the synced "
                               "worlds must agree")
+        sub.add_argument("--network-game", action="store_true",
+                         help="play the world as a network game does: no pause, and the turns read no part of a frame")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     return parser.parse_args(argv)
 
