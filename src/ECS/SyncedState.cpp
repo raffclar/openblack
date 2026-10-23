@@ -174,6 +174,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "locking", .marker = ""},
     // The frames hold the hand to a creature; the world has the hold from the lock (HandLockedCreature)
     {.component = "HandOnCreature", .field = "", .marker = ""},
+    // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
+    {.component = "GuidanceHeard", .field = "", .marker = ""},
     // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
     {.component = "VillageTotem", .field = "gripped", .marker = ""},
     {.component = "VillageTotem", .field = "held", .marker = ""},
