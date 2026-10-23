@@ -113,12 +113,17 @@ std::string Megabytes(int64_t bytes)
 namespace openblack::debug
 {
 
-FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade)
+FrameStatsLog::FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade, std::filesystem::path out)
     : _interval(std::max<uint32_t>(interval, 1))
     , _views(views)
     , _lastPipelinesMade(pipelinesMade)
     , _lastCpuMilliseconds(ThreadCpuMilliseconds())
 {
+	_out = std::move(out);
+	if (!_out.empty())
+	{
+		_records.reserve(100000);
+	}
 }
 
 FrameStatsLog::~FrameStatsLog()
@@ -131,6 +136,12 @@ FrameStatsLog::~FrameStatsLog()
 		    "Frame stats of the run: {} frames, avg {:.2f} ms p95 {:.2f} p99 {:.2f} max {:.2f}; {} frames of {:.0f} ms or more",
 		    run.count, run.average, run.p95, run.p99, run.max, run.slow, k_SpikeMilliseconds);
 	}
+	if (!_out.empty())
+	{
+		std::ofstream file(_out, std::ios::binary | std::ios::trunc);
+		const auto text = frame_stats::ToCsv(_records);
+		file.write(text.data(), static_cast<std::streamsize>(text.size()));
+	}
 }
 
 void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade, uint32_t turn)
@@ -142,6 +153,13 @@ void FrameStatsLog::Frame(float milliseconds, const openblack::Profiler& profile
 	++_frameNumber;
 	const auto cpuMilliseconds = ThreadCpuMilliseconds();
 	const auto onCpu = cpuMilliseconds - std::exchange(_lastCpuMilliseconds, cpuMilliseconds);
+	if (!_out.empty())
+	{
+		_records.push_back({.milliseconds = milliseconds,
+		                    .processorMilliseconds = static_cast<float>(onCpu),
+		                    .turn = turn,
+		                    .played = turnFrame});
+	}
 	std::string spikeStages;
 
 	// The stages timed in this frame: those that started since the frame did

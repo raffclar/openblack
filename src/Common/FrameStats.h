@@ -10,8 +10,10 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <span>
+#include <string>
 #include <vector>
 
 namespace openblack::frame_stats
@@ -33,6 +35,19 @@ struct Summary
 
 /// A frame that takes this time or more is too slow for 100 frames a second
 constexpr float k_SlowMilliseconds = 10.0f;
+
+/// One frame of a run: how long it took, its time on the processor, and the game turn at its end
+struct FrameRecord
+{
+	float milliseconds {0.0f};
+	float processorMilliseconds {0.0f};
+	uint32_t turn {0};
+	/// The frame played a game turn
+	bool played {false};
+};
+
+/// The frames of a run as CSV text: a line of names, then a line for each frame, numbered from 1
+[[nodiscard]] std::string ToCsv(std::span<const FrameRecord> frames);
 
 /// Sums up a run of frame times; an empty run gives an empty summary
 [[nodiscard]] Summary Summarise(std::span<const float> milliseconds);

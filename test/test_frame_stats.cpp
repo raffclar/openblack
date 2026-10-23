@@ -92,3 +92,12 @@ TEST(FrameStats, PeekKeepsTheFrames)
 	EXPECT_EQ(peeked.slow, 1u);
 	EXPECT_EQ(window.Count(), 2u);
 }
+
+TEST(FrameStats, TheCsvHasALineForEachFrame)
+{
+	const std::array<FrameRecord, 2> frames {
+	    FrameRecord {.milliseconds = 3.5f, .processorMilliseconds = 3.25f, .turn = 7, .played = false},
+	    FrameRecord {.milliseconds = 12.0f, .processorMilliseconds = 11.5f, .turn = 8, .played = true},
+	};
+	EXPECT_EQ(ToCsv(frames), "frame,ms,processor_ms,turn,played\n1,3.500,3.250,7,0\n2,12.000,11.500,8,1\n");
+}
