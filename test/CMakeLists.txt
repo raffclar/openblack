@@ -1717,3 +1717,12 @@ target_link_libraries(test_online_map_file PRIVATE onlinemap)
 openblack_setup_and_add_test(test_computer_settings test_computer_settings.cpp)
 target_link_libraries(test_plain_image PRIVATE psys ScriptLibrary edt)
 openblack_setup_and_add_test(test_destruction_ghosts test_destruction_ghosts.cpp)
+openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
+# A background run never touches the pointer of the system: every call of it is behind the background gate
+if (Python3_Interpreter_FOUND)
+  add_test(
+    NAME test_system_pointer_calls
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
+            ${CMAKE_SOURCE_DIR}
+  )
+endif ()
