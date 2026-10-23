@@ -9,6 +9,7 @@
 
 #include "WebPlatform.h"
 
+#include <atomic>
 #include <filesystem>
 #include <functional>
 #include <iostream>
@@ -16,8 +17,11 @@
 #include <string>
 #include <system_error>
 
+#include <bgfx/bgfx.h>
 #include <emscripten.h>
+#include <emscripten/threading.h>
 #include <emscripten/wasmfs.h>
+#include <pthread.h>
 #include <unistd.h>
 
 #include "Common/UserData.h"
@@ -59,6 +63,18 @@ EM_ASYNC_JS(void, openblack_wait_for_display_frame, (), {
 		}
 	});
 });
+// The render thread gives control back to the browser for one task. The browser then shows the frame that the canvas
+// has. A message on a channel does not wait for a display frame or for the minimum time of a timer.
+EM_ASYNC_JS(void, openblack_yield_to_browser, (), {
+	if (!globalThis.openblackYieldChannel) {
+		globalThis.openblackYieldChannel = new MessageChannel();
+	}
+	const channel = globalThis.openblackYieldChannel;
+	await new Promise((resolve) => {
+		channel.port1.onmessage = () => resolve();
+		channel.port2.postMessage(0);
+	});
+});
 EM_JS_DEPS(openblack_web_platform, "$UTF8ToString");
 // clang-format on
 
@@ -89,6 +105,43 @@ PresentState& GetPresentState()
 	return state;
 }
 
+/// The thread that draws the frames of the renderer and owns the canvas
+struct RenderThread
+{
+	/// The game uses the render thread
+	std::atomic<bool> running {false};
+	/// The thread is the render thread of bgfx
+	std::atomic<bool> ready {false};
+	/// The renderer stopped, and the thread draws no more frames
+	std::atomic<bool> stopped {false};
+};
+
+RenderThread& GetRenderThread()
+{
+	static RenderThread thread;
+	return thread;
+}
+
+void* RenderThreadMain(void* /*unused*/)
+{
+	auto& renderThread = GetRenderThread();
+	// A call before the renderer starts makes this thread the render thread of bgfx
+	bgfx::renderFrame();
+	renderThread.ready.store(true);
+	renderThread.ready.notify_all();
+	openblack_set_present(1);
+	while (bgfx::renderFrame() != bgfx::RenderFrame::Exiting)
+	{
+		// The browser shows the frame when this thread gives control back
+		openblack_yield_to_browser();
+	}
+	renderThread.stopped.store(true);
+	renderThread.stopped.notify_all();
+	// The thread owns the canvas. Thus it stays until the program ends, because the browser changes the size of the
+	// canvas through this thread, also when the game closes its window.
+	emscripten_exit_with_live_runtime();
+}
+
 void SetPresent(Present present)
 {
 	auto& state = GetPresentState();
@@ -108,6 +161,10 @@ void SendFrame()
 /// One frame of RunFrames. Returns false after the last frame.
 bool RunOneFrame(const std::function<bool()>& frame)
 {
+	if (GetRenderThread().running.load())
+	{
+		return frame();
+	}
 	auto& state = GetPresentState();
 	state.inRunFrame = true;
 	state.framesDrawn = 0;
@@ -193,8 +250,41 @@ int openblack::web::RunFrames(const std::function<bool()>& frame, const std::fun
 	return end();
 }
 
+bool openblack::web::StartRenderThread()
+{
+	auto& renderThread = GetRenderThread();
+	pthread_attr_t attributes;
+	pthread_attr_init(&attributes);
+	pthread_attr_setdetachstate(&attributes, PTHREAD_CREATE_DETACHED);
+	// The canvas goes from the game thread to the render thread
+	emscripten_pthread_attr_settransferredcanvases(&attributes, "#canvas");
+	pthread_t thread {};
+	const bool started = pthread_create(&thread, &attributes, RenderThreadMain, nullptr) == 0;
+	pthread_attr_destroy(&attributes);
+	if (!started)
+	{
+		return false;
+	}
+	renderThread.running.store(true);
+	renderThread.ready.wait(false);
+	return true;
+}
+
+void openblack::web::WaitForRenderThreadStop()
+{
+	auto& renderThread = GetRenderThread();
+	if (renderThread.running.exchange(false))
+	{
+		renderThread.stopped.wait(false);
+	}
+}
+
 void openblack::web::BeforeFrame()
 {
+	if (GetRenderThread().running.load())
+	{
+		return;
+	}
 	const auto& state = GetPresentState();
 	if (state.inRunFrame && state.framesDrawn > 0)
 	{
@@ -205,6 +295,10 @@ void openblack::web::BeforeFrame()
 
 void openblack::web::PresentFrame()
 {
+	if (GetRenderThread().running.load())
+	{
+		return;
+	}
 	auto& state = GetPresentState();
 	if (state.inRunFrame)
 	{

@@ -22,6 +22,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/WorkerPool.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Ball.h"
 #include "ECS/Components/Feature.h"
@@ -196,6 +197,18 @@ void CastShape(tree_shadows::Coverage& coverage, std::span<const glm::vec2> cast
 		}
 		shape_shadows::Fill(coverage, corners, allBothSides || shape[t].bothSides);
 	}
+}
+
+/// How many threads bake the blocks side by side, the calling thread included
+[[nodiscard]] size_t BakeThreadCount()
+{
+#if defined(__EMSCRIPTEN__)
+	// In the browser, each thread is a web worker. The page makes a small set of workers at the start, and each worker
+	// more than this set loads the program again. Thus the bake uses only as many threads as the worker pools do.
+	return WorkerPool::DefaultThreadCount() + 1;
+#else
+	return std::max(1u, std::thread::hardware_concurrency());
+#endif
 }
 
 } // namespace
@@ -651,7 +664,7 @@ std::vector<LandShadowBake::BlockShades> LandShadowBake::Bake(const BakeJob& job
 			results[i].corner = block.corner;
 		}
 	};
-	const auto workers = std::min<size_t>(job.blocks.size(), std::max(1u, std::thread::hardware_concurrency()));
+	const auto workers = std::min(job.blocks.size(), BakeThreadCount());
 	{
 		std::vector<std::jthread> threads;
 		for (size_t w = 1; w < workers; ++w)
