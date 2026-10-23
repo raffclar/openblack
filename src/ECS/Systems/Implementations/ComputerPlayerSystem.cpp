@@ -11,12 +11,16 @@
 
 #include "ComputerPlayerSystem.h"
 
+#include <span>
 #include <string>
 #include <utility>
 #include <vector>
 
+#include <spdlog/spdlog.h>
+
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "Creature/CreatureFileLoad.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Creature.h"
@@ -24,6 +28,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -131,6 +136,70 @@ public:
 	float GameFloatRand(float most) override { return Locator::gameRandom::value().GameFloatRand(most); }
 };
 
+/// The game's own world for the start of a network game
+class GameSlotWorld final: public computer_player::SlotWorld
+{
+public:
+	explicit GameSlotWorld(ComputerPlayerSystemInterface& minds)
+	    : _minds(minds)
+	{
+	}
+
+	[[nodiscard]] bool HasCitadel(PlayerNames player) const override
+	{
+		bool citadel = false;
+		Locator::entitiesRegistry::value().Each<const Temple>(
+		    [&citadel, player](const Temple& building) { citadel = citadel || building.owner == player; });
+		return citadel;
+	}
+
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames player) const override
+	{
+		bool computer = false;
+		Locator::entitiesRegistry::value().Each<const Player, const ComputerPlayer>(
+		    [&computer, player](const Player& each, const ComputerPlayer& mind) {
+			    computer = computer || (each.name == player && mind.marked);
+		    });
+		return computer;
+	}
+
+	void SwitchOn(PlayerNames player) override { _minds.SwitchOn(player, true); }
+
+	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto home = ecs::creature_home::CitadelCreatureHomeOf(registry, player);
+		if (!home.has_value() || !map_coords::InBounds(*home) || !Locator::terrainSystem::has_value())
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"),
+			                   "No creature made for the computer god {}: its citadel has no home on the land",
+			                   static_cast<int>(player));
+			return;
+		}
+		const auto position = map_coords::ToWorld(Locator::terrainSystem::value(), *home);
+		const auto creature = ecs::archetypes::CreatureArchetype::Create(
+		    position, player, species, 0, creature_file_load::k_StartYaw,
+		    ecs::archetypes::CreatureArchetype::StartScale(species), ecs::archetypes::CreatureArchetype::StartBody(species));
+		if (Locator::playerSystem::has_value())
+		{
+			Locator::playerSystem::value().MakePrimaryCreature(creature);
+		}
+		registry.Get<ecs::components::Creature>(creature).name = ecs::creature_naming::HelpWords(nameText);
+		if (Locator::creatureMindSystem::has_value())
+		{
+			Locator::creatureMindSystem::value().MoveToStage(creature, stage);
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Made creature {} of species {} for the computer god {} at {:.1f}, {:.1f}",
+		                   entt::to_integral(creature), static_cast<int>(species), static_cast<int>(player), position.x,
+		                   position.z);
+	}
+
+	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
+
+private:
+	ComputerPlayerSystemInterface& _minds;
+};
+
 } // namespace
 
 ComputerPlayerSystem::ComputerPlayerSystem()
@@ -197,4 +266,10 @@ void ComputerPlayerSystem::ProcessTurn()
 			computer_player::Start(*_world, name, *mind);
 		}
 	}
+}
+
+void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)
+{
+	GameSlotWorld world(*this);
+	computer_player::FillEmptySlots(world, gods, humans);
 }

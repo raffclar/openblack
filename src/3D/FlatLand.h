@@ -46,6 +46,8 @@ constexpr Colour k_BlockEdge {7, 8, 6};
 
 /// The colour of texel (x, z) of the material, which every block shows whole
 [[nodiscard]] Colour MaterialColour(int x, int z);
+/// The grass material, painted as the checkerboard of MaterialColour
+[[nodiscard]] lnd::LNDMaterial CheckerMaterial();
 
 /// The ambient sound types of the lake's water and of its shore
 constexpr uint8_t k_FreshWaterSoundFlags = 2 << 2;

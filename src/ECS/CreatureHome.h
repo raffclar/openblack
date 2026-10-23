@@ -34,5 +34,8 @@ namespace openblack::ecs::creature_home
 [[nodiscard]] std::optional<map_coords::MapCoords> HomeOnMapOf(const Registry& registry, entt::entity creature);
 /// The pen of the first temple of the player whose mesh marks a pen; none when no temple of the player has one
 [[nodiscard]] std::optional<glm::vec3> TemplePenOf(const Registry& registry, PlayerNames owner);
+/// The creature home of the player's citadel on the map: a marked place of the first temple of the player, on the ground.
+/// None when the player has no temple.
+[[nodiscard]] std::optional<map_coords::MapCoords> CitadelCreatureHomeOf(const Registry& registry, PlayerNames owner);
 
 } // namespace openblack::ecs::creature_home

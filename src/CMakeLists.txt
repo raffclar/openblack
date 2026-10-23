@@ -212,6 +212,7 @@ target_link_libraries(
           helpstats
           creaturehtml
           lhp
+          onlinemap
           imgui::imgui
           imgui_user
           ScriptLibrary
