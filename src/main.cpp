@@ -92,7 +92,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
-		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
+		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Direct3D11 (D3D11, DX11), OpenGL (GL), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
 		("l,log-file", "Output file for logs, 'stdout'/'logcat' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
 		("L,log-level", "Level (trace, debug, info, warning, error, critical, off) of logging per subsystem (" + loggingSubsystems + ").",
@@ -197,7 +197,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			else
 			{
 				throw cxxopts::exceptions::parsing("Unknown backend '" + name +
-				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop");
+				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Direct3D11 (D3D11, DX11), "
+				                                   "OpenGL (GL), Metal, WebGPU (WGPU) or Noop");
 			}
 		}
 

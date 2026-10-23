@@ -522,6 +522,12 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	case GraphicsBackend::WebGPU:
 		init.type = bgfx::RendererType::WebGPU;
 		break;
+	case GraphicsBackend::Direct3D11:
+		init.type = bgfx::RendererType::Direct3D11;
+		break;
+	case GraphicsBackend::OpenGL:
+		init.type = bgfx::RendererType::OpenGL;
+		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
 		return nullptr;

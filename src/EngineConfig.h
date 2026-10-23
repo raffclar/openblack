@@ -34,6 +34,10 @@ enum class GraphicsBackend : uint8_t
 	OpenGLES,
 	/// WebGPU. In a web browser, the browser gives it. On the desktop, bgfx needs the Dawn library next to the game.
 	WebGPU,
+	/// Direct3D 11. Only the Windows build has it.
+	Direct3D11,
+	/// OpenGL 4.3 on the desktop. The web build does not have it.
+	OpenGL,
 };
 
 /// The names a backend is given by on the command line, in any case: its own and the common short ones
@@ -48,6 +52,16 @@ static constexpr auto k_GraphicsBackendNames = std::to_array<std::pair<std::stri
     {"MTL", GraphicsBackend::Metal},
     {"Vulkan", GraphicsBackend::Vulkan},
     {"VK", GraphicsBackend::Vulkan},
+#if defined(_WIN32)
+    {"Direct3D11", GraphicsBackend::Direct3D11},
+    {"D3D11", GraphicsBackend::Direct3D11},
+    {"DX11", GraphicsBackend::Direct3D11},
+    {"DirectX11", GraphicsBackend::Direct3D11},
+#endif
+#if !defined(__EMSCRIPTEN__)
+    {"OpenGL", GraphicsBackend::OpenGL},
+    {"GL", GraphicsBackend::OpenGL},
+#endif
 #if defined(__EMSCRIPTEN__)
     {"OpenGLES", GraphicsBackend::OpenGLES},
     {"GLES", GraphicsBackend::OpenGLES},
