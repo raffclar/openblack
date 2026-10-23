@@ -637,6 +637,41 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	    .townBeliefInPlayer = k_TownBelief,
 	});
+	// The leash tied to the wood flag of a town holds the creature's help for towns to wood
+	all.push_back({
+	    .id = "leash.desire_flag",
+	    .name = "The leash tied to a town's wood flag",
+	    .facet = Facet::Leash,
+	    .description = "The Celtic town of the temple scenarios with an empty storage pit north of it. A grown tiger "
+	                   "of the player that only wants to be nice stands south of the town. Its leash is put on and tied "
+	                   "to the town's wood flag over the pit. The town wants food most.",
+	    .expected = "The rope runs from the wood flag. The town wants food most, but the tiger helps it with wood only "
+	                "(the wood actions), and does not move on to the next desire of the town. The inspector shows the "
+	                "creature's town desire as 1 (wood) and choosesFreely as false.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Centre - glm::vec2(25.0f, 60.0f), k_Centre + glm::vec2(25.0f, 50.0f)},
+	                .distance = 0.6f},
+	    .creatures = {{.species = CreatureType::Tiger,
+	                   .offset = k_Centre - glm::vec2(0.0f, 50.0f),
+	                   .phase = 13,
+	                   .desires = {{.desire = creature_desires::Desire::Compassion, .fraction = 1.0f}}}},
+	    .objects =
+	        [] {
+		        auto objects = Town();
+		        objects.push_back({.type = AbodeInfo::CelticStoragePit,
+		                           .offset = k_Centre + glm::vec2(0.0f, 40.0f),
+		                           .storedFood = 0,
+		                           .storedWood = 0});
+		        return objects;
+	        }(),
+	    .commands = {{.kind = Command::Kind::PutOnLeash, .creature = 0, .delaySeconds = 1.0f, .leash = LeashType::Rope},
+	                 {.kind = Command::Kind::TieLeashToDesireFlag,
+	                  .creature = 0,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(TownDesireInfo::ForWood)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	});
 	all.push_back({
 	    .id = "audio.worship_site_voice",
 	    .name = "The people at a worship site call out for food",

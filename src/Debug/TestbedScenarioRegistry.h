@@ -606,6 +606,8 @@ struct Command
 		/// hand, taking it off; keeping it within a radius of where it stands
 		PutOnLeash,
 		TieLeash,
+		/// The leash tied to the flag of a town's desire (by value), the first such flag found
+		TieLeashToDesireFlag,
 		UntieLeash,
 		TakeOffLeash,
 		ConfineToHome,
