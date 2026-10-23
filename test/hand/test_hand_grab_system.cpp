@@ -1333,7 +1333,7 @@ TEST_F(HandGrabSystemWithWorld, ATakeOfAnotherComputerTakesWithNoPressOfThisHand
 	system->DoTake(world->HandPlayer(), rock);
 	ASSERT_EQ(system->GetHeld(), rock);
 	// And lets go of what it holds, though its own hand never let go of the button
-	system->DoLetGo(world->HandPlayer(), rock, glm::vec3(0.0f));
+	system->DoLetGo(world->HandPlayer(), player_commands::HandLetGo {.object = rock, .velocity = glm::vec3(0.0f)});
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
 
