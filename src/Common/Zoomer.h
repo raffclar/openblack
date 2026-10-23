@@ -57,6 +57,15 @@ private:
 	float _duration {0.0f};
 	/// The path's coefficients of t^2/2, t^3/6 and t^4/24 for the value, and of t, t^2/2 and t^3/6 for the speed
 	glm::vec3 _coefficients {0.0f};
+
+public:
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Zoomer& self, Visitor&& visit)
+	{
+		visit(self._value, self._speed, self._destination, self._destinationSpeed, self._startValue, self._startSpeed,
+		      self._elapsed, self._duration, self._coefficients);
+	}
 };
 
 /// A point of three zoomers

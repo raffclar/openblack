@@ -25,6 +25,13 @@ struct Spark
 	glm::vec3 from {0.0f};
 	glm::vec3 to {0.0f};
 	uint32_t rgb {0};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Spark& self, Visitor&& visit)
+	{
+		visit(self.from, self.to, self.rgb);
+	}
 };
 
 /// A spark's path, worked out once when it is made
@@ -47,6 +54,14 @@ struct Path
 	float amplitude {0.0f};
 	float frequency {0.0f};
 	float phase {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Path& self, Visitor&& visit)
+	{
+		visit(self.from, self.to, self.side, self.length, self.cubic, self.square, self.linear, self.constant, self.amplitude,
+		      self.frequency, self.phase);
+	}
 };
 
 /// The random numbers a spark draws as it is made: each in 0..0.8 for its weave's frequency and size, and in 0..1 for
