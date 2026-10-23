@@ -20,6 +20,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -947,10 +948,18 @@ TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
 	registry.Remove<CreatureNeeds>(_creature);
+	// A stone controls the creature while its plan has a step of the teleport left
 	registry.Assign<TeleportTraveller>(_creature);
+	auto& mind = registry.Assign<CreatureMindState>(_creature);
+	mind.idle.agenda = openblack::creature_mind::AfterTeleport(std::nullopt);
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
+	// Once its plan has no step of the teleport left, the stone no longer controls it, at once
+	registry.Get<CreatureMindState>(_creature).idle.step = 2;
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
 	registry.Remove<TeleportTraveller>(_creature);
+	registry.Remove<CreatureMindState>(_creature);
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
 }
