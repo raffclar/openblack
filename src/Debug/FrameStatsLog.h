@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <array>
+#include <filesystem>
 #include <map>
 #include <optional>
 #include <string>
@@ -29,9 +30,10 @@ namespace openblack::debug
 class FrameStatsLog
 {
 public:
-	/// pipelinesMade: how many pipelines the renderer made before the first frame
-	FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade);
-	/// Logs the summary of all the frames of the run
+	/// pipelinesMade: how many pipelines the renderer made before the first frame. out: a file to write each frame of
+	/// the run into, as CSV, when the run ends; none when empty.
+	FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade, std::filesystem::path out = {});
+	/// Logs the summary of all the frames of the run, and writes them into the file if there is one
 	~FrameStatsLog();
 	FrameStatsLog(const FrameStatsLog&) = delete;
 	FrameStatsLog& operator=(const FrameStatsLog&) = delete;
@@ -54,6 +56,9 @@ private:
 	frame_stats::Window _gpu;
 	/// All the frames of the run
 	frame_stats::Window _run;
+	/// Each frame of the run, for the file
+	std::vector<frame_stats::FrameRecord> _records;
+	std::filesystem::path _out;
 	/// The game turn at the end of the last frame, to know the frames that play a turn
 	std::optional<uint32_t> _lastTurn;
 	std::array<double, static_cast<size_t>(openblack::Profiler::Stage::_count)> _stageTotals {};

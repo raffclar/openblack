@@ -606,6 +606,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.frameStatsOut = args.frameStatsOut;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.useInternetWeather = args.useInternetWeather;
@@ -3984,7 +3985,8 @@ Game::RunStart Game::StartRun() noexcept
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
-		                               Locator::rendererInterface::value().GetPipelinesMade());
+		                               Locator::rendererInterface::value().GetPipelinesMade(),
+		                               std::filesystem::path(config.frameStatsOut));
 		if (config.frameStatsViews)
 		{
 			Locator::rendererInterface::value().SetProfile(true);
