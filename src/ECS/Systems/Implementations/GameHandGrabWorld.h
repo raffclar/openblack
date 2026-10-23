@@ -28,6 +28,7 @@ public:
 	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;
+	[[nodiscard]] bool IsNetworkGame() const override;
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override;

@@ -325,9 +325,9 @@ bool HandGrabSystem::MarksThing(entt::entity object) const
 
 void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 {
-	// The clicks of this computer go straight into the first player's hand, which the scripts read. The god of another
-	// player of a network game has no clicks for the scripts yet: they would change the world of this computer only.
-	if (_world->OwnHandPlayer().has_value())
+	// The clicks of a game alone go straight into the hand, which the scripts read. A network game has no clicks for
+	// the scripts yet: they would change the world of this computer only.
+	if (_world->IsNetworkGame())
 	{
 		return;
 	}
@@ -340,9 +340,9 @@ void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 
 void HandGrabSystem::ClickReleased(uint32_t turn)
 {
-	// The clicks of this computer go straight into the first player's hand, which the scripts read. The god of another
-	// player of a network game has no clicks for the scripts yet: they would change the world of this computer only.
-	if (_world->OwnHandPlayer().has_value())
+	// The clicks of a game alone go straight into the hand, which the scripts read. A network game has no clicks for
+	// the scripts yet: they would change the world of this computer only.
+	if (_world->IsNetworkGame())
 	{
 		return;
 	}

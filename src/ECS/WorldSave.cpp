@@ -144,6 +144,7 @@ world_save::PendingChunk ClockChunk()
 		state.seeds = random.GetSeeds();
 		state.particles = random.GetParticleStream();
 		state.crtSeed = random.GetCrtSeed();
+		state.syncedDraws = random.GetSyncedDraws();
 	}
 	auto saved = std::make_shared<const world_save::ClockState>(std::move(state));
 	return {.tag = gamesave::k_ClockTag, .bytes = [saved]() { return world_save::WriteClock(*saved); }};
@@ -170,6 +171,10 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 		if (state->crtSeed.has_value())
 		{
 			Locator::gameRandom::value().CrtSrand(*state->crtSeed);
+		}
+		if (state->syncedDraws.has_value())
+		{
+			Locator::gameRandom::value().SetSyncedDraws(*state->syncedDraws);
 		}
 	}
 	if (Locator::rng::has_value() && state->streams.size() == static_cast<size_t>(RandomStream::Count))
@@ -564,6 +569,7 @@ std::vector<uint8_t> world_save::WriteClock(const ClockState& state)
 	std::ranges::transform(state.streams, std::back_inserter(streams), GeneratorText);
 	reflection::Save(out, streams);
 	reflection::Save(out, state.general.has_value() ? GeneratorText(*state.general) : std::string {});
+	reflection::Save(out, state.syncedDraws.value_or(0));
 	return std::move(out.Bytes());
 }
 
@@ -588,6 +594,13 @@ std::optional<world_save::ClockState> world_save::ReadClock(std::span<const uint
 	if (in.Remaining() > 0)
 	{
 		reflection::Load(in, general);
+	}
+	// Nor the count of the synced draws
+	if (in.Remaining() > 0)
+	{
+		uint64_t draws = 0;
+		reflection::Load(in, draws);
+		state.syncedDraws = draws;
 	}
 	if (in.Failed())
 	{

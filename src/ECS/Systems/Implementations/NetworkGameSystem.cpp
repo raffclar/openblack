@@ -197,6 +197,15 @@ void NetworkGameSystem::Update()
 		Locator::handSystem::value().SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
 	}
 
+	// The world of a loaded state goes on as the server's turn of the state is here: the next frame does that turn
+	if (_resumeTurn.has_value() && _session->HasTurn(*_resumeTurn))
+	{
+		auto& clock = Locator::time::value();
+		clock.SetPaused(false);
+		clock.ResetTimerToTurn();
+		_resumeTurn.reset();
+	}
+
 	// After a resync the server's world comes: this computer's world loads it and goes on from its turn
 	if (auto world = _session->TakeWorld(); world.has_value())
 	{
@@ -245,7 +254,10 @@ void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& worl
 	auto& clock = Locator::time::value();
 	clock.SetNetworkGame(true);
 	clock.SetCatchesUp(true);
-	clock.SetPaused(false);
+	// The clock stands still until the server's turn of the state is here, as it does before the start: the frames until
+	// then take no game time, so the world is the same as the server's when that turn starts
+	clock.SetPaused(true);
+	_resumeTurn = world.turn;
 	Locator::playerCommandSystem::value().SetSource(_session.get());
 	Locator::syncChecksumSystem::value().SetEnabled(true);
 	if (clock.GetTurn() != world.turn)

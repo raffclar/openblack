@@ -105,6 +105,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -189,6 +190,11 @@ entt::entity GameHandGrabWorld::Hand() const
 		return acting.has_value() ? (*acting)[k_Left] : entt::null;
 	}
 	return hands.GetPlayerHands()[k_Left];
+}
+
+bool GameHandGrabWorld::IsNetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 std::optional<PlayerNames> GameHandGrabWorld::OwnHandPlayer() const

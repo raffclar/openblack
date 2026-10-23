@@ -60,6 +60,8 @@ private:
 	bool _endLogged {false};
 	std::optional<uint32_t> _partAt;
 	bool _partAgain {false};
+	/// The turn of a loaded world state, until it is here and the world goes on
+	std::optional<uint32_t> _resumeTurn;
 };
 
 } // namespace openblack::ecs::systems

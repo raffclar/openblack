@@ -440,7 +440,7 @@ def main():
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
         same = (not different and len(compared) >= expected // 2 and counts is not None
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
-                and counts[0] >= expected - 100 and (recovered or not parted_on_purpose))
+                and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),

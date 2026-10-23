@@ -63,6 +63,8 @@ struct ClockState
 	uint32_t runSeed = 0;
 	std::vector<std::mt19937> streams;
 	std::optional<std::mt19937> general;
+	/// How many numbers the synced seed gave, which the checksum of each turn has. A save of an older build has none.
+	std::optional<uint64_t> syncedDraws;
 };
 
 /// The bytes of the block of the clock
