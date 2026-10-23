@@ -15,6 +15,7 @@
 #include <functional>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 
@@ -217,8 +218,8 @@ glm::mat3 creature_hand_glow::UnitAxes(const glm::mat3& axes)
 glm::mat3 creature_hand_glow::CirclingAxes(float turn)
 {
 	// The sine and cosine keep the processor's wider precision until they are stored
-	const auto c = static_cast<float>(std::cos(static_cast<double>(turn)));
-	const auto s = static_cast<float>(std::sin(static_cast<double>(turn)));
+	const auto c = static_cast<float>(portable_math::Cos(static_cast<double>(turn)));
+	const auto s = static_cast<float>(portable_math::Sin(static_cast<double>(turn)));
 	return {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-s, 0.0f, c)};
 }
 

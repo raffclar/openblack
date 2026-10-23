@@ -1,6 +1,11 @@
 set(L3DTOOL l3dtool.cpp GltfExport.cpp GltfExport.h json.hpp tiny_gltf.h)
 # The exporter poses the bones and blends the seams with the game's own rules
-set(L3DTOOL_GAME_SOURCES ${CMAKE_SOURCE_DIR}/src/3D/SkeletalAnimation.cpp ${CMAKE_SOURCE_DIR}/src/3D/VertexBlend.cpp)
+# and the portable maths that the rules use
+set(L3DTOOL_GAME_SOURCES
+    ${CMAKE_SOURCE_DIR}/src/3D/SkeletalAnimation.cpp
+    ${CMAKE_SOURCE_DIR}/src/3D/VertexBlend.cpp
+    ${CMAKE_SOURCE_DIR}/src/Common/PortableMath.cpp
+)
 
 source_group(apps\\l3dtool FILES ${L3DTOOL})
 

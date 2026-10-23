@@ -105,8 +105,13 @@ using KeepInHash = std::function<bool(std::string_view component, std::string_vi
 /// Makes the hashes of the parts of the world, with no save in memory of the whole world. With a keep function, the hash
 /// of a component leaves out the parts that the function does not keep. The hash of each component goes over its live
 /// rows in the order of the storage. With byField, the hashes also keep each field of each component on its own.
+/// Tools: gets the bytes that the hash takes of each field of a row (the field is "*" for a component that saves as one
+/// value), to compare two builds' worlds value by value
+using RowVisitor = std::function<void(std::string_view component, entt::entity entity, std::string_view field,
+                                      std::span<const uint8_t> bytes)>;
+
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {},
-                                    bool byField = false);
+                                    bool byField = false, const RowVisitor& visit = {});
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the

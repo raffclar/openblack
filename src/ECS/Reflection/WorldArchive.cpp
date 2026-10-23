@@ -232,7 +232,8 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
-                                                                              const KeepInHash& keep, bool byField)
+                                                                              const KeepInHash& keep, bool byField,
+                                                                              const RowVisitor& visit)
 {
 	// FNV-1a over the bytes of each part
 	constexpr uint64_t k_Offset = 14695981039346656037ull;
@@ -302,6 +303,10 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 					const auto start = out.Bytes().size();
 					codec->save(value, out);
 					mixField(0, std::span(out.Bytes()).subspan(start));
+					if (visit)
+					{
+						visit(component.name, row, k_WholeComponent, std::span(out.Bytes()).subspan(start));
+					}
 				}
 			}
 			else
@@ -324,6 +329,10 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 						field.info->save(field.data.get(instance), out);
 					}
 					mixField(index, std::span(out.Bytes()).subspan(start));
+					if (visit)
+					{
+						visit(component.name, row, field.info->name, std::span(out.Bytes()).subspan(start));
+					}
 				}
 			}
 			mix(hash, out.Bytes());

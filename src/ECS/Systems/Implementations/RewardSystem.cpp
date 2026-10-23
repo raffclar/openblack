@@ -28,6 +28,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BlendedByMaterial.h"
 #include "ECS/Components/Mesh.h"
@@ -303,7 +304,7 @@ void RewardSystem::Update(float milliseconds)
 		}
 		// It is placed by its clock as it stood before this frame, which then runs on
 		const float height = reward::FallHeight(chest.seconds);
-		transform.rotation = glm::mat3(glm::eulerAngleY(-reward::FallYaw(chest.seconds)));
+		transform.rotation = glm::mat3(portable_math::EulerAngleY(-reward::FallYaw(chest.seconds)));
 		chest.seconds += milliseconds * 0.001f;
 		if (height > 0.0f)
 		{

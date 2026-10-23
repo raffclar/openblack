@@ -99,6 +99,10 @@ namespace command_log
 {
 class Writer;
 }
+namespace checksum_log
+{
+class Writer;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -457,6 +461,8 @@ private:
 	void PlayStartupScreens();
 	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
 	void StartFightTools();
+	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
+	void StartSimulationLogs();
 	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
 	void PlayLogoScreens();
 	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
@@ -541,6 +547,8 @@ private:
 	std::optional<sim_run::Request> _simulation;
 	/// The file that a tool's run writes the commands of each turn to
 	std::unique_ptr<command_log::Writer> _commandLog;
+	/// The file that a tool's run writes the checksum of each turn to
+	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box

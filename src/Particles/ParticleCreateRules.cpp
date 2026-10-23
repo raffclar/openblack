@@ -17,6 +17,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSounds.h"
@@ -294,7 +295,7 @@ protected:
 	{
 		const float r = effect.Random(startRadius, stopRadius);
 		const float angle = effect.Random(k_TwoPi);
-		atom.position += glm::vec3(std::cos(angle) * r, height, std::sin(angle) * r);
+		atom.position += glm::vec3(openblack::portable_math::Cos(angle) * r, height, openblack::portable_math::Sin(angle) * r);
 		atom.visible = initiallyVisible;
 	}
 	[[nodiscard]] bool AsksAgain() const override { return true; }
@@ -329,10 +330,12 @@ protected:
 		{
 			const float angle = effect.Random(k_TwoPi);
 			const float distance = effect.Random(radius);
-			atom.position += glm::vec3(std::cos(angle) * distance, 0.0f, std::sin(angle) * distance);
+			atom.position += glm::vec3(openblack::portable_math::Cos(angle) * distance, 0.0f,
+			                           openblack::portable_math::Sin(angle) * distance);
 		}
-		const float across = std::sin(phi) * s;
-		atom.velocity = {std::cos(theta) * across, std::cos(phi) * s, std::sin(theta) * across};
+		const float across = openblack::portable_math::Sin(phi) * s;
+		atom.velocity = {openblack::portable_math::Cos(theta) * across, openblack::portable_math::Cos(phi) * s,
+		                 openblack::portable_math::Sin(theta) * across};
 		atom.visible = initiallyVisible;
 		StartAtomSound(effect, atom, sound);
 	}
@@ -444,7 +447,7 @@ private:
 		{
 			const float angle = effect.Random(k_TwoPi);
 			const float r = randomRadiusMin + effect.Random(randomRadiusMax - randomRadiusMin);
-			position += glm::vec3(std::cos(angle) * r, 0.0f, std::sin(angle) * r);
+			position += glm::vec3(openblack::portable_math::Cos(angle) * r, 0.0f, openblack::portable_math::Sin(angle) * r);
 		}
 		glm::vec3 random = effect.RandomInBall() * effect.Random(randomSpeed);
 		random *= effect.FloatProvider(adjustRandomVelocity, 1.0f);

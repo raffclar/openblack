@@ -29,6 +29,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
@@ -279,7 +280,7 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		transform->rotation = physics::QuarterTurned(living::HeadingAxes(heading));
 		// Its heading across the land as the animals keep it, from the way it is drawn
 		const auto side = transform->rotation[0];
-		animal->heading = std::atan2(-side.x, side.z);
+		animal->heading = portable_math::Atan2(-side.x, side.z);
 	}
 	// It goes on from where it came down, on the land
 	if (const auto land = world.LandHeight(glm::vec2(transform->position.x, transform->position.z)))

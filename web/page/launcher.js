@@ -46,7 +46,15 @@ function showLog() {
   logElement.scrollTop = logElement.scrollHeight;
 }
 
+// The checksum lines of a tool's run (--sim-checksums -), which the page keeps all of, for the cross-play check
+const k_ChecksumTag = 'openblack-checksum ';
+const checksumLines = [];
+
 function log(text) {
+  if (text.startsWith(k_ChecksumTag)) {
+    checksumLines.push(text.slice(k_ChecksumTag.length));
+    return;
+  }
   logLines.push(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
@@ -61,6 +69,8 @@ function log(text) {
 
 /** All the lines of the game log that the page keeps, for the test scripts */
 globalThis.openblackLogText = () => logLines.join('\n');
+/** The checksum lines of the turns from a first line on, and the count of all of them, for the test scripts */
+globalThis.openblackChecksums = (from = 0) => ({ count: checksumLines.length, lines: checksumLines.slice(from) });
 logElement.parentElement.addEventListener('toggle', showLog);
 
 /** Show a message on the page. The game calls this too, for an error that stops it. */
@@ -325,6 +335,26 @@ async function chooseRenderer(parameters, gameArguments) {
   return { backend: 'OpenGLES', reason: 'the browser gives no WebGPU adapter' };
 }
 
+// A test script can give the game more files: each page parameter "tool-file" names a file on the page's own server.
+// The game reads it at /game/tool-files/<name>, beside the game folder. For example the commands of a tool's run.
+async function addToolFiles(parameters) {
+  for (const name of parameters.getAll('tool-file')) {
+    if (!/^[\w.-]+$/.test(name)) {
+      log(`The page does not take the tool file "${name}": use letters, digits, ".", "-" and "_" only.`);
+      continue;
+    }
+    const response = await fetch(name, { cache: 'no-store' });
+    if (!response.ok) {
+      log(`The page cannot get the tool file ${name}: ${response.status}`);
+      continue;
+    }
+    const file = new File([await response.blob()], name);
+    chosen = chosen.filter((entry) => entry.path !== `tool-files/${name}`);
+    chosen.push({ file, path: `tool-files/${name}` });
+    log(`The game gets the tool file ${name} at /game/tool-files/${name} (${file.size} bytes).`);
+  }
+}
+
 async function start() {
   if (!chosen) {
     return;
@@ -340,8 +370,9 @@ async function start() {
     // Ask the browser to keep the saves when it needs space
     navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
   }
-  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const parameters = new URLSearchParams(location.search);
+  await addToolFiles(parameters);
+  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {

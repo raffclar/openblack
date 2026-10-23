@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack::particles;
 
 namespace
@@ -46,12 +48,12 @@ float tornado::Bias(float t, float b)
 	{
 		return 0.0f;
 	}
-	return std::pow(t, std::log(b) / std::log(0.5f));
+	return std::pow(t, openblack::portable_math::Log(b) / openblack::portable_math::Log(0.5f));
 }
 
 float tornado::Gain(float t, float g)
 {
-	const float exponent = std::log(1.0f - g) / std::log(0.5f);
+	const float exponent = openblack::portable_math::Log(1.0f - g) / openblack::portable_math::Log(0.5f);
 	if (t < 0.5f)
 	{
 		const float x = 2.0f * t;
@@ -81,8 +83,8 @@ glm::vec3 tornado::AxisCentre(const Funnel& funnel, glm::vec3 base, glm::vec3 to
 	// The wiggle follows the bend: its angle goes with the bent share of the height
 	const float angle = bent * static_cast<float>(funnel.wiggleCount) * std::numbers::pi_v<float>;
 	const float amplitude = funnel.scale * funnel.wiggleAmplitude;
-	centre.x += std::cos(angle) * amplitude;
-	centre.z += std::sin(angle) * amplitude;
+	centre.x += openblack::portable_math::Cos(angle) * amplitude;
+	centre.z += openblack::portable_math::Sin(angle) * amplitude;
 	return centre;
 }
 
@@ -154,9 +156,10 @@ uint8_t tornado::FadeAlpha(float age, float fadeIn, float closeFade)
 glm::vec3 tornado::Launch(float fromVertical, float heading, float speedShare, float speed, float scale, glm::vec3 footVelocity)
 {
 	const float along = speedShare * speed;
-	const float across = std::sin(fromVertical) * along;
-	return {scale * std::cos(heading) * across + footVelocity.x, std::cos(fromVertical) * along * scale + footVelocity.y,
-	        scale * std::sin(heading) * across + footVelocity.z};
+	const float across = openblack::portable_math::Sin(fromVertical) * along;
+	return {scale * openblack::portable_math::Cos(heading) * across + footVelocity.x,
+	        openblack::portable_math::Cos(fromVertical) * along * scale + footVelocity.y,
+	        scale * openblack::portable_math::Sin(heading) * across + footVelocity.z};
 }
 
 float tornado::Reach(const Funnel& funnel, float tribalPower)

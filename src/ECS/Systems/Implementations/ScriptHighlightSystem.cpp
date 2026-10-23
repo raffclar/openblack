@@ -19,6 +19,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "3D/AllMeshes.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -358,7 +359,7 @@ void ScriptHighlightSystem::UpdateHighlight(entt::entity entity, ScriptHighlight
 	highlight.yAngle = rules::IsTipSign(highlight.kind) && highlight.active ? rules::FacingAngle(camera, point)
 	                                                                        : rules::Spin(highlight.yAngle, frameMilliseconds);
 	const float scale = rules::DrawnScale(highlight.kind, k_Scale, glm::distance(point, camera));
-	transform.rotation = glm::mat3(glm::eulerAngleY(-highlight.yAngle));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(-highlight.yAngle));
 	transform.scale = glm::vec3(scale);
 
 	// Where its model's middle is drawn, and how far the model reaches from it
@@ -460,7 +461,7 @@ void ScriptHighlightSystem::UpdateSparks(entt::entity entity, bool drawn, float 
 		auto& transform = registry.Get<Transform>(made);
 		transform.position = look->position;
 		// Turned about the line to the camera, as it faces it
-		transform.rotation = glm::mat3(glm::eulerAngleZ(look->angle));
+		transform.rotation = glm::mat3(portable_math::EulerAngleZ(look->angle));
 		transform.scale = glm::vec3(look->halfSize, look->halfSize, 1.0f);
 		auto& drawnSprite = registry.AllOf<Sprite>(made) ? registry.Get<Sprite>(made) : registry.Assign<Sprite>(made, *picture);
 		drawnSprite = *picture;
