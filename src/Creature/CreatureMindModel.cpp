@@ -418,3 +418,19 @@ creaturemind::MindFileData creature_mind_model::ToFile(const creature_desires::D
 	file.leashWords = learnt.leashWords;
 	return file;
 }
+
+void creature_mind_model::SetSavedBy(creaturemind::MindFileData& file, std::optional<std::string_view> ownerFile,
+                                     std::u16string_view profile)
+{
+	// Both names end with a zero; the profile is in 16-bit characters, low byte first
+	const auto savedAs = ownerFile.value_or(k_NoPlayerFile);
+	file.savedAs.assign(savedAs.begin(), savedAs.end());
+	file.savedAs.push_back(0);
+	file.profile.clear();
+	for (const auto c : profile)
+	{
+		file.profile.push_back(static_cast<uint8_t>(c & 0xff));
+		file.profile.push_back(static_cast<uint8_t>(c >> 8));
+	}
+	file.profile.insert(file.profile.end(), {0, 0});
+}
