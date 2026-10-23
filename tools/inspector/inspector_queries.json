@@ -1050,6 +1050,12 @@
   "query": "engine.config"
  },
  {
+  "description": "The settings of this computer (settings.json) as the game read them at the start, with the changes kept since; a value the file does not keep is null",
+  "kind": "object",
+  "parameters": [],
+  "query": "engine.computer_settings"
+ },
+ {
   "description": "The last frame: its time, the window's size, the renderer's flags and how much it draws",
   "kind": "object",
   "parameters": [],

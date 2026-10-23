@@ -88,6 +88,9 @@ public:
 	virtual bool LoadMapWithFreshScripts(const std::filesystem::path& path, land_change::Kind change) = 0;
 	/// Loads the testbed: a flat land over the whole map with a lake, a dispenser of each miracle and no script
 	virtual void LoadTestbed() = 0;
+	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
+	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
+	virtual bool LoadGodsRingMap() = 0;
 	/// Loads a saved game: the landscape of the saved land, then `restore` puts the saved entities in place of the land's
 	/// own. Gives whether the landscape loaded and `restore` gave true.
 	virtual bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,

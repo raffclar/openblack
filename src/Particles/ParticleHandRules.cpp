@@ -222,6 +222,13 @@ private:
 	{
 		float owed {0.0f};
 		int emitted {0};
+
+		/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+		template <typename Visitor>
+		static void VisitPlainFields(const State& self, Visitor&& visit)
+		{
+			visit(self.owed, self.emitted);
+		}
 	};
 
 	std::string _creator;

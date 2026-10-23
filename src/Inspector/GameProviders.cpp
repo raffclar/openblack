@@ -124,6 +124,7 @@
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
+#include "ECS/Systems/ComputerSettingsSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -273,6 +274,7 @@ namespace
 /// Every locator service and the query that inspects it, in the locator's order
 constexpr std::array k_Coverage {
     LocatorCoverage {"config", "engine.config"},
+    LocatorCoverage {"computerSettingsSystem", "engine.computer_settings"},
     LocatorCoverage {"infoConstants", "engine.services"},
     LocatorCoverage {"profiler", "engine.frame"},
     LocatorCoverage {"events", "engine.services"},
@@ -672,6 +674,25 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		        {"running", config.running},
 		    };
 	    }));
+	provider->Add(
+	    Query("computer_settings", "The settings of this computer (settings.json) as the game read them at the start, with the "
+	                               "changes kept since; a value the file does not keep is null"),
+	    Serve<Locator::computerSettingsSystem>(
+	        "the computer settings",
+	        [](const ecs::systems::ComputerSettingsSystemInterface& system, const QueryContext& /*context*/) {
+		        const auto& settings = system.GetSettings();
+		        const auto value = [](const auto& kept) -> Json { return kept.has_value() ? Json(*kept) : Json(nullptr); };
+		        return Json {
+		            {"detail_level", value(settings.detailLevel)},
+		            {"max_detail_level", value(settings.maxDetailLevel)},
+		            {"effects_volume", value(settings.effectsVolume)},
+		            {"music_volume", value(settings.musicVolume)},
+		            {"width", value(settings.width)},
+		            {"height", value(settings.height)},
+		            {"window_mode", value(settings.windowMode)},
+		            {"vsync", value(settings.vsync)},
+		        };
+	        }));
 	provider->Add(Query("frame", "The last frame: its time, the window's size, the renderer's flags and how much it draws"),
 	              [](const QueryContext& /*context*/) {
 		              Json result = Json::object();

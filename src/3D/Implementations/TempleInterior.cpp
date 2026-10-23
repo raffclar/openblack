@@ -344,7 +344,7 @@ const std::vector<TemplePerson>& TempleInterior::GetPeople() const
 {
 	static const std::vector<TemplePerson> k_Nobody;
 	// The lowest detail levels draw no worshippers
-	const bool shown = graphics::detail_level::For(Locator::config::value().detailLevel).templePeople;
+	const bool shown = Locator::config::value().detail.templePeople;
 	return _people != nullptr && shown ? _people->GetDrawn() : k_Nobody;
 }
 

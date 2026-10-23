@@ -410,8 +410,10 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		return;
 	}
 	// A block keeps a 17th row and column of its neighbours' first cells: a corner on a block's edge is in up to four
-	// blocks, and each copy changes, with the cells of each block it is a corner of
-	const auto setIn = [this, altitude](int blockX, int blockZ, int x, int z) {
+	// blocks, and each copy changes, with the cells of each block it is a corner of. A copy that already has the
+	// altitude does not change, so its block is not built and painted again for no change.
+	bool changedAny = false;
+	const auto setIn = [this, altitude, &changedAny](int blockX, int blockZ, int x, int z) {
 		if (blockX < 0 || blockZ < 0 || blockX >= 32 || blockZ >= 32)
 		{
 			return;
@@ -421,7 +423,11 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		{
 			return;
 		}
-		_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude);
+		if (!_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude))
+		{
+			return;
+		}
+		changedAny = true;
 		auto& cells = _changedCells.at(blockIndex - 1u);
 		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
 		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
@@ -444,7 +450,10 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 	{
 		setIn(blockX - 1, blockZ - 1, 16, 16);
 	}
-	_changedCorners.Add(glm::ivec2(coordinates));
+	if (changedAny)
+	{
+		_changedCorners.Add(glm::ivec2(coordinates));
+	}
 }
 
 void LandIsland::CommitAltitudeChanges()

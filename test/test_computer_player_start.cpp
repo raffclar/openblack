@@ -248,3 +248,89 @@ TEST(ComputerPlayerStart, TheSpeciesNumberZeroIsTheApe)
 	EXPECT_EQ(SpeciesFor(0), CreatureType::GiantApe);
 	EXPECT_EQ(SpeciesFor(16), CreatureType::Gorilla);
 }
+
+namespace
+{
+
+/// A world of gods, citadels and computer players that the test sets, for the start of a network game
+class FakeSlotWorld final: public SlotWorld
+{
+public:
+	[[nodiscard]] bool HasCitadel(PlayerNames player) const override { return citadels.contains(player); }
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames player) const override { return computers.contains(player); }
+	void SwitchOn(PlayerNames player) override { switchedOn.push_back(player); }
+	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
+	{
+		made.push_back({.player = player, .species = species, .nameText = nameText, .stage = stage});
+	}
+	uint32_t GameRand(uint32_t range) override
+	{
+		rangesAsked.push_back(range);
+		const auto roll = rolls.empty() ? 0 : rolls.front();
+		if (!rolls.empty())
+		{
+			rolls.erase(rolls.begin());
+		}
+		return roll;
+	}
+
+	struct Made
+	{
+		PlayerNames player {PlayerNames::NEUTRAL};
+		CreatureType species {CreatureType::GiantApe};
+		uint32_t nameText {0};
+		uint32_t stage {0};
+	};
+
+	std::map<PlayerNames, bool> citadels;
+	std::map<PlayerNames, bool> computers;
+	std::vector<uint32_t> rolls;
+	std::vector<uint32_t> rangesAsked;
+	std::vector<PlayerNames> switchedOn;
+	std::vector<Made> made;
+};
+
+} // namespace
+
+TEST(ComputerPlayerStart, ASlotHasNoPlayerWhenItsGodHasACitadelAndNoHumanOrComputerPlaysIt)
+{
+	EXPECT_TRUE(SlotHasNoPlayer(false, false, true));
+	EXPECT_FALSE(SlotHasNoPlayer(true, false, true));
+	EXPECT_FALSE(SlotHasNoPlayer(false, true, true));
+	EXPECT_FALSE(SlotHasNoPlayer(false, false, false));
+}
+
+TEST(ComputerPlayerStart, EachSlotWithNoPlayerGetsAComputerGodAndAGrownCreature)
+{
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}, {PlayerNames::PLAYER_THREE, true}};
+	// The name roll comes first, then the species roll
+	world.rolls = {42, 6, 7, 0};
+	const std::vector gods {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	FillEmptySlots(world, gods, humans);
+
+	EXPECT_EQ(world.rangesAsked,
+	          (std::vector<uint32_t> {k_SlotNameChoices, k_SlotSpeciesChoices, k_SlotNameChoices, k_SlotSpeciesChoices}));
+	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}));
+	ASSERT_EQ(world.made.size(), 2);
+	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(world.made[0].species, CreatureType::Horse);
+	EXPECT_EQ(world.made[0].nameText, 42);
+	EXPECT_EQ(world.made[0].stage, 12);
+	EXPECT_EQ(world.made[1].player, PlayerNames::PLAYER_THREE);
+	EXPECT_EQ(world.made[1].species, CreatureType::GiantApe);
+	EXPECT_EQ(world.made[1].nameText, 7);
+}
+
+TEST(ComputerPlayerStart, AComputerGodOrAGodWithNoCitadelTakesNoRoll)
+{
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_TWO, true}};
+	world.computers = {{PlayerNames::PLAYER_TWO, true}};
+	const std::vector gods {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE};
+	FillEmptySlots(world, gods, {});
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.made.empty());
+	EXPECT_TRUE(world.switchedOn.empty());
+}

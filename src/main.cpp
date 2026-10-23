@@ -102,7 +102,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
-		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super.", cxxopts::value<uint16_t>()->default_value("4"))
+		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super. Without it, the settings.json of this computer gives the level, if it keeps one; the same holds for the window's size and mode and the vertical sync.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
 		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
@@ -341,6 +341,13 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.vsync = result["vsync"].as<bool>();
 		args.detailLevel = static_cast<uint8_t>(std::min<uint16_t>(result["detail-level"].as<uint16_t>(), 6));
 		args.displayMode = displayMode;
+		args.givenOnCommandLine = {
+		    .width = result.count("width") != 0,
+		    .height = result.count("height") != 0,
+		    .windowMode = result.count("window-mode") != 0,
+		    .vsync = result.count("vsync") != 0,
+		    .detailLevel = result.count("detail-level") != 0,
+		};
 		args.graphicsBackend = graphicsBackend;
 		args.numFramesToSimulate = result["num-frames-to-simulate"].as<uint32_t>();
 		args.logFile = result["log-file"].as<std::string>();

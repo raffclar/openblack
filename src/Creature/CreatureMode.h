@@ -89,6 +89,15 @@ inline constexpr size_t k_TemplePenPlace = 15;
 [[nodiscard]] std::optional<glm::vec3> TemplePen(glm::vec3 templePosition, float yAngle, float scale,
                                                  std::span<const glm::mat4> markedPlaces);
 
+/// Which of the temple mesh's marked places is the creature home of the citadel, where the start of a network game makes
+/// the creature of a computer god
+inline constexpr size_t k_CitadelCreatureHomePlace = 0;
+/// Where the creature home of a citadel is on the map: that marked place of the temple's mesh, turned, scaled and moved
+/// with the temple as for the pen, then truncated to the map's fixed point, on the ground. When the mesh marks no such
+/// place, the place of the temple itself.
+[[nodiscard]] map_coords::MapCoords CitadelCreatureHomeOnMap(glm::vec3 templePosition, float yAngle, float scale,
+                                                             std::span<const glm::mat4> markedPlaces);
+
 /// Where a creature that passed out is carried to come round, its home: while its player's temple stands, the temple's
 /// pen, whatever home it was given; else the home it was given, or for a player without either (as on the testbed) the
 /// spot given, the middle of the land

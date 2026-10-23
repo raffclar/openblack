@@ -17,22 +17,35 @@
 #include <optional>
 #include <vector>
 
+#include <EDTFile.h>
+#include <LHVMTypes.h>
 #include <entt/meta/context.hpp>
 #include <glm/vec3.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CameraTrack.h"
+#include "3D/DayNightClock.h"
 #include "3D/SkyDome.h"
+#include "Animals/Zoomer.h"
+#include "Common/Zoomer.h"
 #include "Creature/CreatureFight.h"
 #include "Creature/FightMarks.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Reflection/PlainImage.h"
+#include "ECS/ScriptObjectTable.h"
 #include "Hand/HandGrabRules.h"
 #include "Magic/CastInput.h"
 #include "Magic/HandMotion.h"
+#include "Particles/LightningMaths.h"
+#include "Particles/ManaPathMaths.h"
+#include "Particles/ParticleEffect.h"
 #include "Particles/ParticleMaths.h"
+#include "Particles/ParticleObjectEffects.h"
 #include "Particles/ParticleSoundRelease.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Particles/PlasmaCommand.h"
+#include "Particles/RisingSparks.h"
+#include "Particles/SurfaceOfRevolution.h"
 
 using namespace openblack;
 using namespace openblack::ecs::reflection;
@@ -94,6 +107,15 @@ void ExpectZeroGaps()
 	}
 }
 
+/// Checks a plain type with no gaps: the fields that the type gives cover every byte of it
+template <typename Type>
+void ExpectNoGaps()
+{
+	const Type value {};
+	const auto covered = CoveredBytes(value);
+	EXPECT_TRUE(std::ranges::all_of(covered, [](bool byte) { return byte; }));
+}
+
 } // namespace
 
 TEST(PlainImage, TheGapsOfEachPlainTypeAreZero)
@@ -112,6 +134,53 @@ TEST(PlainImage, TheGapsOfEachPlainTypeAreZero)
 	ExpectZeroGaps<creature_fight::marks::Mark>();
 	ExpectZeroGaps<creature_fight::marks::MarkList>();
 	ExpectZeroGaps<hand_grab::HandSpring>();
+	ExpectZeroGaps<ecs::script_objects::Place>();
+	ExpectZeroGaps<ecs::script_objects::Table>();
+}
+
+TEST(PlainImage, EachPlainTypeWithNoGapsGivesEveryByte)
+{
+	ExpectNoGaps<DayNightClock>();
+	ExpectNoGaps<Zoomer>();
+	ExpectNoGaps<animals::Zoomer>();
+	ExpectNoGaps<camera_track::WayRunner>();
+	ExpectNoGaps<lhvm::VMValue>();
+	ExpectNoGaps<magic::HandSpin>();
+	ExpectNoGaps<particles::BeliefSprite>();
+	ExpectNoGaps<particles::ExplodeRecord>();
+	ExpectNoGaps<particles::SurfacePoint>();
+	ExpectNoGaps<particles::WaveTarget>();
+	ExpectNoGaps<particles::DrawState>();
+	ExpectNoGaps<particles::ObjectGlow>();
+	ExpectNoGaps<particles::surface::Vertex>();
+	ExpectNoGaps<particles::mana_path::Spark>();
+	ExpectNoGaps<particles::mana_path::Path>();
+	ExpectNoGaps<particles::maths::ArcEnds>();
+	ExpectNoGaps<particles::rising_sparks::Spark>();
+	ExpectNoGaps<particles::rising_sparks::Sparks>();
+	ExpectNoGaps<particles::rising_sparks::FrameMilliseconds>();
+}
+
+TEST(PlainImage, ATableMadeOnOtherBytesSavesTheSameBytes)
+{
+	// The memory of each table has other bytes before the table is made in it, as a table on the stack or the heap can
+	Filled<ecs::script_objects::Table> low(std::byte {0x00});
+	Filled<ecs::script_objects::Table> high(std::byte {0xC9});
+	auto* lowTable = low.Make();
+	auto* highTable = high.Make();
+	for (auto* table : {lowTable, highTable})
+	{
+		table->Register(42, true);
+		table->Register(7, false);
+		table->AddReference(2);
+	}
+	const entt::meta_ctx context;
+	BinaryWriter lowOut(context);
+	BinaryWriter highOut(context);
+	lowOut.WriteRaw(*lowTable);
+	highOut.WriteRaw(*highTable);
+	EXPECT_EQ(lowOut.Bytes(), highOut.Bytes());
+	EXPECT_NE(low.bytes, high.bytes);
 }
 
 TEST(PlainImage, AnEmptyOptionIsZero)

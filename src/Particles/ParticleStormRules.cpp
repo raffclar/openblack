@@ -554,6 +554,13 @@ struct Swirl
 {
 	glm::vec3 velocity {0.0f};
 	float radius {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const Swirl& self, Visitor&& visit)
+	{
+		visit(self.velocity, self.radius);
+	}
 };
 
 /// The swirl where a storm is cast: dark sprites circling its point, tightening and turning faster, drifting off the way

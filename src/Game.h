@@ -22,6 +22,7 @@
 #include <string_view>
 #include <utility>
 
+#include <ComputerSettings.h>
 #include <glm/mat4x4.hpp>
 #include <spdlog/common.h>
 
@@ -133,6 +134,9 @@ struct Arguments
 	/// The game's graphics detail level, 0 to 6
 	uint8_t detailLevel {4};
 	openblack::windowing::DisplayMode displayMode;
+	/// Which of the window's size and mode, the vertical sync and the detail level the command line gave: the others
+	/// come from the settings of this computer when it keeps them
+	computer_settings::GivenOnCommandLine givenOnCommandLine;
 	GraphicsBackend graphicsBackend;
 	std::string gamePath;
 	float guiScale;
@@ -366,6 +370,9 @@ public:
 	/// Loads the testbed: a flat plane over the whole map, with a lake north of the middle and nothing on it, for trying
 	/// out creatures
 	void LoadTestbed() noexcept;
+	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village
+	/// in each slot. The village comes from a land of the game for network play. Returns false when that land is not there.
+	bool LoadGodsRingMap() noexcept;
 	/// Loads a saved game: the saved land's landscape with no map script (the flat land for the testbed), then `restore`
 	/// puts the saved entities in place of the land's own. The systems then find their entities again and the land starts.
 	/// Returns whether the landscape loaded and `restore` gave true.

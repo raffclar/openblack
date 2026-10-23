@@ -89,6 +89,10 @@ PlainBytes<Type> PlainImage(const Type& value)
 	}
 	else
 	{
+		// The compiler cannot show that a value with fields has no gaps, unless all its bytes are in whole numbers
+		static_assert((!std::is_class_v<Type> && !std::is_union_v<Type>) || detail::PlainBits<Type>() ||
+		                  std::has_unique_object_representations_v<Type>,
+		              "A plain type that can have gaps between its fields must give its fields with VisitPlainFields");
 		std::memcpy(image.bytes.data(), &value, sizeof(Type));
 	}
 	return image;
