@@ -184,6 +184,7 @@ public:
 	void HoldFireBall(uint32_t nowMs, uint32_t turn) override;
 	void ReleaseFireBall(uint32_t nowMs, uint32_t turn) override;
 	void DoCatchFireBall(PlayerNames player, entt::entity ball) override;
+	bool DoApplySeed(PlayerNames player, entt::entity target) override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
@@ -201,6 +202,8 @@ public:
 	void SendFireBallCommand(entt::entity ball, bool take);
 	/// A ready fire seed in the hand put to a fireball takes it in, the seed a twentieth stronger; whether it did
 	bool AbsorbFireBall(entt::entity ball);
+	/// Whether the miracle in the hand is a ready fire seed, which takes in a fireball
+	[[nodiscard]] bool AbsorbsFireBalls() const;
 	[[nodiscard]] HandResult GetLastHandResult() const override { return _lastHandResult; }
 	void PlaceHandEffect(glm::vec3 point, float handScale) override;
 	[[nodiscard]] bool IsHandInInfluence() const override;

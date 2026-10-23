@@ -168,6 +168,12 @@ void Run(const Command& command)
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandApply>)
 		    {
+			    // The miracle in the hand is used on the thing, else the thing that the hand holds
+			    if (openblack::Locator::magicSystem::has_value() &&
+			        openblack::Locator::magicSystem::value().DoApplySeed(command.player, action.target))
+			    {
+				    return;
+			    }
 			    if (openblack::Locator::handGrabSystem::has_value() && registry.Valid(action.target))
 			    {
 				    openblack::Locator::handGrabSystem::value().DoApply(command.player, action.target);

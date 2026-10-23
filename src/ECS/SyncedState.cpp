@@ -120,6 +120,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
     // shows
     {.component = "HandLastFeedback", .field = "", .marker = ""},
+    // A miracle's seed in the hand is drawn at the hand of this computer, with its effect in the hand
+    {.component = "SpellSeed", .field = "handEffect", .marker = ""},
+    {.component = "Transform", .field = "position", .marker = "SpellSeed"},
+    {.component = "Transform", .field = "rotation", .marker = "SpellSeed"},
+    // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
+    // hand
+    {.component = "Spell", .field = "effect", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},

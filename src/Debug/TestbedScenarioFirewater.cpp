@@ -235,6 +235,33 @@ void AddFireballCatching(std::vector<Scenario>& all)
 	    .commands = {{.kind = Command::Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Fire)},
 	                 {.kind = Command::Kind::HandTakeFireBall, .delaySeconds = 1.6f}},
 	});
+
+	// The fire seed and the fireballs that the recorded input of the hand presses on for the dedicated server's check
+	// (tools/sim/hand_inputs/absorb.json)
+	all.push_back({
+	    .id = "miracles.recorded_absorb",
+	    .name = "A fire seed for the recorded presses on fireballs",
+	    .facet = Facet::Miracles,
+	    .description = "The hand holds a fire seed. Every eight seconds another player throws a fireball straight up, "
+	                   "slowly, in the middle of the screen. The dedicated server and the game both play this scenario, "
+	                   "and the game makes the recorded input of tools/sim/hand_inputs/absorb.json: the action button on "
+	                   "the ball.",
+	    .expected = "Each ball that the press finds goes into the seed at the next turn, and the seed stays in the hand, "
+	                "a twentieth stronger each time.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, -20.0f}, .look = {0.0f, 8.0f, 10.0f}},
+	    .miracles = {{.type = MagicType::Fireball,
+	                  .point = {0.0f, 10.0f},
+	                  .handOffset = {0.0f, 10.0f},
+	                  .handHeight = 6.0f,
+	                  .throwVelocity = {0.0f, 7.0f, 0.0f},
+	                  .delaySeconds = 2.0f,
+	                  .repeatSeconds = 8.0f,
+	                  .player = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::HoldSeed,
+	                  .delaySeconds = 0.5f,
+	                  .value = static_cast<size_t>(SpellSeedType::Fire)}},
+	});
 }
 } // namespace
 

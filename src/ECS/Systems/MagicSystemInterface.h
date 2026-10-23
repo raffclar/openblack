@@ -265,6 +265,9 @@ public:
 	/// At the turn: the tap or the take of a fireball that the hand sent (player_commands::HandTap, HandTake). Another
 	/// player's ball is caught into the empty hand; the player's own slips through.
 	virtual void DoCatchFireBall(PlayerNames /*player*/, entt::entity /*ball*/) {}
+	/// At the turn: the use of the miracle in the hand on a thing that the hand sent (player_commands::HandApply). A ready
+	/// fire seed takes in a fireball. Whether the miracle in the hand took the command.
+	virtual bool DoApplySeed(PlayerNames /*player*/, entt::entity /*target*/) { return false; }
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
