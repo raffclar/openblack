@@ -170,6 +170,9 @@ void StartLogs(const std::string& logFile, const LogLevels& levels)
 	// TODO (#749) use std::views::enumerate
 	for (size_t i = 0; const auto& subsystem : k_LoggingSubsystemStrs)
 	{
+		// A logger of this name that an earlier user left in the registry would make the new one fail. A test program
+		// that runs many tests in one process leaves such loggers.
+		spdlog::drop(subsystem.data());
 		auto logger = createLogger(subsystem.data());
 		logger->set_level(levels.at(i));
 		// An error is written out at once, so it is in the file even if the process is then ended from outside, where no

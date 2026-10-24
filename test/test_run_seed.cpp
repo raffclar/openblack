@@ -95,6 +95,20 @@ TEST(RunSeed, TheSameSeedDrawsTheSameNumbers)
 	EXPECT_NE(GeneralDraws(rng), general);
 }
 
+// A manager made after another one draws from its own seed, not from what the other left in the thread
+TEST(RunSeed, ASecondManagerOnTheSameThreadStartsFromItsOwnSeed)
+{
+	std::vector<int> first;
+	{
+		RandomNumberManagerProduction rng;
+		rng.SetRunSeed(42);
+		first = GeneralDraws(rng);
+	}
+	RandomNumberManagerProduction other;
+	other.SetRunSeed(42);
+	EXPECT_EQ(GeneralDraws(other), first);
+}
+
 // The general draws of another thread start again from the run's seed too, once it is seeded
 TEST(RunSeed, OtherThreadsGeneralDrawsFollowTheSeed)
 {

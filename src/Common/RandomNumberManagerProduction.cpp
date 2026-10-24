@@ -21,7 +21,9 @@ RandomNumberManagerProduction::RandomNumberManagerProduction()
 void RandomNumberManagerProduction::SetRunSeed(uint32_t seed)
 {
 	_runSeed = seed;
-	_seeding.fetch_add(1);
+	// The count is shared by every manager, so a thread that drew from another manager sees it must start again
+	static std::atomic<uint32_t> seedings {0};
+	_seeding = seedings.fetch_add(1) + 1;
 	for (size_t i = 0; i < _streams.size(); ++i)
 	{
 		_streams.at(i).seed(run_seed::StreamSeed(seed, static_cast<RandomStream>(i)));

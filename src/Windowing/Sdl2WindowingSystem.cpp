@@ -149,8 +149,10 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 
 	// Get SDL Window requirements from Renderer
-	const int x = SDL_WINDOWPOS_UNDEFINED;
-	const int y = SDL_WINDOWPOS_UNDEFINED;
+	// A background run is placed by the game: the system's own placing of new windows can cut a window short when other
+	// games are open. Other runs leave the placing to the system.
+	const int x = background ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED;
+	const int y = background ? SDL_WINDOWPOS_CENTERED : SDL_WINDOWPOS_UNDEFINED;
 
 	auto window = std::unique_ptr<SDL_Window, SDLDestroyer>(SDL_CreateWindow(title.c_str(), x, y, width, height, flags));
 
@@ -180,11 +182,11 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 	}
 	if (displayMode == DisplayMode::Windowed)
 	{
-		KeepInsideDesktop();
+		KeepInsideDesktop({width, height});
 	}
 }
 
-void Sdl2WindowingSystem::KeepInsideDesktop()
+void Sdl2WindowingSystem::KeepInsideDesktop(glm::ivec2 asked)
 {
 	auto* window = _window.get();
 	const int display = SDL_GetWindowDisplayIndex(window);
@@ -197,13 +199,23 @@ void Sdl2WindowingSystem::KeepInsideDesktop()
 	}
 	DesktopRect picture {};
 	SDL_GetWindowPosition(window, &picture.position.x, &picture.position.y);
-	SDL_GetWindowSize(window, &picture.size.x, &picture.size.y);
+	// The size that was asked for is the one to fit: the system may have cut the window short while it opened
+	picture.size = asked;
+	glm::ivec2 current {};
+	SDL_GetWindowSize(window, &current.x, &current.y);
 	const auto fitted = FitWindow(picture, borders, {.position = {usable.x, usable.y}, .size = {usable.w, usable.h}});
 	if (!fitted.has_value())
 	{
+		if (current != asked)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"),
+			                   "The window opened at {}x{} and not at the {}x{} that was asked for: made {}x{}", current.x,
+			                   current.y, asked.x, asked.y, asked.x, asked.y);
+			SDL_SetWindowSize(window, asked.x, asked.y);
+		}
 		return;
 	}
-	if (fitted->size != picture.size)
+	if (fitted->size != current)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("graphics"),
 		                   "The window's {}x{} picture doesn't fit on the desktop with its frame ({}x{} usable): made {}x{}",

@@ -684,6 +684,11 @@ Game::~Game() noexcept
 	ShutDownServices();
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
+	// A later game, or a test, must not find this one through the static pointer
+	if (sInstance == this)
+	{
+		sInstance = nullptr;
+	}
 }
 
 bool Game::ProcessEvents(const SDL_Event& event) noexcept
@@ -5128,6 +5133,7 @@ void Game::FollowWindowSize()
 	{
 		return;
 	}
+	SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window is now {}x{}: the picture follows it", size->x, size->y);
 	Locator::rendererInterface::value().Reset(*size);
 	if (Locator::oceanSystem::has_value())
 	{
