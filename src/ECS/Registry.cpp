@@ -32,6 +32,7 @@ void Registry::Release(entt::entity entity)
 
 void Registry::Destroy(entt::entity entity)
 {
+	_destroying.publish(entity);
 	SetLayoutDirty();
 	_registry.destroy(entity);
 }

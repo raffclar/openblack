@@ -2343,6 +2343,10 @@ void SetPosition() // 024 SET_POSITION
 			// Its walk takes up the new place, and one under the script's control stops there and waits for it
 			ecs::walker_placement::Place(registry, object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			if (registry.AllOf<ecs::components::ScriptControlled>(object))
 			{
 				ecs::walker_placement::Stop(registry, object);
@@ -2356,6 +2360,10 @@ void SetPosition() // 024 SET_POSITION
 		{
 			Locator::creatureLocomotionSystem::value().PlaceWithoutWalking(object, position);
 			ecs::thing_map_place::Keep(registry, object, place);
+			if (Locator::entitiesMap::has_value())
+			{
+				Locator::entitiesMap::value().Moved(object);
+			}
 			return;
 		}
 		ecs::thing_map_place::Put(registry, object, place, position.y);
@@ -2738,7 +2746,7 @@ void MoveGameThing() // 033 MOVE_GAME_THING
 		const auto& registry = Locator::entitiesRegistry::value();
 		const auto& transform = registry.Get<const Transform>(object);
 		const bool inMap =
-		    registry.AllOf<ecs::components::MapCellResident>(object) &&
+		    ecs::InMapCells(registry, object) &&
 		    !registry.AnyOf<ecs::components::InHand, ecs::components::InPhysics, ecs::components::CarriedByTornado>(object);
 		if (inMap && Locator::creatureMindSystem::has_value())
 		{

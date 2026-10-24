@@ -696,9 +696,10 @@ void FootpathSystem::ProcessObstacleChanges()
 
 void FootpathSystem::CatchUpWithMap()
 {
+	// Only the things made go in: a thing that moved is in its new cells already, as the game moves it
 	if (Locator::entitiesMap::has_value())
 	{
-		Locator::entitiesMap::value().Sync();
+		Locator::entitiesMap::value().FileNew();
 	}
 	ProcessObstacleChanges();
 }

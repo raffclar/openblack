@@ -34,7 +34,7 @@ namespace openblack::ecs::thing_map_place
 void Keep(Registry& registry, entt::entity thing, const map_coords::MapCoords& place);
 
 /// Puts a thing at an exact map position: its metres become those of the map position, at the given height, and the
-/// thing keeps the map position (see Keep)
+/// thing keeps the map position (see Keep). A thing in the map's cells goes into the cells of the new place at once.
 void Put(Registry& registry, entt::entity thing, const map_coords::MapCoords& place, float height);
 
 } // namespace openblack::ecs::thing_map_place

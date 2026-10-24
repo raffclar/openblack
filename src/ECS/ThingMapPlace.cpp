@@ -20,7 +20,9 @@
 #include "ECS/Components/MapPlace.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "Locator.h"
 
 namespace openblack::ecs
 {
@@ -105,6 +107,11 @@ void thing_map_place::Put(Registry& registry, entt::entity thing, const map_coor
 	}
 	at->position = {map_coords::ToMetres(place.x), height, map_coords::ToMetres(place.z)};
 	Keep(registry, thing, place);
+	// It goes into the map cells of the new place at once, as the game moves it
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(thing);
+	}
 }
 
 } // namespace openblack::ecs

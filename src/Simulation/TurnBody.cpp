@@ -17,6 +17,7 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/MapCoords.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -25,6 +26,7 @@
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/LivingListPlace.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
@@ -101,6 +103,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Profiler.h"
@@ -109,6 +112,16 @@ namespace openblack::simulation
 {
 namespace
 {
+
+/// The things made so far go into their map cells, as the game puts each thing in its cells as it makes it. The turn does this
+/// after each step and each living thing's turn, so that a thing made there is in the cells before anything else looks.
+void FileNewInMap()
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().FileNew();
+	}
+}
 
 void PlayPlayerTurns()
 {
@@ -174,7 +187,10 @@ void PlayLivingTurn()
 				    [[maybe_unused]] const auto place = &living - list.data();
 				    [[maybe_unused]] const auto drawsBefore =
 				        Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetSyncedDraws() : 0;
-				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) { PlayCreatureTurnStep(step, living.id); });
+				    game_turn::PlayCreaturesTurn([&living](game_turn::Step step) {
+					    PlayCreatureTurnStep(step, living.id);
+					    FileNewInMap();
+				    });
 				    SPDLOG_LOGGER_DEBUG(
 				        spdlog::get("game"),
 				        "Creature {} took its turn at place {} of {} in the list of the living: synced draws {} to {}",
@@ -190,6 +206,7 @@ void PlayLivingTurn()
 				    // The flocks fly and the wolves run and hunt
 				    animals.AnimalTurn(living.id);
 			    }
+			    FileNewInMap();
 		    });
 	}
 	if (animalsTurn)
@@ -228,6 +245,14 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 	}
 	case Step::CreaturePhysiology:
 	{
+		// First it goes into the map cell of where its body stands, after its last turn and the pull of its leash. Not
+		// when another creature carries it, nor when its body is off the map.
+		auto& registry = Locator::entitiesRegistry::value();
+		if (Locator::entitiesMap::has_value() && !registry.AllOf<ecs::components::HeldByCreature>(creature) &&
+		    map_coords::InBounds(ecs::thing_map_place::Of(registry, creature)))
+		{
+			Locator::entitiesMap::value().Moved(creature);
+		}
 		// It ages, grows, gets hungry, tired and thirsty, and heals while it sleeps
 		auto creaturePhysiology = profiler.BeginScoped(Profiler::Stage::CreaturePhysiologyUpdate);
 		Locator::creaturePhysiologySystem::value().CreatureTurn(creature);
@@ -437,10 +462,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The frames of the hand fix the reaches of the citadels. With no frames of the hand, the turn fixes them.
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
-	case Step::MapCells:
-		// What moved since the last turn goes into its new map cell
-		Locator::entitiesMap::value().Sync();
-		break;
 	case Step::Sharks:
 		// Each shark's turn starts where it is
 		Locator::sharkSystem::value().ProcessTurn();
@@ -578,10 +599,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::Living:
 		PlayLivingTurn();
-		break;
-	case Step::MapCellsAfterLiving:
-		// The living that walked this turn go into their new map cells before anything searches them
-		Locator::entitiesMap::value().Sync();
 		break;
 	case Step::Fires:
 		// The game burns its fires here, after the living and before the miracles and the scripts. A fire that a later
@@ -851,7 +868,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 
 void PlayTurn(TurnViewInterface& view)
 {
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); });
+	game_turn::PlayTurn([&view](game_turn::Step step) {
+		PlayTurnStep(step, view);
+		FileNewInMap();
+	});
 }
 
 } // namespace openblack::simulation

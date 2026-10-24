@@ -23,6 +23,7 @@
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Map.h"
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -203,4 +204,90 @@ TEST_F(MapProductionFiling, AThingIsInTheMapUntilItLeavesTheCells)
 	EXPECT_TRUE(map.InMap(other));
 	registry.Destroy(other);
 	EXPECT_FALSE(map.InMap(other));
+}
+
+namespace
+{
+/// A villager made at a place, with no walk: it stands where its metres are
+entt::entity MakeVillager(Registry& registry, glm::vec3 at)
+{
+	const auto villager = registry.Create();
+	registry.Assign<Transform>(villager, at, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mobile>(villager);
+	registry.Assign<Villager>(villager);
+	return villager;
+}
+
+std::vector<entt::entity> MobileIn(const MapInterface& map, glm::vec3 at)
+{
+	const auto things = map.GetMobileInGridCell(at);
+	return {things.begin(), things.end()};
+}
+} // namespace
+
+TEST_F(MapProductionFiling, AThingThatMovesIsInItsNewCellAtOnce)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const glm::vec3 there {520.0f, 0.0f, 500.0f};
+	const auto stayer = MakeVillager(registry, there);
+	const auto walker = MakeVillager(registry, here);
+	map.FileNew();
+	ASSERT_EQ(MobileIn(map, there), std::vector {stayer});
+	// It steps into the next cell: no sync is needed, and the last to come into the cell is met first
+	registry.Get<Transform>(walker).position = there;
+	map.Moved(walker);
+	EXPECT_TRUE(MobileIn(map, here).empty());
+	EXPECT_EQ(MobileIn(map, there), (std::vector {walker, stayer}));
+	// A step in the same cell leaves the order of the cell as it is
+	registry.Get<Transform>(stayer).position = there + glm::vec3(1.0f, 0.0f, 0.0f);
+	map.Moved(stayer);
+	EXPECT_EQ(MobileIn(map, there), (std::vector {walker, stayer}));
+}
+
+TEST_F(MapProductionFiling, AThingMadeBeforeAnotherMovesInIsInItsCellFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const glm::vec3 there {520.0f, 0.0f, 500.0f};
+	const auto walker = MakeVillager(registry, here);
+	map.FileNew();
+	// A villager is born in the cell, then the walker steps in: the newcomer was there first, so the walker is met first
+	const auto born = MakeVillager(registry, there);
+	registry.Get<Transform>(walker).position = there;
+	map.Moved(walker);
+	EXPECT_EQ(MobileIn(map, there), (std::vector {walker, born}));
+}
+
+TEST_F(MapProductionFiling, AThingJustMadeIsInTheCells)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto villager = MakeVillager(registry, {500.0f, 0.0f, 500.0f});
+	EXPECT_TRUE(InMapCells(registry, villager));
+}
+
+TEST_F(MapProductionFiling, AThingMadeBeforeAnotherGoesIsInTheCellsBeforeTheOtherGoes)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto old = MakeVillager(registry, {500.0f, 0.0f, 500.0f});
+	Locator::entitiesMap::value().FileNew();
+	const auto born = MakeVillager(registry, {500.0f, 0.0f, 500.0f});
+	registry.Destroy(old);
+	EXPECT_TRUE(registry.AllOf<MapCellResident>(born));
+}
+
+TEST_F(MapProductionFiling, AMoveOutsideTheTurnWaitsForTheSync)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const glm::vec3 there {520.0f, 0.0f, 500.0f};
+	const auto villager = MakeVillager(registry, here);
+	map.FileNew();
+	registry.Get<Transform>(villager).position = there;
+	EXPECT_EQ(MobileIn(map, here), std::vector {villager});
+	map.Sync();
+	EXPECT_EQ(MobileIn(map, there), std::vector {villager});
 }

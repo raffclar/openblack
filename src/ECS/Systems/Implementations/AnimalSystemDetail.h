@@ -34,6 +34,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptFind.h"
 #include "InfoConstants.h"
@@ -373,6 +374,11 @@ inline void SyncWorld(Animal& animal)
 	const auto xz = Metres(animal.move.position);
 	animal.position = {xz.x, Ground(xz) + animal.height, xz.y};
 	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
+	// It goes into the map cell that it moved into at once
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(EntityRegistry().ToEntity(animal));
+	}
 }
 
 /// Whether a map position is somewhere an animal of a collision mask can't stand: off the map or on no land, or in the

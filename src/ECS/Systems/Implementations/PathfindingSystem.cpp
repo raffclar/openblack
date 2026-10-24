@@ -258,6 +258,11 @@ void MoveWalker(Walker& walker, glm::ivec2 position)
 	                           ? Locator::terrainSystem::value().GetHeightAt(wallHug.placedAt)
 	                           : walker.transform.position.y;
 	walker.transform.position = glm::xzy(glm::vec3(wallHug.placedAt, altitude));
+	// It goes into the map cell that it stepped into at once
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Moved(walker.entity);
+	}
 }
 
 /// Faces the walker along a game angle and makes its step that way
