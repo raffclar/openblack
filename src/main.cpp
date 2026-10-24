@@ -140,6 +140,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. It can have a part of a millisecond, such as 16.7 for 60 frames a second. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<double>())
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
+		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
+		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
+		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 	;
 #if defined(OPENBLACK_INSPECTOR)
@@ -302,6 +305,16 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.seed = result["seed"].as<uint32_t>();
 		}
 		args.networkGame = result.count("sim-network-game") != 0;
+		if (result.count("join") != 0)
+		{
+			args.networkJoin = openblack::ecs::systems::NetworkJoin {
+			    .url = result["join"].as<std::string>(),
+			    .ticket = result.count("join-ticket") != 0 ? result["join-ticket"].as<std::string>() : std::string(),
+			    .gamePassword = {},
+			    .testAuthorities =
+			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
+			};
+		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
 		{
 			openblack::sim_run::Request simulation {};

@@ -190,9 +190,16 @@ struct CreatureBruise
 	std::optional<creature_marks::Mark> wound;
 };
 
+/// The player of the command left a network game, or did not come back in time. Only the game server sends it. The
+/// world defeats the player's god at the turn, and the god's slot stays closed.
+struct PlayerLeft
+{
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, PlayerLeft>;
 
 /// A command and the player that sent it
 struct Command

@@ -161,6 +161,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.totem);
 		               out.Float(command.share);
 	               },
+	               [](const PlayerLeft& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -272,6 +273,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = TotemShare {.totem = totem, .share = in.Float()};
 		return DecodeError::None;
 	}
+	case CommandTag::PlayerLeft:
+		action = PlayerLeft {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -368,6 +372,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandApply& /*command*/) { return CommandTag::HandApply; },
 	                      [](const TotemShare& /*command*/) { return CommandTag::TotemShare; },
 	                      [](const CreatureBruise& /*command*/) { return CommandTag::CreatureBruise; },
+	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
 	                  },
 	                  action);
 }
@@ -392,6 +397,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandApply& /*command*/) { return k_Entity; },
 	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
 	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;
