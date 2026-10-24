@@ -45,13 +45,7 @@ constexpr float k_FishScareFootHeight = 1.0f;
 /// Today's month, counted from 1, and day by the local clock
 std::pair<int, int> Today()
 {
-	const auto now = static_cast<std::time_t>(machine_clock::UnixTime());
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
+	const auto local = machine_clock::LocalTime();
 	return {local.tm_mon + 1, local.tm_mday};
 }
 /// The feet of a creature in the world as its body is posed now, the right foot first; none for a creature without

@@ -11,8 +11,6 @@
 
 #include "GuidanceSystem.h"
 
-#include <ctime>
-
 #include <algorithm>
 #include <iterator>
 #include <vector>
@@ -28,6 +26,7 @@
 #include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -97,13 +96,7 @@ bool FirstLandOfStory()
 /// Whether the computer's clock says it is night now
 bool ComputerNight()
 {
-	const std::time_t now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
+	const auto local = machine_clock::LocalTime();
 	return guidance::ClockSaysNight(local.tm_hour, local.tm_min);
 }
 
@@ -495,7 +488,7 @@ void GuidanceSystem::LookAtMoon()
 	{
 		return;
 	}
-	const auto look = guidance::LookAtMoon(graphics::moon::Phase(static_cast<int64_t>(std::time(nullptr))), ComputerNight());
+	const auto look = guidance::LookAtMoon(graphics::moon::Phase(machine_clock::UnixTime()), ComputerNight());
 	if (look.remark)
 	{
 		SayOneOff(guidance::OneOff::FullMoon);

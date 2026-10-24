@@ -60,6 +60,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/MachineClock.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
@@ -4893,17 +4894,15 @@ void GetGameTime() // 113 GET_GAME_TIME
 	Pushf(Locator::skySystem::value().GetClock().GetScriptTime());
 }
 
-/// The local time of the player's computer now
+/// The local time of the player's computer now. In a game for more than one player, the game tells the script that
+/// this is not safe there, and then gives the value.
 static std::tm RealLocalTime()
 {
-	const auto now = std::time(nullptr);
-	std::tm local {};
-#if defined(_WIN32)
-	localtime_s(&local, &now);
-#else
-	localtime_r(&now, &local);
-#endif
-	return local;
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		ScriptMessage(script::real_time::k_NotMultiplayerFriendly);
+	}
+	return machine_clock::LocalTime();
 }
 
 void GetRealTime() // 114 GET_REAL_TIME

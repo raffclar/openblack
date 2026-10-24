@@ -3388,6 +3388,20 @@ void AddFootprints(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "footprints.april_fools_date",
+	    .name = "1 April by the computer's date",
+	    .facet = Facet::Footprints,
+	    .description = "The computer's clock is set to noon on 1 April 2026; nothing else is changed. A tiger walks round "
+	                   "in a circle.",
+	    .expected = "Its footprints are smiley faces, each the size of a tiger's own print.",
+	    .environment = {.realDate = RealDate {.year = 2026, .month = 4, .day = 1, .hour = 12, .minute = 0}},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {50.0f, 0.0f}, 180.0f)},
+	    .commands = circling,
+	    .repeatFrom = 0,
+	});
+
+	all.push_back({
 	    .id = "footprints.walk_and_run_close",
 	    .name = "Footprints close up, walking and running",
 	    .facet = Facet::Footprints,

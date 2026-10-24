@@ -49,6 +49,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Common/MachineClock.h"
 #include "Common/PlayerProfiles.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSaveState.h"
@@ -160,43 +161,55 @@ PlayerNames LocalPlayer()
 }
 
 /// The date and the time now, the time first, as the save game room shows them. On Windows the player's own formats of
-/// the time and of the long date give the text, as in the game.
+/// the time and of the long date give the text, as in the game; when the long date is not available, the short date
+/// takes its place. The time is the machine's clock as the game reads it.
 std::u16string DateNow()
 {
+	const auto local = machine_clock::LocalTime();
 #ifdef _WIN32
-	std::array<wchar_t, 128> time {};
-	std::array<wchar_t, 128> date {};
-	const auto timeLength =
-	    GetTimeFormatW(LOCALE_USER_DEFAULT, 0, nullptr, nullptr, time.data(), static_cast<int>(time.size()));
-	const auto dateLength =
-	    GetDateFormatW(LOCALE_USER_DEFAULT, DATE_LONGDATE, nullptr, nullptr, date.data(), static_cast<int>(date.size()));
-	if (timeLength > 0 && dateLength > 0)
+	const SYSTEMTIME now {.wYear = static_cast<WORD>(local.tm_year + 1900),
+	                      .wMonth = static_cast<WORD>(local.tm_mon + 1),
+	                      .wDayOfWeek = static_cast<WORD>(local.tm_wday),
+	                      .wDay = static_cast<WORD>(local.tm_mday),
+	                      .wHour = static_cast<WORD>(local.tm_hour),
+	                      .wMinute = static_cast<WORD>(local.tm_min),
+	                      .wSecond = static_cast<WORD>(local.tm_sec),
+	                      .wMilliseconds = 0};
+	const auto part = [](auto&& format) -> std::optional<std::u16string> {
+		const auto size = format(nullptr, 0);
+		if (size <= 0)
+		{
+			return std::nullopt;
+		}
+		std::vector<wchar_t> text(static_cast<size_t>(size));
+		const auto written = format(text.data(), size);
+		if (written <= 0)
+		{
+			return std::nullopt;
+		}
+		return std::u16string(text.data(), text.data() + written - 1);
+	};
+	const auto dateIn = [&now](DWORD flags) {
+		return [&now, flags](wchar_t* text, int size) {
+			return GetDateFormatW(LOCALE_USER_DEFAULT, flags, &now, nullptr, text, size);
+		};
+	};
+	auto date = part(dateIn(DATE_LONGDATE));
+	if (!date.has_value())
 	{
-		std::u16string text(time.data(), time.data() + timeLength - 1);
-		text += u' ';
-		text.append(date.data(), date.data() + dateLength - 1);
-		return text;
+		date = part(dateIn(DATE_SHORTDATE));
 	}
-#endif
-	const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-#if defined(__EMSCRIPTEN__)
-	// The C++ library of the web build has no time zone data. The C library gives the local time of the browser.
-	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
-	std::tm local {};
-	localtime_r(&seconds, &local);
-	std::array<char, 128> text {};
-	const auto length = std::strftime(text.data(), text.size(), "%H:%M:%S %A, %d %B %Y", &local);
-	return gui::ToUtf16(std::string(text.data(), length));
+	const auto time =
+	    part([&now](wchar_t* text, int size) { return GetTimeFormatW(LOCALE_USER_DEFAULT, 0, &now, nullptr, text, size); });
+	return ecs::save_files::SaveDateLabel(time, date);
 #else
-	try
-	{
-		const std::chrono::zoned_time local {std::chrono::current_zone(), now};
-		return gui::ToUtf16(std::format("{:%H:%M:%S %A, %d %B %Y}", local));
-	}
-	catch (const std::exception&)
-	{
-		return gui::ToUtf16(std::format("{:%H:%M:%S %A, %d %B %Y}", now));
-	}
+	// Away from Windows, fixed formats of the time and of the long date take the place of the player's own
+	const auto format = [&local](const char* pattern) {
+		std::array<char, 128> text {};
+		const auto length = std::strftime(text.data(), text.size(), pattern, &local);
+		return gui::ToUtf16(std::string(text.data(), length));
+	};
+	return ecs::save_files::SaveDateLabel(format("%H:%M:%S"), format("%A, %d %B %Y"));
 #endif
 }
 

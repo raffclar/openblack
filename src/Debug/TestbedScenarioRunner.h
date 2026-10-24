@@ -107,6 +107,8 @@ public:
 
 private:
 	void SetUpEnvironment(const Environment& environment);
+	/// The machine's clock gives the scenario's date, or the date it gave before a scenario set one
+	void SetUpDate(const std::optional<RealDate>& date);
 	void PlaceHighlights(const Scenario& scenario, glm::vec2 middle);
 	void PlaceObjects(const Scenario& scenario, glm::vec2 middle);
 	/// Lays the scenario's footpaths and links them to the objects they lead from
@@ -221,6 +223,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// The date that the machine's clock was pinned to (none for the wall clock's) before a scenario set the date
+	std::optional<std::optional<int64_t>> _pinnedDateBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
