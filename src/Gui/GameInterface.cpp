@@ -1283,7 +1283,7 @@ int GameInterface::DrawVideo(glm::u16vec2 resolution)
 	                 .height = picture->height,
 	                 .serial = picture->serial,
 	             },
-	             rect, picture->alpha, videos.IsSixteenBitColour());
+	             rect, picture->alpha, videos.GetFilmSurface());
 	_canvas.Begin(resolution);
 	return rect.x;
 }

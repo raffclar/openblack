@@ -108,7 +108,7 @@ void VideoOverlay::Upload(const Planes& planes)
 }
 
 void VideoOverlay::Draw(RenderPass view, glm::u16vec2 resolution, const Planes& planes, video::ScreenRect rect, uint8_t alpha,
-                        bool sixteenBit)
+                        std::optional<film_surface::Format> surface)
 {
 	if (alpha == 0 || planes.width == 0 || planes.height == 0 || bgfx::getAvailTransientVertexBuffer(6, Layout()) < 6)
 	{
@@ -147,7 +147,7 @@ void VideoOverlay::Draw(RenderPass view, glm::u16vec2 resolution, const Planes& 
 	const glm::vec4 size(static_cast<float>(planes.width), static_cast<float>(planes.height),
 	                     static_cast<float>(_planeSizes[0].x), static_cast<float>(_planeSizes[0].y));
 	const glm::vec4 chroma(static_cast<float>(_planeSizes[1].x), static_cast<float>(_planeSizes[1].y), 0.0f, 0.0f);
-	const glm::vec4 options(sixteenBit ? 1.0f : 0.0f, hasPicture ? 1.0f : 0.0f, 0.0f, 0.0f);
+	const glm::vec4 options(film_surface::ShaderMode(surface), hasPicture ? 1.0f : 0.0f, 0.0f, 0.0f);
 	program->SetUniformValue("u_videoSize", &size);
 	program->SetUniformValue("u_videoChroma", &chroma);
 	program->SetUniformValue("u_videoOptions", &options);

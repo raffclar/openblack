@@ -19,6 +19,8 @@
 #include <string_view>
 #include <vector>
 
+#include "Graphics/FilmSurface.h"
+
 /// The rules of the loading screen the game shows while a land loads: a tip of the day, its picture from tips.bik,
 /// a version number and a bar that sweeps by the time spent loading. Free of any game state so that the screen and the
 /// tests share them. Every position is in screen pixels unless it says it is in the 800 by 600 layout of the front
@@ -213,13 +215,7 @@ inline constexpr Rect k_PleaseWaitShadow {.left = 101, .top = 201, .right = 701,
 inline constexpr int32_t k_BigTextSize = 35;
 
 /// The two ways a 16-bit picture keeps its colour
-enum class Rgb16 : uint8_t
-{
-	/// 5 bits each, the top bit set as opaque alpha
-	Rgb555,
-	/// 5, 6 and 5 bits
-	Rgb565,
-};
+using Rgb16 = graphics::film_surface::Format;
 
 /// A picture of 8-bit blue, green, red and unused bytes cut to 16 bits a pixel, as the game copies its videos. Sixteen
 /// rows of nothing follow the picture: the blur reads into them
@@ -237,7 +233,8 @@ struct Blur
 };
 [[nodiscard]] Blur BlurPicture(std::span<const uint16_t> pixels, uint32_t width, uint32_t height, Rgb16 format);
 
-/// A 16-bit pixel as 8-bit red, green, blue and alpha, each channel widened by repeating its top bits
+/// A 16-bit pixel as 8-bit red, green, blue and alpha, each channel the nearest byte to its level, as the display card
+/// reads it
 [[nodiscard]] std::array<uint8_t, 4> ToRgba8(uint16_t pixel, Rgb16 format) noexcept;
 
 } // namespace openblack::loading

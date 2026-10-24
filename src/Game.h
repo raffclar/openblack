@@ -166,6 +166,9 @@ struct Arguments
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
 	std::string playVideo;
+	/// Debug: the 16-bit surface of the films, "555", "565" or "none". Empty keeps the surface of the display cards of
+	/// today
+	std::string filmSurface;
 	/// Play the pre-intro film at start-up, as on a first run
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
@@ -516,6 +519,7 @@ private:
 
 	std::filesystem::path _startMap;
 	std::string _playVideo;
+	std::string _filmSurface;
 	bool _preIntro {false};
 	bool _skipLogos {false};
 	bool _logoEffectAsked {false};
