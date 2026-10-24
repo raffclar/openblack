@@ -247,7 +247,7 @@ private:
 	[[nodiscard]] components::Spell* FindSpell(entt::entity spell) override;
 	[[nodiscard]] float GameRandom(float max) override;
 	void ReactToSpell(components::Spell& spell, bool onCast) override;
-	void StartCastEffect(components::Spell& spell, ParticleType type) override;
+	void StartCastEffect(components::Spell& spell, ParticleType type, bool synced) override;
 	[[nodiscard]] magic::FlockMiracleInterface* Flocks() override { return &_flocks; }
 	entt::entity CreateTeleportStone(const components::Spell& spell) override;
 	[[nodiscard]] bool CanPlaceTeleportStone(glm::vec3 point) const override;

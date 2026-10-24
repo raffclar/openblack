@@ -3225,11 +3225,11 @@ float MagicSystem::SpellStrength(entt::entity entity)
 
 // For the debug window
 
-void MagicSystem::StartCastEffect(Spell& spell, ParticleType type)
+void MagicSystem::StartCastEffect(Spell& spell, ParticleType type, bool synced)
 {
 	auto& particles = Locator::particleSystem::value();
-	// It plays out by itself, the same on every machine, as big as the miracle and heading the way it was cast
-	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, true);
+	// It plays out by itself, as big as the miracle and heading the way it was cast
+	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, synced);
 	if (auto* effect = particles.Find(spell.castEffect))
 	{
 		effect->SetDirection(spell.direction);
