@@ -28,6 +28,7 @@
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
+#include "Common/BuildVersionFile.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -511,6 +512,8 @@ private:
 	std::optional<LoadTimer> _startupTimer;
 	/// The size drawn at, following the window's
 	windowing::SizeFollower _windowSize;
+	/// The openblack commit of this build, from the version file next to the game
+	build_version::BuildVersion _buildVersion;
 	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
 	std::optional<LoadTimer> _prefetchTimer;
 

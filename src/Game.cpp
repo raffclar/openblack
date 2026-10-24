@@ -16,6 +16,8 @@
 #include <algorithm>
 #include <array>
 #include <chrono>
+#include <filesystem>
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -83,6 +85,7 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
+#include "Common/BuildVersionFile.h"
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -334,6 +337,9 @@
 #ifdef __ANDROID__
 #include <spdlog/sinks/android_sink.h>
 #endif
+#if defined(__EMSCRIPTEN__)
+#include "Web/WebPlatform.h"
+#endif
 
 using namespace openblack;
 using namespace openblack::lhscriptx;
@@ -358,6 +364,36 @@ windowing::DisplayMode DisplayModeOf(std::string_view name, windowing::DisplayMo
 		return windowing::DisplayMode::Borderless;
 	}
 	return otherwise;
+}
+
+/// The version file next to the game. The web build has it in its working folder, where the page puts it.
+std::filesystem::path BuildVersionPath()
+{
+#if defined(__EMSCRIPTEN__)
+	return std::filesystem::path(web::k_WorkingFolder) / build_version::k_FileName;
+#else
+	const std::unique_ptr<char, decltype(&SDL_free)> base(SDL_GetBasePath(), SDL_free);
+	return (base ? std::filesystem::path(base.get()) : std::filesystem::current_path()) / build_version::k_FileName;
+#endif
+}
+
+/// The openblack commit of this build. A build without the version file has an unknown version.
+build_version::BuildVersion ReadBuildVersion(filesystem::FileSystemInterface& fileSystem)
+{
+	const auto path = BuildVersionPath();
+	if (!fileSystem.Exists(path))
+	{
+		return {};
+	}
+	try
+	{
+		const auto bytes = fileSystem.ReadAll(path);
+		return build_version::Parse(std::string_view(reinterpret_cast<const char*>(bytes.data()), bytes.size()));
+	}
+	catch (const std::exception&)
+	{
+		return {};
+	}
 }
 
 /// Notes in the hand's debugging trace that a part of the frame put the hand at a position (see hand_trace::HandTrace)
@@ -3535,6 +3571,8 @@ bool Game::Initialize() noexcept
 	}
 	_startupTimer->Step("window, renderer and audio device");
 	auto& fileSystem = Locator::filesystem::value();
+	_buildVersion = ReadBuildVersion(fileSystem);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "openblack build {}", _buildVersion.Text());
 	auto& events = Locator::events::value();
 
 	events.AddHandler(std::function([this, &config](const SDL_Event& event) {
@@ -5129,6 +5167,7 @@ void Game::FollowWindowSize()
 	{
 		return;
 	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game draws at the new window size {}x{}", size->x, size->y);
 	Locator::rendererInterface::value().Reset(*size);
 	if (Locator::oceanSystem::has_value())
 	{

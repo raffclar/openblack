@@ -22,6 +22,42 @@ const k_Needed = [
 ];
 
 const element = (id) => document.getElementById(id);
+
+// The build writes the openblack commit that it comes from into version.txt next to the page: the full git commit hash,
+// with "-dirty" when the source tree had changes, or "unknown". The page shows the short hash with a link to the
+// commit, and gives the text of the file to the game, which shows it on its loading screen.
+const k_VersionFile = 'version.txt';
+const k_CommitAddress = 'https://github.com/raffclar/openblack/commit/';
+const k_ShortHash = 7;
+
+/** The build version in the text of the version file */
+function parseVersion(text) {
+  const match = /^([0-9a-f]{40})(-dirty)?$/i.exec((text ?? '').trim());
+  if (!match) {
+    return { file: text, text: 'unknown', short: 'unknown', address: null };
+  }
+  const hash = match[1].toLowerCase();
+  const dirty = match[2] ? '-dirty' : '';
+  return { file: text, text: hash + dirty, short: hash.slice(0, k_ShortHash) + dirty, address: k_CommitAddress + hash };
+}
+
+const buildVersion = fetch(k_VersionFile, { cache: 'no-cache' })
+  .then((response) => (response.ok ? response.text() : undefined))
+  .catch(() => undefined)
+  .then(parseVersion);
+
+/** Show the build on the launcher and on the badge that the page shows while the game plays */
+function showVersion(version) {
+  for (const link of document.querySelectorAll('.build-link')) {
+    link.textContent = version.short;
+    link.title = `openblack build ${version.text}`;
+    if (version.address) {
+      link.href = version.address;
+    } else {
+      link.removeAttribute('href');
+    }
+  }
+}
 const logElement = element('log');
 
 // The page keeps the last lines of the game log. It writes them into the log box only while the box is open, and at most
@@ -256,9 +292,6 @@ function showFrame(frame) {
   if (screen.width !== frame.width || screen.height !== frame.height) {
     screen.width = frame.width;
     screen.height = frame.height;
-    const canvas = element('canvas');
-    canvas.style.width = `${frame.width}px`;
-    canvas.style.height = `${frame.height}px`;
   }
   screenContext ??= screen.getContext('bitmaprenderer');
   screenContext.transferFromImageBitmap(frame);
@@ -349,25 +382,33 @@ async function start() {
   }
   log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
     `because ${renderer.reason}.`);
+  const version = await buildVersion;
   element('chooser').hidden = true;
   element('game').hidden = false;
+  element('build-badge').hidden = false;
   document.body.classList.add('playing');
   const canvas = element('canvas');
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  // SDL takes the size of a window that the player can change from the size of the canvas on the page. Thus the canvas
-  // starts with the window size that the game asks for: the game's default, or the size on the command line.
-  const size = (short, long, fallback) => {
+  // SDL takes the size of a window that the player can change from the size of the canvas on the page. The canvas fills
+  // the page (page.css). A size on the command line gives the canvas that fixed size, for the tests.
+  const size = (short, long) => {
     const at = gameArguments.findIndex((argument) => argument === short || argument === long);
-    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : fallback;
+    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : undefined;
   };
-  canvas.style.width = `${size('-W', '--width', 1280)}px`;
-  canvas.style.height = `${size('-H', '--height', 1024)}px`;
+  const width = size('-W', '--width');
+  const height = size('-H', '--height');
+  if (width && height) {
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
     print: log,
     printErr: log,
-    openblackWeb: { folder: { list, files: chosen.map((entry) => entry.file) }, storage, showFrame, setPresent },
+    openblackWeb: {
+      folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
+    },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
   const script = document.createElement('script');
@@ -376,6 +417,18 @@ async function start() {
 }
 
 async function main() {
+  buildVersion.then((version) => {
+    showVersion(version);
+    log(`openblack build ${version.text}`);
+  });
+  // While the game plays, the log is a panel over the game, which the badge opens and closes
+  element('log-toggle').addEventListener('click', (event) => {
+    const open = document.body.classList.toggle('log-open');
+    logElement.parentElement.open = open;
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
+
   if (!globalThis.crossOriginIsolated) {
     showMessage('The page cannot start the game',
       'The site does not send the headers that the game threads need (COOP and COEP).');

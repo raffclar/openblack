@@ -19,7 +19,8 @@ import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readPng } from './png.mjs';
+
+import { changedShare } from './png.mjs';
 
 const [chromePath, pageUrl, gameFolder, out, ...rest] = process.argv.slice(2);
 if (!chromePath || !pageUrl || !gameFolder || !out) {
@@ -124,30 +125,6 @@ const run = (name, args, steps, seconds) => {
 // The values of the eval steps in their order
 const evals = (text) => [...text.matchAll(/\[eval\] .* = (.*)$/gm)].map((m) => JSON.parse(m[1]));
 const count = (text, part) => text.split(part).length - 1;
-
-// The share of the pixels whose colour changed by more than 24 in one channel
-function changedShare(folder, a, b) {
-  const first = path.join(folder, `${a}.png`);
-  const second = path.join(folder, `${b}.png`);
-  if (!existsSync(first) || !existsSync(second)) {
-    return -1;
-  }
-  const x = readPng(first);
-  const y = readPng(second);
-  if (x.width !== y.width || x.height !== y.height) {
-    return 1;
-  }
-  let changed = 0;
-  for (let i = 0; i < x.width * x.height; ++i) {
-    for (let c = 0; c < 3; ++c) {
-      if (Math.abs(x.pixels[i * x.channels + c] - y.pixels[i * y.channels + c]) > 24) {
-        ++changed;
-        break;
-      }
-    }
-  }
-  return changed / (x.width * x.height);
-}
 
 const results = [];
 const check = (name, pass, detail) => {
