@@ -14,6 +14,7 @@
 #include <vector>
 
 #include <Common/DeveloperTools.h>
+#include <Story/NewGameChoice.h>
 #include <gtest/gtest.h>
 
 using namespace openblack::developer_tools;
@@ -195,4 +196,18 @@ TEST(DeveloperTools, AJoinIsTheJoinOptionOnly)
 	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {"openblack", "--join-ticket", "t"}));
 	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {"--join"}));
 	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {}));
+}
+
+TEST(DeveloperTools, TheQuestionOfAPlayerHasOnlyTheAnswersOfTheOriginalGame)
+{
+	using openblack::new_game_choice::Choice;
+	using openblack::new_game_choice::IsShown;
+	EXPECT_FALSE(IsShown(Choice::DebugStartWithCow, true, false));
+	EXPECT_TRUE(IsShown(Choice::DebugStartWithCow, true, true));
+	for (const auto choice : {Choice::StartNormally, Choice::SkipToCreatureSelect, Choice::SkipCreatureTutorial})
+	{
+		EXPECT_TRUE(IsShown(choice, false, false));
+	}
+	EXPECT_TRUE(IsShown(Choice::KeepOldCreature, true, false));
+	EXPECT_FALSE(IsShown(Choice::KeepOldCreature, false, true));
 }
