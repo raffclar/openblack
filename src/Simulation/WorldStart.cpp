@@ -42,6 +42,7 @@
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/SeaTexture.h"
 #include "3D/SkyDome.h"
 #include "3D/SnowCover.h"
@@ -115,6 +116,30 @@ std::optional<size_t> GameFileBytes(const std::filesystem::path& path)
 		// Not found: there is nothing to load
 	}
 	return std::nullopt;
+}
+
+/// The bytes of a raw picture file at half its size, when the lowest detail levels load it so; none otherwise
+std::optional<std::vector<uint8_t>> HalvedAtThisDetail(const std::filesystem::path& path)
+{
+	if (!Locator::config::value().detail.lowResTextures || !low_resolution_textures::HalvedAtLowDetail(path.stem().string()))
+	{
+		return std::nullopt;
+	}
+	return low_resolution_textures::Halve(Locator::filesystem::value().ReadAll(path));
+}
+
+/// Loads a raw picture file into the texture cache, at half its size when the lowest detail levels load it so
+template <typename Id>
+void LoadRawTexture(resources::TextureManager& textures, Id id, const std::filesystem::path& path,
+                    graphics::texel_depth::Depth depth)
+{
+	if (auto halved = HalvedAtThisDetail(path))
+	{
+		textures.Load(id, resources::Texture2DLoader::FromBufferTag {}, ("raw" / path.stem()).string(), std::move(*halved),
+		              depth);
+		return;
+	}
+	textures.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, depth);
 }
 
 /// Registers a resource read from a game file, to be loaded by its cache's loader with these arguments when it is first
@@ -269,8 +294,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		    fileSystem.Exists(sheet))
 		{
 			// Loaded with its alpha by the game, so both keep four bits a channel
-			textureManager.Load(fmt::format("raw/{}", name), resources::Texture2DLoader::FromDiskTag {}, sheet,
-			                    graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, fmt::format("raw/{}", name), sheet, graphics::texel_depth::Depth::FourBits);
 		}
 	}
 
@@ -348,14 +372,18 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	}
 
 	view.StartupStep("mesh pack meshes");
+	// The lowest detail levels draw each texture's own low resolution picture, where the pack has one
+	const bool lowTextures = Locator::config::value().detail.lowResTextures;
 	for (const auto& [name, g3dTexture] : pack->GetTextures())
 	{
+		const auto low = pack->GetLowTextures().find(name);
+		const auto* picture = lowTextures && low != pack->GetLowTextures().end() ? &low->second : &g3dTexture;
 		textureManager.Register(
 		    g3dTexture.header.id,
-		    [pack, name] {
-			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, pack->GetTexture(name));
+		    [pack, name, picture] {
+			    return resources::Texture2DLoader {}(resources::Texture2DLoader::FromPackTag {}, name, *picture);
 		    },
-		    g3dTexture.ddsData.size());
+		    picture->ddsData.size());
 	}
 
 	view.StartupStep("mesh pack textures");
@@ -769,9 +797,11 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 	// The sea's texture, its colours and alpha together
 	try
 	{
+		// The lowest detail levels load the sea's picture at half its size
 		textureManager.Load(sea_texture::k_Id.value(), resources::Texture2DLoader::FromDiskWithAlphaTag {},
 		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_ColourFile,
-		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side);
+		                    fileSystem.GetPath<Path::Textures>() / sea_texture::k_AlphaFile, sea_texture::k_Side,
+		                    Locator::config::value().detail.lowResTextures);
 	}
 	catch (std::runtime_error& err)
 	{
@@ -807,8 +837,17 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Loading raw texture: {}", f.stem().string());
 		try
 		{
-			textureManager.RegisterLoad(fmt::format("raw/{}", f.stem().string()), *bytes,
-			                            resources::Texture2DLoader::FromDiskTag {}, f, graphics::texel_depth::DepthOf(kind));
+			const auto name = fmt::format("raw/{}", f.stem().string());
+			const auto depth = graphics::texel_depth::DepthOf(kind);
+			if (auto halved = HalvedAtThisDetail(f))
+			{
+				textureManager.RegisterLoad(name, halved->size(), resources::Texture2DLoader::FromBufferTag {}, name,
+				                            std::move(*halved), depth);
+			}
+			else
+			{
+				textureManager.RegisterLoad(name, *bytes, resources::Texture2DLoader::FromDiskTag {}, f, depth);
+			}
 		}
 		catch (std::runtime_error& err)
 		{
@@ -829,7 +868,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 		try
 		{
 			// The game loads the hair with its alpha, so both keep four bits a channel
-			textureManager.Load(id, resources::Texture2DLoader::FromDiskTag {}, path, graphics::texel_depth::Depth::FourBits);
+			LoadRawTexture(textureManager, id, path, graphics::texel_depth::Depth::FourBits);
 		}
 		catch (std::runtime_error& err)
 		{

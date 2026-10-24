@@ -57,6 +57,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
+#include "3D/LowResolutionTextures.h"
 #include "3D/MapCoords.h"
 #include "3D/OceanInterface.h"
 #include "3D/PlayersSymbols.h"
@@ -4871,7 +4872,13 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
-	const auto replace = [&textureManager](const std::string& name, std::vector<uint8_t> bytes) {
+	// The lowest detail levels keep the sheet at half its size: each symbol takes every second texel of its full one
+	const bool halve = Locator::config::value().detail.lowResTextures;
+	const auto replace = [&textureManager, halve](const std::string& name, std::vector<uint8_t> bytes) {
+		if (auto halved = halve ? low_resolution_textures::Halve(bytes) : std::nullopt)
+		{
+			bytes = std::move(*halved);
+		}
 		textureManager.Erase(name);
 		try
 		{

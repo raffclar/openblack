@@ -233,3 +233,58 @@ TEST(BlockTexture, BuildBlocksPaintsEachBlockAsBuildBlockInOrder)
 	std::iota(inOrder.begin(), inOrder.end(), size_t {0});
 	EXPECT_EQ(order, inOrder);
 }
+
+TEST(BlockTexture, TheLowResolutionTakesEverySecondTexelOfTheFullTexture)
+{
+	const std::array countries = {SingleMaterialCountry(0), SingleMaterialCountry(1)};
+	std::vector<uint16_t> materials(k_MapTexels * 2);
+	std::iota(materials.begin(), materials.end(), uint16_t {0});
+	std::vector<uint8_t> noise(k_MapTexels);
+	std::iota(noise.begin(), noise.end(), uint8_t {0});
+	const std::vector<uint8_t> bump(k_MapTexels, 0x90);
+	auto cells = FlatCells(10);
+	// A slope, a cell of open sea and cells where two countries meet, so that the corners blend
+	for (size_t i = 0; i < cells.size(); ++i)
+	{
+		cells[i].altitude = static_cast<uint8_t>(2 + (i % 23));
+		cells[i].properties.country = static_cast<uint8_t>((i / 5) % 2);
+	}
+	cells[(5 * block_texture::k_CellsPerSide) + 6].flags = 0x02;
+	block_texture::Sources sources {countries, materials, noise, bump};
+	std::vector<uint8_t> full(block_texture::k_BlockBytes, 0);
+	block_texture::BuildBlock(cells, sources, full);
+
+	sources.resolution = block_texture::Resolution::Low;
+	ASSERT_EQ(block_texture::SideOf(sources.resolution), 128);
+	ASSERT_EQ(block_texture::TexelsPerCellOf(sources.resolution), 8);
+	std::vector<uint8_t> low(block_texture::BlockBytesOf(sources.resolution), 0xAA);
+	block_texture::BuildBlock(cells, sources, low);
+	for (int x = 0; x < block_texture::k_LowSide; ++x)
+	{
+		for (int z = 0; z < block_texture::k_LowSide; ++z)
+		{
+			const auto fromLow = static_cast<size_t>((x * block_texture::k_LowSide) + z) * 4;
+			ASSERT_EQ((std::array {low[fromLow], low[fromLow + 1], low[fromLow + 2], low[fromLow + 3]}),
+			          TexelAt(full, x * 2, z * 2))
+			    << "texel x " << x << " z " << z;
+		}
+	}
+
+	// A rectangle of cells at the low resolution is the same part of the low texture
+	const glm::ivec2 first {4, 5};
+	const glm::ivec2 count {3, 4};
+	std::vector<uint8_t> part(static_cast<size_t>(count.x * count.y) * 8 * 8 * 4, 0xAA);
+	block_texture::PaintCells(cells, sources, first, count, part);
+	for (int x = 0; x < count.x * 8; ++x)
+	{
+		for (int z = 0; z < count.y * 8; ++z)
+		{
+			const auto fromPart = static_cast<size_t>((x * count.y * 8) + z) * 4;
+			const auto fromLow = static_cast<size_t>(((first.x * 8 + x) * block_texture::k_LowSide) + (first.y * 8 + z)) * 4;
+			ASSERT_TRUE(std::equal(part.begin() + static_cast<std::ptrdiff_t>(fromPart),
+			                       part.begin() + static_cast<std::ptrdiff_t>(fromPart + 4),
+			                       low.begin() + static_cast<std::ptrdiff_t>(fromLow)))
+			    << "texel x " << x << " z " << z;
+		}
+	}
+}

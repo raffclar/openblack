@@ -169,8 +169,8 @@ void block_texture::BuildBlock(std::span<const lnd::LNDCell> cells, const Source
 void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm::ivec2 firstCell,
                                glm::ivec2 cellCount, std::span<uint8_t> rgba)
 {
-	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * k_TexelsPerCell *
-	                             k_TexelsPerCell);
+	const auto perCell = TexelsPerCellOf(sources.resolution);
+	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * perCell * perCell);
 	PaintCellTexels(cells, sources, firstCell, cellCount, texels);
 	std::ranges::fill(rgba, uint8_t {0});
 	ToRgba(texels, rgba.first(std::min(rgba.size(), texels.size() * 4)));
@@ -199,8 +199,11 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
                                     glm::ivec2 cellCount, std::span<uint16_t> texels)
 {
 	std::ranges::fill(texels, uint16_t {0});
-	const auto rows = cellCount.x * k_TexelsPerCell;
-	const auto columns = cellCount.y * k_TexelsPerCell;
+	// The low resolution paints every second texel of the full texture along each axis
+	const auto perCell = TexelsPerCellOf(sources.resolution);
+	const auto step = k_TexelsPerCell / perCell;
+	const auto rows = cellCount.x * perCell;
+	const auto columns = cellCount.y * perCell;
 	if (cells.size() < static_cast<size_t>(k_CellsPerSide * k_CellsPerSide) || cellCount.x <= 0 || cellCount.y <= 0 ||
 	    firstCell.x < 0 || firstCell.y < 0 || firstCell.x + cellCount.x > k_BlockCells ||
 	    firstCell.y + cellCount.y > k_BlockCells || texels.size() < static_cast<size_t>(rows) * columns ||
@@ -216,10 +219,12 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	};
 	const auto firstX = firstCell.x * k_TexelsPerCell;
 	const auto firstZ = firstCell.y * k_TexelsPerCell;
-	for (int x = firstX; x < firstX + rows; ++x)
+	for (int row = 0; row < rows; ++row)
 	{
-		for (int z = firstZ; z < firstZ + columns; ++z)
+		const auto x = firstX + (row * step);
+		for (int column = 0; column < columns; ++column)
 		{
+			const auto z = firstZ + (column * step);
 			const auto cellIndex = static_cast<size_t>(((x / k_TexelsPerCell) * k_CellsPerSide) + (z / k_TexelsPerCell));
 			const auto& cell = cells[cellIndex];
 			if ((cell.flags & k_OpenSeaFlag) != 0)
@@ -255,7 +260,7 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 				texel = BlendCorners(painted, weights);
 			}
 
-			texels[static_cast<size_t>(((x - firstX) * columns) + (z - firstZ))] = texel;
+			texels[static_cast<size_t>((row * columns) + column)] = texel;
 		}
 	}
 }
@@ -265,7 +270,7 @@ void block_texture::BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const
 {
 	// The lanes paint a few blocks each into their own memory. Then the calling thread takes them in order.
 	const size_t batch = pool.GetLaneCount() * 2;
-	std::vector<std::vector<uint8_t>> painted(std::min(batch, count), std::vector<uint8_t>(k_BlockBytes));
+	std::vector<std::vector<uint8_t>> painted(std::min(batch, count), std::vector<uint8_t>(BlockBytesOf(sources.resolution)));
 	for (size_t first = 0; first < count; first += batch)
 	{
 		const size_t inBatch = std::min(batch, count - first);
