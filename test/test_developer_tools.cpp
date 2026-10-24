@@ -171,31 +171,14 @@ TEST(DeveloperTools, EachDeveloperOptionHasOneName)
 	EXPECT_FALSE(IsDeveloperOption("join", k_DeveloperOptions));
 }
 
-TEST(DeveloperTools, AJoinKeepsTheOptionsThatTheGameServerChecks)
+TEST(DeveloperTools, AJoinDoesNotKeepTheLandSeedAndStartOptions)
 {
+	// A client that joins a game server takes the land, the seed and the start from the server
 	const std::vector<std::string_view> arguments {"openblack", "--join", "wss://127.0.0.1:1/game/a", "-s",  "Land1.txt",
-	                                               "--seed",    "1",      "--skip-opening",           "cow", "--testbed",
-	                                               "--sim-fast"};
-	ASSERT_TRUE(JoinsGameServer(arguments));
-	const auto removed = OptionsToRemove(k_DeveloperOptions, true);
-	EXPECT_EQ(removed.size(), k_DeveloperOptions.size() - k_JoinWorldOptions.size());
-	EXPECT_EQ(Kept(arguments, removed), (std::vector<std::string> {"openblack", "--join", "wss://127.0.0.1:1/game/a", "-s",
-	                                                               "Land1.txt", "--seed", "1", "--skip-opening", "cow"}));
-}
-
-TEST(DeveloperTools, WithNoJoinTheFilterRemovesTheWorldOptions)
-{
-	const std::vector<std::string_view> arguments {"openblack", "-s", "Land2.txt", "--seed=4", "--skip-opening", "cow"};
-	EXPECT_FALSE(JoinsGameServer(arguments));
-	EXPECT_EQ(Kept(arguments, OptionsToRemove(k_DeveloperOptions, false)), (std::vector<std::string> {"openblack"}));
-}
-
-TEST(DeveloperTools, AJoinIsTheJoinOptionOnly)
-{
-	EXPECT_TRUE(JoinsGameServer(std::vector<std::string_view> {"openblack", "--join=wss://127.0.0.1:1/game/a"}));
-	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {"openblack", "--join-ticket", "t"}));
-	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {"--join"}));
-	EXPECT_FALSE(JoinsGameServer(std::vector<std::string_view> {}));
+	                                               "--seed",    "1",      "--skip-opening",           "cow", "--testbed"};
+	EXPECT_EQ(Kept(arguments, k_DeveloperOptions),
+	          (std::vector<std::string> {"openblack", "--join", "wss://127.0.0.1:1/game/a"}));
+	EXPECT_EQ(FilterDeveloperOptions(arguments, k_DeveloperOptions).ignored.size(), 4U);
 }
 
 TEST(DeveloperTools, TheQuestionOfAPlayerHasOnlyTheAnswersOfTheOriginalGame)

@@ -10,7 +10,6 @@
 #include "DeveloperTools.h"
 
 #include <algorithm>
-#include <iterator>
 
 namespace openblack::developer_tools
 {
@@ -63,22 +62,6 @@ std::optional<Match> MatchOf(std::string_view argument, std::span<const Develope
 bool IsDeveloperOption(std::string_view name, std::span<const DeveloperOption> options) noexcept
 {
 	return std::ranges::any_of(options, [name](const DeveloperOption& option) { return option.name == name; });
-}
-
-bool JoinsGameServer(std::span<const std::string_view> arguments) noexcept
-{
-	return std::ranges::any_of(arguments.subspan(arguments.empty() ? 0 : 1), [](std::string_view argument) {
-		return argument == "--join" || argument.starts_with("--join=");
-	});
-}
-
-std::vector<DeveloperOption> OptionsToRemove(std::span<const DeveloperOption> options, bool joins)
-{
-	std::vector<DeveloperOption> removed;
-	std::ranges::copy_if(options, std::back_inserter(removed), [joins](const DeveloperOption& option) {
-		return !joins || std::ranges::find(k_JoinWorldOptions, option.name) == k_JoinWorldOptions.end();
-	});
-	return removed;
 }
 
 FilteredArguments FilterDeveloperOptions(std::span<const std::string_view> arguments, std::span<const DeveloperOption> options)
