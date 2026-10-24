@@ -2027,6 +2027,31 @@
   "writes": true
  },
  {
+  "description": "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py compares the two files)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The slot, 0 to 20",
+    "name": "slot",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The slot of the second save, 0 to 20",
+    "name": "into",
+    "required": true,
+    "type": "integer"
+   },
+   {
+    "description": "The name of the second save",
+    "name": "name",
+    "type": "string"
+   }
+  ],
+  "query": "saves.load_and_save",
+  "writes": true
+ },
+ {
   "description": "After a load of a slot of the game itself: each creature of the game's file, and whether the record that a save writes for it now has the same bytes as the file's record",
   "kind": "list",
   "parameters": [],

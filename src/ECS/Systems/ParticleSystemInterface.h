@@ -106,6 +106,12 @@ public:
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                                 float magnitude = 1.0f) = 0;
 
+	/// The next effect that starts takes this number and not a new one, as an effect that its owner starts again after a
+	/// load keeps the number that the save has for it. A number that a running effect has is not given again.
+	virtual void StartNextAs(EffectId /*id*/) {}
+	/// A save does not keep the effect: its owner starts it again after a load
+	virtual void KeepOutOfSaves(EffectId /*id*/) {}
+
 	virtual void SetOrigin(EffectId id, glm::vec3 origin) = 0;
 	virtual void SetPlayer(EffectId id, int player) = 0;
 	/// How strong an effect is drawn from now on, which the strength its rules read follows: a glowing artefact's magic

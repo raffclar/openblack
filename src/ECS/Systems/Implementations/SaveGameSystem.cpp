@@ -851,7 +851,7 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 	                          .landscape = {},
 	                          .knownLeashes = 0,
 	                          .creatureInTemple = 0,
-	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastAutosaveTurn = _autosaveTurnToSave,
 	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
 	if (Locator::landSystem::has_value())
 	{
@@ -1258,6 +1258,7 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	_lastAutosaveTurn = game.turn;
 	_lastLoadTurn = game.turn;
 	_lastQuickSaveTurn = game.lastQuickSaveTurn;
+	_autosaveTurnToSave = game.lastAutosaveTurn;
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the whole world of slot {} at turn {}", slot, game.turn);
 	return true;
 }
@@ -1676,6 +1677,7 @@ void SaveGameSystem::EndTurn()
 		return;
 	}
 	_lastAutosaveTurn = state.turn;
+	_autosaveTurnToSave = state.turn;
 	// The autosaves of each land go in turn into the three autosave slots
 	const auto count =
 	    Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().TakeLandAutosave(state.land) : 0u;
@@ -1714,6 +1716,7 @@ bool SaveGameSystem::QuickLoad()
 void SaveGameSystem::NewLand()
 {
 	_lastAutosaveTurn = 0;
+	_autosaveTurnToSave = 0;
 }
 
 bool SaveGameSystem::AnyPictureWaiting() const

@@ -39,9 +39,11 @@
 #include "Common/GameHeading.h"
 #include "Creature/CreatureRouteFollow.h"
 #include "ECS/Components/AudioEmitter.h"
+#include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
+#include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -50,6 +52,7 @@
 #include "Enums.h"
 #include "Graphics/GraphicsHandle.h"
 #include "Graphics/SpriteTextures.h"
+#include "Particles/LightSheet.h"
 #include "PlayerSlots.h"
 
 using namespace openblack;
@@ -1061,4 +1064,40 @@ TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
 	EXPECT_EQ(fieldOf(before, "FakeWalker.counts"), fieldOf(after, "FakeWalker.counts"));
 	// Without the fields asked for, the hashes keep none
 	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
+}
+
+TEST(WorldArchive, ASoundTagAndAnArenaKeepNoValuesOfTheRun)
+{
+	// The emitter of a sound tag is an entity of the audio of the run, and the game makes the tags new at a load, so
+	// their count of turns starts again. The ring of an arena is made again after a load.
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	constexpr auto k_Sound = entt::hashed_string("G_Rustle");
+	entt::registry original;
+	const auto thing = original.create();
+	original.emplace<ecs::components::SoundTag>(
+	    thing,
+	    ecs::components::SoundTag {
+	        .sound = k_Sound.value(), .offset = {0.0f, 2.0f, 0.0f}, .active = true, .emitter = entt::entity {77}, .turns = 40});
+	const auto arena = original.create();
+	original.emplace<ecs::components::CreatureArena>(arena, ecs::components::CreatureArena {
+	                                                            .place = {10, 20},
+	                                                            .radius = 30.0f,
+	                                                            .ring = std::make_shared<particles::LightSheet>(),
+	                                                        });
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	const auto result = LoadWorld(loaded, context, bytes, WorldLoadMode::Exact);
+	ASSERT_TRUE(result.has_value());
+	const auto& tag = loaded.get<ecs::components::SoundTag>(thing);
+	EXPECT_EQ(tag.emitter, entt::entity {entt::null});
+	EXPECT_EQ(tag.turns, 0u);
+	EXPECT_EQ(tag.sound, k_Sound.value());
+	EXPECT_TRUE(tag.active);
+	EXPECT_EQ(loaded.get<ecs::components::CreatureArena>(arena).ring, nullptr);
+	EXPECT_FLOAT_EQ(loaded.get<ecs::components::CreatureArena>(arena).radius, 30.0f);
+	// A save of the loaded world has the same bytes
+	EXPECT_EQ(SaveWorld(loaded, context), bytes);
 }

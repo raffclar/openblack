@@ -165,7 +165,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	return entity;
 }
 
-void VortexSystem::StartEffects(Vortex& vortex)
+void VortexSystem::StartEffects(Vortex& vortex, bool afterLoad)
 {
 	if (!Locator::particleSystem::has_value())
 	{
@@ -176,22 +176,39 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	// The swirl starts on the ground under the middle, the others at the middle itself
 	const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 	const glm::vec3 onGround {vortex.centre.x, ground, vortex.centre.z};
-	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
-		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
+	// The game does not keep these effects in a save. After a load each takes the number it had before.
+	const auto unsaved = [&particles, afterLoad](ParticleSystemInterface::EffectId& effect, auto&& startOne) {
+		if (afterLoad)
+		{
+			particles.StartNextAs(effect);
+		}
+		effect = startOne();
+		particles.KeepOutOfSaves(effect);
 	};
-	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin) {
-		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
-		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
+	const auto start = [&particles, &unsaved](ParticleSystemInterface::EffectId& effect, ParticleType type, glm::vec3 origin) {
+		unsaved(effect, [&]() {
+			return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
+		});
+	};
+	const auto startStepped = [&particles, &unsaved](ParticleSystemInterface::EffectId& effect, ParticleType type,
+	                                                 glm::vec3 origin) {
+		unsaved(effect, [&]() {
+			return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
+			                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
+		});
 	};
 	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
 	// loaded vortex keeps the effect of the save, with the things that it carries.
 	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect)
 	{
-		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
+		vortex.objectMoverEffect =
+		    info->particleTypeObjectMover == ParticleType::None
+		        ? ParticleSystemInterface::k_NoEffect
+		        : particles.StartForSpell(info->particleTypeObjectMover, vortex.centre, glm::vec3(0.0f), 1.0f, g_noMiracle);
 	}
-	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
-	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
-	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
+	startStepped(vortex.beforeLandEffect, info->particleTypePreLandscape, onGround);
+	startStepped(vortex.afterLandEffect, info->particleTypePostLandscape, vortex.centre);
+	start(vortex.lightMapEffect, info->particleTypeLightMap, vortex.centre);
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
 	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
 	{
@@ -803,21 +820,21 @@ void VortexSystem::StartAgainAfterLoad()
 		{
 			return;
 		}
-		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation.
-		// The new effects make the hum again.
-		for (auto* effect : {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect})
+		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation,
+		// with the numbers that they had. The new effects make the hum again. A save of an older build kept the
+		// effects, which go first.
+		for (const auto effect : {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
 		{
-			if (*effect != ParticleSystemInterface::k_NoEffect)
+			if (effect != ParticleSystemInterface::k_NoEffect)
 			{
-				particles->Delete(*effect);
-				*effect = ParticleSystemInterface::k_NoEffect;
+				particles->Delete(effect);
 			}
 		}
 		if (particles->Find(vortex.objectMoverEffect) == nullptr)
 		{
 			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
-		StartEffects(vortex);
+		StartEffects(vortex, true);
 	});
 	if (levelled)
 	{

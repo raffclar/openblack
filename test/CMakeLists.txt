@@ -1717,3 +1717,7 @@ target_link_libraries(test_online_map_file PRIVATE onlinemap)
 openblack_setup_and_add_test(test_computer_settings test_computer_settings.cpp)
 target_link_libraries(test_plain_image PRIVATE psys ScriptLibrary edt)
 openblack_setup_and_add_test(test_destruction_ghosts test_destruction_ghosts.cpp)
+add_test(NAME test_save_diff
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
+)

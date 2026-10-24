@@ -658,7 +658,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureArena::fightOn>("fightOn")
 	    .Field<&components::CreatureArena::first>("first")
 	    .Field<&components::CreatureArena::second>("second")
-	    .Field<&components::CreatureArena::ring>("ring");
+	    .RunField<&components::CreatureArena::ring>("ring");
 	Reflect<components::CreatureAudio>(context)
 	    .Field<&components::CreatureAudio::last>("last")
 	    .Field<&components::CreatureAudio::recent>("recent")
@@ -1788,10 +1788,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::SoundTag::sound>("sound")
 	    .Field<&components::SoundTag::offset>("offset")
 	    .Field<&components::SoundTag::active>("active")
-	    .Field<&components::SoundTag::emitter>("emitter")
+	    .RunField<&components::SoundTag::emitter>("emitter")
 	    .Field<&components::SoundTag::point>("point")
 	    .Field<&components::SoundTag::delayed>("delayed")
-	    .Field<&components::SoundTag::turns>("turns")
+	    .RunField<&components::SoundTag::turns>("turns")
 	    .Field<&components::SoundTag::owner>("owner")
 	    .Field<&components::SoundTag::loops>("loops");
 	Reflect<components::SpellCaster>(context)

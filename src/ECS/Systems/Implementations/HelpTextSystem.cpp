@@ -270,12 +270,21 @@ constexpr int k_DroppedScreenHeight = 480;
 void HelpTextSystem::SaveState(reflection::BinaryWriter& out) const
 {
 	// The voices that speak the texts are sounds, which a save does not keep
-	const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
-	reflection::Save(out, now);
+	// The real times of the text go into the save as times from the moment of the save, and the moment is zero. The real
+	// clock of a run starts at a different time in each run, so a save of a loaded game then has the same bytes as the
+	// save that the game loaded. A load of an older save, which keeps the clock of its run, gives the same times.
+	reflection::Save(out, int32_t {0});
 	reflection::Save(out, _dialogue != nullptr);
 	if (_dialogue != nullptr)
 	{
-		reflection::Save(out, *_dialogue);
+		const auto now = Locator::time::has_value() ? static_cast<int32_t>(Locator::time::value().GetElapsedTime().count()) : 0;
+		// A load empties the box and shows the kept texts again, and the newest text reads from the load. The save keeps
+		// the text as the load makes it, so that a save at once after a load has the same bytes.
+		auto saved = *_dialogue;
+		saved.EmptyBox();
+		saved.ShowAgain();
+		saved.ShiftRealTime(-now);
+		reflection::Save(out, saved);
 	}
 	reflection::Save(out, _storyHistory);
 }

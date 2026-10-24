@@ -834,6 +834,7 @@ void GameParticleWorld::Reset()
 	_beliefSprites.clear();
 	_gestureTrails.clear();
 	_lightSheets.clear();
+	_ownedSheets.clear();
 	SetHandGlow(0);
 	_arcsWanted = false;
 	_bolts.clear();
@@ -987,7 +988,9 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	}
 	ResolveTextures(*effect);
 	effect->StepTwiceFirstTime();
-	const auto effectId = _nextId++;
+	const auto wanted = std::exchange(_startNextAs, std::nullopt);
+	const auto effectId =
+	    wanted.has_value() && *wanted != k_NoEffect && FindRunning(*wanted) == _effects.end() ? *wanted : _nextId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
 	return effectId;
 }
@@ -1241,6 +1244,19 @@ void ParticleSystem::CloseDown(EffectId id)
 	if (const auto it = FindRunning(id); it != _effects.end())
 	{
 		it->effect->CloseDown();
+	}
+}
+
+void ParticleSystem::StartNextAs(EffectId id)
+{
+	_startNextAs = id;
+}
+
+void ParticleSystem::KeepOutOfSaves(EffectId id)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->saved = false;
 	}
 }
 
@@ -1583,11 +1599,14 @@ void ReadLive(particles::EffectReader& in, std::vector<std::weak_ptr<Type>>& lis
 
 } // namespace
 
-void GameParticleWorld::NumberShared(particles::SharedTables& tables) const
+void GameParticleWorld::NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const
 {
 	for (const auto& sound : _sounds)
 	{
-		tables.sounds.Add(sound.link);
+		if (Saved(sound, leftOut))
+		{
+			tables.sounds.Add(sound.link);
+		}
 	}
 	for (const auto& weak : _bolts)
 	{
@@ -1607,7 +1626,17 @@ void GameParticleWorld::NumberShared(particles::SharedTables& tables) const
 	}
 }
 
-void GameParticleWorld::SaveState(particles::EffectWriter& out) const
+bool GameParticleWorld::EndsWithLoad(const PlayingSound& sound)
+{
+	return !sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f);
+}
+
+bool GameParticleWorld::Saved(const PlayingSound& sound, const LeftOutSounds& leftOut)
+{
+	return !EndsWithLoad(sound) && !leftOut.contains(sound.link.get());
+}
+
+void GameParticleWorld::SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const
 {
 	out.WriteValue(_claimed);
 	out.WriteValue(_arcsWaiting);
@@ -1621,12 +1650,13 @@ void GameParticleWorld::SaveState(particles::EffectWriter& out) const
 	out.WriteValue(_arcsWanted);
 	WriteLive(out, _bolts);
 	out.WriteValue(_boltOrder);
-	// A sound goes with the particle that keeps its record; the audio's own emitter does not
-	out.Out().WriteSize(_sounds.size());
-	for (const auto& sound : _sounds)
+	// A sound goes with the particle that keeps its record. The audio's own emitter and the sound's owner, an entity of
+	// the audio, are of this run only and do not go. A sound that a load ends at once does not go either.
+	const auto kept = [&leftOut](const PlayingSound& sound) { return Saved(sound, leftOut); };
+	out.Out().WriteSize(static_cast<size_t>(std::ranges::count_if(_sounds, kept)));
+	for (const auto& sound : _sounds | std::views::filter(kept))
 	{
 		out.WriteShared(sound.link);
-		out.WriteValue(sound.owner);
 		out.WriteValue(sound.letGo);
 		out.WritePlain(sound.fade);
 		out.WriteValue(sound.wait);
@@ -1664,14 +1694,12 @@ bool GameParticleWorld::LoadState(particles::EffectReader& in)
 	{
 		PlayingSound sound;
 		sound.link = in.ReadShared<particles::ParticleSoundLink>();
-		in.ReadValue(sound.owner);
-		// The saved owner was of the last run's audio. The sound gets an owner of this run.
+		// The sound gets an owner of this run's audio
 		sound.owner = NewSoundOwner();
 		in.ReadValue(sound.letGo);
 		in.ReadPlain(sound.fade);
 		in.ReadValue(sound.wait);
-		// A sound that its particle let go of was dying away: it ends with the load
-		if (!sound.link || sound.letGo || (sound.link->atom == nullptr && sound.wait <= 0.0f))
+		if (EndsWithLoad(sound))
 		{
 			Forget(sound);
 			continue;
@@ -1721,12 +1749,30 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 
 	// The effects and the world go into writers of their own first, so that the tables have every shared thing in them
 	// when they are written
+	// The sounds of the effects that the save leaves out stay out too: the effects make them again when their owners
+	// start them again
+	particles::SharedTables leftOutTables;
+	reflection::BinaryWriter leftOutBytes(out.Context());
+	particles::EffectWriter leftOutWriter(leftOutBytes, leftOutTables);
+	for (const auto& running : _effects)
+	{
+		if (!running.saved)
+		{
+			running.effect->Save(leftOutWriter);
+		}
+	}
+	GameParticleWorld::LeftOutSounds leftOut;
+	for (const auto& link : leftOutTables.sounds.items)
+	{
+		leftOut.insert(link.get());
+	}
 	particles::SharedTables tables;
-	_world.NumberShared(tables);
+	_world.NumberShared(tables, leftOut);
 	reflection::BinaryWriter effectBytes(out.Context());
 	particles::EffectWriter effects(effectBytes, tables);
-	effectBytes.WriteSize(_effects.size());
-	for (const auto& running : _effects)
+	const auto saved = [](const Running& running) { return running.saved; };
+	effectBytes.WriteSize(static_cast<size_t>(std::ranges::count_if(_effects, saved)));
+	for (const auto& running : _effects | std::views::filter(saved))
 	{
 		reflection::Save(effectBytes, running.id);
 		reflection::Save(effectBytes, running.file);
@@ -1744,7 +1790,7 @@ void ParticleSystem::SaveState(reflection::BinaryWriter& out) const
 	}
 	reflection::BinaryWriter worldBytes(out.Context());
 	particles::EffectWriter world(worldBytes, tables);
-	_world.SaveState(world);
+	_world.SaveState(world, leftOut);
 	for (const auto* writer : {&effectBytes, &worldBytes})
 	{
 		for (const auto& unsaved : writer->Unsaved())

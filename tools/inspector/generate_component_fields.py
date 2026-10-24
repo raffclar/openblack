@@ -45,6 +45,10 @@ SKIPPED = {
 RUN_ONLY = {
     # The sounds of a saved game do not come back: a load removes each emitter
     "AudioEmitter": {"sourceId"},
+    # An entity of the audio of the run, and a count that the game starts again when a load makes the tags new
+    "SoundTag": {"emitter", "turns"},
+    # The ring of light is made again after a load
+    "CreatureArena": {"ring"},
 }
 
 SOURCES = ROOT / "src"
