@@ -1724,3 +1724,7 @@ openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
             ${CMAKE_SOURCE_DIR}
   )
+target_link_libraries(test_challenge_pictures PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_challenge_picture_files test_challenge_picture_files.cpp
+)
