@@ -141,6 +141,7 @@
 #include "ECS/Systems/Implementations/ResourceStoreSystem.h"
 #include "ECS/Systems/Implementations/RewardSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
+#include "ECS/Systems/Implementations/ScriptMusicSystem.h"
 #include "ECS/Systems/Implementations/ScriptObjectsSystem.h"
 #include "ECS/Systems/Implementations/SharkSystem.h"
 #include "ECS/Systems/Implementations/SimulationSystem.h"
@@ -294,6 +295,7 @@ using openblack::ecs::systems::RenderingSystem;
 using openblack::ecs::systems::ResourceStoreSystem;
 using openblack::ecs::systems::SaveGameSystem;
 using openblack::ecs::systems::ScriptControlSystem;
+using openblack::ecs::systems::ScriptMusicSystem;
 using openblack::ecs::systems::SharkSystem;
 using openblack::ecs::systems::SnowfallSystem;
 using openblack::ecs::systems::SnowSystem;
@@ -497,6 +499,8 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::playerProfileSystem::emplace<PlayerProfileSystem>(profiles);
 	Locator::profileFolderSystem::emplace<ProfileFolderSystem>(Locator::filesystem::value(), profiles.folder);
 	Locator::musicMoodSystem::emplace<MusicMoodSystem>();
+	// The music that the scripts start, which the world times by its turns
+	Locator::scriptMusicSystem::emplace<ScriptMusicSystem>();
 	Locator::templeExteriorSystem::emplace<TempleExteriorSystem>();
 	Locator::templeDestructionSystem::emplace<TempleDestructionSystem>();
 	Locator::computerPlayerSystem::emplace<ComputerPlayerSystem>();
@@ -773,6 +777,7 @@ void openblack::ShutDownServices()
 	Locator::helpProfileSystem::reset();
 	Locator::computerSettingsSystem::reset();
 	Locator::musicMoodSystem::reset();
+	Locator::scriptMusicSystem::reset();
 	Locator::simulation::reset();
 	Locator::profileFolderSystem::reset();
 	Locator::creatureHelpSystem::reset();

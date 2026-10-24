@@ -21,6 +21,7 @@
 #include "3D/L3DAnim.h"
 #include "3D/L3DSubMesh.h"
 #include "3D/Light.h"
+#include "Audio/ScriptMusic.h"
 #include "Audio/Sound.h"
 #include "Creature/CreatureMind.h"
 #include "Creature/CreatureRig.h"
@@ -160,6 +161,17 @@ struct Bitmap16BLoader final: BaseLoader<Bitmap16B>
 
 /// The sounds placed on the people's, animals' and birds' clips, from Data/SmallSounds.SAS; none when there is no file
 struct ClipSoundsLoader final: BaseLoader<audio::clip_sounds::ClipSoundTable>
+{
+	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
+	struct EmptyTag
+	{
+	};
+	[[nodiscard]] result_type operator()(EmptyTag) const;
+};
+
+/// The times of a music bank that the world uses: its cues and the frames of sound in its chunks. A bank that does not
+/// read has no chunks, so its music never plays in the world.
+struct MusicTimingLoader final: BaseLoader<audio::MusicTiming>
 {
 	[[nodiscard]] result_type operator()(FromDiskTag, const std::filesystem::path& path) const;
 	struct EmptyTag

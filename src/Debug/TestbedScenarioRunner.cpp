@@ -208,6 +208,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
@@ -2828,10 +2829,10 @@ void Runner::Give(const Command& command)
 			return;
 		}
 		const auto type = static_cast<audio::MusicType>(command.value);
-		if (auto* game = Game::Instance(); game != nullptr && game->GetGameMusic() != nullptr)
+		if (Locator::scriptMusicSystem::has_value())
 		{
-			game->GetGameMusic()->ResetMusicLyrics();
-			game->GetGameMusic()->StartScriptMusic(type);
+			Locator::scriptMusicSystem::value().ResetLyrics();
+			Locator::scriptMusicSystem::value().Start(type);
 		}
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), audio::GetMusicTypeName(type)));
 		return;

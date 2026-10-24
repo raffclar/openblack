@@ -52,6 +52,7 @@
 #include "ECS/Systems/Implementations/MagicSystem.h"
 #include "ECS/Systems/Implementations/MiracleFxSystem.h"
 #include "ECS/Systems/Implementations/ScriptControlSystem.h"
+#include "ECS/Systems/Implementations/ScriptMusicSystem.h"
 #include "ECS/Systems/Implementations/SnowSystem.h"
 #include "ECS/Systems/Implementations/TeleportSystem.h"
 #include "ECS/Systems/Implementations/TownSystem.h"
@@ -346,22 +347,29 @@ TEST(SavedSystemState, TheMusicThatTheScriptsChoseComesBack)
 	audio::GameMusic saved;
 	saved.AttachMusic(7, audio::MusicType::CelticChantVox);
 	saved.AttachMusic(9, audio::MusicType::ScriptPiperTune);
-	saved.StartScriptMusic(audio::MusicType::NorseChant);
 	saved.SetAlignmentMusicEnabled(false);
-	saved.OnScriptMusicCue("L3");
-	saved.OnScriptMusicCue("W");
 	audio::GameMusic loaded;
 	LoadInto(loaded, StateOf(saved));
 	// The most recently attached stays first
 	ASSERT_EQ(loaded.GetAttachedMusic().size(), 2u);
 	EXPECT_EQ(loaded.GetAttachedMusic()[0].thing, 9u);
 	EXPECT_EQ(loaded.GetAttachedMusic()[1].type, audio::MusicType::CelticChantVox);
-	EXPECT_EQ(loaded.GetScriptType(), audio::MusicType::NorseChant);
 	EXPECT_FALSE(loaded.IsAlignmentMusicEnabled());
-	EXPECT_EQ(loaded.GetMusicLyrics().line, 3);
-	EXPECT_EQ(loaded.GetMusicLyrics().word, 2);
 	// No music plays after the load until a game turn picks it
 	EXPECT_EQ(loaded.GetPlaying(), audio::MusicType::None);
+}
+
+TEST(SavedSystemState, TheMusicThatTheScriptsStartedComesBackWithItsLyricsAndNoSound)
+{
+	ecs::systems::ScriptMusicSystem saved;
+	saved.SetBanksLoaded(false);
+	saved.Start(audio::MusicType::NorseChant);
+	ecs::systems::ScriptMusicSystem loaded;
+	LoadInto(loaded, StateOf(saved));
+	EXPECT_EQ(loaded.GetMusic().GetType(), audio::MusicType::NorseChant);
+	EXPECT_FALSE(loaded.GetMusic().IsStarted());
+	EXPECT_FALSE(loaded.GetMusic().GetPlace().has_value());
+	EXPECT_EQ(loaded.GetMusic().GetLyrics().line, 0);
 }
 
 TEST(SavedSystemState, EachVillageCentreKeepsTheEffectOfItsSymbols)

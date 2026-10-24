@@ -241,6 +241,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -2039,6 +2040,17 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    },
 	};
 	music.creatureDance = ecs::creature_dance_music::Heard(cameraPosition);
+	// The music heard follows the world's clock of the scripts' music
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		music.script = {
+		    .type = script.GetType(),
+		    .started = script.IsStarted(),
+		    .playCount = script.GetPlayCount(),
+		    .place = script.GetPlace(),
+		};
+	}
 	music.film = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
 	if (Locator::infoConstants::has_value())
 	{
@@ -2705,9 +2717,13 @@ void Game::UpdateSingAlong(bool inTemple)
 	}
 	const auto& clock = Locator::time::value();
 	std::optional<int32_t> word;
-	if (_gameMusic && help::sing_along::IsSungVerse(static_cast<int32_t>(_gameMusic->GetScriptType())))
+	if (Locator::scriptMusicSystem::has_value())
 	{
-		word = _gameMusic->GetMusicLyrics().word;
+		const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+		if (help::sing_along::IsSungVerse(static_cast<int32_t>(script.GetType())))
+		{
+			word = script.GetLyrics().word;
+		}
 	}
 	_interface->SetSingAlong(word, help::sing_along::StepMilliseconds(inTemple,
 	                                                                  static_cast<int32_t>(clock.GetFrameRealTime().count()),
@@ -4299,6 +4315,10 @@ void Game::StartLandAudio()
 	{
 		// The -NOLOADMUSIC switch: the game loads none of its music banks, so none of its music plays
 		_gameMusic = std::make_unique<audio::GameMusic>(!_launchSwitches.noLoadMusic);
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().SetBanksLoaded(!_launchSwitches.noLoadMusic);
+		}
 		if (!_launchSwitches.noLoadMusic)
 		{
 			audio::GameMusic::RegisterBanks();

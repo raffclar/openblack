@@ -81,6 +81,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
@@ -796,6 +797,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::Ambience:
 		// The view does this step
 		view.PlayViewStep(step, cameraPosition);
+		break;
+	case Step::ScriptMusic:
+		// The scripts' music plays for the time of the turn, on every computer and on the server
+		if (Locator::scriptMusicSystem::has_value())
+		{
+			Locator::scriptMusicSystem::value().ProcessTurn();
+		}
 		break;
 	case Step::Music:
 		// The view does this step

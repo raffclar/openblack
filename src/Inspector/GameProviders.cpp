@@ -198,6 +198,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SharkSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -412,6 +413,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"playerProfileSystem", "players.new_game"},
     LocatorCoverage {"profileFolderSystem", "players.profile_folder"},
     LocatorCoverage {"musicMoodSystem", "players.custom_music"},
+    LocatorCoverage {"scriptMusicSystem", "audio.state"},
     LocatorCoverage {"tutorialSkipSystem", "players.new_game"},
     LocatorCoverage {"advisorSystem", "help.advisors"},
     LocatorCoverage {"helpTextSystem", "help.dialogue"},
@@ -4098,11 +4100,21 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    const auto& music = *game->GetGameMusic();
 			    state.musicPlaying = audio::GetMusicTypeName(music.GetPlaying());
 			    state.landMusic = audio::GetMusicTypeName(music.GetLandType());
-			    state.scriptMusic = audio::GetMusicTypeName(music.GetScriptType());
 			    state.alignmentMusic = music.IsAlignmentMusicEnabled();
 			    for (const auto& attached : music.GetAttachedMusic())
 			    {
 				    state.attachedMusic.emplace_back(audio::GetMusicTypeName(attached.type), attached.thing);
+			    }
+		    }
+		    if (Locator::scriptMusicSystem::has_value())
+		    {
+			    const auto& script = Locator::scriptMusicSystem::value().GetMusic();
+			    state.scriptMusic = audio::GetMusicTypeName(script.GetType());
+			    state.scriptMusicLine = script.GetLyrics().line;
+			    state.scriptMusicWord = script.GetLyrics().word;
+			    if (const auto time = script.GetChannelTime(); time.has_value())
+			    {
+				    state.scriptMusicMs = std::chrono::duration_cast<std::chrono::milliseconds>(*time).count();
 			    }
 		    }
 		    if (const auto* player = audio.GetMusic(); player != nullptr)

@@ -181,6 +181,7 @@ class TutorialSkipSystemInterface;
 class PlayerProfileSystemInterface;
 class ProfileFolderSystemInterface;
 class MusicMoodSystemInterface;
+class ScriptMusicSystemInterface;
 class TempleExteriorSystemInterface;
 class TempleDestructionSystemInterface;
 class ComputerPlayerSystemInterface;
@@ -298,6 +299,7 @@ struct Locator
 	using playerProfileSystem = entt::locator<ecs::systems::PlayerProfileSystemInterface>;
 	using profileFolderSystem = entt::locator<ecs::systems::ProfileFolderSystemInterface>;
 	using musicMoodSystem = entt::locator<ecs::systems::MusicMoodSystemInterface>;
+	using scriptMusicSystem = entt::locator<ecs::systems::ScriptMusicSystemInterface>;
 	using templeExteriorSystem = entt::locator<ecs::systems::TempleExteriorSystemInterface>;
 	using templeDestructionSystem = entt::locator<ecs::systems::TempleDestructionSystemInterface>;
 	using computerPlayerSystem = entt::locator<ecs::systems::ComputerPlayerSystemInterface>;

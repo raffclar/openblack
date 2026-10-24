@@ -11,12 +11,15 @@
 
 #include "SyncChecksumSystem.h"
 
+#include <array>
+
 #include <entt/meta/context.hpp>
 
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/SyncedState.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
@@ -38,6 +41,16 @@ void SyncChecksumSystem::ProcessTurn()
 	}
 	const auto hash =
 	    synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection, synced_state::PresentationParts());
+	// The music that the scripts start is synced too: its piece, its lyrics and its clock
+	auto stateHash = hash.hash;
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto& music = Locator::scriptMusicSystem::value().GetMusic();
+		const auto time = music.GetChannelTime();
+		const std::array<int64_t, 5> values {static_cast<int64_t>(music.GetType()), music.IsStarted() ? 1 : 0,
+		                                     music.GetLyrics().line, music.GetLyrics().word, time ? time->count() : -1};
+		stateHash = synced_state::MixValues(stateHash, values);
+	}
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
@@ -46,7 +59,7 @@ void SyncChecksumSystem::ProcessTurn()
 		seed = random.GetSeeds().synced;
 		draws = random.GetSyncedDraws();
 	}
-	_last = TurnChecksum {.turn = Locator::time::value().GetTurn(), .checksum = synced_state::Checksum(hash.hash, seed, draws)};
+	_last = TurnChecksum {.turn = Locator::time::value().GetTurn(), .checksum = synced_state::Checksum(stateHash, seed, draws)};
 	if (_listener)
 	{
 		_listener(*_last);

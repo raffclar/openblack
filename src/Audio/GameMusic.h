@@ -22,105 +22,11 @@
 #include <glm/vec3.hpp>
 
 #include "ECS/Systems/SavedStateInterface.h"
+#include "MusicType.h"
+#include "ScriptMusic.h"
 
 namespace openblack::audio
 {
-
-/// The types of music the game plays, in the order its scripts number them
-enum class MusicType : int32_t
-{
-	None = 0,
-	GenericEvil,
-	GenericNeutral,
-	GenericGood,
-	CelticTownEvil,
-	CelticTownNeutral,
-	CelticTownGood,
-	AztecTownEvil,
-	AztecTownNeutral,
-	AztecTownGood,
-	JapaneseTownEvil,
-	JapaneseTownNeutral,
-	JapaneseTownGood,
-	IndianTownEvil,
-	IndianTownNeutral,
-	IndianTownGood,
-	EgyptianTownEvil,
-	EgyptianTownNeutral,
-	EgyptianTownGood,
-	GreekTownEvil,
-	GreekTownNeutral,
-	GreekTownGood,
-	NorseTownEvil,
-	NorseTownNeutral,
-	NorseTownGood,
-	TibetanTownEvil,
-	TibetanTownNeutral,
-	TibetanTownGood,
-	CelticChant,
-	CelticChantVox,
-	AztecChant,
-	AztecChantVox,
-	JapaneseChant,
-	JapaneseChantVox,
-	IndianChant,
-	IndianChantVox,
-	EgyptianChant,
-	EgyptianChantVox,
-	GreekChant,
-	GreekChantVox,
-	NorseChant,
-	NorseChantVox,
-	TibetanChant,
-	TibetanChantVox,
-	CitadelEvil,
-	CitadelNeutral,
-	CitadelGood,
-	ScriptPiperTune,
-	ScriptPiperCaveTune,
-	ScriptHermit,
-	ScriptMissionariesBackground,
-	ScriptMissionariesVerse1,
-	ScriptMissionariesVerse2,
-	ScriptMissionariesVerse3,
-	ScriptIntro,
-	ScriptSingingStoneCircle,
-	ScriptWelcomeDance,
-	ScriptGeneric01,
-	ScriptGeneric02,
-	ScriptGeneric03,
-	ScriptGeneric04,
-	ScriptEpic01,
-	ScriptEpic02,
-	ScriptEpic03,
-	ScriptEpic04,
-	ScriptCreatureChosen,
-	ScriptFuneral,
-	ScriptCreatureGuide,
-	ScriptKhazar,
-	ScriptNemesis,
-	ScriptTwinkle,
-	ScriptWhistleFuneral,
-	ScriptWhistleTwinkle,
-	ScriptSleg,
-	CreatureFight,
-	CreatureBigFight,
-	ScriptGuardianStone,
-	Outro,
-	ScriptFailure,
-	ScriptGregorian,
-	ScriptChristmas,
-	ScriptGregorian3D,
-	ScriptCircus,
-	ScriptCircus3D,
-	ScriptCreatureEndSequence,
-
-	_COUNT
-};
-
-/// The bank the game loads for a music type, relative to the game's directory. Empty for MusicType::None.
-[[nodiscard]] std::string_view GetMusicBankPath(MusicType type);
-[[nodiscard]] std::string_view GetMusicTypeName(MusicType type);
 
 /// The game's music: once a game turn, picks what music plays and hands it to the audio library's music player.
 ///
@@ -201,9 +107,20 @@ public:
 		/// The music of the local player's creature's fight, heard while the player directs the fight or while the camera
 		/// is near the arena of the fight (see SelectFightType)
 		std::optional<MusicType> creatureFight;
-		/// A full-screen film plays. The music is not changed, and the script's music plays again from its start after
-		/// the film.
+		/// A full-screen film plays. The music is not changed, and the script's music plays again after the film.
 		bool film {false};
+		/// The music that the scripts start, as the world sees it
+		struct ScriptPiece
+		{
+			MusicType type {MusicType::None};
+			/// The world plays the piece. A piece that played before a load plays no sound.
+			bool started {false};
+			/// How many times the world played the scripts' music. A change plays the piece again.
+			uint32_t playCount {0};
+			/// The place that the world's channel of the piece has reached, none when no channel plays it
+			std::optional<MusicPiecePosition> place;
+		};
+		ScriptPiece script;
 	};
 
 	/// With no banks loaded (the -NOLOADMUSIC switch), no music of the game plays
@@ -220,19 +137,16 @@ public:
 	void ProcessTurn(const TurnInputs& inputs);
 	/// Forgets what was playing, when a land is loaded
 	void Reset();
-	/// A save keeps the music that scripts attached to objects, the music a script started and whether it played, the
-	/// town whose music played, whether the land's music is on, and the line and word that the sung music got to. It
-	/// does not keep the music that plays, nor where each music group got to.
+	/// A save keeps the music that scripts attached to objects, the town whose music played and whether the land's
+	/// music is on. It does not keep the music that plays, nor where each music group got to. The world keeps the
+	/// music that the scripts start.
 	void SaveState(ecs::reflection::BinaryWriter& out) const override;
-	/// A load gives back what SaveState keeps, after Reset. No music plays until the next game turn picks it. Script
-	/// music that played at the save does not start again until a script stops it or starts other music.
+	/// A load gives back what SaveState keeps, after Reset. No music plays until the next game turn picks it.
 	bool LoadState(ecs::reflection::BinaryReader& in) override;
 	/// Registers every music bank with the audio once, as the game does when its audio starts, so that starting a
 	/// piece later reads none of them
 	static void RegisterBanks();
 
-	/// Music a script starts: MusicType::None stops it
-	void StartScriptMusic(MusicType type);
 	/// Forgets the music that plays, so that the next turn starts the land's music again. A film does this when it
 	/// starts.
 	void ForgetPlaying();
@@ -252,37 +166,12 @@ public:
 	/// A script starts an object's music again from the top: its bank stops at once if it is playing, and the music
 	/// comes back the next time it is chosen
 	void RestartAttachedMusic(uint32_t thing);
-	/// The script music of a type is over: it played to its end, or a script stopped it or started other music
-	[[nodiscard]] bool IsScriptMusicOver(MusicType type) const { return _scriptType != type; }
-
-	/// How far a sung piece of script music has got, from the cues it carries as it plays
-	struct MusicLyrics
-	{
-		/// The number of the last line cue heard, 0 before any
-		int32_t line {0};
-		/// The word of that line reached, counting from 1
-		int32_t word {0};
-	};
-	/// A cue in a piece of script music: "L" (or "l") and a number starts that line at its first word, "W" or "P" (in
-	/// either case) moves on a word, and any other cue changes nothing
-	static void ApplyMusicCue(MusicLyrics& lyrics, std::string_view cue);
-	/// Whether the music has reached a line: its last line cue was that line or a later one. Both are compared as
-	/// unsigned numbers, so a negative line is never reached.
-	[[nodiscard]] static bool ReachedMusicLine(int32_t lastLine, int32_t line);
-	/// A script starting music starts its lyrics again: no line and no word
-	void ResetMusicLyrics() { _lyrics = {}; }
-	/// The end of a dialogue starts the sung line again at no word, and keeps the line
-	void ResetMusicWord() { _lyrics.word = 0; }
-	/// A cue heard in the script's music as it plays
-	void OnScriptMusicCue(std::string_view cue) { ApplyMusicCue(_lyrics, cue); }
-	[[nodiscard]] const MusicLyrics& GetMusicLyrics() const { return _lyrics; }
 
 	// Debug introspection
 	[[nodiscard]] MusicType GetPlaying() const { return _playing; }
 	[[nodiscard]] MusicType GetLandType() const { return _landType; }
 	[[nodiscard]] MusicType GetBlockedType() const { return _blockedType; }
 	[[nodiscard]] uint32_t GetBlockedTurns() const { return _blockedTurns; }
-	[[nodiscard]] MusicType GetScriptType() const { return _scriptType; }
 	[[nodiscard]] bool IsAlignmentMusicEnabled() const { return _alignmentMusicEnabled; }
 	[[nodiscard]] const std::map<int32_t, uint32_t>& GetResumeChunks() const { return _resumeChunks; }
 
@@ -305,7 +194,7 @@ public:
 private:
 	void ProcessMusic(const TurnInputs& inputs);
 	bool ProcessCitadel(const TurnInputs& inputs);
-	bool ProcessScript();
+	bool ProcessScript(const TurnInputs::ScriptPiece& script);
 	bool ProcessCreatureFight(const TurnInputs& inputs);
 	bool ProcessCreatureDance(const TurnInputs& inputs);
 	bool ProcessAttached(const TurnInputs& inputs);
@@ -321,8 +210,9 @@ private:
 	/// The land's music that played to its end: it is not played again for a while
 	MusicType _blockedType {MusicType::None};
 	uint32_t _blockedTurns {0};
-	MusicType _scriptType {MusicType::None};
+	/// The scripts' piece plays in the music heard, and the play count of the world that it follows
 	bool _scriptStarted {false};
+	uint32_t _scriptPlayCount {0};
 	bool _alignmentMusicEnabled {true};
 	bool _banksLoaded {true};
 	/// Whether the land's music could play last turn, for logging when that changes
@@ -332,7 +222,6 @@ private:
 	std::map<int32_t, uint32_t> _resumeChunks;
 	/// Music attached to objects, the most recently attached first
 	std::vector<AttachedMusic> _attached;
-	MusicLyrics _lyrics;
 };
 
 } // namespace openblack::audio

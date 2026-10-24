@@ -66,4 +66,8 @@ struct DecodeResult
 /// declares. expectedSampleRate is the bank header's rate, 0 to skip that check.
 [[nodiscard]] DecodeResult DecodeSound(std::span<const uint8_t> data, int expectedSampleRate = 0);
 
+/// The frames of sound in raw MPEG audio, which the decoder counts from the frames' headers without the work to decode
+/// them. None when the decoder does not accept the data.
+[[nodiscard]] std::optional<uint64_t> CountMpegFrames(std::span<const uint8_t> data);
+
 } // namespace openblack::audio

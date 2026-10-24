@@ -281,6 +281,16 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 	return result;
 }
 
+uint64_t MixValues(uint64_t stateHash, std::span<const int64_t> values)
+{
+	uint64_t hash = stateHash;
+	for (const auto value : values)
+	{
+		Mix(hash, &value, sizeof(value));
+	}
+	return hash;
+}
+
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)
 {
 	uint64_t hash = k_HashOffset;
