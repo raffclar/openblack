@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -91,10 +93,19 @@ public:
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
 	virtual bool LoadGodsRingMap() = 0;
+	/// What the load of a saved land is for
+	enum class SavedLandUse : uint8_t
+	{
+		/// A saved game: the load starts a game. The players take their alignments from their profiles, and their
+		/// statistics note the alignments at the start.
+		SavedGame,
+		/// The world state of a game server: the world continues exactly as the server has it
+		WorldState,
+	};
 	/// Loads a saved game: the landscape of the saved land, then `restore` puts the saved entities in place of the land's
 	/// own. Gives whether the landscape loaded and `restore` gave true.
 	virtual bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-	                           const std::function<bool()>& restore) = 0;
+	                           const std::function<bool()>& restore, SavedLandUse use) = 0;
 	/// Loads the landscape that the map script of the land names
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
 

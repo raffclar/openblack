@@ -4365,7 +4365,8 @@ bool Game::LoadGodsRingMap() noexcept
 bool Game::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
                          const std::function<bool()>& restore) noexcept
 {
-	return Locator::landSystem::value().LoadSavedLand(landPath, landscape, restore);
+	return Locator::landSystem::value().LoadSavedLand(landPath, landscape, restore,
+	                                                  ecs::systems::LandSystemInterface::SavedLandUse::SavedGame);
 }
 
 void Game::StartLandAudio()
