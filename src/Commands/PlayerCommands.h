@@ -12,12 +12,14 @@
 #include <cstddef>
 #include <cstdint>
 
+#include <optional>
 #include <variant>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "Creature/CreatureMarks.h"
 #include "Creature/LeashKeys.h"
 #include "Enums.h"
 
@@ -151,6 +153,43 @@ struct HandTwist
 	glm::vec3 moved;
 };
 
+/// The press of the hand on a thing that it locks on to: the hand scoops from a pile, a field or a fish farm, or holds a
+/// creature to stroke or slap it. The lock stays until the hand sends the end of the lock (HandUnlock).
+struct HandLock
+{
+	entt::entity object;
+};
+
+/// The end of the lock of the hand on a thing (HandLock), when the player lets go of the button
+struct HandUnlock
+{
+	entt::entity object;
+};
+
+/// The press of the hand that holds a thing on a target that the thing is used on: a pot goes into a store or a pile,
+/// a thing goes whole to an altar, a gate stone plinth or a store
+struct HandApply
+{
+	entt::entity target;
+};
+
+/// The hand let go of a town's totem at a share of worship: the town takes that share
+struct TotemShare
+{
+	entt::entity totem;
+	/// The share of the town's people that go to worship, from 0 to 1
+	float share;
+};
+
+/// A hard slap of the hand bruised a creature: the slapping player's own creature loses some life, and the slapped
+/// creature, when it is that creature, takes the wound where the slap met its skin
+struct CreatureBruise
+{
+	entt::entity creature;
+	/// Where the slap met the skin of the slapped creature, which the frame measured; none for a miss
+	std::optional<creature_marks::Mark> wound;
+};
+
 /// The player of the command left a network game, or did not come back in time. Only the game server sends it. The
 /// world defeats the player's god at the turn, and the god's slot stays closed.
 struct PlayerLeft
@@ -164,8 +203,9 @@ struct PlayerJoined
 };
 
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, PlayerLeft, PlayerJoined>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, PlayerLeft, PlayerJoined>;
 
 /// A command and the player that sent it
 struct Command

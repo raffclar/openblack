@@ -71,6 +71,11 @@ enum class CommandTag : uint8_t
 	LeashPostTap = 9,
 	HandReport = 10,
 	HandTwist = 11,
+	HandLock = 12,
+	HandUnlock = 13,
+	HandApply = 14,
+	TotemShare = 15,
+	CreatureBruise = 16,
 	PlayerLeft = 17,
 	PlayerJoined = 23,
 };

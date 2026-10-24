@@ -208,24 +208,20 @@ void ExplosionSystem::Update(float milliseconds)
 		{
 			registry.SetDirty();
 		}
-		// A destroyed building's ghost runs down by the frames' time once drawn, and goes as it reaches nothing
-		std::vector<entt::entity> ghosts;
-		registry.Each<DestructionGhost>([&](entt::entity entity, DestructionGhost& ghost) {
-			if (ghost.shown)
-			{
-				ghost.millisecondsLeft = std::max(ghost.millisecondsLeft - static_cast<int>(milliseconds), 0);
-				if (ghost.millisecondsLeft == 0)
-				{
-					ghosts.push_back(entity);
-				}
-			}
-			ghost.shown = true;
-		});
-		for (const auto entity : ghosts)
-		{
-			registry.Destroy(entity);
-		}
 	}
+	// A destroyed building's ghost runs down by the frames' time once drawn, and goes as it reaches nothing
+	std::erase_if(_ghosts, [milliseconds](DestructionGhost& ghost) {
+		if (ghost.shown)
+		{
+			ghost.millisecondsLeft = std::max(ghost.millisecondsLeft - static_cast<int>(milliseconds), 0);
+			if (ghost.millisecondsLeft == 0)
+			{
+				return true;
+			}
+		}
+		ghost.shown = true;
+		return false;
+	});
 	const float seconds = milliseconds / 1000.0f;
 	std::erase_if(_puffs, [seconds](dust_puff::Puff& puff) { return !dust_puff::Advance(puff, seconds); });
 	// The shakes count down by the real time of the frame, also when the game pauses
@@ -287,6 +283,7 @@ void ExplosionSystem::Reset()
 {
 	_shakes.clear();
 	_puffs.clear();
+	_ghosts.clear();
 	if (Locator::camera::has_value())
 	{
 		Locator::camera::value().SetShake(glm::vec3(0.0f), glm::vec3(0.0f));
@@ -296,7 +293,6 @@ void ExplosionSystem::Reset()
 		auto& registry = Locator::entitiesRegistry::value();
 		std::vector<entt::entity> marks;
 		registry.Each<GroundMark>([&](entt::entity entity, GroundMark&) { marks.push_back(entity); });
-		registry.Each<DestructionGhost>([&](entt::entity entity, DestructionGhost&) { marks.push_back(entity); });
 		registry.Destroy(marks.begin(), marks.end());
 	}
 }

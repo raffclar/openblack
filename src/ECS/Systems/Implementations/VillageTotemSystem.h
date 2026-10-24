@@ -45,6 +45,8 @@ public:
 	[[nodiscard]] std::string_view WhyNotGrip(entt::entity totem, PlayerNames player) const override;
 	void Slide(float upPixels, float screenHeight) override;
 	void LetGo() override;
+	void DoGrip(PlayerNames player, entt::entity totem) override;
+	void DoShare(PlayerNames player, entt::entity totem, float share) override;
 	[[nodiscard]] std::optional<entt::entity> GetGripped() const override;
 	[[nodiscard]] std::optional<HandHold> GetHandHold() const override;
 	[[nodiscard]] std::optional<ShareToolTip> TakeShareToolTip(PlayerNames player) override;

@@ -53,13 +53,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "drawnAt", .marker = ""},
     {.component = "VillagerPose", .field = "easedHeading", .marker = ""},
     {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
+    {.component = "VillagerPose", .field = "detailedHeading", .marker = ""},
     {.component = "VillagerPose", .field = "slopeLift", .marker = ""},
-    // Only the villagers near the camera of a computer get their posed bones
+    // The frames pose a villager's bones only while it is in view
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
-    // What the player at this computer heard of the guidance: the game picks it by the camera of this computer and its
-    // own random numbers
-    {.component = "GuidanceHeard", .field = "", .marker = ""},
+    {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
     // The number of a miracle's particle effect counts the effects that this computer started, also those that only
     // show the world on this computer
     {.component = "Spell", .field = "effect", .marker = ""},
@@ -67,7 +66,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
     {.component = "CreatureHair", .field = "", .marker = ""},
-    // The frames turn and pulse the seed over a worship site's icon. Only the draw reads them.
+    // The seeds of the miracle icons spin, and their phials pulse, as the frames draw them
     {.component = "IconSeed", .field = "spin", .marker = ""},
     {.component = "IconSeed", .field = "ringSpin", .marker = ""},
     {.component = "IconSeed", .field = "phialFrame", .marker = ""},
@@ -182,6 +181,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "lastTarget", .marker = ""},
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},
+    {.component = "HandGrab", .field = "locking", .marker = ""},
+    // The frames hold the hand to a creature; the world has the hold from the lock (HandLockedCreature)
+    {.component = "HandOnCreature", .field = "", .marker = ""},
+    // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
+    {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
+    {.component = "VillageTotem", .field = "gripped", .marker = ""},
+    {.component = "VillageTotem", .field = "held", .marker = ""},
     {.component = "HandGrab", .field = "scoopStream", .marker = ""},
     {.component = "HandGrab", .field = "scoopSound", .marker = ""},
     {.component = "HandGrab", .field = "scoopAnchor", .marker = ""},

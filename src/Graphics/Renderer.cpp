@@ -129,6 +129,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
@@ -5042,7 +5043,11 @@ void Renderer::DrawDestructionGhosts(const DrawSceneDesc& desc) const
 	constexpr int k_GhostMilliseconds = 500;
 	constexpr double k_ScrollRate = 0.7;
 	constexpr double k_ScrollHeight = 1.7000000476837158;
-	desc.entities.Each<const ecs::components::DestructionGhost>([&](const ecs::components::DestructionGhost& ghost) {
+	if (!Locator::explosionSystem::has_value())
+	{
+		return;
+	}
+	std::ranges::for_each(Locator::explosionSystem::value().Ghosts(), [&](const ecs::components::DestructionGhost& ghost) {
 		if (!meshes.Contains(ghost.mesh))
 		{
 			return;

@@ -145,6 +145,18 @@ public:
 			Forget(thing);
 		}
 	}
+	/// The same, but it looks only when things went from the world since the store last looked. The count of the things
+	/// gone from the world only goes up, so an unchanged count means that no belief is about a thing that went.
+	template <typename Gone>
+	void ForgetIfAnyWent(uint64_t goneCount, Gone gone)
+	{
+		if (_lookedAt.goneCount == goneCount)
+		{
+			return;
+		}
+		ForgetIf(gone);
+		_lookedAt.goneCount = goneCount;
+	}
 	/// Records that the creature found no way to the thing on a turn, if the store has a belief about the thing
 	void MarkBlocked(entt::entity thing, uint32_t turn);
 	/// Records that the thing is part of a whole thing, if the store has a belief about the thing
@@ -156,6 +168,9 @@ public:
 	/// Every belief in the order that the creature looks through its two lists: the list of whole things first, then
 	/// the list of all other things. Each list has the newest belief first.
 	[[nodiscard]] std::vector<Belief> InListOrder() const;
+	/// The same two orders, as the beliefs in the store, not copies. They stay valid only while the store does not change.
+	[[nodiscard]] std::vector<const Belief*> HeldNewestFirst() const;
+	[[nodiscard]] std::vector<const Belief*> HeldInListOrder() const;
 	/// How many beliefs it holds of a kind, and in all
 	[[nodiscard]] size_t Count(uint32_t kind) const;
 	[[nodiscard]] size_t Size() const { return _index.size(); }
@@ -170,6 +185,7 @@ public:
 		_pools = contents.pools;
 		_index = contents.index;
 		_made = contents.made;
+		_lookedAt = {};
 	}
 
 private:
@@ -180,6 +196,21 @@ private:
 	std::unordered_map<entt::entity, Place> _index;
 	/// How many beliefs the store made
 	uint64_t _made {0};
+	/// The count of the things gone from the world when the store last looked for beliefs about gone things. A copy of a
+	/// store has not looked yet, as it can go to another world.
+	struct LookedAt
+	{
+		std::optional<uint64_t> goneCount;
+		LookedAt() = default;
+		~LookedAt() = default;
+		LookedAt(const LookedAt& /*other*/) {}
+		LookedAt& operator=(const LookedAt& /*other*/)
+		{
+			goneCount.reset();
+			return *this;
+		}
+	};
+	LookedAt _lookedAt;
 };
 
 /// How a creature's eyes sweep about it: the cells of a square around its own, its own cell first and then ring after

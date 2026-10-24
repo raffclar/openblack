@@ -51,6 +51,12 @@ std::vector<Action> EachCommand()
 	                .camera = {7.0f, 8.0f, 9.0f},
 	                .focus = {10.0f, 11.0f, 12.0f}},
 	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
+	    HandLock {.object = Entity(14)},
+	    HandUnlock {.object = Entity(15)},
+	    HandApply {.target = Entity(16)},
+	    TotemShare {.totem = Entity(17), .share = 0.75f},
+	    CreatureBruise {.creature = Entity(18),
+	                    .wound = creature_marks::Mark {.u = 1, .v = 2, .skin = 3, .age = 0, .type = 0, .column = 7}},
 	    PlayerLeft {},
 	    PlayerJoined {},
 	};
@@ -76,7 +82,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 13)
+	switch (bits(random) % 18)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -103,6 +109,24 @@ Action RandomAction(std::mt19937& random)
 	case 10:
 		return HandTwist {.object = entity(), .moved = vector()};
 	case 11:
+		return HandLock {.object = entity()};
+	case 12:
+		return HandUnlock {.object = entity()};
+	case 13:
+		return HandApply {.target = entity()};
+	case 14:
+		return TotemShare {.totem = entity(), .share = number()};
+	case 15:
+	{
+		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
+		return CreatureBruise {
+		    .creature = entity(),
+		    .wound = bits(random) % 2 == 0
+		                 ? std::optional(creature_marks::Mark {
+		                       .u = field(), .v = field(), .skin = field(), .age = field(), .type = field(), .column = field()})
+		                 : std::nullopt};
+	}
+	case 16:
 		return PlayerLeft {};
 	default:
 		return PlayerJoined {};
@@ -165,7 +189,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 1, 1};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 1, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -209,7 +233,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 2), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>((i * 2) % 32), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});

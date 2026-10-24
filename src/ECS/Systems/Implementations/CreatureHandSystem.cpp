@@ -43,6 +43,7 @@
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/CreatureSpells.h"
+#include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ScriptControl.h"
@@ -52,6 +53,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -257,11 +259,56 @@ bool CreatureHandSystem::Grab()
 		contact.distanceStarted = true;
 	}
 	TakeCamera(*nearest);
-	if (Locator::creatureMindSystem::has_value())
+	// The world takes the hold at the start of a later turn, as a command of the player
+	if (Locator::playerCommandSystem::has_value())
 	{
-		Locator::creatureMindSystem::value().HandTookHold(*nearest);
+		Locator::playerCommandSystem::value().Submit(player_commands::HandLock {.object = *nearest});
+	}
+	else
+	{
+		DoLock(k_LocalPlayer, *nearest);
 	}
 	return true;
+}
+
+std::optional<entt::entity> CreatureHandSystem::GetLockedCreature() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* locked = registry.TryGet<const HandLockedCreature>(PlayerHand());
+	return locked != nullptr && registry.Valid(locked->creature) ? std::optional(locked->creature) : std::nullopt;
+}
+
+void CreatureHandSystem::DoLock([[maybe_unused]] PlayerNames player, entt::entity creature)
+{
+	// There is one human, with the left hand of this computer
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value() || !registry.Valid(creature) || !MayHold(creature))
+	{
+		return;
+	}
+	registry.AssignOrReplace<HandLockedCreature>(PlayerHand(), HandLockedCreature {.creature = creature});
+	if (Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().HandTookHold(creature);
+	}
+}
+
+void CreatureHandSystem::DoUnlock([[maybe_unused]] PlayerNames player, entt::entity creature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!Locator::handSystem::has_value())
+	{
+		return;
+	}
+	if (const auto* locked = registry.TryGet<const HandLockedCreature>(PlayerHand());
+	    locked != nullptr && locked->creature == creature)
+	{
+		registry.Remove<HandLockedCreature>(PlayerHand());
+	}
 }
 
 void CreatureHandSystem::TakeCamera(entt::entity creature)
@@ -396,12 +443,31 @@ std::optional<entt::entity> CreatureHandSystem::CreatureUnderCursor() const
 void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection,
                                 uint8_t column)
 {
-	// The bruise and the lost life go to the player's own creature, where the hand's line of sight meets its skin
+	// The frame finds where the hand's line of sight meets the skin, and the world takes the bruise at the start of a
+	// later turn, as a command of the player
+	const player_commands::CreatureBruise bruise {
+	    .creature = creature, .wound = creature_scars::WoundAlong(creature, rayOrigin, rayDirection, 0, column)};
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(bruise);
+		return;
+	}
+	ApplyBruise(k_LocalPlayer, bruise);
+}
+
+void CreatureHandSystem::DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise)
+{
+	ApplyBruise(player, bruise);
+}
+
+void CreatureHandSystem::ApplyBruise(PlayerNames player, const player_commands::CreatureBruise& bruise)
+{
+	// The bruise and the lost life go to the slapping player's own creature
 	if (!Locator::playerSystem::has_value())
 	{
 		return;
 	}
-	const auto own = Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
+	const auto own = Locator::playerSystem::value().GetPrimaryCreature(player);
 	if (!own.has_value())
 	{
 		return;
@@ -413,9 +479,9 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 	}
 	// TODO(creature): hard slaps on another god's creature bruise the player's own creature in the game, at the place
 	// hit on the slapped one's skin; only a bruise on the slapped creature itself is drawn here (docs/vanilla-bugs.md)
-	if (*own == creature)
+	if (*own == bruise.creature && bruise.wound.has_value() && Locator::creatureSkinSystem::has_value())
 	{
-		creature_scars::MarkAlong(creature, rayOrigin, rayDirection, 0, column);
+		Locator::creatureSkinSystem::value().AddWound(bruise.creature, *bruise.wound);
 	}
 }
 
@@ -669,6 +735,7 @@ void CreatureHandSystem::Release()
 	const auto creature = contact->creature;
 	const auto sum = contact->sum;
 	const auto delivered = feedback::Delivered(sum);
+	const bool byCommand = contact->byCommand;
 	registry.Remove<HandOnCreature>(hand);
 	registry.AssignOrReplace<HandLastFeedback>(hand, HandLastFeedback {.sum = sum});
 	GiveCameraBack();
@@ -686,6 +753,16 @@ void CreatureHandSystem::Release()
 		}
 		// Too slight to count, as a click is, the hand offers to focus on the creature
 		_focusTip = std::abs(delivered) <= feedback::k_SlightFeedback;
+	}
+	// The world lets go of the creature at the start of a later turn, as a command of the player. A hold that a command
+	// started ends at once.
+	if (!byCommand && Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(player_commands::HandUnlock {.object = creature});
+	}
+	else
+	{
+		DoUnlock(k_LocalPlayer, creature);
 	}
 }
 
@@ -720,6 +797,8 @@ HandOnCreature* CreatureHandSystem::HoldByCommand(entt::entity creature)
 	// Held to another creature, the hand lets go of it first, which tells it how it was treated
 	Release();
 	registry.Remove<HandLastFeedback>(hand);
+	// A command holds it in the world at once
+	registry.AssignOrReplace<HandLockedCreature>(hand, HandLockedCreature {.creature = creature});
 	return &registry.AssignOrReplace<HandOnCreature>(hand, HandOnCreature {.creature = creature, .byCommand = true});
 }
 

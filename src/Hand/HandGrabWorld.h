@@ -309,6 +309,9 @@ public:
 	virtual uint32_t AddToStore(entt::entity store, ResourceType resource, uint32_t amount, bool poisoned) = 0;
 	/// A store takes a thing whole, for the resource it is worth, and the thing goes; whether it took it
 	virtual bool TakeIntoStore(entt::entity store, entt::entity object) = 0;
+	/// Whether a thing takes a held thing whole when the hand gives it: a worship site's altar that takes its kind, a
+	/// gate stone plinth that takes a gate stone, or a store that takes what it is worth. Nothing changes.
+	[[nodiscard]] virtual bool TakesWhole(entt::entity /*target*/, entt::entity /*held*/) const { return false; }
 	/// Lays a gate stone in the gate stone plinth it is given to; false for anything else, which is left as it is
 	virtual bool LayGateStone(entt::entity plinth, entt::entity stone) = 0;
 	/// Some resource poured onto a point: to the stores and piles of it about the point, or a new pile

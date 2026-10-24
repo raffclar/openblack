@@ -145,6 +145,22 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.object);
 		               out.Vector(command.moved);
 	               },
+	               [&out](const HandLock& command) { out.Entity(command.object); },
+	               [&out](const HandUnlock& command) { out.Entity(command.object); },
+	               [&out](const HandApply& command) { out.Entity(command.target); },
+	               [&out](const CreatureBruise& command) {
+		               out.Entity(command.creature);
+		               out.Byte(static_cast<uint8_t>(command.wound.has_value() ? 1 : 0));
+		               const auto wound = command.wound.value_or(creature_marks::Mark {});
+		               for (const auto byte : {wound.u, wound.v, wound.skin, wound.age, wound.type, wound.column})
+		               {
+			               out.Byte(byte);
+		               }
+	               },
+	               [&out](const TotemShare& command) {
+		               out.Entity(command.totem);
+		               out.Float(command.share);
+	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [](const PlayerJoined& /*command*/) {},
 	               [&out](const HandReport& command) {
@@ -224,6 +240,38 @@ DecodeError ReadAction(Reader& in, Action& action)
 	{
 		const auto object = in.Entity();
 		action = HandTwist {.object = object, .moved = in.Vector()};
+		return DecodeError::None;
+	}
+	case CommandTag::HandLock:
+		action = HandLock {.object = in.Entity()};
+		return DecodeError::None;
+	case CommandTag::HandUnlock:
+		action = HandUnlock {.object = in.Entity()};
+		return DecodeError::None;
+	case CommandTag::HandApply:
+		action = HandApply {.target = in.Entity()};
+		return DecodeError::None;
+	case CommandTag::CreatureBruise:
+	{
+		const auto creature = in.Entity();
+		const auto wounded = in.Byte();
+		creature_marks::Mark wound;
+		for (auto* byte : {&wound.u, &wound.v, &wound.skin, &wound.age, &wound.type, &wound.column})
+		{
+			*byte = in.Byte();
+		}
+		// No wound has its bytes empty, so that each command has one way of bytes
+		if (wounded > 1 || (wounded == 0 && wound != creature_marks::Mark {}))
+		{
+			return DecodeError::Value;
+		}
+		action = CreatureBruise {.creature = creature, .wound = wounded != 0 ? std::optional(wound) : std::nullopt};
+		return DecodeError::None;
+	}
+	case CommandTag::TotemShare:
+	{
+		const auto totem = in.Entity();
+		action = TotemShare {.totem = totem, .share = in.Float()};
 		return DecodeError::None;
 	}
 	case CommandTag::PlayerLeft:
@@ -324,6 +372,11 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPostTap& /*command*/) { return CommandTag::LeashPostTap; },
 	                      [](const HandReport& /*command*/) { return CommandTag::HandReport; },
 	                      [](const HandTwist& /*command*/) { return CommandTag::HandTwist; },
+	                      [](const HandLock& /*command*/) { return CommandTag::HandLock; },
+	                      [](const HandUnlock& /*command*/) { return CommandTag::HandUnlock; },
+	                      [](const HandApply& /*command*/) { return CommandTag::HandApply; },
+	                      [](const TotemShare& /*command*/) { return CommandTag::TotemShare; },
+	                      [](const CreatureBruise& /*command*/) { return CommandTag::CreatureBruise; },
 	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
 	                      [](const PlayerJoined& /*command*/) { return CommandTag::PlayerJoined; },
 	                  },
@@ -345,6 +398,11 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
 	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
+	                                     [](const HandLock& /*command*/) { return k_Entity; },
+	                                     [](const HandUnlock& /*command*/) { return k_Entity; },
+	                                     [](const HandApply& /*command*/) { return k_Entity; },
+	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
+	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
 	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
 	                                     [](const PlayerJoined& /*command*/) { return size_t {0}; },
 	                                 },

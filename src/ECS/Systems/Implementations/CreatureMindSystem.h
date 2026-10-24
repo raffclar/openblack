@@ -350,6 +350,26 @@ private:
 	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
 	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
 	                      const std::function<bool(entt::entity)>& suitsAction);
+	/// What the planning of one desire found out about the believed things: the things that suit the desire, in the order
+	/// of the lists, each with its worth once an action asked for it. The next action of the same desire uses them again
+	/// while the creature comes across nothing, because only that changes the answers.
+	struct BelievedFacts
+	{
+		struct Suiting
+		{
+			entt::entity thing {entt::null};
+			std::optional<creature_planner::ObjectCandidate> worth;
+		};
+		std::vector<Suiting> suiting;
+		/// The things of the beliefs, in the order of the lists, as the facts were found
+		std::vector<entt::entity> things;
+		/// The count of the things come across when the facts were found, none before they were found
+		std::optional<uint64_t> foundAt;
+	};
+	/// The same, with the facts kept from the last action of the same desire when they are still true
+	[[nodiscard]] std::vector<creature_planner::ObjectCandidate>
+	BelievedThingsToActOn(entt::entity creature, components::CreatureMindState& mind, creature_desires::Desire desire,
+	                      const std::function<bool(entt::entity)>& suitsAction, BelievedFacts& kept);
 	/// The whole thing that a thing shown to the creature is part of. The creature comes across the thing and the whole
 	/// thing. A creature is part of no whole thing.
 	[[nodiscard]] std::optional<entt::entity> WholeOfShownThing(entt::entity creature, components::CreatureMindState& mind,
@@ -553,6 +573,8 @@ private:
 	std::vector<entt::entity> _thinking;
 	/// The creatures whose minds do the step of their agendas after the second part, until the last part
 	std::vector<entt::entity> _acting;
+	/// How many times a creature came across a thing. Facts kept about beliefs stay true while this does not change.
+	uint64_t _comeAcrossCount {0};
 };
 
 } // namespace openblack::ecs::systems

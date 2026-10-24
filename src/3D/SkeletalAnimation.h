@@ -151,6 +151,8 @@ void BlendLayers(std::vector<Pose>& poses, const Animation& first, uint32_t firs
 
 /// The matrices in the mesh's space of the bones posed, in the form L3DMesh::GetBoneMatrices gives the rest pose
 [[nodiscard]] std::vector<glm::mat4> ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> parents);
+/// The same, written into matrices that the caller keeps. The caller can then use their memory again.
+void ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> parents, std::vector<glm::mat4>& matrices);
 
 /// An animation of a .cbn or .hbn file
 [[nodiscard]] Animation FromMorph(const morph::Animation& animation);

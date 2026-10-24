@@ -152,6 +152,7 @@
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
 #include "ECS/Systems/FishFarmSystemInterface.h"
+#include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
@@ -395,6 +396,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
+    LocatorCoverage {"floatingNumberSystem", "magic.state"},
     LocatorCoverage {"rewardSystem", "living.rewards"},
     LocatorCoverage {"scriptObjects", "script.objects"},
     LocatorCoverage {"scriptHighlightSystem", "script.highlights"},
@@ -2182,6 +2184,11 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		    if (Locator::explosionSystem::has_value())
 		    {
 			    result["shaking"] = Locator::explosionSystem::value().IsShaking();
+			    result["ghosts"] = Locator::explosionSystem::value().Ghosts().size();
+		    }
+		    if (Locator::floatingNumberSystem::has_value())
+		    {
+			    result["floating_numbers"] = Locator::floatingNumberSystem::value().Numbers().size();
 		    }
 		    result["miracle_fx"] = Locator::miracleFxSystem::has_value();
 		    return result;

@@ -74,6 +74,15 @@ public:
 	{
 		return GetHandsOf(GetOwnPlayer()).value_or(GetPlayerHands());
 	}
+	/// Where the world has a player's camera, and the point that it looks at
+	struct ReportedCamera
+	{
+		glm::vec3 origin;
+		glm::vec3 focus;
+	};
+	/// Where the world has the player's camera: from the last report that a turn did, none before the first report. The
+	/// world never reads the camera that the frames draw from.
+	[[nodiscard]] virtual std::optional<ReportedCamera> GetReportedCamera() const noexcept { return std::nullopt; }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
 	/// Each frame the hands catch up with their player's alignment once it has moved far enough, and blend their skin
