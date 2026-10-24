@@ -2447,10 +2447,13 @@ void MagicSystem::SendCastUnlock()
 
 void MagicSystem::DoCast(PlayerNames player, const player_commands::HandCast& cast)
 {
-	auto& registry = EntityRegistry();
 	// There is one human, with the hand of this computer
-	if (player != PlayerNames::PLAYER_ONE || !_held.has_value() || !registry.Valid(*_held) ||
-	    !Locator::infoConstants::has_value())
+	if (player != PlayerNames::PLAYER_ONE || !_held.has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(*_held) || !Locator::infoConstants::has_value())
 	{
 		return;
 	}
