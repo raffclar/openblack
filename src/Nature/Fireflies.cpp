@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 using namespace openblack::fireflies;
 
@@ -159,9 +161,9 @@ glm::vec3 fireflies::DriftOffset(const Drift& drift, float clock, float amplitud
 	const float quickAround = std::fmod(quickTurned * k_QuickLoopRateAround + drift.phases[3], k_TwoPi);
 	const float quickUp = std::fmod(quickTurned * k_QuickLoopRateUp + drift.phases[4], k_TwoPi);
 	const auto loop = [amplitude](float around, float up, float radius) {
-		return glm::vec3(amplitude * (std::cos(around) * std::cos(up) * radius),
-		                 amplitude * (std::sin(up) * k_LoopHeightShare * radius),
-		                 amplitude * (std::sin(around) * std::cos(up) * radius));
+		return glm::vec3(amplitude * (portable_math::Cos(around) * portable_math::Cos(up) * radius),
+		                 amplitude * (portable_math::Sin(up) * k_LoopHeightShare * radius),
+		                 amplitude * (portable_math::Sin(around) * portable_math::Cos(up) * radius));
 	};
 	return loop(slowAround, slowUp, k_SlowLoopRadius) + loop(quickAround, quickUp, k_QuickLoopRadius);
 }

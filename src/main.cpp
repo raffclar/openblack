@@ -144,13 +144,18 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
 		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
+		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
+		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
+		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
+		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
+		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
+		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 	;
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options()
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
 		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
 		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
-		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
 		("sim-input", "Tools: the first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
@@ -338,8 +343,39 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			{
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
-			// Only the builds with the inspector have this option
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			if (result.count("sim-checksums") != 0)
+			{
+				simulation.checksumsPath = std::filesystem::path(result["sim-checksums"].as<std::string>());
+				simulation.checksumParts = result.count("sim-checksum-fields") != 0 ? openblack::sim_run::HashDetail::Fields
+				                           : result.count("sim-checksum-parts") != 0
+				                               ? openblack::sim_run::HashDetail::Components
+				                               : openblack::sim_run::HashDetail::None;
+			}
+			if (result.count("sim-checksum-dump") != 0)
+			{
+				const auto text = result["sim-checksum-dump"].as<std::string>();
+				const auto colon = text.find(':');
+				if (colon == std::string::npos)
+				{
+					throw cxxopts::exceptions::parsing("--sim-checksum-dump is TURN:Component,Component");
+				}
+				std::vector<std::string> components;
+				for (size_t at = colon + 1; at <= text.size();)
+				{
+					const auto comma = std::min(text.find(',', at), text.size());
+					if (comma > at)
+					{
+						components.emplace_back(text.substr(at, comma - at));
+					}
+					at = comma + 1;
+				}
+				simulation.checksumDump = std::make_pair(static_cast<uint32_t>(std::stoul(text.substr(0, colon))), components);
+			}
+			if (result.count("sim-play-commands") != 0)
+			{
+				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
+			}
 			args.simulation = simulation;
 		}
 

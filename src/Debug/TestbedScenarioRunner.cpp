@@ -59,6 +59,7 @@
 #include "Camera/DoubleClickFlight.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDecisionTree.h"
 #include "Creature/CreatureFeedback.h"
@@ -1614,7 +1615,7 @@ void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
 		for (uint32_t bird = 0; bird < setup.count; ++bird)
 		{
 			const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(bird) / static_cast<float>(setup.count);
-			const glm::vec2 at = home + glm::vec2(std::cos(angle), std::sin(angle)) * k_Spread;
+			const glm::vec2 at = home + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * k_Spread;
 			animals.CreateBird(setup.kind, at, 0, flock);
 		}
 	}

@@ -25,6 +25,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
@@ -125,7 +126,8 @@ public:
 				fade = std::clamp((age - fadeTimeStart) / (fadeTimeEnd - fadeTimeStart), 0.0f, 1.0f);
 			}
 			atom.rgba[3] = static_cast<uint8_t>(std::round(data.b.x - data.b.x * fade));
-			const float pulse = std::sin(id * k_PulsePhase + (id * k_PulsePace + 1.0f) * age * scaleFrequency);
+			const float pulse =
+			    openblack::portable_math::Sin(id * k_PulsePhase + (id * k_PulsePace + 1.0f) * age * scaleFrequency);
 			atom.ruleScale = (pulse * 0.5f + 1.0f) * (scaleMax - scaleMin) + scaleMin;
 			if (age > fadeTimeEnd + k_GoneAfterFading)
 			{

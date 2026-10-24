@@ -11,7 +11,10 @@
 
 #include <functional>
 #include <memory>
+#include <optional>
+#include <string>
 #include <utility>
+#include <vector>
 
 #include <entt/meta/fwd.hpp>
 
@@ -33,6 +36,16 @@ public:
 	void ProcessTurn() override;
 	void SetEnabled(bool enabled) override { _enabled = enabled; }
 	[[nodiscard]] bool IsEnabled() const override { return _enabled; }
+	void SetDump(uint32_t turn, std::vector<std::string> components) override
+	{
+		_dumpTurn = turn;
+		_dumpComponents = std::move(components);
+	}
+	void SetKeepParts(bool keep, bool byField) override
+	{
+		_keepParts = keep;
+		_byField = byField;
+	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
 
@@ -40,6 +53,10 @@ private:
 	/// The names of the saved components, by which the checksum reads the world
 	std::unique_ptr<entt::meta_ctx> _reflection;
 	bool _enabled {false};
+	bool _keepParts {false};
+	bool _byField {false};
+	std::optional<uint32_t> _dumpTurn;
+	std::vector<std::string> _dumpComponents;
 	std::optional<TurnChecksum> _last;
 	std::function<void(const TurnChecksum&)> _listener;
 };

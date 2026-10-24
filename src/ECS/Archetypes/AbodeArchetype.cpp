@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
+#include "Common/PortableRotations.h"
 #include "ECS/AbodeFoundation.h"
 #include "ECS/AbodeSurroundings.h"
 #include "ECS/Components/Abode.h"
@@ -70,7 +71,7 @@ void AddStoragePitComponents(entt::entity entity, const Mesh& pitMesh, const GAb
 	// The pit is made with all its piles, empty: five of wood and one of food where its model says
 	const auto makePile = [&](size_t place, PotInfo type) {
 		const auto& m = extraMetrics.at(place);
-		const auto translation = static_cast<glm::vec3>(glm::eulerAngleY(-yAngleRadians) * m[3]);
+		const auto translation = static_cast<glm::vec3>(portable_math::EulerAngleY(-yAngleRadians) * m[3]);
 		return PotArchetype::CreateEmpty(position + translation, yAngleRadians, type);
 	};
 	std::array<magic::piles::PileRoom, std::tuple_size_v<decltype(StoragePit::woodPiles)>> woodRoom {};
@@ -114,7 +115,7 @@ entt::entity AbodeArchetype::CreatePlan(uint32_t townId, const glm::vec3& positi
 		townId = registry.Get<Town>(town).id;
 	}
 	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
+	registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<PlannedAbode>(entity, PlannedAbode {.townId = townId, .info = type, .yAngle = yAngleRadians});
 	// It joins its town's plans, after those planned before it
 	registry.Get<Town>(registry.Context().towns.at(townId)).planned.push_back(entity);
@@ -168,7 +169,7 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	morphsWithTerrain |= info.abodeType == AbodeType::Field;
 
 	const auto& transform =
-	    registry.Assign<Transform>(entity, position, glm::mat3(glm::eulerAngleY(-yAngleRadians)), glm::vec3(scale));
+	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
 	// Under construction until all of it is built: it doesn't work until then
 	if (built < 1.0f)

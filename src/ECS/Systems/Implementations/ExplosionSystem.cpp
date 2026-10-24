@@ -17,6 +17,7 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
@@ -155,7 +156,7 @@ void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, centre, glm::mat3(glm::eulerAngleY(yaw)), glm::vec3(scale));
+	registry.Assign<Transform>(entity, centre, glm::mat3(portable_math::EulerAngleY(yaw)), glm::vec3(scale));
 	registry.Assign<Mesh>(entity, resources::HashIdentifier(particles::blast::k_RubbleMesh), static_cast<int8_t>(0),
 	                      static_cast<int8_t>(0));
 	registry.Assign<GroundMark>(entity, GroundMark {.millisecondsLeft = particles::blast::k_RubbleMilliseconds});
@@ -266,7 +267,7 @@ void ExplosionSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 			    .creator = &DustCreator(),
 			    .position = sprite.position,
 			    // The sprite's roll is read from the rotation about the vertical
-			    .rotation = glm::mat3(glm::eulerAngleY(-sprite.angle)),
+			    .rotation = glm::mat3(portable_math::EulerAngleY(-sprite.angle)),
 			    .scale = sprite.halfWidth,
 			    .stretch = 1.0f,
 			    .alpha = sprite.alpha,

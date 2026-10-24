@@ -15,6 +15,8 @@
 #include <filesystem>
 #include <optional>
 #include <span>
+#include <string>
+#include <utility>
 #include <vector>
 
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
@@ -71,6 +73,15 @@ struct Request
 	std::optional<std::filesystem::path> inputPath;
 	/// The file to write the commands of each turn to, for a dedicated server that does the same commands (command_log)
 	std::optional<std::filesystem::path> commandsPath;
+	/// The file to write the checksum of each turn to (checksum_log), or "-" for the standard output
+	std::optional<std::filesystem::path> checksumsPath;
+	/// What the checksum of each turn keeps of the hash of the parts of the synced world
+	HashDetail checksumParts {HashDetail::None};
+	/// The turn at which the checksum also writes each field of each row of some components, and those components
+	std::optional<std::pair<uint32_t, std::vector<std::string>>> checksumDump;
+	/// The file of the commands of each turn (command_log) that the run does at their turns. The run then does no
+	/// command of its own player: as a computer that only receives the commands of a network game.
+	std::optional<std::filesystem::path> playCommandsPath;
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };
