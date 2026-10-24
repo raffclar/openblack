@@ -2389,10 +2389,13 @@ void AnimalSystem::ShowTurnEnd()
 {
 	auto& registry = EntityRegistry();
 	registry.Each<const Animal, Transform>([&registry](entt::entity entity, const Animal& animal, Transform& transform) {
-		// What carries it, holds it or moves it in the physics places it
+		// What carries it, holds it or moves it in the physics places it. If nothing does, the turn sees it at the place of
+		// its last turn, upright and turned to its heading, as the game sees each thing by its own angle. Only the frames
+		// draw the tilt and the lean on the slope.
 		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			transform.position = animal.position;
+			transform.rotation = animals::Orientation(animal.heading, 0.0f);
 		}
 	});
 }
