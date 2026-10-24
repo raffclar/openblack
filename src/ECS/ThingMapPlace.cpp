@@ -114,4 +114,12 @@ void thing_map_place::Put(Registry& registry, entt::entity thing, const map_coor
 	}
 }
 
+void thing_map_place::Reinsert(entt::entity thing)
+{
+	if (Locator::entitiesMap::has_value())
+	{
+		Locator::entitiesMap::value().Reinsert(thing);
+	}
+}
+
 } // namespace openblack::ecs

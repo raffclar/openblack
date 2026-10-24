@@ -368,17 +368,30 @@ inline float RadiusOf(entt::entity entity)
 	return std::max(half.x, half.z) * transform->scale.x;
 }
 
-/// Where the animal is in the world and the way it faces, from its move and height
-inline void SyncWorld(Animal& animal)
+/// Where the animal is in the world, from its move and height, facing the given way. An animal that turns comes out of
+/// its map cell and goes in again, at the front of the cell's list, unless its walk did that already.
+inline void SyncWorldFacing(Animal& animal, float heading, bool walkReinserted)
 {
 	const auto xz = Metres(animal.move.position);
 	animal.position = {xz.x, Ground(xz) + animal.height, xz.y};
-	animal.heading = gutils::ConvertGameAngleTo3D(animal.move.angle);
-	// It goes into the map cell that it moved into at once
+	const bool turned = heading != animal.heading;
+	animal.heading = heading;
 	if (Locator::entitiesMap::has_value())
 	{
-		Locator::entitiesMap::value().Moved(EntityRegistry().ToEntity(animal));
+		const auto entity = EntityRegistry().ToEntity(animal);
+		if (turned && !walkReinserted)
+		{
+			Locator::entitiesMap::value().Reinsert(entity);
+		}
+		// It goes into the map cell that it moved into at once
+		Locator::entitiesMap::value().Moved(entity);
 	}
+}
+
+/// Where the animal is in the world and the way it faces, from its move and height
+inline void SyncWorld(Animal& animal)
+{
+	SyncWorldFacing(animal, gutils::ConvertGameAngleTo3D(animal.move.angle), false);
 }
 
 /// Whether a map position is somewhere an animal of a collision mask can't stand: off the map or on no land, or in the

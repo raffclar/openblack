@@ -60,6 +60,7 @@ public:
 	void Sync() override;
 	void Refile(entt::entity entity) override;
 	void Moved(entt::entity entity) override;
+	void Reinsert(entt::entity entity) override;
 	void FileNew() override;
 	void FileResidents() override;
 	[[nodiscard]] bool InMap(entt::entity entity) const override;

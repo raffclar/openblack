@@ -47,6 +47,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Dances.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/NearestSearch.h"
 #include "ECS/Registry.h"
@@ -235,8 +236,7 @@ void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 		const bool forwards = difference < 1 ? std::abs(difference) > 0x3FF : difference < 0x400;
 		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
 	}
-	transform.rotation = glm::eulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
-	WorldRegistry().SetDirty();
+	openblack::ecs::living_facing::FaceGameAngle(WorldRegistry(), villager, static_cast<uint16_t>(angle));
 }
 
 /// Where the walk holds the villager, in whole map units: where it last put it, unless something else has moved it since

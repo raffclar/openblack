@@ -1619,6 +1619,7 @@ static float LivingAngleOf(entt::entity object, const Transform& transform)
 static void TurnLivingThing(entt::entity object, Transform& transform, float angle)
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = angle != LivingAngleOf(object, transform);
 	const auto heading = script::property_rules::LivingAngleToCreatureHeading(angle);
 	if (auto* walk = registry.TryGet<ecs::components::WallHug>(object); walk != nullptr)
 	{
@@ -1639,6 +1640,24 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 	}
 	transform.rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
 	registry.SetDirty();
+	// A thing that turns comes out of the map's cells and goes in again, at the front of the list of its cell
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
+}
+
+/// Turns a thing that is not living to the given angles and keeps them. A thing in the map's cells comes out of them and
+/// goes in again: always for a turn of a lean, and for a turn about the upright only when the angle about y changes.
+static void TurnPlacedThing(entt::entity object, const glm::vec3& angles, bool lean)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const bool turned = lean || angles.y != ecs::placed_turn::AnglesOf(registry, object).y;
+	ecs::placed_turn::SetAngles(registry, object, angles);
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(object);
+	}
 }
 
 /// Whether a thing may lean, so that its angles across and forward are its own; the others always stand upright
@@ -2095,7 +2114,7 @@ void SetProperty() // 022 SET_PROPERTY
 		(prop == script::ObjectPropertyType::Angle    ? angles.y
 		 : prop == script::ObjectPropertyType::XAngle ? angles.x
 		                                              : angles.z) = radians;
-		ecs::placed_turn::SetAngles(registry, object, angles);
+		TurnPlacedThing(object, angles, prop != script::ObjectPropertyType::Angle);
 		return;
 	}
 	case script::ObjectPropertyType::Strength:
@@ -2200,11 +2219,17 @@ void SetProperty() // 022 SET_PROPERTY
 			}
 			return;
 		}
-		// The thing is drawn at this size, the same along every axis
+		// The thing is drawn at this size, the same along every axis. A thing in the map's cells that changes its size
+		// comes out of them and goes in again.
 		if (auto* transform = registry.TryGet<Transform>(object); transform != nullptr)
 		{
+			const bool resized = transform->scale.x != value;
 			transform->scale = glm::vec3(value);
 			registry.SetDirty();
+			if (resized)
+			{
+				ecs::thing_map_place::Reinsert(object);
+			}
 		}
 		return;
 	case script::ObjectPropertyType::Age:
@@ -2804,7 +2829,7 @@ static void FacePoint(entt::entity object, glm::vec3 point)
 	}
 	auto angles = ecs::placed_turn::AnglesOf(registry, object);
 	angles.y = angle;
-	ecs::placed_turn::SetAngles(registry, object, angles);
+	TurnPlacedThing(object, angles, false);
 }
 
 void SetFocus() // 034 SET_FOCUS

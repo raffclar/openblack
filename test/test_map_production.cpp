@@ -23,6 +23,8 @@
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/WallHug.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Map.h"
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -290,4 +292,93 @@ TEST_F(MapProductionFiling, AMoveOutsideTheTurnWaitsForTheSync)
 	EXPECT_EQ(MobileIn(map, here), std::vector {villager});
 	map.Sync();
 	EXPECT_EQ(MobileIn(map, there), std::vector {villager});
+}
+
+TEST_F(MapProductionFiling, AThingThatTurnsGoesToTheFrontOfItsCell)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const auto first = MakeVillager(registry, here);
+	map.FileNew();
+	const auto second = MakeVillager(registry, here);
+	map.FileNew();
+	ASSERT_EQ(MobileIn(map, here), (std::vector {second, first}));
+	// The first villager turns where it stands: it comes out of its cell and goes in again, at the front
+	map.Reinsert(first);
+	EXPECT_EQ(MobileIn(map, here), (std::vector {first, second}));
+}
+
+TEST_F(MapProductionFiling, AThingNotInTheCellsStaysOutOfThemWhenItTurns)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const auto villager = MakeVillager(registry, here);
+	map.FileNew();
+	// A creature holds it, so it is not in the cells
+	registry.Remove<MapCellResident>(villager);
+	map.Reinsert(villager);
+	EXPECT_FALSE(registry.AllOf<MapCellResident>(villager));
+	EXPECT_TRUE(MobileIn(map, here).empty());
+}
+
+TEST_F(MapProductionFiling, AThingMadeBeforeAnotherTurnsIsInItsCellFirst)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const auto turner = MakeVillager(registry, here);
+	map.FileNew();
+	// A villager is born in the cell, then the other turns: the newcomer went in first, so the one that turned is met first
+	const auto born = MakeVillager(registry, here);
+	map.Reinsert(turner);
+	EXPECT_EQ(MobileIn(map, here), (std::vector {turner, born}));
+}
+
+TEST_F(MapProductionFiling, ABuildingThatChangesItsSizeCoversTheCellsOfItsNewOutline)
+{
+	// The outline grows with the scale of the building: at scale 1 it is inside its cell, at scale 3 it covers the four
+	// cells beside it too
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, glm::mat3(1.0f), transform.scale.x, glm::vec3(0.0f),
+		                                             {2.0f, 1.0f, 2.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto field = registry.Create();
+	registry.Assign<Transform>(field, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Abode>(field, AbodeNumber::Field, 0u, 0u, 0u);
+	registry.Assign<Field>(field);
+	map.FileNew();
+	const auto middle = map_coords::CellOf(place);
+	ASSERT_EQ(registry.Get<const MapCellResident>(field).cells.size(), 1u);
+	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
+	registry.Get<Transform>(field).scale = glm::vec3(3.0f);
+	map.Reinsert(field);
+	EXPECT_EQ(registry.Get<const MapCellResident>(field).cells.size(), 5u);
+	EXPECT_EQ(map.GetAllInCell(middle + glm::ivec2 {1, 0}), std::vector {field});
+}
+
+TEST_F(MapProductionFiling, AWalkerGoesToTheFrontOfItsCellOnlyWhenItsAngleChanges)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 here {500.0f, 0.0f, 500.0f};
+	const auto walker = MakeVillager(registry, here);
+	registry.Assign<WallHug>(walker, WallHug {.goal = glm::vec2(), .yAngle = 0.0f, .speed = 1.0f});
+	map.FileNew();
+	const auto other = MakeVillager(registry, here);
+	map.FileNew();
+	ASSERT_EQ(MobileIn(map, here), (std::vector {other, walker}));
+	// Facing the way it faces already, it stays where it is in the list of its cell
+	living_facing::FaceAngle(registry, walker, 0.0f);
+	EXPECT_EQ(MobileIn(map, here), (std::vector {other, walker}));
+	// A new angle takes it to the front, and the walk takes the game angle of the new way
+	living_facing::FaceGameAngle(registry, walker, 512);
+	EXPECT_EQ(MobileIn(map, here), (std::vector {walker, other}));
+	EXPECT_EQ(registry.Get<const WallHug>(walker).gameAngle, 512);
 }

@@ -52,6 +52,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingCircles.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerNeeds.h"
 #include "ECS/VillagerSpeed.h"
@@ -270,8 +271,15 @@ void FaceAngle(Walker& walker, uint16_t angle)
 {
 	auto& wallHug = walker.wallHug;
 	wallHug.gameAngle = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
-	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	const float yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
+	const bool turned = yAngle != wallHug.yAngle;
+	wallHug.yAngle = yAngle;
 	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	// A walker that turns comes out of its map cell and goes in again, at the front of the cell's list
+	if (turned)
+	{
+		ecs::thing_map_place::Reinsert(walker.entity);
+	}
 	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
 	wallHug.stepAltitude = 0.0f;
 }

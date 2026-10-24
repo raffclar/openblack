@@ -118,6 +118,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TempleHeartPassOn.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/WorldObjects.h"
 #include "ECS/WorshipSites.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -808,6 +809,8 @@ void GameMagicWorld::WaterObject(entt::entity object, const magic::WaterDrop& dr
 			}
 			tree->maxSize = grown.target;
 			registry.SetDirty();
+			// A tree in the map's cells that the water grows comes out of them and goes in again
+			ecs::thing_map_place::Reinsert(object);
 			// It rustles as it grows
 			if (Locator::audio::has_value() && Locator::gameRandom::has_value())
 			{

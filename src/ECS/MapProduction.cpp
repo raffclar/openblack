@@ -559,6 +559,31 @@ void MapProduction::Moved(entt::entity entity)
 	}
 }
 
+void MapProduction::Reinsert(entt::entity entity)
+{
+	if (_registry == nullptr)
+	{
+		return;
+	}
+	// The things made before it changed are in their cells first
+	FileMade();
+	if (!_registry->Valid(entity) || !_registry->AllOf<Transform>(entity))
+	{
+		return;
+	}
+	// What a hand holds or the physics moves is not in the cells
+	const auto* resident = _registry->TryGet<const MapCellResident>(entity);
+	if (resident == nullptr || resident->cells.empty() || _registry->AnyOf<InHand, InPhysics>(entity))
+	{
+		return;
+	}
+	if (const auto kind = KindOf(*_registry, entity))
+	{
+		TakeOut(entity);
+		File(entity, *kind);
+	}
+}
+
 void MapProduction::FileNew()
 {
 	FileMade();

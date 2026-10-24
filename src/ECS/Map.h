@@ -73,6 +73,10 @@ public:
 	/// as it is anywhere else, anything else when it is in another cell. Nothing changes for a thing that is not in the
 	/// cells.
 	virtual void Moved(entt::entity /*entity*/) {}
+	/// A thing in the cells that turns or changes its size comes out of its cells and goes in again, as the game does:
+	/// it covers the cells of its new outline, and it goes to the front of the lists of its cells. Nothing changes for a
+	/// thing that is not in the cells.
+	virtual void Reinsert(entt::entity /*entity*/) {}
 	/// The things made since the last look go into their cells now, in the order they were made, as the game puts a
 	/// thing in its cells when it makes it
 	virtual void FileNew() {}

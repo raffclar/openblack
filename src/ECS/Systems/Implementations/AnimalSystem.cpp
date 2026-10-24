@@ -68,6 +68,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/ThingMapPlace.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerRoutine.h"
 #include "ECS/WorldObjects.h"
@@ -550,6 +551,7 @@ void AnimalSystem::SetupMoveRoundTo(entt::entity entity, Animal& animal, glm::ve
 	walk.position = animal.move.position;
 	walk.placedAt = Metres(animal.move.position);
 	walk.gameAngle = animal.move.angle;
+	walk.yAngle = animal.heading;
 	walk.speed = 0.0f;
 	registry.AssignOrReplace<TurningWalker>(entity,
 	                                        TurningWalker {.turnAngle = TurnAngleOf(animal), .speed = animal.move.speed});
@@ -1882,7 +1884,13 @@ void AnimalSystem::SetScale(entt::entity animal, float scale)
 {
 	if (auto* transform = EntityRegistry().TryGet<Transform>(animal))
 	{
+		const bool resized = transform->scale.x != scale;
 		transform->scale = glm::vec3(scale);
+		// An animal in the map's cells that changes its size comes out of them and goes in again
+		if (resized)
+		{
+			ecs::thing_map_place::Reinsert(animal);
+		}
 	}
 }
 

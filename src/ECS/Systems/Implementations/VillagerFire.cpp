@@ -44,6 +44,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/GraveyardRules.h"
 #include "ECS/Graveyards.h"
+#include "ECS/LivingFacing.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FireSystemInterface.h"
@@ -239,11 +240,6 @@ float FacingOf(const Transform& transform)
 	return -std::atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
-void Face(Transform& transform, float angle)
-{
-	transform.rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
-}
-
 /// Turns the villager towards an object by a quarter of 1024 a turn; whether it faces it. Nothing to look at is looked at.
 bool LookAtObject(entt::entity villager, entt::entity object)
 {
@@ -257,10 +253,10 @@ bool LookAtObject(entt::entity villager, entt::entity object)
 	const float diff = std::remainder(target - FacingOf(*transform), k_TwoPi);
 	if (std::abs(diff) < step)
 	{
-		Face(*transform, target);
+		openblack::ecs::living_facing::FaceAngle(Entities(), villager, target);
 		return true;
 	}
-	Face(*transform, FacingOf(*transform) + (diff > 0.0f ? step : -step));
+	openblack::ecs::living_facing::FaceAngle(Entities(), villager, FacingOf(*transform) + (diff > 0.0f ? step : -step));
 	return false;
 }
 
