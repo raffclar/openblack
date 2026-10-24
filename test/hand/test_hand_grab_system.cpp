@@ -53,6 +53,8 @@ public:
 	{
 		hand = registry.Create();
 		registry.Assign<Transform>(hand, glm::vec3(0.0f, 10.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+		secondHand = registry.Create();
+		registry.Assign<Transform>(secondHand, glm::vec3(0.0f, 10.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	}
 
 	entt::entity AddRock(glm::vec3 position, float radius = 1.0f)
@@ -93,11 +95,24 @@ public:
 	}
 
 	Registry& Entities() override { return registry; }
-	[[nodiscard]] entt::entity Hand() const override { return hand; }
-	[[nodiscard]] PlayerNames HandPlayer() const override { return PlayerNames::PLAYER_ONE; }
+	[[nodiscard]] entt::entity Hand() const override
+	{
+		if (acting == PlayerNames::PLAYER_TWO)
+		{
+			return secondPlayerHasHands ? secondHand : entt::null;
+		}
+		return hand;
+	}
+	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
+	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
+	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override { return nearHand; }
 	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override { return pickedPoint; }
+	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override
+	{
+		return reportedCollide.has_value() ? reportedCollide : pickedPoint;
+	}
 	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3 point) const override
 	{
 		return influence && (!borderX.has_value() || point.x < *borderX);
@@ -391,11 +406,18 @@ public:
 
 	Registry registry;
 	entt::entity hand {entt::null};
+	/// The hand of the second player, which a command of that player acts with
+	entt::entity secondHand {entt::null};
+	/// The second player has hands only once a network game gave them
+	bool secondPlayerHasHands {false};
+	std::optional<PlayerNames> acting;
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
 	/// The point picked under the cursor, and with a border the influence reaches only west of it
 	std::optional<glm::vec3> pickedPoint {glm::vec3(0.0f)};
+	/// The point that the last report of the hand's player picked; the picked point of this computer when none
+	std::optional<glm::vec3> reportedCollide;
 	std::optional<float> borderX;
 	bool looseLeash {false};
 	/// The leash held loose in the hand takes taps as orders
@@ -761,6 +783,25 @@ TEST_F(HandGrabSystemWithWorld, ATakeAsksTheInfluenceWhereThePickedThingStands)
 	Frame(10, {8.0f, 0.0f, 0.0f}, {8.0f, 0.0f, 0.0f});
 	EXPECT_FALSE(Press());
 	EXPECT_EQ(std::ranges::count(world->tapped, outside), 0);
+}
+
+// The turn asks the influence at the point of the last report of the hand's player, never at the cursor of this computer
+TEST_F(HandGrabSystemWithWorld, ATakeAtTheTurnAsksTheInfluenceAtTheReportedPoint)
+{
+	world->borderX = 10.0f;
+	const auto rock = world->AddRock({8.0f, 0.0f, 0.0f});
+	// The cursor of this computer is outside, the report of the player inside: taken
+	world->pickedPoint = glm::vec3(12.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(8.0f, 0.0f, 0.0f);
+	system->DoTake(world->HandPlayer(), rock);
+	EXPECT_EQ(system->GetHeld(), std::optional(rock));
+	system->Reset();
+	// The cursor inside, the report outside: left
+	const auto other = world->AddRock({9.0f, 0.0f, 0.0f});
+	world->pickedPoint = glm::vec3(8.0f, 0.0f, 0.0f);
+	world->reportedCollide = glm::vec3(12.0f, 0.0f, 0.0f);
+	system->DoTake(world->HandPlayer(), other);
+	EXPECT_NE(system->GetHeld(), std::optional(other));
 }
 
 TEST_F(HandGrabSystemWithWorld, AScoopAsksTheInfluenceWhereThePileStands)
@@ -2195,6 +2236,29 @@ TEST_F(HandGrabSystemWithWorld, APressOnAPileSendsTheLockAndTheTurnStartsTheScoo
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u);
 	EXPECT_EQ(system->TakeAmountToolTip(), std::optional(25u));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheLockAndItsEndOfAnotherPlayerScoopWithThatPlayersHand)
+{
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	world->secondPlayerHasHands = true;
+	system->DoLock(PlayerNames::PLAYER_TWO, pile);
+	// The second player's hand holds the handful, and the first player's hand holds nothing
+	EXPECT_FALSE(system->GetHeld().has_value());
+	const auto* second = world->registry.TryGet<const HandGrab>(world->secondHand);
+	ASSERT_NE(second, nullptr);
+	ASSERT_TRUE(world->registry.Valid(second->object));
+	const auto handful = second->object;
+	EXPECT_EQ(world->registry.Get<const Pot>(handful).amount, 25u);
+	EXPECT_EQ(second->scoopSource, pile);
+	// The end of the lock of the first player leaves the second player's scoop
+	system->DoUnlock(PlayerNames::PLAYER_ONE, pile);
+	EXPECT_EQ(world->registry.Get<const HandGrab>(world->secondHand).scoopSource, pile);
+	system->DoUnlock(PlayerNames::PLAYER_TWO, pile);
+	EXPECT_TRUE(world->registry.Get<const HandGrab>(world->secondHand).scoopSource == entt::null);
+	EXPECT_FALSE(world->acting.has_value());
 }
 
 TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)

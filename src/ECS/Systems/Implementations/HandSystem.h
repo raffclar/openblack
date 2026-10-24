@@ -39,7 +39,7 @@ public:
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
 	void SetOwnPlayer(PlayerNames player) override { _ownPlayer = player; }
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer; }
-	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera() const noexcept override;
+	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;

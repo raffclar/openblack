@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <span>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -244,7 +245,7 @@ TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
 
 TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
 {
-	EXPECT_FALSE(_hands.GetReportedCamera().has_value());
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_ONE).has_value());
 }
 
 TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
@@ -252,10 +253,31 @@ TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
 	auto report = ReportAt({20.0f, 1.0f, 30.0f});
 	report.focus = {25.0f, 0.0f, 35.0f};
 	_hands.Report(PlayerNames::PLAYER_ONE, report);
-	const auto camera = _hands.GetReportedCamera();
+	const auto camera = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
 	ASSERT_TRUE(camera.has_value());
 	EXPECT_EQ(camera->origin, glm::vec3(0.0f, 100.0f, 0.0f));
 	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+}
+
+TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
+{
+	// A player with no hands has no camera
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_TWO).has_value());
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto first = ReportAt({20.0f, 1.0f, 30.0f});
+	first.focus = {25.0f, 0.0f, 35.0f};
+	auto second = ReportAt({40.0f, 1.0f, 50.0f});
+	second.camera = {7.0f, 80.0f, 9.0f};
+	second.focus = {45.0f, 0.0f, 55.0f};
+	_hands.Report(PlayerNames::PLAYER_ONE, first);
+	_hands.Report(PlayerNames::PLAYER_TWO, second);
+	const auto one = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
+	const auto two = _hands.GetReportedCamera(PlayerNames::PLAYER_TWO);
+	ASSERT_TRUE(one.has_value());
+	ASSERT_TRUE(two.has_value());
+	EXPECT_EQ(one->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+	EXPECT_EQ(two->origin, glm::vec3(7.0f, 80.0f, 9.0f));
+	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
 }
 
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does

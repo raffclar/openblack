@@ -172,6 +172,7 @@
 #include "ECS/Components/HandOnCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Heartbeat.h"
+#include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/Indestructible.h"
@@ -1439,6 +1440,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::HandStillness::drift>("drift")
 	    .Field<&components::HandStillness::last>("last");
 	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
+	Reflect<components::HeldDrawTrack>(context)
+	    .Field<&components::HeldDrawTrack::from>("from")
+	    .Field<&components::HeldDrawTrack::elapsedMs>("elapsedMs")
+	    .Field<&components::HeldDrawTrack::intervalMs>("intervalMs");
 	Reflect<components::HiddenByState> {context};
 	Reflect<components::HighDetail>(context)
 	    .Field<&components::HighDetail::usualModel>("usualModel")

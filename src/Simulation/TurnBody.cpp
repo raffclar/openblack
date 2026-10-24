@@ -748,6 +748,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::handGrabSystem::value().ProcessTurn();
 		}
 		break;
+	case Step::PlayerSparkles:
+		// The view does this step
+		view.PlayViewStep(step, cameraPosition);
+		break;
 	case Step::Rewards:
 		// A reward chest that fell to the ground goes into the map's cells
 		if (Locator::rewardSystem::has_value())

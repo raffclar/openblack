@@ -142,6 +142,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
+    {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
     {.component = "ShownRoots", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
@@ -151,6 +153,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},
+    // The frames of this computer move what the hand of another player holds toward the reported place of that hand
+    {.component = "HeldDrawTrack", .field = "", .marker = ""},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The press, the pull, the spring, the offer and the scoop of this computer's hand are its own input. The world
     // has what the hand holds from the turns: the InHand of the thing.

@@ -27,9 +27,9 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
-#include "ECS/PlayerCamera.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
@@ -91,12 +91,13 @@ bool InsideTemple()
 bool InView(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* transform = registry.TryGet<const Transform>(creature);
-	if (transform == nullptr || !Locator::camera::has_value())
+	const auto* body = registry.TryGet<const Creature>(creature);
+	if (transform == nullptr || body == nullptr)
 	{
 		return false;
 	}
-	const auto camera = ecs::player_camera::Of();
-	return help::LooksAt(camera.origin, camera.focus, transform->position);
+	const auto camera = ecs::TurnCamera(body->owner);
+	return camera.has_value() && help::LooksAt(camera->origin, camera->focus, transform->position);
 }
 
 /// Fainted or asleep: the game's plans of dying and of sleeping, which hold back the help
