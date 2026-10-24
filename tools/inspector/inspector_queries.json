@@ -1105,7 +1105,7 @@
   "query": "land.weather"
  },
  {
-  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
+  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm, the place of its message and the background weather",
   "kind": "object",
   "parameters": [],
   "query": "land.real_weather"

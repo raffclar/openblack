@@ -11,6 +11,8 @@
 
 #include "RealWeatherSystem.h"
 
+#include <array>
+#include <string_view>
 #include <utility>
 
 #include <spdlog/spdlog.h>
@@ -19,13 +21,29 @@ namespace openblack::ecs::systems
 {
 
 RealWeatherSystem::RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today,
-                                     Clock clock)
+                                     Clock clock, const ReadCountries& readCountries, WriteDays writeDays)
     : _turnedOn(turnedOn)
     , _lobby(lobby)
     , _readPresets(std::move(readPresets))
     , _today(std::move(today))
     , _clock(std::move(clock))
+    , _writeDays(std::move(writeDays))
 {
+	// The list of countries gives the full names of the countries in the message about the weather
+	if (const auto bytes = readCountries ? readCountries() : std::nullopt; bytes.has_value())
+	{
+		_countries =
+		    real_weather::ParseCountries(std::string_view(reinterpret_cast<const char*>(bytes->data()), bytes->size()));
+	}
+}
+
+std::optional<std::string> RealWeatherSystem::GetPlace() const
+{
+	if (!_weather.has_value())
+	{
+		return std::nullopt;
+	}
+	return real_weather::PlaceText(_weather->city, _weather->area, real_weather::CountryName(_countries, _weather->country));
 }
 
 void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
@@ -51,7 +69,7 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 	// The game tries one time and never waits: an answer after the timeout leaves the land's own weather
 	_askedAt = _clock();
 	auto ask = [this, game, date]() {
-		_lobby.GetWeather(date, [this, game](LobbyResult<lobby_api::RealWeather>&& result) {
+		_lobby.GetWeather(date, [this, game, date](LobbyResult<lobby_api::RealWeather>&& result) {
 			// Only an answer for this game counts
 			if (game != _game)
 			{
@@ -73,7 +91,7 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 				}
 				return;
 			}
-			Got(std::move(*result.value));
+			Got(std::move(*result.value), date);
 		});
 	};
 	if (_lobby.GetState() == LobbySessionState::LoggedIn)
@@ -89,11 +107,25 @@ void RealWeatherSystem::StartGame(RealWeatherLandInterface& land)
 	});
 }
 
-void RealWeatherSystem::Got(lobby_api::RealWeather weather)
+void RealWeatherSystem::Got(lobby_api::RealWeather weather, lobby_api::Date date)
 {
 	if (const auto logger = spdlog::get("game"))
 	{
 		SPDLOG_LOGGER_INFO(logger, "Real weather in {}: type {}, {} degrees", weather.city, weather.type, weather.temperature);
+	}
+	// The game keeps the days that it got in the folder of the player. The lobby gives the day that the game asked for.
+	if (_writeDays)
+	{
+		const std::array days {real_weather::KeptDay {.country = weather.country,
+		                                              .area = weather.area,
+		                                              .city = weather.city,
+		                                              .day = date.day,
+		                                              .month = date.month,
+		                                              .year = date.year,
+		                                              .temperature = weather.temperature,
+		                                              .visibility = weather.visibility,
+		                                              .type = weather.type}};
+		_writeDays(real_weather::DaysFile(days));
 	}
 	_weather = std::move(weather);
 	_wanted = Wanted::On;

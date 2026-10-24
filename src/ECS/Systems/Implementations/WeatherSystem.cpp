@@ -303,6 +303,9 @@ bool WeatherSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _activeStorms);
 	reflection::Load(in, _nextStormSerial);
 	reflection::Load(in, _forcedStorm);
+	// A game that the player loads starts with calm background weather. The original game also writes the background weather in
+	// its save, but sets it to calm again after the load reads it.
+	_background = {};
 	// Every cell of the atmosphere is stale
 	for (auto& cell : _grid)
 	{
@@ -324,6 +327,8 @@ void WeatherSystem::Reset()
 	_day.reset();
 	_season = GetSeason(0);
 	_activeStorms.clear();
+	// A new land starts with calm background weather
+	_background = {};
 	++_stamp;
 }
 

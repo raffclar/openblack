@@ -14,6 +14,8 @@
 #include <chrono>
 #include <functional>
 #include <optional>
+#include <span>
+#include <string>
 #include <vector>
 
 #include "ECS/RealWeatherRules.h"
@@ -32,18 +34,25 @@ class RealWeatherSystem final: public RealWeatherSystemInterface
 public:
 	/// The presets come from Scripts/weatherinfo.lhw, none when the file is not there
 	using ReadPresets = std::function<std::optional<std::vector<uint8_t>>()>;
+	/// The countries come from Scripts/country.lhw, none when the file is not there
+	using ReadCountries = std::function<std::optional<std::vector<uint8_t>>()>;
+	/// Writes the file weather.dat in the folder of the player
+	using WriteDays = std::function<void(std::span<const uint8_t>)>;
 	/// The date of today on the computer, as the game asks the lobby for it
 	using Today = std::function<lobby_api::Date()>;
 	/// The real time, which the wait for the answer is measured by
 	using Clock = std::function<std::chrono::steady_clock::time_point()>;
 
-	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today, Clock clock);
+	/// The game reads the countries one time, as the system starts
+	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today, Clock clock,
+	                  const ReadCountries& readCountries = {}, WriteDays writeDays = {});
 
 	void StartGame(RealWeatherLandInterface& land) override;
 	void ProcessTurn(RealWeatherLandInterface& land) override;
 	void Request(bool on) override;
 
 	[[nodiscard]] std::optional<lobby_api::RealWeather> GetWeather() const override { return _weather; }
+	[[nodiscard]] std::optional<std::string> GetPlace() const override;
 	[[nodiscard]] bool IsApplied() const override { return !_landWeatherInPlace; }
 	[[nodiscard]] entt::entity GetStorm() const override { return _storm; }
 
@@ -57,13 +66,15 @@ private:
 		On,
 	};
 
-	void Got(lobby_api::RealWeather weather);
+	void Got(lobby_api::RealWeather weather, lobby_api::Date date);
 
 	bool _turnedOn;
 	LobbyClientSystemInterface& _lobby;
 	ReadPresets _readPresets;
 	Today _today;
 	Clock _clock;
+	WriteDays _writeDays;
+	std::vector<real_weather::Country> _countries;
 	/// When the game asked for the weather of this game
 	std::chrono::steady_clock::time_point _askedAt {};
 
