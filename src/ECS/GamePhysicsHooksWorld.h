@@ -65,7 +65,7 @@ public:
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity creature) const override;
-	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override;
+	[[nodiscard]] bool HandHolds(entt::entity creature) const override;
 	[[nodiscard]] bool HasCreatureActions() const override;
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	[[nodiscard]] bool FreeToCatch(entt::entity creature) const override;

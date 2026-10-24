@@ -7,7 +7,8 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, testbed.json, twogods.json, twogods_totem.json and twogods_scoop_throw.json beside this script. The twogods inputs play on the
+writes land1.json, testbed.json, twogods.json, twogods_totem.json, twogods_scoop_throw.json and
+twogods_creature_hold.json beside this script. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 """
 
@@ -203,6 +204,40 @@ def scoop_throw(pile):
     return script.events
 
 
+def creature_hold(creature):
+    """The god's own creature at a pixel: the hand holds it, strokes it in small circles and lets go. Then a quick click
+    on it puts the leash on, and a tap on the land below leads the creature there. First the C key puts the camera on
+    the creature (Creature Mode), which keeps the creature at the same place on the screen."""
+    script = Script()
+    script.wait(10)
+    script.add({"kind": "key_down", "key": "c"})
+    script.wait(1)
+    script.add({"kind": "key_up", "key": "c"})
+    script.wait(150)
+    script.move(creature, 20)
+    script.wait(10)
+    # Hold the creature for 100 frames, the hand going round on its body
+    script.press()
+    script.wait(20)
+    script.circle(creature, 12, 60, 2.0)
+    script.wait(20)
+    script.release()
+    script.wait(60)
+    # A click puts the leash on
+    script.press()
+    script.wait(2)
+    script.release()
+    script.wait(60)
+    # A tap on the land leads the creature there
+    script.move((640, 900), 20)
+    script.wait(10)
+    script.press()
+    script.wait(2)
+    script.release()
+    script.wait(100)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -220,6 +255,7 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("twogods_scoop_throw", scoop_throw((712, 437)))
+    write("twogods_creature_hold", creature_hold((640, 500)))
 
 
 if __name__ == "__main__":

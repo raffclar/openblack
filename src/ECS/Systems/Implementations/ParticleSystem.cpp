@@ -270,7 +270,7 @@ std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::
 
 bool GameParticleWorld::IsTargetHeld(entt::entity target) const
 {
-	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == target;
+	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(target);
 }
 
 void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)

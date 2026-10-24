@@ -23,6 +23,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
@@ -288,17 +289,52 @@ TEST_F(ReportedHands, TheWorldHoldsACreatureFromTheLockToItsEnd)
 	const auto creature = registry.Create();
 	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
 	ecs::systems::CreatureHandSystem creatures;
-	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
 	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
-	EXPECT_EQ(creatures.GetLockedCreature(), creature);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE), creature);
 	// The frames hold the hand to no creature
 	EXPECT_FALSE(creatures.GetCreature().has_value());
 	// The end of the lock of another thing leaves the hold
 	creatures.DoUnlock(PlayerNames::PLAYER_ONE, registry.Create());
-	EXPECT_EQ(creatures.GetLockedCreature(), creature);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE), creature);
 	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
-	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
 	Locator::handSystem::reset();
+}
+
+// Each god holds its own creature with its own hand, and the creature knows that a hand holds it
+TEST_F(ReportedHands, TheHandOfEachGodHoldsItsOwnCreature)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto own = registry.Create();
+	registry.Assign<ecs::components::Creature>(own, ecs::components::Creature {.owner = PlayerNames::PLAYER_TWO});
+	ecs::systems::CreatureHandSystem creatures;
+	// A god with no hands yet holds nothing
+	creatures.DoLock(PlayerNames::PLAYER_TWO, own);
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_TWO).has_value());
+	EXPECT_FALSE(creatures.IsLocked(own));
+	const auto hands = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	// The first player's hand may not hold the creature of the second player
+	creatures.DoLock(PlayerNames::PLAYER_ONE, own);
+	EXPECT_FALSE(creatures.IsLocked(own));
+	creatures.DoLock(PlayerNames::PLAYER_TWO, own);
+	EXPECT_EQ(creatures.GetLockedCreature(PlayerNames::PLAYER_TWO), own);
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_TRUE(creatures.IsLocked(own));
+	EXPECT_TRUE(registry.AllOf<ecs::components::HandLockedCreature>(hands[0]));
+	EXPECT_FALSE(registry.AllOf<ecs::components::HandLockedCreature>(_hand));
+	// The end of the lock from the first player leaves the hold of the second player
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, own);
+	EXPECT_TRUE(creatures.IsLocked(own));
+	creatures.DoUnlock(PlayerNames::PLAYER_TWO, own);
+	EXPECT_FALSE(creatures.IsLocked(own));
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
 }
 
 TEST_F(ReportedHands, TheWorldHoldsNoCreatureOfAnotherPlayer)
@@ -311,7 +347,7 @@ TEST_F(ReportedHands, TheWorldHoldsNoCreatureOfAnotherPlayer)
 	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
 	ecs::systems::CreatureHandSystem creatures;
 	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
-	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	EXPECT_FALSE(creatures.GetLockedCreature(PlayerNames::PLAYER_ONE).has_value());
 	Locator::handSystem::reset();
 	if (log != nullptr)
 	{

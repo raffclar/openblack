@@ -504,8 +504,7 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	}
 	// Nor does one with no life left, one that the hand holds, or one that a teleport stone carries
 	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
-	const bool held =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == std::optional(entity);
+	const bool held = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity);
 	if (!creature_reaction::BodyFree({.life = needs != nullptr ? needs->needs.life : 1.0f,
 	                                  .heldByHand = held,
 	                                  .teleporting = registry.AllOf<TeleportTraveller>(entity)}))

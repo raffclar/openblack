@@ -1324,7 +1324,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	const auto& leashes = registry.Get<const CreatureLeash>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	// The creature that the hand holds does nothing until the hand lets go of it
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature))
 	{
 		return false;
 	}
@@ -1721,7 +1721,9 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 	}
 	using input::BindableActionMap;
 	const auto& actions = Locator::gameActionSystem::value();
-	const auto player = k_LocalPlayer;
+	// The taps of the player whose hand this computer moves
+	const auto player =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto creature = PlayersCreature(player);
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto pressed = [&actions](BindableActionMap action) { return actions.GetChanged(action) && actions.Get(action); };

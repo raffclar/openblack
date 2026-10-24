@@ -161,7 +161,7 @@ void TellFainting(entt::entity creature)
 bool HeldByHand(entt::entity creature)
 {
 	return openblack::Locator::creatureHandSystem::has_value() &&
-	       openblack::Locator::creatureHandSystem::value().GetLockedCreature() == creature;
+	       openblack::Locator::creatureHandSystem::value().IsLocked(creature);
 }
 
 /// The action of the hands that an order of the mind starts, for the orders that walk to a thing
