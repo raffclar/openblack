@@ -142,6 +142,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
+    {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
     {.component = "ShownRoots", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
