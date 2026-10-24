@@ -61,6 +61,28 @@ public:
 	/// Where the world has the player's camera: from the last report that a turn did, none before the first report. The
 	/// world never reads the camera that the frames draw from.
 	[[nodiscard]] virtual std::optional<ReportedCamera> GetReportedCamera() const noexcept { return std::nullopt; }
+	/// The hands of a player: the first player's are the hands above. The god of another player of a network game has
+	/// hands from the first turn, which the game server's command makes; none before.
+	[[nodiscard]] virtual std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
+	GetHandsOf(PlayerNames player) const noexcept
+	{
+		return player == PlayerNames::PLAYER_ONE ? std::optional(GetPlayerHands()) : std::nullopt;
+	}
+	/// At the turn: makes the hands of a player that has none, and gives the hands of the player
+	virtual std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf([[maybe_unused]] PlayerNames player)
+	{
+		return GetPlayerHands();
+	}
+	/// The player whose hand this computer moves with its pointer: the first player, unless a network game gave this
+	/// computer another god. Only the frames and the input of this computer read it.
+	virtual void SetOwnPlayer([[maybe_unused]] PlayerNames player) {}
+	[[nodiscard]] virtual PlayerNames GetOwnPlayer() const noexcept { return PlayerNames::PLAYER_ONE; }
+	/// The hands that this computer moves and draws: the hands of its own player, or the first player's while that
+	/// player has none yet
+	[[nodiscard]] virtual std::array<entt::entity, static_cast<size_t>(Side::_Count)> GetOwnHands() const noexcept
+	{
+		return GetHandsOf(GetOwnPlayer()).value_or(GetPlayerHands());
+	}
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
 	/// At the turn of a network game: a player reports the thing under the cursor (see player_commands::HandPick)

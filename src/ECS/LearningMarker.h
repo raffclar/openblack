@@ -56,8 +56,8 @@ constexpr float k_BlinkPerMillisecond = 0.0062831854f;
 
 /// The mark's text for a share, 0 to 1: the share in hundredths, with no point, and a percent sign
 [[nodiscard]] std::string Text(float share);
-/// A mark that starts over a creature's head, sized by the creature's height
-[[nodiscard]] components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share);
+/// A mark that starts over a creature's head at a game turn, sized by the creature's height
+[[nodiscard]] components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share, uint32_t turn = 0);
 
 /// The mark moves on by some milliseconds: it gets older and rises. Whether it lasts.
 [[nodiscard]] bool Step(components::LearningMarker& marker, float milliseconds);
@@ -87,7 +87,9 @@ struct Look
 };
 [[nodiscard]] Look LookOf(const components::LearningMarker& marker);
 
-/// Every mark in the registry moves on, and those whose time is up go
+/// Every mark in the registry moves on, in the frames. A mark whose time is up stands still and shows nothing.
 void StepAll(Registry& registry, float milliseconds);
+/// At a game turn, the marks whose life is over go, by the turns since they were made
+void RemoveDone(Registry& registry, uint32_t turn);
 
 } // namespace openblack::ecs::learning_marker

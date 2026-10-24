@@ -111,3 +111,14 @@ TEST(WorldSaveClock, ACutBlockDoesNotRead)
 	ASSERT_GT(bytes.size(), 8u);
 	EXPECT_FALSE(ecs::world_save::ReadClock(std::span(bytes).first(6)).has_value());
 }
+
+// A world state keeps the count of the synced draws, which the checksum of each turn has
+TEST(WorldSaveClock, ALoadPutsBackTheCountOfTheSyncedDraws)
+{
+	auto saved = PlayedClock();
+	saved.syncedDraws = 15519u;
+	const auto loaded = ecs::world_save::ReadClock(ecs::world_save::WriteClock(saved));
+	ASSERT_TRUE(loaded.has_value());
+	ASSERT_TRUE(loaded->syncedDraws.has_value());
+	EXPECT_EQ(*loaded->syncedDraws, 15519u);
+}

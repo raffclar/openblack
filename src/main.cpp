@@ -101,6 +101,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
+		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super. Without it, the settings.json of this computer gives the level, if it keeps one; the same holds for the window's size and mode and the vertical sync.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
@@ -142,6 +143,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
+		("join-part-at", "Tests: at this turn the world of this computer draws one synced random number more, so that it parts from the server's world and resynchronises.", cxxopts::value<uint32_t>())
+		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1). The lobby's calls, its push channel and the game sockets also trust it.", cxxopts::value<std::string>())
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
@@ -321,6 +324,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .name = {},
 			    .testAuthorities =
 			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
+			    .partAt =
+			        result.count("join-part-at") != 0 ? std::optional(result["join-part-at"].as<uint32_t>()) : std::nullopt,
+			    .partAgain = result.count("join-part-again") != 0,
 			};
 		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
@@ -407,6 +413,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
 		args.startTestbed = result.count("testbed") != 0;
+		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;

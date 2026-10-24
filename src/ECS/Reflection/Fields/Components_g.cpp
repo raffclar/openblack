@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/GroundMark.h"
@@ -29,6 +30,7 @@ void RegisterFields_Components_g(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& context)
 {
+	Reflect<components::GodHand>(context).Field<&components::GodHand::player>("player");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
 	Reflect<components::StandInGraves>(context)
 	    .Field<&components::StandInGraves::count>("count")

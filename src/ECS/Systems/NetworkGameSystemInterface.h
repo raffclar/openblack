@@ -39,6 +39,10 @@ struct NetworkJoin
 	/// at once and the world waits for the server's start. False for a join from the multiplayer front end: the player
 	/// waits in the game room, and the game loads the server's land after the start (see TakeStart).
 	bool landLoaded {true};
+	/// Tests: at this turn the world draws one synced random number more, so that it parts from the server's world
+	std::optional<uint32_t> partAt;
+	/// Tests: the world parts again after each load of the server's world
+	bool partAgain {false};
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
@@ -65,6 +69,8 @@ public:
 	[[nodiscard]] virtual std::optional<game_socket::Start> TakeStart() = 0;
 	/// After the game loaded the land of the start: the world does the server's turns from now on
 	virtual void BeginPlay() = 0;
+	/// After the session ended: the world of this computer turns alone from now on, with no server
+	virtual void PlayAlone() = 0;
 	/// Once a frame: moves the session on
 	virtual void Update() = 0;
 	/// True from the join until the session ends

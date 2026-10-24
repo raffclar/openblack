@@ -63,6 +63,8 @@ public:
 	[[nodiscard]] virtual bool TurnReady(uint32_t turn) const = 0;
 	/// True in a network game
 	[[nodiscard]] virtual bool HasSource() const = 0;
+	/// True in a network game whose computer is behind the turns of the game server (see TurnCommandSourceInterface)
+	[[nodiscard]] virtual bool IsBehind([[maybe_unused]] uint32_t turn) const { return false; }
 };
 
 } // namespace openblack::ecs::systems

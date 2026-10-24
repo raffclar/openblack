@@ -102,9 +102,11 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/CreatureHome.h"
+#include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
+#include "ECS/PlayerCamera.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -1980,6 +1982,8 @@ void CreatureMindSystem::ProcessTurn()
 void CreatureMindSystem::BeginTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
+	// The marks over learning creatures whose life is over go at the turn, the same turn on every computer
+	ecs::learning_marker::RemoveDone(registry, Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u);
 	// The feedback of a release reaches each mind before the minds think, when its wait is over
 	std::vector<std::pair<entt::entity, float>> arrived;
 	registry.Each<CreatureMindState>([&arrived](entt::entity entity, CreatureMindState& mind) {

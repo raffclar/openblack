@@ -76,6 +76,8 @@ struct ServerSettings
 	/// Tools: the testbed scenario of this id, which the server plays on the testbed from its first frame, as the game's
 	/// --scenario does. Thus input that the game recorded can get to what the scenario sets up.
 	std::optional<std::string> scenario;
+	/// The network map for 32 gods in place of a land
+	bool godsRingMap {false};
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The text of --skip-opening, which the game server sends to the clients in the start of the game
@@ -99,6 +101,8 @@ struct ServerSettings
 	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same
 	/// turns, as if the game sent them over the network.
 	std::optional<std::filesystem::path> commandsPath;
+	/// Tools: at this turn the server takes its whole world as a world state and loads it again
+	std::optional<uint32_t> reloadAt;
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.
 	std::optional<NetworkSettings> network;

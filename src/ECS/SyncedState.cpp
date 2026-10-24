@@ -59,6 +59,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
+    {.component = "LearningMarker", .field = "", .marker = ""},
+    // The frames move the hair of a creature. Only the draw reads it.
+    {.component = "CreatureHair", .field = "", .marker = ""},
     // The seeds of the miracle icons spin, and their phials pulse, as the frames draw them
     {.component = "IconSeed", .field = "spin", .marker = ""},
     {.component = "IconSeed", .field = "ringSpin", .marker = ""},

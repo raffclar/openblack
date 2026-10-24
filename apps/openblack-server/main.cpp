@@ -53,6 +53,7 @@ int main(int argc, char* argv[])
 		("s,start-level", "The script of the land under the game's Scripts folder.", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "The flat testbed in place of a land.")
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
+		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
 		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
@@ -61,6 +62,7 @@ int main(int argc, char* argv[])
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
@@ -108,6 +110,7 @@ int main(int argc, char* argv[])
 		}
 		settings.openingName = result["skip-opening"].as<std::string>();
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
+		settings.godsRingMap = result.count("gods-ring-map") != 0;
 		settings.seed = result["seed"].as<uint32_t>();
 		if (result.count("turns") != 0)
 		{
@@ -124,6 +127,10 @@ int main(int argc, char* argv[])
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
+		}
+		if (result.count("reload-at") != 0)
+		{
+			settings.reloadAt = result["reload-at"].as<uint32_t>();
 		}
 		if (result.count("commands") != 0)
 		{
