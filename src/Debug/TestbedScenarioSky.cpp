@@ -61,8 +61,9 @@ void testbed_scenarios::AddSkyScenarios(std::vector<Scenario>& all)
 	    .description = "The computer's clock is set to 23:30 on 2 April 2026, a night with a full moon. The game's clock "
 	                   "stands at midnight under a clear sky, the camera low on the land looking east.",
 	    .expected = "The moon in the east is full. As the computer's clock says it is night and the moon is full, the "
-	                "advisors look at the moon each game turn, and within a few seconds an advisor says \"There's a full "
-	                "moon tonight...\". The advisors say it only once.",
+	                "advisors look at the moon one time, at the first game turn: with a chance of 1 in 20 an advisor says "
+	                "\"There's a full moon tonight...\". Then they do not look at the moon again for 600000 game turns "
+	                "(help.guidance shows moon_wait).",
 	    .environment = {.hour = 0.0f,
 	                    .clockRuns = false,
 	                    .realDate = RealDate {.year = 2026, .month = 4, .day = 2, .hour = 23, .minute = 30},
