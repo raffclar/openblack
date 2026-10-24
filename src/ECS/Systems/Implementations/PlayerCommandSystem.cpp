@@ -12,11 +12,15 @@
 #include "PlayerCommandSystem.h"
 
 #include <iterator>
+#include <optional>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
+#include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -34,10 +38,10 @@ using namespace openblack::player_commands;
 namespace
 {
 
-/// Do one command for the player that sent it
-void Run(const Command& command)
+/// Do one command for the player that sent it, at a turn
+void Run(const Command& command, uint32_t turn)
 {
-	const auto& registry = openblack::Locator::entitiesRegistry::value();
+	auto& registry = openblack::Locator::entitiesRegistry::value();
 	std::visit(
 	    [&](const auto& action) {
 		    using Kind = std::decay_t<decltype(action)>;
@@ -189,6 +193,30 @@ void Run(const Command& command)
 				    openblack::Locator::handSystem::value().Report(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, PlayerJoined>)
+		    {
+			    // The god of the player gets hands of its own
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    std::ignore = openblack::Locator::handSystem::value().MakeHandsOf(command.player);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, PlayerLeft>)
+		    {
+			    // The god of the player is defeated, and its slot stays closed. A land can have no god for the slot.
+			    std::optional<entt::entity> god;
+			    registry.Each<const openblack::ecs::components::Player>(
+			        [&god, &command](entt::entity entity, const openblack::ecs::components::Player& player) {
+				        if (player.name == command.player)
+				        {
+					        god = entity;
+				        }
+			        });
+			    if (god.has_value() && !registry.AllOf<openblack::ecs::components::LeftGame>(*god))
+			    {
+				    registry.Assign<openblack::ecs::components::LeftGame>(*god, turn);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
@@ -204,6 +232,12 @@ void Run(const Command& command)
 
 void PlayerCommandSystem::Submit(Action action)
 {
+	// A network game sends the command to the server at once (MI-2)
+	if (_source != nullptr)
+	{
+		_source->Send(action);
+		return;
+	}
 	_queue.Submit(_sender, std::move(action));
 }
 
@@ -212,9 +246,16 @@ void PlayerCommandSystem::SendOpenBlock()
 	_queue.Send();
 }
 
+void PlayerCommandSystem::SetSource(TurnCommandSourceInterface* source)
+{
+	_source = source;
+	// The commands that waited for a single player turn do not go into the network game
+	_queue.Clear();
+}
+
 void PlayerCommandSystem::RunSent(uint32_t turn)
 {
-	auto commands = _queue.TakeSent();
+	auto commands = _source != nullptr ? _source->TakeTurn(turn) : _queue.TakeSent();
 	if (const auto received = _received.find(turn); received != _received.end())
 	{
 		commands.insert(commands.end(), received->second.begin(), received->second.end());
@@ -226,7 +267,7 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	}
 	for (const auto& command : commands)
 	{
-		Run(command);
+		Run(command, turn);
 	}
 }
 

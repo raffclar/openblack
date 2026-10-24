@@ -29,6 +29,7 @@
 #include "ECS/SaveFileWriter.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
+#include "ECS/WorldSave.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -42,6 +43,8 @@ class SaveGameSystem final: public SaveGameSystemInterface
 public:
 	bool Save(uint32_t slot, std::u16string_view name) override;
 	bool Load(uint32_t slot) override;
+	[[nodiscard]] std::vector<uint8_t> WorldState() override;
+	bool LoadWorldState(std::span<const uint8_t> bytes) override;
 	bool Delete(uint32_t slot) override;
 	[[nodiscard]] std::optional<std::vector<uint8_t>> ReadPictureFile(std::string_view name) const override;
 	[[nodiscard]] std::vector<Slot> Slots() const override;
@@ -98,7 +101,8 @@ private:
 	/// The reflection of the components, which the system registers at its first use
 	[[nodiscard]] const entt::meta_ctx& Reflection();
 	/// Loads the whole world of a slot: the saved land, its entities, its clock and its scripts
-	bool LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game);
+	bool LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game,
+	                    ecs::world_save::LoadKind kind = ecs::world_save::LoadKind::SavedGame);
 
 	bool LoadVanilla(uint32_t slot, const std::filesystem::path& slotFolder, const std::filesystem::path& mindFolder,
 	                 const std::vector<uint8_t>& bytes);

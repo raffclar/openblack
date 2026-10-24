@@ -138,6 +138,7 @@ def main():
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=100.0)
@@ -145,6 +146,7 @@ def main():
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
+    parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -171,7 +173,8 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
     events = None
     if options.input:
         with open(options.input, encoding="utf-8") as file:
@@ -186,6 +189,7 @@ def main():
     server_command = [server_exe, "-g", options.game_path] + where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
                       "-l", server_log]
+    server_command += options.server_args.split()
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:

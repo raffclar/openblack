@@ -17,6 +17,7 @@
 
 #include "3D/HandMorph.h"
 #include "ECS/Archetypes/HandArchetype.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
@@ -42,16 +43,62 @@ bool HandSystem::Initialize() noexcept
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, false);
 	_hands[static_cast<size_t>(Side::Right)] =
 	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, true);
+	// The gods of the other players get their hands from the game server's command
+	_godHands.clear();
 
 	return false;
+}
+
+std::optional<std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>>
+HandSystem::GetHandsOf(PlayerNames player) const noexcept
+{
+	if (player == PlayerNames::PLAYER_ONE)
+	{
+		return _hands;
+	}
+	const auto found = _godHands.find(player);
+	return found != _godHands.end() ? std::optional(found->second) : std::nullopt;
+}
+
+std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::MakeHandsOf(PlayerNames player)
+{
+	if (const auto hands = GetHandsOf(player); hands.has_value())
+	{
+		return *hands;
+	}
+	// The same hands as the first player's, which the world tells apart by their player
+	auto& registry = Locator::entitiesRegistry::value();
+	std::array<entt::entity, 2> hands {};
+	hands[static_cast<size_t>(Side::Left)] =
+	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, false);
+	hands[static_cast<size_t>(Side::Right)] =
+	    HandArchetype::Create(glm::vec3(0.0f), glm::half_pi<float>(), 0.0f, glm::half_pi<float>(), 0.01f, true);
+	for (const auto hand : hands)
+	{
+		registry.Assign<GodHand>(hand, player);
+	}
+	_godHands[player] = hands;
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The god of player {} has hands of its own", static_cast<int>(player));
+	}
+	return hands;
 }
 
 void HandSystem::FindAfterLoad()
 {
 	_hands = {entt::null, entt::null};
+	_godHands.clear();
 	auto& registry = Locator::entitiesRegistry::value();
-	registry.Each<const Hand>([this](entt::entity entity, const Hand& hand) {
-		_hands.at(static_cast<size_t>(hand.rightHanded ? Side::Right : Side::Left)) = entity;
+	registry.Each<const Hand>([this, &registry](entt::entity entity, const Hand& hand) {
+		const auto side = static_cast<size_t>(hand.rightHanded ? Side::Right : Side::Left);
+		if (const auto* god = registry.TryGet<const GodHand>(entity))
+		{
+			auto [found, made] = _godHands.try_emplace(god->player, std::array<entt::entity, 2> {entt::null, entt::null});
+			found->second.at(side) = entity;
+			return;
+		}
+		_hands.at(side) = entity;
 	});
 	// A world from an older save can have a hand with no miracle effects. The load gives them to the hand.
 	if (const auto left = _hands.at(static_cast<size_t>(Side::Left));
@@ -64,24 +111,30 @@ void HandSystem::FindAfterLoad()
 void HandSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
-	if (!registry.Valid(hand))
+	// The world counts the stillness of each left hand that the reports give, as each computer has the same reports
+	const auto step = [&registry](entt::entity hand) {
+		if (!registry.Valid(hand))
+		{
+			return;
+		}
+		const auto* reported = registry.TryGet<const ReportedHand>(hand);
+		auto* stillness = registry.TryGet<HandStillness>(hand);
+		if (reported != nullptr && stillness != nullptr)
+		{
+			hand_stillness::Step(*stillness, reported->handPoint);
+		}
+	};
+	step(_hands[static_cast<size_t>(Side::Left)]);
+	for (const auto& [player, hands] : _godHands)
 	{
-		return;
-	}
-	// The world counts the stillness of the hand that the reports give, as each computer has the same reports
-	const auto* reported = registry.TryGet<const ReportedHand>(hand);
-	auto* stillness = registry.TryGet<HandStillness>(hand);
-	if (reported != nullptr && stillness != nullptr)
-	{
-		hand_stillness::Step(*stillness, reported->handPoint);
+		step(hands[static_cast<size_t>(Side::Left)]);
 	}
 }
 
 std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto hand = GetOwnHands()[static_cast<size_t>(Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
 	if (transform == nullptr || transform->position == glm::zero<glm::vec3>())
 	{
@@ -90,11 +143,12 @@ std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
 	return transform->position;
 }
 
-void HandSystem::Report([[maybe_unused]] PlayerNames player, const player_commands::HandReport& report)
+void HandSystem::Report(PlayerNames player, const player_commands::HandReport& report)
 {
-	// There is one human, with the left hand of this computer
+	// The report moves the left hand of its player. A player with no hands yet has no report.
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto hands = GetHandsOf(player);
+	const auto hand = hands.has_value() ? (*hands)[static_cast<size_t>(Side::Left)] : entt::null;
 	if (!registry.Valid(hand))
 	{
 		return;

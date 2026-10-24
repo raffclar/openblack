@@ -30,12 +30,15 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/UserData.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -59,6 +62,12 @@
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
 #include "Simulation/TurnBody.h"
+
+// The game role has sockets and TLS, which only the desktop builds have
+#if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
+#define OPENBLACK_GAME_ROLE 1
+#include "Server/Desktop/GameRole.h"
+#endif
 
 namespace openblack::server
 {
@@ -117,6 +126,18 @@ public:
 	[[nodiscard]] bool StartLand();
 	/// Plays one frame of the world. Gives false when the world is at its last turn.
 	[[nodiscard]] bool Frame();
+	/// The game role, which gives the turns of a network game
+	/// What the game role lets the world do in a frame
+	enum class NetworkStep : uint8_t
+	{
+		/// The game ended
+		Stop,
+		/// The world waits: before the start, and with no god's player. The clock stands still: the frames take no game
+		/// time and no turn comes.
+		Wait,
+		Play,
+	};
+	void SetNetwork(std::function<NetworkStep()> beforeTurns) { _beforeTurns = std::move(beforeTurns); }
 
 	void StartupStep(std::string_view /*step*/) override {}
 	void LoadHandAnimation() override {}
@@ -141,7 +162,10 @@ private:
 	/// The frame rate that the statistics of the game keep, by the clock of the machine as the game reads it
 	statistics::FrameRateMeter _frameRate;
 	uint32_t _frameCount {0};
+	bool _reloaded {false};
 	std::chrono::steady_clock::time_point _frameStart;
+	/// Gives false when the game of the network ended
+	std::function<NetworkStep()> _beforeTurns;
 };
 
 bool ServerWorld::Initialize()
@@ -255,7 +279,14 @@ bool ServerWorld::Initialize()
 bool ServerWorld::StartLand()
 {
 	auto& land = Locator::landSystem::value();
-	if (_settings.testbed)
+	if (_settings.godsRingMap)
+	{
+		if (!land.LoadGodsRingMap())
+		{
+			return false;
+		}
+	}
+	else if (_settings.testbed)
 	{
 		land.LoadTestbed();
 	}
@@ -274,8 +305,8 @@ bool ServerWorld::StartLand()
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground
-	const bool startStory =
-	    !_settings.testbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	const bool startStory = !_settings.testbed && !_settings.godsRingMap &&
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
 	if (!land.StartChallengeScripts(startStory))
 	{
 		return false;
@@ -307,6 +338,22 @@ bool ServerWorld::Frame()
 	auto& profiler = Locator::profiler::value();
 	auto& clock = Locator::time::value();
 	auto& land = Locator::landSystem::value();
+	// The game role takes the joins and the commands, and starts or holds the world
+	if (_beforeTurns)
+	{
+		const auto step = _beforeTurns();
+		if (step == NetworkStep::Stop)
+		{
+			return false;
+		}
+		// While the world waits, its clock stands still and its frames take no game time, as the clocks of the clients
+		// stand still until the start. Thus the frames before the first turn are the same as theirs.
+		const bool wait = step == NetworkStep::Wait;
+		if (clock.IsPaused() != wait)
+		{
+			clock.SetPaused(wait);
+		}
+	}
 	// The clock of the frame, and the inspector of the tools before the frame's turn
 	profiler.Frame();
 	clock.Update();
@@ -318,6 +365,62 @@ bool ServerWorld::Frame()
 	if (Locator::handDemoSystem::has_value())
 	{
 		Locator::handDemoSystem::value().Update();
+	}
+	// The tools check that a world state loads into the same world: the server loads its own world once
+	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
+	    Locator::saveGameSystem::has_value())
+	{
+		_reloaded = true;
+		auto& saves = Locator::saveGameSystem::value();
+		entt::meta_ctx reflection;
+		ecs::reflection::RegisterComponents(reflection);
+		const auto hash = [&reflection] {
+			return synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), reflection,
+			                            synced_state::PresentationParts(), true);
+		};
+		// The order of each storage, which the turns follow as they go through the entities
+		const auto orders = [] {
+			std::vector<std::pair<std::string, uint64_t>> out;
+			for (const auto& [id, storage] : Locator::entitiesRegistry::value().Underlying().storage())
+			{
+				uint64_t order = 1469598103934665603ull;
+				for (const auto entity : storage)
+				{
+					order = (order ^ entt::to_integral(entity)) * 1099511628211ull;
+				}
+				out.emplace_back(std::string(storage.info().name()), order);
+			}
+			std::ranges::sort(out);
+			return out;
+		};
+		const auto ordersBefore = orders();
+		const auto before = hash();
+		const auto drawsBefore = Locator::gameRandom::value().GetSyncedDraws();
+		const auto state = saves.WorldState();
+		const bool loaded = saves.LoadWorldState(state);
+		const auto after = hash();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The world state of turn {} ({} bytes) loaded again: {}, synced state the same: {}, draws {} and {}",
+		                   *_settings.reloadAt, state.size(), loaded, before.hash == after.hash, drawsBefore,
+		                   Locator::gameRandom::value().GetSyncedDraws());
+		const auto ordersAfter = orders();
+		for (const auto& [name, order] : ordersBefore)
+		{
+			const auto found = std::ranges::find(ordersAfter, name, &std::pair<std::string, uint64_t>::first);
+			if (found == ordersAfter.end() || found->second != order)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the order of {}", name);
+			}
+		}
+		// The parts that the load did not put back as they were
+		for (const auto& [name, value] : before.parts)
+		{
+			const auto found = std::ranges::find(after.parts, name, &std::pair<std::string, uint64_t>::first);
+			if (found == after.parts.end() || found->second != value)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the part {}", name);
+			}
+		}
 	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
@@ -383,6 +486,61 @@ bool ServerWorld::Frame()
 	_frameStart = frameEnd;
 	return true;
 }
+
+#if defined(OPENBLACK_GAME_ROLE)
+/// Starts the game role after the land loaded: the clients start the same land with the same seed
+bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::unique_ptr<GameRole>& network,
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
+{
+	network = std::make_unique<GameRole>();
+	const game_socket::Start start {
+	    .land = Locator::landSystem::value().GetLandPath().filename().string(),
+	    .testbed = settings.testbed,
+	    .seed = settings.seed,
+	    .turn = Locator::time::value().GetTurn(),
+	};
+	if (const auto error = network->Start(*settings.network, start); error.has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
+		network.reset();
+		return false;
+	}
+	auto& host = network->Host();
+	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
+	Locator::playerCommandSystem::value().SetSource(&host);
+	// A client whose world parted gets the world of the server, at the start of the next turn
+	host.SetWorldState([] {
+		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
+	});
+	world.SetNetwork([&host, role = network.get()] {
+		role->Update();
+		if (host.GameOver())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every god left the game: the game ends");
+			return ServerWorld::NetworkStep::Stop;
+		}
+		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
+	});
+	Locator::syncChecksumSystem::value().SetTurnListener(
+	    [&host, onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    if (onTurn)
+		    {
+			    onTurn(turn.turn, turn.checksum);
+		    }
+		    // Every client gets the checksum of the server's world
+		    host.TurnChecksum(turn.turn, turn.checksum);
+	    });
+	return true;
+}
+#else
+bool StartNetwork(const ServerSettings& /*settings*/, ServerWorld& /*world*/, std::unique_ptr<int>& /*network*/,
+                  const std::function<void(uint32_t turn, uint64_t checksum)>& /*onTurn*/)
+{
+	SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "This build has no game role");
+	return false;
+}
+#endif
 
 } // namespace
 
@@ -473,7 +631,16 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 	});
 
 	int exitCode = EXIT_SUCCESS;
+#if defined(OPENBLACK_GAME_ROLE)
+	std::unique_ptr<GameRole> network;
+#else
+	std::unique_ptr<int> network;
+#endif
 	if (!world->StartLand())
+	{
+		exitCode = EXIT_FAILURE;
+	}
+	else if (settings.network.has_value() && !StartNetwork(settings, *world, network, onTurn))
 	{
 		exitCode = EXIT_FAILURE;
 	}
@@ -488,6 +655,18 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		}
 	}
 	checksums.SetTurnListener({});
+#if defined(OPENBLACK_GAME_ROLE)
+	if (network)
+	{
+		for (const auto& line : network->Host().SummaryLines())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Network game: {}", line);
+		}
+		Locator::playerCommandSystem::value().SetSource(nullptr);
+		world->SetNetwork({});
+		network.reset();
+	}
+#endif
 	world.reset();
 	return exitCode;
 }

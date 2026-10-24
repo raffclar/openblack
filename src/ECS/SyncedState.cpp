@@ -59,6 +59,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The number of a miracle's particle effect counts the effects that this computer started, also those that only
+    // show the world on this computer
+    {.component = "Spell", .field = "effect", .marker = ""},
+    // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
+    {.component = "LearningMarker", .field = "", .marker = ""},
+    // The frames move the hair of a creature. Only the draw reads it.
+    {.component = "CreatureHair", .field = "", .marker = ""},
     // The seeds of the miracle icons spin, and their phials pulse, as the frames draw them
     {.component = "IconSeed", .field = "spin", .marker = ""},
     {.component = "IconSeed", .field = "ringSpin", .marker = ""},
@@ -77,6 +84,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SkyDome", .field = "", .marker = ""},
     // The moon's phase comes from the date of the computer's clock, as in the game
     {.component = "Moon", .field = "", .marker = ""},
+    // The hum and the mana path of the hand past the border follow the hand that this computer draws
+    {.component = "VirtualInfluence", .field = "shown", .marker = ""},
+    {.component = "VirtualInfluence", .field = "hum", .marker = ""},
     {.component = "VillageLight", .field = "flicker", .marker = ""},
     {.component = "VillageLight", .field = "flickerTimer", .marker = ""},
     {.component = "VillageLight", .field = "glowSize", .marker = ""},

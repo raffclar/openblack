@@ -139,6 +139,7 @@
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/PlayerCamera.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
@@ -5112,9 +5113,9 @@ void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindSt
 		return;
 	}
 	const auto marker = registry.Create();
-	registry.Assign<LearningMarker>(
-	    marker,
-	    ecs::learning_marker::Start(HeadPoint(registry, creature), ShownSize(*body) * creature_mode::k_HeightPerSize, *share));
+	registry.Assign<LearningMarker>(marker, ecs::learning_marker::Start(HeadPoint(registry, creature),
+	                                                                    ShownSize(*body) * creature_mode::k_HeightPerSize,
+	                                                                    *share, turn));
 }
 
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)

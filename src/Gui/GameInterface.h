@@ -163,6 +163,14 @@ public:
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
+	/// A network game resynchronises this computer's world with the server's: the words "Resynchronising..." show at the
+	/// top of the screen while it does
+	void ShowResync(bool shown) noexcept { _resyncShown = shown; }
+	/// The world stayed out of step with the server's after the last try: the box asks "Warning. The game may not be
+	/// synchronised on your machine. Continue?" with a Yes and a No
+	void AskOutOfSync();
+	/// The player's answer to the out-of-sync box, once: true to play on, false to leave the game
+	[[nodiscard]] std::optional<bool> TakeOutOfSyncAnswer() { return std::exchange(_outOfSyncAnswer, std::nullopt); }
 	/// The save game room's boxes take the mouse and the keyboard while one is up; true when they took the event
 	bool ProcessSaveGameBoxesEvent(const SDL_Event& event);
 	/// The name of a saved game that the named zoom tooltip shows. The tooltip keeps the last name given.
@@ -430,6 +438,10 @@ private:
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
+	bool _resyncShown {false};
+	/// The out-of-sync box is up and waits for its answer
+	bool _outOfSyncAsked {false};
+	std::optional<bool> _outOfSyncAnswer;
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;

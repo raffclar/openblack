@@ -313,6 +313,7 @@
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/OnlineMapLand.h"
 #include "Online/OpenPage.h"
 #include "Online/WebSocketInterface.h"
@@ -581,7 +582,8 @@ Game::Game(Arguments&& args) noexcept
     , _newGameAsked(args.newGame || launch_switches::FirstGameOf(args.launchSwitches) == launch_switches::FirstGame::NewGame)
     , _continueAsked(args.continueGame)
     , _launchSwitches(args.launchSwitches)
-    , _startTestbed(args.startTestbed || args.scenario.has_value())
+    , _startTestbed(args.startTestbed || args.startGodsRingMap || args.scenario.has_value())
+    , _startGodsRingMap(args.startGodsRingMap)
     , _scenarioRequest(args.scenario)
     , _inspectPort(args.inspectPort)
     , _fightAutopilot(args.fightAutopilot)
@@ -590,6 +592,7 @@ Game::Game(Arguments&& args) noexcept
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
+    , _networkJoin(args.networkJoin)
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -1455,7 +1458,7 @@ void Game::UpdateHandToolTipAnchor()
 		return;
 	}
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
 	if (handTransform == nullptr)
 	{
@@ -2123,6 +2126,19 @@ bool Game::Update() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The simulation run is at its last turn, {}", Locator::time::value().GetTurn());
 		return false;
 	}
+	// A game that joined from the command line stops when its network game ends: its world turns no more
+	// After the out-of-sync box, the game stops on No and plays on with Yes
+	if (_leaveNetworkGame)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the game stops");
+		return false;
+	}
+	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame() &&
+	    !_outOfSyncAsked)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game ended: the game stops");
+		return false;
+	}
 	const auto& config = Locator::config::value();
 	return config.numFramesToSimulate == 0 || _frameCount < config.numFramesToSimulate;
 }
@@ -2304,6 +2320,38 @@ void Game::UpdateOnline()
 	if (Locator::lobbyClient::has_value())
 	{
 		Locator::lobbyClient::value().Update();
+	}
+	// The network game takes the turns and the checksums that came, and comes back after a loss
+	if (Locator::networkGame::has_value())
+	{
+		auto& network = Locator::networkGame::value();
+		network.Update();
+		const auto* session = network.Session();
+		if (_interface)
+		{
+			// The words "Resynchronising..." show while the world resynchronises (user decision MI-4)
+			_interface->ShowResync(session != nullptr && network.InGame() && session->ShowsResync());
+			// After the last try the game asks whether the player plays on, as the game asks when the checksums differ
+			// A run of the tools asks nothing: the game stops as its network game ends
+			const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
+			if (session != nullptr && !network.InGame() && session->GetEnd() == online::NetworkSession::End::OutOfSync &&
+			    !_outOfSyncAsked && !toolRun)
+			{
+				_outOfSyncAsked = true;
+				_interface->AskOutOfSync();
+			}
+			if (const auto answer = _interface->TakeOutOfSyncAnswer(); answer.has_value())
+			{
+				if (*answer)
+				{
+					network.PlayAlone();
+				}
+				else
+				{
+					_leaveNetworkGame = true;
+				}
+			}
+		}
 	}
 }
 
@@ -2589,7 +2637,7 @@ void Game::ReportHand()
 	_handReportTurn = turn;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const ecs::components::Transform>(hand) : nullptr;
 	if (transform == nullptr)
 	{
@@ -2653,6 +2701,14 @@ void Game::UpdateScreenMarks()
 	UpdateLearningMarks(milliseconds);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(milliseconds * 0.001f);
+}
+
+void Game::CatchUpFrame()
+{
+	// The frame steps that change the world, as the frame after a turn does them, with no draw
+	Locator::time::value().CatchUpFrame();
+	simulation::PlayCreaturePoses();
+	simulation::PlayFrameEffects(*this);
 }
 
 void Game::UpdateFrameEffects()
@@ -2921,8 +2977,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		if (auto* trace = Locator::handSystem::value().GetTrace(); trace != nullptr && trace->Enabled())
 		{
 			trace->BeginFrame(_frameCount, std::chrono::duration<float>(deltaTime).count());
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity))
 			{
 				trace->Note("frame start", transform->position);
@@ -2941,9 +2997,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			{
 				const glm::mat4 modelRotationCorrection = glm::eulerAngleX(glm::radians(90.0f));
 
-				const auto handEntity =
-				    Locator::handSystem::value()
-				        .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+				const auto handEntity = Locator::handSystem::value()
+				                            .GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 				auto& handTransform = Locator::entitiesRegistry::value().Get<ecs::components::Transform>(handEntity);
 				if (!_stillHandAt.has_value())
 				{
@@ -3139,8 +3194,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		}
 		bool holdingSeed = false;
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (auto* handTransform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity))
 			{
 				const magic::HandHoldPoser::Frame holdFrame {
@@ -3242,8 +3297,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				_handAnimation->Update(deltaTime, state, cycle, _mousePosition, leash_snap::PinchShare(ropeHand));
 			}
 
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			auto& registry = Locator::entitiesRegistry::value();
 			auto* hand = registry.TryGet<ecs::components::Hand>(handEntity);
 			if (hand != nullptr)
@@ -3291,8 +3346,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		UpdateHandToolTipAnchor();
 		// Taking or letting go of a seed cross-fades the drawn hand, and the seed's in-hand effect sits in its fingers
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			if (auto* handTransform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity))
 			{
 				const float handSize = HandAnimation::SizeAtDistance(
@@ -3919,7 +3974,15 @@ Game::RunStart Game::StartRun() noexcept
 	}
 
 	auto start = game_session::Start::NewGame;
-	if (_startTestbed)
+	if (_startGodsRingMap)
+	{
+		// The map for 32 gods, as a network game plays it
+		if (!LoadGodsRingMap())
+		{
+			return RunStart::Failed;
+		}
+	}
+	else if (_startTestbed)
 	{
 		LoadTestbed();
 	}
@@ -4045,6 +4108,17 @@ void Game::StartPlayView()
 
 void Game::BeforeFirstFrame(bool continued)
 {
+	// A join from the command line: the land loaded, so the game joins the server and waits for its start
+	if (auto join = std::exchange(_networkJoin, std::nullopt); join.has_value() && Locator::networkGame::has_value())
+	{
+		_joinedFromCommandLine = Locator::networkGame::value().Join(std::move(*join));
+		if (!_joinedFromCommandLine)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game cannot join the game server");
+		}
+		// The game is in a network game already, so the -MULTIPLAYER switch does not open the front end
+		_frontEndOnStart = false;
+	}
 	// The first game of the program starts with the logo effect and its sound, before the menu shows
 	if (startup::PlaysLogoEffect(_automatedRun, _logoEffectAsked, false))
 	{
@@ -5577,7 +5651,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	const auto screen = glm::vec2(Locator::windowing::value().GetSize());
 	// Where the posed hand is drawn: by its first bone, at the wrist
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto* handTransform = registry.TryGet<ecs::components::Transform>(handEntity);
 	if (handTransform == nullptr)
@@ -5753,7 +5827,7 @@ void Game::EndHandTrace(const glm::vec3& placed, const ecs::components::Transfor
 		frame->visible = glm::vec3(model * glm::vec4(_handAnimation->LeafBoneCentre(), 1.0f));
 		// The wrist as it is drawn: after the blend of the drawn pose, which the animation's own bones do not have
 		const auto handEntity =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::Hand>(handEntity);
 		const auto& bones = drawn != nullptr ? drawn->boneMatrices : _handAnimation->GetBoneMatrices();
 		if (!bones.empty())

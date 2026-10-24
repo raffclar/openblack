@@ -8,7 +8,8 @@
  *******************************************************************************/
 
 // The dedicated server of openblack: it runs the world of one land with no window, at 10 turns a second, and logs the
-// checksum of the synced world at the end of each turn. It has no network yet.
+// checksum of the synced world at the end of each turn. With --listen it is the game server of a network game: the
+// clients join with a ticket of the lobby, and the server orders their commands into its turns.
 
 #include <csignal>
 #include <cstdint>
@@ -51,6 +52,7 @@ int main(int argc, char* argv[])
 		("g,game-path", "The folder of the game's data.", cxxopts::value<std::string>())
 		("s,start-level", "The script of the land under the game's Scripts folder.", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "The flat testbed in place of a land.")
+		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
 		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
@@ -59,7 +61,15 @@ int main(int argc, char* argv[])
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
+		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
+		("tls-key", "The PEM file of the key of --tls-cert.", cxxopts::value<std::string>())
+		("server-id", "The id of the server at the lobby, which the join tickets name.", cxxopts::value<std::string>())
+		("ticket-keys", "The keys that sign the join tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file of the same JSON.", cxxopts::value<std::string>())
+		("gods", "The game starts when this many gods joined and are ready.", cxxopts::value<uint32_t>()->default_value("1"))
+		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
 		("h,help", "Show this help.");
@@ -87,6 +97,7 @@ int main(int argc, char* argv[])
 		settings.gamePath = result["game-path"].as<std::string>();
 		settings.land = result["start-level"].as<std::string>();
 		settings.testbed = result.count("testbed") != 0;
+		settings.godsRingMap = result.count("gods-ring-map") != 0;
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(result["skip-opening"].as<std::string>());
 		settings.seed = result["seed"].as<uint32_t>();
 		if (result.count("turns") != 0)
@@ -105,9 +116,45 @@ int main(int argc, char* argv[])
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
 		}
+		if (result.count("reload-at") != 0)
+		{
+			settings.reloadAt = result["reload-at"].as<uint32_t>();
+		}
 		if (result.count("commands") != 0)
 		{
 			settings.commandsPath = std::filesystem::path(result["commands"].as<std::string>());
+		}
+		if (result.count("listen") != 0)
+		{
+			const auto listen = result["listen"].as<std::string>();
+			const auto colon = listen.rfind(':');
+			if (colon == std::string::npos)
+			{
+				std::cerr << "--listen needs an address and a port, such as 127.0.0.1:0." << std::endl;
+				return EXIT_FAILURE;
+			}
+			openblack::server::NetworkSettings network;
+			network.address = listen.substr(0, colon);
+			network.port = static_cast<uint16_t>(std::stoul(listen.substr(colon + 1)));
+			if (result.count("tls-cert") != 0)
+			{
+				network.certificate = std::filesystem::path(result["tls-cert"].as<std::string>());
+			}
+			if (result.count("tls-key") != 0)
+			{
+				network.key = std::filesystem::path(result["tls-key"].as<std::string>());
+			}
+			if (result.count("server-id") != 0)
+			{
+				network.serverId = result["server-id"].as<std::string>();
+			}
+			if (result.count("ticket-keys") != 0)
+			{
+				network.ticketKeys = result["ticket-keys"].as<std::string>();
+			}
+			network.godsToStart = result["gods"].as<uint32_t>();
+			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			settings.network = std::move(network);
 		}
 		openblack::crash_handler::SetLogFile(settings.logFile);
 	}

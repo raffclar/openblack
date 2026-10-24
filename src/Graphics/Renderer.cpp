@@ -990,7 +990,7 @@ glm::vec3 HandGlowColour()
 		return glm::vec3(0.0f);
 	}
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* glow = Locator::entitiesRegistry::value().TryGet<ecs::components::HandGlow>(hand);
 	if (glow == nullptr)
 	{
@@ -2711,7 +2711,7 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity);
 	if (transform == nullptr)
 	{
@@ -4232,7 +4232,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	if (drawDesc.drawHand && Locator::handSystem::has_value())
 	{
 		const auto hand =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		if (const auto* transform = drawDesc.entities.TryGet<ecs::components::Transform>(hand); transform != nullptr)
 		{
 			frame.hand = transform->position;
@@ -4512,7 +4512,7 @@ const ecs::components::HandMorph* PlayerHandMorph()
 		return nullptr;
 	}
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	return Locator::entitiesRegistry::value().TryGet<const ecs::components::HandMorph>(hand);
 }
 } // namespace
@@ -4964,7 +4964,7 @@ glm::vec4 Renderer::GetModelLight() const
 	if (Locator::handSystem::has_value() && Locator::skySystem::has_value() && Locator::camera::has_value())
 	{
 		const auto handEntity =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		if (const auto* transform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity);
 		    transform != nullptr)
 		{
@@ -5284,8 +5284,8 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
 		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skySystem::has_value())
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			const auto& registry = Locator::entitiesRegistry::value();
 			const auto [hand, mesh, transform] =
 			    registry.TryGet<ecs::components::Hand, ecs::components::Mesh, ecs::components::Transform>(handEntity);

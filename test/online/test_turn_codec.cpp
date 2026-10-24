@@ -57,6 +57,8 @@ std::vector<Action> EachCommand()
 	    TotemShare {.totem = Entity(17), .share = 0.75f},
 	    CreatureBruise {.creature = Entity(18),
 	                    .wound = creature_marks::Mark {.u = 1, .v = 2, .skin = 3, .age = 0, .type = 0, .column = 7}},
+	    PlayerLeft {},
+	    PlayerJoined {},
 	};
 }
 
@@ -80,7 +82,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 16)
+	switch (bits(random) % 18)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -114,7 +116,7 @@ Action RandomAction(std::mt19937& random)
 		return HandApply {.target = entity()};
 	case 14:
 		return TotemShare {.totem = entity(), .share = number()};
-	default:
+	case 15:
 	{
 		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
 		return CreatureBruise {
@@ -124,6 +126,10 @@ Action RandomAction(std::mt19937& random)
 		                       .u = field(), .v = field(), .skin = field(), .age = field(), .type = field(), .column = field()})
 		                 : std::nullopt};
 	}
+	case 16:
+		return PlayerLeft {};
+	default:
+		return PlayerJoined {};
 	}
 }
 
@@ -183,13 +189,17 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 1, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), i + 1) << i;
+		// The tags are 1 to 11 in the order of the commands. The leave of the server has tag 17, its join tag 23.
+		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i])     ? 17
+		                   : std::holds_alternative<PlayerJoined>(commands[i]) ? 23
+		                                                                       : i + 1;
+		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
 
@@ -223,7 +233,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 2), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>((i * 2) % 32), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -494,4 +504,48 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	EXPECT_EQ(up.size() + k_HandReport, 129u);
 	EXPECT_EQ(Encode(TurnChecksum {.turn = 1, .checksum = 2}).size(), 14u);
 	EXPECT_EQ(Encode(Ping {.id = 1, .time = 2}).size(), 14u);
+}
+
+TEST(TurnCodec, AWorldPartGoesToBytesAndBack)
+{
+	ExpectRoundTrip(WorldPart {.turn = 7, .part = 1, .parts = 3, .bytes = {1, 2, 3, 250}});
+	ExpectRoundTrip(WorldPart {.turn = 7, .part = 0, .parts = 1, .bytes = {}});
+	const auto bytes = Encode(WorldPart {.turn = 0x01020304, .part = 2, .parts = 5, .bytes = {9}});
+	const std::vector<uint8_t> expected {k_Version, 6, 4, 3, 2, 1, 2, 0, 5, 0, 9};
+	EXPECT_EQ(bytes, expected);
+}
+
+TEST(TurnCodec, AWorldPartOutOfItsCountIsRefused)
+{
+	EXPECT_TRUE(Encode(WorldPart {.turn = 1, .part = 3, .parts = 3, .bytes = {}}).empty());
+	EXPECT_TRUE(
+	    Encode(WorldPart {.turn = 1, .part = 0, .parts = 1, .bytes = std::vector<uint8_t>(k_WorldPartBytes + 1)}).empty());
+	const std::vector<uint8_t> bad {k_Version, 6, 1, 0, 0, 0, 3, 0, 3, 0};
+	EXPECT_EQ(Decode(bad).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AWorldStateSplitsIntoPartsThatGoBackTogether)
+{
+	std::vector<uint8_t> state((k_WorldPartBytes * 2) + 17);
+	for (size_t i = 0; i < state.size(); ++i)
+	{
+		state[i] = static_cast<uint8_t>(i * 31);
+	}
+	const auto parts = SplitWorld(40, state);
+	ASSERT_EQ(parts.size(), 3u);
+	std::vector<uint8_t> joined;
+	for (size_t i = 0; i < parts.size(); ++i)
+	{
+		EXPECT_EQ(parts[i].turn, 40u);
+		EXPECT_EQ(parts[i].part, i);
+		EXPECT_EQ(parts[i].parts, 3u);
+		EXPECT_LE(parts[i].bytes.size(), k_WorldPartBytes);
+		EXPECT_FALSE(Encode(parts[i]).empty());
+		joined.insert(joined.end(), parts[i].bytes.begin(), parts[i].bytes.end());
+	}
+	EXPECT_EQ(joined, state);
+	// An empty state is one empty part
+	const auto none = SplitWorld(3, {});
+	ASSERT_EQ(none.size(), 1u);
+	EXPECT_TRUE(none[0].bytes.empty());
 }
