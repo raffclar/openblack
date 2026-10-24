@@ -55,6 +55,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -182,12 +183,38 @@ entt::entity GameHandGrabWorld::Hand() const
 	{
 		return entt::null;
 	}
-	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto& hands = Locator::handSystem::value();
+	constexpr auto k_Left = static_cast<size_t>(HandSystemInterface::Side::Left);
+	// A command acts with its player's hand, which a player of a network game has from the first turn
+	if (_acting.has_value())
+	{
+		const auto acting = hands.GetHandsOf(*_acting);
+		return acting.has_value() ? (*acting)[k_Left] : entt::null;
+	}
+	return hands.GetPlayerHands()[k_Left];
+}
+
+bool GameHandGrabWorld::IsNetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
+std::optional<PlayerNames> GameHandGrabWorld::OwnHandPlayer() const
+{
+	if (!Locator::handSystem::has_value() || Locator::handSystem::value().GetOwnPlayer() == PlayerNames::PLAYER_ONE)
+	{
+		return std::nullopt;
+	}
+	return Locator::handSystem::value().GetOwnPlayer();
 }
 
 PlayerNames GameHandGrabWorld::HandPlayer() const
 {
-	// The hands on the screen are the local player's
+	if (_acting.has_value())
+	{
+		return *_acting;
+	}
+	// The first hands are the local player's
 	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 }
 
@@ -468,11 +495,6 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 		    entt::hashed_string(fmt::format("InGame.sad/{}", sample).c_str()).value(),
 		    {.position = position, .voiceOwner = audio::VoiceOwner::OwnSound, .follows = audio::Follows::Place});
 	}
-}
-
-bool GameHandGrabWorld::IsNetworkGame() const
-{
-	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 void GameHandGrabWorld::SendCommand(player_commands::Action action)
@@ -838,8 +860,33 @@ glm::vec3 GameHandGrabWorld::ReportedHandPlace() const
 	{
 		return glm::vec3(0.0f);
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)].value_or(
-	    glm::vec3(0.0f));
+	return ReportedPlaceOf(Hand());
+}
+
+glm::vec3 GameHandGrabWorld::ReportedPlaceOf(entt::entity hand) const
+{
+	// Where the last report of the hand's player put the hand
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? reported->handPoint : glm::vec3(0.0f);
+}
+
+std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
+{
+	std::vector<PlayerNames> players;
+	if (!Locator::handSystem::has_value())
+	{
+		return players;
+	}
+	const auto& hands = Locator::handSystem::value();
+	for (size_t i = 1; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	{
+		if (hands.GetHandsOf(static_cast<PlayerNames>(i)).has_value())
+		{
+			players.push_back(static_cast<PlayerNames>(i));
+		}
+	}
+	return players;
 }
 
 hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PoseOf(entt::entity object) const

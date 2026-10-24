@@ -105,6 +105,7 @@ struct DeveloperOption
 inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "start-level", .shortName = 's', .takesValue = true},
     DeveloperOption {.name = "testbed"},
+    DeveloperOption {.name = "gods-ring-map"},
     DeveloperOption {.name = "ui-scale", .shortName = 'u', .takesValue = true},
     DeveloperOption {.name = "screenshot-frame", .takesValue = true},
     DeveloperOption {.name = "screenshot-path", .takesValue = true},
@@ -130,6 +131,8 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-frame-ms", .takesValue = true},
     DeveloperOption {.name = "sim-draw-every", .takesValue = true},
     DeveloperOption {.name = "sim-until-turn", .takesValue = true},
+    DeveloperOption {.name = "join-part-at", .takesValue = true},
+    DeveloperOption {.name = "join-part-again"},
     DeveloperOption {.name = "sim-network-game"},
     DeveloperOption {.name = "sim-still-hand"},
     DeveloperOption {.name = "sim-checksums", .takesValue = true},
@@ -171,6 +174,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "record", .takesValue = true},
     DeveloperOption {.name = "record-fields"},
     DeveloperOption {.name = "commands", .takesValue = true},
+    DeveloperOption {.name = "reload-at", .takesValue = true},
 };
 
 /// The developer options that a join of a game server (--join) needs. The game server checks that the land, the seed

@@ -285,10 +285,17 @@ struct HandPick
 	entt::entity object;
 };
 
+/// The player of the command is a god of the network game from its start. Only the game server sends it, in the first
+/// turn. The world gives the player hands of its own.
+struct PlayerJoined
+{
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined>;
 
 /// A command and the player that sent it
 struct Command

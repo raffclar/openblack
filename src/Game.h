@@ -158,6 +158,8 @@ struct Arguments
 	std::string startLevel;
 	/// Start on the flat creature testbed rather than startLevel
 	bool startTestbed {false};
+	/// Start on the network map for 32 gods rather than startLevel
+	bool startGodsRingMap {false};
 	/// Log frame time statistics every so many frames, never when 0
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
@@ -279,6 +281,7 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	void CatchUpFrame() override;
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -559,6 +562,7 @@ private:
 	/// The tips screen has faded in once: later loads show it at once
 	bool _tipFadedIn {false};
 	bool _startTestbed {false};
+	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
@@ -581,6 +585,9 @@ private:
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
+	/// The out-of-sync box was asked; the player answered No to it
+	bool _outOfSyncAsked {false};
+	bool _leaveNetworkGame {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

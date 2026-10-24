@@ -50,6 +50,8 @@ struct Resume
 	std::string session;
 	/// The last turn that the client did
 	uint32_t turn {0};
+	/// The world of the client parted from the server's: the server sends its world state first ("world", optional)
+	bool world {false};
 };
 
 /// Client to server: "room.ready". The client loaded the land and waits for the start of the game.
@@ -101,6 +103,8 @@ struct Resumed
 {
 	/// The last turn that the server did
 	uint32_t turn {0};
+	/// The server's world state at the start of that turn follows as world parts, before the turns ("world", optional)
+	bool world {false};
 };
 
 /// Server to client: "player.state". A god's player lost the socket, came back, or left the game.

@@ -125,6 +125,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
 		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
 		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
+		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
@@ -149,6 +150,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. It can have a part of a millisecond, such as 16.7 for 60 frames a second. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<double>())
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
+		("join-part-at", "Tests: at this turn the world of this computer draws one synced random number more, so that it parts from the server's world and resynchronises.", cxxopts::value<uint32_t>())
+		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
@@ -341,6 +344,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .name = {},
 			    .testAuthorities =
 			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
+			    .partAt =
+			        result.count("join-part-at") != 0 ? std::optional(result["join-part-at"].as<uint32_t>()) : std::nullopt,
+			    .partAgain = result.count("join-part-again") != 0,
 			};
 		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
@@ -427,6 +433,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
 		args.startTestbed = result.count("testbed") != 0;
+		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;

@@ -14,13 +14,17 @@
 #include <chrono>
 #include <filesystem>
 #include <string_view>
+#include <tuple>
 #include <utility>
 
 #include <spdlog/spdlog.h>
 
+#include "Common/GameRandom.h"
 #include "Common/RandomNumberManager.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -85,6 +89,10 @@ void NetworkGameSystem::Detach()
 	{
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 	}
+	if (Locator::time::has_value())
+	{
+		Locator::time::value().SetCatchesUp(false);
+	}
 	if (Locator::syncChecksumSystem::has_value())
 	{
 		Locator::syncChecksumSystem::value().SetTurnListener({});
@@ -113,6 +121,8 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		sockets = _testClient.get();
 	}
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds);
+	_partAt = join.partAt;
+	_partAgain = join.partAgain;
 	_started = false;
 	_endLogged = false;
 	_awaitingLand = !join.landLoaded;
@@ -144,7 +154,9 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 void NetworkGameSystem::Attach()
 {
 	// A network game: the clock never stops for one player
-	Locator::time::value().SetNetworkGame(true);
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(true);
+	clock.SetCatchesUp(true);
 	Locator::playerCommandSystem::value().SetSource(_session.get());
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
@@ -186,6 +198,16 @@ void NetworkGameSystem::Leave()
 	}
 }
 
+void NetworkGameSystem::PlayAlone()
+{
+	if (InGame())
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world of this computer turns alone, with no game server");
+	Detach();
+}
+
 void NetworkGameSystem::Update()
 {
 	if (!_session)
@@ -197,6 +219,38 @@ void NetworkGameSystem::Update()
 		_testClient->Poll();
 	}
 	_session->Update();
+
+	// A test parts this computer's world from the server's once
+	if (_partAt.has_value() && Locator::time::value().GetTurn() >= *_partAt)
+	{
+		_partAt.reset();
+		std::ignore = Locator::gameRandom::value().GameRand(1000);
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "Test: the world parts from the server's at turn {}",
+		                   Locator::time::value().GetTurn());
+	}
+
+	// The god of this computer's slot: its pointer moves that god's hand
+	if (const auto& joined = _session->GetJoined();
+	    joined.has_value() && joined->slot.has_value() && Locator::handSystem::has_value() &&
+	    Locator::handSystem::value().GetOwnPlayer() != static_cast<PlayerNames>(*joined->slot))
+	{
+		Locator::handSystem::value().SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+	}
+
+	// The world of a loaded state goes on as the server's turn of the state is here: the next frame does that turn
+	if (_resumeTurn.has_value() && _session->HasTurn(*_resumeTurn))
+	{
+		auto& clock = Locator::time::value();
+		clock.SetPaused(false);
+		clock.ResetTimerToTurn();
+		_resumeTurn.reset();
+	}
+
+	// After a resync the server's world comes: this computer's world loads it and goes on from its turn
+	if (auto world = _session->TakeWorld(); world.has_value())
+	{
+		LoadWorld(*world);
+	}
 
 	if (!_started && _session->GetStart().has_value())
 	{
@@ -233,6 +287,37 @@ void NetworkGameSystem::Update()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The network game ended ({}): {} turns compared with the server, {} the same, {} resumes",
 		                   online::EndName(_session->GetEnd()), compares.compared, compares.same, _session->Resumes());
+	}
+}
+
+void NetworkGameSystem::LoadWorld(const online::NetworkSession::WorldState& world)
+{
+	if (!Locator::saveGameSystem::has_value() || !Locator::saveGameSystem::value().LoadWorldState(world.bytes))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state of turn {} from the game server did not load", world.turn);
+		_session->Leave();
+		return;
+	}
+	// The load starts the land again: the world is still the world of a network game, which turns with the server
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(true);
+	clock.SetCatchesUp(true);
+	// The clock stands still until the server's turn of the state is here, as it does before the start: the frames until
+	// then take no game time, so the world is the same as the server's when that turn starts
+	clock.SetPaused(true);
+	_resumeTurn = world.turn;
+	Locator::playerCommandSystem::value().SetSource(_session.get());
+	Locator::syncChecksumSystem::value().SetEnabled(true);
+	if (clock.GetTurn() != world.turn)
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The world state is at turn {}, not at the server's turn {}", clock.GetTurn(),
+		                    world.turn);
+	}
+	_session->WorldLoaded(world.turn);
+	// A test parts the loaded world again at once
+	if (_partAgain)
+	{
+		_partAt = world.turn;
 	}
 }
 

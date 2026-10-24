@@ -45,6 +45,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Map.h"
@@ -143,6 +144,7 @@ world_save::PendingChunk ClockChunk()
 		state.seeds = random.GetSeeds();
 		state.particles = random.GetParticleStream();
 		state.crtSeed = random.GetCrtSeed();
+		state.syncedDraws = random.GetSyncedDraws();
 	}
 	auto saved = std::make_shared<const world_save::ClockState>(std::move(state));
 	return {.tag = gamesave::k_ClockTag, .bytes = [saved]() { return world_save::WriteClock(*saved); }};
@@ -169,6 +171,10 @@ bool LoadClock(std::span<const uint8_t> bytes, uint32_t turn)
 		if (state->crtSeed.has_value())
 		{
 			Locator::gameRandom::value().CrtSrand(*state->crtSeed);
+		}
+		if (state->syncedDraws.has_value())
+		{
+			Locator::gameRandom::value().SetSyncedDraws(*state->syncedDraws);
 		}
 	}
 	if (Locator::rng::has_value() && state->streams.size() == static_cast<size_t>(RandomStream::Count))
@@ -216,6 +222,23 @@ bool LoadCamera(std::span<const uint8_t> bytes)
 	}
 	Locator::camera::value().SetOrigin(origin).SetFocus(focus);
 	return true;
+}
+
+/// The sounds of a world state start again on this computer: the emitters are of the computer that made the state
+void ForgetEmitters(Registry& registry)
+{
+	if (Locator::audio::has_value())
+	{
+		Locator::audio::value().ForgetSavedEmitters();
+	}
+	registry.Each<components::SoundTag>([](entt::entity, components::SoundTag& tag) { tag.emitter = entt::null; });
+}
+
+/// The rooms of the temple are not a part of the land. The temple makes them again when the player goes into it.
+void ForgetTempleRooms(entt::registry& registry)
+{
+	const auto rooms = registry.view<const components::TempleInteriorPart>();
+	registry.destroy(rooms.begin(), rooms.end());
 }
 
 /// The sounds that played at the save do not come back, as the game keeps no sound in its saves. The objects' own sounds
@@ -456,7 +479,7 @@ bool world_save::HasWholeWorld(const gamesave::WorldFile& file)
 }
 
 std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::meta_ctx& reflection,
-                                                                    const gamesave::WorldFile& file)
+                                                                    const gamesave::WorldFile& file, LoadKind kind)
 {
 	const auto entities = gamesave::FindChunk(file, gamesave::k_EntitiesTag);
 	if (!entities.has_value())
@@ -485,8 +508,15 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			SPDLOG_LOGGER_WARN(Log(), "The context of the saved world does not read; the land keeps a new context");
 		}
 	}
-	// Things the save does not keep go back to their start
-	ForgetUnsavedState(registry.Underlying());
+	// Things the save does not keep go back to their start. A world state keeps them.
+	if (kind == LoadKind::SavedGame)
+	{
+		ForgetUnsavedState(registry.Underlying());
+	}
+	else
+	{
+		ForgetTempleRooms(registry.Underlying());
+	}
 	// What the hand holds stays in the hand: the hand's grab and the held thing are components. The physics takes its
 	// bodies back with the running state of the systems.
 	// A walk along a camera track takes its track again from the land's tracks, by its number
@@ -506,7 +536,14 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		arena.ring = archetypes::ArenaArchetype::MakeRing(arena.place, arena.radius);
 		arena.ring->SetHidden(!arena.fightOn);
 	}
-	ForgetSavedSounds(registry);
+	if (kind == LoadKind::SavedGame)
+	{
+		ForgetSavedSounds(registry);
+	}
+	else
+	{
+		ForgetEmitters(registry);
+	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the saved world: {} entities with {} components", result->report.entities,
 	                   result->report.components);
 	LogNames("components that this build does not know", result->report.unknownComponents);
@@ -532,6 +569,7 @@ std::vector<uint8_t> world_save::WriteClock(const ClockState& state)
 	std::ranges::transform(state.streams, std::back_inserter(streams), GeneratorText);
 	reflection::Save(out, streams);
 	reflection::Save(out, state.general.has_value() ? GeneratorText(*state.general) : std::string {});
+	reflection::Save(out, state.syncedDraws.value_or(0));
 	return std::move(out.Bytes());
 }
 
@@ -556,6 +594,13 @@ std::optional<world_save::ClockState> world_save::ReadClock(std::span<const uint
 	if (in.Remaining() > 0)
 	{
 		reflection::Load(in, general);
+	}
+	// Nor the count of the synced draws
+	if (in.Remaining() > 0)
+	{
+		uint64_t draws = 0;
+		reflection::Load(in, draws);
+		state.syncedDraws = draws;
 	}
 	if (in.Failed())
 	{
@@ -585,10 +630,8 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
-	// The rooms of the temple are not a part of the land. A save from inside the temple has them, so the load removes
-	// them. The temple makes them again when the player goes into it.
-	const auto rooms = registry.view<const components::TempleInteriorPart>();
-	registry.destroy(rooms.begin(), rooms.end());
+	// A save from inside the temple has the rooms of the temple, so the load removes them
+	ForgetTempleRooms(registry);
 }
 
 bool world_save::LoadRunningState(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, uint32_t turn)

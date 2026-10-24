@@ -89,3 +89,18 @@ TEST(GameSocket, BadFramesDoNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"room.joined","role":"god","session":"s","slot":32})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"player.state","slot":1,"state":"gone"})").has_value());
 }
+
+TEST(GameSocket, AResumeCanAskForTheWorldOfTheServer)
+{
+	const auto resume = RoundTrip(Resume {.session = "secret", .turn = 9, .world = true});
+	EXPECT_TRUE(resume.world);
+	EXPECT_FALSE(RoundTrip(Resume {.session = "secret", .turn = 9}).world);
+	const auto resumed = RoundTrip(Resumed {.turn = 30, .world = true});
+	EXPECT_EQ(resumed.turn, 30u);
+	EXPECT_TRUE(resumed.world);
+	// A resume of an older client has no world member
+	EXPECT_EQ(ToJson(Resumed {.turn = 30}).find("world"), std::string::npos);
+	const auto parsed = Parse(R"({"type":"room.resumed","turn":3})");
+	ASSERT_TRUE(parsed.has_value());
+	EXPECT_FALSE(std::get<Resumed>(*parsed).world);
+}

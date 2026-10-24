@@ -36,6 +36,7 @@ public:
 	void SetSource(player_commands::TurnCommandSourceInterface* source) override;
 	[[nodiscard]] bool TurnReady(uint32_t turn) const override { return _source == nullptr || _source->HasTurn(turn); }
 	[[nodiscard]] bool HasSource() const override { return _source != nullptr; }
+	[[nodiscard]] bool IsBehind(uint32_t turn) const override { return _source != nullptr && _source->IsBehind(turn); }
 
 private:
 	player_commands::CommandQueue _queue;

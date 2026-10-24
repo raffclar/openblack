@@ -35,6 +35,10 @@ public:
 	/// The audio of a turn of the temple, while the player is in the temple and the world is paused. A view with no
 	/// audio does nothing.
 	virtual void PlayTempleAudioTurn() {}
+
+	/// Between two turns of one frame, as a network game that catches up does them: the frame steps that change the
+	/// world, with the time of a turn. So the world is the same as on a computer that does one turn a frame.
+	virtual void CatchUpFrame() {}
 };
 
 /// A view that does nothing, for a world with no player in front of it. It gives the statistics a fixed frame rate.

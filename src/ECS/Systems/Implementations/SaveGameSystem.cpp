@@ -1243,6 +1243,61 @@ bool SaveGameSystem::Load(uint32_t slot)
 	return restored > 0;
 }
 
+std::vector<uint8_t> SaveGameSystem::WorldState()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	gamesave::WorldFile world;
+	gamesave::GameChunk game {.land = LandNumber(),
+	                          .turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u,
+	                          .landscape = {},
+	                          .knownLeashes = 0,
+	                          .creatureInTemple = 0,
+	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
+	if (Locator::landSystem::has_value())
+	{
+		const auto& lands = Locator::landSystem::value();
+		game.landscape = lands.GetLandPath().generic_string();
+		game.landscapeFile = lands.GetLandscapePath().generic_string();
+	}
+	world.chunks.push_back(gamesave::ToChunk(game));
+	// The records of the creatures, as a save keeps them
+	const auto creatures = CreaturesInOrder();
+	std::vector<gamesave::SavedCreature> saved;
+	for (uint32_t index = 0; index < creatures.size(); ++index)
+	{
+		saved.push_back(ToSave(registry, creatures[index], index));
+	}
+	const auto chunks = gamesave::ToChunks(saved);
+	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
+	// Then the whole world in openblack's own layout. This computer makes all the blocks now, with no writer thread.
+	ecs::world_save::SaveSummary summary;
+	for (const auto& pending : ecs::world_save::SaveWorld(Reflection(), summary))
+	{
+		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+	}
+	return gamesave::Write(world);
+}
+
+bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
+{
+	FlushWrites();
+	const auto world = gamesave::ReadWorldFile(bytes);
+	if (!world.has_value() || !ecs::world_save::HasWholeWorld(*world))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state has no whole world that the game can read");
+		return false;
+	}
+	const auto gameChunk = std::ranges::find(world->chunks, gamesave::k_GameTag, &gamesave::Chunk::tag);
+	const auto game = gameChunk != world->chunks.end() ? gamesave::ReadGameChunk(gameChunk->bytes) : std::nullopt;
+	if (!game.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state has no game block");
+		return false;
+	}
+	return LoadWholeWorld(0, *world, *game, ecs::world_save::LoadKind::WorldState);
+}
+
 void SaveGameSystem::StartLandAgain() const
 {
 	if (!Locator::landSystem::has_value() || Locator::landSystem::value().GetLandPath().empty())
@@ -1266,7 +1321,8 @@ const entt::meta_ctx& SaveGameSystem::Reflection()
 	return *_reflection;
 }
 
-bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game)
+bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game,
+                                    ecs::world_save::LoadKind kind)
 {
 	if (!Locator::landSystem::has_value() || (game.landscapeFile.empty() && game.landscape.empty()))
 	{
@@ -1280,9 +1336,10 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	{
 		Locator::vm::value().StopAllTasks();
 	}
-	const bool loaded = Locator::landSystem::value().LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world]() {
-		return ecs::world_save::LoadEntities(reflection, world).has_value();
-	});
+	const bool loaded =
+	    Locator::landSystem::value().LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world, kind]() {
+		    return ecs::world_save::LoadEntities(reflection, world, kind).has_value();
+	    });
 	if (!loaded)
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The world of slot {} did not load", slot);

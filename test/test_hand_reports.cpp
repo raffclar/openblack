@@ -24,6 +24,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/ReportedHand.h"
@@ -347,4 +348,58 @@ TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
 	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 165});
 	EXPECT_EQ(minds.forced.size(), 2u);
 	Locator::creatureMindSystem::reset();
+}
+
+TEST_F(ReportedHands, TheGodOfAnotherPlayerGetsHandsOfItsOwnAndItsReportsMoveOnlyThem)
+{
+	// Before the command of the game server the player has no hands, and its reports do nothing
+	EXPECT_FALSE(_hands.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	EXPECT_FALSE(_hands.GetPlayerHandPositions()[0].has_value());
+
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto hand : made)
+	{
+		ASSERT_TRUE(registry.Valid(hand));
+		EXPECT_NE(hand, _hand);
+		ASSERT_TRUE(registry.AllOf<ecs::components::GodHand>(hand));
+		EXPECT_EQ(registry.Get<const ecs::components::GodHand>(hand).player, PlayerNames::PLAYER_TWO);
+	}
+	// A second command makes no more hands
+	EXPECT_EQ(_hands.MakeHandsOf(PlayerNames::PLAYER_TWO), made);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_ONE), _hands.GetPlayerHands());
+
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 0.0f, 20.0f}));
+	EXPECT_EQ(registry.Get<const ecs::components::ReportedHand>(made[0]).handPoint, glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	// The turn counts the stillness of each god's hand
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		_hands.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const ecs::components::HandStillness>(made[0]).stillTurns,
+	          registry.Get<const ecs::components::HandStillness>(_hand).stillTurns);
+}
+
+TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)
+{
+	_hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	// Before the first turn it has the first player's hands to draw
+	EXPECT_EQ(_hands.GetOwnHands(), _hands.GetPlayerHands());
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_hands.GetOwnHands(), made);
+	// The turns still read the first player's hands
+	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
+}
+
+TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
+{
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_THREE);
+	ecs::systems::HandSystem loaded;
+	loaded.FindAfterLoad();
+	EXPECT_EQ(loaded.GetPlayerHands()[0], _hand);
+	EXPECT_EQ(loaded.GetHandsOf(PlayerNames::PLAYER_THREE), made);
+	EXPECT_FALSE(loaded.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
 }

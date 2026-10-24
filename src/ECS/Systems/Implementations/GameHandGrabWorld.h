@@ -25,6 +25,10 @@ public:
 	[[nodiscard]] Registry& Entities() override;
 	[[nodiscard]] entt::entity Hand() const override;
 	[[nodiscard]] PlayerNames HandPlayer() const override;
+	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
+	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
+	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;
+	[[nodiscard]] bool IsNetworkGame() const override;
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override;
@@ -73,7 +77,6 @@ public:
 	[[nodiscard]] static bool LeashTakesTap(entt::entity object, PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void SendCommand(player_commands::Action action) override;
-	[[nodiscard]] bool IsNetworkGame() const override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;
@@ -85,6 +88,8 @@ public:
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;
 	[[nodiscard]] glm::vec3 ReportedHandPlace() const override;
+	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity hand) const override;
+	[[nodiscard]] std::vector<PlayerNames> OtherHandPlayers() const override;
 	void SetPose(entt::entity object, const Pose& pose) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
@@ -128,6 +133,9 @@ public:
 private:
 	/// Where the resource in the local player's hand came from
 	void SetHandTookFrom(PlayerNames from);
+
+	/// The player of the command that the hand does now, none outside the commands
+	std::optional<PlayerNames> _acting;
 };
 
 } // namespace openblack::ecs::systems

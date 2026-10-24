@@ -241,13 +241,41 @@ def lines_with(log, words):
         return [line.strip() for line in file if any(word in line for word in words)]
 
 
-def shifted_input(path, folder):
-    """The recorded input with its frames moved after the start of the network game"""
+SESSION_COUNTS = re.compile(r"Network game: (\d+) turns compared with the server, (\d+) the same")
+RESUMES = re.compile(r"Back in the game at turn")
+
+
+def session_counts(log):
+    """The last counts of the compares that the client's session wrote: compared, the same, and the resumes"""
+    if not os.path.exists(log):
+        return None
+    found = None
+    resumes = 0
+    with open(log, encoding="utf-8", errors="replace") as file:
+        for line in file:
+            match = SESSION_COUNTS.search(line)
+            if match:
+                found = (int(match.group(1)), int(match.group(2)))
+            if RESUMES.search(line):
+                resumes += 1
+    return None if found is None else (found[0], found[1], resumes)
+
+
+def set_camera(pid, camera):
+    """Puts the camera of a client where its input plays, through the inspector"""
+    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", "camera_set", camera], timeout=120,
+                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+
+
+def shifted_input(path, folder, extra=0):
+    """The recorded input with its frames moved after the start of the network game, and the extra frames"""
     with open(path, encoding="utf-8") as file:
         value = json.load(file)
     events = value.get("events", []) if isinstance(value, dict) else value
     for event in events:
-        event["frame"] = event["frame"] + INPUT_OFFSET_FRAMES
+        event["frame"] = event["frame"] + INPUT_OFFSET_FRAMES + extra
     if isinstance(value, dict):
         value["events"] = events
     else:
@@ -263,14 +291,25 @@ def main():
     parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
+    parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin")
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "net-check"))
     parser.add_argument("--input", help="recorded input for the first client's hand")
+    parser.add_argument("--input2", help="recorded input for the second client's hand (its god's own hand)")
+    parser.add_argument("--input2-delay-frames", type=int, default=1500,
+                        help="the second client's input starts this many frames later than the first's")
+    parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
+                                           "camera_set takes it (JSON)")
+    parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--part-second-at", type=int,
+                        help="the second client's world parts from the server's at this turn (--join-part-at), and must "
+                             "come back in step by the server's world state")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
@@ -292,7 +331,8 @@ def main():
     os.makedirs(keys_dir, exist_ok=True)
     key, kid, keys_file = make_ticket_key(keys_dir)
     certs = make_certificates(keys_dir)
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
 
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
@@ -307,6 +347,8 @@ def main():
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
         "--come-back-seconds", str(options.come_back_seconds)]
+    if options.server_frame_ms is not None:
+        server_command += ["--frame-ms", str(options.server_frame_ms)]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -335,10 +377,17 @@ def main():
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
                 command.append("--sim-hash-parts")
-            if index == 0 and options.input:
-                command += ["--sim-input", shifted_input(options.input, client_dir)]
+            client_input = options.input if index == 0 else options.input2
+            if client_input:
+                command += ["--sim-input",
+                            shifted_input(client_input, client_dir, options.input2_delay_frames if index else 0)]
             else:
                 command.append("--sim-still-hand")
+            camera = options.camera1 if index == 0 else options.camera2
+            if camera:
+                command += ["--inspect-port", "0"]
+            if index == 1 and options.part_second_at is not None:
+                command += ["--join-part-at", str(options.part_second_at)]
             clients.append(start(command, client_dir))
             processes.append(clients[-1])
             if index == 0:
@@ -346,6 +395,13 @@ def main():
                 if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[0]):
                     print(f"the first client did not join; see {client_dir}")
                     return 1
+        # Each client looks where its input plays, once its network game started
+        for index, client in enumerate(clients):
+            camera = options.camera1 if index == 0 else options.camera2
+            if camera:
+                log = os.path.join(client_dirs[index], "client.log")
+                if wait_for_line(log, "Joined the game server", client):
+                    set_camera(client.pid, camera)
         started = time.monotonic()
         stopped_second = False
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
@@ -373,11 +429,23 @@ def main():
         different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
         parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
                              different[0]) if different and options.hash_parts else None
+        # A client that catches up does several turns in a frame, and its record keeps only the last of them; the
+        # session compares every turn and writes its counts to the log
+        counts = session_counts(os.path.join(client_dir, "client.log"))
+        parted_on_purpose = index == 1 and options.part_second_at is not None
+        recovered = lines_with(os.path.join(client_dir, "client.log"), ["The world goes on from the server's world"])
+        if parted_on_purpose and recovered:
+            back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
+            different = [turn for turn in different if turn > back_at]
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
-        same = not different and len(compared) >= expected
+        same = (not different and len(compared) >= expected // 2 and counts is not None
+                and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
+                and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
+            "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
+            "recovered": recovered[-1:] if recovered else [],
             "different": different[:20], "same": same, "parts_against_server": parts,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
