@@ -644,6 +644,23 @@ struct ObjectShower
 	rising_sparks::FrameMilliseconds clock;
 };
 
+/// The shift of a drawn atom from where it stepped: the move of this computer's live hand away from a reference point
+/// since the last step, times a weight. Only the casts of this computer give it. Thus the parts of a miracle that
+/// follow the hand stay on the live hand between steps.
+struct HandOffset
+{
+	/// The point that the last step put the atom at, or the hand point of that step
+	glm::vec3 reference {0.0f};
+	/// How much of the move it takes, 0..1
+	float weight {0.0f};
+};
+
+/// The shift of an atom with the offset from where it stepped, when this computer draws its hand at a point
+[[nodiscard]] inline glm::vec3 LiveHandShift(const HandOffset& offset, glm::vec3 hand)
+{
+	return (hand - offset.reference) * offset.weight;
+}
+
 /// A particle
 struct Atom
 {
@@ -705,6 +722,11 @@ struct Atom
 	/// effect's age then: a wisp let out of this computer's hand starts at the hand
 	std::optional<glm::vec3> drawOffset;
 	float drawOffsetFrom {0.0f};
+	/// It keeps the atom at the live hand of this computer's cast between steps. An atom has only one draw offset: this one,
+	/// the shift above, or the one of its parent atom.
+	std::optional<HandOffset> handOffset;
+	/// It uses the draw offset of its parent atom, the same one, as the rain cone keeps with its cloud
+	bool sharesParentOffset {false};
 	/// The surface it is drawn as, its own, when a rule draws it as a surface of revolution
 	std::shared_ptr<SurfaceInstance> surface;
 	/// The shell it lays over an object's model, when a rule keeps it on one
@@ -754,6 +776,17 @@ struct Collection
 	std::vector<std::unique_ptr<Atom>> atoms;
 	std::vector<Slot> modifiers;
 };
+
+/// The atom whose draw offset an atom uses: the atom itself, or the parent atom whose offset it shares
+[[nodiscard]] const Atom& DrawOffsetHolder(const Atom& atom);
+/// Whether the atom has a draw offset of any kind, its own or a shared one
+[[nodiscard]] bool HasDrawOffset(const Atom& atom);
+/// The atom keeps up with this computer's live hand: it takes the move of the hand from the reference point, times the
+/// weight (clamped to 0..1). An atom with another draw offset keeps that offset.
+void FollowLiveHand(Atom& atom, glm::vec3 reference, float weight);
+/// The atom shares the draw offset of its parent atom, if it has no draw offset and the parent has one. Returns true
+/// only when it starts to share the offset now.
+bool ShareParentDrawOffset(Atom& atom);
 
 /// A rule of a group: it creates atoms, moves them, changes how they look, or removes them
 class Modifier
@@ -945,6 +978,8 @@ public:
 		const SurfaceInstance* surface {nullptr};
 		/// How much of its effect's draw offset it takes (Atom::drawWeight)
 		float offsetWeight {1.0f};
+		/// The offset from the live hand that it holds or shares (Atom::handOffset)
+		std::optional<HandOffset> handOffset;
 		/// The triangles of a piece of a broken model
 		std::shared_ptr<const blast::MeshFragment> fragment;
 		/// The player it shows, when not its effect's (Atom::player); -1 for its effect's

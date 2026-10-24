@@ -718,6 +718,42 @@ size_t Effect::CollectionCount() const
 	return total;
 }
 
+const Atom& openblack::particles::DrawOffsetHolder(const Atom& atom)
+{
+	const Atom* holder = &atom;
+	while (holder->sharesParentOffset && holder->collection != nullptr && holder->collection->parent != nullptr)
+	{
+		holder = holder->collection->parent;
+	}
+	return *holder;
+}
+
+bool openblack::particles::HasDrawOffset(const Atom& atom)
+{
+	const auto& holder = DrawOffsetHolder(atom);
+	return holder.drawOffset.has_value() || holder.handOffset.has_value();
+}
+
+void openblack::particles::FollowLiveHand(Atom& atom, glm::vec3 reference, float weight)
+{
+	if (atom.drawOffset.has_value() || atom.sharesParentOffset)
+	{
+		return;
+	}
+	atom.handOffset = HandOffset {.reference = reference, .weight = std::clamp(weight, 0.0f, 1.0f)};
+}
+
+bool openblack::particles::ShareParentDrawOffset(Atom& atom)
+{
+	if (HasDrawOffset(atom) || atom.collection == nullptr || atom.collection->parent == nullptr ||
+	    !HasDrawOffset(*atom.collection->parent))
+	{
+		return false;
+	}
+	atom.sharesParentOffset = true;
+	return true;
+}
+
 std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, bool interpolated) const
 {
 	const float k = interpolated ? std::clamp(t, 0.0f, 1.0f) : 1.0f;
@@ -731,10 +767,12 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	// The drawn time lies between the last two steps; the effect's age is the current step's end
 	const float drawnAt = _age - (_dt * (1.0f - k));
 	const float age = drawnAt - atom.birth;
+	// The draw offset is the atom's own or its parent atom's
+	const auto& holder = DrawOffsetHolder(atom);
 	glm::vec3 shift(0.0f);
-	if (atom.drawOffset.has_value())
+	if (holder.drawOffset.has_value())
 	{
-		shift = *atom.drawOffset * std::clamp(1.0f - (drawnAt - atom.drawOffsetFrom) * k_DrawOffsetFade, 0.0f, 1.0f);
+		shift = *holder.drawOffset * std::clamp(1.0f - (drawnAt - holder.drawOffsetFrom) * k_DrawOffsetFade, 0.0f, 1.0f);
 	}
 	return DrawAtom {
 	    .creator = atom.creator,
@@ -750,6 +788,7 @@ std::optional<Effect::DrawAtom> Effect::Interpolate(const Atom& atom, float t, b
 	    .fraction = k,
 	    .surface = atom.surface.get(),
 	    .offsetWeight = atom.drawWeight,
+	    .handOffset = holder.handOffset,
 	    .fragment = atom.fragment,
 	    .player = atom.player,
 	    .objectGlow = atom.objectGlow,
@@ -1395,6 +1434,10 @@ void Effect::SaveStructure(const Collection& collection, EffectWriter& out) cons
 		out.WriteValue(atom.drawOnFirstUpdate);
 		out.WriteValue(atom.drawOffset);
 		out.WriteValue(atom.drawOffsetFrom);
+		out.WriteValue(atom.handOffset.has_value());
+		out.WriteValue(atom.handOffset.value_or(HandOffset {}).reference);
+		out.WriteValue(atom.handOffset.value_or(HandOffset {}).weight);
+		out.WriteValue(atom.sharesParentOffset);
 		out.Out().WriteSize(atom.sounds.size());
 		for (const auto& sound : atom.sounds)
 		{
@@ -1532,6 +1575,16 @@ std::unique_ptr<Collection> Effect::LoadStructure(EffectReader& in, Atom* parent
 		in.ReadValue(atom.drawOnFirstUpdate);
 		in.ReadValue(atom.drawOffset);
 		in.ReadValue(atom.drawOffsetFrom);
+		bool followsHand = false;
+		HandOffset handOffset;
+		in.ReadValue(followsHand);
+		in.ReadValue(handOffset.reference);
+		in.ReadValue(handOffset.weight);
+		if (followsHand)
+		{
+			atom.handOffset = handOffset;
+		}
+		in.ReadValue(atom.sharesParentOffset);
 		const auto sounds = in.In().ReadSize();
 		for (size_t s = 0; sounds.has_value() && s < *sounds && !in.Failed(); ++s)
 		{

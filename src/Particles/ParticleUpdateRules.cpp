@@ -416,19 +416,31 @@ public:
 	}
 };
 
-/// An atom stays with its parent atom and moves as it does
+/// An atom stays with its parent atom and moves as it does. When the rule asks, an atom with no draw offset takes the
+/// draw offset of its parent, and its collection blends between steps only if the parent's collection blends.
 class FollowParent final: public Modifier
 {
 public:
+	explicit FollowParent(const ParticleObject& object)
+	    : useParentsDrawOffset(object.Bool("UseParentsDrawOffset", false))
+	{
+	}
+
 	bool ModifyAtom(Effect& effect, Atom& atom, Collection::Slot& /*slot*/) const override
 	{
 		if (const auto* parent = atom.collection->parent; parent != nullptr)
 		{
 			atom.position = effect.SpawnPosition(*atom.collection);
 			atom.velocity = parent->velocity;
+			if (useParentsDrawOffset && ShareParentDrawOffset(atom) && parent->collection != nullptr)
+			{
+				atom.collection->interpolated = parent->collection->interpolated;
+			}
 		}
 		return true;
 	}
+
+	bool useParentsDrawOffset;
 };
 
 /// An atom held at a height above the land, or at an altitude above the sea

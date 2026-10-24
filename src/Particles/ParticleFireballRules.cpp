@@ -653,10 +653,9 @@ public:
 					groups = trailGroup >= 0 ? std::span<const int>(tail) : std::span<const int> {};
 				}
 				auto& atom = effect.NewAtom(collection, atomCreator, groups);
-				if (useParentsDrawOffset && collection.parent != nullptr)
+				if (useParentsDrawOffset)
 				{
-					atom.drawOffset = collection.parent->drawOffset;
-					atom.drawOffsetFrom = collection.parent->drawOffsetFrom;
+					ShareParentDrawOffset(atom);
 				}
 			}
 			return true;

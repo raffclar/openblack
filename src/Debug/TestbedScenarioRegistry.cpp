@@ -5953,6 +5953,50 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::SetAlignment, .delaySeconds = 10.0f, .alignment = 1.0f}},
 	});
 
+	// The camera looks north over the land from high up; the pointer starts east of the middle, clear of the testbed's
+	// window
+	all.push_back({
+	    .id = "hand.held_miracle_draw",
+	    .name = "Miracles that follow the hand as it moves",
+	    .facet = Facet::Hand,
+	    .description = "The hand gets a water seed and casts it with the right mouse button held. The pointer moves left "
+	                   "and right, then to the far edge of the testbed and back, then lets go. Then the hand casts "
+	                   "food, wood, lightning and fire, and the pointer moves left and right.",
+	    .expected = "The rain cloud and its rain cone stay exactly on the moving hand, with no lag. The food grains "
+	                "and the logs fall from where they come out and do not move with the hand. The start of the "
+	                "lightning and the fireball in the hand stay on the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -30.0f}, .look = {0.0f, 10.0f, 30.0f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.6f, 0.8f}},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Water)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.0f, -0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 2.0f, .point = {0.0f, 0.78f}, .amount = 1.0f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Food)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Wood)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::LightningBolt)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 2.0f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.5f, .point = {-0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 1.5f, .point = {0.3f, 0.0f}, .amount = 1.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 1.5f, .value = 3}},
+	});
+
 	// The camera looks down on an oak from about 150 m, as in play, the pointer on its crown
 	all.push_back({
 	    .id = "hand.tree_tug",
