@@ -2141,7 +2141,7 @@ game_frame::GraphicsWindow Game::FrameGraphicsWindow() const
 bool Game::DoesFrameGraphics() const
 {
 	const auto window = FrameGraphicsWindow();
-	return game_frame::DoesGraphics(window.minimised, window.pictureWanted);
+	return game_frame::DoesGraphics(window.minimised, window.pictureWanted, window.fixedFrameTime);
 }
 
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)

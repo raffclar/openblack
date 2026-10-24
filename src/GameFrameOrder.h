@@ -213,10 +213,13 @@ struct CameraKeyState
 	return false;
 }
 
-/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary
-[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted)
+/// Whether the frame does its graphics: not while the window is minimised, unless a picture of the frame is necessary.
+/// A run with a fixed frame time draws each frame also while the window is minimised. The renderer keeps some of what it
+/// drew before, such as the shadows on the land. Thus a picture of the run is the same whatever the desktop did with the
+/// window.
+[[nodiscard]] constexpr bool DoesGraphics(bool minimised, bool pictureWanted, bool fixedFrameTime)
 {
-	return !minimised || pictureWanted;
+	return !minimised || pictureWanted || fixedFrameTime;
 }
 
 /// The state of the window and the run that decides which steps of the graphics a frame does
