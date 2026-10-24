@@ -5457,13 +5457,13 @@ void AddHand(std::vector<Scenario>& all)
 	});
 
 	// The creature that the recorded input of the hand strokes and slaps for the dedicated server's check
-	// (tools/sim/hand_inputs/strokes.json). The creature help is off, so that the hand over the creature, which only the
-	// computer of that hand counts, does not start a help script on one computer only.
+	// (tools/sim/hand_inputs/strokes.json). The creature help is on: in a network game every computer counts the time
+	// that the reported hand stays over the creature, and the turn sets the look of the held creature.
 	all.push_back({
 	    .id = "hand.recorded_strokes",
 	    .name = "A tiger for the recorded strokes and slaps",
 	    .facet = Facet::Hand,
-	    .description = "The player's tiger faces the camera in the middle of the screen, with the creature help off. The "
+	    .description = "The player's tiger faces the camera in the middle of the screen. The "
 	                   "dedicated server and the game both play this scenario, and the game makes the recorded input of "
 	                   "tools/sim/hand_inputs/strokes.json: the hand holds the tiger, strokes it, slaps it and lets go.",
 	    .expected = "The strokes play the pleased animations and the slaps the reeling ones. In a network game each "
@@ -5471,10 +5471,6 @@ void AddHand(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
-	    .commands = {{.kind = Kind::CallNative,
-	                  .delaySeconds = 0.0f,
-	                  .script = "SET_CREATURE_HELP",
-	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}}},
 	});
 
 	// The carried leash round the wrist while the hand strokes and slaps: slow sweeps stroke, fast sweeps slap
@@ -6864,25 +6860,20 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 
 	// The fight that the recorded input of the hand directs for the dedicated server's check (tools/sim/hand_inputs).
-	// The creature help is off, so that the hand over a creature, which only the computer of that hand counts, does
-	// not start a help script on one computer only.
+	// The creature help is on: in a network game every computer counts the time that the reported hand stays over the
+	// creature.
 	all.push_back({
 	    .id = "combat.recorded_presses",
 	    .name = "A fight for the recorded presses of the hand",
 	    .facet = Facet::Combat,
-	    .description = "As Watching a fight, with the creature help off: the player's red tiger and a blue tiger fight by "
+	    .description = "As Watching a fight: the player's red tiger and a blue tiger fight by "
 	                   "themselves, and the hand's presses direct the red one. The dedicated server and the game both "
 	                   "play this scenario, and the game makes the recorded input of tools/sim/hand_inputs/fight.json.",
 	    .expected = "The camera flies to the side of the arena. Each press on the blue tiger, on the red tiger or on the "
 	                "ground puts its sparkle up at once, and the red tiger makes the move at the next turn.",
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
 	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
-	    .commands = {{.kind = Kind::CallNative,
-	                  .delaySeconds = 0.0f,
-	                  .script = "SET_CREATURE_HELP",
-	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer, .number = 0.0f}}},
-	                 Fight(Kind::StartFight, 0, 1, 1.0f),
-	                 Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
 	all.push_back({

@@ -262,6 +262,21 @@ TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
 	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
 }
 
+// In a network game the turn keeps the thing under the cursor from the last pick, whatever the reports of the hand do
+TEST_F(ReportedHands, TheWorldHasTheThingUnderTheCursorFromTheLastPick)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+	const auto creature = registry.Create();
+	_hands.ReportPick(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
+	EXPECT_EQ(_hands.GetReportedPick(), creature);
+	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 1.0f, 30.0f));
+	_hands.ReportPick(PlayerNames::PLAYER_ONE, entt::null);
+	EXPECT_EQ(_hands.GetReportedPick(), entt::entity {entt::null});
+}
+
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does
 TEST_F(ReportedHands, TheWorldHoldsACreatureFromTheLockToItsEnd)
 {

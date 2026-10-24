@@ -44,6 +44,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -415,6 +416,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::handGrabSystem::has_value())
 		{
 			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
+		}
+		// In a network game the held creature looks at the hand that its player reported
+		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
+		{
+			Locator::creatureHandSystem::value().LookAtReportedHand();
 		}
 		break;
 	case Step::TurnCheering:

@@ -101,6 +101,9 @@ public:
 	/// Whether letting go just told the creature something too slight to count, which forces the hand's "Focus Creature"
 	/// tooltip once; asking takes it
 	virtual bool TakeFocusTip() = 0;
+	/// At the turn of a network game: the creature that the hand holds looks at the hand that the player last reported,
+	/// so that every computer has the same look. A single game sets the look from the hand in each frame.
+	virtual void LookAtReportedHand() {}
 };
 
 } // namespace openblack::ecs::systems
