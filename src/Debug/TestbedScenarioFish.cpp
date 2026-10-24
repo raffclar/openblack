@@ -247,8 +247,9 @@ void testbed_scenarios::AddFishScenarios(std::vector<Scenario>& all)
 		                   "it away.",
 		    .expected = "Each time the rock comes to rest on the path, the hut's path bends round it in the same turn: the "
 		                "line goes round the rock, by a route that the creatures' planner finds or by nodes a tenth of a "
-		                "half turn apart on a circle about it. Each time the hand takes the rock, the path goes straight "
-		                "between its nodes again in the same turn. The fisherman on the path walks with the path.",
+		                "half turn apart on a circle about it. Each time the hand takes the rock, the marker at the rock's "
+		                "place goes and the line stops going round it, in the same turn. The fisherman on the path walks "
+		                "with the path.",
 		    .environment = {.dispenserGrid = false, .drawFootpaths = true, .cursor = glm::vec2(0.5f, 0.5f)},
 		    .framing = {.shot = Shot::Placed, .eye = {drop.x, 22.0f, drop.y - 24.0f}, .look = {drop.x, 0.0f, drop.y}},
 		    .objects = objects,
