@@ -16,13 +16,17 @@
 #include <random>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <JoinTicket.h>
+#include <LobbyApiJson.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
+#include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
 
 namespace openblack::server
@@ -34,6 +38,8 @@ namespace
 constexpr auto k_KeysAgainAfter = std::chrono::seconds(60);
 /// The first fetch of the keys waits this long at most
 constexpr auto k_FirstKeysLimit = std::chrono::seconds(15);
+/// The last report, when the server stops, waits this long at most
+constexpr auto k_LastReportLimit = std::chrono::seconds(3);
 
 int64_t SteadyMicroseconds()
 {
@@ -72,6 +78,45 @@ struct GameRole::Parts
 	std::string keysAddress;
 	std::chrono::steady_clock::time_point lastFetch {};
 	bool fetching {false};
+	/// The status reports to the lobby, over mutual TLS
+	std::unique_ptr<online::CurlHttpClient> lobby;
+	std::string statusAddress;
+	lobby_status::Room room;
+	std::chrono::steady_clock::time_point nextReport {};
+	bool reporting {false};
+	bool listed {false};
+
+	void Report(lobby_status::Phase phase)
+	{
+		if (!lobby || reporting || !host)
+		{
+			return;
+		}
+		reporting = true;
+		nextReport = std::chrono::steady_clock::now() + lobby_status::k_ReportInterval;
+		const auto text = lobby_api::ToJson(lobby_status::MakeStatus(room, phase, host->Seats()));
+		online::HttpRequest request {.method = online::HttpMethod::Put,
+		                             .url = statusAddress,
+		                             .headers = {{"Content-Type", "application/json"}},
+		                             .body = std::vector<uint8_t>(text.begin(), text.end())};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			reporting = false;
+			const bool ok = response.status == 200;
+			if (ok != listed)
+			{
+				if (ok)
+				{
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby lists the server");
+				}
+				else
+				{
+					SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the status of the server (status {}): {}",
+					                   response.status, response.Text().substr(0, 200));
+				}
+			}
+			listed = ok;
+		});
+	}
 
 	void FetchKeys()
 	{
@@ -168,6 +213,26 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		}
 		return result;
 	};
+	if (!settings.lobbyApi.empty())
+	{
+		if (!IsAddress(settings.lobbyApi) || !settings.clientCertificate.has_value() || !settings.clientKey.has_value())
+		{
+			return "the status reports need an https:// address of the lobby and a client certificate and key";
+		}
+		parts.lobby = std::make_unique<online::CurlHttpClient>(
+		    online::ClientIdentity {.certificate = *settings.clientCertificate, .key = *settings.clientKey});
+		auto base = settings.lobbyApi;
+		while (base.ends_with('/'))
+		{
+			base.pop_back();
+		}
+		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		parts.room = lobby_status::Room {.hostname = settings.roomName,
+		                                 .land = start.land,
+		                                 .maxGods = static_cast<int32_t>(settings.godsToStart),
+		                                 .version = std::string(build_version::Semantic())};
+	}
+
 	parts.host = std::make_unique<LockstepHost>(
 	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {.start = std::move(start),
@@ -190,6 +255,35 @@ void GameRole::Update()
 	{
 		parts.host->Update();
 	}
+	if (parts.lobby)
+	{
+		if (std::chrono::steady_clock::now() >= parts.nextReport)
+		{
+			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
+		}
+		parts.lobby->Poll();
+	}
+}
+
+void GameRole::Close()
+{
+	auto& parts = *_parts;
+	if (!parts.lobby || !parts.host)
+	{
+		return;
+	}
+	// The last report goes after the report that did not come back yet
+	const auto until = std::chrono::steady_clock::now() + k_LastReportLimit;
+	const auto wait = [&parts, until] {
+		while (parts.reporting && std::chrono::steady_clock::now() < until)
+		{
+			parts.lobby->Poll();
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	};
+	wait();
+	parts.Report(lobby_status::Phase::Exiting);
+	wait();
 }
 
 } // namespace openblack::server

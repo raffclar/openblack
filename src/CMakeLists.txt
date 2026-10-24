@@ -468,6 +468,12 @@ if (NOT ANDROID)
   target_link_libraries(openblack_lib PUBLIC openblack_systems openblack_sim)
   target_link_libraries(openblack_systems PUBLIC openblack_lib)
   target_link_libraries(openblack_sim PUBLIC openblack_systems openblack_lib)
+  # A linker that reads each static library one time (GNU ld) finds the symbols of the three libraries only if the link
+  # line names them again. MSVC's linker and LLVM's lld look through each library again by themselves.
+  set_property(
+    TARGET openblack_lib openblack_systems openblack_sim
+    PROPERTY LINK_INTERFACE_MULTIPLICITY 4
+  )
 endif ()
 
 set_property(

@@ -512,7 +512,7 @@ TEST(ScreenPick, ACreatureInItsPenIsPickedOnlyWhereNoWallIsNearer)
 	    {.centre = {0.0f, 0.0f, -60.0f}, .radius = 40.0f, .origin = {0.0f, 0.0f, -60.0f}},
 	    {.centre = {0.0f, 0.0f, -50.0f}, .radius = 1.0f, .origin = {0.0f, 0.0f, -50.0f}},
 	}};
-	constexpr float k_Creature = 49.5f;
+	static constexpr float k_Creature = 49.5f;
 
 	// Over the open pen the cursor meets the temple only on the wall behind the creature: the creature is picked
 	const auto overThePen =
