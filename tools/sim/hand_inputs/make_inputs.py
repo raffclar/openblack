@@ -7,9 +7,9 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json and casts.json beside this script. strokes.json
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json, casts.json and cast_edge.json beside this script. strokes.json
 plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes), and casts.json on
-miracles.recorded_casts. The twogods inputs play on the
+miracles.recorded_casts, cast_edge.json on miracles.cast_at_influence_edge. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
 fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
@@ -260,6 +260,25 @@ def casts():
     return script.events
 
 
+def cast_edge():
+    """The testbed scenario miracles.cast_at_influence_edge: the hand waits inside the player's influence with the water
+    miracle, goes just past the border, waits two turns and casts there, then moves far out at once, before the next
+    turn. In a network game the turn after the press checks the cast from the hand that the last turn reported."""
+    script = Script()
+    script.wait(10)
+    script.move((640, 980), 20)
+    # The water miracle comes into the hand at 1 s and is ready to cast before the hand goes out
+    script.frame = 250
+    script.move((640, 700), 15)
+    script.wait(10)
+    script.press()
+    script.move((640, 100), 3)
+    script.wait(60)
+    script.release()
+    script.wait(100)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -279,6 +298,7 @@ def main():
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
     write("casts", casts())
+    write("cast_edge", cast_edge())
 
 
 if __name__ == "__main__":

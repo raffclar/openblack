@@ -372,6 +372,26 @@ void AddFoundation(std::vector<Scenario>& all)
 	          .byHand = true}},
 	});
 
+	// The camera looks down on the north edge of the player's influence, 400 m from the middle: the bottom of the
+	// screen is inside it, the rest beyond. The dedicated server and the game both play this scenario, and the game
+	// makes the recorded input of tools/sim/hand_inputs/cast_edge.json.
+	all.push_back({
+	    .id = "miracles.cast_at_influence_edge",
+	    .name = "A cast just past the influence border, and the hand moves away at once",
+	    .facet = Facet::Miracles,
+	    .description = "A water miracle comes into the hand. The hand stays inside the player's influence, then goes just "
+	                   "past the border and casts there. Right after the press, the hand moves far out, before the next "
+	                   "turn.",
+	    .expected = "In a single player game the turn after the press checks the cast from the hand now, which is far "
+	                "out: the water does not rain. In a network game the turn checks it from the hand that the last turn "
+	                "reported, which was at the cast point: the water rains there on the server and on each computer.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 375.0f}, .look = {0.0f, 0.0f, 415.0f}},
+	    .commands = {{.kind = Command::Kind::HoldSeed,
+	                  .delaySeconds = 1.0f,
+	                  .value = static_cast<size_t>(SpellSeedType::Water)}},
+	});
+
 	all.push_back({
 	    .id = "miracles.hand_worship_and_creature",
 	    .name = "A seed from worship, and a creature spell by hand",
