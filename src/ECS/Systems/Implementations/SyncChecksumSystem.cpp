@@ -11,8 +11,6 @@
 
 #include "SyncChecksumSystem.h"
 
-#include <array>
-
 #include <entt/meta/context.hpp>
 
 #include "Common/GameRandom.h"
@@ -45,11 +43,7 @@ void SyncChecksumSystem::ProcessTurn()
 	auto stateHash = hash.hash;
 	if (Locator::scriptMusicSystem::has_value())
 	{
-		const auto& music = Locator::scriptMusicSystem::value().GetMusic();
-		const auto time = music.GetChannelTime();
-		const std::array<int64_t, 5> values {static_cast<int64_t>(music.GetType()), music.IsStarted() ? 1 : 0,
-		                                     music.GetLyrics().line, music.GetLyrics().word, time ? time->count() : -1};
-		stateHash = synced_state::MixValues(stateHash, values);
+		stateHash = synced_state::MixValues(stateHash, Locator::scriptMusicSystem::value().GetMusic().SyncedValues());
 	}
 	uint32_t seed = 0;
 	uint64_t draws = 0;

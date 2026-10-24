@@ -215,7 +215,9 @@ def compare(records_a, records_b):
         state_a = (record.get("creature") or {}).get("state_hash")
         state_b = (other.get("creature") or {}).get("state_hash")
         draws_same = record.get("seeds") == other.get("seeds") and record.get("draws") == other.get("draws")
-        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same:
+        # The checksum of the synced world also holds what the systems keep, such as the scripts' music
+        checksum_same = (record.get("synced") or {}).get("checksum") == (other.get("synced") or {}).get("checksum")
+        if record.get("hash") != other.get("hash") or state_a != state_b or not draws_same or not checksum_same:
             parts_a, parts_b = record.get("hash_parts", {}), other.get("hash_parts", {})
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {
@@ -247,7 +249,7 @@ def compare_synced(records_a, records_b):
         if not synced_a or not synced_b:
             continue
         compared += 1
-        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws")):
+        if (synced_a.get("hash"), synced_a.get("seed"), synced_a.get("draws"), synced_a.get("checksum")) !=                 (synced_b.get("hash"), synced_b.get("seed"), synced_b.get("draws"), synced_b.get("checksum")):
             parts_a, parts_b = synced_a.get("parts") or {}, synced_b.get("parts") or {}
             parts = sorted(key for key in set(parts_a) | set(parts_b) if parts_a.get(key) != parts_b.get(key))
             return {

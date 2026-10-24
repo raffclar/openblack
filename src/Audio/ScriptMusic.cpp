@@ -250,6 +250,12 @@ std::optional<std::chrono::microseconds> ScriptMusic::GetChannelTime() const
 	return _channel.has_value() ? std::optional(_channel->time) : std::nullopt;
 }
 
+std::array<int64_t, 5> ScriptMusic::SyncedValues() const
+{
+	return {static_cast<int64_t>(_type), _started ? 1 : 0, _lyrics.line, _lyrics.word,
+	        _channel.has_value() ? _channel->time.count() : -1};
+}
+
 void ScriptMusic::Restore(MusicType type, bool started, MusicLyrics lyrics)
 {
 	_type = type;

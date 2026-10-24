@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <chrono>
 #include <functional>
 #include <memory>
@@ -153,6 +154,9 @@ public:
 	[[nodiscard]] std::optional<MusicPiecePosition> GetPlace() const;
 	/// The time since the channel of the scripts' piece started, none when no channel plays
 	[[nodiscard]] std::optional<std::chrono::microseconds> GetChannelTime() const;
+	/// The values that a network game compares each turn: the piece, whether it plays, the line, the word and the time
+	/// of the channel in microseconds (-1 without a channel)
+	[[nodiscard]] std::array<int64_t, 5> SyncedValues() const;
 
 	/// A saved game continues with the scripts' piece, whether it played and the lyrics. A piece that played before the
 	/// save gives no sound and does not end, because the save keeps no channel.
