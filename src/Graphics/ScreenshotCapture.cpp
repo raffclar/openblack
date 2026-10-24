@@ -34,23 +34,27 @@ constexpr auto k_CopyView = static_cast<bgfx::ViewId>(RenderPass::_count);
 constexpr uint32_t k_BytesPerPixel = 4;
 } // namespace
 
-ScreenshotPlan PlanScreenshot(bool screenDroppedWhenMinimised, bool minimised, bool canReadBack, glm::u16vec2 size)
+ScreenshotPlan PlanScreenshot(WindowBuffers buffers, bool minimised, bool canReadBack, glm::u16vec2 size)
 {
-	if (!screenDroppedWhenMinimised || !minimised)
+	const bool screenHoldsFrame =
+	    buffers == WindowBuffers::Kept || (buffers == WindowBuffers::DroppedWhenMinimised && !minimised);
+	if (screenHoldsFrame)
 	{
 		return {.route = ScreenshotRoute::Screen, .why = {}};
 	}
+	// The reason that the window's buffers cannot be read, at the start of each refusal
+	const std::string_view cause = buffers == WindowBuffers::UncoveredOnly
+	                                   ? "this renderer gives no pixels where other windows cover the window"
+	                                   : "the window is minimised, which leaves this renderer nothing to read";
 	if (!canReadBack)
 	{
 		return {.route = ScreenshotRoute::Refused,
-		        .why = "the window is minimised, which leaves this renderer nothing to read, and it can't read back a frame "
-		               "drawn aside: restore the window"};
+		        .why = std::string(cause) + ", and it can't read back a frame drawn aside: restore the window"};
 	}
 	if (size.x == 0 || size.y == 0)
 	{
 		return {.route = ScreenshotRoute::Refused,
-		        .why = "the window is minimised, which leaves this renderer nothing to read, and its size is unknown: "
-		               "restore the window"};
+		        .why = std::string(cause) + ", and the window's size is unknown: restore the window"};
 	}
 	return {.route = ScreenshotRoute::Offscreen, .why = {}};
 }

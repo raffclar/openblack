@@ -32,6 +32,11 @@ vcpkg_download_distfile(
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the Direct3D 12 renderer only:
+# - d3d12-upload-pages: buffer and texture updates of 1 MB or less copy from mapped 4 MB upload pages that the
+#   command queue keeps. A full page is used again when the queue fence shows that the GPU is done with it.
+#   Without this change, each update makes an upload resource and releases it later. That took 6 to 8 ms of each
+#   frame on Land 1. Larger updates keep the old path. The same bytes are copied, thus the pictures stay the same.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -44,6 +49,7 @@ vcpkg_extract_source_archive(
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
     essl-no-inline.patch
+    d3d12-upload-pages.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx
