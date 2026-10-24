@@ -1325,7 +1325,7 @@ bool LeashSystem::ShouldWalkBack(entt::entity creature) const
 	const auto& leashes = registry.Get<const CreatureLeash>(creature);
 	const auto& transform = registry.Get<const Transform>(creature);
 	// The creature that the hand holds does nothing until the hand lets go of it
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature)
 	{
 		return false;
 	}

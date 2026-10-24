@@ -7,8 +7,17 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, testbed.json, twogods.json and twogods_totem.json beside this script. The twogods inputs play on the
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json and strokes.json beside this script. strokes.json
+plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes). The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
+
+fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
+which the server plays too. To record it again:
+
+    python tools/sim/server_check.py --scenario combat.recorded_presses --turns 400 --frame-ms 20 --server-fast
+        --hash-parts --input <a file with one pointer event, [640, 900] at frame 0> --game-args "--fight-autopilot
+        sequence --fight-autopilot-sequence 1:high,2.5:block,4:step_forward,5.5:middle,7:step_back,8.5:low,10:step_left,
+        11.5:step_right,13:high --sim-record-input fight.json"
 """
 
 import json
@@ -128,6 +137,11 @@ def testbed():
     return script.events
 
 
+# The camera of land1_camera.json: turned from where Land 1 starts it and further back, so that the story's scripts read
+# a camera that only the player's reports give the server
+LAND1_TURNED_CAMERA = {"yaw": 120, "pitch": 40, "distance": 90}
+
+
 # The camera of twogods.json: 35 m from the store of the player's first town, looking down at 40 degrees
 TWO_GODS_STORE_CAMERA = {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}
 
@@ -168,11 +182,42 @@ def two_gods_totem():
     script.wait(20)
     script.press()
     script.wait(10)
+    # Down the screen: the share stays 0. A slide up (the pointer above the hand, which the game puts the pointer back on
+    # each frame) gives a share above 0, but then the frames make the totem's ghost as entities of the world, which the
+    # server does not make (tracker row)
     script.move((640, 700), 40)
     script.wait(10)
     script.release()
     script.wait(30)
     script.move((600, 600), 20)
+    script.wait(40)
+    return script.events
+
+
+def strokes():
+    """The testbed scenario hand.recorded_strokes: the hand holds the player's tiger by its middle, strokes it with slow
+    moves up and down, slaps it with fast sweeps across the screen, and lets go"""
+    script = Script()
+    script.wait(10)
+    script.move((640, 512), 10)
+    script.wait(40)
+    script.press()
+    script.wait(30)
+    # Slow strokes up and down the body
+    for _ in range(3):
+        script.move((640, 470), 20)
+        script.move((640, 540), 20)
+    script.move((640, 512), 10)
+    script.wait(20)
+    # Fast sweeps across the middle, each a slap
+    for across in (900, 380, 900, 380):
+        script.move((across, 512), 3)
+        script.wait(40)
+    script.move((640, 512), 10)
+    script.wait(20)
+    script.release()
+    script.wait(60)
+    script.move((640, 900), 20)
     script.wait(40)
     return script.events
 
@@ -190,9 +235,11 @@ def write(name, events, camera=None):
 
 def main():
     write("land1", land1())
+    write("land1_camera", land1(), LAND1_TURNED_CAMERA)
     write("testbed", testbed())
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
+    write("strokes", strokes())
 
 
 if __name__ == "__main__":

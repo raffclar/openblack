@@ -139,6 +139,8 @@ def main():
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
+    parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
+                                           "frame, so that the recorded input gets to what it sets up")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
@@ -153,6 +155,9 @@ def main():
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
+    parser.add_argument("--game-args", default="",
+                        help="more arguments of the game, divided by spaces, such as the fight autopilot and "
+                             "--sim-record-input to record an input for --input")
     parser.add_argument("--ignore-parts", default="",
                         help="with --hash-parts, components (comma separated) left out of a second comparison of the "
                              "turns, for a difference that waits on a decision")
@@ -172,6 +177,10 @@ def main():
             os.remove(path)
 
     where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    server_where = where
+    if options.scenario:
+        where = ["--scenario", options.scenario, "--scenario-hide-window"]
+        server_where = ["--scenario", options.scenario]
     events = None
     if options.input:
         with open(options.input, encoding="utf-8") as file:
@@ -183,7 +192,7 @@ def main():
     if os.path.exists(commands):
         os.remove(commands)
 
-    server_command = [server_exe, "-g", options.game_path] + where + [
+    server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
                       "-l", server_log]
     if options.server_fast:
@@ -209,6 +218,7 @@ def main():
         game_command += ["--sim-input", os.path.abspath(options.input)]
     if relay:
         game_command += ["--sim-commands", commands]
+    game_command += [argument for argument in options.game_args.split(" ") if argument]
     if options.hash_fields:
         game_command.append("--sim-hash-fields")
     elif options.hash_parts:

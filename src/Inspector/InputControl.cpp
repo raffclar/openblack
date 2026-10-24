@@ -435,6 +435,21 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	};
 }
 
+void InputProvider::StartRecording()
+{
+	_timeline.StartRecording(StartFrame());
+}
+
+std::vector<Json> InputProvider::StopRecording()
+{
+	std::vector<Json> events;
+	for (const auto& recorded : _timeline.StopRecording())
+	{
+		events.push_back({{"frame", recorded.frame}, {"event", ToJson(recorded.event)}});
+	}
+	return events;
+}
+
 std::optional<uint64_t> InputProvider::Replay(const Json& events, InputEvent::Timing timing, std::string& error)
 {
 	if (!events.is_array())
@@ -836,9 +851,9 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 		if (action == "stop")
 		{
 			Json events = Json::array();
-			for (const auto& recorded : _timeline.StopRecording())
+			for (auto& recorded : StopRecording())
 			{
-				events.push_back({{"frame", recorded.frame}, {"event", ToJson(recorded.event)}});
+				events.push_back(std::move(recorded));
 			}
 			return QueryResult::Value({{"recording", false}, {"events", std::move(events)}});
 		}

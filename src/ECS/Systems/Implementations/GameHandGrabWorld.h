@@ -73,6 +73,7 @@ public:
 	[[nodiscard]] static bool LeashTakesTap(entt::entity object, PlayerNames player);
 	[[nodiscard]] uint32_t LocalRandom(uint32_t count) override;
 	void SendCommand(player_commands::Action action) override;
+	[[nodiscard]] bool IsNetworkGame() const override;
 	void VillagerIntoHand(entt::entity villager) override;
 	void AnimalIntoOwnFlock(entt::entity animal) override;
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;

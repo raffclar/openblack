@@ -58,6 +58,7 @@
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 #include "Windowing/WindowingInterface.h"
@@ -455,6 +456,49 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 	ApplyBruise(k_LocalPlayer, bruise);
 }
 
+bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
+                               std::optional<creature_face::Request> face, float interruptsAfter)
+{
+	auto& minds = Locator::creatureMindSystem::value();
+	// In a network game the reaction is a command, which every computer plays at the same turn. The frame only asks
+	// whether the creature can take it now, for what the hand counts.
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame() && Locator::playerCommandSystem::has_value())
+	{
+		const bool takes = minds.CanForceAction(creature, animation, mirrored, interruptsAfter);
+		Locator::playerCommandSystem::value().Submit(player_commands::CreatureReaction {
+		    .creature = creature,
+		    .animation = static_cast<uint32_t>(animation),
+		    .mirrored = mirrored,
+		    .pullsFace = face.has_value(),
+		    .face = face.has_value() ? static_cast<uint8_t>(face->face) : uint8_t {0},
+		    .faceMs = face.has_value() ? face->milliseconds : 0.0f,
+		    .cue = face.has_value() ? static_cast<uint8_t>(face->cue) : uint8_t {0},
+		    .interruptsAfter = interruptsAfter,
+		});
+		return takes;
+	}
+	// Alone, the creature reacts at once, in the frame of the stroke or the slap
+	return minds.ForceAction(creature, animation, mirrored, face, interruptsAfter);
+}
+
+void CreatureHandSystem::DoReaction(PlayerNames /*player*/, const player_commands::CreatureReaction& reaction)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(reaction.creature) || !registry.AllOf<Creature>(reaction.creature) ||
+	    !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	const auto face = reaction.pullsFace ? std::optional(creature_face::Request {
+	                                           .face = static_cast<creature_face::Face>(reaction.face),
+	                                           .milliseconds = reaction.faceMs,
+	                                           .cue = static_cast<creature_face::Cue>(reaction.cue),
+	                                       })
+	                                     : std::nullopt;
+	Locator::creatureMindSystem::value().ForceAction(reaction.creature, reaction.animation, reaction.mirrored, face,
+	                                                 reaction.interruptsAfter);
+}
+
 void CreatureHandSystem::DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise)
 {
 	ApplyBruise(player, bruise);
@@ -660,7 +704,6 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 	const bool cursorMoved = input.cursor.x != contact.lastCursor.x;
 	bool stroking = false;
 
-	auto& minds = Locator::creatureMindSystem::value();
 	const auto ground = Locator::terrainSystem::has_value()
 	                        ? Locator::terrainSystem::value().GetHeightAt(glm::xz(input.shownAt))
 	                        : transform.position.y;
@@ -677,7 +720,7 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 			Bruise(creatureEntity, input.rayOrigin, input.rayDirection, feedback::BruiseColumn(contact.speed, height));
 		}
 		// The slap only counts when the creature can reel from it
-		if (minds.ForceAction(creatureEntity, slap->animation, slap->mirrored, std::nullopt, feedback::k_SlapInterruptsAfter))
+		if (React(creatureEntity, slap->animation, slap->mirrored, std::nullopt, feedback::k_SlapInterruptsAfter))
 		{
 			feedback::Touched(clocks);
 			contact.sum = feedback::AfterSlap(contact.sum, slap->gentle);
@@ -701,8 +744,8 @@ bool CreatureHandSystem::Step(HandOnCreature& contact, const StepInput& input)
 			const auto part = feedback::NearestPart(*input.touch, *parts);
 			const auto index = static_cast<size_t>(part);
 			if (feedback::StrokeDue(clocks, contact.lastPart, part, contact.sum) &&
-			    minds.ForceAction(creatureEntity, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
-			                      feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter))
+			    React(creatureEntity, feedback::k_RewardAnimations.at(index), feedback::k_RewardMirrored.at(index),
+			          feedback::RewardFace(part), feedback::k_StrokeInterruptsAfter))
 			{
 				contact.lastPart = part;
 				feedback::Touched(clocks);

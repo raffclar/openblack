@@ -66,6 +66,9 @@ struct CreatureFighting
 	/// Whether this creature started the fight by a plan of its own, and not by the leash, a script or the debug tools
 	bool planned {false};
 	creature_fight::Fighter fighter {};
+	/// The sparkles that mark the moves that the player queued, in step with the queue. Only the computer of the player
+	/// who made the moves adds them, as it draws them.
+	creature_fight::marks::MarkList marks;
 	/// How far each of its blows reaches and where it lands, measured as the fight starts, and when in each blow it
 	/// lands, by the blow's place from the first
 	std::vector<creature_fight::Reach> reaches;
