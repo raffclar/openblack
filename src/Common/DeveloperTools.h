@@ -172,6 +172,19 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "commands", .takesValue = true},
 };
 
+/// The developer options that a join of a game server (--join) needs. The game server checks that the land, the seed
+/// and the start of the new game are the same as its own, thus these options cannot change the shared world. A build
+/// without the developer tools keeps them only when the command line joins a game server.
+inline constexpr std::array<std::string_view, 3> k_JoinWorldOptions {"start-level", "seed", "skip-opening"};
+
+/// Whether the arguments of a command line join a game server: they have --join, with its value after a "=" or in the
+/// next argument
+[[nodiscard]] bool JoinsGameServer(std::span<const std::string_view> arguments) noexcept;
+
+/// The developer options that the filter removes: all of them, but not the options of k_JoinWorldOptions when the
+/// command line joins a game server
+[[nodiscard]] std::vector<DeveloperOption> OptionsToRemove(std::span<const DeveloperOption> options, bool joins);
+
 /// Whether an option of the command line, by its long name, is one of the developer options
 [[nodiscard]] bool IsDeveloperOption(std::string_view name, std::span<const DeveloperOption> options) noexcept;
 

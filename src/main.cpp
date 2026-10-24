@@ -195,8 +195,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		if constexpr (!openblack::developer_tools::k_Built)
 		{
 			const std::vector<std::string_view> texts(ownArguments.begin(), ownArguments.end());
-			auto filtered =
-			    openblack::developer_tools::FilterDeveloperOptions(texts, openblack::developer_tools::k_DeveloperOptions);
+			// A join of a game server keeps the options of the land, the seed and the start, which the server checks
+			const auto removed = openblack::developer_tools::OptionsToRemove(
+			    openblack::developer_tools::k_DeveloperOptions, openblack::developer_tools::JoinsGameServer(texts));
+			auto filtered = openblack::developer_tools::FilterDeveloperOptions(texts, removed);
 			std::vector<char*> kept;
 			kept.reserve(filtered.kept.size());
 			std::ranges::transform(filtered.kept, std::back_inserter(kept),
