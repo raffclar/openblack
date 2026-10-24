@@ -46,11 +46,13 @@ public:
 	void DoLock(PlayerNames player, entt::entity creature) override;
 	void DoUnlock(PlayerNames player, entt::entity creature) override;
 	void DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise) override;
+	void DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction) override;
 	[[nodiscard]] bool IsHeldByCommand() const override;
 	[[nodiscard]] std::optional<entt::entity> CreatureUnderCursor() const override;
 	[[nodiscard]] float GetFeedbackSum() const override;
 	[[nodiscard]] float GetLastFeedbackSum() const override;
 	bool TakeFocusTip() override { return std::exchange(_focusTip, false); }
+	void LookAtReportedHand() override;
 
 private:
 	/// Whether the hand of the player may take hold of the creature
@@ -85,6 +87,10 @@ private:
 	/// The world takes a bruise: the slapping player's own creature loses some life and, slapped itself, takes the wound
 	static void ApplyBruise(PlayerNames player, const player_commands::CreatureBruise& bruise);
 	static void Bruise(entt::entity creature, const glm::vec3& rayOrigin, const glm::vec3& rayDirection, uint8_t column);
+	/// The held creature reacts to a stroke or a slap: at once, or in a network game at the next turn on every computer.
+	/// Whether the creature takes the reaction now.
+	static bool React(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
+	                  float interruptsAfter);
 
 	/// The camera on the creature while the hand holds it, and where the player's camera was going when it took over
 	CreatureInteractCameraModel* _cameraModel {nullptr};

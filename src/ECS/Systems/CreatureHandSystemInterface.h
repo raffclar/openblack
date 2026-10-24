@@ -22,6 +22,7 @@
 namespace openblack::player_commands
 {
 struct CreatureBruise;
+struct CreatureReaction;
 } // namespace openblack::player_commands
 
 namespace openblack::ecs::systems
@@ -93,6 +94,8 @@ public:
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// At the turn: a hard slap bruised a creature (player_commands::CreatureBruise)
 	virtual void DoBruise(PlayerNames /*player*/, const player_commands::CreatureBruise& /*bruise*/) {}
+	/// The turn of a stroke or a slap that a player sent in a network game: the creature plays its reaction
+	virtual void DoReaction(PlayerNames /*player*/, const player_commands::CreatureReaction& /*reaction*/) {}
 	/// Whether the hand was put on the creature by a command, so the button letting go leaves it held
 	[[nodiscard]] virtual bool IsHeldByCommand() const = 0;
 	/// The creature the interface picked under the cursor at the last frame drawn, which the hand would take hold of
@@ -104,6 +107,9 @@ public:
 	/// Whether letting go just told the creature something too slight to count, which forces the hand's "Focus Creature"
 	/// tooltip once; asking takes it
 	virtual bool TakeFocusTip() = 0;
+	/// At the turn of a network game: the creature that the hand holds looks at the hand that the player last reported,
+	/// so that every computer has the same look. A single game sets the look from the hand in each frame.
+	virtual void LookAtReportedHand() {}
 };
 
 } // namespace openblack::ecs::systems

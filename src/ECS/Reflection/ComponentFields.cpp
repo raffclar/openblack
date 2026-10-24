@@ -753,6 +753,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::CreatureFighting::arenaEntity>("arenaEntity")
 	    .Field<&components::CreatureFighting::planned>("planned")
 	    .Field<&components::CreatureFighting::fighter>("fighter")
+	    .Field<&components::CreatureFighting::marks>("marks")
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
 	    .Field<&components::CreatureFighting::measured>("measured")
@@ -1688,7 +1689,8 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ReportedHand::collidePoint>("collidePoint")
 	    .Field<&components::ReportedHand::handPoint>("handPoint")
 	    .Field<&components::ReportedHand::camera>("camera")
-	    .Field<&components::ReportedHand::focus>("focus");
+	    .Field<&components::ReportedHand::focus>("focus")
+	    .Field<&components::ReportedHand::pickedObject>("pickedObject");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)
@@ -2480,7 +2482,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::creature_fight::Fighter::stopping>("stopping")
 	    .Field<&openblack::creature_fight::Fighter::hurried>("hurried")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
-	    .Field<&openblack::creature_fight::Fighter::marks>("marks")
 	    .Field<&openblack::creature_fight::Fighter::health>("health")
 	    .Field<&openblack::creature_fight::Fighter::stamina>("stamina")
 	    .Field<&openblack::creature_fight::Fighter::control>("control")

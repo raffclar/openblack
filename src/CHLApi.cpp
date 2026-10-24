@@ -152,6 +152,7 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPopulate.h"
@@ -1196,8 +1197,22 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
+/// In a network game the scripts read the camera and the hand of the player from the last report of a turn, so that
+/// every computer gets the same answer; before the first report they read the middle of the world's axes. Alone, the
+/// scripts read the camera and the hand of this computer.
+bool ScriptsReadReports()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
+	if (ScriptsReadReports())
+	{
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	const auto position = camera.GetOrigin();
 	PushVec(position);
@@ -1205,6 +1220,12 @@ void GetCameraPosition() // 005 GET_CAMERA_POSITION
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
+	if (ScriptsReadReports())
+	{
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	const auto focus = camera.GetFocus();
 	PushVec(focus);
@@ -3289,6 +3310,12 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	if (PlayerInsideTemple())
 	{
 		ScriptMessage("Hand in citadel");
+	}
+	if (ScriptsReadReports())
+	{
+		const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
+		PushVec(reported.value_or(glm::vec3(0.0f)));
+		return;
 	}
 	const auto handEntity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);

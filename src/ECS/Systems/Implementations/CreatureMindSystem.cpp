@@ -3072,6 +3072,42 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	LearnFromFeedback(creature, *mind, feedback);
 }
 
+bool CreatureMindSystem::MayInterrupt(entt::entity creature, const CreatureAnimation& body, float interruptsAfter)
+{
+	// Not while it is only just into something
+	if (Locator::creatureObjectActionSystem::has_value())
+	{
+		if (const auto progress = Locator::creatureObjectActionSystem::value().GetProgress(creature);
+		    progress.has_value() && *progress < interruptsAfter)
+		{
+			return false;
+		}
+	}
+	if (creature_layers::IsPlaying(body.body) && Locator::creatureAnimationSystem::has_value())
+	{
+		const auto duration =
+		    Locator::creatureAnimationSystem::value().AnimationDuration(creature, creature_layers::CurrentAnimation(body.body));
+		if (duration.has_value() && *duration > 0.0f && body.body.timeMs / *duration < interruptsAfter)
+		{
+			return false;
+		}
+	}
+	return true;
+}
+
+bool CreatureMindSystem::CanForceAction(entt::entity creature, size_t animation, bool mirrored, float interruptsAfter) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.TryGet<const CreatureAnimation>(creature);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	if (body == nullptr || mind == nullptr || creature_mind::IsUnconscious(mind->idle))
+	{
+		return false;
+	}
+	return MayInterrupt(creature, *body, interruptsAfter) &&
+	       creature_layers::PlayOnce(creature_layers::BodyAction {}, animation, mirrored).has_value();
+}
+
 bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bool mirrored,
                                      std::optional<creature_face::Request> face, float interruptsAfter)
 {
@@ -3088,23 +3124,9 @@ bool CreatureMindSystem::ForceAction(entt::entity creature, size_t animation, bo
 		body->face =
 		    creature_layers::PullFace(body->face, creature_face::AnimationOf(face->face), face->milliseconds, face->cue);
 	}
-	// Not while it is only just into something
-	if (Locator::creatureObjectActionSystem::has_value())
+	if (!MayInterrupt(creature, *body, interruptsAfter))
 	{
-		if (const auto progress = Locator::creatureObjectActionSystem::value().GetProgress(creature);
-		    progress.has_value() && *progress < interruptsAfter)
-		{
-			return false;
-		}
-	}
-	if (creature_layers::IsPlaying(body->body) && Locator::creatureAnimationSystem::has_value())
-	{
-		const auto duration = Locator::creatureAnimationSystem::value().AnimationDuration(
-		    creature, creature_layers::CurrentAnimation(body->body));
-		if (duration.has_value() && *duration > 0.0f && body->body.timeMs / *duration < interruptsAfter)
-		{
-			return false;
-		}
+		return false;
 	}
 	const auto played = creature_layers::PlayOnce(creature_layers::BodyAction {}, animation, mirrored);
 	if (!played.has_value())

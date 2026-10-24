@@ -2697,18 +2697,40 @@ bool MagicSystem::CatchFireBall(entt::entity ball)
 	return true;
 }
 
-bool MagicSystem::AbsorbFireBall(entt::entity ball)
+bool MagicSystem::AbsorbsFireBalls() const
 {
-	auto& registry = EntityRegistry();
+	const auto& registry = EntityRegistry();
 	if (!_held.has_value() || !registry.Valid(*_held))
 	{
 		return false;
 	}
-	auto& seed = registry.Get<SpellSeed>(*_held);
-	if (!seed.ready || seed.seedType != SpellSeedType::Fire)
+	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	return seed.ready && seed.seedType == SpellSeedType::Fire;
+}
+
+bool MagicSystem::DoApplySeed(PlayerNames player, entt::entity target)
+{
+	// There is one human, with the hand of this computer. A miracle in the hand takes the command, also when the thing
+	// is gone by the turn.
+	if (player != PlayerNames::PLAYER_ONE || !_held.has_value())
 	{
 		return false;
 	}
+	if (EntityRegistry().Valid(target) && EntityRegistry().AllOf<MagicFireBall>(target))
+	{
+		AbsorbFireBall(target);
+	}
+	return true;
+}
+
+bool MagicSystem::AbsorbFireBall(entt::entity ball)
+{
+	auto& registry = EntityRegistry();
+	if (!AbsorbsFireBalls())
+	{
+		return false;
+	}
+	auto& seed = registry.Get<SpellSeed>(*_held);
 	// The catch uses the row of the fireball table that the ball uses
 	const auto row = EntityRegistry().Get<const MagicFireBall>(ball).infoRow;
 	seed.power *= 1.0f + Info().magicFireBall.at(row).catchIncreaseFactor;
@@ -2729,10 +2751,19 @@ bool MagicSystem::PressAction()
 		return false;
 	}
 	_actionDown = true;
-	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand
+	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand. The hand
+	// sends the use of the seed on the ball, which the turn does.
 	if (const auto ball = PickedUnderHand();
-	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbFireBall(*ball))
+	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbsFireBalls())
 	{
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::HandApply {.target = *ball});
+		}
+		else
+		{
+			AbsorbFireBall(*ball);
+		}
 		return true;
 	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
@@ -2936,30 +2967,62 @@ void MagicSystem::TakeGestures()
 			_circle = Circle {.centre = centre, .radius = event.radius, .turn = _turn};
 			break;
 		}
+		// The gestures on the seed in the hand go as commands of the player, which the turn does
 		case GestureEvent::Kind::PowerUp:
-			PowerUpHeldSeed(event.powerUpLevel);
+			SendSeedGesture(
+			    {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = static_cast<int8_t>(event.powerUpLevel)});
 			break;
 		case GestureEvent::Kind::Scribble:
-		{
-			// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
-			const auto* seed = _held.has_value() && EntityRegistry().Valid(*_held)
-			                       ? EntityRegistry().TryGet<const SpellSeed>(*_held)
-			                       : nullptr;
-			if (seed != nullptr && magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) ==
-			                           magic::ScribbleResult::StopPowerUp)
-			{
-				PowerUpHeldSeed(-1);
-			}
-			else
-			{
-				DiscardHeldSeed();
-			}
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Scribble, .level = 0});
 			break;
-		}
 		case GestureEvent::Kind::Shake:
-			DiscardHeldSeed();
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Shake, .level = 0});
 			break;
 		}
+	}
+}
+
+void MagicSystem::SendSeedGesture(const player_commands::SeedGesture& gesture)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(gesture);
+		return;
+	}
+	DoSeedGesture(PlayerNames::PLAYER_ONE, gesture);
+}
+
+void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture)
+{
+	// There is one human, with the hand of this computer
+	if (player != PlayerNames::PLAYER_ONE)
+	{
+		return;
+	}
+	switch (gesture.kind)
+	{
+	case player_commands::SeedGesture::Kind::PowerUp:
+		PowerUpHeldSeed(gesture.level);
+		break;
+	case player_commands::SeedGesture::Kind::Scribble:
+	{
+		// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
+		const auto* seed =
+		    _held.has_value() && EntityRegistry().Valid(*_held) ? EntityRegistry().TryGet<const SpellSeed>(*_held) : nullptr;
+		if (seed != nullptr &&
+		    magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) == magic::ScribbleResult::StopPowerUp)
+		{
+			PowerUpHeldSeed(-1);
+		}
+		else
+		{
+			DiscardHeldSeed();
+		}
+		break;
+	}
+	case player_commands::SeedGesture::Kind::Shake:
+		DiscardHeldSeed();
+		break;
 	}
 }
 

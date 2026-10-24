@@ -142,11 +142,10 @@ public:
 	std::vector<RecordedInput> StopRecording();
 	[[nodiscard]] bool Recording() const { return _recordingFrom.has_value(); }
 	[[nodiscard]] size_t Recorded() const { return _recorded.size(); }
-
-private:
 	/// Writes down an event made, while recording
 	void Made(uint64_t frame, const InputEvent& event);
 
+private:
 	struct Scheduled
 	{
 		uint64_t frame;
@@ -201,6 +200,12 @@ public:
 	/// Makes recorded input again, frame for frame, from the coming frame on, behind any input still to come. The frame
 	/// it starts at, or none with why not.
 	std::optional<uint64_t> Replay(const Json& events, InputEvent::Timing timing, std::string& error);
+	/// Input that another tool made at a frame goes into the recording, as if this input had made it
+	void Record(uint64_t frame, const InputEvent& event) { _timeline.Made(frame, event); }
+	/// Records the input made from the coming frame on, which is the frame that a replay asked for now starts at
+	void StartRecording();
+	/// Stops the recording: each event made, by its frame from the start of the recording, as input.record answers it
+	[[nodiscard]] std::vector<Json> StopRecording();
 
 	/// Input made for other requests (gui.press clicking a control of the game's dialogs), all at the frame they start
 	/// at, behind any input still to come. Empty when it was made or scheduled, else why not

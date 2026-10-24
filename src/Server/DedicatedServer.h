@@ -65,6 +65,9 @@ struct ServerSettings
 	bool testbed {false};
 	/// The network map for 32 gods in place of a land
 	bool godsRingMap {false};
+	/// Tools: the testbed scenario of this id, which the server plays on the testbed from its first frame, as the game's
+	/// --scenario does. Thus input that the game recorded can get to what the scenario sets up.
+	std::optional<std::string> scenario;
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The seed of every random number of the world. The date of the world is pinned with it.

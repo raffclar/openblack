@@ -34,6 +34,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/UserData.h"
+#include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
@@ -165,6 +166,9 @@ private:
 	std::chrono::steady_clock::time_point _frameStart;
 	/// Gives false when the game of the network ended
 	std::function<NetworkStep()> _beforeTurns;
+	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
+	const testbed_scenarios::Scenario* _scenario {nullptr};
+	std::unique_ptr<testbed_scenarios::Runner> _scenarioRunner;
 };
 
 bool ServerWorld::Initialize()
@@ -274,6 +278,16 @@ bool ServerWorld::Initialize()
 bool ServerWorld::StartLand()
 {
 	auto& land = Locator::landSystem::value();
+	if (_settings.scenario.has_value())
+	{
+		_scenario = testbed_scenarios::Find(*_settings.scenario);
+		if (_scenario == nullptr)
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "No testbed scenario {}", *_settings.scenario);
+			return false;
+		}
+		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
+	}
 	if (_settings.godsRingMap)
 	{
 		if (!land.LoadGodsRingMap())
@@ -417,10 +431,23 @@ bool ServerWorld::Frame()
 			}
 		}
 	}
+	// The scenario starts in the first frame and gives its commands in the frames before the turns, at the time of the
+	// game's debug windows
+	if (_scenarioRunner != nullptr)
+	{
+		if (_scenario != nullptr)
+		{
+			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
+		}
+		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
 	Locator::playerCommandSystem::value().SendOpenBlock();
 	clock.UpdateFrame();
+	// The real time since the last frame, as the game's draw measures it. The storms' clouds and other frame effects step
+	// by it.
+	clock.StartDraw();
 	// The frame steps that change the world: the creatures' fights, walks and animations, and the frame's effects
 	simulation::PlayCreaturePoses();
 	simulation::PlayFrameEffects(_frameView);

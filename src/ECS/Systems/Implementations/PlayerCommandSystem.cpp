@@ -23,12 +23,14 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
 
@@ -120,6 +122,54 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::creatureHandSystem::value().DoBruise(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, SeedGesture>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoSeedGesture(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandClick>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoClick(command.player, action,
+				                                                        openblack::Locator::time::value().GetTurn());
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureReaction>)
+		    {
+			    if (openblack::Locator::creatureHandSystem::has_value())
+			    {
+				    openblack::Locator::creatureHandSystem::value().DoReaction(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightGround>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoGroundPress(command.player, action.creature,
+				                                                                   action.point, action.replace);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightMove>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoMove(
+				        command.player, action.target,
+				        {.kind = static_cast<openblack::creature_fight::Move::Kind>(action.kind), .value = action.value},
+				        action.replace);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, FightCharge>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoCharge(command.player,
+				                                                              static_cast<float>(action.heldMs));
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, TotemShare>)
 		    {
 			    if (openblack::Locator::villageTotemSystem::has_value() && registry.Valid(action.totem))
@@ -129,6 +179,12 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandApply>)
 		    {
+			    // The miracle in the hand is used on the thing, else the thing that the hand holds
+			    if (openblack::Locator::magicSystem::has_value() &&
+			        openblack::Locator::magicSystem::value().DoApplySeed(command.player, action.target))
+			    {
+				    return;
+			    }
 			    if (openblack::Locator::handGrabSystem::has_value() && registry.Valid(action.target))
 			    {
 				    openblack::Locator::handGrabSystem::value().DoApply(command.player, action.target);
@@ -215,6 +271,13 @@ void Run(const Command& command, uint32_t turn)
 			    if (god.has_value() && !registry.AllOf<openblack::ecs::components::LeftGame>(*god))
 			    {
 				    registry.Assign<openblack::ecs::components::LeftGame>(*god, turn);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandPick>)
+		    {
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    openblack::Locator::handSystem::value().ReportPick(command.player, action.object);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)

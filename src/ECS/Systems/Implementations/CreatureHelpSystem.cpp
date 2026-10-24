@@ -34,6 +34,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -411,8 +412,15 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		}
 	}();
 
-	// How steadily the player's hand has been over it
-	const bool over = Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object == creature;
+	// How steadily the hand of the creature's player has been over it. In a network game the turn knows the thing under
+	// the cursor from that player's last pick, so that every computer counts the same. A single game reads the pick of
+	// this computer at once.
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const auto* body = registry.TryGet<const Creature>(creature);
+	const bool over = networkGame
+	                      ? Locator::handSystem::has_value() && body != nullptr &&
+	                            Locator::handSystem::value().GetReportedPick(body->owner) == creature
+	                      : Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object == creature;
 	auto& memory = MemoryOf(registry, creature);
 	memory.handOver = help::NextHandOver(memory.handOver, over);
 }

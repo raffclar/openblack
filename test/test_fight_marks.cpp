@@ -215,19 +215,32 @@ TEST(FightMarks, PaceStepsAtMostSixtyTimesASecond)
 TEST(FightMarks, TheFighterKeepsMarksInStepWithTheQueue)
 {
 	Fighter fighter;
+	MarkList marks;
 	fighter.state = State::Stance;
-	fighter.marks.Add({.anchor = Anchor::Self});
-	PlayerMove(fighter, BlockMove(), false);
-	fighter.marks.Add({.anchor = Anchor::Ground});
-	PlayerMove(fighter, StepMove(Step::Forward), false);
-	ASSERT_EQ(fighter.marks.Size(), 2u);
+	marks.Add({.anchor = Anchor::Self});
+	PlayerMove(fighter, marks, BlockMove(), false);
+	marks.Add({.anchor = Anchor::Ground});
+	PlayerMove(fighter, marks, StepMove(Step::Forward), false);
+	ASSERT_EQ(marks.Size(), 2u);
 	// The block is made: its sparkle goes
-	ASSERT_TRUE(TakeOrder(fighter, true).has_value());
-	ASSERT_EQ(fighter.marks.Size(), 1u);
-	EXPECT_EQ(fighter.marks.Marks()[0].anchor, Anchor::Ground);
+	ASSERT_TRUE(TakeOrder(fighter, marks, true).has_value());
+	ASSERT_EQ(marks.Size(), 1u);
+	EXPECT_EQ(marks.Marks()[0].anchor, Anchor::Ground);
 	// A move in place of the queue keeps only its own sparkle
-	fighter.marks.Add(OnOpponent(4));
-	PlayerMove(fighter, AttackMove(Band::High), true);
-	ASSERT_EQ(fighter.marks.Size(), 1u);
-	EXPECT_EQ(fighter.marks.Marks()[0].firstIndex, 4u);
+	marks.Add(OnOpponent(4));
+	PlayerMove(fighter, marks, AttackMove(Band::High), true);
+	ASSERT_EQ(marks.Size(), 1u);
+	EXPECT_EQ(marks.Marks()[0].firstIndex, 4u);
+}
+
+TEST(FightMarks, AFighterWithNoMarksTakesItsMoves)
+{
+	// The computers of the other players add no sparkles: the moves are queued and made all the same
+	Fighter fighter;
+	MarkList marks;
+	fighter.state = State::Stance;
+	EXPECT_TRUE(PlayerMove(fighter, marks, BlockMove(), true));
+	EXPECT_TRUE(TakeOrder(fighter, marks, true).has_value());
+	EXPECT_EQ(marks.Size(), 0u);
+	EXPECT_EQ(fighter.queue.Size(), 0u);
 }

@@ -41,6 +41,8 @@ public:
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer; }
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
+	void ReportPick(PlayerNames player, entt::entity object) override;
+	[[nodiscard]] entt::entity GetReportedPick(PlayerNames player) const noexcept override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
