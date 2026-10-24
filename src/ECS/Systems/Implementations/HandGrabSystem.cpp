@@ -499,9 +499,21 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	{
 	case HandGrab::State::Grabbing:
 	{
-		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap
+		// The pull freed the thing: the hand takes it, also when the button is let go in the same frame
+		if (grab->tug.has_value() && !grab->pulling && Exists(grab->object))
+		{
+			SendTake(*grab, grab->object);
+			return std::nullopt;
+		}
+		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap.
+		// Only this computer pulled it and the other computers did not see the lean. Thus in a network game, the thing
+		// stands again as it stood before the pull, so that all the worlds stay the same.
 		const auto object = grab->object;
 		const bool tap = hand_grab::ElapsedMs(nowMs, grab->pressMs, turn, grab->pressTurn) <= hand_grab::k_GrabWaitMs;
+		if (_world->IsNetworkGame())
+		{
+			StandAsBeforePull(*grab);
+		}
 		Empty(*grab);
 		// It still becomes the thing last let go, which a flying thing's twist then finds
 		grab->released = object;
@@ -1112,9 +1124,14 @@ void HandGrabSystem::PlayTakeSounds(entt::entity object)
 
 void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 {
-	// A thing that the hand can no longer take is let go of
+	// A thing that the hand can no longer take is let go of. In a network game, a pulled thing stands again as it stood
+	// before the pull, as when the hand lets go of it before it comes free.
 	if (!MayTake(object))
 	{
+		if (_world->IsNetworkGame())
+		{
+			StandAsBeforePull(grab);
+		}
 		Empty(grab);
 		return;
 	}
@@ -1824,14 +1841,9 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// that it had as the hand took it.
 	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
 	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	if (const auto* grab = Grab(); grab != nullptr &&
-	                               (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
-	                               grab->tug.has_value() && Exists(grab->object))
+	if (const auto* grab = Grab(); grab != nullptr)
 	{
-		auto& pulled = _world->Entities().Get<Transform>(grab->object);
-		pulled.position = grab->pullPosition;
-		pulled.rotation = grab->pullRotation;
-		pulled.scale = grab->pullScale;
+		StandAsBeforePull(*grab);
 	}
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
@@ -1840,6 +1852,19 @@ void HandGrabSystem::PlaceHeldForTurn()
 		transform.rotation = inHand.rotation;
 		transform.scale = inHand.scale;
 	});
+}
+
+void HandGrabSystem::StandAsBeforePull(const HandGrab& grab)
+{
+	if ((grab.state != HandGrab::State::Grabbing && grab.state != HandGrab::State::Taking) || !grab.tug.has_value() ||
+	    !Exists(grab.object))
+	{
+		return;
+	}
+	auto& pulled = _world->Entities().Get<Transform>(grab.object);
+	pulled.position = grab.pullPosition;
+	pulled.rotation = grab.pullRotation;
+	pulled.scale = grab.pullScale;
 }
 
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
