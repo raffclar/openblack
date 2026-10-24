@@ -119,6 +119,7 @@
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -181,6 +182,7 @@
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
+#include "ECS/Components/LeashOrderSparkles.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/ListPlace.h"
@@ -828,6 +830,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::LeashPost::look>("look")
 	    .Field<&components::LeashPost::hung>("hung")
 	    .Field<&components::LeashPost::glow>("glow");
+	Reflect<components::CreatureLeashRope>(context)
+	    .Field<&components::CreatureLeashRope::rope>("rope")
+	    .Field<&components::CreatureLeashRope::started>("started")
+	    .Field<&components::CreatureLeashRope::held>("held");
 	Reflect<components::CreatureLocomotion>(context)
 	    .Field<&components::CreatureLocomotion::motion>("motion")
 	    .Field<&components::CreatureLocomotion::started>("started")
@@ -1495,6 +1501,7 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::LearningMarker::size>("size")
 	    .Field<&components::LearningMarker::milliseconds>("milliseconds")
 	    .Field<&components::LearningMarker::madeTurn>("madeTurn");
+	Reflect<components::LeashOrderSparkles>(context).Field<&components::LeashOrderSparkles::effect>("effect");
 	Reflect<components::LeftGame>(context).Field<&components::LeftGame::turn>("turn");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");
 	Reflect<components::ListPlace>(context).Field<&components::ListPlace::made>("made");
@@ -3161,7 +3168,6 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::fight>("fight")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::object>("object")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::point>("point")
-	    .Field<&openblack::ecs::components::CreatureLeash::Order::sparkles>("sparkles")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::ring>("ring")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::footprint>("footprint");
 	Reflect<openblack::ecs::components::CreatureLeash::Worn>(context, ValueOnly {})
@@ -3170,12 +3176,11 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::works>("works")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::rope>("rope")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::held>("held");
-	Reflect<openblack::ecs::components::CreatureLeash::Worn::HeldRopes>(context, ValueOnly {})
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toCollar>("toCollar")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toTied>("toTied");
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::slackLength>("slackLength")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::maxLength>("maxLength");
+	Reflect<openblack::ecs::components::CreatureLeashRope::HeldRopes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLeashRope::HeldRopes::toCollar>("toCollar")
+	    .Field<&openblack::ecs::components::CreatureLeashRope::HeldRopes::toTied>("toTied");
 	Reflect<openblack::ecs::components::CreatureLocomotion::GaveUp>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::destination>("destination")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::met>("met");

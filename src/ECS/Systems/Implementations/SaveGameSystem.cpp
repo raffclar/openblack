@@ -504,8 +504,8 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 			kept.type = save_state::LeashTypeNumber(worn.type);
 			kept.player = save_state::PlayerNumber(worn.holder);
 			kept.tiedTo = save_state::ToRef(worn.tiedTo);
-			kept.length = worn.rope.slackLength;
-			kept.fullLength = worn.rope.maxLength;
+			kept.length = worn.slackLength;
+			kept.fullLength = worn.maxLength;
 			// The turn that the leash was last tied
 			kept.word34 = worn.tiedTurn;
 		}

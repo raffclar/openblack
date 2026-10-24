@@ -601,6 +601,10 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
+	}
 	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {

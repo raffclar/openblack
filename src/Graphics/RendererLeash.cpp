@@ -22,6 +22,7 @@
 #include "Camera/Camera.h"
 #include "Creature/LeashRope.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -176,7 +177,8 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 	};
 
 	desc.entities.Each<const CreatureLeash>([&](entt::entity creature, const CreatureLeash& leashes) {
-		if (!leashes.worn.has_value() || !leashes.worn->ropeStarted)
+		const auto* drawn = desc.entities.TryGet<const ecs::components::CreatureLeashRope>(creature);
+		if (!leashes.worn.has_value() || drawn == nullptr || !drawn->started)
 		{
 			return;
 		}
@@ -187,19 +189,19 @@ void Renderer::DrawLeashes(const DrawSceneDesc& desc) const
 		    .scriptCinema = scriptCinema,
 		    .local = worn.holder == k_LocalPlayer,
 		    .handHidden = !desc.drawHand,
-		    .handHoldsTiedRope = worn.held.has_value(),
+		    .handHoldsTiedRope = drawn->held.has_value(),
 		    .creatureFizz = spells != nullptr ? spells->fizz : 0.0f,
 		};
 		if (leash_rope::Shown(showing))
 		{
-			draw(worn.rope);
+			draw(drawn->rope);
 		}
 		// The hand holding the rope of the tied leash: the rope is drawn as two, from the collar and from what it is tied to
 		// to the hand
 		if (leash_rope::HeldRopesShown(showing))
 		{
-			draw(worn.held->toCollar);
-			draw(worn.held->toTied);
+			draw(drawn->held->toCollar);
+			draw(drawn->held->toTied);
 		}
 	});
 }

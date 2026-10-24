@@ -71,6 +71,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -3246,15 +3247,16 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    if (leashes->worn.has_value())
 		    {
 			    const auto& worn = *leashes->worn;
-			    const auto& rope = worn.rope;
+			    const auto* drawn = registry.TryGet<const ecs::components::CreatureLeashRope>(creature);
+			    const auto rope = drawn != nullptr ? drawn->rope : leash_rope::Rope {};
 			    result["type"] = static_cast<int>(worn.type);
 			    result["works"] = worn.works;
 			    result["tied_to"] = Id(worn.tiedTo);
-			    result["held_rope"] = worn.held.has_value();
+			    result["held_rope"] = drawn != nullptr && drawn->held.has_value();
 			    result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
 			                      {"end", {rope.end.x, rope.end.y, rope.end.z}},
-			                      {"slack_length", rope.slackLength},
-			                      {"max_length", rope.maxLength},
+			                      {"slack_length", worn.slackLength},
+			                      {"max_length", worn.maxLength},
 			                      {"tension", rope.tension}};
 		    }
 		    return QueryResult::Value(std::move(result));

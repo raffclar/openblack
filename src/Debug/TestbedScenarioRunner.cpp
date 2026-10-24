@@ -106,6 +106,7 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -4702,7 +4703,8 @@ std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) 
 		return std::nullopt;
 	}
 	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
-	if (leash == nullptr || !leash->worn.has_value())
+	const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeashRope>(*entity);
+	if (leash == nullptr || !leash->worn.has_value() || drawn == nullptr)
 	{
 		return std::nullopt;
 	}
@@ -4710,7 +4712,7 @@ std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) 
 	// points of the straight line are tried from its middle out, away from the collar and the thing. Below each point
 	// on the screen, the first pixel that touches the rope is taken.
 	const auto& camera = Locator::camera::value();
-	const auto& rope = leash->worn->rope;
+	const auto& rope = drawn->rope;
 	auto& leashes = Locator::leashSystem::value();
 	constexpr int k_Steps = 16;
 	constexpr int k_MostPixelsBelow = 200;
