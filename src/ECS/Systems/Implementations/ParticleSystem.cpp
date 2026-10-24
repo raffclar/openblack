@@ -988,9 +988,7 @@ ParticleSystemInterface::EffectId ParticleSystem::Start(std::string_view file, g
 	}
 	ResolveTextures(*effect);
 	effect->StepTwiceFirstTime();
-	const auto wanted = std::exchange(_startNextAs, std::nullopt);
-	const auto effectId =
-	    wanted.has_value() && *wanted != k_NoEffect && FindRunning(*wanted) == _effects.end() ? *wanted : _nextId++;
+	const auto effectId = _nextId++;
 	_effects.push_front({.id = effectId, .file = std::string(file), .effect = std::move(effect)});
 	return effectId;
 }
@@ -1247,9 +1245,19 @@ void ParticleSystem::CloseDown(EffectId id)
 	}
 }
 
-void ParticleSystem::StartNextAs(EffectId id)
+bool ParticleSystem::Renumber(EffectId from, EffectId to)
 {
-	_startNextAs = id;
+	const auto it = FindRunning(from);
+	if (to == k_NoEffect || it == _effects.end() || FindRunning(to) != _effects.end())
+	{
+		return false;
+	}
+	it->id = to;
+	if (from + 1 == _nextId)
+	{
+		_nextId = from;
+	}
+	return true;
 }
 
 void ParticleSystem::KeepOutOfSaves(EffectId id)

@@ -106,9 +106,10 @@ public:
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                                 float magnitude = 1.0f) = 0;
 
-	/// The next effect that starts takes this number and not a new one, as an effect that its owner starts again after a
-	/// load keeps the number that the save has for it. A number that a running effect has is not given again.
-	virtual void StartNextAs(EffectId /*id*/) {}
+	/// Gives a running effect another number, as an effect that its owner starts again after a load takes the number that
+	/// the save has for it. When the effect had the newest number, the next effect gets that number again. Returns false,
+	/// and changes nothing, when no effect has the first number or an effect has the second.
+	virtual bool Renumber(EffectId /*from*/, EffectId /*to*/) { return false; }
 	/// A save does not keep the effect: its owner starts it again after a load
 	virtual void KeepOutOfSaves(EffectId /*id*/) {}
 

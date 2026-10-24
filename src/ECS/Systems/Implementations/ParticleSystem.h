@@ -244,7 +244,7 @@ public:
 	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override { _fightMarks = std::move(marks); }
 	void SetLearningMarks(std::vector<particles::draw::LearningMark> marks) override { _learningMarks = std::move(marks); }
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
-	void StartNextAs(EffectId id) override;
+	bool Renumber(EffectId from, EffectId to) override;
 	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetInTemple(EffectId id) override;
@@ -341,8 +341,6 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
-	/// The number that the next effect takes in place of a new one
-	std::optional<EffectId> _startNextAs;
 	bool _paused {false};
 	/// When the ribbons' textures last slid on
 	water_rings::Pace _chainScrollPace;

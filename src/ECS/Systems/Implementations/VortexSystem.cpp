@@ -12,6 +12,7 @@
 #include "VortexSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -154,6 +155,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	// Until a script says otherwise, the animals that come out gather at the vortex itself
 	vortex.arrival.gatheringPlace = centre;
 	StartEffects(vortex);
+	KeepEffectsOutOfSaves(vortex);
 	if (type == VortexType::In)
 	{
 		StartCrossingFile(entity);
@@ -165,7 +167,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	return entity;
 }
 
-void VortexSystem::StartEffects(Vortex& vortex, bool afterLoad)
+void VortexSystem::StartEffects(Vortex& vortex)
 {
 	if (!Locator::particleSystem::has_value())
 	{
@@ -176,43 +178,39 @@ void VortexSystem::StartEffects(Vortex& vortex, bool afterLoad)
 	// The swirl starts on the ground under the middle, the others at the middle itself
 	const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 	const glm::vec3 onGround {vortex.centre.x, ground, vortex.centre.z};
-	// The game does not keep these effects in a save. After a load each takes the number it had before.
-	const auto unsaved = [&particles, afterLoad](ParticleSystemInterface::EffectId& effect, auto&& startOne) {
-		if (afterLoad)
-		{
-			particles.StartNextAs(effect);
-		}
-		effect = startOne();
-		particles.KeepOutOfSaves(effect);
+	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
+		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
 	};
-	const auto start = [&particles, &unsaved](ParticleSystemInterface::EffectId& effect, ParticleType type, glm::vec3 origin) {
-		unsaved(effect, [&]() {
-			return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
-		});
-	};
-	const auto startStepped = [&particles, &unsaved](ParticleSystemInterface::EffectId& effect, ParticleType type,
-	                                                 glm::vec3 origin) {
-		unsaved(effect, [&]() {
-			return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
-			                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
-		});
+	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin) {
+		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
+		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
 	};
 	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
 	// loaded vortex keeps the effect of the save, with the things that it carries.
 	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect)
 	{
-		vortex.objectMoverEffect =
-		    info->particleTypeObjectMover == ParticleType::None
-		        ? ParticleSystemInterface::k_NoEffect
-		        : particles.StartForSpell(info->particleTypeObjectMover, vortex.centre, glm::vec3(0.0f), 1.0f, g_noMiracle);
+		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
 	}
-	startStepped(vortex.beforeLandEffect, info->particleTypePreLandscape, onGround);
-	startStepped(vortex.afterLandEffect, info->particleTypePostLandscape, vortex.centre);
-	start(vortex.lightMapEffect, info->particleTypeLightMap, vortex.centre);
+	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
+	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
+	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
 	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
 	{
 		particles.SetDrawPath(vortex.beforeLandEffect, particles::draw::DrawPath::BeforeLand);
+	}
+}
+
+void VortexSystem::KeepEffectsOutOfSaves(const Vortex& vortex)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	for (const auto effect : {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
+	{
+		particles.KeepOutOfSaves(effect);
 	}
 }
 
@@ -820,21 +818,33 @@ void VortexSystem::StartAgainAfterLoad()
 		{
 			return;
 		}
-		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation,
-		// with the numbers that they had. The new effects make the hum again. A save of an older build kept the
-		// effects, which go first.
-		for (const auto effect : {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
+		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation.
+		// The new effects make the hum again. A save of an older build kept the effects, which go first.
+		const std::array saved {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect};
+		for (auto* effect : {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect})
 		{
-			if (effect != ParticleSystemInterface::k_NoEffect)
+			if (*effect != ParticleSystemInterface::k_NoEffect)
 			{
-				particles->Delete(effect);
+				particles->Delete(*effect);
+				*effect = ParticleSystemInterface::k_NoEffect;
 			}
 		}
 		if (particles->Find(vortex.objectMoverEffect) == nullptr)
 		{
 			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
-		StartEffects(vortex, true);
+		StartEffects(vortex);
+		KeepEffectsOutOfSaves(vortex);
+		// Each new effect takes the number that the save has for it, the last one made first, so that the numbers of
+		// the next effects are as before the load
+		const std::array made {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect};
+		for (size_t i = made.size(); i-- > 0;)
+		{
+			if (*made.at(i) != ParticleSystemInterface::k_NoEffect && particles->Renumber(*made.at(i), saved.at(i)))
+			{
+				*made.at(i) = saved.at(i);
+			}
+		}
 	});
 	if (levelled)
 	{

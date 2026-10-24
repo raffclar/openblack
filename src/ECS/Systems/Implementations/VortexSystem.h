@@ -53,11 +53,11 @@ public:
 
 private:
 	/// A vortex's effects start where it is made
-	/// Starts the vortex's effects. A save does not keep the swirl, the effect over the land and the glow, so a load
-	/// starts them again with the numbers that the vortex keeps for them.
-	static void StartEffects(components::Vortex& vortex, bool afterLoad = false);
+	static void StartEffects(components::Vortex& vortex);
 	/// They go at once with it
 	static void DeleteEffects(const components::Vortex& vortex);
+	/// A save does not keep the swirl, the effect over the land and the glow: a load starts them again
+	static void KeepEffectsOutOfSaves(const components::Vortex& vortex);
 	/// A fully open vortex that leads away takes what it reaches this turn
 	static void Pull(entt::entity entity, const components::Vortex& vortex);
 	/// A thing it takes is handed to its effect, which starts drawing it in when it next steps; a thing taken as it flew
