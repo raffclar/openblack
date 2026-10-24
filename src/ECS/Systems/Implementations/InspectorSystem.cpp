@@ -192,6 +192,9 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_inspector.Add(std::move(input));
 	// The fight autopilot fights for the player through the same input
 	_autopilot = std::make_unique<inspector::FightAutopilot>(*_inputTarget);
+	// A recording of the input also has the input of the autopilot
+	_autopilot->SetRecorder(
+	    [input = _input](uint64_t frame, const inspector::InputEvent& event) { input->Record(frame, event); });
 	// The game's dialogs are clicked through the input's queue, behind any input asked for before
 	_controls->gui.SetInputSender(
 	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
@@ -242,6 +245,36 @@ InspectorSystem::~InspectorSystem()
 	{
 		_loadingHelper.join();
 	}
+	WriteRecordedInput();
+}
+
+void InspectorSystem::RecordInputOnLoad(const std::filesystem::path& path)
+{
+	_recordInputTo = path;
+	_recordInputOnLoad = true;
+}
+
+void InspectorSystem::WriteRecordedInput()
+{
+	if (!_recordInputTo.has_value() || _input == nullptr)
+	{
+		return;
+	}
+	std::ofstream file(*_recordInputTo, std::ios::binary | std::ios::trunc);
+	if (!file.is_open())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input does not write to {}", _recordInputTo->string());
+		return;
+	}
+	// One event a line, as the files of tools/sim/hand_inputs keep them
+	const auto events = _input->StopRecording();
+	file << "[\n";
+	for (size_t i = 0; i < events.size(); ++i)
+	{
+		file << events[i].dump() << (i + 1 < events.size() ? ",\n" : "\n");
+	}
+	file << "]\n";
+	_recordInputTo.reset();
 }
 
 void InspectorSystem::BeginLoading(std::string_view what)
@@ -290,6 +323,12 @@ void InspectorSystem::EndLoading()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The camera of the recorded input is not put: {}", error);
 		}
 		_cameraOnLoad.reset();
+	}
+	// A tool's recording of the input starts at the same frame as a replay would
+	if (_recordInputOnLoad)
+	{
+		_input->StartRecording();
+		_recordInputOnLoad = false;
 	}
 	// A tool's recorded input starts at the first frame of the land
 	if (_replayOnLoad.has_value())

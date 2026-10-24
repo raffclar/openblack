@@ -14,6 +14,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "Creature/CreatureFace.h"
+#include "Creature/CreatureFight.h"
 #include "PlayerSlots.h"
 
 namespace openblack::turn_codec
@@ -22,6 +24,9 @@ namespace
 {
 
 using namespace player_commands;
+
+/// The last kind of a fight move, so that a command with another kind does not read
+constexpr auto k_LastFightMoveKind = static_cast<uint8_t>(creature_fight::Move::Kind::Spell);
 
 static_assert(sizeof(entt::id_type) == sizes::k_Entity, "An entity goes on the wire as 32 bits");
 static_assert(std::numeric_limits<float>::is_iec559, "A float goes on the wire as its IEEE 754 bits");
@@ -161,6 +166,39 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Entity(command.totem);
 		               out.Float(command.share);
 	               },
+	               [&out](const FightGround& command) {
+		               out.Entity(command.creature);
+		               out.Vector(command.point);
+		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
+	               },
+	               [&out](const FightMove& command) {
+		               out.Entity(command.target);
+		               out.Byte(command.kind);
+		               out.Number(command.value);
+		               out.Byte(static_cast<uint8_t>(command.replace ? 1 : 0));
+	               },
+	               [&out](const FightCharge& command) { out.Number(command.heldMs); },
+	               [&out](const SeedGesture& command) {
+		               out.Byte(static_cast<uint8_t>(command.kind));
+		               out.Byte(static_cast<uint8_t>(command.level));
+	               },
+	               [&out](const HandClick& command) {
+		               out.Entity(command.thing);
+		               out.Byte(static_cast<uint8_t>(command.release ? 1 : 0));
+		               out.Byte(static_cast<uint8_t>(command.hasPlace ? 1 : 0));
+		               out.Number(static_cast<uint32_t>(command.placeX));
+		               out.Number(static_cast<uint32_t>(command.placeZ));
+	               },
+	               [&out](const CreatureReaction& command) {
+		               out.Entity(command.creature);
+		               out.Number(command.animation);
+		               out.Byte(static_cast<uint8_t>(command.mirrored ? 1 : 0));
+		               out.Byte(static_cast<uint8_t>(command.pullsFace ? 1 : 0));
+		               out.Byte(command.face);
+		               out.Float(command.faceMs);
+		               out.Byte(command.cue);
+		               out.Float(command.interruptsAfter);
+	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
@@ -273,6 +311,88 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = TotemShare {.totem = totem, .share = in.Float()};
 		return DecodeError::None;
 	}
+	case CommandTag::FightGround:
+	{
+		const auto creature = in.Entity();
+		const auto point = in.Vector();
+		const auto replace = in.Byte();
+		if (replace > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = FightGround {.creature = creature, .point = point, .replace = replace != 0};
+		return DecodeError::None;
+	}
+	case CommandTag::FightMove:
+	{
+		const auto target = in.Entity();
+		const auto kind = in.Byte();
+		const auto value = in.Number<uint32_t>();
+		const auto replace = in.Byte();
+		if (kind > k_LastFightMoveKind || replace > 1)
+		{
+			return DecodeError::Value;
+		}
+		action = FightMove {.target = target, .kind = kind, .value = value, .replace = replace != 0};
+		return DecodeError::None;
+	}
+	case CommandTag::FightCharge:
+		action = FightCharge {.heldMs = in.Number<uint32_t>()};
+		return DecodeError::None;
+	case CommandTag::SeedGesture:
+	{
+		const auto kind = in.Byte();
+		const auto level = static_cast<int8_t>(in.Byte());
+		if (kind > static_cast<uint8_t>(SeedGesture::Kind::Shake))
+		{
+			return DecodeError::Value;
+		}
+		action = SeedGesture {.kind = static_cast<SeedGesture::Kind>(kind), .level = level};
+		return DecodeError::None;
+	}
+	case CommandTag::HandClick:
+	{
+		HandClick click {};
+		click.thing = in.Entity();
+		const auto release = in.Byte();
+		const auto hasPlace = in.Byte();
+		click.placeX = static_cast<int32_t>(in.Number<uint32_t>());
+		click.placeZ = static_cast<int32_t>(in.Number<uint32_t>());
+		// A press clicks a thing and has no place; no place has its bytes empty
+		const bool placeEmpty = hasPlace != 0 || (click.placeX == 0 && click.placeZ == 0);
+		if (release > 1 || hasPlace > 1 || (release == 0 && hasPlace != 0) || !placeEmpty)
+		{
+			return DecodeError::Value;
+		}
+		click.release = release != 0;
+		click.hasPlace = hasPlace != 0;
+		action = click;
+		return DecodeError::None;
+	}
+	case CommandTag::CreatureReaction:
+	{
+		CreatureReaction reaction {};
+		reaction.creature = in.Entity();
+		reaction.animation = in.Number<uint32_t>();
+		const auto mirrored = in.Byte();
+		const auto pullsFace = in.Byte();
+		reaction.face = in.Byte();
+		reaction.faceMs = in.Float();
+		reaction.cue = in.Byte();
+		reaction.interruptsAfter = in.Float();
+		// No face has its bytes empty, so that each command has one way of bytes
+		const bool noFaceEmpty =
+		    pullsFace != 0 || (reaction.face == 0 && std::bit_cast<uint32_t>(reaction.faceMs) == 0 && reaction.cue == 0);
+		if (mirrored > 1 || pullsFace > 1 || reaction.face >= creature_face::k_FaceCount ||
+		    reaction.cue >= creature_face::k_CueCount || !noFaceEmpty)
+		{
+			return DecodeError::Value;
+		}
+		reaction.mirrored = mirrored != 0;
+		reaction.pullsFace = pullsFace != 0;
+		action = reaction;
+		return DecodeError::None;
+	}
 	case CommandTag::PlayerLeft:
 		action = PlayerLeft {};
 		return DecodeError::None;
@@ -372,6 +492,12 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandApply& /*command*/) { return CommandTag::HandApply; },
 	                      [](const TotemShare& /*command*/) { return CommandTag::TotemShare; },
 	                      [](const CreatureBruise& /*command*/) { return CommandTag::CreatureBruise; },
+	                      [](const FightGround& /*command*/) { return CommandTag::FightGround; },
+	                      [](const FightMove& /*command*/) { return CommandTag::FightMove; },
+	                      [](const FightCharge& /*command*/) { return CommandTag::FightCharge; },
+	                      [](const CreatureReaction& /*command*/) { return CommandTag::CreatureReaction; },
+	                      [](const HandClick& /*command*/) { return CommandTag::HandClick; },
+	                      [](const SeedGesture& /*command*/) { return CommandTag::SeedGesture; },
 	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
 	                  },
 	                  action);
@@ -397,6 +523,12 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandApply& /*command*/) { return k_Entity; },
 	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
 	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	                                     [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
+	                                     [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
+	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
+	                                     [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
+	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
+	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);

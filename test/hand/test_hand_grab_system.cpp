@@ -178,6 +178,8 @@ public:
 		return true;
 	}
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
+	[[nodiscard]] bool IsNetworkGame() const override { return networkGame; }
+	bool networkGame {false};
 	void SendCommand(player_commands::Action action) override
 	{
 		sent.push_back(action);
@@ -532,9 +534,16 @@ protected:
 			    {
 				    system->DoApply(player, command.target);
 			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandClick>)
+			    {
+				    system->DoClick(player, command, commandTurn);
+			    }
 		    },
 		    action);
 	}
+
+	/// The turn at which the world does the commands
+	uint32_t commandTurn {0};
 
 	/// The start of a turn: the world does the commands that wait
 	void RunWaiting()
@@ -952,6 +961,38 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
 	EXPECT_EQ(clicked.place.z, map_coords::ToFixed(30.0f));
 	EXPECT_EQ(clicked.placeTurn, 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+{
+	world->networkGame = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	commandTurn = 12;
+	system->ClickThing(rock, 7);
+	ASSERT_EQ(world->sent.size(), 1u);
+	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
+	// The click has the number of the turn that wrote it, not of the frame that sent it
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thingTurn, 12u);
+	// A let go over the land sends the place
+	world->underCursor.reset();
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	commandTurn = 13;
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(clicked.placeTurn, 13u);
+	// A thing that is gone by the turn is not clicked
+	const auto gone = world->AddRock({5.0f, 0.0f, 0.0f});
+	world->underCursor = gone;
+	waiting.clear();
+	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
+	system->ClickReleased(9);
+	world->registry.Destroy(gone);
+	RunWaiting();
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
 TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)

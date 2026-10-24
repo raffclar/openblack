@@ -9,11 +9,15 @@
 
 #include <cstdint>
 
+#include <functional>
+#include <memory>
+#include <optional>
 #include <span>
 #include <utility>
 #include <variant>
 #include <vector>
 
+#include <MindFile.h>
 #include <gtest/gtest.h>
 #include <spdlog/sinks/null_sink.h>
 #include <spdlog/spdlog.h>
@@ -30,6 +34,7 @@
 
 // The test builds its own locator
 #define LOCATOR_IMPLEMENTATIONS
+#include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/Implementations/CreatureHandSystem.h"
 #include "ECS/Systems/Implementations/HandSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
@@ -130,6 +135,60 @@ TEST_F(CommandsOfATurn, TheCommandsOfAnotherComputerWaitForTheirTurnAndComeAfter
 	EXPECT_EQ(_heard[1].second[1].player, PlayerNames::PLAYER_TWO);
 	EXPECT_EQ(std::get<HandTake>(_heard[1].second[1].action).object, Entity(9));
 }
+
+/// A mind that only keeps the actions forced on its creatures
+class ReactingMinds final: public ecs::systems::CreatureMindSystemInterface
+{
+public:
+	void ProcessTurn() override {}
+	void PlanTurn() override {}
+	void LearnTurn() override {}
+	void LoadMind(entt::entity, std::shared_ptr<const creaturemind::MindFileData>) override {}
+	[[nodiscard]] std::optional<creaturemind::MindFileData> SaveMind(entt::entity) const override { return std::nullopt; }
+	void ClearLearning(entt::entity) override {}
+	void SeeSkill(const glm::vec3&, size_t) override {}
+	void SeeMiracle(const glm::vec3&, size_t) override {}
+	void PlayerDid(size_t, const glm::vec3&, std::optional<entt::entity>, std::optional<PlayerNames>) override {}
+	[[nodiscard]] const creature_mind_tables::Tables* GetTables() override { return nullptr; }
+	bool PlayAction(entt::entity, size_t) override { return false; }
+	bool PlayGesture(entt::entity, size_t) override { return false; }
+	void PullFace(entt::entity, size_t) override {}
+	std::optional<creature_face::Request> ShowFeeling(entt::entity, creature_face::Cue) override { return std::nullopt; }
+	bool SitDown(entt::entity) override { return false; }
+	void StandUp(entt::entity) override {}
+	void ReceiveFeedback(entt::entity, float) override {}
+	bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
+	                 float interruptsAfter) override
+	{
+		forced.push_back({.creature = creature,
+		                  .animation = animation,
+		                  .mirrored = mirrored,
+		                  .face = face.has_value() ? std::optional(face->face) : std::nullopt,
+		                  .interruptsAfter = interruptsAfter});
+		return true;
+	}
+	bool Sleep(entt::entity) override { return false; }
+	bool Eat(entt::entity, std::optional<entt::entity>) override { return false; }
+	bool Drink(entt::entity) override { return false; }
+	bool Poo(entt::entity) override { return false; }
+	bool Puke(entt::entity) override { return false; }
+	bool Faint(entt::entity) override { return false; }
+	void Wake(entt::entity) override {}
+	void FoughtFight(entt::entity, bool) override {}
+	void ChangeDesires(entt::entity, const std::function<void(creature_desires::Desires&)>&) override {}
+	void SetAgendaPriority(entt::entity, float) override {}
+	bool ForceActivity(entt::entity, const ForcedActivity&) override { return false; }
+
+	struct Forced
+	{
+		entt::entity creature;
+		size_t animation;
+		bool mirrored;
+		std::optional<creature_face::Face> face;
+		float interruptsAfter;
+	};
+	std::vector<Forced> forced;
+};
 
 class ReportedHands: public ::testing::Test
 {
@@ -240,4 +299,37 @@ TEST_F(ReportedHands, TheWorldHoldsNoCreatureOfAnotherPlayer)
 	{
 		spdlog::drop("game");
 	}
+}
+
+TEST_F(ReportedHands, TheTurnPlaysTheReactionThatAPlayerSent)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	ReactingMinds minds;
+	Locator::creatureMindSystem::reset(&minds, [](ecs::systems::CreatureMindSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoReaction(PlayerNames::PLAYER_TWO, CreatureReaction {.creature = creature,
+	                                                                .animation = 166,
+	                                                                .mirrored = true,
+	                                                                .pullsFace = true,
+	                                                                .face = 1,
+	                                                                .faceMs = 2000.0f,
+	                                                                .cue = 15,
+	                                                                .interruptsAfter = 0.35f});
+	ASSERT_EQ(minds.forced.size(), 1u);
+	EXPECT_EQ(minds.forced[0].creature, creature);
+	EXPECT_EQ(minds.forced[0].animation, 166u);
+	EXPECT_TRUE(minds.forced[0].mirrored);
+	EXPECT_EQ(minds.forced[0].face, creature_face::Face::Grimace);
+	EXPECT_EQ(minds.forced[0].interruptsAfter, 0.35f);
+	// A slap with no face pulls none
+	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 167});
+	ASSERT_EQ(minds.forced.size(), 2u);
+	EXPECT_FALSE(minds.forced[1].face.has_value());
+	// A creature that is gone by the turn plays nothing
+	registry.Destroy(creature);
+	creatures.DoReaction(PlayerNames::PLAYER_ONE, CreatureReaction {.creature = creature, .animation = 165});
+	EXPECT_EQ(minds.forced.size(), 2u);
+	Locator::creatureMindSystem::reset();
 }

@@ -321,8 +321,17 @@ bool HandGrabSystem::MarksThing(entt::entity object) const
 
 void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 {
-	auto* clicked = Clicked();
-	if (clicked != nullptr && MarksThing(object))
+	if (!MarksThing(object))
+	{
+		return;
+	}
+	// In a network game the turn writes the click, so that the scripts of every computer read the same click
+	if (_world->IsNetworkGame())
+	{
+		_world->SendCommand(player_commands::HandClick {.thing = object, .release = false});
+		return;
+	}
+	if (auto* clicked = Clicked())
 	{
 		hand_click::ClickThing(*clicked, object, turn);
 	}
@@ -330,12 +339,8 @@ void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 
 void HandGrabSystem::ClickReleased(uint32_t turn)
 {
-	auto* clicked = Clicked();
-	if (clicked == nullptr)
-	{
-		return;
-	}
 	const auto under = _world->ObjectUnderCursor();
+	const bool marks = under.has_value() && MarksThing(*under);
 	const auto* grab = Grab();
 	std::optional<map_coords::MapCoords> place;
 	if (grab != nullptr && grab->handPoint.has_value())
@@ -343,7 +348,45 @@ void HandGrabSystem::ClickReleased(uint32_t turn)
 		place =
 		    map_coords::MapCoords {.x = map_coords::ToFixed(grab->handPoint->x), .z = map_coords::ToFixed(grab->handPoint->z)};
 	}
-	hand_click::ClickReleased(*clicked, under, under.has_value() && MarksThing(*under), place, turn);
+	if (_world->IsNetworkGame())
+	{
+		// A thing under the hand that the click does not mark is not sent: the place is clicked in its stead
+		_world->SendCommand(player_commands::HandClick {
+		    .thing = marks ? *under : entt::null,
+		    .release = true,
+		    .hasPlace = place.has_value(),
+		    .placeX = place.has_value() ? place->x : 0,
+		    .placeZ = place.has_value() ? place->z : 0,
+		});
+		return;
+	}
+	if (auto* clicked = Clicked())
+	{
+		hand_click::ClickReleased(*clicked, under, marks, place, turn);
+	}
+}
+
+void HandGrabSystem::DoClick(PlayerNames /*player*/, const player_commands::HandClick& click, uint32_t turn)
+{
+	// There is one human, with the hand of this computer
+	auto* clicked = Clicked();
+	if (clicked == nullptr)
+	{
+		return;
+	}
+	// A thing that is gone by the turn is not clicked
+	const bool thing = click.thing != entt::null && Exists(click.thing);
+	if (!click.release)
+	{
+		if (thing)
+		{
+			hand_click::ClickThing(*clicked, click.thing, turn);
+		}
+		return;
+	}
+	const auto place =
+	    click.hasPlace ? std::optional(map_coords::MapCoords {.x = click.placeX, .z = click.placeZ}) : std::nullopt;
+	hand_click::ClickReleased(*clicked, thing ? std::optional(click.thing) : std::nullopt, thing, place, turn);
 }
 
 bool HandGrabSystem::Press(uint32_t nowMs, uint32_t turn)
@@ -1288,11 +1331,10 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
-	// Clicks are forgotten as the game's turns go by
-	if (auto* clicked = Clicked(); clicked != nullptr)
+	// Clicks are forgotten as the game's turns go by. In a network game the turn writes the clicks and forgets them.
+	if (!_world->IsNetworkGame())
 	{
-		constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
-		hand_click::Forget(*clicked, frame.turn, k_MillisecondsPerTurn);
+		ForgetClicks(frame.turn);
 	}
 	// A pour lasts three quarters of a second of the game's time
 	if (grab->pourEffect.has_value())
@@ -1553,8 +1595,21 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	grab->givenTo = creature;
 }
 
+void HandGrabSystem::ForgetClicks(uint32_t turn)
+{
+	if (auto* clicked = Clicked(); clicked != nullptr)
+	{
+		constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+		hand_click::Forget(*clicked, turn, k_MillisecondsPerTurn);
+	}
+}
+
 void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
 {
+	if (_world->IsNetworkGame())
+	{
+		ForgetClicks(turn);
+	}
 	auto* grab = Grab();
 	if (grab == nullptr)
 	{

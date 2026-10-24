@@ -165,6 +165,8 @@ public:
 	[[nodiscard]] virtual uint32_t LocalRandom(uint32_t count) = 0;
 	/// Sends a command of the hand's player. The world does the command at the start of a later turn.
 	virtual void SendCommand(player_commands::Action action) = 0;
+	/// Whether the world is a network game, in which the turn writes the clicks of the hand that the scripts read
+	[[nodiscard]] virtual bool IsNetworkGame() const { return false; }
 	/// A villager goes into the hand: it remembers what it was doing and is held
 	virtual void VillagerIntoHand(entt::entity villager) = 0;
 	/// An animal leaves its flock for one of its own, the old one going if it is left empty

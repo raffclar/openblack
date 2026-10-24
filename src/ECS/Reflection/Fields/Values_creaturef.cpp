@@ -51,7 +51,6 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturef(entt::meta_ctx&
 	    .Field<&openblack::creature_fight::Fighter::stopping>("stopping")
 	    .Field<&openblack::creature_fight::Fighter::hurried>("hurried")
 	    .Field<&openblack::creature_fight::Fighter::queue>("queue")
-	    .Field<&openblack::creature_fight::Fighter::marks>("marks")
 	    .Field<&openblack::creature_fight::Fighter::health>("health")
 	    .Field<&openblack::creature_fight::Fighter::stamina>("stamina")
 	    .Field<&openblack::creature_fight::Fighter::control>("control")
