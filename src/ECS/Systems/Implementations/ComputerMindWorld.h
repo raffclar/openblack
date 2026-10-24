@@ -49,6 +49,11 @@ public:
 	[[nodiscard]] float GestureLength(uint32_t gesture) const override;
 	[[nodiscard]] glm::vec3 GesturePoint(uint32_t gesture, float share) const override;
 	void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) override;
+	[[nodiscard]] bool HandHasRoom() const override;
+	void PutDownHeld(glm::vec3 hand) override;
+	[[nodiscard]] bool CanPickUp(entt::entity thing) const override;
+	void PickUp(entt::entity thing, glm::vec3 hand) override;
+	void UseHeldOn(entt::entity target, glm::vec3 hand) override;
 
 private:
 	PlayerNames _player;
@@ -79,6 +84,10 @@ private:
 	float ShallCast(computer_mind::Mind& mind, uint16_t node, MagicType type, ResourceType resource);
 	/// The worship site's icon that the god wants to charge most is the node's object. How much it wants it.
 	float ChargeUpSpell(computer_mind::Mind& mind, uint16_t node);
+	/// The field of the god's towns that the god wants to take food from most
+	float FoodFromField(computer_mind::Mind& mind, uint16_t node);
+	/// The hand takes the thing that the chosen leaf found and drops it on the store of the town
+	bool PickUpForTown(computer_mind::Mind& mind, uint16_t node);
 	/// The god charges the miracle of the node's icon and casts it on the store of the town above
 	bool CastFromIcon(computer_mind::Mind& mind, uint16_t node);
 	/// The god's worshippers chant for the miracle of the node's icon
@@ -97,6 +106,9 @@ private:
 
 /// Before the mind's turn: the god forgets its miracles that are gone, and stops an action whose things are gone
 void Validate(components::ComputerPlayer& state);
+/// The god reports where its hand and its camera are, as a player of a network game reports them. Only a god that has
+/// hands reports.
+void ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera);
 /// Where the hand of the god starts on the land: at its temple
 [[nodiscard]] std::optional<glm::vec3> StartingHand(PlayerNames player);
 

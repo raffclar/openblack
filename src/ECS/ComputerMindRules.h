@@ -83,6 +83,17 @@ struct ChargeChoice
 };
 [[nodiscard]] std::optional<ChargeChoice> ChooseCharge(std::span<const ChargeCandidate> icons);
 
+/// The distance in metres at which a field no longer pulls the hand
+constexpr float k_FieldReach = 250.0f;
+/// A field must be wanted more than this before the god takes food from it
+constexpr float k_LeastFieldWish = 0.1f;
+
+/// How much the god wants to take food from a field: the share of the field's full crop that is in it, less the further
+/// the field is from the hand, times the pull of the field's place
+[[nodiscard]] float FieldWish(float food, float totalFood, float distanceFromHand, float placePull);
+/// The field that the god wants most: the first with the largest wish over k_LeastFieldWish
+[[nodiscard]] std::optional<size_t> MostWantedField(std::span<const float> wishes);
+
 /// A circle of a player's own influence: its middle and how far it reaches, in metres
 struct InfluenceCircle
 {

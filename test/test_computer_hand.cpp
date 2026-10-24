@@ -70,6 +70,19 @@ public:
 		shownAt = corner;
 		shownSize = size;
 	}
+	[[nodiscard]] bool HandHasRoom() const override { return held == entt::null; }
+	void PutDownHeld(glm::vec3 /*hand*/) override
+	{
+		held = entt::null;
+		++putDown;
+	}
+	[[nodiscard]] bool CanPickUp(entt::entity thing) const override { return places.contains(thing); }
+	void PickUp(entt::entity thing, glm::vec3 /*hand*/) override { held = thing; }
+	void UseHeldOn(entt::entity target, glm::vec3 /*hand*/) override
+	{
+		usedOn.push_back(target);
+		held = entt::null;
+	}
 
 	std::map<entt::entity, glm::vec2> places;
 	bool charging {false};
@@ -80,6 +93,9 @@ public:
 	std::vector<uint32_t> shown;
 	glm::vec3 shownAt {0.0f};
 	float shownSize {0.0f};
+	entt::entity held {entt::null};
+	int putDown {0};
+	std::vector<entt::entity> usedOn;
 };
 
 } // namespace
@@ -246,6 +262,83 @@ TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(0.0f, 2.0f), 1.0f);
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(3.0f, 0.0f), 1.0f);
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(4.0f, 2.0f), 1.0f / 60.0f);
+}
+
+TEST(ComputerHand, CameraFollowsTheHandButNotOnTheTurnOfTheInsertedMove)
+{
+	FakeWorld world;
+	world.places[k_Icon] = {1000.0f, 1000.0f};
+	HandAction action;
+	action.hand = {900.0f, 0.0f, 1000.0f};
+	Add(action, StepKind::CastSpellAtObject,
+	    {Argument {.object = k_Icon}, Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.object = k_Icon}});
+	// The turn that puts the move in front leaves the camera where it was
+	Process(action, world);
+	EXPECT_EQ(action.camera, glm::vec3(0.0f));
+	Process(action, world); // the start of the move
+	Process(action, world); // the first step of the move
+	EXPECT_EQ(action.camera, action.hand);
+	EXPECT_GT(action.camera.x, 900.0f);
+}
+
+TEST(ComputerHand, HandTakesAThingAndDropsItOnTheStore)
+{
+	constexpr auto k_Field = static_cast<entt::entity>(7);
+	FakeWorld world;
+	world.places[k_Field] = {100.0f, 100.0f};
+	world.places[k_Store] = {100.0f, 102.0f};
+	HandAction action;
+	action.hand = {100.0f, 0.0f, 100.0f};
+	Add(action, StepKind::PickUpObject, {Argument {.object = k_Field}, Argument {.value = 90.0f}});
+	Add(action, StepKind::DropObjectInHandOnObject, {Argument {.object = k_Store}});
+	// Each step gets a move to its thing first: three parts of the move, then three of the step
+	for (int turn = 0; turn < 20 && Busy(action); ++turn)
+	{
+		ASSERT_TRUE(Process(action, world));
+	}
+	EXPECT_FALSE(Busy(action));
+	ASSERT_EQ(world.usedOn.size(), 1u);
+	EXPECT_EQ(world.usedOn[0], k_Store);
+	EXPECT_TRUE(world.held == entt::null);
+}
+
+TEST(ComputerHand, FullHandPutsDownFirstAndAMissingThingEndsBadly)
+{
+	constexpr auto k_Field = static_cast<entt::entity>(7);
+	constexpr auto k_Other = static_cast<entt::entity>(8);
+	FakeWorld world;
+	world.places[k_Field] = {100.0f, 100.0f};
+	world.held = k_Other;
+	HandAction action;
+	action.hand = {100.0f, 0.0f, 100.0f};
+	action.moveFirst = false;
+	Add(action, StepKind::PickUpObject, {Argument {.object = k_Field}});
+	Process(action, world); // the start
+	Process(action, world); // the hand is full: it puts down what it holds
+	EXPECT_EQ(world.putDown, 1);
+	EXPECT_EQ(action.part, 1);
+	Process(action, world);
+	EXPECT_EQ(world.held, k_Field);
+	// A thing that is gone ends the action badly
+	Clear(action);
+	world.held = entt::null;
+	action.moveFirst = false;
+	Add(action, StepKind::PickUpObject, {Argument {.object = static_cast<entt::entity>(99)}});
+	Process(action, world);
+	EXPECT_FALSE(Process(action, world));
+}
+
+TEST(ComputerMindRules, FieldWishAndChoice)
+{
+	// A full field at the hand with a full pull is wanted almost fully
+	const float full = FieldWish(100.0f, 100.0f, 0.0f, 1.0f);
+	EXPECT_FLOAT_EQ(full, gutils::GetDistanceModifier(0.0f, k_FieldReach) * ((100.0f + 0.001f) / (100.0f + 0.001f)));
+	// An empty field is wanted little, and a field outside the influence that does not pull is not wanted
+	EXPECT_LT(FieldWish(0.0f, 100.0f, 0.0f, 1.0f), 0.001f);
+	EXPECT_FLOAT_EQ(FieldWish(100.0f, 100.0f, 0.0f, 0.0f), 0.0f);
+	// The first of the largest over a tenth wins; none at a tenth or less
+	EXPECT_EQ(MostWantedField(std::vector<float> {0.1f, 0.05f}), std::nullopt);
+	EXPECT_EQ(MostWantedField(std::vector<float> {0.2f, 0.5f, 0.5f}), std::optional<size_t> {1});
 }
 
 TEST(ComputerMindRules, ChargeShareCountsTheSiteAndTheIcon)

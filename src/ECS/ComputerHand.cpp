@@ -248,6 +248,38 @@ Result CastEnd(HandAction& action, const World& world, const Step& step)
 	return Result::Continue;
 }
 
+Result PickUpStart(HandAction& action, const World& world, const Step& step)
+{
+	if (const auto coords = world.CoordsOf(ArgumentAt(step, 0).object))
+	{
+		action.target = PlaceOf(world, *coords);
+	}
+	return Result::Next;
+}
+
+Result PickUpProcess(HandAction& action, World& world, const Step& step)
+{
+	// A full hand puts down what it holds first, and tries again on the next turn
+	if (!world.HandHasRoom())
+	{
+		world.PutDownHeld(action.hand);
+		return Result::Continue;
+	}
+	const auto thing = ArgumentAt(step, 0).object;
+	if (!world.CanPickUp(thing))
+	{
+		return Result::Abort;
+	}
+	world.PickUp(thing, action.hand);
+	return Result::Next;
+}
+
+Result UseHeldProcess(HandAction& action, World& world, const Step& step)
+{
+	world.UseHeldOn(ArgumentAt(step, 0).object, action.hand);
+	return Result::Next;
+}
+
 /// The gesture that a step draws, from its magic type and its stage
 uint32_t GestureOf(const World& world, const Step& step)
 {
@@ -312,6 +344,14 @@ Result RunPart(HandAction& action, World& world, const Step& step)
 			return CastStart(action, step);
 		}
 		return action.part == 1 ? CastProcess(action, world, step) : CastEnd(action, world, step);
+	case StepKind::PickUpObject:
+		if (action.part == 0)
+		{
+			return PickUpStart(action, world, step);
+		}
+		return action.part == 1 ? PickUpProcess(action, world, step) : Result::Next;
+	case StepKind::DropObjectInHandOnObject:
+		return action.part == 1 ? UseHeldProcess(action, world, step) : Result::Next;
 	case StepKind::MakeGesture:
 		if (action.part == 0)
 		{
@@ -377,6 +417,7 @@ bool openblack::computer_hand::Process(HandAction& action, World& world)
 	action.coords = {.x = map_coords::ToFixed(action.hand.x), .z = map_coords::ToFixed(action.hand.z), .altitude = 0.0f};
 	if (!Busy(action))
 	{
+		action.camera = action.hand;
 		return true;
 	}
 	const auto& front = action.steps.front();
@@ -398,7 +439,10 @@ bool openblack::computer_hand::Process(HandAction& action, World& world)
 		return true;
 	}
 	const auto step = action.steps.front();
-	switch (RunPart(action, world, step))
+	const auto result = RunPart(action, world, step);
+	// The camera of the god follows the hand after each part, but not after the turn that puts a move in front
+	action.camera = action.hand;
+	switch (result)
 	{
 	case Result::Next:
 		NextPart(action);

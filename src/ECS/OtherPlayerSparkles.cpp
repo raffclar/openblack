@@ -11,8 +11,13 @@
 
 #include <cstddef>
 
+#include <optional>
+
+#include <glm/vec3.hpp>
+
 #include "3D/TempleInteriorInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/PlayerColour.h"
@@ -37,6 +42,20 @@ bool Left(const Registry& registry, PlayerNames name)
 	});
 	return left;
 }
+
+/// The camera of a computer god whose mind plays, none for another player
+std::optional<glm::vec3> ComputerCamera(const Registry& registry, PlayerNames name)
+{
+	std::optional<glm::vec3> camera;
+	registry.Each<const components::Player, const components::ComputerPlayer>(
+	    [&](const components::Player& player, const components::ComputerPlayer& computer) {
+		    if (player.name == name && computer.switchedOn && !camera.has_value())
+		    {
+			    camera = computer.hand.camera;
+		    }
+	    });
+	return camera;
+}
 } // namespace
 
 void AddAtCameras()
@@ -59,18 +78,27 @@ void AddAtCameras()
 	for (size_t i = 0; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
 	{
 		const auto player = static_cast<PlayerNames>(i);
-		// Only the players with hands of their own play. A player shows no camera before its first report.
-		const auto camera = hands.GetReportedCamera(player);
-		if (player == hands.GetOwnPlayer() || !hands.GetHandsOf(player).has_value() || !camera.has_value() ||
-		    Left(registry, player))
+		if (player == hands.GetOwnPlayer())
 		{
 			continue;
+		}
+		// A computer god shows a sparkle at its camera while its mind plays. Of the other players, only those with
+		// hands of their own play, and a player shows no camera before its first report.
+		auto origin = ComputerCamera(registry, player);
+		if (!origin.has_value())
+		{
+			const auto camera = hands.GetReportedCamera(player);
+			if (!hands.GetHandsOf(player).has_value() || !camera.has_value() || Left(registry, player))
+			{
+				continue;
+			}
+			origin = camera->origin;
 		}
 		const auto tint = random.LocalRand(player_sparkles::k_Tints);
 		const auto colour = player_sparkles::Colour(player_colour::OnLand(player, land), tint);
 		const auto kind = player_sparkles::KindOf(random.LocalRand(2));
-		liquids.AddForPlayer(player, camera->origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
-		liquids.SetPlayerPoint(player, camera->origin);
+		liquids.AddForPlayer(player, *origin, glm::vec3(0.0f), player_sparkles::k_Size, colour, kind);
+		liquids.SetPlayerPoint(player, *origin);
 	}
 }
 

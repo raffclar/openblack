@@ -27,9 +27,13 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/VirtualInfluence.h"
 #include "Creature/CreatureGesture.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Field.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -39,7 +43,10 @@
 #include "ECS/ComputerMindRules.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -266,7 +273,65 @@ float DesireOf(entt::entity town, TownDesireInfo desire)
 	return desires->desire.at(index) + desires->boost.at(index) + desires->boostA.at(index);
 }
 
+/// The left hand of a god, made when the god first needs it. A god holds things in its left hand.
+entt::entity HandOf(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return entt::null;
+	}
+	const auto hands = Locator::handSystem::value().MakeHandsOf(player);
+	return hands[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
+/// What the hand of a god holds, none when the god has no hands or they hold nothing
+std::optional<entt::entity> HeldBy(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto hands = Locator::handSystem::value().GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	auto& registry = Entities();
+	const auto hand = (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto* grab = registry.Valid(hand) ? registry.TryGet<const HandGrab>(hand) : nullptr;
+	if (grab == nullptr || grab->state == HandGrab::State::Empty || !registry.Valid(grab->object))
+	{
+		return std::nullopt;
+	}
+	return grab->object;
+}
+
+/// The town that has the number
+entt::entity TownNumbered(int number)
+{
+	entt::entity found = entt::null;
+	Entities().Each<const Town>([&found, number](entt::entity entity, const Town& town) {
+		if (static_cast<int>(town.id) == number && found == entt::null)
+		{
+			found = entity;
+		}
+	});
+	return found;
+}
+
 } // namespace
+
+void computer_world::ReportHand(PlayerNames player, glm::vec3 hand, glm::vec3 camera)
+{
+	if (!Locator::handSystem::has_value() || !Locator::handSystem::value().GetHandsOf(player).has_value() ||
+	    !Locator::terrainSystem::has_value())
+	{
+		return;
+	}
+	// The god points at the land under its hand
+	const glm::vec3 under {hand.x, Locator::terrainSystem::value().GetHeightAt({hand.x, hand.z}), hand.z};
+	Locator::handSystem::value().Report(player, {.collidePoint = under, .handPoint = hand, .camera = camera, .focus = camera});
+}
 
 GameHandWorld::GameHandWorld(PlayerNames player, ComputerPlayer& state)
     : _player(player)
@@ -432,6 +497,81 @@ void GameHandWorld::ShowGesture(uint32_t gesture, glm::vec3 corner, float size)
 	audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellGestureRecognise), corner);
 }
 
+bool GameHandWorld::HandHasRoom() const
+{
+	return !HeldBy(_player).has_value();
+}
+
+void GameHandWorld::PutDownHeld(glm::vec3 hand)
+{
+	const auto held = HeldBy(_player);
+	if (!held.has_value() || !Locator::handGrabSystem::has_value())
+	{
+		return;
+	}
+	// The hand lets go with no speed, where it is
+	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	Locator::handGrabSystem::value().DoLetGo(
+	    _player, player_commands::HandLetGo {.object = *held, .velocity = glm::vec3(0.0f), .start = {.origin = hand}});
+}
+
+bool GameHandWorld::CanPickUp(entt::entity thing) const
+{
+	return thing != entt::null && Entities().Valid(thing);
+}
+
+void GameHandWorld::PickUp(entt::entity thing, glm::vec3 hand)
+{
+	auto& registry = Entities();
+	if (!Locator::handGrabSystem::has_value() || HandOf(_player) == entt::null)
+	{
+		return;
+	}
+	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	auto& grab = Locator::handGrabSystem::value();
+	const auto* field = registry.TryGet<const Field>(thing);
+	if (field == nullptr)
+	{
+		grab.DoTake(_player, thing);
+		return;
+	}
+	// A field goes into the hand only with a crop that has grown and holds food
+	if (!(field->crop.age > 0.0f) || !(field->crop.food > 0.0f) || !Locator::fieldSystem::has_value() ||
+	    !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	auto& fields = Locator::fieldSystem::value();
+	const auto& type = Locator::infoConstants::value().fieldType.at(static_cast<size_t>(field->type));
+	// The field gives a pot of the food that a hand takes from a field, made where the field is
+	const auto handful = map_coords::FtoL(type.foodValueTakenWithHand);
+	const auto* at = registry.TryGet<const Transform>(thing);
+	const auto pot = archetypes::PotArchetype::Create(at != nullptr ? at->position : hand, 0.0f, PotInfo::HandFood, handful,
+	                                                  TownNumbered(field->town));
+	grab.DoTake(_player, pot);
+	fields.RemoveFood(thing, static_cast<float>(handful));
+	// Then all the food left in the field goes into the pot in the hand
+	const auto held = HeldBy(_player);
+	auto* potData = held.has_value() ? registry.TryGet<Pot>(*held) : nullptr;
+	if (potData == nullptr || !registry.AllOf<Field>(thing))
+	{
+		return;
+	}
+	const auto rest = map_coords::FtoL(registry.Get<const Field>(thing).crop.food);
+	fields.RemoveFood(thing, static_cast<float>(rest));
+	potData->amount += rest;
+}
+
+void GameHandWorld::UseHeldOn(entt::entity target, glm::vec3 hand)
+{
+	if (!HeldBy(_player).has_value() || !Locator::handGrabSystem::has_value())
+	{
+		return;
+	}
+	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	Locator::handGrabSystem::value().DoApply(_player, target);
+}
+
 GameMindWorld::GameMindWorld(PlayerNames player, ComputerPlayer& state)
     : _player(player)
     , _state(state)
@@ -453,6 +593,8 @@ float GameMindWorld::Intensity(computer_mind::Mind& mind, uint16_t node)
 		return ShallCast(mind, node, MagicType::Wood, ResourceType::Wood);
 	case NodeKind::ActionChargeUpSpell:
 		return ChargeUpSpell(mind, node);
+	case NodeKind::ObjectGetFoodFromField:
+		return FoodFromField(mind, node);
 	default:
 		// The rules of the other needs are not made yet: the god does not want them
 		return 0.0f;
@@ -471,6 +613,10 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 	case NodeKind::ActionChargeUpSpell:
 		started = PerformCharge(mind, node);
 		break;
+	case NodeKind::ActionTownWithHighestFoodDesire:
+	case NodeKind::ActionTownWithHighestWoodDesire:
+		started = PickUpForTown(mind, node);
+		break;
 	default:
 		break;
 	}
@@ -486,7 +632,11 @@ bool GameMindWorld::ActionBusy() const
 
 bool GameMindWorld::StepAction()
 {
-	return computer_hand::Process(_state.hand, _hand);
+	// The god reports the place of its hand before the step, and its camera after it
+	const auto hand = _state.hand.hand;
+	const bool ended = computer_hand::Process(_state.hand, _hand);
+	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	return ended;
 }
 
 void GameMindWorld::ClearAction()
@@ -706,6 +856,83 @@ float GameMindWorld::ChargeUpSpell(computer_mind::Mind& mind, uint16_t node)
 	}
 	mind.nodes[node].object = icons[choice->index];
 	return choice->value;
+}
+
+float GameMindWorld::FoodFromField(computer_mind::Mind& mind, uint16_t node)
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0.0f;
+	}
+	auto& registry = Entities();
+	const auto& types = Locator::infoConstants::value().fieldType;
+	std::vector<entt::entity> fields;
+	std::vector<float> wishes;
+	for (const auto town : TownsOf(_player))
+	{
+		const auto number = static_cast<int>(registry.Get<const Town>(town).id);
+		// A town keeps its newest field first
+		registry.Each<const Field>([&](entt::entity entity, const Field& field) {
+			if (field.town != number)
+			{
+				return;
+			}
+			const auto coords = CoordsOfThing(entity);
+			if (!coords.has_value())
+			{
+				return;
+			}
+			const auto& type = types.at(static_cast<size_t>(field.type));
+			fields.push_back(entity);
+			wishes.push_back(computer_mind_rules::FieldWish(field.crop.food, type.totalFoodInField,
+			                                                gutils::GetDistanceInMetres(_state.hand.coords, *coords),
+			                                                PlacePull(*coords)));
+		});
+	}
+	const auto best = computer_mind_rules::MostWantedField(wishes);
+	if (!best.has_value())
+	{
+		return 0.0f;
+	}
+	mind.nodes[node].object = fields[*best];
+	return wishes[*best];
+}
+
+bool GameMindWorld::PickUpForTown(computer_mind::Mind& mind, uint16_t node)
+{
+	auto& registry = Entities();
+	// The thing is the object of the leaf that the node chose, or of the first node above that leaf with one
+	auto leaf = node;
+	while (mind.nodes[leaf].bestLeaf.has_value() && *mind.nodes[leaf].bestLeaf != leaf)
+	{
+		leaf = *mind.nodes[leaf].bestLeaf;
+	}
+	entt::entity thing = mind.nodes[leaf].object;
+	for (auto at = mind.nodes[leaf].parent; thing == entt::null && at.has_value(); at = mind.nodes[*at].parent)
+	{
+		thing = mind.nodes[*at].object;
+	}
+	entt::entity town = mind.nodes[node].object;
+	for (auto at = mind.nodes[node].parent; town == entt::null && at.has_value(); at = mind.nodes[*at].parent)
+	{
+		town = mind.nodes[*at].object;
+	}
+	if (thing == entt::null || !registry.Valid(thing) || town == entt::null || !registry.Valid(town) ||
+	    !registry.AllOf<Town>(town))
+	{
+		return false;
+	}
+	// The food or the wood of the thing goes to the town's store of it
+	const auto resource = registry.AllOf<Field>(thing) ? ResourceType::Food : ResourceType::Wood;
+	const auto store = StoreOf(town, resource);
+	if (store == entt::null)
+	{
+		return false;
+	}
+	computer_hand::Add(_state.hand, StepKind::PickUpObject,
+	                   {Argument {.object = thing}, Argument {.value = _state.hand.speed}});
+	computer_hand::Add(_state.hand, StepKind::DropObjectInHandOnObject, {Argument {.object = store}});
+	return true;
 }
 
 void GameMindWorld::ReachIcon(entt::entity icon, MagicType type)

@@ -110,4 +110,22 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	    .landScript = k_ComputerGodTownScript,
 	    .worshipShare = 0.5f,
 	});
+	all.push_back({
+	    .id = "mind.computer_god_field_food",
+	    .name = "A computer god that carries the food of a field to the storage pit of its town",
+	    .facet = Facet::Mind,
+	    .description = "The town of the food miracle scenario, with two ripe wheat fields of the town just north of the "
+	                   "temple of player two. The hand of the god starts at the temple, but the god measures from the "
+	                   "middle of the land until its first action.",
+	    .expected = "The god first draws the gesture of the miracles in the air over its temple, and its worshippers chant "
+	                "for the food miracle. Then the hand flies to the nearest field, takes all its food in a pot, carries "
+	                "the pot to the storage pit and drops it in. Small sparkles in the colour of player two show where "
+	                "its hand is. The players.list query shows the steps of the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {-25.0f, -55.0f}, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {25.0f, -55.0f}, .ripeCrop = true}},
+	    .landScript = k_ComputerGodTownScript,
+	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	});
 }

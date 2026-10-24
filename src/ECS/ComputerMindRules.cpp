@@ -103,6 +103,28 @@ std::optional<ChargeChoice> computer_mind_rules::ChooseCharge(std::span<const Ch
 	return best;
 }
 
+float computer_mind_rules::FieldWish(float food, float totalFood, float distanceFromHand, float placePull)
+{
+	const float share = (food + k_SmallChants) / (totalFood + k_SmallChants);
+	const float near = gutils::GetDistanceModifier(distanceFromHand, k_FieldReach) * share;
+	return placePull * near;
+}
+
+std::optional<size_t> computer_mind_rules::MostWantedField(std::span<const float> wishes)
+{
+	std::optional<size_t> best;
+	float most = k_LeastFieldWish;
+	for (size_t i = 0; i < wishes.size(); ++i)
+	{
+		if (wishes[i] > most)
+		{
+			most = wishes[i];
+			best = i;
+		}
+	}
+	return best;
+}
+
 std::optional<map_coords::MapCoords> computer_mind_rules::NearestInfluenceEdge(const map_coords::MapCoords& place,
                                                                                std::span<const InfluenceCircle> circles)
 {

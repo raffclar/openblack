@@ -118,6 +118,8 @@ struct HandAction
 	float progress {0.0f};
 	/// The thing that the hand casts at
 	entt::entity castTarget {entt::null};
+	/// Where the camera of the god is. It goes to the hand after each turn of a step, and stays there between actions.
+	glm::vec3 camera {0.0f};
 };
 
 /// The turns in each second of the game
@@ -180,6 +182,16 @@ public:
 	/// The shape of the gesture shows on the land, as a recognised gesture shows. The square is so many metres across,
 	/// from a corner.
 	virtual void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) = 0;
+	/// The hand of the god has room for a thing
+	[[nodiscard]] virtual bool HandHasRoom() const = 0;
+	/// The hand puts down what it holds where the hand is
+	virtual void PutDownHeld(glm::vec3 hand) = 0;
+	/// The thing can go into the hand now
+	[[nodiscard]] virtual bool CanPickUp(entt::entity thing) const = 0;
+	/// The god places the thing in its hand. A field gives a handful of its food, then all the food that is left in it.
+	virtual void PickUp(entt::entity thing, glm::vec3 hand) = 0;
+	/// The hand uses what it holds on the thing: food or wood goes into a store
+	virtual void UseHeldOn(entt::entity target, glm::vec3 hand) = 0;
 };
 
 /// The hand has steps left
