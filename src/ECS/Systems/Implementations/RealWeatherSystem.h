@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "ECS/RealWeatherRules.h"
@@ -38,6 +39,8 @@ public:
 	using ReadCountries = std::function<std::optional<std::vector<uint8_t>>()>;
 	/// Writes the file weather.dat in the folder of the player
 	using WriteDays = std::function<void(std::span<const uint8_t>)>;
+	/// Gives the message of the real weather: the place and the number of its weather picture
+	using Tell = std::function<void(std::string_view place, uint8_t picture)>;
 	/// The date of today on the computer, as the game asks the lobby for it
 	using Today = std::function<lobby_api::Date()>;
 	/// The real time, which the wait for the answer is measured by
@@ -45,7 +48,7 @@ public:
 
 	/// The game reads the countries one time, as the system starts
 	RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today, Clock clock,
-	                  const ReadCountries& readCountries = {}, WriteDays writeDays = {});
+	                  const ReadCountries& readCountries = {}, WriteDays writeDays = {}, Tell tell = {});
 
 	void StartGame(RealWeatherLandInterface& land) override;
 	void ProcessTurn(RealWeatherLandInterface& land) override;
@@ -74,6 +77,7 @@ private:
 	Today _today;
 	Clock _clock;
 	WriteDays _writeDays;
+	Tell _tell;
 	std::vector<real_weather::Country> _countries;
 	/// When the game asked for the weather of this game
 	std::chrono::steady_clock::time_point _askedAt {};

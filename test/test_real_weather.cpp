@@ -16,6 +16,7 @@
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -697,4 +698,37 @@ TEST(RealWeatherSystem, ALateAnswerWritesNoDaysFile)
 	clock.now += RealWeatherSystemInterface::k_AnswerTimeout + std::chrono::milliseconds(1);
 	lobby.Answer(Weather(2));
 	EXPECT_TRUE(written.empty());
+}
+
+TEST(RealWeatherSystem, TheMessageNamesThePlaceAndShowsThePictureOneTime)
+{
+	FakeLobby lobby;
+	FakeLand land;
+	auto presets = FileOf({PresetBytes(2, true).Change(k_Rain, 0, 40.0f)});
+	const std::string countries = "gb=Great Britain\r\n";
+	std::vector<std::pair<std::string, uint8_t>> told;
+	RealWeatherSystem system(
+	    true, lobby, [presets]() { return std::optional(presets); }, []() { return k_Today; },
+	    []() { return std::chrono::steady_clock::time_point {}; },
+	    [countries]() { return std::optional(std::vector<uint8_t>(countries.begin(), countries.end())); }, {},
+	    [&told](std::string_view place, uint8_t picture) { told.emplace_back(std::string(place), picture); });
+	system.StartGame(land);
+	system.ProcessTurn(land);
+	EXPECT_TRUE(told.empty());
+
+	lobby.Answer(Weather(2));
+	system.ProcessTurn(land);
+	ASSERT_EQ(told.size(), 1U);
+	EXPECT_EQ(told.front().first, "Guildford (Surrey,Great Britain)");
+	// Type 2 shows the fifth picture
+	EXPECT_EQ(told.front().second, 4);
+
+	// Turning the real weather off and on again changes the land again, with a new message
+	system.ProcessTurn(land);
+	system.Request(false);
+	system.ProcessTurn(land);
+	EXPECT_EQ(told.size(), 1U);
+	system.Request(true);
+	system.ProcessTurn(land);
+	EXPECT_EQ(told.size(), 2U);
 }

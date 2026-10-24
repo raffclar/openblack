@@ -121,6 +121,7 @@
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
+#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -265,6 +266,7 @@ using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
+using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandShadeSystem;
@@ -485,6 +487,13 @@ void InitializeOnline(const player_profiles::Store& profiles)
 		    {
 			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write the days of the real weather");
 		    }
+	    },
+	    // The message of the real weather goes into the list of incoming messages
+	    [](std::string_view place, uint8_t picture) {
+		    if (Locator::incomingMessageSystem::has_value())
+		    {
+			    Locator::incomingMessageSystem::value().AddWeather(gui::ToUtf16(place), picture);
+		    }
 	    });
 }
 
@@ -607,6 +616,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
+	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
@@ -832,6 +842,7 @@ void openblack::ShutDownServices()
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
+	Locator::incomingMessageSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();

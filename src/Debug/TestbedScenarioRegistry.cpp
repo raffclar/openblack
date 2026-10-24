@@ -30,6 +30,7 @@
 #include "Creature/CreatureIdleMind.h"
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureObjectActions.h"
+#include "ECS/IncomingMessageRules.h"
 #include "Input/BindableActions.h"
 #include "Particles/ParticleTypes.h"
 #include "TestbedDispenserGrid.h"
@@ -3872,6 +3873,77 @@ void AddAudio(std::vector<Scenario>& all)
 	                "out as they come nearer. The menu (Escape) hides the words at once.",
 	    .framing = {.shot = Shot::Overview},
 	    .commands = {{.kind = Kind::PauseGame, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	// The message of the real weather in the list of incoming messages, then a second one after it
+	all.push_back({
+	    .id = "interface.real_weather_message",
+	    .name = "The message of the real weather",
+	    .facet = Facet::Interface,
+	    .description = "After a second the message of the real weather comes in, as the real weather gives it at the "
+	                   "start of a game: a storm with rain over Guildford. A second message, snow over Oslo, comes in "
+	                   "after it. Click the button, or wait.",
+	    .expected = "At the bottom left of the screen, a 48 pixel button shows a cloud with rain, and to its right the "
+	                "line \"Weather Information from: Guildford (Surrey,Great Britain)\" in white with a black shadow. "
+	                "The picture does not flash. After 10 seconds the second message shows its own picture and "
+	                "\"Weather Information from: Oslo (Norway)\" for 10 seconds, then the corner is clear. A left click "
+	                "on the button clicks, removes the message and locks the camera onto the player's creature. A right "
+	                "click only removes the message.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        {{.kind = Kind::AddIncomingMessage, .delaySeconds = 1.0f, .value = 4, .action = "Guildford (Surrey,Great Britain)"},
+	         {.kind = Kind::AddIncomingMessage, .delaySeconds = 0.5f, .value = 6, .action = "Oslo (Norway)"}},
+	});
+
+	// The nine weather pictures one after the other
+	all.push_back({
+	    .id = "interface.weather_pictures",
+	    .name = "The nine weather pictures",
+	    .facet = Facet::Interface,
+	    .description = "After a second nine messages of the real weather come in, one for each weather picture, in the "
+	                   "order of the pictures. Each one shows for 10 seconds. Click the button to go to the next one.",
+	    .expected = "The pictures show in turn: sun, sun with a cloud, a dark cloud, sun with a cloud and some rain, a "
+	                "cloud with rain, sun with a cloud and some snow, a cloud with snow, a cloud with snow and rain, and a "
+	                "thunder storm. The line of text names the number of the picture.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands =
+	        [] {
+		        std::vector<Command> commands;
+		        static constexpr std::array<std::string_view, incoming_messages::k_WeatherPictures> k_Places {
+		            "Picture 0 (Sun)",       "Picture 1 (Sun,Cloud)", "Picture 2 (Cloud)",
+		            "Picture 3 (Some rain)", "Picture 4 (Rain)",      "Picture 5 (Some snow)",
+		            "Picture 6 (Snow)",      "Picture 7 (Snow,Rain)", "Picture 8 (Thunder storm)"};
+		        for (size_t picture = 0; picture < k_Places.size(); ++picture)
+		        {
+			        commands.push_back({.kind = Kind::AddIncomingMessage,
+			                            .delaySeconds = picture == 0 ? 1.0f : 0.1f,
+			                            .value = picture,
+			                            .action = k_Places.at(picture)});
+		        }
+		        return commands;
+	        }(),
+	});
+
+	// A chat line and an e-mail, whose buttons flash
+	all.push_back({
+	    .id = "interface.incoming_chat_and_mail",
+	    .name = "Incoming chat and e-mail",
+	    .facet = Facet::Interface,
+	    .description = "After a second a chat line and an e-mail come into the list of incoming messages, as other "
+	                   "players and the e-mail announcement add them. Single player gets no chat or e-mail; this stages "
+	                   "the looks of their buttons.",
+	    .expected = "The chat line shows first: a speech bubble with an arrow that flashes to a speech bubble without "
+	                "the arrow for a tenth of a second in each four tenths. The bubble lights up under the pointer. "
+	                "After 10 seconds the e-mail shows an envelope that flashes in the same way.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::AddIncomingMessage,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_IncomingChat,
+	                  .action = "Alice: Hello from the other island"},
+	                 {.kind = Kind::AddIncomingMessage,
+	                  .delaySeconds = 0.5f,
+	                  .value = k_IncomingMail,
+	                  .action = "Bob has sent you an e-mail about the harvest"}},
 	});
 
 	all.push_back({
@@ -10642,7 +10714,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
-	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || IsPointerCommand(kind);
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::AddIncomingMessage ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10670,7 +10743,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 176> k_Names {
+	constexpr std::array<std::string_view, 177> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10847,6 +10920,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove the teleport stone",
 	    "make a dance",
 	    "open a multiplayer box",
+	    "add an incoming message",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

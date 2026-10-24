@@ -210,6 +210,7 @@
 #include "ECS/Systems/HighDetailSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -657,6 +658,10 @@ Game::~Game() noexcept
 	if (Locator::pauseTextSystem::has_value())
 	{
 		Locator::pauseTextSystem::value().SetInterface(nullptr);
+	}
+	if (Locator::incomingMessageSystem::has_value())
+	{
+		Locator::incomingMessageSystem::value().SetTexts(nullptr);
 	}
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -3746,6 +3751,10 @@ const gui::TextDatabase* Game::MakeInterface()
 		if (Locator::pauseTextSystem::has_value())
 		{
 			Locator::pauseTextSystem::value().SetInterface(_interface.get());
+		}
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
 		}
 	}
 	return _interface ? &_interface->GetTexts() : nullptr;

@@ -59,6 +59,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
+#include "Gui/IncomingMessageStripRules.h"
 #include "Gui/VillagerLabels.h"
 #include "Level.h"
 #include "Locator.h"
@@ -75,6 +76,8 @@ constexpr std::string_view k_Cave = "cave";
 constexpr std::string_view k_SkipBox = "skip_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
+/// The incoming message at the bottom left of the screen; its button is "message"
+constexpr std::string_view k_IncomingMessage = "incoming_message";
 constexpr std::string_view k_Multiplayer = "multiplayer";
 
 /// The names of the multiplayer front end's boxes, for gui.windows
@@ -482,6 +485,15 @@ std::vector<WindowInfo> GameGui::Windows() const
 		}
 		windows.push_back(std::move(player));
 
+		// The incoming message at the bottom left of the screen, open while its button shows
+		const auto& incoming = game->GetInterface()->GetIncomingMessages();
+		WindowInfo message {.name = std::string(k_IncomingMessage), .kind = "game", .open = incoming.IsActive()};
+		if (incoming.IsActive())
+		{
+			message.buttons.emplace_back("message");
+		}
+		windows.push_back(std::move(message));
+
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
 		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
@@ -678,6 +690,29 @@ std::string GameGui::Send(std::span<const InputEvent> events)
 std::string GameGui::Press(std::string_view window, const std::vector<ButtonPathStep>& path)
 {
 	const auto lower = Lower(window);
+	if (lower == k_IncomingMessage)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			return "the game's dialogs aren't made yet";
+		}
+		auto& interface = *game->GetInterface();
+		if (!interface.GetIncomingMessages().IsActive())
+		{
+			return "no incoming message shows now (the list is empty, or a dialog, the temple, a video or a cut scene "
+			       "hides it)";
+		}
+		const std::vector<gui::Dialog::NamedControl> named {
+		    {.name = u"message", .kind = "button", .rect = gui::incoming_message_strip::ButtonRect()}};
+		const auto found = FindDialogControl(DialogControls(named), path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the incoming message: " + *why + "; its one button is message";
+		}
+		const auto size = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(800, 600);
+		return Send(ClickAt(interface.FromIncomingMessages(std::get<glm::ivec2>(found), static_cast<glm::u16vec2>(size))));
+	}
 	if (lower == k_MusicPlayer)
 	{
 		auto* game = Game::Instance();

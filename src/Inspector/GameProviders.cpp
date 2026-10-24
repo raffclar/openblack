@@ -168,6 +168,7 @@
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/HighDetailSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/IntroSystemInterface.h"
@@ -231,6 +232,7 @@
 #include "Game.h"
 #include "GameControls.h"
 #include "Graphics/RendererInterface.h"
+#include "Gui/GameInterface.h"
 #include "Gui/ScriptTexts.h"
 #include "Gui/TextDatabase.h"
 #include "Hand/HandTrace.h"
@@ -391,6 +393,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"gestureSystem", "players.gestures"},
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
+    LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -2494,6 +2497,46 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              }
 		              return QueryResult::Value(std::move(result));
 	              });
+	provider->Add(
+	    Query("incoming_messages",
+	          "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the "
+	          "real time it started to show), the real time now, and whether the button shows with its look"),
+	    [](const QueryContext& /*c*/) {
+		    Json result = {{"count", 0}, {"messages", Json::array()}, {"shown", false}};
+		    if (!Locator::incomingMessageSystem::has_value())
+		    {
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& system = Locator::incomingMessageSystem::value();
+		    constexpr std::array<std::string_view, 3> k_Kinds {"chat", "mail", "weather"};
+		    result["now"] = system.GetMilliseconds();
+		    result["count"] = system.GetQueue().Count();
+		    result["shown_text"] = gui::ToUtf8(system.GetQueue().ShownText());
+		    // The list is read from the top message down, by dismissing copies
+		    auto copy = system.GetQueue();
+		    while (const auto* top = copy.Top())
+		    {
+			    result["messages"].push_back({{"kind", k_Kinds.at(static_cast<size_t>(top->kind))},
+			                                  {"text", gui::ToUtf8(top->text)},
+			                                  {"picture", top->picture},
+			                                  {"since", top->since}});
+			    copy.Dismiss(top->since);
+		    }
+		    if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		    {
+			    const auto& strip = game->GetInterface()->GetIncomingMessages();
+			    result["shown"] = strip.IsActive();
+			    if (const auto& look = strip.GetLook(); look.has_value())
+			    {
+				    constexpr std::array<std::string_view, 5> k_Looks {"speech", "speech_arrow", "envelope", "envelope_arrow",
+				                                                       "weather"};
+				    result["look"] = k_Looks.at(static_cast<size_t>(look->look));
+				    result["look_picture"] = look->picture;
+			    }
+			    result["line"] = gui::ToUtf8(strip.GetText());
+		    }
+		    return QueryResult::Value(std::move(result));
+	    });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {

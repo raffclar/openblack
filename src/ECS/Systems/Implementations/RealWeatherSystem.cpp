@@ -21,13 +21,14 @@ namespace openblack::ecs::systems
 {
 
 RealWeatherSystem::RealWeatherSystem(bool turnedOn, LobbyClientSystemInterface& lobby, ReadPresets readPresets, Today today,
-                                     Clock clock, const ReadCountries& readCountries, WriteDays writeDays)
+                                     Clock clock, const ReadCountries& readCountries, WriteDays writeDays, Tell tell)
     : _turnedOn(turnedOn)
     , _lobby(lobby)
     , _readPresets(std::move(readPresets))
     , _today(std::move(today))
     , _clock(std::move(clock))
     , _writeDays(std::move(writeDays))
+    , _tell(std::move(tell))
 {
 	// The list of countries gives the full names of the countries in the message about the weather
 	if (const auto bytes = readCountries ? readCountries() : std::nullopt; bytes.has_value())
@@ -175,6 +176,11 @@ void RealWeatherSystem::ProcessTurn(RealWeatherLandInterface& land)
 				_storm = land.AddStorm(*applied.storm);
 			}
 			_landWeatherInPlace = false;
+			// The message names the place and shows the picture of the weather
+			if (_tell)
+			{
+				_tell(*GetPlace(), real_weather::PictureOf(_weather->type));
+			}
 		}
 	}
 	else if (!_landWeatherInPlace)
