@@ -90,19 +90,19 @@ void GripLandscapeEffect::Spawn(glm::vec3 groundPosition)
 	}
 }
 
-void GripLandscapeEffect::Update(float deltaSeconds)
+void GripLandscapeEffect::Update(float gameSeconds)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> dead;
 	registry.Each<GripLandscapeParticle, Sprite, Transform>(
-	    [&dead, deltaSeconds](entt::entity entity, GripLandscapeParticle& particle, Sprite& sprite, Transform& transform) {
-		    particle.age += deltaSeconds;
+	    [&dead, gameSeconds](entt::entity entity, GripLandscapeParticle& particle, Sprite& sprite, Transform& transform) {
+		    particle.age += gameSeconds;
 		    if (particle.age >= k_DieAge)
 		    {
 			    dead.push_back(entity);
 			    return;
 		    }
-		    particle.frame = glm::mod(particle.frame + (k_FrameRate * deltaSeconds), static_cast<float>(k_FrameCount));
+		    particle.frame = glm::mod(particle.frame + (k_FrameRate * gameSeconds), static_cast<float>(k_FrameCount));
 
 		    const auto scale = k_FinalScale * glm::min(particle.age / k_GrowTime, 1.0f);
 		    const auto alpha = glm::mix(k_StartAlpha, k_EndAlpha, glm::min(particle.age / k_FadeTime, 1.0f));
