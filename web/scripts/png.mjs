@@ -1,6 +1,7 @@
 // A small reader for the screenshots of Chrome (8 bits a channel, RGB or RGBA, no interlace), and the finders that the
 // web checks use on them.
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import path from 'node:path';
 import { inflateSync } from 'node:zlib';
 
 export function decodePng(data) {
@@ -76,4 +77,57 @@ export function findPointer(picture) {
     }
   }
   return count > 0 ? { x: Math.round(sumX / count), y: Math.round(sumY / count), count } : { x: -1, y: -1, count };
+}
+
+// The share of the pixels whose colour changed by more than 24 in one channel
+export function changedShare(folder, a, b) {
+  const first = path.join(folder, `${a}.png`);
+  const second = path.join(folder, `${b}.png`);
+  if (!existsSync(first) || !existsSync(second)) {
+    return -1;
+  }
+  const x = readPng(first);
+  const y = readPng(second);
+  if (x.width !== y.width || x.height !== y.height) {
+    return 1;
+  }
+  let changed = 0;
+  for (let i = 0; i < x.width * x.height; ++i) {
+    for (let c = 0; c < 3; ++c) {
+      if (Math.abs(x.pixels[i * x.channels + c] - y.pixels[i * y.channels + c]) > 24) {
+        ++changed;
+        break;
+      }
+    }
+  }
+  return changed / (x.width * x.height);
+}
+
+// The share of the pixels in a box of the picture that are not black (any channel above 16). The box is [x, y, width,
+// height] in the pixels of the picture.
+export function litShare(file, box) {
+  if (!existsSync(file)) {
+    return -1;
+  }
+  const picture = readPng(file);
+  const [left, top, width, height] = box;
+  let lit = 0;
+  for (let y = top; y < top + height; ++y) {
+    for (let x = left; x < left + width; ++x) {
+      const i = (y * picture.width + x) * picture.channels;
+      if (picture.pixels[i] > 16 || picture.pixels[i + 1] > 16 || picture.pixels[i + 2] > 16) {
+        ++lit;
+      }
+    }
+  }
+  return lit / (width * height);
+}
+
+// The width and the height of a picture
+export function pictureSize(file) {
+  if (!existsSync(file)) {
+    return [0, 0];
+  }
+  const picture = readPng(file);
+  return [picture.width, picture.height];
 }

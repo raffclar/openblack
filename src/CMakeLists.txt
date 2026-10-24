@@ -476,6 +476,28 @@ else ()
   # The game is the simulation library and the game's own library
   target_link_libraries(openblack PRIVATE openblack_sim openblack_lib)
 
+  # The openblack commit of the build goes into version.txt next to the game, at each build (see
+  # CMakeModules/WriteVersionFile.cmake). The game and the web page read it.
+  find_package(Git QUIET)
+  get_property(OPENBLACK_MULTI_CONFIG GLOBAL PROPERTY GENERATOR_IS_MULTI_CONFIG)
+  if (OPENBLACK_MULTI_CONFIG)
+    set(OPENBLACK_VERSION_FILE
+        "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/$<CONFIG>/version.txt"
+    )
+  else ()
+    set(OPENBLACK_VERSION_FILE "${CMAKE_RUNTIME_OUTPUT_DIRECTORY}/version.txt")
+  endif ()
+  add_custom_target(
+    openblack_version_file
+    COMMAND
+      ${CMAKE_COMMAND} -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+      -DOUTPUT=${OPENBLACK_VERSION_FILE} -DGIT_EXECUTABLE=${GIT_EXECUTABLE} -P
+      ${CMAKE_SOURCE_DIR}/CMakeModules/WriteVersionFile.cmake
+    COMMENT "Write the openblack commit into version.txt"
+    VERBATIM
+  )
+  add_dependencies(openblack openblack_version_file)
+
   if (MSVC)
     # Debug builds create a debug console
     set_target_properties(
