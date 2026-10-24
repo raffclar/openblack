@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 
 using namespace openblack;
 using namespace openblack::computer_hand;
@@ -274,6 +275,56 @@ Result PickUpProcess(HandAction& action, World& world, const Step& step)
 	return Result::Next;
 }
 
+Result MoveToPlaceStart(HandAction& action, const Step& step)
+{
+	action.target = ArgumentAt(step, 0).place;
+	return Result::Next;
+}
+
+Result MoveToPlace(HandAction& action, const World& world)
+{
+	// The hand moves at its speed and stops at the place when it is nearer than a step
+	const float distance = gutils::GetDistance(action.hand, action.target);
+	float dx = action.target.x - action.hand.x;
+	float dz = action.target.z - action.hand.z;
+	if (dx != 0.0f || dz != 0.0f)
+	{
+		const float inverse = 1.0f / std::sqrt(dx * dx + dz * dz);
+		dx = dx * inverse;
+		dz = inverse * dz;
+	}
+	const float step = action.speed / static_cast<float>(k_TurnsPerSecond);
+	if (!(distance > step))
+	{
+		action.hand = action.target;
+		FloatOverLand(action, world);
+		return Result::Next;
+	}
+	action.hand.x = dx * step + action.hand.x;
+	action.hand.y = 0.0f * step + action.hand.y;
+	action.hand.z = dz * step + action.hand.z;
+	FloatOverLand(action, world);
+	return Result::Continue;
+}
+
+Result WaitStart(HandAction& action, const Step& step)
+{
+	action.counter = static_cast<uint32_t>(map_coords::FtoL(static_cast<float>(k_TurnsPerSecond) * ArgumentAt(step, 0).value));
+	return Result::Next;
+}
+
+Result WaitProcess(HandAction& action)
+{
+	--action.counter;
+	return action.counter != 0 ? Result::Continue : Result::Next;
+}
+
+Result DropHeldProcess(HandAction& action, World& world)
+{
+	world.DropHeld(action.hand);
+	return Result::Next;
+}
+
 Result UseHeldProcess(HandAction& action, World& world, const Step& step)
 {
 	world.UseHeldOn(ArgumentAt(step, 0).object, action.hand);
@@ -350,6 +401,20 @@ Result RunPart(HandAction& action, World& world, const Step& step)
 			return PickUpStart(action, world, step);
 		}
 		return action.part == 1 ? PickUpProcess(action, world, step) : Result::Next;
+	case StepKind::MoveHandToPos:
+		if (action.part == 0)
+		{
+			return MoveToPlaceStart(action, step);
+		}
+		return action.part == 1 ? MoveToPlace(action, world) : Result::Next;
+	case StepKind::Wait:
+		if (action.part == 0)
+		{
+			return WaitStart(action, step);
+		}
+		return action.part == 1 ? WaitProcess(action) : Result::Next;
+	case StepKind::DropObjectInHandAtPos:
+		return action.part == 1 ? DropHeldProcess(action, world) : Result::Next;
 	case StepKind::DropObjectInHandOnObject:
 		return action.part == 1 ? UseHeldProcess(action, world, step) : Result::Next;
 	case StepKind::MakeGesture:

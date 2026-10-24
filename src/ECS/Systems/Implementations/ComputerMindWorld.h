@@ -54,6 +54,7 @@ public:
 	[[nodiscard]] bool CanPickUp(entt::entity thing) const override;
 	void PickUp(entt::entity thing, glm::vec3 hand) override;
 	void UseHeldOn(entt::entity target, glm::vec3 hand) override;
+	void DropHeld(glm::vec3 hand) override;
 
 private:
 	PlayerNames _player;
@@ -86,6 +87,12 @@ private:
 	float ChargeUpSpell(computer_mind::Mind& mind, uint16_t node);
 	/// The field of the god's towns that the god wants to take food from most
 	float FoodFromField(computer_mind::Mind& mind, uint16_t node);
+	/// The worship site of the god that needs dancers most
+	float SiteNeedingVillagers(computer_mind::Mind& mind, uint16_t node);
+	/// The villager that the god carries to the worship site of the node above
+	float VillagerForSite(computer_mind::Mind& mind, uint16_t node);
+	/// The hand carries the villager of the node to the gate of the worship site above and drops it there
+	bool CarryToSite(computer_mind::Mind& mind, uint16_t node);
 	/// The hand takes the thing that the chosen leaf found and drops it on the store of the town
 	bool PickUpForTown(computer_mind::Mind& mind, uint16_t node);
 	/// The god charges the miracle of the node's icon and casts it on the store of the town above

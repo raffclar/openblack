@@ -83,6 +83,11 @@ public:
 		usedOn.push_back(target);
 		held = entt::null;
 	}
+	void DropHeld(glm::vec3 hand) override
+	{
+		held = entt::null;
+		droppedAt.push_back(hand);
+	}
 
 	std::map<entt::entity, glm::vec2> places;
 	bool charging {false};
@@ -96,6 +101,7 @@ public:
 	entt::entity held {entt::null};
 	int putDown {0};
 	std::vector<entt::entity> usedOn;
+	std::vector<glm::vec3> droppedAt;
 };
 
 } // namespace
@@ -326,6 +332,81 @@ TEST(ComputerHand, FullHandPutsDownFirstAndAMissingThingEndsBadly)
 	Add(action, StepKind::PickUpObject, {Argument {.object = static_cast<entt::entity>(99)}});
 	Process(action, world);
 	EXPECT_FALSE(Process(action, world));
+}
+
+TEST(ComputerHand, VillagerGoesToThePlaceWaitsAndIsDropped)
+{
+	constexpr auto k_Villager = static_cast<entt::entity>(9);
+	FakeWorld world;
+	world.places[k_Villager] = {100.0f, 100.0f};
+	HandAction action;
+	action.hand = {100.0f, 0.0f, 100.0f};
+	action.moveFirst = false;
+	const glm::vec3 gate {100.0f, 20.0f, 130.0f};
+	Add(action, StepKind::PickUpObject, {Argument {.object = k_Villager}});
+	Add(action, StepKind::MoveHandToPos, {Argument {.place = gate}, Argument {.value = 900.0f}});
+	Add(action, StepKind::Wait, {Argument {.value = 1.0f}});
+	Add(action, StepKind::DropObjectInHandAtPos, {Argument {.place = gate}});
+	// The pick up has no move in front of it here; its three parts take three turns
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		Process(action, world);
+	}
+	EXPECT_EQ(world.held, k_Villager);
+	ASSERT_EQ(action.steps.front().kind, StepKind::MoveHandToPos);
+	// The move gets no move of its own. At 90 metres a second the hand covers 30 metres in four steps of 9 and the rest.
+	Process(action, world); // the start
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		Process(action, world);
+		EXPECT_EQ(action.part, 1);
+	}
+	EXPECT_FLOAT_EQ(action.hand.z, 127.0f);
+	Process(action, world);
+	EXPECT_EQ(action.part, 2);
+	EXPECT_FLOAT_EQ(action.hand.z, 130.0f);
+	// The hand floats over the land at the place
+	EXPECT_FLOAT_EQ(action.hand.y, 30.0f);
+	Process(action, world); // the end of the move
+	ASSERT_EQ(action.steps.front().kind, StepKind::Wait);
+	// The wait takes ten turns of the second, after its start
+	Process(action, world);
+	EXPECT_EQ(action.counter, 10u);
+	for (int turn = 0; turn < 9; ++turn)
+	{
+		Process(action, world);
+		EXPECT_EQ(action.part, 1);
+	}
+	Process(action, world);
+	EXPECT_EQ(action.part, 2);
+	Process(action, world);
+	// The drop gets the move to the place first, which ends at once
+	ASSERT_EQ(action.steps.front().kind, StepKind::DropObjectInHandAtPos);
+	for (int turn = 0; turn < 8 && Busy(action); ++turn)
+	{
+		Process(action, world);
+	}
+	EXPECT_FALSE(Busy(action));
+	ASSERT_EQ(world.droppedAt.size(), 1u);
+	EXPECT_TRUE(world.held == entt::null);
+}
+
+TEST(ComputerMindRules, WorshipNeeds)
+{
+	// A town with no one at worship needs worshippers fully, and one with most of its people there needs none
+	EXPECT_FLOAT_EQ(TownWorshipNeed(10, 0, 0), 1.0f);
+	EXPECT_FLOAT_EQ(TownWorshipNeed(0, 0, 0), 0.0f);
+	EXPECT_FLOAT_EQ(TownWorshipNeed(10, 5, 1), 0.0f);
+	// A third at worship leaves the cube of two thirds
+	const float missing = 1.0f - 1.0f / 3.0f;
+	EXPECT_FLOAT_EQ(TownWorshipNeed(3, 1, 0), (missing * missing) * missing);
+	// More than all counts as all
+	EXPECT_FLOAT_EQ(TownWorshipNeed(2, 3, 1), 0.0f);
+	// A site with no icons needs no dancers; four dancers for each icon fill it
+	EXPECT_FLOAT_EQ(SiteDancerNeed(0, 0), 0.0f);
+	EXPECT_FLOAT_EQ(SiteDancerNeed(0, 3), 1.0f);
+	EXPECT_FLOAT_EQ(SiteDancerNeed(12, 3), 0.0f);
+	EXPECT_FLOAT_EQ(SiteDancerNeed(6, 3), 1.0f - 0.0625f);
 }
 
 TEST(ComputerMindRules, FieldWishAndChoice)

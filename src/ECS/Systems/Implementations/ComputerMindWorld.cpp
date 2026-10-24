@@ -29,15 +29,19 @@
 #include "Creature/CreatureGesture.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Abode.h"
+#include "ECS/Components/AtHome.h"
 #include "ECS/Components/Field.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Influence.h"
+#include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/ComputerMindRules.h"
@@ -47,12 +51,14 @@
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerWorship.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
+#include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
@@ -304,6 +310,60 @@ std::optional<entt::entity> HeldBy(PlayerNames player)
 		return std::nullopt;
 	}
 	return grab->object;
+}
+
+/// The centre of the town, none when it has none
+entt::entity TownCentreOf(entt::entity town)
+{
+	auto& registry = Entities();
+	for (const auto abode : registry.Get<const Town>(town).abodes)
+	{
+		const auto* info = registry.Valid(abode) ? ecs::world_objects::AbodeInfoOf(abode) : nullptr;
+		if (info != nullptr && info->abodeType == AbodeType::TownCentre)
+		{
+			return abode;
+		}
+	}
+	return entt::null;
+}
+
+/// How much a town needs more worshippers: none with no people, in an emergency, or with no centre that works
+float TownWorshipNeedOf(entt::entity town)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(town) || !registry.AllOf<Town>(town))
+	{
+		return 0.0f;
+	}
+	const auto count = ecs::villager_worship::HeadcountOf(town);
+	if (count.population == 0)
+	{
+		return 0.0f;
+	}
+	if (Locator::townSystem::has_value() && Locator::townSystem::value().IsInStateOfEmergency(town))
+	{
+		return 0.0f;
+	}
+	const auto centre = TownCentreOf(town);
+	if (centre == entt::null || !ecs::villager_home::IsFunctional(centre))
+	{
+		return 0.0f;
+	}
+	return computer_mind_rules::TownWorshipNeed(count.population, count.worshipping, count.onTheWay);
+}
+
+/// A hand can take the villager: it is not at home, not in a hand and not on its way to hide
+bool Reachable(entt::entity villager)
+{
+	auto& registry = Entities();
+	const auto* action = registry.TryGet<const LivingAction>(villager);
+	const bool hiding = action != nullptr && action->states[static_cast<size_t>(LivingAction::Index::Top)] ==
+	                                             static_cast<uint8_t>(VillagerStates::GoAndHideInNearbyBuilding);
+	return hand_grab::ValidForPlaceInHand({.kind = hand_grab::GrabKind::Villager,
+	                                       .available = registry.Valid(villager),
+	                                       .atHome = registry.AllOf<AtHome>(villager),
+	                                       .inHand = registry.AllOf<InHand>(villager),
+	                                       .hiding = hiding});
 }
 
 /// The town that has the number
@@ -562,6 +622,11 @@ void GameHandWorld::PickUp(entt::entity thing, glm::vec3 hand)
 	potData->amount += rest;
 }
 
+void GameHandWorld::DropHeld(glm::vec3 hand)
+{
+	PutDownHeld(hand);
+}
+
 void GameHandWorld::UseHeldOn(entt::entity target, glm::vec3 hand)
 {
 	if (!HeldBy(_player).has_value() || !Locator::handGrabSystem::has_value())
@@ -595,6 +660,10 @@ float GameMindWorld::Intensity(computer_mind::Mind& mind, uint16_t node)
 		return ChargeUpSpell(mind, node);
 	case NodeKind::ObjectGetFoodFromField:
 		return FoodFromField(mind, node);
+	case NodeKind::ActionWorshipSiteThatNeedsVillagers:
+		return SiteNeedingVillagers(mind, node);
+	case NodeKind::ObjectTakeVillagerFromTownToWorshipSite:
+		return VillagerForSite(mind, node);
 	default:
 		// The rules of the other needs are not made yet: the god does not want them
 		return 0.0f;
@@ -616,6 +685,9 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 	case NodeKind::ActionTownWithHighestFoodDesire:
 	case NodeKind::ActionTownWithHighestWoodDesire:
 		started = PickUpForTown(mind, node);
+		break;
+	case NodeKind::ObjectTakeVillagerFromTownToWorshipSite:
+		started = CarryToSite(mind, node);
 		break;
 	default:
 		break;
@@ -896,6 +968,164 @@ float GameMindWorld::FoodFromField(computer_mind::Mind& mind, uint16_t node)
 	}
 	mind.nodes[node].object = fields[*best];
 	return wishes[*best];
+}
+
+float GameMindWorld::SiteNeedingVillagers(computer_mind::Mind& mind, uint16_t node)
+{
+	auto& registry = Entities();
+	float best = 0.0f;
+	entt::entity chosen = entt::null;
+	for (const auto site : SitesOf(_player))
+	{
+		if (site == entt::null)
+		{
+			continue;
+		}
+		// A built site with icons needs dancers; the need of its neediest town counts
+		const auto icons = static_cast<uint32_t>(IconsOf(site).size());
+		const bool built = Locator::worshipSiteSystem::has_value() && Locator::worshipSiteSystem::value().IsBuilt(site);
+		const float dancerNeed =
+		    built ? computer_mind_rules::SiteDancerNeed(Locator::worshipSiteSystem::value().Dancers(site), icons) : 0.0f;
+		float need = 0.0f;
+		if (dancerNeed != 0.0f)
+		{
+			float townNeed = 0.0f;
+			for (const auto town : registry.Get<const WorshipSite>(site).towns)
+			{
+				const float each = TownWorshipNeedOf(town);
+				if (townNeed < each)
+				{
+					townNeed = each;
+				}
+			}
+			need = townNeed * dancerNeed;
+		}
+		if (need > best)
+		{
+			best = need;
+			chosen = site;
+		}
+	}
+	if (chosen == entt::null)
+	{
+		return 0.0f;
+	}
+	mind.nodes[node].object = chosen;
+	return best;
+}
+
+float GameMindWorld::VillagerForSite(computer_mind::Mind& mind, uint16_t node)
+{
+	auto& registry = Entities();
+	entt::entity site = entt::null;
+	for (auto at = mind.nodes[node].parent; site == entt::null && at.has_value(); at = mind.nodes[*at].parent)
+	{
+		site = mind.nodes[*at].object;
+	}
+	if (site == entt::null || !registry.Valid(site) || !registry.AllOf<WorshipSite>(site))
+	{
+		return 0.0f;
+	}
+	std::optional<glm::vec2> gatePlace;
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		gatePlace = Locator::worshipSiteSystem::value().PlaceAt(site, WorshipSiteSystemInterface::SitePlace::Gate);
+	}
+	const auto gate = gatePlace.has_value() ? map_coords::FromMetres(*gatePlace) : map_coords::MapCoords {};
+	// A villager far enough from the gate that the god may take
+	const auto farFromGate = [&gate](entt::entity villager) {
+		const auto coords = CoordsOfThing(villager);
+		return coords.has_value() && gutils::GetDistanceInMetres(gate, *coords) > computer_mind_rules::k_CarryToWorshipDistance;
+	};
+	float best = 0.0f;
+	entt::entity chosen = entt::null;
+	for (const auto town : registry.Get<const WorshipSite>(site).towns)
+	{
+		const float need = TownWorshipNeedOf(town);
+		if (!(need > best))
+		{
+			continue;
+		}
+		// First the people of its buildings, newest building first, then its homeless
+		entt::entity found = entt::null;
+		for (const auto abode : registry.Get<const Town>(town).abodes)
+		{
+			const auto* building = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr;
+			if (building == nullptr || found != entt::null)
+			{
+				continue;
+			}
+			for (const auto villager : building->inhabitants)
+			{
+				if (registry.Valid(villager) && registry.AllOf<Villager>(villager) &&
+				    ecs::villager_worship::IsAvailableForWorshipSite(villager, false) && Reachable(villager) &&
+				    farFromGate(villager) && PlacePull(*CoordsOfThing(villager)) > 0.0f)
+				{
+					found = villager;
+					break;
+				}
+			}
+		}
+		if (found == entt::null)
+		{
+			for (const auto villager : registry.Get<const Town>(town).homelessVillagers)
+			{
+				if (registry.Valid(villager) && registry.AllOf<Villager>(villager) &&
+				    ecs::villager_worship::IsAvailableForWorshipSite(villager, false) && farFromGate(villager))
+				{
+					found = villager;
+					break;
+				}
+			}
+		}
+		if (found != entt::null)
+		{
+			best = need;
+			chosen = found;
+		}
+	}
+	if (chosen == entt::null)
+	{
+		return 0.0f;
+	}
+	mind.nodes[node].object = chosen;
+	return best;
+}
+
+bool GameMindWorld::CarryToSite(computer_mind::Mind& mind, uint16_t node)
+{
+	auto& registry = Entities();
+	entt::entity villager = mind.nodes[node].object;
+	for (auto at = mind.nodes[node].parent; villager == entt::null && at.has_value(); at = mind.nodes[*at].parent)
+	{
+		villager = mind.nodes[*at].object;
+	}
+	entt::entity site = entt::null;
+	for (auto at = mind.nodes[node].parent; site == entt::null && at.has_value(); at = mind.nodes[*at].parent)
+	{
+		site = mind.nodes[*at].object;
+	}
+	if (villager == entt::null || !registry.Valid(villager) || site == entt::null || !registry.Valid(site))
+	{
+		return false;
+	}
+	// With no gate the action counts as done, but the hand does nothing
+	const auto gatePlace = Locator::worshipSiteSystem::has_value()
+	                           ? Locator::worshipSiteSystem::value().PlaceAt(site, WorshipSiteSystemInterface::SitePlace::Gate)
+	                           : std::nullopt;
+	if (!gatePlace.has_value())
+	{
+		return true;
+	}
+	const auto gate = map_coords::FromMetres(*gatePlace);
+	const glm::vec3 place {map_coords::ToMetres(gate.x), _hand.LandHeight(gate) + gate.altitude, map_coords::ToMetres(gate.z)};
+	computer_hand::Add(_state.hand, StepKind::PickUpObject,
+	                   {Argument {.object = villager}, Argument {.value = _state.hand.speed}});
+	computer_hand::Add(_state.hand, StepKind::MoveHandToPos, {Argument {.place = place}, Argument {.value = 900.0f}});
+	computer_hand::Add(_state.hand, StepKind::Wait, {Argument {.value = 1.0f}});
+	computer_hand::Add(_state.hand, StepKind::DropObjectInHandAtPos,
+	                   {Argument {.place = place}, Argument {.value = _state.hand.speed}});
+	return true;
 }
 
 bool GameMindWorld::PickUpForTown(computer_mind::Mind& mind, uint16_t node)

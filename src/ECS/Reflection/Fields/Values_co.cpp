@@ -27,7 +27,8 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	Reflect<openblack::computer_hand::Argument>(context, ValueOnly {})
 	    .Field<&openblack::computer_hand::Argument::object>("object")
 	    .Field<&openblack::computer_hand::Argument::number>("number")
-	    .Field<&openblack::computer_hand::Argument::value>("value");
+	    .Field<&openblack::computer_hand::Argument::value>("value")
+	    .Field<&openblack::computer_hand::Argument::place>("place");
 	Reflect<openblack::computer_hand::HandAction>(context, ValueOnly {})
 	    .Field<&openblack::computer_hand::HandAction::hand>("hand")
 	    .Field<&openblack::computer_hand::HandAction::coords>("coords")

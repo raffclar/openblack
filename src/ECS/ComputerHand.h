@@ -79,6 +79,8 @@ struct Argument
 	entt::entity object {entt::null};
 	int32_t number {0};
 	float value {0.0f};
+	/// A place in metres
+	glm::vec3 place {0.0f};
 };
 
 /// One step of an action
@@ -192,6 +194,8 @@ public:
 	virtual void PickUp(entt::entity thing, glm::vec3 hand) = 0;
 	/// The hand uses what it holds on the thing: food or wood goes into a store
 	virtual void UseHeldOn(entt::entity target, glm::vec3 hand) = 0;
+	/// The hand lets go of what it holds where it is, with no speed
+	virtual void DropHeld(glm::vec3 hand) = 0;
 };
 
 /// The hand has steps left

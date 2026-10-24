@@ -103,6 +103,40 @@ std::optional<ChargeChoice> computer_mind_rules::ChooseCharge(std::span<const Ch
 	return best;
 }
 
+float computer_mind_rules::TownWorshipNeed(uint32_t population, uint32_t worshipping, uint32_t onTheWay)
+{
+	if (population == 0)
+	{
+		return 0.0f;
+	}
+	float share = static_cast<float>(worshipping + onTheWay) / static_cast<float>(population);
+	if (!(share < 1.0f))
+	{
+		share = 1.0f;
+	}
+	const float missing = 1.0f - share;
+	const float need = (missing * missing) * missing;
+	if (!(need < k_FullWorshipNeed))
+	{
+		return 1.0f;
+	}
+	return need < k_LeastWorshipNeed ? 0.0f : need;
+}
+
+float computer_mind_rules::SiteDancerNeed(uint32_t dancers, uint32_t icons)
+{
+	if (icons == 0)
+	{
+		return 0.0f;
+	}
+	float share = static_cast<float>(dancers) / (static_cast<float>(icons) * k_DancersPerIcon);
+	if (!(share < 1.0f))
+	{
+		share = 1.0f;
+	}
+	return 1.0f - ((share * share) * share) * share;
+}
+
 float computer_mind_rules::FieldWish(float food, float totalFood, float distanceFromHand, float placePull)
 {
 	const float share = (food + k_SmallChants) / (totalFood + k_SmallChants);

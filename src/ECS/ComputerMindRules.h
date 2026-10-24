@@ -94,6 +94,23 @@ constexpr float k_LeastFieldWish = 0.1f;
 /// The field that the god wants most: the first with the largest wish over k_LeastFieldWish
 [[nodiscard]] std::optional<size_t> MostWantedField(std::span<const float> wishes);
 
+/// The share of the worship that a town wants filled at which the god sees it as fully short of worshippers, and the
+/// share under which the god sees no need
+constexpr float k_FullWorshipNeed = 0.7f;
+constexpr float k_LeastWorshipNeed = 0.2f;
+/// The dancers that each icon of a worship site wants
+constexpr float k_DancersPerIcon = 4.0f;
+/// A villager must be further than this, in metres, from the gate of the worship site before the god carries it there
+constexpr float k_CarryToWorshipDistance = 50.0f;
+
+/// How much a town needs more worshippers, from 0 to 1, from its people and those that worship or go to worship: the
+/// cube of the share that does not worship. A need of k_FullWorshipNeed or more is full; under k_LeastWorshipNeed it is
+/// none.
+[[nodiscard]] float TownWorshipNeed(uint32_t population, uint32_t worshipping, uint32_t onTheWay);
+/// How much a built worship site needs more dancers, from 0 to 1: one less the fourth power of the share of its dancers
+/// against k_DancersPerIcon for each icon. A site with no icons needs none.
+[[nodiscard]] float SiteDancerNeed(uint32_t dancers, uint32_t icons);
+
 /// A circle of a player's own influence: its middle and how far it reaches, in metres
 struct InfluenceCircle
 {
