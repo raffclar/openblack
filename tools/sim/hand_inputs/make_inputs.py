@@ -8,7 +8,8 @@ it: the game puts its camera there before the first frame of the land.
     python tools/sim/hand_inputs/make_inputs.py
 
 writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json,
-twogods_totem.json, twogods_scoop_throw.json, twogods_creature_hold.json and strokes.json beside this script.
+twogods_totem.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json and strokes.json beside this
+script.
 strokes.json plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes).
 The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
@@ -148,6 +149,11 @@ LAND1_TURNED_CAMERA = {"yaw": 120, "pitch": 40, "distance": 90}
 TWO_GODS_STORE_CAMERA = {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}
 
 
+# The camera of gods_ring_slot1_scoop_throw.json: 35 m from the store of slot 1 on the map for 32 gods, looking down at
+# 40 degrees; the food pot to the east of the store is at the pixel of the scoop
+GODS_RING_SLOT1_STORE_CAMERA = {"focus": [3028.14, 21.44, 827.47], "yaw": 4, "pitch": 40, "distance": 35}
+
+
 def two_gods():
     """The player's first town of the playground: the hand scoops from the food pile of the store, lets go of the
     button, and puts the handful into the store"""
@@ -222,41 +228,6 @@ def scoop_throw(pile):
     return script.events
 
 
-def creature_hold(creature):
-    """The god's own creature at a pixel: the hand holds it, strokes it in small circles and lets go. Then a quick click
-    on it puts the leash on, and a tap on the land below leads the creature there. First the C key puts the camera on
-    the creature (Creature Mode), which keeps the creature at the same place on the screen."""
-    script = Script()
-    script.wait(10)
-    script.add({"kind": "key_down", "key": "c"})
-    script.wait(1)
-    script.add({"kind": "key_up", "key": "c"})
-    # The camera flies to the creature first
-    script.wait(400)
-    script.move(creature, 20)
-    script.wait(10)
-    # Hold the creature for 100 frames, the hand going round on its body
-    script.press()
-    script.wait(20)
-    script.circle(creature, 12, 60, 2.0)
-    script.wait(20)
-    script.release()
-    script.wait(60)
-    # A click puts the leash on
-    script.press()
-    script.wait(2)
-    script.release()
-    script.wait(60)
-    # A tap on the land leads the creature there
-    script.move((640, 900), 20)
-    script.wait(10)
-    script.press()
-    script.wait(2)
-    script.release()
-    script.wait(100)
-    return script.events
-
-
 def strokes():
     """The testbed scenario hand.recorded_strokes: the hand holds the player's tiger by its middle, strokes it with slow
     moves up and down, slaps it with fast sweeps across the screen, and lets go"""
@@ -303,7 +274,8 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("twogods_scoop_throw", scoop_throw((712, 437)))
-    write("twogods_creature_hold", creature_hold((640, 500)))
+    # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
+    write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
     write("strokes", strokes())
 
 
