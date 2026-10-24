@@ -27,6 +27,7 @@
 #include <utility>
 #include <vector>
 
+#include <GameSocket.h>
 #include <LHVM.h>
 #include <LNDFile.h>
 #include <MorphFile.h>
@@ -44,6 +45,10 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
+
+#if defined(__EMSCRIPTEN__)
+#include <emscripten.h>
+#endif
 
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
@@ -228,6 +233,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -653,6 +659,7 @@ Game::Game(Arguments&& args) noexcept
 	config.frameStatsViews = args.frameStatsViews;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
+	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
 	config.useInternetWeather = args.useInternetWeather;
 	config.dynamicTreeShadows = args.dynamicTreeShadows;
 	config.unlockedBonusCreatures = args.unlockedBonusCreatures;
@@ -4063,6 +4070,11 @@ Game::RunStart Game::StartRun() noexcept
 	}
 
 	auto start = game_session::Start::NewGame;
+	// A network game's land starts from the state that every computer of the game starts it from
+	if (_networkGame || _networkJoin.has_value())
+	{
+		simulation::PrepareNetworkLand(Locator::rng::value().GetRunSeed());
+	}
 	if (_startTestbed)
 	{
 		LoadTestbed();
@@ -4132,7 +4144,10 @@ Game::RunStart Game::StartRun() noexcept
 		return RunStart::Done;
 	}
 	// The world starts to play, with the game as its view
-	simulation::BeginPlay(continued, _simulation.has_value() && _simulation->frameTime.has_value(), *this);
+	// A run with a fixed frame time and a network game load every resource before the first frame, as the game server
+	const bool loadAllFirst =
+	    (_simulation.has_value() && _simulation->frameTime.has_value()) || _networkGame || _networkJoin.has_value();
+	simulation::BeginPlay(continued, loadAllFirst, *this);
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
 	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
@@ -4214,6 +4229,12 @@ void Game::BeforeFirstFrame(bool continued)
 			return;
 		}
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+		// The land's start-of-game question waited for the front end, which did not open
+		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
+		    hasCreature.has_value() && _interface)
+		{
+			_interface->ShowSkipBox(*hasCreature);
+		}
 	}
 	// A game that continued from the save on exit starts under the menu
 	if (game_session::ShowsMenuOnStart(game_session::Start::Continue, continued))
@@ -4513,6 +4534,13 @@ bool Game::AskStartQuestion(bool hasCreature)
 	}
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPlayerPause(true);
+	// The multiplayer front end is in front of the land: the question comes when the player leaves the front end to
+	// the land
+	if (_interface->GetMultiplayerBoxes().IsActive() || _frontEndOnStart)
+	{
+		_startQuestionAfterFrontEnd = hasCreature;
+		return true;
+	}
 	_interface->ShowSkipBox(hasCreature);
 	return true;
 }
@@ -4774,10 +4802,9 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	{
 		_lanDiscovery = std::make_unique<online::NoLanDiscovery>();
 	}
-	const auto start = std::chrono::steady_clock::now();
 	gui::MultiplayerFrontEnd::Services services {
 	    .lobby = Locator::lobbyClient::has_value() ? &Locator::lobbyClient::value() : nullptr,
-	    .sockets = Locator::webSocketClient::has_value() ? &Locator::webSocketClient::value() : nullptr,
+	    .network = Locator::networkGame::has_value() ? &Locator::networkGame::value() : nullptr,
 	    .lan = _lanDiscovery.get(),
 	    .openPage =
 	        [](std::string_view url) {
@@ -4790,32 +4817,34 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 		        }
 #endif
 	        },
-	    .clock =
-	        [start] {
-		        const auto since = std::chrono::steady_clock::now() - start;
-		        return static_cast<uint64_t>(std::chrono::duration_cast<std::chrono::microseconds>(since).count());
-	        },
 	    .owner = {},
 	    .poll = {},
 	};
 	gui::MultiplayerFrontEnd::Settings settings;
 	// The registration page is on the lobby's site: Register on the site, then log in in the game
-	const auto origin = Locator::config::value().lobbyOrigin.value_or(std::string());
 #if defined(__EMSCRIPTEN__)
 	settings.browser = true;
 	settings.registerPage = "/register/";
+	settings.accountPage = "/account/";
 #else
+	const auto origin = Locator::config::value().lobbyOrigin.value_or(std::string());
 	settings.registerPage = origin.empty() ? std::string() : origin + "/register/";
+	settings.accountPage = origin.empty() ? std::string() : origin + "/account/";
 #endif
-	// The internet connection's name in the list is the lobby's host
+	// The internet connection's name in the list is the lobby's host: in the browser, the host of the page
+#if defined(__EMSCRIPTEN__)
+	settings.internetName = gui::ToUtf16(emscripten_run_script_string("location.host"));
+#else
 	const auto host = origin.find("://");
 	settings.internetName = gui::ToUtf16(host == std::string::npos ? origin : origin.substr(host + 3));
+#endif
 	if (const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile(); profile.has_value())
 	{
 		settings.profileName = gui::ToUtf16(profile->name);
 	}
-	// A game server of another build shows "(Wrong Version)" in the game list
-	settings.gameVersion = std::string(build_version::Text());
+	// A game server of another version shows "(Wrong Version)" in the game list. The lobby keeps 16 characters of a
+	// server's version, so the game servers report their semantic version and the list compares that.
+	settings.gameVersion = std::string(build_version::Semantic());
 	auto maps = gui::ReadOnlineMapTexts();
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
@@ -4839,6 +4868,39 @@ void Game::UpdateMultiplayerFrontEnd()
 	{
 		return;
 	}
+	// The game server started the game that the player joined in the front end: the front end closes, and the server's
+	// land loads with the server's seed. The network game keeps its session with the server.
+	if (Locator::networkGame::has_value())
+	{
+		auto& network = Locator::networkGame::value();
+		if (const auto start = network.TakeStart(); start.has_value())
+		{
+			auto& startBoxes = _interface->GetMultiplayerBoxes();
+			if (startBoxes.IsActive())
+			{
+				startBoxes.Close();
+			}
+			if (Locator::temple::has_value() && Locator::temple::value().IsMultiplayerFrontEnd())
+			{
+				Locator::temple::value().LeaveMultiplayerFrontEnd();
+			}
+			// The land of the question goes: the network game's land does not ask it
+			if (std::exchange(_startQuestionAfterFrontEnd, std::nullopt).has_value())
+			{
+				Locator::time::value().SetPlayerPause(false);
+			}
+			if (StartNetworkLand(*start))
+			{
+				network.BeginPlay();
+			}
+			else
+			{
+				SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land of the network game did not load");
+				network.Leave();
+			}
+			return;
+		}
+	}
 	auto& boxes = _interface->GetMultiplayerBoxes();
 	if (!boxes.IsActive())
 	{
@@ -4852,7 +4914,52 @@ void Game::UpdateMultiplayerFrontEnd()
 		{
 			Locator::temple::value().LeaveMultiplayerFrontEnd();
 		}
+		// The land's start-of-game question waited for the front end
+		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt); hasCreature.has_value())
+		{
+			_interface->ShowSkipBox(*hasCreature);
+		}
 	}
+}
+
+bool Game::StartNetworkLand(const game_socket::Start& start)
+{
+	// The client starts the land as the game server started it: the same new-game start, the same seed and the same
+	// pinned date, as a network game
+	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
+	auto& lands = Locator::landSystem::value();
+	lands.SetNewGameStart(_newGameStart);
+	auto& clock = Locator::time::value();
+	clock.RestartClock(ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	clock.SetNetworkGame(true);
+	// The land starts from the state that the game server started it from
+	simulation::PrepareNetworkLand(start.seed);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
+	_startTestbed = start.testbed;
+	if (start.testbed)
+	{
+		LoadTestbed();
+	}
+	else if (!LoadMapWithFreshScripts(start.land, land_change::Kind::NewGame))
+	{
+		return false;
+	}
+	// The story's scripts run the first land, but not the testbed or a playground
+	const bool startStory =
+	    !start.testbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	if (!lands.StartChallengeScripts(startStory))
+	{
+		return false;
+	}
+	// The world starts as a new world starts to play: everything that the land made goes into the map's cells, and the
+	// clock starts from the start of the current turn
+	Locator::entitiesMap::value().Sync();
+	// Every resource loads before the first turn, as on the game server, so that a thing that waits for its picture or
+	// its model starts at the same turn on each computer
+	simulation::LoadEveryResource();
+	clock.Start();
+	clock.ResetTimerToTurn();
+	return true;
 }
 
 void Game::UpdateTattooMenu(float milliseconds)

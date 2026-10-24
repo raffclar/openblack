@@ -77,6 +77,7 @@ int main(int argc, char* argv[])
 		("client-cert", "The PEM file of the client certificate that the server shows to the lobby (mutual TLS).", cxxopts::value<std::string>())
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
 		("room-name", "The name of the room in the list of the lobby.", cxxopts::value<std::string>()->default_value("Game"))
+		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
 		("come-back-seconds", "How long a god's player can be away before the god is defeated.", cxxopts::value<uint32_t>()->default_value("300"))
 		("l,log-file", "The file of the log, or stdout.", cxxopts::value<std::string>()->default_value("stdout"))
 		("version", "Write the version of openblack (the semantic version and the git commit) and exit.")
@@ -127,7 +128,8 @@ int main(int argc, char* argv[])
 			settings.scenario = result["scenario"].as<std::string>();
 			settings.testbed = true;
 		}
-		settings.opening = openblack::new_game_choice::ParseNewGameStart(result["skip-opening"].as<std::string>());
+		settings.openingName = result["skip-opening"].as<std::string>();
+		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
 		settings.seed = result["seed"].as<uint32_t>();
 		if (result.count("turns") != 0)
 		{
@@ -192,6 +194,10 @@ int main(int argc, char* argv[])
 				network.clientKey = std::filesystem::path(result["client-key"].as<std::string>());
 			}
 			network.roomName = result["room-name"].as<std::string>();
+			if (result.count("lobby-test-ca") != 0)
+			{
+				network.lobbyTestAuthorities = std::filesystem::path(result["lobby-test-ca"].as<std::string>());
+			}
 			settings.network = std::move(network);
 		}
 		openblack::crash_handler::SetLogFile(settings.logFile);

@@ -117,7 +117,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
-		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>());
+		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
+		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1). The lobby's calls, its push channel and the game sockets also trust it.", cxxopts::value<std::string>());
 	// The options that only developers and tools use. A build without the developer tools ignores them (see
 	// FilterDeveloperOptions), and its help does not show them.
 	options.add_options("Developer")
@@ -337,6 +338,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .url = result["join"].as<std::string>(),
 			    .ticket = result.count("join-ticket") != 0 ? result["join-ticket"].as<std::string>() : std::string(),
 			    .gamePassword = {},
+			    .name = {},
 			    .testAuthorities =
 			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
 			};
@@ -429,6 +431,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();
+		if (result.count("lobby-test-ca") != 0)
+		{
+			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
+		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;

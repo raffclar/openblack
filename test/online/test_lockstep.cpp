@@ -71,7 +71,7 @@ struct Computer
 		    .gamePassword = {},
 		    .comeBackMicroseconds = 5LL * 60 * 1'000'000,
 		});
-		session.SetReady();
+		session.SetReady(true);
 	}
 
 	/// The frame of the computer: the socket, the session, then the turns that are due

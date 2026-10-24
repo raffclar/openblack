@@ -181,6 +181,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// A new land: every effect goes
 	virtual void Reset() = 0;
+	/// The next Reset also numbers the effects after it from the first number again, as a new program does. Every
+	/// computer of a network game loads its land this way, because the world keeps the numbers of some effects.
+	virtual void SetFreshIdsAtNextReset() = 0;
 
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
 	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple

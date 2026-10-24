@@ -100,7 +100,8 @@ struct DeveloperOption
 
 /// The options of the command line that only developers and tools use. A build without the developer tools ignores
 /// them. The window options (--background, -n), the logs, the lobby and the join options stay in every build.
-/// --join-test-ca stays too: the join refuses it for all addresses but the loopback address of this computer.
+/// --join-test-ca and --lobby-test-ca stay too: the game refuses them for all addresses but the loopback address of
+/// this computer.
 inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "start-level", .shortName = 's', .takesValue = true},
     DeveloperOption {.name = "testbed"},

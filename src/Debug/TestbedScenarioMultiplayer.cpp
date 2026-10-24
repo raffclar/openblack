@@ -38,7 +38,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 13> boxes = {{
+	const std::array<BoxScenario, 14> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -56,7 +56,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.game_list", "The multiplayer front end: the game list", Stage::GameList,
 	     "The player logs in as Alice, and the first game of the list is picked.",
 	     "The box \"Find/Create a game on the Internet.\" lists \"Bob's game (2/4)\", \"Fun (1/2) - PLAYING\", \"Test "
-	     "(1/4) (Wrong Version)\", \"Clan war (3/4)(Needs Password)-Locked\" and \"Thirty-two gods (32/32)\". The "
+	     "(1/4) (Wrong Version)\", \"Clan war (3/4)(Needs Password)-Locked\", \"Thirty-two gods (32/32)\" and \"Full "
+	     "game (2/2)\". The "
 	     "players of Bob's game show at the right. \"Join game\" is at the bottom right. Click no game: the help "
 	     "shows, and the second box reads \"Game Name Filter:\"."},
 	    {"multiplayer.room_chat", "The multiplayer front end: the game room's chat", Stage::RoomChat,
@@ -105,6 +106,11 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The chat shows 31 lines, \"God1: I am god 1.\" to \"God31: I am god 31.\". Gods 1 to 4 are red, green, blue "
 	     "and yellow. Each of gods 5 to 31 has a different colour, and each line is easy to read on the chat box. Scroll "
 	     "the chat to see all the lines. The list of gods at the side uses the same colours."},
+	    {"multiplayer.full_room_observer", "The multiplayer front end: a full room joined as an observer",
+	     Stage::FullRoomObserver,
+	     "The player picks \"Full game (2/2)\" and joins it. The lobby gives no god's ticket for the full room.",
+	     "No message shows. The game room of \"Full game\" opens, with Ivy and Jon as gods 1 and 2. The player is an "
+	     "observer, with no god."},
 	}};
 	for (const auto& box : boxes)
 	{

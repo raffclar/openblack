@@ -36,6 +36,9 @@ public:
 	CurlHttpClient();
 	/// A client that shows its certificate on each request, for a server that asks for mutual TLS
 	explicit CurlHttpClient(ClientIdentity identity);
+	/// A client that also trusts a PEM file of more certificate authorities, for the tests on this computer only. The
+	/// client still checks each certificate and host name. The callers give the file only for a loopback address.
+	CurlHttpClient(std::optional<ClientIdentity> identity, std::filesystem::path testAuthorities);
 	~CurlHttpClient() override;
 	CurlHttpClient(const CurlHttpClient&) = delete;
 	CurlHttpClient& operator=(const CurlHttpClient&) = delete;
@@ -57,6 +60,7 @@ private:
 	std::vector<std::unique_ptr<Transfer>> _transfers;
 	HttpRequestId _nextId {1};
 	std::optional<ClientIdentity> _identity;
+	std::optional<std::string> _testAuthorities;
 };
 
 } // namespace openblack::online

@@ -111,6 +111,7 @@ public:
 	[[nodiscard]] LobbySessionState GetState() const override { return state; }
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return std::nullopt; }
 	[[nodiscard]] bool IsPushOpen() const override { return false; }
+	[[nodiscard]] bool IsEmailRequired() const override { return false; }
 	void Login(std::string, std::string, LobbyCallback<lobby_api::AccountRef>) override {}
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) override { resume = std::move(callback); }
 	void Logout(bool, LobbyCallback<LobbyDone>) override {}
@@ -119,7 +120,7 @@ public:
 	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return {}; }
 	void WatchServers(bool) override {}
 	void WatchChannel(std::string, bool) override {}
-	void RequestJoinTicket(std::string, LobbyCallback<lobby_api::JoinTicket>) override {}
+	void RequestJoinTicket(std::string, game_socket::Role, LobbyCallback<lobby_api::JoinTicket>) override {}
 	void SendChatLine(std::string, std::string, LobbyCallback<LobbyDone>) override {}
 	void UseClan(std::string, std::optional<int64_t>, LobbyCallback<lobby_api::UsedClan>) override {}
 	void CheckAccountName(std::string, LobbyCallback<lobby_api::AccountNameCheck>) override {}
