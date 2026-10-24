@@ -355,7 +355,8 @@ public:
 				    game_socket::Joined {.role = observer ? game_socket::Role::Observer : game_socket::Role::God,
 				                         .slot = observer ? std::nullopt : std::optional<uint8_t>(1),
 				                         .session = "demo",
-				                         .name = "Alice"}));
+				                         .name = "Alice",
+				                         .start = std::nullopt}));
 			}
 		}
 		auto opening = std::move(_opening);

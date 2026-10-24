@@ -62,8 +62,13 @@ private:
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;
 	bool _started {false};
-	/// The join came from the front end: the game loads the land after the start
+	/// The game loads the server's land, and calls BeginPlay once it loaded
 	bool _awaitingLand {false};
+	/// The join came from the command line: the game loads the server's land of the server's reply to the join, before
+	/// the player is ready
+	bool _fromCommandLine {false};
+	/// The reply of the server to the join of the command line was read
+	bool _joinReplyRead {false};
 	std::optional<game_socket::Start> _pendingStart;
 	bool _endLogged {false};
 	std::optional<uint32_t> _partAt;

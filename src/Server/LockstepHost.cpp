@@ -169,7 +169,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		Refuse(connection, "started");
 		return;
 	}
-	game_socket::Joined joined {.role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name};
+	game_socket::Joined joined {
+	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	if (claims.role == game_socket::Role::God)
 	{
 		const auto same = std::ranges::find_if(

@@ -323,6 +323,7 @@
 #include "Locator.h"
 #include "Online/HttpClientInterface.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
 #include "Online/OpenPage.h"
 #include "Online/WebSocketInterface.h"
@@ -636,6 +637,7 @@ Game::Game(Arguments&& args) noexcept
     , _seed(args.seed)
     , _networkGame(args.networkGame)
     , _networkJoin(args.networkJoin)
+    , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
@@ -3953,6 +3955,23 @@ void Game::StartSimulationLogs()
 	}
 }
 
+void Game::StartInputTools()
+{
+	// A tool's run can record the input of the hand from the first frame of the next land, for a later run to make again
+	if (_simulation.has_value() && _simulation->recordInputPath.has_value() && Locator::inspector::has_value())
+	{
+		Locator::inspector::value().RecordInputOnLoad(*_simulation->recordInputPath);
+	}
+	// A tool's run can give the hand recorded input from the first frame of the next land
+	if (_simulation.has_value() && _simulation->inputPath.has_value() && Locator::inspector::has_value())
+	{
+		if (const auto error = Locator::inspector::value().ReplayOnLoad(*_simulation->inputPath); error.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input cannot start: {}", *error);
+		}
+	}
+}
+
 void Game::StartFightTools()
 {
 	// A tool that steps a simulation run has each land start paused
@@ -3970,18 +3989,10 @@ void Game::StartFightTools()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The simulation record cannot start: {}", *error);
 		}
 	}
-	// A tool's run can record the input of the hand from the first frame of the land, for a later run to make again
-	if (_simulation.has_value() && _simulation->recordInputPath.has_value() && Locator::inspector::has_value())
+	// A join from the command line starts the input on the server's land
+	if (!_networkLandPending)
 	{
-		Locator::inspector::value().RecordInputOnLoad(*_simulation->recordInputPath);
-	}
-	// A tool's run can give the hand recorded input from the first frame of the land
-	if (_simulation.has_value() && _simulation->inputPath.has_value() && Locator::inspector::has_value())
-	{
-		if (const auto error = Locator::inspector::value().ReplayOnLoad(*_simulation->inputPath); error.has_value())
-		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input cannot start: {}", *error);
-		}
+		StartInputTools();
 	}
 	// A tool's run can write the commands of each turn, for a dedicated server that does the same commands
 	if (_simulation.has_value() && _simulation->commandsPath.has_value())
@@ -4586,8 +4597,8 @@ bool Game::AskStartQuestion(bool hasCreature)
 	// The game waits, paused, for the answer
 	Locator::time::value().SetPlayerPause(true);
 	// The multiplayer front end is in front of the land: the question comes when the player leaves the front end to
-	// the land
-	if (_interface->GetMultiplayerBoxes().IsActive() || _frontEndOnStart)
+	// the land. A join from the command line loads the server's land, which does not ask the question.
+	if (_interface->GetMultiplayerBoxes().IsActive() || _frontEndOnStart || _networkLandPending)
 	{
 		_startQuestionAfterFrontEnd = hasCreature;
 		return true;
@@ -4975,6 +4986,32 @@ void Game::UpdateMultiplayerFrontEnd()
 
 bool Game::StartNetworkLand(const game_socket::Start& start)
 {
+	const auto scripts = Locator::filesystem::value().GetPath<filesystem::Path::Scripts>();
+	const auto landPath = start.testbed || start.godsRingMap ? std::optional<std::filesystem::path>(std::filesystem::path())
+	                                                         : network_land::PathOf(start.land, scripts);
+	if (!landPath.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server gives a land that is not a land script: {}", start.land);
+		return false;
+	}
+	// A join from the command line: the server's land, seed and start take the place of those of this computer
+	if (std::exchange(_networkLandPending, false))
+	{
+		const auto& lands = Locator::landSystem::value();
+		const auto differences = network_land::OwnValuesThatDiffer({.land = lands.GetLandPath(),
+		                                                            .testbed = _startTestbed,
+		                                                            .godsRingMap = _startGodsRingMap,
+		                                                            .seed = Locator::rng::value().GetRunSeed(),
+		                                                            .opening = _newGameStart},
+		                                                           start);
+		if (!differences.empty())
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"),
+			                   "The land, the seed and the start of the game server win: this computer had another {}",
+			                   differences);
+		}
+		StartInputTools();
+	}
 	// The client starts the land as the game server started it: the same new-game start, the same seed and the same
 	// pinned date, as a network game
 	_newGameStart = start.opening.empty() ? std::nullopt : new_game_choice::ParseNewGameStart(start.opening);
@@ -4987,17 +5024,26 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	simulation::PrepareNetworkLand(start.seed);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
 	_startTestbed = start.testbed;
+	_startGodsRingMap = start.godsRingMap;
+	// The server chose the land: the testbed of a server is not a developer tool of this computer
 	if (start.testbed)
 	{
-		LoadTestbed();
+		lands.LoadTestbed();
 	}
-	else if (!LoadMapWithFreshScripts(start.land, land_change::Kind::NewGame))
+	else if (start.godsRingMap)
+	{
+		if (!LoadGodsRingMap())
+		{
+			return false;
+		}
+	}
+	else if (!LoadMapWithFreshScripts(*landPath, land_change::Kind::NewGame))
 	{
 		return false;
 	}
-	// The story's scripts run the first land, but not the testbed or a playground
-	const bool startStory =
-	    !start.testbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
+	const bool startStory = !start.testbed && !start.godsRingMap &&
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return false;

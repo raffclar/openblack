@@ -507,7 +507,7 @@ void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password
 	    .gamePassword = ToUtf8(password),
 	    .name = lanName,
 	    .testAuthorities = std::nullopt,
-	    .landLoaded = false,
+	    .fromCommandLine = false,
 	});
 	if (!_joining)
 	{

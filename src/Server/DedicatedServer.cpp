@@ -56,6 +56,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/NetworkLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Simulation/CommandLog.h"
@@ -518,12 +519,16 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
 {
 	network = std::make_unique<GameRole>();
+	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder. The
+	// clients take the land, the seed and the start from the server as they join.
+	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const game_socket::Start start {
-	    .land = Locator::landSystem::value().GetLandPath().filename().string(),
+	    .land = scriptLand ? network_land::WireName(Locator::landSystem::value().GetLandPath()) : std::string(),
 	    .testbed = settings.testbed,
 	    .seed = settings.seed,
 	    .turn = Locator::time::value().GetTurn(),
-	    .opening = settings.testbed ? std::string() : settings.openingName,
+	    .opening = scriptLand ? settings.openingName : std::string(),
+	    .godsRingMap = settings.godsRingMap,
 	};
 	if (const auto error = network->Start(*settings.network, start); error.has_value())
 	{
