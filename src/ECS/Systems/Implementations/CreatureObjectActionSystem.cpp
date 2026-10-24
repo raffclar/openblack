@@ -1237,6 +1237,12 @@ void Approach(entt::entity creature, CreatureObjectAction& action, const Creatur
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto& locomotion = Locator::creatureLocomotionSystem::value();
+	// The turn on the spot to get the thing in reach is a part of the reach, not of the walk: the walk-up waits for it
+	if (locomotion.IsMoving(creature) && creature_object_actions::NextMovingApproachStep(action.turnedToReach) ==
+	                                         creature_object_actions::MovingApproachStep::WaitForTurn)
+	{
+		return;
+	}
 	// On each turn of the walk, a thing that it can no longer pick up stops the pick-up and the walk
 	if (action.kind == Kind::PickUp && action.target.has_value() && registry.Valid(*action.target) &&
 	    Locator::creatureObjectActionSystem::has_value() &&

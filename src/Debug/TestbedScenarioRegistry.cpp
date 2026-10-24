@@ -6222,6 +6222,28 @@ void AddLeash(std::vector<Scenario>& all)
 	                 OnObject(Kind::LeashOrderOn, 0, 0, 1.0f, false), Go(Kind::LeashOrderAt, 0, k_Bank, 45.0f, false)},
 	});
 
+	// A full size tiger stops its walk to a man just inside the reach of its hand, which is less straight ahead, so it
+	// turns on the spot before it reaches
+	constexpr glm::vec2 k_StillMan {40.0f, -40.0f};
+	all.push_back({
+	    .id = "leash.pick_up_turns_into_reach",
+	    .name = "A full size creature turns to get a man in reach",
+	    .facet = Facet::Leash,
+	    .description = "A tiger of size 1 goes on the learning leash. The Action button of the leash orders it onto a "
+	                   "man that a script holds still on the land in front of it.",
+	    .expected = "It walks up to the man and stops a hand's reach from him. It turns a little on the spot, so that "
+	                "the man is in front of its hand, then picks him up and holds him. Before, it reached straight "
+	                "ahead with nothing in its hand.",
+	    .framing = {.shot = Shot::Overview, .include = {{0.0f, 20.0f}, k_StillMan}},
+	    .creatures = {[&] {
+		    auto tiger = Content(CreatureType::Tiger, {0.0f, 20.0f});
+		    tiger.size = 1.0f;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = k_StillMan, .inScript = true}},
+	    .commands = {Leash(0, LeashType::Rope, 1.0f), OnObject(Kind::LeashOrderOn, 0, 0, 2.0f, false)},
+	});
+
 	// Worn out and wanting to sleep more than anything, far from its player's temple
 	CreatureSetup tired {.species = CreatureType::Tiger,
 	                     .offset = {0.0f, 20.0f},

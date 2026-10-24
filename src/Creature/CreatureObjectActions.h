@@ -129,6 +129,18 @@ enum class ApproachStep : uint8_t
 /// - straightReach: how far the hand or foot gets in the reaching animations (creature_reach::StraightReach);
 /// - inRange: the thing lies where the reaching animations get to (creature_reach::Blend::inRange).
 [[nodiscard]] ApproachStep NextApproachStep(bool seen, float flatDistance, float straightReach, bool inRange);
+/// What a creature that walks up to a thing to pick it up or stomp on it does on a turn when it moves
+enum class MovingApproachStep : uint8_t
+{
+	/// It turns on the spot to get the thing in reach. This turn is the start of the reach, so the walk-up does nothing:
+	/// no new walk, no count of the turns with no progress, and no new test of the thing.
+	WaitForTurn,
+	/// It is on its way to the thing: it aims at the thing again
+	AimAgain,
+};
+/// The next step while the creature moves. turnsToReach: it turns on the spot because the thing was outside the corners
+/// of its reach.
+[[nodiscard]] MovingApproachStep NextMovingApproachStep(bool turnsToReach);
 /// How far from the thing the walk near to it stops: twice the creature's radius and the thing's radius added
 [[nodiscard]] float NearWalkDistance(float creatureRadius, float thingRadius);
 /// A thing higher than this above the creature, in metres, can be too high to pick up

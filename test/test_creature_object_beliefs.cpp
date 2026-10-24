@@ -419,6 +419,16 @@ TEST(CreatureObjectBeliefs, AWalkUpToAThingContinuesUntilTheThingIsInReach)
 	EXPECT_EQ(NextApproachStep(true, 9.0f, 2.5f, false), ApproachStep::WalkInReach);
 }
 
+TEST(CreatureObjectBeliefs, TheTurnToGetAThingInReachIsNotAWalk)
+{
+	using openblack::creature_object_actions::MovingApproachStep;
+	using openblack::creature_object_actions::NextMovingApproachStep;
+	// A creature that stopped just inside its straight reach but outside the corners turns first: the walk-up waits
+	EXPECT_EQ(NextMovingApproachStep(true), MovingApproachStep::WaitForTurn);
+	// On its way to the thing, it aims again on each turn
+	EXPECT_EQ(NextMovingApproachStep(false), MovingApproachStep::AimAgain);
+}
+
 TEST(CreatureObjectBeliefs, AWalkNearAThingStopsAtTwiceTheRadii)
 {
 	using openblack::creature_object_actions::NearWalkDistance;
