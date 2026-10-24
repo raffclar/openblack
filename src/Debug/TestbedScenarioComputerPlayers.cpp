@@ -77,6 +77,57 @@ CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The same town 260 metres further east, so that its storage pit is far from the temple and its worship site
+constexpr std::string_view k_ComputerGodFarTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "260.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+CREATE_NEW_TOWN_SPELL(900, "FOOD")
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "256.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "270.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "300.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("296.0,62.0", "300.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("296.0,62.0", "300.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("296.0,62.0", "300.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("296.0,62.0", "300.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "320.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("316.0,62.0", "320.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("316.0,62.0", "320.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("316.0,62.0", "320.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("316.0,62.0", "320.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "300.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("296.0,82.0", "300.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("296.0,82.0", "300.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("296.0,82.0", "300.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("296.0,82.0", "300.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "320.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("316.0,82.0", "320.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("316.0,82.0", "320.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("316.0,82.0", "320.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("316.0,82.0", "320.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "220.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("216.0,62.0", "220.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("216.0,62.0", "220.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("216.0,62.0", "220.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("216.0,62.0", "220.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "200.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("196.0,62.0", "200.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("196.0,62.0", "200.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("196.0,62.0", "200.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("196.0,62.0", "200.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "220.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("216.0,82.0", "220.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("216.0,82.0", "220.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("216.0,82.0", "220.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("216.0,82.0", "220.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "200.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_FORESTER", 20)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
@@ -112,19 +163,21 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 	all.push_back({
 	    .id = "mind.computer_god_field_food",
-	    .name = "A computer god that carries the food of a field to the storage pit of its town",
+	    .name = "A computer god that carries villagers to worship, food from a field, and draws the miracle gesture",
 	    .facet = Facet::Mind,
-	    .description = "The town of the food miracle scenario, with two ripe wheat fields of the town just north of the "
-	                   "temple of player two. The hand of the god starts at the temple, but the god measures from the "
-	                   "middle of the land until its first action.",
-	    .expected = "The god first draws the gesture of the miracles in the air over its temple, and its worshippers chant "
-	                "for the food miracle. Then the hand flies to the nearest field, takes all its food in a pot, carries "
-	                "the pot to the storage pit and drops it in. Small sparkles in the colour of player two show where "
-	                "its hand is. The players.list query shows the steps of the hand.",
-	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
-	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {-25.0f, -55.0f}, .ripeCrop = true},
-	                {.type = FieldTypeInfo::Wheat, .offset = {25.0f, -55.0f}, .ripeCrop = true}},
-	    .landScript = k_ComputerGodTownScript,
+	    .description = "The town of the food miracle scenario stands 260 metres further east, with two ripe wheat "
+	                   "fields beside it. The temple of player two and its worship site stay to the west. The hand of "
+	                   "the god starts at the temple, but the god measures from the middle of the land until its first "
+	                   "action.",
+	    .expected = "The hand carries villagers from the town to the gate of the worship site, waits a second and drops "
+	                "them. It takes the food of a field in a pot and drops the pot in the storage pit of the town. When it "
+	                "next charges the food miracle from beside the pit, 200 metres or more from the icon, it first draws "
+	                "the spiral gesture in the air, 30 metres across, and the shape of the spiral shows on the land with "
+	                "the sound of a recognised gesture. Small sparkles in the colour of player two show the hand.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(340.0f, 140.0f)}},
+	    .objects = {{.type = FieldTypeInfo::Wheat, .offset = {240.0f, 125.0f}, .ripeCrop = true},
+	                {.type = FieldTypeInfo::Wheat, .offset = {300.0f, 125.0f}, .ripeCrop = true}},
+	    .landScript = k_ComputerGodFarTownScript,
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
 	});
