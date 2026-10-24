@@ -1711,19 +1711,13 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
 		}
 		particles.ProcessByFrame(dispenser->effect, *seconds);
 	};
-	// The frame draws the things of the list in its order, the nearest blocks first. Without a camera or a land, it
-	// draws every thing.
-	if (drawList.GetView().has_value())
-	{
-		std::ranges::for_each(drawList.GetList(), stepSwirl);
-	}
-	else
-	{
-		std::vector<entt::entity> dispensers;
-		registry.Each<const SpellDispenser>(
-		    [&dispensers](entt::entity entity, const SpellDispenser&) { dispensers.push_back(entity); });
-		std::ranges::for_each(dispensers, stepSwirl);
-	}
+	std::vector<entt::entity> dispensers;
+	registry.Each<const SpellDispenser>(
+	    [&dispensers](entt::entity entity, const SpellDispenser&) { dispensers.push_back(entity); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), dispensers, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
+	                      stepSwirl);
 }
 
 void MagicSystem::Reset()

@@ -9,9 +9,15 @@
 
 #pragma once
 
+#include <algorithm>
 #include <chrono>
+#include <iterator>
 #include <optional>
+#include <span>
 #include <utility>
+#include <vector>
+
+#include <entt/entity/entity.hpp>
 
 #include "Common/FramePace.h"
 
@@ -39,6 +45,26 @@ namespace openblack::particles::drawn_steps
 		return std::nullopt;
 	}
 	return std::chrono::duration<float>(step).count();
+}
+
+/// The order in which the frame draws some things, such as the stones or the dispensers. With a camera and a land the
+/// frame draws the things of the land's list in the list's order, the nearest blocks first, then the things that are
+/// not on the list's blocks. Without a camera or a land it draws every thing, in the given order.
+/// `onBlocks(thing)` tells whether a thing is on the land's blocks, so that the list decides whether the frame draws it.
+template <typename OnBlocks>
+[[nodiscard]] std::vector<entt::entity> DrawOrder(std::span<const entt::entity> list, std::span<const entt::entity> things,
+                                                  bool listDecides, OnBlocks&& onBlocks)
+{
+	if (!listDecides)
+	{
+		return {things.begin(), things.end()};
+	}
+	std::vector<entt::entity> order;
+	order.reserve(things.size());
+	std::ranges::copy_if(list, std::back_inserter(order),
+	                     [things](entt::entity listed) { return std::ranges::find(things, listed) != things.end(); });
+	std::ranges::copy_if(things, std::back_inserter(order), [&onBlocks](entt::entity thing) { return !onBlocks(thing); });
+	return order;
 }
 
 } // namespace openblack::particles::drawn_steps

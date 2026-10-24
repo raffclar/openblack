@@ -890,18 +890,12 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
 		}
 		particles.ProcessByFrame(component->pool, *seconds);
 	};
-	// The frame draws the things of the list in its order, the nearest blocks first. Without a camera or a land, it
-	// draws every thing.
-	if (drawList.GetView().has_value())
-	{
-		std::ranges::for_each(drawList.GetList(), stepPool);
-	}
-	else
-	{
-		std::vector<entt::entity> stones;
-		registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });
-		std::ranges::for_each(stones, stepPool);
-	}
+	std::vector<entt::entity> stones;
+	registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), stones, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity stone) { return drawList.Decides(registry, stone); }),
+	                      stepPool);
 }
 
 void TeleportSystem::Reset()

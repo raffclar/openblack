@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <chrono>
+#include <vector>
 
 #include <gtest/gtest.h>
 
@@ -74,4 +75,30 @@ TEST(DrawnEffectSteps, AFrameBeforeTheStepIsDueDoesNotStep)
 	const auto seconds = particles::drawn_steps::StepSeconds(pace, milliseconds(5), milliseconds(5), true);
 	ASSERT_TRUE(seconds.has_value());
 	EXPECT_FLOAT_EQ(*seconds, 0.02f);
+}
+
+namespace
+{
+constexpr auto k_A = entt::entity {1};
+constexpr auto k_B = entt::entity {2};
+constexpr auto k_C = entt::entity {3};
+constexpr auto k_D = entt::entity {4};
+constexpr auto k_Other = entt::entity {9};
+} // namespace
+
+TEST(DrawnEffectSteps, TheListedThingsComeInTheListsOrderThenTheThingsOffTheBlocks)
+{
+	// The list holds C and A of these things and another thing; D is not on the land's blocks; B is on them, not listed
+	const std::vector list {k_C, k_Other, k_A};
+	const std::vector things {k_A, k_B, k_C, k_D};
+	const auto order = particles::drawn_steps::DrawOrder(list, things, true, [](entt::entity thing) { return thing != k_D; });
+	EXPECT_EQ(order, (std::vector {k_C, k_A, k_D}));
+}
+
+TEST(DrawnEffectSteps, WithoutACameraOrALandEveryThingComesInItsOwnOrder)
+{
+	const std::vector<entt::entity> list;
+	const std::vector things {k_B, k_A};
+	const auto order = particles::drawn_steps::DrawOrder(list, things, false, [](entt::entity) { return true; });
+	EXPECT_EQ(order, things);
 }
