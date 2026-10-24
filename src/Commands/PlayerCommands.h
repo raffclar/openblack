@@ -196,8 +196,9 @@ struct PlayerLeft
 {
 };
 
-/// The player of the command is a god of the network game from its start. Only the game server sends it, in the first
-/// turn. The world gives the player hands of its own.
+/// The player of the command is a human god of the network game from its start. Only the game server sends it, for each
+/// human in the first turn. The world gives the player hands of its own, makes the player when the land has none, and
+/// gives each slot with no human a computer god.
 struct PlayerJoined
 {
 };

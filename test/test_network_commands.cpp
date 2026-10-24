@@ -24,6 +24,7 @@
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
 
@@ -78,6 +79,19 @@ public:
 	}
 
 	std::vector<PlayerNames> made;
+};
+
+/// The computer minds of the test: it keeps the humans of each join
+class FakeMinds final: public ecs::systems::ComputerPlayerSystemInterface
+{
+public:
+	void SwitchOn(PlayerNames /*player*/, bool /*on*/) override {}
+	void SetCreatureLike(PlayerNames /*player*/, PlayerNames /*like*/) override {}
+	void ProcessTurn() override {}
+	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
+	void WaitForHumans() override {}
+	void HumansJoined(std::span<const PlayerNames> humans) override { joins.emplace_back(humans.begin(), humans.end()); }
+	std::vector<std::vector<PlayerNames>> joins;
 };
 
 class NetworkCommands: public ::testing::Test
@@ -173,4 +187,20 @@ TEST_F(NetworkCommands, AComputerIsBehindWhenTheNextTurnIsThereToo)
 	_source.turns[4] = {};
 	EXPECT_TRUE(_commands.IsBehind(3));
 	_commands.SetSource(nullptr);
+}
+
+TEST_F(NetworkCommands, TheHumansOfTheFirstTurnJoinTogetherAfterTheCommandsOfTheTurn)
+{
+	auto& minds = static_cast<FakeMinds&>(Locator::computerPlayerSystem::emplace<FakeMinds>());
+	_commands.SetSource(&_source);
+	_source.turns[0] = {{.player = PlayerNames::PLAYER_ONE, .action = PlayerJoined {}},
+	                    {.player = PlayerNames::PLAYER_TWO, .action = PlayerJoined {}}};
+	_source.turns[1] = {{.player = PlayerNames::PLAYER_ONE, .action = HandTap {.object = Entity(2)}}};
+	_commands.RunSent(0);
+	_commands.RunSent(1);
+	// One join with both humans, and none for a turn with no join
+	ASSERT_EQ(minds.joins.size(), 1u);
+	EXPECT_EQ(minds.joins[0], (std::vector {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_TWO}));
+	_commands.SetSource(nullptr);
+	Locator::computerPlayerSystem::reset();
 }

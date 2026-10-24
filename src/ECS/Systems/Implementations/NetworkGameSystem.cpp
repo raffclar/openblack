@@ -89,6 +89,11 @@ void NetworkGameSystem::Detach()
 	{
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 	}
+	// The next land that loads has the player of this computer as its one human again
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetHumansFromSession(false);
+	}
 	if (Locator::time::has_value())
 	{
 		Locator::time::value().SetCatchesUp(false);
@@ -121,6 +126,11 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		sockets = _testClient.get();
 	}
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds);
+	// A land that loads after the join gets its humans from the session at the start of the game
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetHumansFromSession(true);
+	}
 	_partAt = join.partAt;
 	_partAgain = join.partAgain;
 	_started = false;

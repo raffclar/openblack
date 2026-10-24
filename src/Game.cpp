@@ -3705,6 +3705,8 @@ bool Game::Initialize() noexcept
 	// The game is the view of the land's loads
 	Locator::landSystem::value().SetView(this);
 	Locator::landSystem::value().SetNewGameStart(_newGameStart);
+	// A game that joins a game server gets the humans of its land from the network session
+	Locator::landSystem::value().SetHumansFromSession(_networkJoin.has_value());
 	// A deterministic run: every random number from the seed, the date pinned
 	if (_seed.has_value())
 	{
