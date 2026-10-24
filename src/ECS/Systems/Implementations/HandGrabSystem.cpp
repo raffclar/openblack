@@ -1076,10 +1076,11 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 		grab.stretch.Update(frame.seconds);
 		if (result.comesFree)
 		{
-			// A standing tree pulled out of the ground leaves its roots in a hole
+			// A standing tree pulled out of the ground leaves its roots in a hole. The hole is at the base of the tree,
+			// with the turn and the size of the tree before the pull, because the lean changes only the drawn tree.
 			if (tree && !_world->IsFlying(object))
 			{
-				_world->LeaveRootsHole(object);
+				_world->LeaveRootsHole(object, tug.base, grab.pullRotation, grab.pullScale.x);
 			}
 			// Make the land's draw list again when the hand pulls a living thing free
 			if (const auto kind = KindOf(object); kind == GrabKind::Villager || kind == GrabKind::Animal)

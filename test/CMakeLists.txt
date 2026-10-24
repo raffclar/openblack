@@ -1736,3 +1736,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_player_sparkles test_player_sparkles.cpp)
 openblack_setup_and_add_test(test_other_held_draw test_other_held_draw.cpp)
+openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
