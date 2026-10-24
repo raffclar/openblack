@@ -1647,6 +1647,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		// As the rooms are drawn, the scroll the camera is close to has its text drawn in front of it, and the signs
 		// their labels
 		_text.clear();
+		_scrollPictures.clear();
 		if (_scrolls != nullptr && _cameraModel != nullptr)
 		{
 			const auto facts = GatherScrollFacts();
@@ -1662,6 +1663,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 				}
 			}
 			_scrolls->AppendFocusedText(_text, facts);
+			_scrolls->AppendFocusedPictures(_scrollPictures, facts);
 		}
 		if (_signs != nullptr)
 		{

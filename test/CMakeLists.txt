@@ -1724,3 +1724,4 @@ openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
             ${CMAKE_SOURCE_DIR}
   )
+openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)

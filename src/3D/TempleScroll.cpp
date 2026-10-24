@@ -370,7 +370,8 @@ void TempleScrollTexture::DrawText(std::span<uint16_t> texels, std::u16string_vi
 }
 
 uint32_t TempleScrollTexture::LayOut(std::u16string_view text, uint32_t position, const gui::GameFont& font,
-                                     const std::function<void(std::u16string_view line, float x, float y)>& line)
+                                     const std::function<void(std::u16string_view line, float x, float y)>& line,
+                                     const std::function<void(const PictureLine& picture)>& picture)
 {
 	// The lines up to the one at the position are passed over, and those after go down from the top, the first of them
 	// as far up as the position is through it
@@ -379,6 +380,7 @@ uint32_t TempleScrollTexture::LayOut(std::u16string_view text, uint32_t position
 	const auto size = static_cast<float>(k_LineHeight);
 	uint32_t lines = 0;
 	uint32_t laidOut = 0;
+	float lastX = 0.0f;
 	size_t at = 0;
 	while (at < text.size())
 	{
@@ -411,20 +413,31 @@ uint32_t TempleScrollTexture::LayOut(std::u16string_view text, uint32_t position
 		const auto words = text.substr(at, length);
 		at += length + 3;
 		++lines;
+		const bool isPicture =
+		    !words.empty() && (words.front() == TempleScrollText::k_Gesture || words.front() == TempleScrollText::k_Control);
+		// Each line of words sets the place across where the next picture starts, also a line that the scroll passes over
+		if (!isPicture)
+		{
+			lastX = (static_cast<float>(k_Size) - (font.GetWidth(words, size) * k_Stretch)) * 0.5f;
+		}
 		if (lines <= passedOver)
 		{
 			continue;
 		}
 		const float y = (static_cast<float>(k_LineHeight) * static_cast<float>(laidOut)) - offset;
 		++laidOut;
-		// A gesture's or a control's picture is drawn over the scroll only when the camera is close to it
-		if (!words.empty() && (words.front() == TempleScrollText::k_Gesture || words.front() == TempleScrollText::k_Control))
+		// The game draws a gesture's or a control's picture over the scroll only when the camera is close to it. The
+		// texture keeps the line blank.
+		if (isPicture)
 		{
-			// TODO(raffclar): The picture, a gesture's glyph or the keys and buttons of a control
+			if (picture)
+			{
+				const int32_t number = words.size() > 1 ? static_cast<int32_t>(words[1]) - TempleScrollText::k_Hidden : 0;
+				picture({.marker = words.front(), .number = number, .lastX = lastX, .y = y});
+			}
 			continue;
 		}
-		const float x = (static_cast<float>(k_Size) - (font.GetWidth(words, size) * k_Stretch)) * 0.5f;
-		line(words, x, y);
+		line(words, lastX, y);
 	}
 	return lines * k_LineHeight;
 }
