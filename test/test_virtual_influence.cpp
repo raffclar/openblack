@@ -239,3 +239,15 @@ TEST(VirtualInfluence, BackInInfluenceTheManaPathIsWorkedOutAfresh)
 	state.disabled = true;
 	EXPECT_FALSE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 7)));
 }
+
+TEST(VirtualInfluence, OnlyThisComputersPlayerBetweenTurnsWithoutTheTurnHandsOnlyUsesTheLiveHand)
+{
+	// Single player, or a question that is not a cast check: between turns this computer's player uses the hand now
+	EXPECT_EQ(MeasureFrom(false, false, true), MeasuredHand::Live);
+	// Network game, the check of a received cast: the hand of the turn
+	EXPECT_EQ(MeasureFrom(false, true, true), MeasuredHand::Turn);
+	// In the game turn, and for the other players, always the hand of the turn
+	EXPECT_EQ(MeasureFrom(true, false, true), MeasuredHand::Turn);
+	EXPECT_EQ(MeasureFrom(true, true, true), MeasuredHand::Turn);
+	EXPECT_EQ(MeasureFrom(false, false, false), MeasuredHand::Turn);
+}

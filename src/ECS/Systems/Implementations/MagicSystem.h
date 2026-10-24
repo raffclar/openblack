@@ -60,6 +60,8 @@ public:
 	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override;
 	[[nodiscard]] bool HandInInfluence(PlayerNames player, glm::vec3 hand) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
+	[[nodiscard]] bool IsNetworkGame() const override;
+	void SetTurnHandsOnly(bool turnHandsOnly) override;
 	[[nodiscard]] std::optional<glm::vec3> PositionOf(entt::entity object) const override;
 	bool ApplyEffect(entt::entity object, const magic::EffectValues& values, const magic::EffectSource& source) override;
 	std::vector<entt::entity> ApplyEffectAt(glm::vec3 point, const magic::EffectValues& values,
@@ -352,6 +354,9 @@ private:
 	/// At the turn: the held seed's miracle cast as the command gives it, or applied again when it runs. The miracle, or
 	/// none.
 	entt::entity CastHeldSeed(const player_commands::HandCast& cast);
+	/// CastHeldSeed with its checks of the influence measured from the hand that the turn reported in a network game,
+	/// and from the hand of this computer now in a single player game
+	entt::entity CheckAndCastHeldSeed(const player_commands::HandCast& cast);
 	/// What becomes of the seed once its miracle is cast: it stays, goes, or leaves the hand with its miracle
 	void AfterCast(entt::entity spell);
 	void FailCast();

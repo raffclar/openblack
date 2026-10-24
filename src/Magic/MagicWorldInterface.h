@@ -89,6 +89,11 @@ public:
 	[[nodiscard]] virtual bool HandInInfluence(PlayerNames player, glm::vec3 hand) const { return InInfluence(player, hand); }
 	/// The hand used what it holds on the land, which counts as a turn more for what it keeps past the border
 	virtual void HeldThingUsedOnLand(PlayerNames /*player*/) {}
+	/// The game is a network game: each computer plays the same world
+	[[nodiscard]] virtual bool IsNetworkGame() const { return false; }
+	/// While this is set, the influence questions measure from where the hands were at the turn, not from where the
+	/// hand of this computer is now
+	virtual void SetTurnHandsOnly(bool /*turnHandsOnly*/) {}
 	/// Where an object stands, none once it has gone
 	[[nodiscard]] virtual std::optional<glm::vec3> PositionOf(entt::entity object) const = 0;
 

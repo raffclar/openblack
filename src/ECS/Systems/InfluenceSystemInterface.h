@@ -104,6 +104,9 @@ public:
 	virtual void HeldThingUsedOnLand(PlayerNames player) = 0;
 	/// Whether the game turn is being played: questions asked then measure from where the hands were at the turn
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
+	/// While this is set, the questions between turns also measure from where the hands were at the turn. A network
+	/// game sets it for the check of a received cast, so that each computer gets the same answer.
+	virtual void SetTurnHandsOnly(bool turnHandsOnly) = 0;
 	/// Fixes the reach of each citadel that no question fixed yet. The frames of the hand ask for the reaches in each frame,
 	/// so a world with no frames of the hand, as the dedicated server, fixes them at the same time.
 	virtual void FixCitadelReaches() = 0;

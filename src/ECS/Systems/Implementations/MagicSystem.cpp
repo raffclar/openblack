@@ -444,6 +444,19 @@ void GameMagicWorld::HeldThingUsedOnLand(PlayerNames player)
 	}
 }
 
+bool GameMagicWorld::IsNetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
+void GameMagicWorld::SetTurnHandsOnly(bool turnHandsOnly)
+{
+	if (Locator::influenceSystem::has_value())
+	{
+		Locator::influenceSystem::value().SetTurnHandsOnly(turnHandsOnly);
+	}
+}
+
 std::optional<glm::vec3> GameMagicWorld::PositionOf(entt::entity object) const
 {
 	const auto& registry = EntityRegistry();
@@ -2458,7 +2471,7 @@ void MagicSystem::DoCast(PlayerNames player, const player_commands::HandCast& ca
 		return;
 	}
 	const bool locked = _input.state == magic::CastInput::State::Locked;
-	const auto spell = CastHeldSeed(cast);
+	const auto spell = CheckAndCastHeldSeed(cast);
 	if (spell == entt::null)
 	{
 		// The turn may not cast it there: the hand of this computer forgets the press
@@ -2477,6 +2490,32 @@ void MagicSystem::DoCastUnlock(PlayerNames player, entt::entity seed)
 		return;
 	}
 	UnlockHeldMiracle();
+}
+
+entt::entity MagicSystem::CheckAndCastHeldSeed(const player_commands::HandCast& command)
+{
+	// In a network game, each computer checks the cast from the hand that the turn reported, so all computers agree.
+	// A single player game checks it from the hand of this computer now.
+	struct TurnHandsOnly
+	{
+		explicit TurnHandsOnly(magic::MagicWorldInterface& world)
+		    : world(world)
+		{
+			world.SetTurnHandsOnly(true);
+		}
+		TurnHandsOnly(const TurnHandsOnly&) = delete;
+		TurnHandsOnly& operator=(const TurnHandsOnly&) = delete;
+		TurnHandsOnly(TurnHandsOnly&&) = delete;
+		TurnHandsOnly& operator=(TurnHandsOnly&&) = delete;
+		~TurnHandsOnly() { world.SetTurnHandsOnly(false); }
+		magic::MagicWorldInterface& world;
+	};
+	if (_world.IsNetworkGame())
+	{
+		const TurnHandsOnly scope(_world);
+		return CastHeldSeed(command);
+	}
+	return CastHeldSeed(command);
 }
 
 entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)

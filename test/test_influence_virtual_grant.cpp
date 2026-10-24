@@ -127,6 +127,26 @@ TEST_F(VirtualGrant, BetweenTurnsItIsMeasuredFromTheHandNowAndDuringOneFromTheHa
 	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, then), 1.0f);
 }
 
+// The check of a received cast near the border: a single player game measures from the hand now, a network game from
+// the hand of the turn, which each computer knows
+TEST_F(VirtualGrant, WithTheTurnHandsOnlyACastCheckBetweenTurnsMeasuresFromTheHandThen)
+{
+	const glm::vec3 cast {1300.0f, 0.0f, 1000.0f};
+	const glm::vec3 now {1300.0f, 0.0f, 1200.0f};
+	HandOut(1.0f, cast);
+	MoveHand(now);
+	// Single player: the hand moved away after the cast, so the cast point is out
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, cast), 0.0f);
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, now), 1.0f);
+	// Network game: the hand of the turn was at the cast point, so the cast point is in
+	_influence.SetTurnHandsOnly(true);
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, cast), 1.0f);
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, now), 0.0f);
+	// After the check, the questions between turns measure from the hand now again
+	_influence.SetTurnHandsOnly(false);
+	EXPECT_EQ(_influence.PlayerInfluence(PlayerNames::PLAYER_ONE, cast), 0.0f);
+}
+
 TEST_F(VirtualGrant, TheHandItselfIsInWhileAnyShareIsLeft)
 {
 	const glm::vec3 far {1900.0f, 0.0f, 1900.0f};

@@ -46,6 +46,7 @@ public:
 	[[nodiscard]] float PlayerRawInfluence(PlayerNames player, const map_coords::MapCoords& position) const override;
 	void HeldThingUsedOnLand(PlayerNames player) override;
 	void SetInGameTurn(bool inGameTurn) override { _inGameTurn = inGameTurn; }
+	void SetTurnHandsOnly(bool turnHandsOnly) override { _turnHandsOnly = turnHandsOnly; }
 	void FixCitadelReaches() override;
 
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return _circles; }
@@ -87,6 +88,7 @@ private:
 	bool _handSeen {false};
 	glm::vec3 _handBefore {0.0f};
 	bool _inGameTurn {false};
+	bool _turnHandsOnly {false};
 };
 
 } // namespace openblack::ecs::systems

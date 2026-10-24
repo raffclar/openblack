@@ -59,6 +59,7 @@ public:
 	}
 	void HeldThingUsedOnLand(PlayerNames) override {}
 	void SetInGameTurn(bool) override {}
+	void SetTurnHandsOnly(bool) override {}
 	void FixCitadelReaches() override {}
 	[[nodiscard]] std::span<const influence::Circle> GetCircles() const override { return {}; }
 	[[nodiscard]] bool IsBorderShown(PlayerNames) const override { return false; }

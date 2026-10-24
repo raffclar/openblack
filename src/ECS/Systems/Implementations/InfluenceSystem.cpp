@@ -691,10 +691,12 @@ float InfluenceSystem::PlayerInfluence(PlayerNames player, const map_coords::Map
 {
 	if (const auto* state = VirtualStateOf(player); state != nullptr)
 	{
-		// The questions of a game turn measure from where the hand was at the turn; between turns this computer's
-		// player's are measured from where their hand is now
+		// The questions of a game turn measure from where the hand was at the turn. Between turns, the questions about
+		// this computer's player measure from where the hand is now, but not with the turn hands only.
 		auto hand = state->turnHand;
-		if (!_inGameTurn && Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == player)
+		const bool localPlayer =
+		    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == player;
+		if (virtual_influence::MeasureFrom(_inGameTurn, _turnHandsOnly, localPlayer) == virtual_influence::MeasuredHand::Live)
 		{
 			if (const auto live = HandPosition(); live.has_value())
 			{

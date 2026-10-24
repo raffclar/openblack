@@ -125,3 +125,13 @@ TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 	registry.emplace<FakeHidden>(body);
 	EXPECT_NE(synced_state::HashOf(registry, context, k_Presentation).hash, before);
 }
+
+// Only the frames of this computer change the hum and the mana path of the hand past the border. The turns change the
+// strength that the hand keeps.
+TEST(SyncedState, TheHumAndTheManaPathOfTheHandPastTheBorderAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "shown"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "hum"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VirtualInfluence", "state"));
+}

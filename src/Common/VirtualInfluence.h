@@ -87,6 +87,24 @@ struct TurnInputs
 [[nodiscard]] std::optional<float> Grant(const State& state, const map_coords::MapCoords& hand,
                                          const map_coords::MapCoords& place);
 
+/// The hand that measures what a player keeps past the border
+enum class MeasuredHand : uint8_t
+{
+	/// Where the hand was at the last game turn: the same on each computer
+	Turn,
+	/// Where this computer's hand is now
+	Live,
+};
+
+/// Which hand measures a question about the influence of a player. Only this computer's own player has a live hand.
+/// - A question of the game turn uses the turn hand.
+/// - A question with the turn hands only (in a network game, the check of a received cast) uses the turn hand.
+/// - Other questions about this computer's player use the live hand.
+[[nodiscard]] constexpr MeasuredHand MeasureFrom(bool inGameTurn, bool turnHandsOnly, bool localPlayer)
+{
+	return inGameTurn || turnHandsOnly || !localPlayer ? MeasuredHand::Turn : MeasuredHand::Live;
+}
+
 /// Each turn: in influence the hand marks the place and gets a tenth of its strength back; out of it the strength drops
 /// by how far it is from that place and how long it has been out, a strength under a tenth going at once; and under a
 /// shield it has none.
