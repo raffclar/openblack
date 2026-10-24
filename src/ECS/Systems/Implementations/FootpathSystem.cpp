@@ -63,14 +63,13 @@ namespace route = openblack::creature_route;
 namespace obstacles = openblack::creature_obstacles;
 namespace planning = openblack::ecs::footpath_planning;
 namespace obstacle_rules = openblack::ecs::footpath_obstacles;
+using footpath_world::RouteSearchInterface;
+using footpath_world::WorldInterface;
 
-/// The search for a path's way and what it goes round, kept from turn to turn while the path is found
+/// The search for a path's way, kept from turn to turn while the path is found
 struct components::FootpathFinder::Plan
 {
-	route::Obstacles obstacles;
-	std::optional<route::Search> search;
-	glm::vec2 start {0.0f};
-	glm::vec2 goal {0.0f};
+	std::unique_ptr<RouteSearchInterface> search;
 };
 
 namespace
@@ -81,134 +80,264 @@ constexpr float k_RouteMargin = 0.0f;
 /// Only a dance that is not a worship site's or a temple's gets a path
 constexpr auto k_FirstTempleDance = DanceInfo::CitadelDance_1;
 constexpr auto k_LastTempleDance = DanceInfo::CitadelDance_6;
-/// A dance's footpaths end half a cell along x from its place
-constexpr int32_t k_DanceArriveOffset = 0x8000;
 /// A site already has the path from a pit when one of its paths ends this near the site's gate
 constexpr float k_SitePathReach = 0.001f;
 
-Registry& Entities()
+/// The creatures' route search for a route that no one walks, with what it goes round, added as the search reaches each
+/// block of the map
+class GameRouteSearch final: public RouteSearchInterface
 {
-	return Locator::entitiesRegistry::value();
-}
-
-glm::ivec2 PlaceOf(entt::entity thing)
-{
-	return wall_hug::ToWhole(glm::xz(Entities().Get<const Transform>(thing).position));
-}
-
-/// Where a path to a thing ends: a building's door, the middle of a crèche, a graveyard, a town centre or a wonder, a
-/// worship site's gate, half a cell along from a dance's place, or else the thing's place
-glm::ivec2 ArrivePlace(entt::entity thing)
-{
-	const auto& registry = Entities();
-	if (const auto* dance = registry.TryGet<const Dance>(thing))
+public:
+	GameRouteSearch(glm::vec2 start, glm::vec2 goal, route::Obstacles::Gatherer gatherer)
+	    : _start(start)
+	    , _goal(goal)
 	{
-		return {dance->place.x + k_DanceArriveOffset, dance->place.z};
+		_obstacles.ResetWithoutWalker(k_RouteMargin, std::move(gatherer));
+		// Nothing that holds either end is gone round
+		_obstacles.LeaveOutCirclesHolding(goal, start);
+		_search.emplace(_obstacles, route::Search::Start {.point = start},
+		                route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
 	}
-	if (registry.AllOf<WorshipSite>(thing) && Locator::worshipSiteSystem::has_value())
+
+	void Step() override { _search->Step(_obstacles); }
+
+	[[nodiscard]] Status GetStatus() const override
 	{
-		if (const auto gate = Locator::worshipSiteSystem::value().PlaceAt(thing, WorshipSiteSystemInterface::SitePlace::Gate))
+		switch (_search->GetStatus())
 		{
-			return wall_hug::ToWhole(*gate);
+		case route::Search::Status::Searching:
+			return Status::Searching;
+		case route::Search::Status::Found:
+			return Status::Found;
+		default:
+			return Status::Failed;
+		}
+	}
+
+	[[nodiscard]] std::optional<std::vector<glm::ivec2>> Route() const override
+	{
+		if (_search->GetStatus() != route::Search::Status::Found)
+		{
+			return std::nullopt;
+		}
+		return planning::RoutePlaces(_search->GetBest(), _obstacles.All(), _start, _goal);
+	}
+
+private:
+	route::Obstacles _obstacles;
+	std::optional<route::Search> _search;
+	glm::vec2 _start;
+	glm::vec2 _goal;
+};
+
+/// The game's own world, through the game's systems
+class GameWorld final: public WorldInterface
+{
+public:
+	[[nodiscard]] Registry& Entities() override { return Locator::entitiesRegistry::value(); }
+
+	[[nodiscard]] uint32_t Turn() const override
+	{
+		return Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
+	}
+
+	void SyncMap() override
+	{
+		if (Locator::entitiesMap::has_value())
+		{
+			Locator::entitiesMap::value().Sync();
+		}
+	}
+
+	/// Where a path to a thing ends: a building's door, the middle of a crèche, a graveyard, a town centre or a wonder, a
+	/// worship site's gate, half a cell along from a dance's place, or else the thing's place
+	[[nodiscard]] glm::ivec2 ArrivePlace(entt::entity thing) const override
+	{
+		/// A dance's footpaths end half a cell along x from its place
+		constexpr int32_t k_DanceArriveOffset = 0x8000;
+		const auto& registry = Registry();
+		if (const auto* dance = registry.TryGet<const Dance>(thing))
+		{
+			return {dance->place.x + k_DanceArriveOffset, dance->place.z};
+		}
+		if (registry.AllOf<WorshipSite>(thing) && Locator::worshipSiteSystem::has_value())
+		{
+			if (const auto gate =
+			        Locator::worshipSiteSystem::value().PlaceAt(thing, WorshipSiteSystemInterface::SitePlace::Gate))
+			{
+				return wall_hug::ToWhole(*gate);
+			}
+			return PlaceOf(thing);
+		}
+		if (registry.AllOf<Abode>(thing))
+		{
+			const auto* info = world_objects::AbodeInfoOf(thing);
+			const auto type = info != nullptr ? info->abodeType : AbodeType::General;
+			if (type == AbodeType::Creche || type == AbodeType::Graveyard || type == AbodeType::TownCentre ||
+			    type == AbodeType::Wonder)
+			{
+				return PlaceOf(thing);
+			}
+			return wall_hug::ToWhole(villager_home::ArrivePosition(thing));
 		}
 		return PlaceOf(thing);
 	}
-	if (registry.AllOf<Abode>(thing))
-	{
-		const auto* info = world_objects::AbodeInfoOf(thing);
-		const auto type = info != nullptr ? info->abodeType : AbodeType::General;
-		if (type == AbodeType::Creche || type == AbodeType::Graveyard || type == AbodeType::TownCentre ||
-		    type == AbodeType::Wonder)
-		{
-			return PlaceOf(thing);
-		}
-		return wall_hug::ToWhole(villager_home::ArrivePosition(thing));
-	}
-	return PlaceOf(thing);
-}
 
-/// The circles of a thing that a route no one walks goes round, none for a thing it goes through
-std::vector<route::Circle> CirclesToGoRound(const Registry& registry, entt::entity entity)
-{
-	const auto thing = creature_obstacle_things::ThingOf(registry, entity);
-	if (!thing.has_value() || !obstacles::MustAvoidWithoutWalker(*thing))
+	/// The first end towards the second as it was, and then the second towards the first as moved
+	[[nodiscard]] std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to) const override
 	{
-		return {};
-	}
-	// The Norse gate is a row of small circles across its width, with a way through the middle while it stands open
-	if (registry.AnyOf<AnimatedStatic>(entity) && Locator::animatedStaticSystem::has_value())
-	{
-		if (const auto gate = Locator::animatedStaticSystem::value().RouteCircles(entity))
-		{
-			std::vector<route::Circle> circles;
-			circles.reserve(gate->size());
-			std::ranges::transform(*gate, std::back_inserter(circles), [](const auto& circle) {
-				return route::Circle {.centre = circle.centre, .radius = circle.radius};
-			});
-			return circles;
-		}
-	}
-	return obstacles::CirclesWithoutWalker(*thing, k_RouteMargin);
-}
-
-/// What stands in a cell, added the first time the search reaches the cell's block: the land that can't be walked on and
-/// the water, then each thing to go round whose circles aren't filed in the block already
-route::Obstacles::Gatherer Gatherer()
-{
-	return [](glm::ivec2 cell, route::Obstacles& into) {
-		if (Locator::creatureLocomotionSystem::has_value())
-		{
-			route::AddLandCircles(Locator::creatureLocomotionSystem::value().GetWalkableLand(), cell, into, true);
-		}
-		if (!Locator::entitiesMap::has_value())
-		{
-			return;
-		}
-		const auto& registry = Entities();
-		for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
-		{
-			const auto key = entt::to_integral(entity);
-			if (into.BlockHas(key, cell))
+		const auto& registry = Registry();
+		auto start = planning::ToPoint(ArrivePlace(from));
+		auto goal = planning::ToPoint(ArrivePlace(to));
+		const auto clearOf = [this, &registry](entt::entity building, glm::vec2 end, glm::vec2 other) {
+			if (!registry.AnyOf<Abode, WorshipSite>(building))
 			{
-				continue;
+				return end;
 			}
-			for (const auto& circle : CirclesToGoRound(registry, entity))
+			const auto thing = creature_obstacle_things::ThingOf(registry, building);
+			if (!thing.has_value())
 			{
-				into.Add(key, circle.centre, circle.radius);
+				return end;
+			}
+			const auto circles = obstacles::CirclesWithoutWalker(*thing, planning::k_EndClearMargin);
+			return planning::ClearOfBuilding(end, planning::ToPoint(PlaceOf(building)), other, circles);
+		};
+		start = clearOf(from, start, goal);
+		goal = clearOf(to, goal, start);
+		return {start, goal};
+	}
+
+	[[nodiscard]] footpath_world::ObstacleLook ObstacleOf(entt::entity entity, glm::vec3 /*position*/) const override
+	{
+		const auto& registry = Registry();
+		const auto thing = creature_obstacle_things::ThingOf(registry, entity);
+		footpath_world::ObstacleLook look {.known = thing.has_value()};
+		if (thing.has_value() && obstacles::MustAvoidWithoutWalker(*thing))
+		{
+			look.radius = systems::object_measures::TwoDRadius(registry, entity);
+		}
+		return look;
+	}
+
+	[[nodiscard]] std::unique_ptr<RouteSearchInterface> StartRoute(glm::vec2 start, glm::vec2 goal) const override
+	{
+		return std::make_unique<GameRouteSearch>(start, goal, Gatherer());
+	}
+
+	[[nodiscard]] entt::entity TownOf(entt::entity building) const override
+	{
+		return town_homes::TownOfAbode(Registry(), building);
+	}
+
+	[[nodiscard]] std::optional<entt::entity> StoragePitOf(entt::entity town) const override
+	{
+		return construction::StoragePitOf(town);
+	}
+
+	[[nodiscard]] bool IsBuilt(entt::entity building) const override { return construction::IsBuilt(building); }
+
+	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override
+	{
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(point) : 0.0f;
+	}
+
+	[[nodiscard]] float AltitudeAt(glm::ivec2 place) const override
+	{
+		return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetAltitude(place.x, place.y) : 0.0f;
+	}
+
+	void LookAgain(entt::entity walker) override
+	{
+		if (Locator::pathfindingSystem::has_value())
+		{
+			Locator::pathfindingSystem::value().LookAgain(walker);
+		}
+	}
+
+	void WalkTo(entt::entity walker, glm::ivec2 place) override
+	{
+		if (Locator::pathfindingSystem::has_value())
+		{
+			Locator::pathfindingSystem::value().WalkTo(walker, place);
+		}
+	}
+
+private:
+	[[nodiscard]] static const ecs::Registry& Registry() { return Locator::entitiesRegistry::value(); }
+
+	[[nodiscard]] static glm::ivec2 PlaceOf(entt::entity thing)
+	{
+		return wall_hug::ToWhole(glm::xz(Registry().Get<const Transform>(thing).position));
+	}
+
+	/// The circles of a thing that a route no one walks goes round, none for a thing it goes through
+	[[nodiscard]] static std::vector<route::Circle> CirclesToGoRound(const ecs::Registry& registry, entt::entity entity)
+	{
+		const auto thing = creature_obstacle_things::ThingOf(registry, entity);
+		if (!thing.has_value() || !obstacles::MustAvoidWithoutWalker(*thing))
+		{
+			return {};
+		}
+		// The Norse gate is a row of small circles across its width, with a way through the middle while it stands open
+		if (registry.AnyOf<AnimatedStatic>(entity) && Locator::animatedStaticSystem::has_value())
+		{
+			if (const auto gate = Locator::animatedStaticSystem::value().RouteCircles(entity))
+			{
+				std::vector<route::Circle> circles;
+				circles.reserve(gate->size());
+				std::ranges::transform(*gate, std::back_inserter(circles), [](const auto& circle) {
+					return route::Circle {.centre = circle.centre, .radius = circle.radius};
+				});
+				return circles;
 			}
 		}
-	};
-}
+		return obstacles::CirclesWithoutWalker(*thing, k_RouteMargin);
+	}
 
-std::shared_ptr<FootpathFinder::Plan> StartPlan(glm::vec2 start, glm::vec2 goal)
+	/// What stands in a cell, added the first time the search reaches the cell's block: the land that can't be walked on
+	/// and the water, then each thing to go round whose circles aren't filed in the block already
+	[[nodiscard]] static route::Obstacles::Gatherer Gatherer()
+	{
+		return [](glm::ivec2 cell, route::Obstacles& into) {
+			if (Locator::creatureLocomotionSystem::has_value())
+			{
+				route::AddLandCircles(Locator::creatureLocomotionSystem::value().GetWalkableLand(), cell, into, true);
+			}
+			if (!Locator::entitiesMap::has_value())
+			{
+				return;
+			}
+			const auto& registry = Registry();
+			for (const auto entity : Locator::entitiesMap::value().GetAllInCell(cell))
+			{
+				const auto key = entt::to_integral(entity);
+				if (into.BlockHas(key, cell))
+				{
+					continue;
+				}
+				for (const auto& circle : CirclesToGoRound(registry, entity))
+				{
+					into.Add(key, circle.centre, circle.radius);
+				}
+			}
+		};
+	}
+};
+
+std::shared_ptr<FootpathFinder::Plan> StartPlan(const WorldInterface& world, glm::vec2 start, glm::vec2 goal)
 {
 	auto plan = std::make_shared<FootpathFinder::Plan>();
-	plan->start = start;
-	plan->goal = goal;
-	plan->obstacles.ResetWithoutWalker(k_RouteMargin, Gatherer());
-	// Nothing that holds either end is gone round
-	plan->obstacles.LeaveOutCirclesHolding(goal, start);
-	plan->search.emplace(plan->obstacles, route::Search::Start {.point = start},
-	                     route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
+	plan->search = world.StartRoute(start, goal);
 	return plan;
 }
 
 /// Takes the search up to a number of steps further, stopping once it ends
 void StepPlan(FootpathFinder::Plan& plan, int32_t steps)
 {
-	for (int32_t i = 0; i < steps && plan.search->GetStatus() == route::Search::Status::Searching; ++i)
+	for (int32_t i = 0; i < steps && plan.search->GetStatus() == RouteSearchInterface::Status::Searching; ++i)
 	{
-		plan.search->Step(plan.obstacles);
+		plan.search->Step();
 	}
-}
-
-std::optional<std::vector<glm::ivec2>> RouteOf(const FootpathFinder::Plan& plan)
-{
-	if (plan.search->GetStatus() != route::Search::Status::Found)
-	{
-		return std::nullopt;
-	}
-	return planning::RoutePlaces(plan.search->GetBest(), plan.obstacles.All(), plan.start, plan.goal);
 }
 
 std::vector<planning::PlanNode> PlanNodesOf(const Footpath& footpath)
@@ -221,112 +350,13 @@ std::vector<planning::PlanNode> PlanNodesOf(const Footpath& footpath)
 	return nodes;
 }
 
-/// The path takes the planned nodes, each drawn on the land
-void SetNodes(Footpath& footpath, std::span<const planning::PlanNode> nodes)
-{
-	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
-	footpath.nodes.clear();
-	footpath.nodes.reserve(nodes.size());
-	for (const auto& node : nodes)
-	{
-		const auto ground = planning::ToPoint(node.place);
-		footpath.nodes.push_back({.position = {ground.x, land != nullptr ? land->GetHeightAt(ground) : 0.0f, ground.y},
-		                          .place = node.place,
-		                          .planned = node.planned,
-		                          .hidden = node.hidden,
-		                          .marker = node.marker});
-	}
-}
-
-/// A new path with two nodes, the first where the first thing is arrived at
-entt::entity MakeFootpath(glm::ivec2 first, glm::ivec2 last)
-{
-	auto& registry = Entities();
-	const auto entity = registry.Create();
-	auto& footpath = registry.Assign<Footpath>(entity);
-	const std::array<planning::PlanNode, 2> ends {planning::PlanNode {.place = first}, planning::PlanNode {.place = last}};
-	SetNodes(footpath, ends);
-	return entity;
-}
-
-/// The path's nodes between its two ends are laid along the route
-void LayRoute(entt::entity entity, std::span<const glm::ivec2> route, bool settle)
-{
-	auto& footpath = Entities().Get<Footpath>(entity);
-	auto nodes = PlanNodesOf(footpath);
-	nodes = planning::LayBetween(nodes, 0, nodes.size() - 1, route, std::nullopt);
-	if (settle)
-	{
-		planning::Settle(nodes);
-	}
-	SetNodes(footpath, nodes);
-}
-
-/// A thing keeps a path among those that lead from it, the newest first
-void AddFootpath(entt::entity thing, entt::entity footpath)
-{
-	auto& registry = Entities();
-	auto* link = registry.TryGet<FootpathLink>(thing);
-	if (link == nullptr)
-	{
-		// The link is where the thing stands; a dance, which has no body, has it where its paths end
-		glm::vec3 position {0.0f};
-		if (const auto* transform = registry.TryGet<const Transform>(thing))
-		{
-			position = transform->position;
-		}
-		else
-		{
-			const auto ground = planning::ToPoint(ArrivePlace(thing));
-			position = {ground.x,
-			            Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt(ground) : 0.0f,
-			            ground.y};
-		}
-		link = &registry.Assign<FootpathLink>(thing, position, std::vector<Footpath::Id> {});
-	}
-	link->footpaths.insert(link->footpaths.begin(), static_cast<Footpath::Id>(footpath));
-	registry.SetDirty();
-}
-
-/// The two points a path between two things is planned between: where each is arrived at, moved out of its building
-/// when it is a building, the first towards the second as it was and then the second towards the first as moved
-std::pair<glm::vec2, glm::vec2> PlannedEnds(entt::entity from, entt::entity to)
-{
-	const auto& registry = Entities();
-	auto start = planning::ToPoint(ArrivePlace(from));
-	auto goal = planning::ToPoint(ArrivePlace(to));
-	const auto clearOf = [&registry](entt::entity building, glm::vec2 end, glm::vec2 other) {
-		if (!registry.AnyOf<Abode, WorshipSite>(building))
-		{
-			return end;
-		}
-		const auto thing = creature_obstacle_things::ThingOf(registry, building);
-		if (!thing.has_value())
-		{
-			return end;
-		}
-		const auto circles = obstacles::CirclesWithoutWalker(*thing, planning::k_EndClearMargin);
-		return planning::ClearOfBuilding(end, planning::ToPoint(PlaceOf(building)), other, circles);
-	};
-	start = clearOf(from, start, goal);
-	goal = clearOf(to, goal, start);
-	return {start, goal};
-}
-
-/// The town's storage pit, while it stands built
-std::optional<entt::entity> StandingStoragePit(entt::entity town)
-{
-	const auto pit = construction::StoragePitOf(town);
-	return pit.has_value() && construction::IsBuilt(*pit) ? pit : std::nullopt;
-}
-
 /// The town nearest a place, however far
-entt::entity NearestTown(glm::ivec2 place)
+entt::entity NearestTown(const Registry& registry, glm::ivec2 place)
 {
 	const map_coords::MapCoords from {.x = place.x, .z = place.y, .altitude = 0.0f};
 	entt::entity nearest = entt::null;
 	float best = std::numeric_limits<float>::max();
-	Entities().Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& transform) {
+	registry.Each<const Town, const Transform>([&](entt::entity town, const Town&, const Transform& transform) {
 		const float distance = gutils::GetDistanceInMetres(from, map_coords::MapCoords {
 		                                                             .x = map_coords::ToFixed(transform.position.x),
 		                                                             .z = map_coords::ToFixed(transform.position.z),
@@ -341,9 +371,9 @@ entt::entity NearestTown(glm::ivec2 place)
 	return nearest;
 }
 
-std::vector<footpath_rules::Path> PathsOf(entt::entity thing, std::vector<std::vector<glm::ivec2>>& places)
+std::vector<footpath_rules::Path> PathsOf(const Registry& registry, entt::entity thing,
+                                          std::vector<std::vector<glm::ivec2>>& places)
 {
-	const auto& registry = Entities();
 	std::vector<bool> walkable;
 	if (const auto* link = registry.TryGet<const FootpathLink>(thing))
 	{
@@ -370,18 +400,16 @@ std::vector<footpath_rules::Path> PathsOf(entt::entity thing, std::vector<std::v
 
 /// What the paths go round of a thing standing at a position: its radius across the ground and its place. None when the
 /// creatures' route rule lets them through it. Whether the thing is whole enough to tell goes in known.
-std::optional<FootpathObstacleChange> ObstacleOf(const Registry& registry, entt::entity entity, glm::vec3 position, bool put,
+std::optional<FootpathObstacleChange> ObstacleOf(const WorldInterface& world, entt::entity entity, glm::vec3 position, bool put,
                                                  bool& known)
 {
-	const auto thing = creature_obstacle_things::ThingOf(registry, entity);
-	known = thing.has_value();
-	if (!thing.has_value() || !obstacles::MustAvoidWithoutWalker(*thing))
+	const auto look = world.ObstacleOf(entity, position);
+	known = look.known;
+	if (!look.radius.has_value())
 	{
 		return std::nullopt;
 	}
-	return FootpathObstacleChange {.put = put,
-	                               .radius = systems::object_measures::TwoDRadius(registry, entity),
-	                               .place = wall_hug::ToWhole(glm::xz(position))};
+	return FootpathObstacleChange {.put = put, .radius = *look.radius, .place = wall_hug::ToWhole(glm::xz(position))};
 }
 
 /// A villager on a path that walks towards one of its nodes, by the node's key while the nodes change
@@ -408,24 +436,101 @@ std::vector<Follower> FollowersOf(const Registry& registry, entt::entity footpat
 }
 } // namespace
 
+FootpathSystem::FootpathSystem()
+    : _world(std::make_unique<GameWorld>())
+{
+}
+
+FootpathSystem::FootpathSystem(std::unique_ptr<WorldInterface> world)
+    : _world(std::move(world))
+{
+}
+
+FootpathSystem::~FootpathSystem() = default;
+
+void FootpathSystem::SetNodes(Footpath& footpath, std::span<const planning::PlanNode> nodes) const
+{
+	footpath.nodes.clear();
+	footpath.nodes.reserve(nodes.size());
+	for (const auto& node : nodes)
+	{
+		const auto ground = planning::ToPoint(node.place);
+		footpath.nodes.push_back({.position = {ground.x, _world->LandHeightAt(ground), ground.y},
+		                          .place = node.place,
+		                          .planned = node.planned,
+		                          .hidden = node.hidden,
+		                          .marker = node.marker});
+	}
+}
+
+entt::entity FootpathSystem::MakeFootpath(glm::ivec2 first, glm::ivec2 last)
+{
+	auto& registry = _world->Entities();
+	const auto entity = registry.Create();
+	auto& footpath = registry.Assign<Footpath>(entity);
+	const std::array<planning::PlanNode, 2> ends {planning::PlanNode {.place = first}, planning::PlanNode {.place = last}};
+	SetNodes(footpath, ends);
+	return entity;
+}
+
+void FootpathSystem::LayRoute(entt::entity entity, std::span<const glm::ivec2> route, bool settle)
+{
+	auto& footpath = _world->Entities().Get<Footpath>(entity);
+	auto nodes = PlanNodesOf(footpath);
+	nodes = planning::LayBetween(nodes, 0, nodes.size() - 1, route, std::nullopt);
+	if (settle)
+	{
+		planning::Settle(nodes);
+	}
+	SetNodes(footpath, nodes);
+}
+
+void FootpathSystem::AddFootpath(entt::entity thing, entt::entity footpath)
+{
+	auto& registry = _world->Entities();
+	auto* link = registry.TryGet<FootpathLink>(thing);
+	if (link == nullptr)
+	{
+		// The link is where the thing stands; a dance, which has no body, has it where its paths end
+		glm::vec3 position {0.0f};
+		if (const auto* transform = registry.TryGet<const Transform>(thing))
+		{
+			position = transform->position;
+		}
+		else
+		{
+			const auto ground = planning::ToPoint(_world->ArrivePlace(thing));
+			position = {ground.x, _world->LandHeightAt(ground), ground.y};
+		}
+		link = &registry.Assign<FootpathLink>(thing, position, std::vector<Footpath::Id> {});
+	}
+	link->footpaths.insert(link->footpaths.begin(), static_cast<Footpath::Id>(footpath));
+	registry.SetDirty();
+}
+
+std::optional<entt::entity> FootpathSystem::StandingStoragePit(entt::entity town) const
+{
+	const auto pit = _world->StoragePitOf(town);
+	return pit.has_value() && _world->IsBuilt(*pit) ? pit : std::nullopt;
+}
+
 void FootpathSystem::BuildingWorking(entt::entity building)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	if (!registry.Valid(building) || !registry.AllOf<Abode, Transform>(building))
 	{
 		return;
 	}
-	const auto town = town_homes::TownOfAbode(registry, building);
-	const auto turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const auto town = _world->TownOf(building);
 	const auto pit = town != entt::null ? StandingStoragePit(town) : std::nullopt;
-	if (!pit.has_value() || *pit == building || turn == 0)
+	if (!pit.has_value() || *pit == building || _world->Turn() == 0)
 	{
 		return;
 	}
 	CatchUpWithMap();
 	// The path is planned from the pit to the building's door, with no end moved out of its building
-	const auto start = ArrivePlace(*pit);
-	const auto goal = ArrivePlace(building);
+	const auto start = _world->ArrivePlace(*pit);
+	const auto goal = _world->ArrivePlace(building);
 	const auto route = PlanBetween(start, goal);
 	if (!route.has_value())
 	{
@@ -439,12 +544,12 @@ void FootpathSystem::BuildingWorking(entt::entity building)
 
 void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	if (!registry.Valid(site) || !registry.Valid(town) || !registry.AllOf<Transform>(site))
 	{
 		return;
 	}
-	const auto pit = construction::StoragePitOf(town);
+	const auto pit = _world->StoragePitOf(town);
 	if (!pit.has_value())
 	{
 		return;
@@ -455,21 +560,22 @@ void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 		registry.Assign<FootpathLink>(site, registry.Get<const Transform>(site).position, std::vector<Footpath::Id> {});
 	}
 	std::vector<std::vector<glm::ivec2>> places;
-	const auto paths = PathsOf(site, places);
-	if (footpath_rules::NearestPathToQuick(paths, ArrivePlace(site), ArrivePlace(*pit), k_SitePathReach).has_value())
+	const auto paths = PathsOf(registry, site, places);
+	if (footpath_rules::NearestPathToQuick(paths, _world->ArrivePlace(site), _world->ArrivePlace(*pit), k_SitePathReach)
+	        .has_value())
 	{
 		return;
 	}
-	const auto [start, goal] = PlannedEnds(*pit, site);
+	const auto [start, goal] = _world->PlannedEnds(*pit, site);
 	const auto finder = registry.Create();
-	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(ArrivePlace(*pit), ArrivePlace(site)),
-	                                StartPlan(start, goal));
+	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(_world->ArrivePlace(*pit), _world->ArrivePlace(site)),
+	                                StartPlan(*_world, start, goal));
 	ecs::list_order::Join(registry, finder);
 }
 
 void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	const auto* data = registry.Valid(dance) ? registry.TryGet<const Dance>(dance) : nullptr;
 	if (data == nullptr || data->type == DanceInfo::Worship || data->type == DanceInfo::None ||
 	    (data->type >= k_FirstTempleDance && data->type <= k_LastTempleDance))
@@ -478,7 +584,7 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	}
 	if (town == entt::null)
 	{
-		town = NearestTown({data->place.x, data->place.z});
+		town = NearestTown(registry, {data->place.x, data->place.z});
 	}
 	const auto pit = town != entt::null ? StandingStoragePit(town) : std::nullopt;
 	if (!pit.has_value())
@@ -487,15 +593,15 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	}
 	CatchUpWithMap();
 	// The path is planned from the dance to the pit, and laid at once
-	const auto [start, goal] = PlannedEnds(dance, *pit);
-	auto plan = StartPlan(start, goal);
+	const auto [start, goal] = _world->PlannedEnds(dance, *pit);
+	auto plan = StartPlan(*_world, start, goal);
 	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	const auto route = RouteOf(*plan);
+	const auto route = plan->search->Route();
 	if (!route.has_value())
 	{
 		return;
 	}
-	const auto footpath = MakeFootpath(ArrivePlace(dance), ArrivePlace(*pit));
+	const auto footpath = MakeFootpath(_world->ArrivePlace(dance), _world->ArrivePlace(*pit));
 	LayRoute(footpath, *route, true);
 	AddFootpath(*pit, footpath);
 	AddFootpath(dance, footpath);
@@ -509,7 +615,7 @@ void FootpathSystem::DanceMoved(entt::entity dance)
 
 void FootpathSystem::ThingPut(entt::entity thing)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	const auto* transform = registry.Valid(thing) ? registry.TryGet<const Transform>(thing) : nullptr;
 	if (transform == nullptr)
 	{
@@ -517,7 +623,7 @@ void FootpathSystem::ThingPut(entt::entity thing)
 	}
 	auto& context = registry.Context();
 	bool known = false;
-	const auto change = ObstacleOf(registry, thing, transform->position, true, known);
+	const auto change = ObstacleOf(*_world, thing, transform->position, true, known);
 	if (!change.has_value())
 	{
 		context.footpathObstacles.erase(thing);
@@ -529,11 +635,11 @@ void FootpathSystem::ThingPut(entt::entity thing)
 
 void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position, bool filed)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	auto& context = registry.Context();
 	// The thing as it is now; a thing that is going may not be whole any more, and then it is as it was put on the map
 	bool known = false;
-	const auto now = ObstacleOf(registry, thing, position, false, known);
+	const auto now = ObstacleOf(*_world, thing, position, false, known);
 	const auto kept = context.footpathObstacles.find(thing);
 	if (kept == context.footpathObstacles.end())
 	{
@@ -561,7 +667,7 @@ void FootpathSystem::ThingRemoved(entt::entity thing, glm::vec3 position, bool f
 
 void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& change)
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	const auto& footpath = registry.Get<const Footpath>(entity);
 	const obstacle_rules::Obstacle obstacle {.radius = change.radius, .place = change.place};
 	// A thing put far from every node of the path leaves the path as it is: most things come nowhere near most paths
@@ -600,22 +706,21 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 		}
 		return *found;
 	};
-	auto* pathfinding = Locator::pathfindingSystem::has_value() ? &Locator::pathfindingSystem::value() : nullptr;
-	const auto* land = Locator::terrainSystem::has_value() ? &Locator::terrainSystem::value() : nullptr;
+	auto& world = *_world;
 	const obstacle_rules::Hooks hooks {
 	    .planRoute = [this](glm::ivec2 from, glm::ivec2 to) { return PlanBetween(from, to); },
 	    .lookAgain =
-	        [&followers, pathfinding](uint32_t key, bool towardsStart) {
+	        [&followers, &world](uint32_t key, bool towardsStart) {
 		        for (const auto& follower : followers())
 		        {
-			        if (follower.key == key && follower.towardsStart == towardsStart && pathfinding != nullptr)
+			        if (follower.key == key && follower.towardsStart == towardsStart)
 			        {
-				        pathfinding->LookAgain(follower.villager);
+				        world.LookAgain(follower.villager);
 			        }
 		        }
 	        },
 	    .sendOn =
-	        [&followers, pathfinding](uint32_t gone, uint32_t back, glm::ivec2 backPlace, uint32_t on, glm::ivec2 onPlace) {
+	        [&followers, &world](uint32_t gone, uint32_t back, glm::ivec2 backPlace, uint32_t on, glm::ivec2 onPlace) {
 		        for (auto& follower : followers())
 		        {
 			        if (follower.key != gone)
@@ -623,10 +728,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 				        continue;
 			        }
 			        follower.key = follower.towardsStart ? back : on;
-			        if (pathfinding != nullptr)
-			        {
-				        pathfinding->WalkTo(follower.villager, follower.towardsStart ? backPlace : onPlace);
-			        }
+			        world.WalkTo(follower.villager, follower.towardsStart ? backPlace : onPlace);
 		        }
 	        },
 	    .cutOff =
@@ -640,7 +742,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 			        }
 		        }
 	        },
-	    .altitude = [land](glm::ivec2 place) { return land != nullptr ? land->GetAltitude(place.x, place.y) : 0.0f; },
+	    .altitude = [&world](glm::ivec2 place) { return world.AltitudeAt(place); },
 	};
 	const auto before = nodes;
 	if (change.put)
@@ -655,10 +757,13 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 	{
 		return;
 	}
-	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Footpath {} {} a thing of radius {} at ({}, {}): {} nodes, then {}",
-	                    entt::to_integral(entity), change.put ? "sent round" : "brought back from", change.radius,
-	                    map_coords::ToMetres(change.place.x), map_coords::ToMetres(change.place.y), before.size(),
-	                    nodes.size());
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_DEBUG(logger, "Footpath {} {} a thing of radius {} at ({}, {}): {} nodes, then {}",
+		                    entt::to_integral(entity), change.put ? "sent round" : "brought back from", change.radius,
+		                    map_coords::ToMetres(change.place.x), map_coords::ToMetres(change.place.y), before.size(),
+		                    nodes.size());
+	}
 	std::vector<planning::PlanNode> laid;
 	laid.reserve(nodes.size());
 	std::ranges::transform(nodes, std::back_inserter(laid), &obstacle_rules::KeyedNode::node);
@@ -675,7 +780,7 @@ void FootpathSystem::Reroute(entt::entity entity, const FootpathObstacleChange& 
 
 void FootpathSystem::ProcessObstacleChanges()
 {
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	// Each change goes through every path. The paths do not depend on each other, so their order does not matter.
 	auto changes = std::move(registry.Context().footpathObstacleChanges);
 	registry.Context().footpathObstacleChanges.clear();
@@ -696,32 +801,29 @@ void FootpathSystem::ProcessObstacleChanges()
 
 void FootpathSystem::CatchUpWithMap()
 {
-	if (Locator::entitiesMap::has_value())
-	{
-		Locator::entitiesMap::value().Sync();
-	}
+	_world->SyncMap();
 	ProcessObstacleChanges();
 }
 
 void FootpathSystem::ProcessTurn()
 {
 	ProcessObstacleChanges();
-	auto& registry = Entities();
+	auto& registry = _world->Entities();
 	// The finders in the order of the game's list, the newest first
 	for (const auto entity : ecs::list_order::Walk<FootpathFinder>(registry))
 	{
 		auto& finder = registry.Get<FootpathFinder>(entity);
 		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath);
 		const auto status = finder.plan->search->GetStatus();
-		if (alive && status == route::Search::Status::Searching)
+		if (alive && status == RouteSearchInterface::Status::Searching)
 		{
 			StepPlan(*finder.plan, planning::k_StepsPerTurn);
 			continue;
 		}
-		if (alive && status == route::Search::Status::Found)
+		if (alive && status == RouteSearchInterface::Status::Found)
 		{
 			// The way is found: the path is laid along it and both things keep it
-			LayRoute(finder.footpath, *RouteOf(*finder.plan), true);
+			LayRoute(finder.footpath, *finder.plan->search->Route(), true);
 			AddFootpath(finder.from, finder.footpath);
 			AddFootpath(finder.to, finder.footpath);
 		}
@@ -735,7 +837,7 @@ void FootpathSystem::ProcessTurn()
 
 std::optional<std::vector<glm::ivec2>> FootpathSystem::PlanBetween(glm::ivec2 from, glm::ivec2 to) const
 {
-	auto plan = StartPlan(planning::ToPoint(from), planning::ToPoint(to));
+	auto plan = StartPlan(*_world, planning::ToPoint(from), planning::ToPoint(to));
 	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	return RouteOf(*plan);
+	return plan->search->Route();
 }

@@ -82,7 +82,7 @@ struct FootpathFinder
 };
 
 /// A thing that the footpaths go round, put on the map or removed from it: its radius across the ground in metres and its
-/// place in whole map units. On their next turn the footpaths go round it, or stop going round it.
+/// place in whole map units. At the next change process the footpaths go round it, or stop going round it.
 struct FootpathObstacleChange
 {
 	bool put {true};
