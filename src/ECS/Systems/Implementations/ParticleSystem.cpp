@@ -1108,6 +1108,14 @@ ParticleSystemInterface::EffectId ParticleSystem::StartByFrame(ParticleType type
 	return id;
 }
 
+void ParticleSystem::SetShown(EffectId id, bool shown)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->shown = shown;
+	}
+}
+
 ParticleSystemInterface::EffectId ParticleSystem::StartSpotVisual(SpotVisualType type, glm::vec3 position,
                                                                   std::optional<int> turns, entt::entity owner, float magnitude)
 {
@@ -1464,7 +1472,7 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 	};
 	for (const auto& running : _effects)
 	{
-		if (running.inTemple != inTemple)
+		if (running.inTemple != inTemple || !running.shown)
 		{
 			continue;
 		}

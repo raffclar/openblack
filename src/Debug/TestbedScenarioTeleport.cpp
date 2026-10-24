@@ -45,6 +45,10 @@ constexpr NeedOverrides k_Content {
 /// Two stones too far apart for a villager to walk between to worship
 constexpr glm::vec2 k_WorshipStoneA {-300.0f, 0.0f};
 constexpr glm::vec2 k_WorshipStoneB {300.0f, 0.0f};
+/// Three stones on one line from the camera: close, inside the draw list's reach and beyond it
+constexpr glm::vec2 k_NearStone {0.0f, 30.0f};
+constexpr glm::vec2 k_MiddleStone {0.0f, 400.0f};
+constexpr glm::vec2 k_FarStone {0.0f, 900.0f};
 } // namespace
 
 void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
@@ -66,6 +70,36 @@ void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 	                  .handHeight = 12.0f,
 	                  .delaySeconds = 1.0f,
 	                  .byHand = true}},
+	});
+
+	all.push_back({
+	    .id = "miracles.teleport_pools_near_and_far",
+	    .name = "Teleport stones near and far, in the map's cells",
+	    .facet = Facet::Miracles,
+	    .description = "Three teleport miracles cast on one line from a still camera: one close, one some 400 "
+	                   "away and one some 900 away, beyond the land's draw list. Each stone goes into the map's cells, so "
+	                   "the draw list decides it as it decides the other things on the land.",
+	    .expected = "The near pool and the pool at 400 turn and their rims fade in and out. The far pool does not show, "
+	                "because the draw list does not reach its stone. When the camera flies out to it, its pool shows and "
+	                "moves on again.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, -20.0f}, .look = {0.0f, 0.0f, 60.0f}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = k_NearStone,
+	                  .handOffset = k_NearStone,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_MiddleStone,
+	                  .handOffset = k_MiddleStone,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 4.0f},
+	                 {.type = MagicType::Teleport,
+	                  .point = k_FarStone,
+	                  .handOffset = k_FarStone,
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 7.0f}},
 	});
 
 	all.push_back({

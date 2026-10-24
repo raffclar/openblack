@@ -61,6 +61,7 @@
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
@@ -222,7 +223,7 @@ void VortexSystem::DeleteEffects(const Vortex& vortex)
 void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	_groundMarks.clear();
-	// The swirls and the effects over the land step at the pace of the screen's refresh
+	// The swirls step at the pace of the screen's refresh
 	const auto effectStep = particles::drawn_steps::StepSeconds(_effectPace, frameRealTime, frameGameTime, landDrawn);
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
@@ -247,8 +248,8 @@ void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chr
 		{
 			return;
 		}
-		// The swirl and the effect over the land grow with the openness, stepped by the game time since their last step;
-		// the swirl rises towards the ground as the land is levelled
+		// The swirl grows with the openness, stepped by the game time since its last step; it rises towards the ground as
+		// the land is levelled
 		const particles::ProcessInfo info {.power = openness, .enabled = true};
 		if (effectStep.has_value() && openness != 0.0f && vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
 		{
@@ -260,18 +261,61 @@ void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chr
 				vortex.beforeLandEffect = ParticleSystemInterface::k_NoEffect;
 			}
 		}
-		if (effectStep.has_value() && openness != 0.0f && vortex.afterLandEffect != ParticleSystemInterface::k_NoEffect &&
-		    !particles->ProcessForSpell(vortex.afterLandEffect, info, *effectStep))
+	});
+}
+
+void VortexSystem::UpdateDrawnFrame(ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+                                    std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	// The effects over the land step at the pace of the screen's refresh
+	const auto effectStep = particles::drawn_steps::StepSeconds(_drawnEffectPace, frameRealTime, frameGameTime, landDrawn);
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto update = [&](entt::entity entity) {
+		auto* vortex = registry.TryGet<Vortex>(entity);
+		if (vortex == nullptr)
 		{
-			vortex.afterLandEffect = ParticleSystemInterface::k_NoEffect;
+			return;
+		}
+		// The effect over the land and the glow show only in the frames that draw their vortex
+		const bool drawn = drawList.Drawn(registry, entity);
+		particles.SetShown(vortex->afterLandEffect, drawn);
+		particles.SetShown(vortex->lightMapEffect, drawn);
+		if (!drawn)
+		{
+			return;
+		}
+		// The draw of a vortex does not test the screen, so the vortex stays drawn on the next frames of a still camera
+		if (drawList.GetFrame().drawAll)
+		{
+			drawList.NoteFullFrame(entity, true);
+		}
+		const auto seconds = SecondsInState(*vortex, ReadIn::Frame);
+		const auto openness = vortex::Openness(vortex->state, seconds);
+		// The effect over the land grows with the openness, stepped by the game time since its last step
+		const particles::ProcessInfo info {.power = openness, .enabled = true};
+		if (effectStep.has_value() && openness != 0.0f && vortex->afterLandEffect != ParticleSystemInterface::k_NoEffect &&
+		    !particles.ProcessForSpell(vortex->afterLandEffect, info, *effectStep))
+		{
+			vortex->afterLandEffect = ParticleSystemInterface::k_NoEffect;
 		}
 		// The glow on the ground is as bright as the vortex's state has it
-		if (auto* lightMap = particles->Find(vortex.lightMapEffect))
+		if (auto* lightMap = particles.Find(vortex->lightMapEffect))
 		{
-			const auto glow = vortex::GlowBrightness(vortex.state, seconds);
+			const auto glow = vortex::GlowBrightness(vortex->state, seconds);
 			lightMap->SetGlobalAlpha(static_cast<float>(static_cast<int>(glow * 255.0f)));
 		}
-	});
+	};
+	std::vector<entt::entity> vortices;
+	registry.Each<const Vortex>([&vortices](entt::entity entity, const Vortex&) { vortices.push_back(entity); });
+	std::ranges::for_each(particles::drawn_steps::DrawOrder(
+	                          drawList.GetList(), vortices, drawList.GetView().has_value(),
+	                          [&registry, &drawList](entt::entity entity) { return drawList.Decides(registry, entity); }),
+	                      update);
 }
 
 bool VortexSystem::StartFadeOut(entt::entity vortex)

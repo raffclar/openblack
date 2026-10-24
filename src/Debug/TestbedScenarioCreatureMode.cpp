@@ -515,8 +515,9 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	    .facet = Facet::CreatureMode,
 	    .description = "The player's tiger has learnt the fireball, the heal and the water miracles in full; F5 is "
 	                   "pressed. The effects of the seeds' holders step no more often than 60 times a second.",
-	    .expected = "The seeds hover by the plinths, spinning. The fire of the fireball's holder and the other holders' "
-	                "effects move as they do at 60 frames a second, also at hundreds of frames a second. They do not move "
+	    .expected = "The seeds hover by the plinths and do not turn, because they turn by the game's time and the game is "
+	                "paused in the temple. The fire of the fireball's holder and the other holders' effects move by the "
+	                "real time, as they do at 60 frames a second, also at hundreds of frames a second. They do not move "
 	                "faster or flicker more at a high frame rate.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},

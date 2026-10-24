@@ -175,8 +175,8 @@ private:
 	TempleLight _light;
 	TempleFog _fog;
 	/// The creature's room's belts for how the creature fights, the medals for its miracles and the seeds of its best
-	/// learnt, at the points of the room's mesh, while the room is drawn
-	void UpdateCaveTrophies(float seconds);
+	/// learnt, at the points of the room's mesh, while the room is drawn. The seeds turn and pulse by `gameSeconds`.
+	void UpdateCaveTrophies(float gameSeconds);
 	/// The seeds go, with their effects, as the player leaves the temple
 	void ClearCaveSeeds();
 	/// How the magic scroll last worked out the creature's miracles, which the medals and seeds show; none until the

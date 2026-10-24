@@ -21,12 +21,14 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/SpellIcon.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/MapCells.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "Locator.h"
+#include "Magic/TeleportRules.h"
 
 #define LOCATOR_IMPLEMENTATIONS
 #include "ECS/MapProduction.h"
@@ -182,6 +184,40 @@ TEST_F(MapProductionFiling, AFieldIsInEachCellItsOutlineCoversAndLeavesThemWhenG
 	registry.Destroy(field);
 	EXPECT_TRUE(map.GetAllInCell(middle).empty());
 	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
+}
+
+TEST_F(MapProductionFiling, ATeleportStoneIsFiledAtItsFullSizeAndThenAtItsKeptSize)
+{
+	// A stone goes into the cells that its model's outline covers at once, at its full size. Then it shrinks to the size
+	// it keeps, which takes it out of the cells and puts it back in them. Here the model's box has half sides of 3
+	// units: at full size its circle reaches the four cells beside its own cell, and at a hundredth of that size it is
+	// a circle of a unit (no side is less than a unit), which reaches only its own cell.
+	auto& registry = Locator::entitiesRegistry::value();
+	const glm::vec3 place {505.0f, 0.0f, 505.0f};
+	Locator::entitiesMap::reset();
+	Locator::entitiesMap::emplace<MapProduction>([](const Registry& from, entt::entity entity) {
+		const auto& transform = from.Get<const Transform>(entity);
+		return std::optional(map_cells::OutlineOfBox(transform.position, transform.rotation, transform.scale.x, glm::vec3(0.0f),
+		                                             {3.0f, 3.0f, 3.0f}));
+	});
+	auto& map = Locator::entitiesMap::value();
+	const auto stone = registry.Create();
+	registry.Assign<Transform>(stone, place, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<TeleportStone>(stone);
+	map.Refile(stone);
+	ASSERT_TRUE(registry.AllOf<MapCellResident>(stone));
+	EXPECT_EQ(registry.Get<const MapCellResident>(stone).cells.size(), 5u);
+	registry.Get<Transform>(stone).scale = glm::vec3(magic::teleport::k_StoneScale);
+	map.Refile(stone);
+	const auto middle = map_coords::CellOf(place);
+	EXPECT_EQ(registry.Get<const MapCellResident>(stone).cells.size(), 1u);
+	ASSERT_EQ(map.GetAllInCell(middle).size(), 1u);
+	EXPECT_EQ(map.GetAllInCell(middle).front(), stone);
+	EXPECT_TRUE(map.GetAllInCell(middle + glm::ivec2 {1, 0}).empty());
+	// The map's search finds it on its land block, so the land's draw list decides it as it decides other things
+	const auto block = glm::ivec2 {middle.x >> 4, middle.y >> 4};
+	const auto onBlock = map.GetOnBlock(block);
+	EXPECT_NE(std::ranges::find(onBlock, stone), onBlock.end());
 }
 
 TEST_F(MapProductionFiling, AThingIsInTheMapUntilItLeavesTheCells)

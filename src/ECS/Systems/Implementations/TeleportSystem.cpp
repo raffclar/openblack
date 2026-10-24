@@ -48,6 +48,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
@@ -224,6 +225,12 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 		component.reaction = Locator::reactionSystem::value().Create(
 		    {.initiator = stone, .type = Reaction::ReactToTeleport, .player = player, .position = position});
 	}
+	// It goes into the map's cells at once, at its full size
+	auto* map = Locator::entitiesMap::has_value() ? &Locator::entitiesMap::value() : nullptr;
+	if (map != nullptr)
+	{
+		map->Refile(stone);
+	}
 	// Its swirling pool, with its hum. Its random numbers are only this computer's: the pool does not change the world.
 	// The pool moves on in the frames that draw the stone, not in the turns.
 	if (Locator::particleSystem::has_value())
@@ -234,6 +241,12 @@ entt::entity TeleportSystem::CreateStone(glm::vec3 point, PlayerNames player, en
 		{
 			particles.SetPlayer(component.pool, static_cast<int>(player));
 		}
+	}
+	// Then it shrinks to the size it keeps, which takes it out of the map's cells and puts it back in them
+	registry.Get<Transform>(stone).scale = glm::vec3(teleport::k_StoneScale);
+	if (map != nullptr)
+	{
+		map->Refile(stone);
 	}
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Teleport: stone of player {} at ({}, {})", static_cast<int>(player), position.x,
 	                    position.z);
@@ -867,7 +880,7 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
                                  std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	const auto seconds = particles::drawn_steps::StepSeconds(_poolPace, frameRealTime, frameGameTime, landDrawn);
-	if (!seconds.has_value() || !Locator::particleSystem::has_value())
+	if (!Locator::particleSystem::has_value())
 	{
 		return;
 	}
@@ -879,7 +892,10 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
 		{
 			return;
 		}
-		if (!drawList.Drawn(registry, stone))
+		// The pool shows and moves on only in the frames that draw its stone
+		const bool drawn = drawList.Drawn(registry, stone);
+		particles.SetShown(component->pool, drawn);
+		if (!drawn)
 		{
 			return;
 		}
@@ -888,7 +904,10 @@ void TeleportSystem::UpdateFrame(ObjectDrawListSystemInterface& drawList, std::c
 		{
 			drawList.NoteFullFrame(stone, true);
 		}
-		particles.ProcessByFrame(component->pool, *seconds);
+		if (seconds.has_value())
+		{
+			particles.ProcessByFrame(component->pool, *seconds);
+		}
 	};
 	std::vector<entt::entity> stones;
 	registry.Each<const TeleportStone>([&stones](entt::entity stone, const TeleportStone&) { stones.push_back(stone); });

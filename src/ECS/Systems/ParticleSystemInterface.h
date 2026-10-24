@@ -107,6 +107,8 @@ public:
 	{
 		return Start(type, origin, magnitude, false);
 	}
+	/// Whether an effect that its thing draws shows in this frame: it shows only while the frame draws its thing
+	virtual void SetShown(EffectId /*id*/, bool /*shown*/) {}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,

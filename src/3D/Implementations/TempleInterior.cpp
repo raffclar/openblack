@@ -1046,7 +1046,7 @@ void TempleInterior::FadeIntoRoom()
 	}
 }
 
-void TempleInterior::UpdateCaveTrophies(float seconds)
+void TempleInterior::UpdateCaveTrophies(float gameSeconds)
 {
 	using namespace CreatureCaveTrophies;
 	_caveTrophies.clear();
@@ -1145,15 +1145,18 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 			continue;
 		}
 		auto& seed = place->seed;
-		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * seconds), glm::two_pi<float>());
+		std::optional<int> receiveType;
 		if (magic::visuals::IsPhialSeed(seed.seed))
 		{
 			const auto* spell =
 			    magic::GetMagicInfoAs<GMagicCreatureSpellInfo>(info, magic::GetSpellSeedInfo(info, seed.seed).magicTypes[0]);
-			const int receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
-			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, seconds);
-			seed.phialPhase = std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
+			receiveType = spell != nullptr ? static_cast<int>(spell->creatureReceiveSpellType) : 0;
 		}
+		const auto turn = magic::visuals::TurnSeed(
+		    {.spin = seed.spin, .phialFrame = seed.phialFrame, .phialPhase = seed.phialPhase}, receiveType, gameSeconds);
+		seed.spin = turn.spin;
+		seed.phialFrame = turn.phialFrame;
+		seed.phialPhase = turn.phialPhase;
 		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
 		    _caveEffectStep.has_value())
 		{
@@ -1608,7 +1611,7 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		}
 		const float milliseconds = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(dt).count();
 		// The effects of the seeds step at the pace of the screen's refresh: in the creature's room by the real time, over
-		// the map by the game's time
+		// the map by the game's time. The seeds themselves turn by the game's time in both.
 		const auto realTime = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime()
 		                                                 : std::chrono::duration_cast<std::chrono::milliseconds>(dt);
 		const auto gameTime =
@@ -1708,10 +1711,11 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 		                         static_cast<uint32_t>(machine_clock::Ticks()));
 		// The room the player is in sets how thick the fog is, and the light its colour
 		_fog = TempleFog::In(_currentRoom == TempleRoom::CreatureCave, _light);
-		// The creature's room chooses the belts and medals every frame
+		// The creature's room chooses the belts and medals every frame. Its seeds turn and pulse by the game's time of the
+		// frame, which stops while the player is in the temple.
 		if (IsRoomDrawn(TempleRoom::CreatureCave))
 		{
-			UpdateCaveTrophies(milliseconds / 1000.0f);
+			UpdateCaveTrophies(static_cast<float>(gameTime.count()) * 0.001f);
 		}
 		else
 		{

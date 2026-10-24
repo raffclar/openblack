@@ -16,6 +16,7 @@
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureCastMoves.h"
+#include "Creature/CreatureObstacles.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
@@ -24,6 +25,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
@@ -123,6 +125,11 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	if (registry.AllOf<Field>(entity))
 	{
 		return cast_moves::k_FieldRadius;
+	}
+	// A teleport stone has the same radius whatever its model and its size
+	if (registry.AllOf<TeleportStone>(entity))
+	{
+		return creature_obstacles::k_TeleportStoneWidth;
 	}
 	const auto half = HalfExtentsOf(registry, entity);
 	return half.has_value() ? std::max(half->x, half->z) : 0.0f;

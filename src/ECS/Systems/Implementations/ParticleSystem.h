@@ -222,6 +222,7 @@ public:
 	bool ProcessForSpell(EffectId id, const particles::ProcessInfo& info, float seconds) override;
 	bool ProcessByFrame(EffectId id, float seconds) override;
 	EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude) override;
+	void SetShown(EffectId id, bool shown) override;
 	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
 	                         float magnitude) override;
 
@@ -292,6 +293,8 @@ private:
 		bool everyFrame {false};
 		/// One of the temple's rooms' effects, drawn only while the player is in the temple
 		bool inTemple {false};
+		/// Drawn in this frame; false while the frame does not draw the thing that draws it
+		bool shown {true};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with

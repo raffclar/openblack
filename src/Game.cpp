@@ -3434,8 +3434,8 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 						Locator::abodeSoundSystem::value().Update(
 						    std::chrono::duration<float, std::milli>(clock.GetFrameGameTime()));
 					}
-					// The pools of the teleport stones and the swirls of the dispensers that the list draws move on, only in
-					// a frame that draws the land
+					// The pools of the teleport stones, the swirls of the dispensers and the effects of the vortices over the
+					// land show only while the list draws their things, and move on only in a frame that draws the land
 					const bool landDrawn = simulation::LandDrawn();
 					auto& drawList = Locator::objectDrawListSystem::value();
 					if (Locator::teleportSystem::has_value())
@@ -3447,6 +3447,11 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					{
 						Locator::magicSystem::value().UpdateDispenserFrame(drawList, clock.GetFrameRealTime(),
 						                                                   clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::vortexSystem::has_value())
+					{
+						Locator::vortexSystem::value().UpdateDrawnFrame(drawList, clock.GetFrameRealTime(),
+						                                                clock.GetFrameGameTime(), landDrawn);
 					}
 				}
 				updateDrawnScenery();

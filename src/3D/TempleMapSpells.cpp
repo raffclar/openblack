@@ -15,7 +15,6 @@
 
 #include <glm/gtc/constants.hpp>
 
-#include "Magic/DispenserRules.h"
 #include "Magic/MiracleVisuals.h"
 
 namespace openblack
@@ -60,17 +59,12 @@ void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, std
 		auto& seed = place.seed;
 		seed.middle = middle;
 		seed.ownerAlignment = cast.ownerAlignment;
-		seed.spin = std::fmod(seed.spin + (magic::k_OrbSeedSpin * gameSeconds), glm::two_pi<float>());
-		if (seed.spin < 0.0f)
-		{
-			seed.spin += glm::two_pi<float>();
-		}
-		if (cast.phialReceiveType.has_value())
-		{
-			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, gameSeconds);
-			seed.phialPhase =
-			    std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(*cast.phialReceiveType) * gameSeconds), 1.0f);
-		}
+		const auto turn =
+		    magic::visuals::TurnSeed({.spin = seed.spin, .phialFrame = seed.phialFrame, .phialPhase = seed.phialPhase},
+		                             cast.phialReceiveType, gameSeconds);
+		seed.spin = turn.spin;
+		seed.phialFrame = turn.phialFrame;
+		seed.phialPhase = turn.phialPhase;
 		if (place.effect.has_value() && effectSeconds.has_value())
 		{
 			effects.Step(*place.effect, holderPoint, *effectSeconds);

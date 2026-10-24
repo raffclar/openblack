@@ -1700,7 +1700,7 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
                                        std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	const auto seconds = particles::drawn_steps::StepSeconds(_swirlPace, frameRealTime, frameGameTime, landDrawn);
-	if (!seconds.has_value() || !Locator::particleSystem::has_value())
+	if (!Locator::particleSystem::has_value())
 	{
 		return;
 	}
@@ -1708,12 +1708,17 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
 	const auto& registry = EntityRegistry();
 	const auto stepSwirl = [&](entt::entity entity) {
 		const auto* dispenser = registry.TryGet<const SpellDispenser>(entity);
-		if (dispenser == nullptr || dispenser->effect == ParticleSystemInterface::k_NoEffect ||
-		    !drawList.Drawn(registry, entity))
+		if (dispenser == nullptr || dispenser->effect == ParticleSystemInterface::k_NoEffect)
 		{
 			return;
 		}
-		particles.ProcessByFrame(dispenser->effect, *seconds);
+		// The swirl shows and moves on only in the frames that draw its dispenser
+		const bool drawn = drawList.Drawn(registry, entity);
+		particles.SetShown(dispenser->effect, drawn);
+		if (drawn && seconds.has_value())
+		{
+			particles.ProcessByFrame(dispenser->effect, *seconds);
+		}
 	};
 	std::vector<entt::entity> dispensers;
 	registry.Each<const SpellDispenser>(

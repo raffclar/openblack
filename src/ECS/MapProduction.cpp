@@ -111,17 +111,6 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<RewardOnLand>();
 }
 
-/// The model whose box a thing covers: its own, or a vortex's cylinder, which is never drawn. An altar has its model
-/// before the model shows.
-std::optional<entt::id_type> OutlineMeshOf(const Registry& registry, entt::entity entity)
-{
-	if (registry.AllOf<Vortex>(entity))
-	{
-		return resources::HashIdentifier(MeshId::SpellVortexCylinder);
-	}
-	return thing_model::ModelOf(registry, entity);
-}
-
 /// A building's outline on the ground, from its model's box as it is placed
 std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::optional<entt::id_type> meshId)
 {
@@ -141,7 +130,7 @@ std::optional<map_cells::Outline> OutlineOf(const Transform& transform, std::opt
 /// The outline of a thing from its model in the resources
 std::optional<map_cells::Outline> ModelOutlineOf(const Registry& registry, entt::entity entity)
 {
-	return OutlineOf(registry.Get<const Transform>(entity), OutlineMeshOf(registry, entity));
+	return OutlineOf(registry.Get<const Transform>(entity), thing_model::OutlineModelOf(registry, entity));
 }
 } // namespace
 
