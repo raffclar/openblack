@@ -83,6 +83,7 @@
 #include "TextureViewer.h"
 #include "VideoViewer.h"
 #include "Weather.h"
+#include "Windowing/SystemPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 // Turn off formatting because it adds spaces which break the stringifying
@@ -169,6 +170,9 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 			{
 				return nullptr;
 			}
+			// A background run (a tool or an agent) never touches the pointer of the system: it is the user's
+			const bool background = Locator::config::has_value() && Locator::config::value().background;
+			ImGui_ImplSDL2_KeepOffSystemPointer(!openblack::windowing::system_pointer::MayTouch(background));
 		}
 	}
 	// The system's cursor stays hidden: the game shows the hand, and its menu its own pointer

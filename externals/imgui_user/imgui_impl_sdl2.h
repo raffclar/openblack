@@ -37,6 +37,9 @@ IMGUI_IMPL_API bool     ImGui_ImplSDL2_InitForOther(SDL_Window* window);
 IMGUI_IMPL_API void     ImGui_ImplSDL2_Shutdown();
 IMGUI_IMPL_API void     ImGui_ImplSDL2_NewFrame();
 IMGUI_IMPL_API bool     ImGui_ImplSDL2_ProcessEvent(const SDL_Event* event);
+// openblack: with true, the backend never captures, moves, hides or reads the pointer of the system (a background run of
+// a tool or an agent: the pointer is the user's)
+IMGUI_IMPL_API void     ImGui_ImplSDL2_KeepOffSystemPointer(bool keep_off);
 
 // Gamepad selection automatically starts in AutoFirst mode, picking first available SDL_Gamepad. You may override this.
 // When using manual mode, caller is responsible for opening/closing gamepad.
