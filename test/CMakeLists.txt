@@ -1728,3 +1728,4 @@ target_link_libraries(test_challenge_pictures PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
   test_challenge_picture_files test_challenge_picture_files.cpp
 )
+openblack_setup_and_add_test(test_reflection_order test_reflection_order.cpp)
