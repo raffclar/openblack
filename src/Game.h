@@ -189,6 +189,8 @@ struct Arguments
 	bool continueGame {false};
 	/// The switches of the original game's command line, such as -NEWGAME
 	launch_switches::Switches launchSwitches;
+	/// The developer options that a build without the developer tools ignored, with their values, for the log
+	std::vector<std::string> ignoredDeveloperOptions;
 	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
 	/// the player's profiles, or with it answered at once; as the game decides when none
 	std::optional<new_game_choice::NewGameStart> newGameStart;
@@ -421,8 +423,9 @@ public:
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
-	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
-	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
+	/// without the developer tools, and a live network game, refuse it: then the result is false.
+	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves

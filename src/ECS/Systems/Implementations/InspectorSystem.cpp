@@ -25,6 +25,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
@@ -136,8 +137,7 @@ public:
 		{
 			return false;
 		}
-		game->RequestScenario({.id = std::string(id), .benchmark = false});
-		return true;
+		return game->RequestScenario({.id = std::string(id), .benchmark = false});
 	}
 	[[nodiscard]] std::vector<inspector::ScenarioSummary> Scenarios() const override
 	{
@@ -168,6 +168,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	// Points of the world are found on the screen through the view drawn, an override's while one is shown
 	_inputTarget->SetCamera(_controls->camera);
 	inspector::reflection::RegisterComponents(*_reflection);
+	// A live network game refuses the queries that change the shared world
+	_inspector.SetNetworkGameLive([]() { return developer_tools::NetworkSessionLive(); });
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
 		{

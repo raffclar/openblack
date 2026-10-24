@@ -86,6 +86,7 @@
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -641,6 +642,10 @@ Game::Game(Arguments&& args) noexcept
 	// The log of each part of the game
 	simulation::StartLogs(args.logFile, args.logLevels);
 	sInstance = this;
+	for (const auto& ignored : args.ignoredDeveloperOptions)
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This build has no developer tools: it ignores the option {}", ignored);
+	}
 
 	auto& config = Locator::config::emplace();
 	config.numFramesToSimulate = args.numFramesToSimulate;
@@ -1048,10 +1053,14 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			    .ctrl = (mod & KMOD_CTRL) != 0,
 			    .alt = (mod & KMOD_ALT) != 0,
 			};
-			// F1 is the game's Help key, so the renderer's statistics are on another key
+			// F1 is the game's Help key, so the renderer's statistics are on another key. It is a debug key: a build
+			// without the developer tools, and a live network game, ignore it.
 			if (key == keys::RendererStatisticsKey(k_Platform))
 			{
-				Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
+				if (developer_tools::Allowed(developer_tools::Action::DebugKey))
+				{
+					Locator::rendererInterface::value().SetDebug(!Locator::rendererInterface::value().GetDebug());
+				}
 				break;
 			}
 			// The slower key halves the game's speed, to half of normal at the least. The faster key doubles it, to
@@ -4425,7 +4434,22 @@ bool Game::LoadMapWithFreshScripts(const std::filesystem::path& path, land_chang
 
 void Game::LoadTestbed() noexcept
 {
+	// The testbed is a developer tool. A live network game never loads it.
+	if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad))
+	{
+		return;
+	}
 	Locator::landSystem::value().LoadTestbed();
+}
+
+bool Game::RequestScenario(ScenarioRequest request)
+{
+	if (!developer_tools::Allowed(developer_tools::Action::ScenarioLoad))
+	{
+		return false;
+	}
+	_scenarioRequest = std::move(request);
+	return true;
 }
 
 bool Game::LoadGodsRingMap() noexcept

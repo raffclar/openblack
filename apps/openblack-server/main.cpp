@@ -15,17 +15,22 @@
 #include <cstdint>
 #include <cstdlib>
 
+#include <algorithm>
 #include <atomic>
 #include <exception>
 #include <filesystem>
 #include <iostream>
+#include <iterator>
 #include <string>
+#include <string_view>
 #include <typeinfo>
+#include <vector>
 
 #include <cxxopts.hpp>
 
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
+#include "Common/DeveloperTools.h"
 #include "Server/DedicatedServer.h"
 
 namespace
@@ -81,7 +86,24 @@ int main(int argc, char* argv[])
 	openblack::server::ServerSettings settings;
 	try
 	{
-		const auto result = options.parse(argc, argv);
+		// A build without the developer tools ignores the options of the tools and keeps those of a deployed server
+		std::vector<char*> arguments(argv, argv + argc);
+		if constexpr (!openblack::developer_tools::k_Built)
+		{
+			const std::vector<std::string_view> texts(arguments.begin(), arguments.end());
+			const auto filtered =
+			    openblack::developer_tools::FilterDeveloperOptions(texts, openblack::developer_tools::k_ServerDeveloperOptions);
+			std::vector<char*> kept;
+			kept.reserve(filtered.kept.size());
+			std::ranges::transform(filtered.kept, std::back_inserter(kept),
+			                       [&arguments](size_t index) { return arguments[index]; });
+			arguments = std::move(kept);
+			for (const auto& ignored : filtered.ignored)
+			{
+				std::cerr << "This build has no developer tools: it ignores the option " << ignored << std::endl;
+			}
+		}
+		const auto result = options.parse(static_cast<int>(arguments.size()), arguments.data());
 		if (result.count("help") != 0)
 		{
 			std::cout << options.help() << std::endl;
