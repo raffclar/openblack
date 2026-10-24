@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "Commands/PlayerCommands.h"
+#include "Commands/TurnCommandSource.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -52,6 +53,16 @@ public:
 	[[nodiscard]] virtual PlayerNames GetSender() const = 0;
 	/// The number of commands that wait for the world, in the open block and in the sent blocks
 	[[nodiscard]] virtual size_t PendingCount() const = 0;
+
+	/// A network game: the commands of this computer go to the source at once, and each turn does only the commands
+	/// that the source gives for it. None gives back the queue of a single player game. The source must live while it
+	/// is set.
+	virtual void SetSource(player_commands::TurnCommandSourceInterface* source) = 0;
+	/// True when the turn can start: always in a single player game, and in a network game when the source has the
+	/// commands of the turn
+	[[nodiscard]] virtual bool TurnReady(uint32_t turn) const = 0;
+	/// True in a network game
+	[[nodiscard]] virtual bool HasSource() const = 0;
 };
 
 } // namespace openblack::ecs::systems

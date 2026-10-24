@@ -29,7 +29,8 @@
 /// - Commands (client to server): sequence (u16), turn (u32), count (u8), then the commands.
 /// - Turn (server to clients): turn (u32), block count (u16), then each block: sender (u8), sequence (u16), count (u8),
 ///   then the commands.
-/// - Checksum (client to server): turn (u32), checksum (u64).
+/// - Checksum (both ways): turn (u32), checksum (u64). The server sends its checksum of each turn, and each client sends
+///   its own.
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
@@ -38,7 +39,7 @@ namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 4;
+inline constexpr uint8_t k_Version = 5;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -72,6 +73,7 @@ enum class CommandTag : uint8_t
 	HandApply = 14,
 	TotemShare = 15,
 	CreatureBruise = 16,
+	PlayerLeft = 17,
 };
 
 /// The sizes of the parts of the frames, in bytes
