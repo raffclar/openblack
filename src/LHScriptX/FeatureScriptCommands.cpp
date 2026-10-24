@@ -50,6 +50,7 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Stream.h"
@@ -76,6 +77,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
@@ -385,8 +387,15 @@ void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, glm::to_string(position));
+	// The town with the number gets its gathering place at the map position of the text
+	const auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<Town>(town).congregationPos =
+	    ecs::town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(position.x, position.z));
 }
 
 void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
@@ -874,10 +883,19 @@ void FeatureScriptCommands::CreateNewBigForest(glm::vec3 position, BigForestInfo
 	BigForestArchetype::Create(position, type, unknown, rotation, scale);
 }
 
-void FeatureScriptCommands::CreateInfluenceRing([[maybe_unused]] glm::vec3 position, int32_t, float, int32_t)
+void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A ring of influence that stays at the place, for the player of the number, as a script makes one. A last value
+	// other than 0 makes it an anti-influence: the player then has no influence at all within it.
+	if (player < 0 || player >= static_cast<int32_t>(PlayerNames::_COUNT))
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto ring = registry.Create();
+	registry.Assign<Transform>(ring, position, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<InfluenceSource>(ring, static_cast<PlayerNames>(player), radius, anti != 0, entt::null);
+	LastObject() = ring;
 }
 
 void FeatureScriptCommands::CreateWeatherClimate(int32_t index, int32_t type, glm::vec3 position, float radius1, float radius2)

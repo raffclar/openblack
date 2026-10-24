@@ -52,6 +52,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/OnlineMapLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Simulation/CommandLog.h"
@@ -186,6 +187,10 @@ bool ServerWorld::Initialize()
 	{
 		// With no land asked for, a new game starts on the land that the map script names
 		_startMap = *land;
+	}
+	else if (online_map_land::IsOnlineMap(_startMap.generic_string()))
+	{
+		// A land of a network game is in the game's folder, such as "Online Maps/mpm_2p_1.map"
 	}
 	else
 	{
