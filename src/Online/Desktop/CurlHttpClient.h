@@ -10,6 +10,8 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -24,7 +26,8 @@ namespace openblack::online
 class CurlHttpClient final: public HttpClientInterface
 {
 public:
-	CurlHttpClient();
+	/// A file of more certificate authorities is for the tests on this computer only (see tls_settings::Apply)
+	explicit CurlHttpClient(std::optional<std::string> extraAuthorities = std::nullopt);
 	~CurlHttpClient() override;
 	CurlHttpClient(const CurlHttpClient&) = delete;
 	CurlHttpClient& operator=(const CurlHttpClient&) = delete;
@@ -35,6 +38,7 @@ public:
 	void Cancel(HttpRequestId id) override;
 	void Poll() override;
 	[[nodiscard]] size_t Pending() const override;
+	[[nodiscard]] std::optional<uint64_t> SentBytes(HttpRequestId id) const override;
 
 private:
 	struct Transfer;
@@ -42,6 +46,7 @@ private:
 
 	void Finish(Transfer& transfer, HttpResponse&& response);
 
+	std::optional<std::string> _extraAuthorities;
 	std::unique_ptr<Multi> _multi;
 	std::vector<std::unique_ptr<Transfer>> _transfers;
 	HttpRequestId _nextId {1};

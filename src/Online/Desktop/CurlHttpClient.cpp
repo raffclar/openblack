@@ -134,7 +134,8 @@ struct CurlHttpClient::Transfer
 	}
 };
 
-CurlHttpClient::CurlHttpClient()
+CurlHttpClient::CurlHttpClient(std::optional<std::string> extraAuthorities)
+    : _extraAuthorities(std::move(extraAuthorities))
 {
 	tls_settings::StartLibrary();
 	_multi = std::make_unique<Multi>();
@@ -182,7 +183,7 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 	curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
 	// The TLS rules: TLS 1.2 at the oldest, AEAD cipher suites only, and a check of the certificate and the host name
-	tls_settings::Apply(easy);
+	tls_settings::Apply(easy, _extraAuthorities.has_value() ? _extraAuthorities->c_str() : nullptr);
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);
@@ -310,6 +311,21 @@ void CurlHttpClient::Poll()
 size_t CurlHttpClient::Pending() const
 {
 	return _transfers.size();
+}
+
+std::optional<uint64_t> CurlHttpClient::SentBytes(HttpRequestId id) const
+{
+	const auto found = std::ranges::find_if(_transfers, [id](const auto& transfer) { return transfer->id == id; });
+	if (found == _transfers.end() || !(*found)->easy)
+	{
+		return std::nullopt;
+	}
+	curl_off_t sent = 0;
+	if (curl_easy_getinfo((*found)->easy.get(), CURLINFO_SIZE_UPLOAD_T, &sent) != CURLE_OK || sent < 0)
+	{
+		return std::nullopt;
+	}
+	return static_cast<uint64_t>(sent);
 }
 
 void CurlHttpClient::Finish(Transfer& transfer, HttpResponse&& response)

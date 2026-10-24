@@ -678,7 +678,7 @@ TEST_F(LobbyClientTest, CreatureUploadSendsTheThreeFiles)
 	ASSERT_TRUE(type.has_value());
 	EXPECT_TRUE(type->starts_with("multipart/form-data; boundary=openblack-"));
 	const auto body = _http.NextBody();
-	EXPECT_NE(body.find(R"(name="creature"; filename="creature.lhp")"), std::string::npos);
+	EXPECT_NE(body.find(R"(name="lhp"; filename="creature.lhp")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="mind"; filename="_A_b_c.chl")"), std::string::npos);
 	EXPECT_NE(body.find(R"(name="physique"; filename="_A_b_c.phy")"), std::string::npos);
 	_http.Answer(201, R"({"url":"https://bw.example/creatures/abc"})");
