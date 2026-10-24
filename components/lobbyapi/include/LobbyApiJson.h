@@ -31,6 +31,7 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const ClanCreatureReply& reply);
 [[nodiscard]] std::string ToJson(const ChatLineRequest& request);
 [[nodiscard]] std::string ToJson(const UseClanRequest& request);
+[[nodiscard]] std::string ToJson(const ServerStatus& status);
 /// The frame that asks for the events of a channel, or stops them
 [[nodiscard]] std::string SubscribeFrame(bool subscribe, std::string_view channel);
 /// The frame that a client sends after it opens the channel again: the epoch and the number of the last event that it

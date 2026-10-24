@@ -8,6 +8,11 @@ the game sent them over the network. Each turn of the server must have the same 
     python tools/sim/server_check.py --turns 100
     python tools/sim/server_check.py --turns 100 --config RelWithDebInfo --out E:/runs/server
     python tools/sim/server_check.py --turns 150 --frame-ms 20 --input tools/sim/hand_inputs/land1.json
+    python tools/sim/server_check.py --turns 2000 --testbed --server-fast --wsl-server /root/ob/bin/openblack-server
+
+With --wsl-server, the server is a Linux build that runs in WSL (wsl -d DISTRO): the script gives it the paths of the
+game data, the log and the commands as WSL paths (/mnt/<drive>/...). So the Linux server and the Windows game play the
+same turns, and each turn's checksum must be the same.
 
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
@@ -43,18 +48,32 @@ def default_bin(config):
     return os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()), "bin", config)
 
 
-def run(command, cwd, limit=RUN_LIMIT_SECONDS):
-    """Runs a program with no console window of its own, and stops it by its own process id after the limit"""
+def run(command, cwd, limit=RUN_LIMIT_SECONDS, output=None):
+    """Runs a program with no console window of its own, and stops it by its own process id after the limit. With an
+    output path, the program's standard output and error go to that file."""
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               creationflags=flags)
+    sink = open(output, "wb") if output else subprocess.DEVNULL
     try:
-        return process.wait(timeout=limit)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-        raise RuntimeError(f"{command[0]} (pid {process.pid}) did not finish in {limit} s")
+        process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=sink,
+                                   stderr=subprocess.STDOUT if output else subprocess.DEVNULL, creationflags=flags)
+        try:
+            return process.wait(timeout=limit)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise RuntimeError(f"{command[0]} (pid {process.pid}) did not finish in {limit} s")
+    finally:
+        if output:
+            sink.close()
+
+
+def wsl_path(path):
+    """The path of a Windows file as WSL sees it: C:/a/b is /mnt/c/a/b"""
+    path = os.path.abspath(path).replace("\\", "/")
+    if len(path) > 1 and path[1] == ":":
+        return f"/mnt/{path[0].lower()}{path[2:]}"
+    return path
 
 
 def server_checksums(log):
@@ -146,6 +165,8 @@ def main():
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
+    parser.add_argument("--wsl-server", help="the Linux openblack-server in WSL, such as /root/ob/bin/openblack-server")
+    parser.add_argument("--wsl-distro", default="Ubuntu", help="with --wsl-server, the WSL distribution")
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
@@ -192,17 +213,22 @@ def main():
     if os.path.exists(commands):
         os.remove(commands)
 
+    # A Linux server in WSL takes WSL paths
+    local = wsl_path if options.wsl_server else (lambda path: path)
     server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "-l", server_log]
+                      "-l", local(server_log)]
+    if options.wsl_server:
+        server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
+                          local(options.game_path)] + server_command[3:]
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
-        server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
+        server_command += ["--record", local(os.path.join(server_dir, "record.jsonl"))]
     if options.hash_fields:
         server_command.append("--record-fields")
     if relay:
-        server_command += ["--commands", commands]
+        server_command += ["--commands", local(commands)]
 
     # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more. The server's
     # world is a network game, so the game plays as one too
@@ -226,7 +252,9 @@ def main():
 
     def play_server():
         started = time.monotonic()
-        code = run(server_command, server_dir)
+        # The output of wsl.exe goes to a file, which tells why a Linux server did not start
+        code = run(server_command, server_dir,
+                   output=os.path.join(server_dir, "wsl-output.txt") if options.wsl_server else None)
         if code != 0:
             print(f"the server ended with exit code {code}; see {server_log}")
         return code, time.monotonic() - started

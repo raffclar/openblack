@@ -175,6 +175,38 @@ struct ServerEntry
 	int64_t updated {0};
 };
 
+/// A god or an observer in the status report of a game server
+struct ServerStatusPlayer
+{
+	/// "account": the account id from the player's ticket
+	int64_t account {0};
+	/// "role": "god" or "observer"
+	std::string role;
+	/// "clan": the clan that the god plays for, or null
+	std::optional<int64_t> clan;
+};
+
+/// PUT /api/v1/servers/{id}/status: the report of a game server every 5 seconds, over mutual TLS
+struct ServerStatus
+{
+	/// "hostname": the name of the room
+	std::string hostname;
+	/// "land"
+	std::string land;
+	/// "gamemode": "openstaging" (in the room before the game), "closedplaying" or "exiting"
+	std::string gamemode;
+	/// "locked"
+	bool locked {false};
+	/// "password": the room needs a password
+	bool password {false};
+	/// "maxplayers": 1 to 32 gods
+	int32_t maxplayers {1};
+	/// "gamever": the version of the game server, 16 characters at most
+	std::string gamever;
+	/// "players"
+	std::vector<ServerStatusPlayer> players;
+};
+
 /// GET /api/v1/servers: {"servers": [...]}
 struct ServerList
 {
