@@ -40,13 +40,18 @@ public:
 	NetworkGameSystem& operator=(NetworkGameSystem&&) = delete;
 
 	bool Join(NetworkJoin join) override;
+	void SetReady(bool ready) override;
 	void Leave() override;
+	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override;
+	void BeginPlay() override;
 	void Update() override;
 	[[nodiscard]] bool InGame() const override;
 	[[nodiscard]] const online::NetworkSession* Session() const override { return _session.get(); }
 
 private:
 	void Detach();
+	/// The world does the turns of the session
+	void Attach();
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
@@ -54,6 +59,9 @@ private:
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;
 	bool _started {false};
+	/// The join came from the front end: the game loads the land after the start
+	bool _awaitingLand {false};
+	std::optional<game_socket::Start> _pendingStart;
 	bool _endLogged {false};
 };
 

@@ -128,7 +128,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Join)
 	{
 		Join join;
-		if (!ReadString(object, "ticket", join.ticket, false) || !ReadString(object, "game_password", join.gamePassword, false))
+		if (!ReadString(object, "ticket", join.ticket, false) ||
+		    !ReadString(object, "game_password", join.gamePassword, false) || !ReadString(object, "name", join.name, false))
 		{
 			return std::nullopt;
 		}
@@ -205,7 +206,8 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		uint64_t seed = 0;
 		uint64_t turn = 0;
 		if (!ReadString(object, "land", start.land, false) || !ReadBool(object, "testbed", start.testbed, false) ||
-		    !ReadUnsigned(object, "seed", k_MostTurn, seed) || !ReadUnsigned(object, "turn", k_MostTurn, turn, false))
+		    !ReadUnsigned(object, "seed", k_MostTurn, seed) || !ReadUnsigned(object, "turn", k_MostTurn, turn, false) ||
+		    !ReadString(object, "opening", start.opening, false))
 		{
 			return std::nullopt;
 		}
@@ -277,6 +279,10 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["game_password"] = value.gamePassword;
 			    }
+			    if (!value.name.empty())
+			    {
+				    object["name"] = value.name;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resume>)
 		    {
@@ -310,6 +316,10 @@ std::string ToJson(const Frame& frame)
 			                   {"testbed", value.testbed},
 			                   {"seed", value.seed},
 			                   {"turn", value.turn}};
+			    if (!value.opening.empty())
+			    {
+				    object["opening"] = value.opening;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resumed>)
 		    {

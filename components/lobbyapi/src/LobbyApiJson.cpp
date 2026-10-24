@@ -423,7 +423,8 @@ std::optional<Session> ParseSession(std::string_view text)
 		}
 		return ReadString(object, "access_token", out.accessToken) && !out.accessToken.empty() &&
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
-		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false);
+		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
+		       ReadBool(object, "email_required", out.emailRequired, false);
 	});
 }
 
@@ -449,7 +450,7 @@ std::optional<JoinTicket> ParseJoinTicket(std::string_view text)
 {
 	return ParseWith<JoinTicket>(text, [](const Json& object, JoinTicket& out) {
 		return ReadString(object, "url", out.url) && ReadString(object, "ticket", out.ticket) && !out.ticket.empty() &&
-		       ReadTime(object, "expires", out.expires);
+		       ReadTime(object, "expires", out.expires) && ReadString(object, "role", out.role, false);
 	});
 }
 
@@ -509,6 +510,13 @@ std::string ToJson(const UseClanRequest& request)
 {
 	auto object = Json::object();
 	object["clan"] = request.clan.has_value() ? Json(*request.clan) : Json(nullptr);
+	return Dump(object);
+}
+
+std::string ToJson(const TicketRequest& request)
+{
+	auto object = Json::object();
+	object["role"] = request.role;
 	return Dump(object);
 }
 

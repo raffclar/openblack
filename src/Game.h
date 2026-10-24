@@ -99,6 +99,10 @@ namespace online
 {
 class LanDiscoveryInterface;
 }
+namespace game_socket
+{
+struct Start;
+}
 namespace command_log
 {
 class Writer;
@@ -162,6 +166,7 @@ struct Arguments
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
+	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
 	bool dynamicTreeShadows {false};
@@ -735,8 +740,14 @@ private:
 	void HandleInterfaceAction();
 	/// The main menu's tattoo editor: its button shows while it may, and the creature it shows is posed each frame
 	void UpdateTattooMenu(float milliseconds);
-	/// The multiplayer front end ends when the player leaves its first box, or when the temple closes
+	/// The multiplayer front end ends when the player leaves its first box, or when the temple closes. When the game
+	/// server starts the game that the player joined, the front end closes and the server's land loads.
 	void UpdateMultiplayerFrontEnd();
+	/// Loads the land of a network game's start with the server's seed, as the game server loaded it
+	bool StartNetworkLand(const game_socket::Start& start);
+	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
+	/// creature
+	std::optional<bool> _startQuestionAfterFrontEnd;
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.

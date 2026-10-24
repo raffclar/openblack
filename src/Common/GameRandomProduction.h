@@ -34,6 +34,13 @@ public:
 	[[nodiscard]] uint64_t GetSyncedDraws() const override { return _syncedDraws; }
 	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
 	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
+	void Restart() override
+	{
+		_seeds = {};
+		_particleStream = ParticleRandomStream::None;
+		_crtSeed = 1;
+		_syncedDraws = 0;
+	}
 
 	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return _particleStream; }
 	void SetParticleStream(ParticleRandomStream stream) override { _particleStream = stream; }

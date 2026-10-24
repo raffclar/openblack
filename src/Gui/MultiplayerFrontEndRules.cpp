@@ -147,6 +147,7 @@ MessageButtons ButtonsOf(Message message) noexcept
 	switch (message)
 	{
 	case Message::NotRegistered:
+	case Message::EmailRequired:
 		return MessageButtons::YesNo;
 	case Message::WaitingForStart:
 		return MessageButtons::Cancel;
@@ -155,6 +156,25 @@ MessageButtons ButtonsOf(Message message) noexcept
 	default:
 		return MessageButtons::Ok;
 	}
+}
+
+Message TicketFailureMessage(ecs::systems::LobbyErrorKind /*error*/, std::string_view code) noexcept
+{
+	if (code == lobby_api::problems::k_EmailRequired)
+	{
+		return Message::EmailRequired;
+	}
+	return Message::ConnectionFailed;
+}
+
+Message JoinFailureMessage(std::string_view refusal, LobbyKind kind) noexcept
+{
+	// The server's word for an account that is in its room already
+	if (refusal == "already")
+	{
+		return Message::AlreadyInRoom;
+	}
+	return kind == LobbyKind::Lan ? Message::CouldNotConnect : Message::ConnectionFailed;
 }
 
 LoginProblem CheckLogin(std::u16string_view name, std::u16string_view password)

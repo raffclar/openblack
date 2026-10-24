@@ -370,11 +370,12 @@ QueryResult Inspector::Writes(const QueryOptions& options) const
 
 void Inspector::Remember(const Request& request, const QueryResult& answer) const
 {
+	const auto logged = ForTheLog(request);
 	if (_writeLog)
 	{
-		_writeLog(request, answer);
+		_writeLog(logged, answer);
 	}
-	Json write = {{"query", request.query}, {"params", request.params}, {"ok", answer.Ok()}};
+	Json write = {{"query", logged.query}, {"params", logged.params}, {"ok", answer.Ok()}};
 	if (!answer.Ok())
 	{
 		write["error"] = answer.error;

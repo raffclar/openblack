@@ -79,14 +79,20 @@ enum class Message : uint8_t
 	NotRegistered,
 	/// "Invalid details. Please try again.", with OK
 	InvalidDetails,
-	/// "Connection Failed.", with OK: the lobby did not give the list of the games
+	/// "Connection Failed.", with OK: the lobby did not give the list of the games, or a join of a game on the internet
+	/// failed
 	ConnectionFailed,
-	/// "Could not connect to remote machine.", with OK: the join of a game server failed
+	/// "Could not connect to remote machine.", with OK: the join of a game on the local network failed
 	CouldNotConnect,
+	/// "A person with this registration name was already in the game.", with OK: the server has the account in its room
+	AlreadyInRoom,
+	/// The account has no email address. The box has the text of NotRegistered, with Yes and No. Yes opens the account
+	/// page of the lobby's site.
+	EmailRequired,
 	/// "The channel host left the channel that you were in.", with OK: the game socket closed while the player was in
 	/// the room. OK goes back to the game list.
 	HostLeft,
-	/// The player is in the room of the game server, and the start of the game is not made yet. With Cancel.
+	/// "Waiting for start replies...", with Cancel: the player is ready, and the server waits for the other gods
 	WaitingForStart,
 };
 
@@ -124,6 +130,15 @@ enum class LoginProblem : uint8_t
 
 /// Whether the box asks the lobby about the name after a failed login
 [[nodiscard]] bool AsksAboutName(ecs::systems::LobbyErrorKind error) noexcept;
+
+/// The message when the lobby gives no ticket for a game. A full room is not here: the front end then asks for an
+/// observer's ticket. The game shows "Connection Failed." for each failure of a join on the internet.
+/// @param code The code of the lobby's problem, empty when there is none
+[[nodiscard]] Message TicketFailureMessage(ecs::systems::LobbyErrorKind error, std::string_view code) noexcept;
+
+/// The message when the join of the game server fails
+/// @param refusal The reason that the server gave in its refusal, empty when the socket closed with no refusal
+[[nodiscard]] Message JoinFailureMessage(std::string_view refusal, LobbyKind kind) noexcept;
 
 /// A value for a text with printf codes: %s takes text, %d and %u take a number
 using TextArgument = std::variant<std::u16string_view, int64_t>;

@@ -69,8 +69,9 @@ constexpr std::string_view k_UserNameText = "HELP_TEXT_MPFE_USERNAME_LABEL";
 constexpr std::string_view k_PasswordText = "HELP_TEXT_MPFE_PASSWORD_LABEL";
 constexpr std::string_view k_InternetListTitle = "HELP_TEXT_DIALOG_ADDITION_57";
 constexpr std::string_view k_LanListTitle = "HELP_TEXT_DIALOG_ADDITION_55";
-constexpr std::string_view k_InternetHelp = "HELP_TEXT_DIALOG_ADDITION_13";
-constexpr std::string_view k_LanHelp = "HELP_TEXT_DIALOG_ADDITION_12";
+/// The help of the game list. The internet's own text also tells the player to click Create Game, which does not show
+/// (each game server is a game), so both lists show the text without it.
+constexpr std::string_view k_GameListHelp = "HELP_TEXT_DIALOG_ADDITION_12";
 constexpr std::string_view k_CurrentGamesText = "HELP_TEXT_DIALOG_ADDITION_47";
 constexpr std::string_view k_PlayersInGameText = "HELP_TEXT_DIALOG_ADDITION_112";
 constexpr std::string_view k_GameNameText = "HELP_TEXT_MPFE_CS_GAME_LABEL";
@@ -127,6 +128,7 @@ std::string_view MessageTextName(Message message)
 	case Message::IncorrectPassword:
 		return "HELP_TEXT_DIALOG_ADDITION_171";
 	case Message::NotRegistered:
+	case Message::EmailRequired:
 		return "HELP_TEXT_DIALOG_YOUARENOTREGISTERED";
 	case Message::InvalidDetails:
 		return "HELP_TEXT_DIALOG_INVALIDDETAILS";
@@ -136,16 +138,15 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_DIALOG_ADDITION_41";
 	case Message::HostLeft:
 		return "HELP_TEXT_DIALOG_ADDITION_127";
+	case Message::AlreadyInRoom:
+		return "HELP_TEXT_MPFE_ERROR_ALREADY_IN_ROOM";
 	case Message::WaitingForStart:
+		return "HELP_TEXT_DIALOG_ADDITION_145";
 	case Message::None:
 		return {};
 	}
 	return {};
 }
-
-/// The start of a network game is not made yet. The game has no text for this wait, so the box shows this one until
-/// the start comes from the game server.
-constexpr std::u16string_view k_WaitingForStart = u"You are in the game. Wait for the start of the game.";
 
 bool IsReturn(int key)
 {
@@ -359,8 +360,8 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_next = &dialog.Add<BigButton>(_font, k_NextPosition, k_ArrowSize, Text(k_JoinGameText), LabelSide::Left, Look::RightArrow);
 	_next->onClick = [this] { Join(); };
 	dialog.Add<StaticText>(k_Title, Text(lan ? k_LanListTitle : k_InternetListTitle), Layout::Centre, k_Big);
-	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(lan ? k_LanHelp : k_InternetHelp),
-	                                Layout::Wrapped, k_Big);
+	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(k_GameListHelp), Layout::Wrapped,
+	                                k_Big);
 	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, k_Mid);
 	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, k_Mid, false, true, true);
 	_list->onClick = [this] {
@@ -768,7 +769,7 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	}
 	auto& shown = _message.emplace();
 	shown.message = message;
-	shown.text = message == Message::WaitingForStart ? std::u16string(k_WaitingForStart) : Text(MessageTextName(message));
+	shown.text = Text(MessageTextName(message));
 	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))

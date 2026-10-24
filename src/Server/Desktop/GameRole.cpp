@@ -167,9 +167,24 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		return "the game role needs the server's id (--server-id)";
 	}
 	parts.tickets = TicketCheck(settings.serverId, ed25519::Verify);
+	// The test authorities are only for a lobby on this computer
+	const auto testAuthorities = [&settings](std::string_view address) -> std::optional<std::filesystem::path> {
+		if (settings.lobbyTestAuthorities.has_value() && online::http_policy::IsLoopbackAddress(address))
+		{
+			return settings.lobbyTestAuthorities;
+		}
+		return std::nullopt;
+	};
+	if (settings.lobbyTestAuthorities.has_value() && !online::http_policy::IsLoopbackAddress(settings.lobbyApi) &&
+	    !online::http_policy::IsLoopbackAddress(settings.ticketKeys))
+	{
+		return "the test authorities (--lobby-test-ca) are only for a lobby on a loopback address";
+	}
 	if (IsAddress(settings.ticketKeys))
 	{
-		parts.http = std::make_unique<online::CurlHttpClient>();
+		const auto authorities = testAuthorities(settings.ticketKeys);
+		parts.http = authorities.has_value() ? std::make_unique<online::CurlHttpClient>(std::nullopt, *authorities)
+		                                     : std::make_unique<online::CurlHttpClient>();
 		parts.keysAddress = settings.ticketKeys;
 		parts.FetchKeys();
 		const auto until = std::chrono::steady_clock::now() + k_FirstKeysLimit;
@@ -219,8 +234,10 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		{
 			return "the status reports need an https:// address of the lobby and a client certificate and key";
 		}
-		parts.lobby = std::make_unique<online::CurlHttpClient>(
-		    online::ClientIdentity {.certificate = *settings.clientCertificate, .key = *settings.clientKey});
+		const online::ClientIdentity identity {.certificate = *settings.clientCertificate, .key = *settings.clientKey};
+		const auto authorities = testAuthorities(settings.lobbyApi);
+		parts.lobby = authorities.has_value() ? std::make_unique<online::CurlHttpClient>(identity, *authorities)
+		                                      : std::make_unique<online::CurlHttpClient>(identity);
 		auto base = settings.lobbyApi;
 		while (base.ends_with('/'))
 		{

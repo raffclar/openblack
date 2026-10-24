@@ -24,7 +24,7 @@ using namespace openblack::inspector;
 namespace
 {
 
-constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 9> k_KindNames {{
+constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 10> k_KindNames {{
     {InputEvent::Kind::PointerTo, "pointer"},
     {InputEvent::Kind::ButtonDown, "button_down"},
     {InputEvent::Kind::ButtonUp, "button_up"},
@@ -34,6 +34,7 @@ constexpr std::array<std::pair<InputEvent::Kind, std::string_view>, 9> k_KindNam
     {InputEvent::Kind::Action, "action"},
     {InputEvent::Kind::Gesture, "gesture"},
     {InputEvent::Kind::Release, "release"},
+    {InputEvent::Kind::Text, "text"},
 }};
 
 constexpr std::array<std::pair<InputEvent::Timing, std::string_view>, 2> k_TimingNames {{
@@ -180,6 +181,9 @@ Json openblack::inspector::ToJson(const InputEvent& event)
 		break;
 	case InputEvent::Kind::Release:
 		break;
+	case InputEvent::Kind::Text:
+		json["text"] = event.text;
+		break;
 	}
 	return json;
 }
@@ -191,7 +195,8 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 	                               [&kindName](const auto& k) { return kindName.has_value() && k.second == *kindName; });
 	if (kind == k_KindNames.end())
 	{
-		error = "an event's kind is one of pointer, button_down, button_up, key_down, key_up, wheel, action, gesture, release";
+		error = "an event's kind is one of pointer, button_down, button_up, key_down, key_up, wheel, action, gesture, "
+		        "release, text";
 		return std::nullopt;
 	}
 	InputEvent event {.kind = kind->first};
@@ -280,6 +285,14 @@ std::optional<InputEvent> openblack::inspector::InputEventFromJson(const Json& j
 		}
 		break;
 	case InputEvent::Kind::Release:
+		break;
+	case InputEvent::Kind::Text:
+		event.text = StringMember(json, "text").value_or("");
+		if (event.text.empty())
+		{
+			error = "a text event needs its letters";
+			return std::nullopt;
+		}
 		break;
 	}
 	return event;
@@ -394,6 +407,10 @@ std::vector<QueryDescription> InputProvider::Describe() const
 	          {Optional("key", "string", "The key's name, as SDL names it"),
 	           Optional("action", "string", "The action's name, from input.names; pressed for one frame"),
 	           Optional("how", "string", "For a key: press, release or tap (the default: down now, up the next frame)")}),
+	    Write("text",
+	          "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It "
+	          "presses no key. The answer does not repeat the letters",
+	          {{.name = "text", .type = "string", .description = "The letters, 1 to 256 bytes of UTF-8", .required = true}}),
 	    Write("wheel", "Turns the mouse wheel some notches, away from the player positive",
 	          {{.name = "notches", .type = "integer", .description = "Notches", .required = true}}),
 	    Write("drag",
@@ -705,6 +722,22 @@ QueryResult InputProvider::Run(std::string_view query, const QueryContext& conte
 			_timeline.Schedule(start + 1, {.kind = InputEvent::Kind::KeyUp, .key = *key});
 		}
 		return QueryResult::Value(Answer({{"key", *key}, {"how", how}}, start));
+	}
+	if (query == "text")
+	{
+		const auto text = StringMember(params, "text");
+		constexpr size_t k_MostTextBytes = 256;
+		if (!text.has_value() || text->empty() || text->size() > k_MostTextBytes)
+		{
+			return failed("text is 1 to 256 bytes of UTF-8");
+		}
+		const auto start = StartFrame();
+		if (auto why = At(start, {.kind = InputEvent::Kind::Text, .text = *text}); !why.empty())
+		{
+			return failed(why);
+		}
+		// The answer does not repeat the letters, which can be a password
+		return QueryResult::Value(Answer({{"bytes", text->size()}}, start));
 	}
 	if (query == "wheel")
 	{
