@@ -1105,6 +1105,12 @@
   "query": "land.weather"
  },
  {
+  "description": "The clouds of the storms that the frames make and draw: for each, its storm, its place in the order that its storm gathered them, where it is drawn, its size and its alpha",
+  "kind": "object",
+  "parameters": [],
+  "query": "land.storm_clouds"
+ },
+ {
   "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
   "kind": "object",
   "parameters": [],
