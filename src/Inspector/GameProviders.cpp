@@ -820,7 +820,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                               {"days_from_start", weather.GetDaysFromStart(turn)}};
 	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
-	                                    "its storm and the background weather"),
+	                                    "its storm, the place of its message and the background weather"),
 	              Serve<Locator::realWeatherSystem>(
 	                  "the real weather", [](const ecs::systems::RealWeatherSystemInterface& real, const QueryContext& /*c*/) {
 		                  Json result {{"applied", real.IsApplied()}, {"storm", real.GetStorm() != entt::null}};
@@ -832,6 +832,7 @@ std::unique_ptr<ProviderInterface> LandProvider()
 			                                            {"city", weather->city},
 			                                            {"area", weather->area},
 			                                            {"country", weather->country}};
+			                  result["place"] = real.GetPlace().value_or("");
 		                  }
 		                  else
 		                  {
