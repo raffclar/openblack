@@ -9,6 +9,11 @@
 //   --shots <count>          the number of screenshots (default 1, at the end)
 //   --shots-from <seconds>   the time of the first screenshot, after the click (default: the end)
 //   --shot-every <ms>        the time between two screenshots (default 500)
+//   --virtual-pointer-lock   give the page a pointer lock that only the page knows. Chrome on Windows confines the real
+//                            cursor of the user to the page while a page has the real lock, and a Chrome that is
+//                            stopped can leave the confinement set. Tests that run on a desktop where somebody works
+//                            must use this flag. The page and the game free the virtual lock as they free the real one
+//                            (a key sent by this script does not make Chrome free a real lock by itself either).
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
 //   --eval <expression>      at the end, print the value of this expression on the page
@@ -24,11 +29,24 @@
 //                            {"do": "wait-log", "text": "...", "seconds": 60}
 //                            The wait-log step waits until the game log of the page has the text (at most the
 //                            seconds), and then moves the times of all the next steps and the end later by the wait.
+//                            {"do": "wait-pointer", "x", "y", "within": 40, "seconds": 60}
+//                            The wait-log step has an optional "count": the number of times the text must be in the log.
+//                            {"do": "wait-frames", "count": 3, "seconds": 60}
+//                            {"do": "look-pointer", "label": "after the click"}  (writes where the game pointer is)
+//                            The wait-pointer step takes screenshots until the pointer of the game (its teal picture) has
+//                            its middle within the distance of the place, for two screenshots in a row. The wait-frames
+//                            step takes screenshots until the game has drawn the number of new pictures (the screen of
+//                            the start-up screens moves all the time). Both give the real state of the game, which
+//                            can be behind the page by seconds on a busy computer. Like wait-log, each moves the next
+//                            steps later by the wait.
+//   --run-all-steps          do not end the run before the last step is done
 //                            The synth steps send page events to the game canvas. Use them while the pointer is
 //                            locked: headless Chrome gives no movement for its own mouse events then.
 import { spawn } from 'node:child_process';
+import { createHash } from 'node:crypto';
 import { appendFileSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
+import { decodePng, findPointer } from './png.mjs';
 
 const [chromePath, url, secondsText, out, ...rest] = process.argv.slice(2);
 const option = (name, fallback) => {
@@ -118,6 +136,26 @@ await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFac
 // A headless page has no focus of its own. The pointer lock and the keyboard lock need a page with the focus.
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.bringToFront');
+if (flag('--virtual-pointer-lock')) {
+  await send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
+    let locked = null;
+    Object.defineProperty(Document.prototype, 'pointerLockElement', { configurable: true, get: () => locked });
+    Element.prototype.requestPointerLock = function requestPointerLock() {
+      const element = this;
+      return new Promise((resolve) => setTimeout(() => {
+        locked = element;
+        document.dispatchEvent(new Event('pointerlockchange'));
+        resolve();
+      }, 0));
+    };
+    Document.prototype.exitPointerLock = function exitPointerLock() {
+      if (locked) {
+        locked = null;
+        document.dispatchEvent(new Event('pointerlockchange'));
+      }
+    };
+  })();` });
+}
 await send('Page.navigate', { url });
 await sleep(1500);
 
@@ -129,9 +167,18 @@ if (preClick) {
 }
 const gameFolder = option('--game-folder');
 if (gameFolder) {
-  const { root } = await send('DOM.getDocument', { depth: 0 });
-  const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#folder-input' });
-  const result = await send('DOM.setFileInputFiles', { nodeId, files: [path.resolve(gameFolder)] });
+  // On a busy computer the page can take longer than the first wait to load. The node of the input is then not there
+  // yet, so the step asks again until the page has it.
+  let result = { error: 'the page has no folder input' };
+  for (let i = 0; i < 300 && result.error; ++i) {
+    const { root } = await send('DOM.getDocument', { depth: 0 });
+    const { nodeId } = await send('DOM.querySelector', { nodeId: root.nodeId, selector: '#folder-input' });
+    result = nodeId ? await send('DOM.setFileInputFiles', { nodeId, files: [path.resolve(gameFolder)] })
+      : { error: 'the page has no folder input' };
+    if (result.error) {
+      await sleep(200);
+    }
+  }
   console.log(`game folder given: ${JSON.stringify(result)}`);
 }
 
@@ -169,12 +216,21 @@ const mouseEvent = (type, x, y, button = 'none', buttons = 0) => {
   return send('Input.dispatchMouseEvent', { type, x, y, button, buttons, clickCount: type === 'mouseMoved' ? 0 : 1 });
 };
 const k_Buttons = { none: 0, left: 1, right: 2, middle: 4 };
+// A screenshot of a page that Chrome has not drawn for a long time can take very long. The waiting steps ask again.
+const screenshotWithin = (ms) => Promise.race([send('Page.captureScreenshot', { format: 'png' }), sleep(ms).then(() => undefined)]);
 const shot = async (name) => {
   const picture = await send('Page.captureScreenshot', { format: 'png' });
   if (picture?.data) {
     writeFileSync(path.join(out, `${name}.png`), Buffer.from(picture.data, 'base64'));
     record(`[shot] ${name}.png`);
   }
+};
+// A step that waits moves the times of the next steps, and the end of the run, later by the wait
+const shiftTimeline = (step) => {
+  const late = Math.max(0, Date.now() - (clicked + step.at * 1000));
+  clicked += late;
+  end += late;
+  next += late;
 };
 const runStep = async (step) => {
   record(`[step] ${JSON.stringify(step)}`);
@@ -230,7 +286,7 @@ const runStep = async (step) => {
   case 'wait-log': {
     const until = Date.now() + (step.seconds ?? 60) * 1000;
     const expression = `(globalThis.openblackLogText?.() ?? document.getElementById('log')?.textContent ?? '')
-      .includes(${JSON.stringify(step.text)})`;
+      .split(${JSON.stringify(step.text)}).length - 1 >= ${step.count ?? 1}`;
     let found = false;
     while (!found && Date.now() < until) {
       found = await evaluate(expression);
@@ -239,10 +295,45 @@ const runStep = async (step) => {
       }
     }
     record(`[wait-log] ${found ? 'found' : 'NOT FOUND'}: ${step.text}`);
-    const late = Math.max(0, Date.now() - (clicked + step.at * 1000));
-    clicked += late;
-    end += late;
-    next += late;
+    shiftTimeline(step);
+    break;
+  }
+  case 'wait-pointer': {
+    const until = Date.now() + (step.seconds ?? 60) * 1000;
+    const within = step.within ?? 40;
+    let last = { x: -1, y: -1, count: 0 };
+    let near = 0;
+    let looks = 0;
+    while (near < 2 && Date.now() < until) {
+      const picture = await screenshotWithin(20000);
+      ++looks;
+      last = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64'))) : last;
+      near = last.count > 0 && Math.hypot(last.x - step.x, last.y - step.y) <= within ? near + 1 : 0;
+    }
+    record(`[wait-pointer] ${near >= 2 ? 'found' : 'NOT FOUND'}: pointer at ${last.x}, ${last.y} (wanted ${step.x}, ${step.y}) after ${looks} screenshots`);
+    shiftTimeline(step);
+    break;
+  }
+  case 'look-pointer': {
+    const picture = await screenshotWithin(20000);
+    const seen = picture?.data ? findPointer(decodePng(Buffer.from(picture.data, 'base64'))) : { x: -1, y: -1 };
+    record(`[look-pointer] ${step.label ?? ''} pointer at ${seen.x}, ${seen.y}`);
+    break;
+  }
+  case 'wait-frames': {
+    const until = Date.now() + (step.seconds ?? 60) * 1000;
+    let previous = '';
+    let drawn = 0;
+    let looks = 0;
+    while (drawn < (step.count ?? 1) && Date.now() < until) {
+      const picture = await screenshotWithin(20000);
+      ++looks;
+      const hash = picture?.data ? createHash('sha1').update(picture.data).digest('hex') : '';
+      drawn += previous !== '' && hash !== '' && hash !== previous ? 1 : 0;
+      previous = hash || previous;
+    }
+    record(`[wait-frames] ${drawn >= (step.count ?? 1) ? 'found' : 'NOT FOUND'}: ${drawn} new pictures after ${looks} screenshots`);
+    shiftTimeline(step);
     break;
   }
   default:
@@ -255,7 +346,7 @@ steps.sort((a, b) => a.at - b.at);
 let taken = 0;
 let end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
-while (Date.now() < end || taken < Math.min(shots, 1)) {
+while (Date.now() < end || taken < Math.min(shots, 1) || (flag('--run-all-steps') && steps.length > 0)) {
   if (taken < shots && Date.now() >= next) {
     const picture = await send('Page.captureScreenshot', { format: 'png' });
     if (picture?.data) {
