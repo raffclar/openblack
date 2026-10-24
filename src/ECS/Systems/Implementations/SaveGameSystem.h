@@ -59,6 +59,8 @@ public:
 	void NewLand() override;
 	[[nodiscard]] bool AnyPictureWaiting() const override;
 	void CollectPictures(const Screens& screens) override;
+	void PutChallengePicture(uint32_t place, std::span<const uint8_t> picture) override;
+	[[nodiscard]] gamesave::ChallengePictureCells ChallengePictureCells(uint32_t place) override;
 	void SetShowBox(ShowBox show) override { _showBox = std::move(show); }
 	void SetReportProblem(ReportProblem report) override { _reportProblem = std::move(report); }
 	void ReportWriteProblems() override;
@@ -97,6 +99,14 @@ private:
 	void WriteTemporaryPicture(std::span<const uint8_t> screenPicture);
 	/// Copies the pictures of the temporary picture file into the picture files of the slot
 	void PutSlotPicture(uint32_t slot);
+	/// Reads the challenge picture files of the game that the player plays now into the store, the first time and when
+	/// the folder of that game changes
+	void ReadChallengePictures();
+	/// A load copies the challenge picture files of the slot into the folder of the game that the player plays now,
+	/// and into the store. Gives the names of the files that it copied.
+	std::vector<std::string> CopyChallengePicturesFrom(const std::filesystem::path& slotFolder);
+	/// After a load, each challenge record shows its picture from the files that the load copied
+	void ShowChallengePictures(const std::vector<std::string>& copied);
 
 	/// The reflection of the components, which the system registers at its first use
 	[[nodiscard]] const entt::meta_ctx& Reflection();
@@ -132,6 +142,10 @@ private:
 	mutable std::unique_ptr<ecs::save_files::BackgroundWriter> _writer;
 	std::optional<VanillaOrigin> _vanilla;
 	std::vector<WaitingPicture> _waitingPictures;
+	/// The challenge picture files of the game that the player plays now, as the writer writes them, and their folder
+	gamesave::ChallengePictureStore _challengePictures;
+	std::optional<std::filesystem::path> _challengeFolder;
+	bool _challengePicturesRead {false};
 	uint32_t _pictureRequests {0};
 	/// The turns of the last autosave, the last quick save and the last load. The turn of the last autosave starts again
 	/// with each land; the other two stay from land to land.

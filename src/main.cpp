@@ -126,6 +126,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("continue", "For developers and tools: start as a plain start does, a run of a developer too. The save on exit of the profile loads, with the menu over it, or a new game starts when there is none. A developer's or a tool's run otherwise starts a new game.")
 		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature; story when the profile has none), cow (debug: skip the creature choice, the Cow is the player's creature), normal; or ask, to be asked it as every new game is.", cxxopts::value<std::string>())
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
+		("film-surface", "Debug: the 16-bit surface that each film picture goes through: 555 (the default, as the game on the display cards of today), 565 (as on cards with no 555) or none (the full colour of the decoder).", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
@@ -392,6 +393,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.unlockedBonusCreatures = *unlocked;
 		}
 		args.playVideo = result["play-video"].as<std::string>();
+		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
 		args.logoEffect = result.count("logo-effect") != 0;

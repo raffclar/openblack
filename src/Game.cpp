@@ -574,6 +574,7 @@ Game::Game(Arguments&& args) noexcept
     : _gamePath(args.gamePath)
     , _startMap(args.startLevel)
     , _playVideo(args.playVideo)
+    , _filmSurface(args.filmSurface)
     , _preIntro(args.preIntro || args.launchSwitches.preIntroVideo)
     , _skipLogos(args.skipLogos)
     , _logoEffectAsked(args.logoEffect)
@@ -4074,6 +4075,18 @@ Game::RunStart Game::StartRun() noexcept
 
 void Game::StartPlayView()
 {
+	if (_filmSurface == "555")
+	{
+		Locator::videoSystem::value().SetFilmSurface(graphics::film_surface::Format::Rgb555);
+	}
+	else if (_filmSurface == "565")
+	{
+		Locator::videoSystem::value().SetFilmSurface(graphics::film_surface::Format::Rgb565);
+	}
+	else if (_filmSurface == "none")
+	{
+		Locator::videoSystem::value().SetFilmSurface(std::nullopt);
+	}
 	if (_playVideo == "intro")
 	{
 		Locator::videoSystem::value().Play("Data/INTRO.bik");
@@ -4225,7 +4238,8 @@ bool Game::RunFrame() noexcept
 		ecs::challenge_pictures::Collect(
 		    Locator::entitiesRegistry::value(),
 		    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
-		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
+		     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }},
+		    ecs::challenge_pictures::ProfileFiles());
 		// The pictures of the saved games whose screens are back
 		if (Locator::saveGameSystem::has_value())
 		{

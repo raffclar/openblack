@@ -224,6 +224,8 @@ TEST(LoadingScreen, SixteenBitCopy)
 	EXPECT_EQ(ToRgba8(0x7FFF, Rgb16::Rgb555), (std::array<uint8_t, 4> {255, 255, 255, 255}));
 	EXPECT_EQ(ToRgba8((16u << 10) | (1u << 5), Rgb16::Rgb555), (std::array<uint8_t, 4> {132, 8, 0, 255}));
 	EXPECT_EQ(ToRgba8(0x07E0, Rgb16::Rgb565), (std::array<uint8_t, 4> {0, 255, 0, 255}));
+	// The display card reads a level as the nearest byte: level 3 of 5 bits is 25
+	EXPECT_EQ(ToRgba8((3u << 10) | (24u << 5) | 28u, Rgb16::Rgb555), (std::array<uint8_t, 4> {25, 197, 230, 255}));
 }
 
 TEST(LoadingScreen, BlurAveragesOverlappingBlocks)

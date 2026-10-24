@@ -165,10 +165,10 @@ void LoadingScreen::MakePicture()
 	{
 		return;
 	}
-	// The blur is made from the picture as the game copies it, 5 bits a channel
+	// The game makes the blur from its 16-bit copy of the picture
 	const auto& still = *picture.still;
-	const auto sixteen = loading::ToSixteenBit(still.bgrx, still.width, still.height, loading::Rgb16::Rgb555);
-	const auto blur = loading::BlurPicture(sixteen, still.width, still.height, loading::Rgb16::Rgb555);
+	const auto sixteen = loading::ToSixteenBit(still.bgrx, still.width, still.height, graphics::film_surface::k_TodaysCards);
+	const auto blur = loading::BlurPicture(sixteen, still.width, still.height, graphics::film_surface::k_TodaysCards);
 	if (blur.texels.empty())
 	{
 		return;
@@ -176,7 +176,7 @@ void LoadingScreen::MakePicture()
 	const auto* texels = bgfx::alloc(static_cast<uint32_t>(blur.texels.size() * 4));
 	for (size_t i = 0; i < blur.texels.size(); ++i)
 	{
-		const auto rgba = loading::ToRgba8(blur.texels[i], loading::Rgb16::Rgb555);
+		const auto rgba = loading::ToRgba8(blur.texels[i], graphics::film_surface::k_TodaysCards);
 		std::ranges::copy(rgba, texels->data + (i * 4));
 	}
 	picture.blur = std::make_unique<graphics::Texture2D>("LoadingScreenBlur");
@@ -361,14 +361,15 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 		{
 			_canvas.End();
 			_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.sharpAlpha,
-			               true);
+			               graphics::film_surface::k_TodaysCards);
 			begin();
 		}
 	}
 	else if (tip.still)
 	{
 		_canvas.End();
-		_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.alpha, true);
+		_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.alpha,
+		               graphics::film_surface::k_TodaysCards);
 		begin();
 	}
 
@@ -464,5 +465,5 @@ void LoadingScreen::DrawPicture(glm::u16vec2 resolution, const graphics::VideoOv
 {
 	_canvas.Begin(resolution);
 	_canvas.End();
-	_overlay->Draw(graphics::RenderPass::Interface, resolution, planes, rect, alpha, true);
+	_overlay->Draw(graphics::RenderPass::Interface, resolution, planes, rect, alpha, graphics::film_surface::k_TodaysCards);
 }

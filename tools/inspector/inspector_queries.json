@@ -1636,7 +1636,7 @@
   "query": "view.pause_text"
  },
  {
-  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, and whether films and 16-bit colour are on",
+  "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",
   "kind": "object",
   "parameters": [],
   "query": "view.video"

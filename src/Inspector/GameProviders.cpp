@@ -2523,7 +2523,7 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              return QueryResult::Value(std::move(result));
 	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
-	                             "creature and its effects, and whether films and 16-bit colour are on"),
+	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::videoSystem::has_value())
@@ -2533,7 +2533,13 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			              result["covers_screen"] = videos.CoversScreen();
 			              result["hides_world"] = videos.HidesWorld();
 			              result["films"] = videos.AreFilmsEnabled();
-			              result["sixteen_bit_colour"] = videos.IsSixteenBitColour();
+			              const auto surface = videos.GetFilmSurface();
+			              result["sixteen_bit_colour"] = surface.has_value();
+			              result["film_surface"] = "none";
+			              if (surface)
+			              {
+				              result["film_surface"] = *surface == graphics::film_surface::Format::Rgb555 ? "555" : "565";
+			              }
 			              if (const auto status = videos.GetStatus())
 			              {
 				              result["frame"] = status->frame;
