@@ -47,9 +47,26 @@ TEST(GraphicsBackendNames, WebGpuByItsNames)
 TEST(GraphicsBackendNames, UnknownNamesAreRefused)
 {
 	EXPECT_FALSE(ParseGraphicsBackend("").has_value());
-	EXPECT_FALSE(ParseGraphicsBackend("D3D11").has_value());
+	EXPECT_FALSE(ParseGraphicsBackend("D3D10").has_value());
 	EXPECT_FALSE(ParseGraphicsBackend("Vulkan2").has_value());
-	EXPECT_FALSE(ParseGraphicsBackend("OpenGL").has_value());
+	EXPECT_FALSE(ParseGraphicsBackend("OpenGL2").has_value());
+}
+
+#if defined(_WIN32)
+TEST(GraphicsBackendNames, Direct3D11ByItsNames)
+{
+	EXPECT_EQ(ParseGraphicsBackend("Direct3D11"), GraphicsBackend::Direct3D11);
+	EXPECT_EQ(ParseGraphicsBackend("D3D11"), GraphicsBackend::Direct3D11);
+	EXPECT_EQ(ParseGraphicsBackend("dx11"), GraphicsBackend::Direct3D11);
+	EXPECT_EQ(ParseGraphicsBackend("DirectX11"), GraphicsBackend::Direct3D11);
+}
+#endif
+
+TEST(GraphicsBackendNames, OpenGlByItsNames)
+{
+	EXPECT_EQ(ParseGraphicsBackend("OpenGL"), GraphicsBackend::OpenGL);
+	EXPECT_EQ(ParseGraphicsBackend("opengl"), GraphicsBackend::OpenGL);
+	EXPECT_EQ(ParseGraphicsBackend("GL"), GraphicsBackend::OpenGL);
 }
 
 } // namespace

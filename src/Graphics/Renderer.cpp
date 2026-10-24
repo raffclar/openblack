@@ -523,6 +523,12 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 	case GraphicsBackend::WebGPU:
 		init.type = bgfx::RendererType::WebGPU;
 		break;
+	case GraphicsBackend::Direct3D11:
+		init.type = bgfx::RendererType::Direct3D11;
+		break;
+	case GraphicsBackend::OpenGL:
+		init.type = bgfx::RendererType::OpenGL;
+		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
 		return nullptr;
@@ -7986,9 +7992,22 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
 	// All the renderers of bgfx can copy and read back textures
 	constexpr bool k_CanReadBack = true;
-	// Vulkan lets go of the window's buffers while it is minimised, where the other renderers keep drawing into them
-	const bool screenDropped = bgfx::getRendererType() == bgfx::RendererType::Vulkan;
-	switch (const auto plan = PlanScreenshot(screenDropped, minimised, k_CanReadBack, size); plan.route)
+	// Vulkan releases the window's buffers while the window is minimised. OpenGL on the desktop reads the window's own
+	// pixels, which have no defined value where other windows cover the window. This often occurs in background runs.
+	// The other renderers keep the whole frame in the window's buffers.
+	auto buffers = graphics::WindowBuffers::Kept;
+	switch (bgfx::getRendererType())
+	{
+	case bgfx::RendererType::Vulkan:
+		buffers = graphics::WindowBuffers::DroppedWhenMinimised;
+		break;
+	case bgfx::RendererType::OpenGL:
+		buffers = graphics::WindowBuffers::UncoveredOnly;
+		break;
+	default:
+		break;
+	}
+	switch (const auto plan = PlanScreenshot(buffers, minimised, k_CanReadBack, size); plan.route)
 	{
 	case ScreenshotRoute::Screen:
 	{
@@ -7997,8 +8016,7 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 		break;
 	}
 	case ScreenshotRoute::Offscreen:
-		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window is minimised: drawing the frame aside for {}",
-		                   filepath.string());
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Drawing the frame aside for {}", filepath.string());
 		_offscreenShots->Begin(filepath, size);
 		break;
 	case ScreenshotRoute::Refused:
