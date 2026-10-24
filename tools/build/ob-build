@@ -719,6 +719,10 @@ do_store() {
 	mkdir -p "$OB_MASTER_STORE/$hash" && rm -rf "$tmp" && mkdir "$tmp" || die "could not make $tmp"
 	cp "$from"/openblack.exe "$from"/openblack-server.exe "$from"/*.dll "$tmp"/ || { rm -rf "$tmp"; die "could not copy $from"; }
 	cp "$from"/openblack.pdb "$from"/openblack-server.pdb "$tmp"/ 2>/dev/null
+	# The game reads its commit from version.txt; the stored game gives the stored commit (the same tree)
+	if cp "$from"/version.txt "$tmp"/ 2>/dev/null; then
+		sed -i "s/^[0-9a-f]\{40\}\(-dirty\)\{0,1\}/$(git -C "$WT" rev-parse "$hash")/" "$tmp/version.txt"
+	fi
 	printf 'commit %s\ntree %s\nfrom %s\n' "$(git -C "$WT" rev-parse "$hash")" "$tree" "$B" >"$tmp/ob-store.txt"
 	if ! mv "$tmp" "$dest" 2>/dev/null; then
 		rm -rf "$tmp"
