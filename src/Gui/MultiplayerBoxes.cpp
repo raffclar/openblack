@@ -820,7 +820,11 @@ void MultiplayerBoxes::SendChat()
 	{
 		return;
 	}
-	_frontEnd->SendChat(_chatEdit->GetText());
+	// The box first holds its prompt: a click on it clears the prompt and sends nothing, as the game's box does
+	if (_chatEdit->GetText() != Text(k_TypeChatText))
+	{
+		_frontEnd->SendChat(_chatEdit->GetText());
+	}
 	_chatEdit->SetText(std::u16string());
 	// The chat's box keeps the keyboard for the next line
 	_dialog->SetFocus(_chatEdit);
