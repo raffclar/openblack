@@ -241,6 +241,15 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
 }
 
+TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::Teleports));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::ComputerPlayers));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Reactions));
+}
+
 TEST(GameTurnOrder, TheCreaturesHelpPictureAndAlignmentArePartOfTheirOwnTurn)
 {
 	const auto recorder = PlayOneTurn();

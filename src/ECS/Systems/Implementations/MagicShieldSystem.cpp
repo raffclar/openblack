@@ -171,11 +171,12 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	auto& transform = registry.Get<Transform>(object);
 	transform.position.y = position.y + dome.pose.height;
 	transform.scale = glm::vec3(dome.pose.scale);
-	// Its sparkling trail and hum, on the dome
+	// Its sparkling trail and hum, on the dome. Its random numbers are only this computer's: the trail does not change
+	// the world.
 	if (Locator::particleSystem::has_value())
 	{
 		auto& particles = Locator::particleSystem::value();
-		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude, true);
+		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude);
 		if (dome.effect != ParticleSystemInterface::k_NoEffect)
 		{
 			particles.SetPlayer(dome.effect, static_cast<int>(miracle.caster.player));
