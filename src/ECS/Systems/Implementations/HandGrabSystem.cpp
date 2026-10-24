@@ -1823,6 +1823,7 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
 	// that it had as the hand took it.
 	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	if (const auto* grab = Grab(); grab != nullptr &&
 	                               (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
 	                               grab->tug.has_value() && Exists(grab->object))
