@@ -15,12 +15,14 @@
 #include <numbers>
 #include <optional>
 #include <span>
+#include <type_traits>
 #include <vector>
 
 #include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
+#include "FaceSearch.h"
 #include "Materials.h"
 
 namespace openblack::physics
@@ -275,6 +277,8 @@ private:
 	[[nodiscard]] std::optional<glm::vec3> AnyFaceBehind(glm::vec3 point, glm::vec3 direction) const;
 	/// The skeleton part a line meets first
 	[[nodiscard]] std::optional<RayHit> SkeletonHit(glm::vec3 point, glm::vec3 direction) const;
+	/// The faces in the world, in blocks for the search. The body makes the blocks again after its points or faces move.
+	[[nodiscard]] std::span<const face_search::FaceBlock> FaceBlocks() const;
 
 	float _scale {1.0f};
 	glm::mat3 _axes {1.0f};
@@ -301,6 +305,10 @@ private:
 	std::vector<Point> _points;
 	std::vector<Face> _faces;
 	std::vector<Ellipsoid> _bones;
+	/// A copy of the faces in the world for the search. It is not part of the body's state.
+	mutable std::vector<face_search::FaceBlock> _faceBlocks;
+	/// The points or the faces moved since the last copy
+	mutable bool _faceBlocksStale {true};
 
 public:
 	/// Gives the values that a saved game keeps to a visitor. The last body that it touched is kept apart, by its place
@@ -314,6 +322,10 @@ public:
 		      self._damping, self._friction, self._spinKeptPerStep, self._drag, self._radius, self._dynamic, self._contacts,
 		      self._restCounter, self._force, self._torque, self._inertia, self._inverseInertia, self._points, self._faces,
 		      self._bones);
+		if constexpr (!std::is_const_v<Self>)
+		{
+			self._faceBlocksStale = true;
+		}
 	}
 };
 

@@ -50,7 +50,6 @@ constexpr int k_RestCounterLoosens = 15000;
 constexpr float k_RestLoosening = 1.0f / 15000.0f;
 constexpr int k_RestCounterPerStep = 5;
 constexpr float k_MinRotationStep = 1e-5f;
-constexpr float k_FacingThreshold = -0.0001f;
 constexpr float k_AnyFaceStart = -10000.0f;
 /// The overlap test takes a face that faces the line more than this, a double
 constexpr double k_AnyFacingThreshold = -0.0001;
@@ -237,6 +236,7 @@ void Body::SetUpPose(const Pose& objectMatrix)
 	_axes = NormaliseAxes(objectMatrix.axes);
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
+	_faceBlocksStale = true;
 	for (auto& point : _points)
 	{
 		point.world = TurnedZyx(_axes, point.local) + _centre;
@@ -267,6 +267,7 @@ void Body::SetPoseDirect(const glm::mat3& axes, glm::vec3 centre)
 	_centre = centre;
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
+	_faceBlocksStale = true;
 	for (auto& point : _points)
 	{
 		point.world = _axes * point.local + _centre;
@@ -287,6 +288,7 @@ void Body::SetPoseDirect(const glm::mat3& axes, glm::vec3 centre)
 void Body::PlacePoints(glm::vec3 centre, std::span<const glm::vec3> worldPoints)
 {
 	_centre = centre;
+	_faceBlocksStale = true;
 	_turnStartAxes = _axes;
 	_turnStartCentre = _centre;
 	for (size_t i = 0; i < _points.size() && i < worldPoints.size(); ++i)
@@ -338,6 +340,7 @@ void Body::ClearForces()
 		return;
 	}
 	const auto ahead = velocity * k_LookAheadSeconds;
+	_faceBlocksStale = true;
 	for (auto& point : _points)
 	{
 		point.world = TurnedYxz(_axes, point.local) + _centre + ahead;
@@ -371,6 +374,7 @@ void Body::TouchGround(const Ground& ground)
 		{
 			// A resting skeleton's points all stand at its first part's origin
 			const auto origin = glm::vec3(_bones.front().localToWorld[3]);
+			_faceBlocksStale = true;
 			for (auto& point : _points)
 			{
 				point.world = origin;
@@ -434,34 +438,38 @@ void Body::TouchGround(const Ground& ground)
 	}
 }
 
+std::span<const face_search::FaceBlock> Body::FaceBlocks() const
+{
+	if (_faceBlocksStale)
+	{
+		_faceBlocks.resize(face_search::BlocksFor(_faces.size()));
+		// An empty place in the last block keeps a zero normal, so it never faces a line
+		if (!_faceBlocks.empty())
+		{
+			_faceBlocks.back() = {};
+		}
+		for (size_t i = 0; i < _faces.size(); ++i)
+		{
+			const auto& face = _faces[i];
+			face_search::Store(_faceBlocks, i,
+			                   {.normal = face.worldNormal,
+			                    .a = _points[face.indices[0]].world,
+			                    .b = _points[face.indices[1]].world,
+			                    .c = _points[face.indices[2]].world});
+		}
+		_faceBlocksStale = false;
+	}
+	return _faceBlocks;
+}
+
 std::optional<RayHit> Body::FaceBehind(glm::vec3 point, glm::vec3 direction) const
 {
-	std::optional<RayHit> found;
-	float best = -1.0f;
-	for (const auto& face : _faces)
+	const auto hit = face_search::NearestBehind(FaceBlocks(), point, direction);
+	if (!hit.has_value())
 	{
-		const auto& normal = face.worldNormal;
-		// The facing adds x, z, then y; the distance along the line adds z, y, then x
-		const float facing = openblack::x87::Dot<openblack::x87::SumOrder::Xzy>(normal, direction);
-		if (!(facing < k_FacingThreshold))
-		{
-			continue;
-		}
-		const auto& v0 = _points[face.indices[0]].world;
-		const float t = -openblack::x87::DotZyx(point - v0, normal) / facing;
-		if (!(t < 0.0f) || !(best < t))
-		{
-			continue;
-		}
-		const auto hit = point + t * direction;
-		if (!InsideTriangle(hit, v0, _points[face.indices[1]].world, _points[face.indices[2]].world, normal))
-		{
-			continue;
-		}
-		best = t;
-		found = RayHit {.point = hit, .normal = normal};
+		return std::nullopt;
 	}
-	return found;
+	return RayHit {.point = hit->point, .normal = _faces[hit->face].worldNormal};
 }
 
 std::optional<glm::vec3> Body::AnyFaceBehind(glm::vec3 point, glm::vec3 direction) const
