@@ -173,7 +173,13 @@ void openblack::gamesave::SmoothLargePicture(std::span<uint8_t> texels)
 
 void openblack::gamesave::PutSmallPicture(std::span<uint8_t> texels, std::span<const uint8_t> largePicture)
 {
-	const auto cell = SmallPictureCell(k_SmallPictureCell);
+	PutSmallPictureInCell(texels, largePicture, k_SmallPictureCell);
+}
+
+void openblack::gamesave::PutSmallPictureInCell(std::span<uint8_t> texels, std::span<const uint8_t> largePicture,
+                                                uint32_t smallCell)
+{
+	const auto cell = SmallPictureCell(smallCell);
 	if (texels.size() < k_PictureTexelsSize || largePicture.size() < k_ScreenPictureHeight * k_RowSize)
 	{
 		return;
@@ -293,6 +299,37 @@ std::vector<uint8_t> openblack::gamesave::DecodePicture(std::span<const uint8_t>
 				texel[0] = static_cast<uint8_t>(colour.red & 0xF8u);
 				texel[1] = static_cast<uint8_t>(colour.green & 0xF8u);
 				texel[2] = static_cast<uint8_t>(colour.blue & 0xF8u);
+			}
+		}
+	}
+	return texels;
+}
+
+std::vector<uint8_t> openblack::gamesave::DecodeBlocks(std::span<const uint8_t> blocks, uint32_t width, uint32_t height)
+{
+	const uint32_t across = width / k_PictureBlockSide;
+	const uint32_t down = height / k_PictureBlockSide;
+	const size_t rowSize = static_cast<size_t>(width) * k_TexelSize;
+	if (blocks.size() < static_cast<size_t>(across) * down * k_PictureBlockSize)
+	{
+		return {};
+	}
+	std::vector<uint8_t> texels(rowSize * height, 0);
+	for (uint32_t blockRow = 0; blockRow < down; ++blockRow)
+	{
+		for (uint32_t blockColumn = 0; blockColumn < across; ++blockColumn)
+		{
+			const auto at = ((static_cast<size_t>(blockRow) * across) + blockColumn) * k_PictureBlockSize;
+			const auto palette = Palette(ReadWord(blocks, at), ReadWord(blocks, at + 2));
+			const uint32_t indices = blocks[at + 4] | (blocks[at + 5] << 8u) | (blocks[at + 6] << 16u) |
+			                         (static_cast<uint32_t>(blocks[at + 7]) << 24u);
+			for (uint32_t i = 0; i < 16; ++i)
+			{
+				const auto& colour = palette[(indices >> (2u * i)) & 3u];
+				auto* texel = texels.data() + ((blockRow * 4 + i / 4) * rowSize) + ((blockColumn * 4 + i % 4) * k_TexelSize);
+				texel[0] = static_cast<uint8_t>(colour.red);
+				texel[1] = static_cast<uint8_t>(colour.green);
+				texel[2] = static_cast<uint8_t>(colour.blue);
 			}
 		}
 	}

@@ -33,6 +33,7 @@
 #include <utility>
 #include <vector>
 
+#include <ChallengePictureFiles.h>
 #include <CreatureRecord.h>
 #include <InstantSaves.h>
 #include <LHVM.h>
@@ -53,6 +54,7 @@
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSaveState.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
+#include "ECS/ChallengePictures.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureDance.h"
 #include "ECS/Components/CreatureFight.h"
@@ -259,6 +261,30 @@ ecs::save_files::SaveStep SlotPictureStep(std::filesystem::path pictures, uint32
 		const auto put = gamesave::PutSlotPictures(View(temporary), View(large), View(small), slot);
 		const bool largeWritten = files.WriteAll(largePath, put.large);
 		return files.WriteAll(smallPath, put.small) && largeWritten;
+	};
+}
+
+/// The folder of the game that the player plays now, in the profile folder. None without a profile folder.
+std::optional<std::filesystem::path> CurrentGameFolder()
+{
+	const auto player = PlayerFolder();
+	return player.has_value() ? ProfilePath(*player / gamesave::k_CurrentGameFolder) : std::nullopt;
+}
+
+/// A step that copies the challenge picture files of the game that the player plays now into the slot's folder. A file
+/// that is not there is not copied, and the file of the same name in the slot stays. The game does not look at the
+/// result, so the step does not count a failure.
+ecs::save_files::SaveStep ChallengePictureCopyStep(std::filesystem::path from, std::filesystem::path to)
+{
+	return [from = std::move(from), to = std::move(to)](filesystem::FileSystemInterface& files) {
+		for (const auto& name : gamesave::ChallengePictureFileNames())
+		{
+			if (const auto bytes = ReadFile(from / name); bytes.has_value() && !files.WriteAll(to / name, *bytes))
+			{
+				SPDLOG_LOGGER_WARN(Log(), "The game could not copy the challenge picture {}", (to / name).generic_string());
+			}
+		}
+		return true;
 	};
 }
 
@@ -919,11 +945,17 @@ std::shared_ptr<const std::atomic<ecs::save_files::SaveWrite>> SaveGameSystem::S
 		                   slotFolder / gamesave::VanillaScriptFileName(slot));
 	}
 
-	// The slot's pictures come from the temporary picture file, as the screen was when the game last took a picture
-	if (putPicture)
-	{
-		files.pictures = SlotPictureStep(*playerPath / gamesave::k_SavedGamesFolder / gamesave::k_PicturesFolder, slot);
-	}
+	// The challenge picture files go into the slot first. Then the slot's pictures come from the temporary picture
+	// file, as the screen was when the game last took a picture.
+	auto challengePictures = ChallengePictureCopyStep(*playerPath / gamesave::k_CurrentGameFolder, slotFolder);
+	auto slotPictures = putPicture
+	                        ? SlotPictureStep(*playerPath / gamesave::k_SavedGamesFolder / gamesave::k_PicturesFolder, slot)
+	                        : ecs::save_files::SaveStep {};
+	files.pictures = [challengePictures = std::move(challengePictures),
+	                  slotPictures = std::move(slotPictures)](filesystem::FileSystemInterface& fileSystem) {
+		std::ignore = challengePictures(fileSystem);
+		return !slotPictures || slotPictures(fileSystem);
+	};
 	const gamesave::SaveGameInfo info {.slot = slot, .date = DateNow(), .name = std::u16string(name)};
 	files.info = {.path = slotFolder / gamesave::k_InfoFileName, .bytes = gamesave::Write(info)};
 	files.world = slotFolder / gamesave::WorldFileName(slot);
@@ -1090,12 +1122,19 @@ bool SaveGameSystem::Load(uint32_t slot)
 	// The previous land's save is in the folder of the land before, the next land's in the folder of the land after
 	const auto slotFolder = *root / *player / gamesave::LoadSlotFolder(slot, land);
 	const auto mindFolder = *root / *player / gamesave::MindFolder(slot, land);
+	// Each load first copies the challenge picture files of the slot, also when the slot has no world file
+	const auto copiedPictures = CopyChallengePicturesFrom(slotFolder);
 	const auto vanillaBytes = ReadFile(slotFolder / gamesave::VanillaWorldFileName(slot));
 	const auto bytes = ReadFile(slotFolder / gamesave::WorldFileName(slot));
 	if (!bytes.has_value())
 	{
 		// A slot of the game itself: its world file in the game's layout
-		return vanillaBytes.has_value() && LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
+		const bool loaded = vanillaBytes.has_value() && LoadVanilla(slot, slotFolder, mindFolder, *vanillaBytes);
+		if (loaded)
+		{
+			ShowChallengePictures(copiedPictures);
+		}
+		return loaded;
 	}
 	const auto worldPath = slotFolder / gamesave::WorldFileName(slot);
 	const auto world = gamesave::ReadWorldFile(*bytes);
@@ -1132,6 +1171,7 @@ bool SaveGameSystem::Load(uint32_t slot)
 			StartLandAgain();
 			return false;
 		}
+		ShowChallengePictures(copiedPictures);
 		if (counts)
 		{
 			std::ignore = files.WriteAt(worldPath, gamesave::k_AttemptsOffset, gamesave::AttemptsBytes(0));
@@ -1806,4 +1846,115 @@ void SaveGameSystem::PutSlotPicture(uint32_t slot)
 	auto* files = &Locator::filesystem::value();
 	Writer().Queue((*pictures / gamesave::LargePictureFileName(slot)).generic_string(),
 	               [files, step = SlotPictureStep(*pictures, slot)]() { return step(*files); });
+}
+
+void SaveGameSystem::ReadChallengePictures()
+{
+	const auto folder = CurrentGameFolder();
+	if (_challengePicturesRead && folder == _challengeFolder)
+	{
+		return;
+	}
+	_challengePictures.Clear();
+	_challengeFolder = folder;
+	_challengePicturesRead = true;
+	if (!folder.has_value())
+	{
+		return;
+	}
+	for (const auto& name : gamesave::ChallengePictureFileNames())
+	{
+		_challengePictures.Set(name, ReadFile(*folder / name));
+	}
+}
+
+void SaveGameSystem::PutChallengePicture(uint32_t place, std::span<const uint8_t> picture)
+{
+	ReadChallengePictures();
+	// A place past the files that a save copies reads its files the first time that it uses them
+	const std::array names {gamesave::ChallengeLargePictureFileName(place), gamesave::ChallengeSmallPictureFileName(place)};
+	for (const auto& name : names)
+	{
+		if (!_challengePictures.File(name).has_value() && _challengeFolder.has_value())
+		{
+			_challengePictures.Set(name, ReadFile(*_challengeFolder / name));
+		}
+	}
+	std::ignore = _challengePictures.Put(place, picture);
+	if (!_challengeFolder.has_value() || !Locator::filesystem::has_value())
+	{
+		return;
+	}
+	// The writer makes the folder and writes the two files on its own thread, after the files before them
+	auto* files = &Locator::filesystem::value();
+	for (const auto& name : names)
+	{
+		const auto bytes = _challengePictures.File(name);
+		Writer().Queue((*_challengeFolder / name).generic_string(),
+		               [files, folder = *_challengeFolder, path = *_challengeFolder / name,
+		                bytes = std::vector<uint8_t>(bytes->begin(), bytes->end())]() {
+			               return files->MakeFolder(folder) && files->WriteAll(path, bytes);
+		               });
+	}
+}
+
+gamesave::ChallengePictureCells SaveGameSystem::ChallengePictureCells(uint32_t place)
+{
+	ReadChallengePictures();
+	return _challengePictures.Cells(place);
+}
+
+std::vector<std::string> SaveGameSystem::CopyChallengePicturesFrom(const std::filesystem::path& slotFolder)
+{
+	ReadChallengePictures();
+	std::vector<std::string> copied;
+	if (!_challengeFolder.has_value() || !Locator::filesystem::has_value())
+	{
+		return copied;
+	}
+	auto& files = Locator::filesystem::value();
+	if (!files.MakeFolder(*_challengeFolder))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The game could not make the folder {}", _challengeFolder->generic_string());
+	}
+	// A file that the slot does not have is not copied, and the file of the game that the player plays now stays
+	for (const auto& name : gamesave::ChallengePictureFileNames())
+	{
+		auto bytes = ReadFile(slotFolder / name);
+		if (!bytes.has_value())
+		{
+			continue;
+		}
+		if (!files.WriteAll(*_challengeFolder / name, *bytes))
+		{
+			SPDLOG_LOGGER_WARN(Log(), "The game could not copy the challenge picture {}",
+			                   (*_challengeFolder / name).generic_string());
+		}
+		_challengePictures.Set(name, std::move(bytes));
+		copied.push_back(name);
+	}
+	return copied;
+}
+
+void SaveGameSystem::ShowChallengePictures(const std::vector<std::string>& copied)
+{
+	if (copied.empty())
+	{
+		return;
+	}
+	// A record whose files the slot did not have keeps the picture of openblack's own save
+	const auto isCopied = [&copied](const std::string& name) { return std::ranges::find(copied, name) != copied.end(); };
+	ecs::challenge_pictures::Refresh(Locator::entitiesRegistry::value(),
+	                                 {.put = {}, .cells = [this, &isCopied](uint32_t place) {
+		                                  auto cells = _challengePictures.Cells(place);
+		                                  if (!isCopied(gamesave::ChallengeLargePictureFileName(place)))
+		                                  {
+			                                  cells.large.clear();
+		                                  }
+		                                  if (!isCopied(gamesave::ChallengeSmallPictureFileName(place)))
+		                                  {
+			                                  cells.small.clear();
+		                                  }
+		                                  return cells;
+	                                  }});
 }

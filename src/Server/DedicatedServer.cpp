@@ -336,7 +336,8 @@ bool ServerWorld::Frame()
 	// The pictures that the world asked for come back with none: the server draws nothing
 	const auto take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); };
 	const auto failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); };
-	ecs::challenge_pictures::Collect(Locator::entitiesRegistry::value(), {.take = take, .failed = failed});
+	ecs::challenge_pictures::Collect(Locator::entitiesRegistry::value(), {.take = take, .failed = failed},
+	                                 ecs::challenge_pictures::ProfileFiles());
 	if (Locator::saveGameSystem::has_value())
 	{
 		Locator::saveGameSystem::value().CollectPictures({.take = take, .failed = failed});
