@@ -101,6 +101,12 @@ public:
 	/// Steps an effect that is stepped as it is drawn, by the frame's game time, rather than each turn; false once it has
 	/// gone
 	virtual bool ProcessByFrame(EffectId /*id*/, float /*seconds*/) { return false; }
+	/// An effect that only ProcessByFrame steps, never the turn, as the draw of its thing moves it on. Its random numbers
+	/// are only this computer's.
+	virtual EffectId StartByFrame(ParticleType type, glm::vec3 origin, float magnitude)
+	{
+		return Start(type, origin, magnitude, false);
+	}
 	/// A spot visual: the info table's particle type at a point for some turns (its own life when not given, for ever
 	/// when negative), staying where it was made, and ending when its owner object (if any) goes
 	virtual EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,

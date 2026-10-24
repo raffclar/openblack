@@ -50,6 +50,25 @@ constexpr glm::vec2 k_WorshipStoneB {300.0f, 0.0f};
 void testbed_scenarios::AddTeleportScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
+	    .id = "miracles.teleport_pool_frames",
+	    .name = "A teleport pool close up, stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One teleport miracle cast by hand on open land, with the camera close and still. The pool moves on "
+	                   "in each frame that draws its stone, no more often than 60 times a second, not once a turn.",
+	    .expected = "The pool of land turns and its rim fades in and out smoothly, with no jerk ten times a second. It "
+	                "continues to move when the camera stops, also while the pool is at the edge of the screen. Its "
+	                "random numbers are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 14.0f, 12.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .miracles = {{.type = MagicType::Teleport,
+	                  .point = {0.0f, 25.0f},
+	                  .handOffset = {0.0f, 25.0f},
+	                  .handHeight = 12.0f,
+	                  .delaySeconds = 1.0f,
+	                  .byHand = true}},
+	});
+
+	all.push_back({
 	    .id = "miracles.teleport_two_points",
 	    .name = "Teleport between two points",
 	    .facet = Facet::Miracles,

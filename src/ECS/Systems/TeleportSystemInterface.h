@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <chrono>
 #include <optional>
 #include <vector>
 
@@ -20,6 +21,7 @@
 
 namespace openblack::ecs::systems
 {
+class ObjectDrawListSystemInterface;
 
 /// The teleport miracle's stones. Each cast leaves an invisible stone with a swirling pool on the land; a player's stones
 /// form a network. Villagers and creatures walking past one of them turn aside into it when jumping to another of the
@@ -77,6 +79,13 @@ public:
 	/// Once a game turn, with the players' towns: the stones of miracles that are not there go, and the travellers that
 	/// gave up are dropped. A creature is dropped when its plan has no step of the teleport left.
 	virtual void ProcessTurn() = 0;
+	/// Once a frame, after the frame makes the land's draw list: the pools of the stones that the frame draws move on.
+	/// They step no more often than 60 times a second, by the game time since the last step. A stone in the list stays
+	/// drawn when the camera stops, because its draw does not test the screen.
+	virtual void UpdateFrame(ObjectDrawListSystemInterface& /*drawList*/, std::chrono::milliseconds /*frameRealTime*/,
+	                         std::chrono::milliseconds /*frameGameTime*/, bool /*landDrawn*/)
+	{
+	}
 	/// A new land: no stones
 	virtual void Reset() = 0;
 };

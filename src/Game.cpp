@@ -3433,6 +3433,24 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 						Locator::abodeSoundSystem::value().Update(
 						    std::chrono::duration<float, std::milli>(clock.GetFrameGameTime()));
 					}
+					// The pools of the teleport stones and the swirls of the dispensers that the list draws move on, only in
+					// a frame that draws the land
+					const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+					const bool landHidden =
+					    Locator::videoSystem::has_value() &&
+					    (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
+					const bool landDrawn = !inTemple && !landHidden;
+					auto& drawList = Locator::objectDrawListSystem::value();
+					if (Locator::teleportSystem::has_value())
+					{
+						Locator::teleportSystem::value().UpdateFrame(drawList, clock.GetFrameRealTime(),
+						                                             clock.GetFrameGameTime(), landDrawn);
+					}
+					if (Locator::magicSystem::has_value())
+					{
+						Locator::magicSystem::value().UpdateDispenserFrame(drawList, clock.GetFrameRealTime(),
+						                                                   clock.GetFrameGameTime(), landDrawn);
+					}
 				}
 				updateDrawnScenery();
 				// The static of each fizzing creature slides only when the frame draws its body on the screen

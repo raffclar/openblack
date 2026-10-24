@@ -36,6 +36,20 @@ void AddDispensers(std::vector<Scenario>& all)
 	                   {.type = MagicType::LightningBolt, .offset = {0.0f, 25.0f}},
 	                   {.type = MagicType::Food, .offset = {10.0f, 25.0f}, .charged = false}},
 	});
+
+	all.push_back({
+	    .id = "miracles.dispenser_swirl_frames",
+	    .name = "A dispenser swirl close up, stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fire dispenser close up, with the camera still. Its swirl moves on in each frame that draws "
+	                   "the dispenser, no more often than 60 times a second, not once a turn.",
+	    .expected = "The stars of the disk under the dispenser creep round and outwards smoothly, with no jerk ten times a "
+	                "second. They stop when the dispenser is off the screen and the camera does not move. Their random "
+	                "numbers are only this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 9.0f, 14.0f}, .look = {0.0f, 0.0f, 25.0f}},
+	    .dispensers = {{.type = MagicType::Fireball, .offset = {0.0f, 25.0f}}},
+	});
 }
 
 /// The miracles that the challenges of the first land give as dispensers, a row of them this far apart

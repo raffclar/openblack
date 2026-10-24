@@ -21,6 +21,7 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "Common/FramePace.h"
 #include "Creature/CreatureSpells.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "Magic/AreaEffect.h"
@@ -212,6 +213,8 @@ public:
 
 	void ProcessTurn() override;
 	void Update(float seconds) override;
+	void UpdateDispenserFrame(const ObjectDrawListSystemInterface& drawList, std::chrono::milliseconds frameRealTime,
+	                          std::chrono::milliseconds frameGameTime, bool landDrawn) override;
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -414,6 +417,8 @@ private:
 	/// Where the held miracle's in-hand effect sits, in the fingers of the hand's pose, and how large the hand is drawn
 	std::optional<glm::vec3> _handEffectPoint;
 	float _handScale {1.0f};
+	/// When the swirls of the dispensers take their next step
+	frame_pace::Pace _swirlPace;
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
 	std::optional<entt::entity> _held;
