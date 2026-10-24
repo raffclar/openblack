@@ -33,7 +33,9 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // The window is 1280x1024, the default size of the game. The pointer speed of the game at this size is 0.8 of the
 // movement of the mouse (see src/Input/PointerSpeed.h).
 const k_PointerScale = 0.8;
-const k_LockAt = [640, 330];
+// The lock click is in the middle of the window: the page of the check keeps its own mouse there, and Chrome then has
+// no reason to move the locked pointer by itself while it takes screenshots
+const k_LockAt = [640, 512];
 // The OK button of the name box at 1280x1024
 const k_NameBoxOk = [290, 700];
 // Where the picture of the game pointer is when its point is on the OK button: the middle of the picture is a little
@@ -44,7 +46,7 @@ const k_Name = 'ab';
 
 const nameBoxSteps = [
   { at: 1, do: 'wait-log', text: 'asking the new player for their name', seconds: 240 },
-  { at: 5, do: 'mouse', type: 'mouseMoved', x: 600, y: 300 },
+  { at: 5, do: 'mouse', type: 'mouseMoved', x: 600, y: 480 },
   { at: 5.3, do: 'mouse', type: 'mouseMoved', x: k_LockAt[0], y: k_LockAt[1] },
   ...[...k_Name].map((key, i) => ({ at: 6 + i * 0.5, do: 'key', key, code: `Key${key.toUpperCase()}`,
     keyCode: key.toUpperCase().charCodeAt(0), hold: 150 })),
@@ -63,7 +65,10 @@ const nameBoxSteps = [
   { at: 11.5, do: 'synth-button', type: 'mousedown', button: 0 },
   // The button stays down for some frames of the game, as a click of a user does
   { at: 11.6, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 11.9, do: 'look-pointer', label: 'button down' },
   { at: 12, do: 'synth-button', type: 'mouseup', button: 0 },
+  { at: 12.2, do: 'look-pointer', label: 'button up' },
+  { at: 12.4, do: 'look-pointer', label: 'later' },
   { at: 12.5, do: 'wait-log', text: `Made the player profile "${k_Name}"`, seconds: 120 },
 ];
 
@@ -108,7 +113,7 @@ const run = (name, args, steps, seconds) => {
   const query = `renderer=${renderer}&args=${encodeURIComponent(args)}`;
   const url = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}${query}`;
   const result = spawnSync(process.execPath, [path.join(here, 'cdp-run.mjs'), chromePath, url, String(seconds), folder,
-    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--run-all-steps', '--actions', actions], { encoding: 'utf8', timeout: 600000 });
+    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--virtual-pointer-lock', '--run-all-steps', '--actions', actions], { encoding: 'utf8', timeout: 600000 });
   if (result.status !== 0) {
     console.log(`${name}: cdp-run failed (${result.status}): ${result.stdout}${result.stderr}`);
   }
@@ -157,8 +162,8 @@ check('click locks the pointer', boxEvals[0] === 'canvas', `lock element ${boxEv
 check('game follows the lock',
   box.log.includes(`The page locked the pointer: the game moves its own pointer from ${k_LockAt[0]}, ${k_LockAt[1]}`));
 // What the steps saw of the game: when it read the lock, where its pointer was, and how many frames it drew
-const waits = box.console.split(/\r?\n/).filter((line) => /\[wait-(pointer|frames)\]/.test(line))
-  .map((line) => line.replace(/^\S+ \[wait-/, '').replace('] ', ' ')).join('; ');
+const waits = box.console.split(/\r?\n/).filter((line) => /\[(wait|look)-(pointer|frames)\]/.test(line))
+  .map((line) => line.replace(/^\S+ \[/, '').replace('] ', ' ')).join('; ');
 check('keys, locked moves and a locked click answer the name box',
   box.log.includes(`Made the player profile "${k_Name}"`),
   `typed "${k_Name}", ${box.log.includes('Made the player profile') ? 'profile made' : 'no profile made'}; ${waits}`);
