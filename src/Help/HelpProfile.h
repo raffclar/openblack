@@ -40,10 +40,19 @@ constexpr uint32_t k_CastCreatureMiracle = 10;
 /// The hand holds the leash over nothing and the tooltip offers to focus on the creature
 constexpr uint32_t k_FocusCreatureTip = 47;
 /// The gestures that the help counts. All of them also count as the event for any gesture.
+/// - The R calls the last miracle again.
+/// - A gesture opens the miracle selection.
+/// - A gesture of the open selection matches a miracle, and a gesture chooses a miracle.
+/// - A scribble closes the selection.
 /// - The hand powers up the miracle that it holds.
 /// - The player calls the special move of the creature in a fight.
 /// - A scribble stops the power-up of the miracle in the hand, or drops the miracle when it has no power-up.
 /// - The hand casts a miracle that has a power-up.
+constexpr uint32_t k_GestureRepeatMiracle = 14;
+constexpr uint32_t k_GestureOpenSelection = 15;
+constexpr uint32_t k_GestureSelectionStep = 16;
+constexpr uint32_t k_GestureSelectionChosen = 17;
+constexpr uint32_t k_GestureCloseSelection = 21;
 constexpr uint32_t k_GesturePowerUp = 18;
 constexpr uint32_t k_GestureSpecialMove = 19;
 constexpr uint32_t k_GestureStopPowerUp = 20;

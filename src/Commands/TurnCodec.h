@@ -33,12 +33,12 @@
 /// - Ping and pong: id (u32), time (u64). A pong sends back the id and the time of its ping.
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
-///   angles of the start.
+///   angles of the start. A seed is its number (u8).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 6;
+inline constexpr uint8_t k_Version = 7;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -79,6 +79,8 @@ enum class CommandTag : uint8_t
 	HandClick = 21,
 	SeedGesture = 22,
 	HandPick = 23,
+	MiracleRequest = 24,
+	MiracleRepeat = 25,
 };
 
 /// The sizes of the parts of the frames, in bytes

@@ -43,6 +43,11 @@ public:
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;
+	[[nodiscard]] bool IsHandReady(PlayerNames player) const override { return HandReady(player); }
+	[[nodiscard]] std::vector<SpellSeedType> SeedsForSelection(PlayerNames player, GestureType opening) const override;
+	[[nodiscard]] bool ValidForRequest(PlayerNames player, SpellSeedType seed) const override;
+	bool RequestSeed(PlayerNames player, SpellSeedType seed) override;
+	[[nodiscard]] SpellSeedType LastSeedGained(PlayerNames player) const override;
 	[[nodiscard]] std::optional<float> ShownCharge(entt::entity icon) const override;
 
 	[[nodiscard]] std::vector<magic::WorshipIconCharge> ChargesAt(entt::entity site) const override;
@@ -90,6 +95,12 @@ private:
 	magic::spell_icons::TapResult TapSiteIcon(entt::entity icon, PlayerNames player);
 	/// An icon's charged miracle goes into its player's hand, carrying what the icon stored
 	bool GiveSeed(entt::entity icon);
+	/// The icon starts to charge its miracle for the hand of a player. A charge that is full already goes into the hand.
+	void StartCharge(entt::entity icon, PlayerNames player);
+	/// The worship sites of a player, in the order of their places round the temple
+	[[nodiscard]] std::vector<entt::entity> SitesOf(PlayerNames player) const;
+	/// Whether a gesture of a player may ask a site's icon for its miracle
+	[[nodiscard]] bool IconValidForRequest(entt::entity icon, PlayerNames player) const;
 	/// Deletes an icon and forgets it, with the seeds out from it; what it was charging and what it stored are lost
 	void Destroy(entt::entity icon);
 };

@@ -1972,6 +1972,13 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
 	_held = entity;
 	_input = {};
+	// The player's last miracle is now this one: the R gesture and the R key ask for it again
+	EntityRegistry().Each<components::Player>([player, seedType](entt::entity, components::Player& record) {
+		if (record.name == player)
+		{
+			record.lastSeedGained = seedType;
+		}
+	});
 	// A miracle that goes into the hand makes the hand start the path of its gesture again
 	if (Locator::gestureSystem::has_value())
 	{
@@ -3012,6 +3019,11 @@ void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedG
 		if (seed != nullptr &&
 		    magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) == magic::ScribbleResult::StopPowerUp)
 		{
+			// The hand shakes as it does when the scribble drops the miracle
+			if (Locator::miracleFxSystem::has_value())
+			{
+				Locator::miracleFxSystem::value().HandShaken();
+			}
 			PowerUpHeldSeed(-1);
 		}
 		else

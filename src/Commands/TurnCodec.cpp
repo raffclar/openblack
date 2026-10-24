@@ -200,6 +200,8 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(command.cue);
 		               out.Float(command.interruptsAfter);
 	               },
+	               [&out](const MiracleRequest& command) { out.Byte(static_cast<uint8_t>(command.seed)); },
+	               [](const MiracleRepeat& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -396,6 +398,19 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = reaction;
 		return DecodeError::None;
 	}
+	case CommandTag::MiracleRequest:
+	{
+		const auto seed = in.Byte();
+		if (seed > static_cast<uint8_t>(SpellSeedType::BeamExplosion))
+		{
+			return DecodeError::Value;
+		}
+		action = MiracleRequest {.seed = static_cast<SpellSeedType>(seed)};
+		return DecodeError::None;
+	}
+	case CommandTag::MiracleRepeat:
+		action = MiracleRepeat {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -499,6 +514,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandClick& /*command*/) { return CommandTag::HandClick; },
 	                      [](const SeedGesture& /*command*/) { return CommandTag::SeedGesture; },
 	                      [](const HandPick& /*command*/) { return CommandTag::HandPick; },
+	                      [](const MiracleRequest& /*command*/) { return CommandTag::MiracleRequest; },
+	                      [](const MiracleRepeat& /*command*/) { return CommandTag::MiracleRepeat; },
 	                  },
 	                  action);
 }
@@ -530,6 +547,8 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                                     [](const HandPick& /*command*/) { return k_Entity; },
+	                                     [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

@@ -17,6 +17,7 @@
 #include <vector>
 
 #include "Enums.h"
+#include "Gestures/MiracleSelection.h"
 
 /// Which gestures the hand is waiting for, and what each would do, as the game decides it once a frame. The game never
 /// recognises a gesture it isn't waiting for: a circle only sizes a storm or a shield in the hand, a scribble only does
@@ -56,6 +57,14 @@ enum class Purpose : uint8_t
 	FightMiracle,
 	/// In the leash picker on Land 1, the square wave: the hidden script starts. The picker stays open.
 	HiddenScript,
+	/// With the hand ready, a spiral or an inverse spiral: the miracle selection opens for the miracles of that gesture
+	OpenSelection,
+	/// In the open miracle selection, a gesture of the chain of a miracle
+	SelectMiracle,
+	/// In the open miracle selection, a scribble: the selection closes
+	CloseSelection,
+	/// With the hand ready, the R: the last miracle that came into the hand comes again from its icon
+	RepeatMiracle,
 };
 
 [[nodiscard]] std::string_view Name(Purpose purpose);
@@ -83,6 +92,7 @@ struct Request
 	LeashType leash {LeashType::None};
 	/// FightMiracle: the miracle, and the seed of the miracle that its hint shows
 	MagicType magic {MagicType::None};
+	/// SelectMiracle and RepeatMiracle: the miracle that the hint of the gesture shows
 	SpellSeedType seed {SpellSeedType::None};
 
 	bool operator==(const Request&) const = default;
@@ -145,6 +155,33 @@ struct HandContext
 	bool pickerOpen {false};
 	/// The land is Land 1 of the story, not a skirmish. Then the leash picker also waits for the square wave.
 	bool hiddenScriptLand {false};
+
+	/// The hand has space for a miracle: it holds nothing
+	bool handReady {false};
+	/// The miracle selection, while it is open
+	struct Selection
+	{
+		/// The gesture that opened it
+		GestureType openedWith {GestureType::None};
+		/// The gestures that it waits for
+		std::vector<SelectionWait> waiting;
+		/// It stays open after this frame. When its time runs out in a frame, it still waits for its gestures in that
+		/// frame, but the other gestures act as if it were closed.
+		bool open {true};
+	};
+	std::optional<Selection> selection;
+	/// The gestures that open the selection for the player's own miracles and for the miracles of the creature, and
+	/// the gesture that calls the last miracle again
+	GestureType ownSelectionGesture {GestureType::Spiral};
+	GestureType creatureSelectionGesture {GestureType::InverseSpiral};
+	GestureType repeatGesture {GestureType::RShape};
+	/// An icon of the player can give a miracle for the opening gesture of the player's own miracles, and of the
+	/// creature's miracles
+	bool ownSelectionOffered {false};
+	bool creatureSelectionOffered {false};
+	/// The last miracle that came into the hand, and whether an icon of the player can give it again
+	SpellSeedType lastSeed {SpellSeedType::None};
+	bool repeatOffered {false};
 
 	/// The gesture that calls a creature's special move in a fight
 	GestureType specialMoveGesture {GestureType::Star};
