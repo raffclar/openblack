@@ -27,6 +27,7 @@
 #include "Blast/DustPuff.h"
 #include "CHLApi.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AnimatedStatic.h"
 #include "ECS/Components/BoatFilm.h"
 #include "ECS/Components/Mesh.h"
@@ -333,7 +334,7 @@ void BoatLaunchSystem::PlaceParts()
 		{
 			const auto sailor = rules::LaunchSailor(i - 1, _clocks, _places.dock);
 			const glm::vec3 at {sailor.xz.x, LandHeight(sailor.xz), sailor.xz.y};
-			Place(entity, glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(-sailor.heading));
+			Place(entity, glm::translate(glm::mat4(1.0f), at) * portable_math::EulerAngleY(-sailor.heading));
 			Pose(entity, sailor.clip, sailor.clipTime);
 			continue;
 		}
@@ -413,7 +414,7 @@ void BoatLaunchSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 		    .creator = &WakeCreator(),
 		    .position = wake.position,
 		    // The sprite's turn is read from the rotation about the vertical
-		    .rotation = glm::mat3(glm::eulerAngleY(-wake.angle)),
+		    .rotation = glm::mat3(portable_math::EulerAngleY(-wake.angle)),
 		    .scale = wake.halfWidth,
 		    .stretch = wake.aspect,
 		    .alpha = static_cast<float>(wake.alpha),

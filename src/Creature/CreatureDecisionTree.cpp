@@ -17,6 +17,8 @@
 
 #include <fmt/format.h>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 using namespace openblack::creature_tree;
 
@@ -48,7 +50,7 @@ constexpr std::array k_CreatureSlots {Allegiance, Origin,         Animate, Playe
 float Log2Share(size_t count, size_t total)
 {
 	const auto share = static_cast<float>(count) / static_cast<float>(total);
-	return share > 0.0f ? -share * std::log2(share) : 0.0f;
+	return share > 0.0f ? -share * portable_math::Log2(share) : 0.0f;
 }
 
 /// Grows the node for a set of examples, with the attributes still to test, appending it and its children

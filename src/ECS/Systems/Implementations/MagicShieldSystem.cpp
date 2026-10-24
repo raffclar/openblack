@@ -30,6 +30,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -252,7 +253,7 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 		dome.alpha = shield::DomeAlpha(strength);
 	}
 	transform.position.y = LandHeight(transform.position) + dome.pose.height;
-	transform.rotation = glm::eulerAngleY(dome.pose.angle);
+	transform.rotation = portable_math::EulerAngleY(dome.pose.angle);
 	transform.scale = glm::vec3(dome.pose.scale);
 	if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
 	{

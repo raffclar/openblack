@@ -15,6 +15,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat3x3.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Construction.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
@@ -37,7 +38,7 @@ namespace
 /// The game's turn goes the other way round from the drawn one
 glm::mat3 Rotation(float yAngle)
 {
-	return glm::mat3(glm::eulerAngleY(-yAngle));
+	return glm::mat3(portable_math::EulerAngleY(-yAngle));
 }
 } // namespace
 

@@ -15,6 +15,10 @@
           "type": "FILEPATH",
           "value": "${sourceDir}/vcpkg/scripts/buildsystems/vcpkg.cmake"
         },
+        "VCPKG_OVERLAY_PORTS": {
+          "type": "PATH",
+          "value": "${sourceDir}/vcpkg-overlay-ports"
+        },
         "OPENBLACK_USE_VCPKG": true
       },
       "environment": {
@@ -87,7 +91,7 @@
         },
         "VCPKG_OVERLAY_PORTS": {
           "type": "PATH",
-          "value": "${sourceDir}/web/ports"
+          "value": "${sourceDir}/web/ports;${sourceDir}/vcpkg-overlay-ports/glm"
         },
         "OPENBLACK_USE_VCPKG": true,
         "VCPKG_TARGET_TRIPLET": "wasm32-emscripten-openblack"

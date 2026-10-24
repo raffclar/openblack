@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
+#include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/MistDome.h"
 #include "ECS/Components/Sprite.h"
@@ -294,7 +295,7 @@ void CreatureCaveEffects::ShowSmoke(const Smoke& smoke) const
 		const float alpha = particle.hidden ? 0.0f : static_cast<float>(SmokeAlpha(particle.age, smoke.rising)) / 255.0f;
 		sprite.tint = glm::vec4(smoke.colour, alpha);
 		transform.position = particle.position;
-		transform.rotation = glm::mat3(glm::rotate(particle.angle, glm::vec3(0.0f, 0.0f, 1.0f)));
+		transform.rotation = glm::mat3(portable_math::Rotate(particle.angle, glm::vec3(0.0f, 0.0f, 1.0f)));
 		transform.scale = glm::vec3(size, size, 1.0f);
 	}
 }

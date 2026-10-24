@@ -326,6 +326,7 @@
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptInterfaceLevels.h"
 #include "Serializer/FotFile.h"
+#include "Simulation/ChecksumLog.h"
 #include "Simulation/CommandLog.h"
 #include "Simulation/FrameBody.h"
 #include "Simulation/ProfileMenu.h"
@@ -2240,6 +2241,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		return played;
 	}
 	case Step::SendCommands:
+		// A tool's run that plays the commands of a file does no command of its own player
+		if (_simulation.has_value() && _simulation->playCommandsPath.has_value())
+		{
+			Locator::playerCommandSystem::value().Reset();
+			break;
+		}
 		ReportHand();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
@@ -3745,6 +3752,7 @@ bool Game::Initialize() noexcept
 			StartFightTools();
 		}
 	}
+	StartSimulationLogs();
 
 	// The logos, the first run's pre-intro and the tips screen, which stays up while the rest loads. Closing the window
 	// meanwhile ends the game at its first frame
@@ -3817,6 +3825,59 @@ void Game::StartupStep(std::string_view step)
 	if (_startupTimer.has_value())
 	{
 		_startupTimer->Step(step);
+	}
+}
+
+void Game::StartSimulationLogs()
+{
+	if (!_simulation.has_value())
+	{
+		return;
+	}
+	if (_simulation->checksumsPath.has_value())
+	{
+		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
+		if (_checksumLog->IsOpen())
+		{
+			auto& checksums = Locator::syncChecksumSystem::value();
+			checksums.SetEnabled(true);
+			checksums.SetKeepParts(_simulation->checksumParts != sim_run::HashDetail::None,
+			                       _simulation->checksumParts == sim_run::HashDetail::Fields);
+			if (_simulation->checksumDump.has_value())
+			{
+				checksums.SetDump(_simulation->checksumDump->first, _simulation->checksumDump->second);
+			}
+			checksums.SetTurnListener(
+			    [log = _checksumLog.get()](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+				    log->Write(turn.turn, turn.checksum, turn.parts);
+				    if (!turn.dump.empty())
+				    {
+					    log->WriteDump(turn.turn, turn.dump);
+				    }
+			    });
+		}
+		else
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the checksums cannot open: {}",
+			                    _simulation->checksumsPath->string());
+		}
+	}
+	if (_simulation->playCommandsPath.has_value())
+	{
+		auto turns = command_log::ReadFile(*_simulation->playCommandsPath);
+		if (!turns.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the commands does not read: {}",
+			                    _simulation->playCommandsPath->string());
+			return;
+		}
+		auto& commands = Locator::playerCommandSystem::value();
+		for (auto& [turn, turnCommands] : *turns)
+		{
+			commands.Receive(turn, std::move(turnCommands));
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Commands of {} turns to play from {}", turns->size(),
+		                   _simulation->playCommandsPath->string());
 	}
 }
 

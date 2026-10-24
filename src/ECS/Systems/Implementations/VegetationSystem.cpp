@@ -26,6 +26,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -272,7 +273,7 @@ glm::mat4 VegetationSystem::GetTreeMatrix(entt::entity tree, const glm::mat4& mo
 		{
 			return model;
 		}
-		const auto tilt = glm::rotate(glm::mat4(1.0f), k_MaxBend * bend->second.amount, axis);
+		const auto tilt = openblack::portable_math::Rotate(glm::mat4(1.0f), k_MaxBend * bend->second.amount, axis);
 		return glm::translate(glm::mat4(1.0f), position) * tilt * glm::translate(glm::mat4(1.0f), -position) * model;
 	}
 

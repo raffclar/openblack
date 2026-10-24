@@ -1,0 +1,19 @@
+diff --git a/glm/detail/func_geometric.inl b/glm/detail/func_geometric.inl
+--- a/glm/detail/func_geometric.inl
++++ b/glm/detail/func_geometric.inl
+@@ -59,13 +59,8 @@ namespace detail
+ 	{
+ 		GLM_FUNC_QUALIFIER GLM_CONSTEXPR static T call(vec<4, T, Q> const& a, vec<4, T, Q> const& b)
+ 		{
+-			// VS 17.7.4 generates longer assembly (~20 instructions vs 11 instructions)
+-			#if defined(_MSC_VER)
+-				return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+-			#else
+-				vec<4, T, Q> tmp(a * b);
+-				return (tmp.x + tmp.y) + (tmp.z + tmp.w);
+-			#endif
++			// openblack: the same order of the additions on every compiler, so that each build gives the same bits
++			return a.x * b.x + a.y * b.y + a.z * b.z + a.w * b.w;
+ 		}
+ 	};
+ 

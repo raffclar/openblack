@@ -16,6 +16,7 @@
 #include <glm/vec3.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/LivingAction.h"
@@ -89,7 +90,7 @@ entt::entity VillagerArchetype::Create([[maybe_unused]] const glm::vec3& abodePo
 		                             [&random](float limit) { return random.GameFloatRand(limit); });
 	}
 
-	registry.Assign<Transform>(entity, position, glm::eulerAngleY(glm::radians(180.0f)), glm::vec3(born.scale));
+	registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(glm::radians(180.0f)), glm::vec3(born.scale));
 	registry.Assign<Mobile>(entity);
 	const float life = info.life;
 

@@ -20,6 +20,8 @@
 #include <entt/entity/fwd.hpp>
 #include <entt/meta/fwd.hpp>
 
+#include "ECS/Reflection/WorldArchive.h"
+
 /// The synced state of the world: the part of the saved world that each computer of a game keeps the same, turn by turn.
 /// The frames draw the rest. Two computers that play the same turns at other frame rates have other values in the rest,
 /// so the hash of the synced state leaves it out.
@@ -57,7 +59,8 @@ struct Hash
 /// The hash of the synced state of a world: its entities and every saved component, without the presentation parts.
 /// With byField, the parts also keep the hash of each field.
 [[nodiscard]] Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context,
-                          std::span<const PresentationPart> presentation, bool byField = false);
+                          std::span<const PresentationPart> presentation, bool byField = false,
+                          const ecs::reflection::RowVisitor& visit = {});
 
 /// The checksum of a turn: the hash of the synced state, mixed with the synced seed and the count of synced draws
 [[nodiscard]] uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws);

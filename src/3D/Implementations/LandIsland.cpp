@@ -35,6 +35,7 @@
 #include "3D/LandData.h"
 #include "3D/LandNormal.h"
 #include "3D/MapCoords.h"
+#include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/IndexBuffer.h"
@@ -223,7 +224,7 @@ void LandIsland::Build(const LandData& data)
 	                       bgfx::copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
 
 	_proj = glm::ortho(_extentMin.x, _extentMax.x, _extentMin.y, _extentMax.y);
-	_view = glm::rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	_view = portable_math::Rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} countries", data.countries.size());
 	_countries = data.countries;

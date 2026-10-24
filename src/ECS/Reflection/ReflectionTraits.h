@@ -10,6 +10,7 @@
 #pragma once
 
 #include <cstddef>
+#include <cstdint>
 
 #include <array>
 #include <bitset>
@@ -194,6 +195,13 @@ inline constexpr bool k_IsIndirect<std::unique_ptr<Type, Deleter>> = true;
 template <typename Type>
 inline constexpr bool k_IsIndirect<std::weak_ptr<Type>> = true;
 
+/// An integer whose size follows the build and is less than 64 bits: size_t and ptrdiff_t have 64 bits on the desktop
+/// build and 32 bits on the web build. The binary archive keeps such an integer in 64 bits, as the desktop build does, so
+/// that each build writes the same bytes.
+template <typename Type>
+inline constexpr bool k_IsBuildSized =
+    (std::is_same_v<Type, std::size_t> || std::is_same_v<Type, std::ptrdiff_t>) && sizeof(Type) < sizeof(uint64_t);
+
 /// A value whose bytes in memory are the bytes that the binary archive writes for it: a number (not a bool), or a glm
 /// vector or matrix of such numbers with no padding. A list of such values goes in and out as one block of bytes.
 template <typename Type>
@@ -201,7 +209,7 @@ template <typename Type>
 {
 	if constexpr (std::is_arithmetic_v<Type>)
 	{
-		return !std::is_same_v<Type, bool>;
+		return !std::is_same_v<Type, bool> && !k_IsBuildSized<Type>;
 	}
 	else if constexpr (k_IsGlmVector<Type>)
 	{
