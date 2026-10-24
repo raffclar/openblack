@@ -73,6 +73,14 @@ std::vector<Action> EachCommand()
 	    HandPick {.object = Entity(23)},
 	    MiracleRequest {.seed = SpellSeedType::Heal},
 	    MiracleRepeat {},
+	    HandCast {.object = Entity(24),
+	              .point = {1.0f, 2.0f, 3.0f},
+	              .size = 12.5f,
+	              .handPosition = {4.0f, 5.0f, 6.0f},
+	              .cameraForward = {0.0f, -0.6f, 0.8f},
+	              .handVelocity = {-7.0f, 0.0f, 8.0f},
+	              .spin = -0.5f},
+	    HandCastUnlock {.seed = Entity(25)},
 	};
 }
 
@@ -96,7 +104,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 25)
+	switch (bits(random) % 27)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -170,6 +178,16 @@ Action RandomAction(std::mt19937& random)
 		return MiracleRequest {.seed = static_cast<SpellSeedType>(bits(random) % 30)};
 	case 23:
 		return MiracleRepeat {};
+	case 24:
+		return HandCast {.object = entity(),
+		                 .point = vector(),
+		                 .size = number(),
+		                 .handPosition = vector(),
+		                 .cameraForward = vector(),
+		                 .handVelocity = vector(),
+		                 .spin = number()};
+	case 25:
+		return HandCastUnlock {.seed = entity()};
 	default:
 	{
 		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
@@ -239,7 +257,7 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21, 15, 3, 5, 2, 1};
+	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 18, 11, 5, 21, 15, 3, 5, 2, 1, 61, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)

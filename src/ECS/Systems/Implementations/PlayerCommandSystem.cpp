@@ -26,9 +26,9 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
-#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -124,6 +124,20 @@ void Run(const Command& command)
 			    if (openblack::Locator::magicSystem::has_value())
 			    {
 				    openblack::Locator::magicSystem::value().DoSeedGesture(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCast>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCast(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCastUnlock>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCastUnlock(command.player, action.seed);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)

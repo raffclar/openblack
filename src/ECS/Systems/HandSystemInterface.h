@@ -61,6 +61,8 @@ public:
 	/// Where the world has the player's camera: from the last report that a turn did, none before the first report. The
 	/// world never reads the camera that the frames draw from.
 	[[nodiscard]] virtual std::optional<ReportedCamera> GetReportedCamera() const noexcept { return std::nullopt; }
+	/// The velocity of the player's hand in units a second, from the reports of the turns (see hand_stillness::Step)
+	[[nodiscard]] virtual glm::vec3 GetReportedHandVelocity() const noexcept { return glm::vec3(0.0f); }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
 	/// At the turn of a network game: a player reports the thing under the cursor (see player_commands::HandPick)

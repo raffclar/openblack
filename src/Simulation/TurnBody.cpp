@@ -417,6 +417,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
 		}
+		// A miracle locked on in the hand sends its cast again while the button stays down
+		if (Locator::magicSystem::has_value())
+		{
+			Locator::magicSystem::value().InterfaceTurn();
+		}
 		// In a network game the held creature looks at the hand that its player reported
 		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
 		{

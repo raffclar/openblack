@@ -159,6 +159,14 @@ uint32_t HandSystem::GetHandStillTurns() const noexcept
 	return stillness != nullptr ? stillness->stillTurns : 0;
 }
 
+glm::vec3 HandSystem::GetReportedHandVelocity() const noexcept
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto* stillness = registry.Valid(hand) ? registry.TryGet<const HandStillness>(hand) : nullptr;
+	return stillness != nullptr ? stillness->velocity : glm::vec3(0.0f);
+}
+
 std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> HandSystem::GetPlayerHands() const noexcept
 {
 	return _hands;

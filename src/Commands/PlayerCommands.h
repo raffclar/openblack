@@ -292,11 +292,41 @@ struct MiracleRepeat
 {
 };
 
+/// The cast of the miracle in the player's hand, as the hand of that player found it: on a thing, or at a point on the
+/// land. A miracle that the hand keeps locked on sends one cast at each turn that the button stays down. The turn checks
+/// again that the miracle may be cast there, then casts it with the hand as the command gives it. Thus every computer
+/// casts the same miracle at the same turn.
+struct HandCast
+{
+	/// The thing that the miracle is cast on, or none for a cast on the land
+	entt::entity object {entt::null};
+	/// The point on the land: the point under the hand, or the middle of the circle that the player drew
+	glm::vec3 point {0.0f};
+	/// The size of the miracle: the radius of the circle that the player drew, or the plain size
+	float size {0.0f};
+	/// The place of the hand at the cast
+	glm::vec3 handPosition {0.0f};
+	/// The direction that the camera looks in at the cast
+	glm::vec3 cameraForward {0.0f, 0.0f, 1.0f};
+	/// The smoothed velocity of the hand at the cast
+	glm::vec3 handVelocity {0.0f};
+	/// The spin that the movement of the hand gives the miracle
+	float spin {0.0f};
+};
+
+/// The player let go of the button that kept a miracle locked on in the hand: the miracle stops, and the seed keeps what
+/// the miracle has left
+struct HandCastUnlock
+{
+	/// The seed in the hand
+	entt::entity seed {entt::null};
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
                             FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, HandPick,
-                            MiracleRequest, MiracleRepeat>;
+                            MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock>;
 
 /// A command and the player that sent it
 struct Command
