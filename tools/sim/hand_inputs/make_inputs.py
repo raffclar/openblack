@@ -8,8 +8,8 @@ it: the game puts its camera there before the first frame of the land.
     python tools/sim/hand_inputs/make_inputs.py
 
 writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json,
-twogods_totem.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json and strokes.json beside this
-script.
+twogods_totem.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json, strokes.json and
+twogods_slot1_tree_press.json beside this script.
 strokes.json plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes).
 The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
@@ -256,6 +256,29 @@ def strokes():
     return script.events
 
 
+# The camera of twogods_slot1_tree_press.json: 25 m from a conifer of the second god's town, looking down at 20 degrees;
+# the tree's crown is at the pixel of the press (net_check.py --land Playgrounds/TwoGods.txt --input2 ... --camera2)
+TWO_GODS_SLOT1_TREE_CAMERA = {"focus": [2928.87, 88.44, 2620.91], "yaw": 0, "pitch": 20, "distance": 25}
+
+
+def two_gods_slot1_tree_press():
+    """A conifer of the second god's town: a short press on it, let go after the pull started but before the conifer
+    comes free, so that it stays leaning (in single player)"""
+    script = Script()
+    script.wait(10)
+    script.move((640, 325), 10)
+    script.wait(20)
+    # The pull starts after the hand has faded into its pull pose, and a conifer comes free a few frames later: a
+    # release 8 frames after the press lets go of it in between, leaning
+    script.press()
+    script.wait(7)
+    script.release()
+    script.wait(30)
+    script.move((600, 600), 20)
+    script.wait(20)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -277,6 +300,8 @@ def main():
     # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
     write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
     write("strokes", strokes())
+    # The second god's conifer on TwoGods (net_check.py --input2 with --camera2 TWO_GODS_SLOT1_TREE_CAMERA)
+    write("twogods_slot1_tree_press", two_gods_slot1_tree_press())
 
 
 if __name__ == "__main__":
