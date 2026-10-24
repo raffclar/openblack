@@ -290,6 +290,28 @@ void AddForests(std::vector<Scenario>& all)
 	                  .holdBeforePress = 2.0f}},
 	});
 
+	all.push_back({
+	    .id = "miracles.forest_camera_paused",
+	    .name = "Forest: a pause while the camera follows the miracle",
+	    .facet = Facet::Miracles,
+	    .description = "A forest seed summoned from the player's worship and cast by hand on grass north of the middle, "
+	                   "as in the forest seed scenario. Six seconds in, while the camera follows the miracle, the game "
+	                   "pauses, as the pause key does. Press P to continue the game.",
+	    .expected = "While the game is paused, the camera comes to rest in a moment where the miracle's path stopped "
+	                "and stays there; the trees and the seed stand still. When the game continues, the camera follows "
+	                "the rest of the path from there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 20.0f}, {20.0f, 60.0f}}},
+	    .miracles = {{.type = MagicType::Forest,
+	                  .point = {0.0f, 40.0f},
+	                  .handOffset = {0.0f, 40.0f},
+	                  .delaySeconds = 0.5f,
+	                  .byHand = true,
+	                  .fromWorship = true,
+	                  .holdBeforePress = 2.0f}},
+	    .commands = {{.kind = Command::Kind::PauseGame, .delaySeconds = 6.0f, .value = 1}},
+	});
+
 	// The forest's outermost tree on its east, and where the hand puts it down, south east of the forest
 	constexpr glm::vec2 k_EastTree {10.75f, 40.0f};
 	constexpr size_t k_Action = 3;

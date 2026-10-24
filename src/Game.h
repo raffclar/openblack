@@ -21,9 +21,11 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <ComputerSettings.h>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <spdlog/common.h>
 
 #include "3D/HandCrossFade.h"
@@ -673,6 +675,9 @@ private:
 	std::optional<entt::entity> _creatureUnderHand;
 	/// Grabbing the sea plays G_HandInWater_01 to _10 in turn
 	uint32_t _handInWaterSample {0};
+	/// Where the hand gripped the land since the last turn. The grip plays its sound at once, and the next turn makes its
+	/// puff of dust. Thus a grip while the game is paused makes its dust when the game continues.
+	std::vector<glm::vec3> _gripDust;
 
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
