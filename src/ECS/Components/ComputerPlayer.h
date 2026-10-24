@@ -10,7 +10,12 @@
 #pragma once
 
 #include <optional>
+#include <vector>
 
+#include <entt/entity/entity.hpp>
+
+#include "ECS/ComputerHand.h"
+#include "ECS/ComputerMind.h"
 #include "Enums.h"
 
 namespace openblack::ecs::components
@@ -27,6 +32,12 @@ struct ComputerPlayer
 	bool started {false};
 	/// The player that a land script named for the size of this player's creature. Any name starts the size change.
 	std::optional<PlayerNames> creatureLike;
+	/// The tree of needs that chooses what the god does. It is made at the first turn of the mind.
+	computer_mind::Mind mind;
+	/// The hand of the god and the steps of its action
+	computer_hand::HandAction hand;
+	/// The miracles that the god cast and that are still in the world, the newest first
+	std::vector<entt::entity> casts;
 };
 
 } // namespace openblack::ecs::components

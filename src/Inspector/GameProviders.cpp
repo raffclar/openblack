@@ -1779,6 +1779,41 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 				                                 {"creature_like", mind->creatureLike.has_value()
 				                                                       ? Json(static_cast<int>(*mind->creatureLike))
 				                                                       : Json(nullptr)}};
+				        // What the god wants and what its hand does: the nodes that were wanted when last looked at
+				        auto& computer = item["computer_mind"];
+				        computer["paused"] = mind->mind.paused;
+				        computer["last_empty_turn"] = mind->mind.lastEmptyTurn;
+				        computer["doing"] = mind->mind.doing;
+				        computer["hand"] = {mind->hand.hand.x, mind->hand.hand.y, mind->hand.hand.z};
+				        Json steps = Json::array();
+				        for (const auto& step : mind->hand.steps)
+				        {
+					        steps.push_back(static_cast<int>(step.kind));
+				        }
+				        computer["steps"] = std::move(steps);
+				        computer["step_part"] = mind->hand.part;
+				        Json wanted = Json::array();
+				        for (const auto& node : mind->mind.nodes)
+				        {
+					        if (node.value != 0.0f)
+					        {
+						        wanted.push_back({{"name", computer_mind::InfoOf(node.kind).name},
+						                          {"value", node.value},
+						                          {"suppression", node.suppression},
+						                          {"object", Id(node.object)}});
+					        }
+				        }
+				        computer["wanted"] = std::move(wanted);
+				        Json requests = Json::object();
+				        for (size_t type = 0; type < mind->mind.castRequested.size(); ++type)
+				        {
+					        if (mind->mind.castRequested.at(type) != 0)
+					        {
+						        requests[std::to_string(type)] = mind->mind.castRequested.at(type);
+					        }
+				        }
+				        computer["cast_requests"] = std::move(requests);
+				        computer["casts"] = mind->casts.size();
 			        }
 			        if (Locator::alignmentSystem::has_value())
 			        {

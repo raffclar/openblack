@@ -1729,3 +1729,4 @@ openblack_setup_and_add_test(
   test_challenge_picture_files test_challenge_picture_files.cpp
 )
 openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
+openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)

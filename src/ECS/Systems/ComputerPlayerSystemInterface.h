@@ -10,6 +10,7 @@
 #pragma once
 
 #include <span>
+#include <string_view>
 
 #include "Enums.h"
 
@@ -27,6 +28,16 @@ public:
 	virtual void SwitchOn(PlayerNames player, bool on) = 0;
 	/// A land script names the player whose creature gives the size of this player's creature
 	virtual void SetCreatureLike(PlayerNames player, PlayerNames like) = 0;
+	/// A land script switches the mind of the player on or off, and leaves the mark of a computer player as it is
+	virtual void SetActive(PlayerNames player, bool on) = 0;
+	/// A land script pauses the mind of the player, or lets it go on. A paused mind also holds its hand.
+	virtual void SetPaused(PlayerNames player, bool paused) = 0;
+	/// A land script sets the weight of each need of the mind that has the name
+	virtual void SetPersonality(PlayerNames player, std::string_view name, float weight) = 0;
+	/// A land script sets the suppression of each need of the mind that has the name
+	virtual void SetSuppression(PlayerNames player, std::string_view name, float suppression) = 0;
+	/// The hand of the god has no action to do
+	[[nodiscard]] virtual bool Ready(PlayerNames player) = 0;
 	/// In the turn of the players: each mind that is switched on and did not start on the land starts
 	virtual void ProcessTurn() = 0;
 	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and

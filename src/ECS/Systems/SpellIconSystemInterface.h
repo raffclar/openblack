@@ -55,6 +55,14 @@ public:
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
+	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge,
+	/// no hand may hold its seed, the god must be able to cast the miracle, and the site must have prayer power to give
+	/// or the icon some stored. Whether the charge started.
+	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
+	/// The prayer power that an icon's miracle still needs to be charged full
+	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
+	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
+	virtual void TakeCastCharge(entt::entity /*icon*/) {}
 	/// Whether a player has an icon for a seed at any of their worship sites
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
