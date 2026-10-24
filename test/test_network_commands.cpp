@@ -9,7 +9,9 @@
 
 #include <cstdint>
 
+#include <array>
 #include <map>
+#include <optional>
 #include <span>
 #include <utility>
 #include <variant>
@@ -22,6 +24,7 @@
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -58,6 +61,23 @@ public:
 
 	std::vector<Action> sent;
 	std::map<uint32_t, std::vector<Command>> turns;
+};
+
+/// The hands of the test: it keeps the players that got hands
+class FakeHands final: public ecs::systems::HandSystemInterface
+{
+public:
+	bool Initialize() noexcept override { return true; }
+	[[nodiscard]] std::array<entt::entity, 2> GetPlayerHands() const noexcept override { return {}; }
+	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetPlayerHandPositions() const noexcept override { return {}; }
+	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> /*picked*/, bool /*holdPoint*/) override {}
+	std::array<entt::entity, 2> MakeHandsOf(PlayerNames player) override
+	{
+		made.push_back(player);
+		return {};
+	}
+
+	std::vector<PlayerNames> made;
 };
 
 class NetworkCommands: public ::testing::Test
@@ -129,5 +149,28 @@ TEST_F(NetworkCommands, TheLeaveOfTheServerDefeatsTheGodOfThePlayerAtTheTurn)
 	_source.turns[5] = {{.player = PlayerNames::PLAYER_TWO, .action = PlayerLeft {}}};
 	_commands.RunSent(5);
 	EXPECT_EQ(registry.Get<ecs::components::LeftGame>(god).turn, 4u);
+	_commands.SetSource(nullptr);
+}
+
+TEST_F(NetworkCommands, TheJoinOfTheServerGivesTheGodOfThePlayerItsHandsAtTheTurn)
+{
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	_commands.SetSource(&_source);
+	_source.turns[0] = {{.player = PlayerNames::PLAYER_TWO, .action = PlayerJoined {}},
+	                    {.player = PlayerNames::PLAYER_THREE, .action = PlayerJoined {}}};
+	_commands.RunSent(0);
+	EXPECT_EQ(hands.made, (std::vector {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE}));
+	_commands.SetSource(nullptr);
+	Locator::handSystem::reset();
+}
+
+TEST_F(NetworkCommands, AComputerIsBehindWhenTheNextTurnIsThereToo)
+{
+	EXPECT_FALSE(_commands.IsBehind(3));
+	_commands.SetSource(&_source);
+	_source.turns[3] = {};
+	EXPECT_FALSE(_commands.IsBehind(3));
+	_source.turns[4] = {};
+	EXPECT_TRUE(_commands.IsBehind(3));
 	_commands.SetSource(nullptr);
 }

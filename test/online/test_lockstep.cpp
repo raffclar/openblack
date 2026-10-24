@@ -8,6 +8,7 @@
  *******************************************************************************/
 
 #include <cstdint>
+#include <cstring>
 
 #include <memory>
 #include <string>
@@ -86,12 +87,23 @@ struct Computer
 			played.push_back(commands.size());
 			session.LocalChecksum(turn + 1, world.Play(turn, commands));
 		}
+		// After a resync the server's world comes: the computer loads it and goes on from its turn
+		if (auto state = session.TakeWorld(); state.has_value())
+		{
+			ASSERT_EQ(state->bytes.size(), sizeof(uint64_t) + sizeof(uint32_t));
+			std::memcpy(&world.hash, state->bytes.data(), sizeof(uint64_t));
+			std::memcpy(&world.turns, state->bytes.data() + sizeof(uint64_t), sizeof(uint32_t));
+			world.partsAfter.reset();
+			++loads;
+			session.WorldLoaded(state->turn);
+		}
 	}
 
 	std::unique_ptr<LoopbackSockets::Client> sockets;
 	NetworkSession session;
 	FakeWorld world;
 	std::vector<size_t> played;
+	uint32_t loads {0};
 };
 
 server::TicketCheck::Result CheckFakeTicket(std::string_view token)
@@ -224,7 +236,8 @@ TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
 	{
 		commands += count;
 	}
-	EXPECT_EQ(commands, 600u / 7 + 1 + 2 * (600u / 11 + 1));
+	// The first turn gives the god of slot 1 its hands
+	EXPECT_EQ(commands, 1 + 600u / 7 + 1 + 2 * (600u / 11 + 1));
 }
 
 TEST_F(LockstepTest, TheServerRefusesBadTicketsLateJoinersAndTheCommandsOfObservers)
@@ -262,9 +275,10 @@ TEST_F(LockstepTest, AClientCannotSendTheLeaveOfTheServer)
 	Computer alice(network, now, "god:alice");
 	Frames({&alice}, 3);
 	alice.session.Send(PlayerLeft {});
+	alice.session.Send(PlayerJoined {});
 	alice.session.Send(HandTap {.object = Entity(2)});
 	Frames({&alice}, 3);
-	EXPECT_EQ(host->RefusedBlocks(), 1u);
+	EXPECT_EQ(host->RefusedBlocks(), 2u);
 	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
 }
 
@@ -295,13 +309,14 @@ TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMiss
 	EXPECT_EQ(host->Seats()[1].resumes, 1u);
 	EXPECT_GE(bob.world.turns, turnsWhileAway);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
-	// The tap that waited for the socket went to the server after the resume
+	// The tap that waited for the socket went to the server after the resume, after the hands of slot 1 in the first
+	// turn
 	size_t commands = 0;
 	for (const auto count : alice.played)
 	{
 		commands += count;
 	}
-	EXPECT_EQ(commands, 1u);
+	EXPECT_EQ(commands, 2u);
 }
 
 TEST_F(LockstepTest, TheWorldWaitsWithNoPlayersAndAGodThatDoesNotComeBackIsDefeated)
@@ -338,12 +353,13 @@ TEST_F(LockstepTest, AnAwayGodIsDefeatedAfterTheTimeToComeBack)
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
 	// Every computer did the defeat at the same turn: Alice is still in step with the server
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	// The hands of slot 1 in the first turn, and its defeat
 	size_t commands = 0;
 	for (const auto count : alice.played)
 	{
 		commands += count;
 	}
-	EXPECT_EQ(commands, 1u);
+	EXPECT_EQ(commands, 2u);
 }
 
 TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
@@ -361,4 +377,29 @@ TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 	EXPECT_EQ(alice.session.GetCompares().firstDifferent, 21u);
 	ASSERT_TRUE(host->Seats()[0].compares.firstDifferent.has_value());
 	EXPECT_EQ(*host->Seats()[0].compares.firstDifferent, 21u);
+}
+
+TEST_F(LockstepTest, AClientThatPartsLoadsTheWorldOfTheServerAndStaysInStep)
+{
+	MakeHost(1);
+	// The world state of the fake world: its hash and its turns
+	host->SetWorldState([this] {
+		std::vector<uint8_t> bytes(sizeof(uint64_t) + sizeof(uint32_t));
+		std::memcpy(bytes.data(), &serverWorld.hash, sizeof(uint64_t));
+		std::memcpy(bytes.data() + sizeof(uint64_t), &serverWorld.turns, sizeof(uint32_t));
+		return bytes;
+	});
+	Computer alice(network, now, "god:alice");
+	alice.world.partsAfter = 20;
+	Frames({&alice}, 120);
+	EXPECT_EQ(alice.loads, 1u);
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(alice.session.Resumes(), 1u);
+	EXPECT_EQ(alice.session.Resync().GetState(), online::ResyncRule::State::InStep);
+	EXPECT_FALSE(alice.session.ShowsResync());
+	// After the load every turn is the same as the server's again
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	EXPECT_EQ(alice.world.turns, serverWorld.turns);
+	EXPECT_GT(alice.session.GetCompares().same, 90u);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same + 1);
 }

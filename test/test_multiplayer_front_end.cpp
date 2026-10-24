@@ -213,6 +213,7 @@ public:
 	void Update() override { session.Update(); }
 	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override { return std::nullopt; }
 	void BeginPlay() override {}
+	void PlayAlone() override {}
 	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
 

@@ -32,6 +32,7 @@ public:
 
 	[[nodiscard]] std::optional<uint32_t> GetCrtSeed() const override { return _crtSeed; }
 	[[nodiscard]] uint64_t GetSyncedDraws() const override { return _syncedDraws; }
+	void SetSyncedDraws(uint64_t draws) override { _syncedDraws = draws; }
 	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
 	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
 	void Restart() override

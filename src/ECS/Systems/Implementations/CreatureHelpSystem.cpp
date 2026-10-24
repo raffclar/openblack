@@ -27,6 +27,7 @@
 #include "ECS/Components/CreatureNeeds.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/PlayerCamera.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -95,8 +96,8 @@ bool InView(const ecs::Registry& registry, entt::entity creature)
 	{
 		return false;
 	}
-	const auto& camera = Locator::camera::value();
-	return help::LooksAt(camera.GetOrigin(), camera.GetFocus(), transform->position);
+	const auto camera = ecs::player_camera::Of();
+	return help::LooksAt(camera.origin, camera.focus, transform->position);
 }
 
 /// Fainted or asleep: the game's plans of dying and of sleeping, which hold back the help

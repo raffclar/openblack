@@ -157,6 +157,7 @@ def main():
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
     parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
                                            "frame, so that the recorded input gets to what it sets up")
@@ -168,6 +169,7 @@ def main():
     parser.add_argument("--wsl-server", help="the Linux openblack-server in WSL, such as /root/ob/bin/openblack-server")
     parser.add_argument("--wsl-distro", default="Ubuntu", help="with --wsl-server, the WSL distribution")
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
+    parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -197,7 +199,8 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
     server_where = where
     if options.scenario:
         where = ["--scenario", options.scenario, "--scenario-hide-window"]
@@ -221,6 +224,7 @@ def main():
     if options.wsl_server:
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
+    server_command += options.server_args.split()
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:

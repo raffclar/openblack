@@ -216,8 +216,9 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 		return !seat.session.empty() && seat.session == resume.session &&
 		       (seat.state == SeatState::Taken || seat.state == SeatState::Away);
 	});
-	// The server sends again only the turns that it kept
-	const bool kept = resume.turn == _turnsDone || _history.contains(resume.turn);
+	// The server sends again only the turns that it kept, unless it sends its world
+	const bool world = resume.world && _worldState;
+	const bool kept = world || resume.turn == _turnsDone || _history.contains(resume.turn);
 	if (peer.joined || found == _seats.end() || resume.turn > _turnsDone || !kept)
 	{
 		Refuse(connection, "resume");
@@ -237,6 +238,25 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	peer.joined = true;
 	peer.role = game_socket::Role::God;
 	peer.seat = seat;
+	// A client whose world parted gets the server's world at the start of the next turn, and then the turns from there
+	if (const auto state = world ? _worldState() : std::vector<uint8_t> {}; !state.empty())
+	{
+		const auto parts = turn_codec::SplitWorld(_turnsDone, state);
+		SendTo(connection, game_socket::Resumed {.turn = _turnsDone, .world = true});
+		for (const auto& part : parts)
+		{
+			_sockets.SendBinary(connection, turn_codec::Encode(part));
+		}
+		// The checksums that the client sent for the turns of its parted world are no longer of use
+		std::erase_if(_early, [seat](const auto& early) { return early.first.first == seat; });
+		Log(spdlog::level::info, fmt::format("The player of slot {} is back from turn {} with the world of turn {} ({} bytes)",
+		                                     seat, resume.turn, _turnsDone, state.size()));
+		if (wasAway)
+		{
+			Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
+		}
+		return;
+	}
 	SendTo(connection, game_socket::Resumed {.turn = _turnsDone});
 	for (auto turn = _history.lower_bound(resume.turn); turn != _history.end(); ++turn)
 	{
@@ -278,8 +298,10 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		const auto before = block->actions.size();
-		std::erase_if(block->actions,
-		              [](const auto& action) { return std::holds_alternative<player_commands::PlayerLeft>(action); });
+		std::erase_if(block->actions, [](const auto& action) {
+			return std::holds_alternative<player_commands::PlayerLeft>(action) ||
+			       std::holds_alternative<player_commands::PlayerJoined>(action);
+		});
 		if (block->actions.size() != before)
 		{
 			++_refusedBlocks;
@@ -369,6 +391,14 @@ void LockstepHost::Update()
 			auto start = _settings.start;
 			start.turn = _turnsDone;
 			Log(spdlog::level::info, fmt::format("The network game starts with {} gods", ready));
+			// The first turn gives the gods of the other slots their hands, on every computer
+			for (size_t i = 1; i < _seats.size(); ++i)
+			{
+				if (_seats[i].state == SeatState::Taken)
+				{
+					_joining.push_back(static_cast<uint8_t>(i));
+				}
+			}
 			Broadcast(start);
 		}
 		return;
@@ -419,6 +449,12 @@ bool LockstepHost::HasTurn(uint32_t /*turn*/) const
 std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)
 {
 	turn_codec::TurnBundle bundle {.turn = turn, .blocks = {}};
+	for (const auto seat : _joining)
+	{
+		bundle.blocks.push_back(turn_codec::StampedBlock {
+		    .sender = static_cast<PlayerNames>(seat), .sequence = 0, .actions = {player_commands::PlayerJoined {}}});
+	}
+	_joining.clear();
 	for (const auto seat : _leaving)
 	{
 		bundle.blocks.push_back(turn_codec::StampedBlock {
@@ -531,11 +567,11 @@ std::vector<std::string> LockstepHost::SummaryLines() const
 		{
 			commands += fmt::format("{}{}x{}", commands.empty() ? "" : " ", count, tag);
 		}
-		lines.push_back(fmt::format("slot {} {}: commands [{}], {} checksums compared, {} the same, first different {}, {} resumes",
-		                            i, seat.name, commands, seat.compares.compared, seat.compares.same,
-		                            seat.compares.firstDifferent.has_value() ? std::to_string(*seat.compares.firstDifferent)
-		                                                                     : std::string("none"),
-		                            seat.resumes));
+		lines.push_back(fmt::format(
+		    "slot {} {}: commands [{}], {} checksums compared, {} the same, first different {}, {} resumes", i, seat.name,
+		    commands, seat.compares.compared, seat.compares.same,
+		    seat.compares.firstDifferent.has_value() ? std::to_string(*seat.compares.firstDifferent) : std::string("none"),
+		    seat.resumes));
 	}
 	return lines;
 }

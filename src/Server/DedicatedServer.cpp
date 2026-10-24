@@ -30,13 +30,16 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/UserData.h"
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
@@ -129,7 +132,8 @@ public:
 	{
 		/// The game ended
 		Stop,
-		/// The world waits: before the start, and with no god's player. No step of the world runs, not even its clock.
+		/// The world waits: before the start, and with no god's player. The clock stands still: the frames take no game
+		/// time and no turn comes.
 		Wait,
 		Play,
 	};
@@ -158,6 +162,7 @@ private:
 	/// The frame rate that the statistics of the game keep, by the clock of the machine as the game reads it
 	statistics::FrameRateMeter _frameRate;
 	uint32_t _frameCount {0};
+	bool _reloaded {false};
 	std::chrono::steady_clock::time_point _frameStart;
 	/// The testbed scenario that the server plays, as the game's window of scenarios plays it
 	const testbed_scenarios::Scenario* _scenario {nullptr};
@@ -285,7 +290,14 @@ bool ServerWorld::StartLand()
 	}
 	// The land starts from the state that every client of the network game starts it from
 	simulation::PrepareNetworkLand(_settings.seed);
-	if (_settings.testbed)
+	if (_settings.godsRingMap)
+	{
+		if (!land.LoadGodsRingMap())
+		{
+			return false;
+		}
+	}
+	else if (_settings.testbed)
 	{
 		land.LoadTestbed();
 	}
@@ -304,8 +316,8 @@ bool ServerWorld::StartLand()
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
 	// The story's scripts run the first land, but not the testbed or a playground
-	const bool startStory =
-	    !_settings.testbed && new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	const bool startStory = !_settings.testbed && !_settings.godsRingMap &&
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
 	if (!land.StartChallengeScripts(startStory))
 	{
 		return false;
@@ -345,17 +357,12 @@ bool ServerWorld::Frame()
 		{
 			return false;
 		}
-		if (step == NetworkStep::Wait)
+		// While the world waits, its clock stands still and its frames take no game time, as the clocks of the clients
+		// stand still until the start. Thus the frames before the first turn are the same as theirs.
+		const bool wait = step == NetworkStep::Wait;
+		if (clock.IsPaused() != wait)
 		{
-			// The world waits as it is, so that it is the same as the clients' worlds when the turns start
-			if (Locator::inspector::has_value())
-			{
-				Locator::inspector::value().Service();
-			}
-			std::this_thread::sleep_for(std::chrono::duration_cast<std::chrono::microseconds>(
-			    clock.GetFixedFrameTime().value_or(std::chrono::microseconds(100'000))));
-			_frameStart = std::chrono::steady_clock::now();
-			return true;
+			clock.SetPaused(wait);
 		}
 	}
 	// The clock of the frame, and the inspector of the tools before the frame's turn
@@ -379,6 +386,62 @@ bool ServerWorld::Frame()
 			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
 		}
 		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+	}
+	// The tools check that a world state loads into the same world: the server loads its own world once
+	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
+	    Locator::saveGameSystem::has_value())
+	{
+		_reloaded = true;
+		auto& saves = Locator::saveGameSystem::value();
+		entt::meta_ctx reflection;
+		ecs::reflection::RegisterComponents(reflection);
+		const auto hash = [&reflection] {
+			return synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), reflection,
+			                            synced_state::PresentationParts(), true);
+		};
+		// The order of each storage, which the turns follow as they go through the entities
+		const auto orders = [] {
+			std::vector<std::pair<std::string, uint64_t>> out;
+			for (const auto& [id, storage] : Locator::entitiesRegistry::value().Underlying().storage())
+			{
+				uint64_t order = 1469598103934665603ull;
+				for (const auto entity : storage)
+				{
+					order = (order ^ entt::to_integral(entity)) * 1099511628211ull;
+				}
+				out.emplace_back(std::string(storage.info().name()), order);
+			}
+			std::ranges::sort(out);
+			return out;
+		};
+		const auto ordersBefore = orders();
+		const auto before = hash();
+		const auto drawsBefore = Locator::gameRandom::value().GetSyncedDraws();
+		const auto state = saves.WorldState();
+		const bool loaded = saves.LoadWorldState(state);
+		const auto after = hash();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "The world state of turn {} ({} bytes) loaded again: {}, synced state the same: {}, draws {} and {}",
+		                   *_settings.reloadAt, state.size(), loaded, before.hash == after.hash, drawsBefore,
+		                   Locator::gameRandom::value().GetSyncedDraws());
+		const auto ordersAfter = orders();
+		for (const auto& [name, order] : ordersBefore)
+		{
+			const auto found = std::ranges::find(ordersAfter, name, &std::pair<std::string, uint64_t>::first);
+			if (found == ordersAfter.end() || found->second != order)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the order of {}", name);
+			}
+		}
+		// The parts that the load did not put back as they were
+		for (const auto& [name, value] : before.parts)
+		{
+			const auto found = std::ranges::find(after.parts, name, &std::pair<std::string, uint64_t>::first);
+			if (found == after.parts.end() || found->second != value)
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world state did not put back the part {}", name);
+			}
+		}
 	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
@@ -470,8 +533,11 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	}
 	auto& host = network->Host();
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
-	// The server's clock never pauses: a paused clock of the server parted its world from the clients' (Land 1, turn 49).
 	Locator::playerCommandSystem::value().SetSource(&host);
+	// A client whose world parted gets the world of the server, at the start of the next turn
+	host.SetWorldState([] {
+		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
+	});
 	world.SetNetwork([&host, role = network.get()] {
 		role->Update();
 		if (host.GameOver())

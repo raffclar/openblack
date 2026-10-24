@@ -1039,26 +1039,33 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		return;
 	}
 
-	// A network game waits for the commands of the turn from the game server
+	// A network game waits for the commands of the turn from the game server. A computer that is behind the server's
+	// turns catches up, up to 10 turns a frame: when the next turn is there too, the clock of this computer follows the
+	// server's and the turn is due.
 	const auto& commands = Locator::playerCommandSystem::value();
-	if (!commands.TurnReady(clock.GetTurn()))
+	bool played = false;
+	while (commands.TurnReady(clock.GetTurn()))
 	{
-		return;
-	}
-	// A network game that is behind the server's turns catches up, one turn a frame
-	if (commands.HasSource() && commands.TurnReady(clock.GetTurn() + 1))
-	{
-		clock.ResetTimerToTurn();
-	}
-	if (!clock.IsTurnDue())
-	{
-		return;
-	}
-	// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
-	simulation::PlayTurn(view);
+		if (commands.IsBehind(clock.GetTurn()))
+		{
+			clock.ResetTimerToTurn();
+		}
+		if (!clock.IsTurnDue())
+		{
+			return;
+		}
+		// A second turn in the frame comes after the frame steps of the turn before it
+		if (played)
+		{
+			view.CatchUpFrame();
+		}
+		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+		simulation::PlayTurn(view);
+		played = true;
 
-	_lastGameLoopTime = currentTime;
-	_turnDeltaTime = delta;
+		_lastGameLoopTime = currentTime;
+		_turnDeltaTime = delta;
+	}
 }
 
 void LandSystem::PlayTurns(simulation::TurnViewInterface& view)

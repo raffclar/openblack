@@ -41,6 +41,7 @@ public:
 
 	bool Join(NetworkJoin join) override;
 	void SetReady(bool ready) override;
+	void PlayAlone() override;
 	void Leave() override;
 	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override;
 	void BeginPlay() override;
@@ -52,6 +53,8 @@ private:
 	void Detach();
 	/// The world does the turns of the session
 	void Attach();
+	/// Loads the world state that the server sent after a resync
+	void LoadWorld(const online::NetworkSession::WorldState& world);
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
@@ -63,6 +66,10 @@ private:
 	bool _awaitingLand {false};
 	std::optional<game_socket::Start> _pendingStart;
 	bool _endLogged {false};
+	std::optional<uint32_t> _partAt;
+	bool _partAgain {false};
+	/// The turn of a loaded world state, until it is here and the world goes on
+	std::optional<uint32_t> _resumeTurn;
 };
 
 } // namespace openblack::ecs::systems

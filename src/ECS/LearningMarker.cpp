@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <tuple>
 #include <vector>
 
 #include "Common/FixedFormat.h"
@@ -28,6 +29,8 @@ namespace
 constexpr float k_InverseLife = 1.0f / k_LifeMilliseconds;
 constexpr float k_InverseFade = 1.0f / (k_LifeMilliseconds - k_FadeStartMilliseconds);
 constexpr float k_FullAlpha = 255.0f;
+/// A game turn, in milliseconds
+constexpr float k_TurnMilliseconds = 100.0f;
 } // namespace
 
 std::string Text(float share)
@@ -37,12 +40,13 @@ std::string Text(float share)
 	return fixed_format::Fixed(static_cast<double>(share * k_Hundred), 0, 0) + "%";
 }
 
-components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share)
+components::LearningMarker Start(const glm::vec3& head, float creatureHeight, float share, uint32_t turn)
 {
 	return {.text = Text(share),
 	        .position = head + glm::vec3(0.0f, k_OverHead, 0.0f),
 	        .size = creatureHeight * k_SizeOfHeight,
-	        .milliseconds = 0.0f};
+	        .milliseconds = 0.0f,
+	        .madeTurn = turn};
 }
 
 bool Step(components::LearningMarker& marker, float milliseconds)
@@ -103,9 +107,21 @@ Look LookOf(const components::LearningMarker& marker)
 
 void StepAll(Registry& registry, float milliseconds)
 {
+	registry.Each<components::LearningMarker>([milliseconds](components::LearningMarker& marker) {
+		if (marker.milliseconds < k_LifeMilliseconds)
+		{
+			std::ignore = Step(marker, milliseconds);
+		}
+	});
+}
+
+void RemoveDone(Registry& registry, uint32_t turn)
+{
+	// The frames of each computer step the marks at their own times, so the turn removes them: the world has the same
+	// entities on every computer
 	std::vector<entt::entity> gone;
-	registry.Each<components::LearningMarker>([milliseconds, &gone](entt::entity entity, components::LearningMarker& marker) {
-		if (!Step(marker, milliseconds))
+	registry.Each<components::LearningMarker>([turn, &gone](entt::entity entity, const components::LearningMarker& marker) {
+		if (static_cast<float>(turn - marker.madeTurn) * k_TurnMilliseconds >= k_LifeMilliseconds)
 		{
 			gone.push_back(entity);
 		}
