@@ -35,6 +35,7 @@
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureReactionRules.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AtHome.h"
@@ -506,9 +507,12 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
 	const bool held = Locator::creatureHandSystem::has_value() &&
 	                  Locator::creatureHandSystem::value().GetLockedCreature() == std::optional(entity);
-	if (!creature_reaction::BodyFree({.life = needs != nullptr ? needs->needs.life : 1.0f,
-	                                  .heldByHand = held,
-	                                  .teleporting = registry.AllOf<TeleportTraveller>(entity)}))
+	// A stone controls the creature only while its plan still has a step of the teleport to do
+	const auto* plans = registry.TryGet<const CreatureMindState>(entity);
+	const bool teleporting =
+	    registry.AllOf<TeleportTraveller>(entity) && plans != nullptr && creature_mind::StoneControls(plans->idle);
+	if (!creature_reaction::BodyFree(
+	        {.life = needs != nullptr ? needs->needs.life : 1.0f, .heldByHand = held, .teleporting = teleporting}))
 	{
 		return false;
 	}

@@ -1326,6 +1326,11 @@ void MagicSystem::CloseDown(entt::entity entity)
 		StopHandGrain(*spell);
 	}
 	spell->closedDown = true;
+	// The things that the miracle made and that go with it, its teleport stones, go at once
+	if (Locator::teleportSystem::has_value())
+	{
+		Locator::teleportSystem::value().RemoveStonesOf(entity);
+	}
 	if (spell->effect != ParticleSystemInterface::k_NoEffect)
 	{
 		Locator::particleSystem::value().CloseDown(spell->effect);
@@ -1495,6 +1500,11 @@ void MagicSystem::Delete(entt::entity entity)
 	auto& registry = EntityRegistry();
 	if (auto* spell = FindSpell(entity))
 	{
+		// A miracle that goes closes down first: its teleport stones go with it
+		if (Locator::teleportSystem::has_value())
+		{
+			Locator::teleportSystem::value().RemoveStonesOf(entity);
+		}
 		if (spell->effect != ParticleSystemInterface::k_NoEffect)
 		{
 			Locator::particleSystem::value().Delete(spell->effect);
@@ -1717,7 +1727,8 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
 	if (Locator::particleSystem::has_value())
 	{
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world
+		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -1740,7 +1751,8 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	JoinTown(entity, DispenserTown(town));
 	if (Locator::particleSystem::has_value())
 	{
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world
+		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	return entity;
 }
@@ -3228,8 +3240,9 @@ float MagicSystem::SpellStrength(entt::entity entity)
 void MagicSystem::StartCastEffect(Spell& spell, ParticleType type)
 {
 	auto& particles = Locator::particleSystem::value();
-	// It plays out by itself, the same on every machine, as big as the miracle and heading the way it was cast
-	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, true);
+	// It plays out by itself, as big as the miracle and heading the way it was cast. Its random numbers are only this
+	// computer's: it does not change the world.
+	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude);
 	if (auto* effect = particles.Find(spell.castEffect))
 	{
 		effect->SetDirection(spell.direction);
