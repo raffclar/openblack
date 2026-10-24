@@ -23,6 +23,7 @@
 #include "3D/WaterRings.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "Enums.h"
 #include "Particles/LiquidParticles.h"
 
 /// Providers of the world's passing things: the sky's moon, and the splashes and particle effects
@@ -75,6 +76,8 @@ struct ParticleSources
 	std::function<std::span<const water_rings::Ring>()> rings;
 	std::function<std::vector<ParticleEffectInfo>()> effects;
 	std::function<std::span<const liquid_particles::Particle>()> liquids;
+	/// The sparkles at the camera of another player
+	std::function<std::span<const liquid_particles::Particle>(PlayerNames)> playerLiquids;
 };
 
 ///   particles.splash   near, radius          the splashes within the radius, nearest first, with their state

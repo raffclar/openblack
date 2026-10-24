@@ -4023,6 +4023,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		    }
 		    return Locator::liquidParticleSystem::value().Particles();
 	    },
+	    .playerLiquids = [](PlayerNames player) -> std::span<const liquid_particles::Particle> {
+		    if (!Locator::liquidParticleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
+	    },
 	}));
 
 	inspector.Add(MakePhysicsProvider({.bodies = &Bodies}));

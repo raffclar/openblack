@@ -1116,12 +1116,12 @@ void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 	Take(*grab, object, true, false);
 }
 
-void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds)
+void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds, bool askInfluence)
 {
 	auto& registry = _world->Entities();
 	// The pull may have ended on a thing that can no longer be taken: the hand lets go of it. The turn asks the influence
 	// at the point that the last report of the hand's player picked, the same on every computer.
-	if (!hand_grab::PassesGate(GateAt(object, _world->ReportedCollidePoint())))
+	if (!hand_grab::PassesGate(GateAt(object, askInfluence ? _world->ReportedCollidePoint() : std::nullopt)))
 	{
 		Empty(grab);
 		return;
@@ -1132,7 +1132,7 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	{
 		if (const auto tree = _world->TreeFromBigForest(object); tree.has_value() && Exists(*tree))
 		{
-			Take(grab, *tree, true, sounds);
+			Take(grab, *tree, true, sounds, askInfluence);
 		}
 		else
 		{
@@ -1654,6 +1654,18 @@ bool HandGrabSystem::TakeIntoHand(entt::entity object)
 		return false;
 	}
 	Take(*grab, object, true);
+	return grab->state == HandGrab::State::Holding;
+}
+
+bool HandGrabSystem::TakeIntoHandOf(PlayerNames player, entt::entity object)
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	auto* grab = Grab();
+	if (grab == nullptr || grab->state != HandGrab::State::Empty || !Exists(object))
+	{
+		return false;
+	}
+	Take(*grab, object, true, true, false);
 	return grab->state == HandGrab::State::Holding;
 }
 

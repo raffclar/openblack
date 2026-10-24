@@ -121,3 +121,30 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 		all.push_back(std::move(scenario));
 	}
 }
+
+void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
+{
+	using Kind = Command::Kind;
+	// Another god's hand holds a barrel high over the land, and that god's camera stands above it
+	all.push_back({
+	    .id = "multiplayer.other_god_hand",
+	    .name = "Another god's sparkles and held thing",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game in which the second player is another god. After a second, the "
+	                   "second player's hand takes the barrel to the east, and the second player reports the hand 5 m above "
+	                   "the land to the west and the camera 30 m above that hand. This computer does not draw the hand of "
+	                   "the other god.",
+	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
+	                "about it. High above the barrel, sparkles in the second player's colour come out one after another "
+	                "and fall down slowly. They do not stop while the scenario runs.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .object = 0,
+	                  .radius = 5.0f}},
+	});
+}

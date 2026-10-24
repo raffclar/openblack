@@ -327,9 +327,15 @@
   "query": "particles.emitters"
  },
  {
-  "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each kind and the drops that lie on the land",
+  "description": "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each kind and the drops that lie on the land. With player, the pool of the sparkles at that other player's camera",
   "kind": "object",
-  "parameters": [],
+  "parameters": [
+   {
+    "description": "The other player whose sparkles to count, from 0",
+    "name": "player",
+    "type": "integer"
+   }
+  ],
   "query": "particles.liquid"
  },
  {
