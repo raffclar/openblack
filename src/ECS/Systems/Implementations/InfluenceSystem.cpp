@@ -511,15 +511,20 @@ void InfluenceSystem::ProcessVirtualInfluence(entt::entity entity, PlayerNames p
 	const auto before = virtualInfluence.state;
 	// TODO(raffclar): the chants waiting at the player's worship sites, which slow the waning and are used up by it, once
 	// worship sites gather chants; until then there are none
-	virtual_influence::ProcessTurn(virtualInfluence.state,
-	                               {
-	                                   .hand = hand,
-	                                   .turn = turn,
-	                                   .handShielded = shielded,
-	                                   .handInInfluence = inInfluence,
-	                                   .influencePower = InfluencePower(player),
-	                                   .chants = 0.0f,
-	                               },
+	const virtual_influence::TurnInputs inputs {
+	    .hand = hand,
+	    .turn = turn,
+	    .handShielded = shielded,
+	    .handInInfluence = inInfluence,
+	    .influencePower = InfluencePower(player),
+	    .chants = 0.0f,
+	};
+	// Back in influence, the next trip out has a new mana path
+	if (virtual_influence::ManaPathEnds(virtualInfluence.state, inputs))
+	{
+		virtualInfluence.shown.manaPathStart.reset();
+	}
+	virtual_influence::ProcessTurn(virtualInfluence.state, inputs,
 	                               {
 	                                   .maxDistance = citadel.virtualInfluenceMaxDistance,
 	                                   .maxTurns = citadel.virtualInfluenceMaxGameTicks,
@@ -561,7 +566,8 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 		return;
 	}
 	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
-	auto& state = virtualInfluence.state;
+	const auto& state = virtualInfluence.state;
+	auto& shown = virtualInfluence.shown;
 	auto& audio = Locator::audio::value();
 	const auto hand = HandPosition();
 	const auto inInfluence = [this, player](const glm::vec3& point) { return PlayerRawInfluence(player, point) > 0.0f; };
@@ -570,7 +576,7 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 	                                               Shielded(player, *state.anchor), inInfluence(*state.anchor));
 	if (!plays)
 	{
-		if (state.soundStarted)
+		if (shown.soundStarted)
 		{
 			// A land change takes the sound with it
 			if (audio.EmitterExists(virtualInfluence.hum))
@@ -578,37 +584,37 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 				audio.DestroyEmitter(virtualInfluence.hum);
 			}
 			virtualInfluence.hum = entt::null;
-			state.soundStarted = false;
+			shown.soundStarted = false;
 		}
 		return;
 	}
 	// Past the border the hand hums, heard alike from both sides, lower the less of its strength is left; it is started
 	// again whenever it has played out
-	if (!state.soundStarted)
+	if (!shown.soundStarted)
 	{
-		state.soundFraction = state.fraction;
-		state.soundStarted = true;
+		shown.soundFraction = state.fraction;
+		shown.soundStarted = true;
 	}
 	// The mana path runs from the hand back to halfway to where it last was in influence, worked out once for each trip
 	// out, its sparks in the player's colour dimmed by the strength left
 	const auto handCoords = map_coords::FromMetres({hand->x, hand->z});
-	if (!state.manaPathStart.has_value())
+	if (!shown.manaPathStart.has_value())
 	{
-		state.manaPathStart =
+		shown.manaPathStart =
 		    virtual_influence::ManaPathStart(handCoords, map_coords::FromMetres({state.anchor->x, state.anchor->z}));
 	}
-	if (const auto scale = virtual_influence::EmitManaPath(state, gameTime.count());
+	if (const auto scale = virtual_influence::EmitManaPath(shown, state, gameTime.count());
 	    scale.has_value() && Locator::particleSystem::has_value() && Locator::terrainSystem::has_value())
 	{
 		const auto& land = Locator::terrainSystem::value();
 		const auto colour = Player::k_Colours.at(static_cast<size_t>(player) & (Player::k_Colours.size() - 1));
 		Locator::particleSystem::value().AddHandManaPathSpark({
 		    .from = map_coords::ToWorld(land, handCoords),
-		    .to = map_coords::ToWorld(land, *state.manaPathStart),
+		    .to = map_coords::ToWorld(land, *shown.manaPathStart),
 		    .rgb = virtual_influence::ScaleColour(colour, *scale) & 0xFFFFFFu,
 		});
 	}
-	const auto pitch = virtual_influence::HumPitchPercent(state);
+	const auto pitch = virtual_influence::HumPitchPercent(state, shown);
 	if (!audio.EmitterExists(virtualInfluence.hum))
 	{
 		virtualInfluence.hum = audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_VirtualInfluence_04),

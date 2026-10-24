@@ -33,6 +33,27 @@ namespace openblack::server
 /// turn, and the server plays 10 turns a second.
 constexpr double k_DefaultFrameMilliseconds = 100.0;
 
+/// The game role of the server: the game socket that the clients join with a ticket of the lobby
+struct NetworkSettings
+{
+	/// The IPv4 address and the TCP port of the game socket. Port 0 lets the system choose a free port.
+	std::string address {"127.0.0.1"};
+	uint16_t port {0};
+	/// The certificate chain and the key of TLS, as PEM files. With none, the socket speaks plain WebSocket, only on a
+	/// loopback address, behind a reverse proxy that does the TLS.
+	std::optional<std::filesystem::path> certificate;
+	std::optional<std::filesystem::path> key;
+	/// The id of the server at the lobby, which the tickets name
+	std::string serverId;
+	/// The keys that sign the tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file with the same
+	/// JSON
+	std::string ticketKeys;
+	/// The game starts when this many gods joined and are ready
+	uint32_t godsToStart {1};
+	/// How long a god's player can be away before the god is defeated
+	uint32_t comeBackSeconds {300};
+};
+
 /// What the command line of the dedicated server gives
 struct ServerSettings
 {
@@ -42,6 +63,8 @@ struct ServerSettings
 	std::string land {k_DefaultStartLevel};
 	/// The flat testbed in place of a land
 	bool testbed {false};
+	/// The network map for 32 gods in place of a land
+	bool godsRingMap {false};
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The seed of every random number of the world. The date of the world is pinned with it.
@@ -63,7 +86,11 @@ struct ServerSettings
 	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same
 	/// turns, as if the game sent them over the network.
 	std::optional<std::filesystem::path> commandsPath;
+	/// Tools: at this turn the server takes its whole world as a world state and loads it again
+	std::optional<uint32_t> reloadAt;
 	/// The file of the log, or "stdout"
+	/// The game role. With none, the server plays the world alone, as the tools use it.
+	std::optional<NetworkSettings> network;
 	std::string logFile {"stdout"};
 	spdlog::level::level_enum logLevel {spdlog::level::info};
 };

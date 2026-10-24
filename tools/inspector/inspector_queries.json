@@ -1038,7 +1038,7 @@
   "writes": true
  },
  {
-  "description": "The web client, the WSS client and the lobby client: the requests that wait, the open sockets, the session and the push channel",
+  "description": "The web client, the WSS client, the lobby client and the network game: the requests that wait, the open sockets, the session, the push channel, and the turns and checksums of the game server",
   "kind": "object",
   "parameters": [],
   "query": "engine.online"

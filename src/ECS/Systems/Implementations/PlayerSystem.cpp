@@ -120,6 +120,7 @@ void PlayerSystem::KeepForNextLand()
 		          .windResistance = player.windResistance,
 		          .miracles = player.miracles,
 		          .virtualInfluence = virtualInfluence != nullptr ? std::optional(virtualInfluence->state) : std::nullopt,
+		          .virtualInfluenceShown = virtualInfluence != nullptr ? virtualInfluence->shown : virtual_influence::Shown {},
 		          .influenceHistory = statistics != nullptr ? statistics->influenceHistory : statistics::History {},
 		          .populationHistory = statistics != nullptr ? statistics->populationHistory : statistics::History {}});
 	});
@@ -167,7 +168,7 @@ void PlayerSystem::TakeUpKept(entt::entity playerEntity)
 	// hum went with that land
 	if (kept.virtualInfluence.has_value())
 	{
-		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence);
+		registry.AssignOrReplace<VirtualInfluence>(playerEntity, *kept.virtualInfluence, kept.virtualInfluenceShown);
 	}
 	// Their histories go on, though their statistics' counters start again
 	if (auto* statistics = registry.TryGet<PlayerStatistics>(playerEntity))

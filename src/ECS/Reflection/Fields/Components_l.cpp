@@ -15,6 +15,7 @@
 
 #include "ECS/Components/LandForest.h"
 #include "ECS/Components/LearningMarker.h"
+#include "ECS/Components/LeftGame.h"
 #include "ECS/Components/LightBeam.h"
 #include "ECS/Components/ListPlace.h"
 #include "ECS/Components/LivingAction.h"
@@ -57,7 +58,9 @@ void openblack::ecs::reflection::RegisterFields_Components_l(entt::meta_ctx& con
 	    .Field<&components::LearningMarker::text>("text")
 	    .Field<&components::LearningMarker::position>("position")
 	    .Field<&components::LearningMarker::size>("size")
-	    .Field<&components::LearningMarker::milliseconds>("milliseconds");
+	    .Field<&components::LearningMarker::milliseconds>("milliseconds")
+	    .Field<&components::LearningMarker::madeTurn>("madeTurn");
+	Reflect<components::LeftGame>(context).Field<&components::LeftGame::turn>("turn");
 	Reflect<components::LightBeam>(context).Field<&components::LightBeam::cone>("cone");
 	Reflect<components::ListPlace>(context).Field<&components::ListPlace::made>("made");
 	Reflect<components::LivingAction>(context)

@@ -47,7 +47,10 @@ public:
 	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
+	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
+	void ProcessHandTurn();
 	void PlaceHeldForTurn() override;
+	void PlaceOthersHeldForFrame(int32_t frameMs) override;
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void DoLock(PlayerNames player, entt::entity object) override;
 	void DoApply(PlayerNames player, entt::entity target) override;
@@ -95,6 +98,7 @@ private:
 	[[nodiscard]] hand_grab::Holdable HoldableOf(entt::entity object) const;
 	/// Whether the hand may take a thing now: what it is, what a script says of it, and the hand's influence
 	[[nodiscard]] hand_grab::Gate GateOf(entt::entity object) const;
+	[[nodiscard]] hand_grab::Gate GateAt(entt::entity object, std::optional<glm::vec3> point) const;
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);

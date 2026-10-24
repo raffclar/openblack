@@ -193,7 +193,8 @@ TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Climates, Step::HeldThing));
-	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::Rewards));
+	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
+	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
 	EXPECT_TRUE(recorder.Before(Step::Rewards, Step::Guidance));
 	EXPECT_TRUE(recorder.Before(Step::Guidance, Step::CameraChecks));
 	EXPECT_TRUE(recorder.Before(Step::CameraChecks, Step::BuildingPieces));

@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <span>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -20,6 +21,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/ReportedHand.h"
@@ -187,9 +189,63 @@ TEST_F(ReportedHands, TheTurnCountsTheStillnessOfTheReportedHandNotOfTheDrawnHan
 	EXPECT_EQ(_hands.GetHandStillTurns(), 0u);
 }
 
+TEST_F(ReportedHands, TheGodOfAnotherPlayerGetsHandsOfItsOwnAndItsReportsMoveOnlyThem)
+{
+	// Before the command of the game server the player has no hands, and its reports do nothing
+	EXPECT_FALSE(_hands.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	EXPECT_FALSE(_hands.GetPlayerHandPositions()[0].has_value());
+
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto& registry = Locator::entitiesRegistry::value();
+	for (const auto hand : made)
+	{
+		ASSERT_TRUE(registry.Valid(hand));
+		EXPECT_NE(hand, _hand);
+		ASSERT_TRUE(registry.AllOf<ecs::components::GodHand>(hand));
+		EXPECT_EQ(registry.Get<const ecs::components::GodHand>(hand).player, PlayerNames::PLAYER_TWO);
+	}
+	// A second command makes no more hands
+	EXPECT_EQ(_hands.MakeHandsOf(PlayerNames::PLAYER_TWO), made);
+	EXPECT_EQ(_hands.GetHandsOf(PlayerNames::PLAYER_ONE), _hands.GetPlayerHands());
+
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 0.0f, 20.0f}));
+	EXPECT_EQ(registry.Get<const ecs::components::ReportedHand>(made[0]).handPoint, glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	// The turn counts the stillness of each god's hand
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		_hands.ProcessTurn();
+	}
+	EXPECT_EQ(registry.Get<const ecs::components::HandStillness>(made[0]).stillTurns,
+	          registry.Get<const ecs::components::HandStillness>(_hand).stillTurns);
+}
+
+TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)
+{
+	_hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	// Before the first turn it has the first player's hands to draw
+	EXPECT_EQ(_hands.GetOwnHands(), _hands.GetPlayerHands());
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_hands.GetOwnHands(), made);
+	// The turns still read the first player's hands
+	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
+}
+
+TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
+{
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_THREE);
+	ecs::systems::HandSystem loaded;
+	loaded.FindAfterLoad();
+	EXPECT_EQ(loaded.GetPlayerHands()[0], _hand);
+	EXPECT_EQ(loaded.GetHandsOf(PlayerNames::PLAYER_THREE), made);
+	EXPECT_FALSE(loaded.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
+}
+
 TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
 {
-	EXPECT_FALSE(_hands.GetReportedCamera().has_value());
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_ONE).has_value());
 }
 
 TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
@@ -197,10 +253,31 @@ TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
 	auto report = ReportAt({20.0f, 1.0f, 30.0f});
 	report.focus = {25.0f, 0.0f, 35.0f};
 	_hands.Report(PlayerNames::PLAYER_ONE, report);
-	const auto camera = _hands.GetReportedCamera();
+	const auto camera = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
 	ASSERT_TRUE(camera.has_value());
 	EXPECT_EQ(camera->origin, glm::vec3(0.0f, 100.0f, 0.0f));
 	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+}
+
+TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
+{
+	// A player with no hands has no camera
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_TWO).has_value());
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto first = ReportAt({20.0f, 1.0f, 30.0f});
+	first.focus = {25.0f, 0.0f, 35.0f};
+	auto second = ReportAt({40.0f, 1.0f, 50.0f});
+	second.camera = {7.0f, 80.0f, 9.0f};
+	second.focus = {45.0f, 0.0f, 55.0f};
+	_hands.Report(PlayerNames::PLAYER_ONE, first);
+	_hands.Report(PlayerNames::PLAYER_TWO, second);
+	const auto one = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
+	const auto two = _hands.GetReportedCamera(PlayerNames::PLAYER_TWO);
+	ASSERT_TRUE(one.has_value());
+	ASSERT_TRUE(two.has_value());
+	EXPECT_EQ(one->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+	EXPECT_EQ(two->origin, glm::vec3(7.0f, 80.0f, 9.0f));
+	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
 }
 
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does

@@ -59,6 +59,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The number of a miracle's particle effect counts the effects that this computer started, also those that only
+    // show the world on this computer
+    {.component = "Spell", .field = "effect", .marker = ""},
+    // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
+    {.component = "LearningMarker", .field = "", .marker = ""},
+    // The frames move the hair of a creature. Only the draw reads it.
+    {.component = "CreatureHair", .field = "", .marker = ""},
     // The seeds of the miracle icons spin, and their phials pulse, as the frames draw them
     {.component = "IconSeed", .field = "spin", .marker = ""},
     {.component = "IconSeed", .field = "ringSpin", .marker = ""},
@@ -77,6 +84,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SkyDome", .field = "", .marker = ""},
     // The moon's phase comes from the date of the computer's clock, as in the game
     {.component = "Moon", .field = "", .marker = ""},
+    // The hum and the mana path of the hand past the border follow the hand that this computer draws
+    {.component = "VirtualInfluence", .field = "shown", .marker = ""},
+    {.component = "VirtualInfluence", .field = "hum", .marker = ""},
     {.component = "VillageLight", .field = "flicker", .marker = ""},
     {.component = "VillageLight", .field = "flickerTimer", .marker = ""},
     {.component = "VillageLight", .field = "glowSize", .marker = ""},
@@ -132,6 +142,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
+    {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
     {.component = "ShownRoots", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
@@ -141,6 +153,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.
     // The world reads the hand only from the reports of its player (ReportedHand).
     {.component = "Transform", .field = "", .marker = "Hand"},
+    // The frames of this computer move what the hand of another player holds toward the reported place of that hand
+    {.component = "HeldDrawTrack", .field = "", .marker = ""},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The press, the pull, the spring, the offer and the scoop of this computer's hand are its own input. The world
     // has what the hand holds from the turns: the InHand of the thing.

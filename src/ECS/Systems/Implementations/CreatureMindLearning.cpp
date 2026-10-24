@@ -2275,8 +2275,10 @@ creature_activity::WholeFacts WholeFactsOf(const ecs::Registry& registry, entt::
 		facts.samePlayer = self.owner == PlayerNames::NEUTRAL;
 		break;
 	}
-	// Only the player of the creature looks at it
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera(); self.owner == PlayerNames::PLAYER_ONE && camera.has_value())
+	// Only the player of the creature looks at it. In a game with one player, that is the first player.
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
+	    (networkGame || self.owner == PlayerNames::PLAYER_ONE) && camera.has_value())
 	{
 		const auto* at = registry.TryGet<const Transform>(creature);
 		facts.lookedAt = at != nullptr && creature_attention::IsLookingAt(camera->origin, camera->focus, at->position);
@@ -3006,7 +3008,7 @@ void CreatureMindSystem::PlanCreature(entt::entity creature, CreatureMindState& 
 	const auto& learnt = *mind.learnt;
 
 	creature_plan_actions::Situation situation;
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 	}
@@ -3416,7 +3418,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			}
 			const bool alreadyHeld = Locator::creatureObjectActionSystem::has_value() &&
 			                         Locator::creatureObjectActionSystem::value().GetHeld(creature) == plan.object;
-			const auto camera = openblack::ecs::ReportedPlayerCamera();
+			const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 			const auto eye = camera.has_value() ? camera->origin : transform->position;
 			agenda = creature_leash_orders::Hold(
 			    entt::to_integral(*plan.object), alreadyHeld, glm::vec2(eye.x, eye.z), playWith,
@@ -3450,7 +3452,7 @@ bool CreatureMindSystem::ForcePlan(entt::entity creature, const ForcedPlan& plan
 			{
 				situation.fishing = FishingFor(registry, creature, position);
 			}
-			if (const auto camera = openblack::ecs::ReportedPlayerCamera())
+			if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 			{
 				situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 			}
@@ -3718,7 +3720,7 @@ void CreatureMindSystem::Situate(entt::entity creature, creature_plan_actions::S
 		situation.stage = mind->developmentPhase;
 	}
 	// Every agenda that faces the player can be made: also when a plan starts again after a hold, or is forced
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		situation.eye = camera->origin;
 		situation.camera = glm::vec2(situation.eye->x, situation.eye->z);
@@ -3794,7 +3796,7 @@ void CreatureMindSystem::SituatePlayer(entt::entity creature, creature_plan_acti
 	const auto* at = registry.TryGet<const Transform>(creature);
 	const auto* body = registry.TryGet<const Creature>(creature);
 	// Only the local player's camera looks at creatures here
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 	if (at != nullptr && body != nullptr && camera.has_value() && Locator::playerSystem::has_value() &&
 	    body->owner == Locator::playerSystem::value().GetLocalPlayer())
 	{
@@ -5112,9 +5114,9 @@ void CreatureMindSystem::ShowLearningMeter(entt::entity creature, CreatureMindSt
 		return;
 	}
 	const auto marker = registry.Create();
-	registry.Assign<LearningMarker>(
-	    marker,
-	    ecs::learning_marker::Start(HeadPoint(registry, creature), ShownSize(*body) * creature_mode::k_HeightPerSize, *share));
+	registry.Assign<LearningMarker>(marker, ecs::learning_marker::Start(HeadPoint(registry, creature),
+	                                                                    ShownSize(*body) * creature_mode::k_HeightPerSize,
+	                                                                    *share, turn));
 }
 
 void CreatureMindSystem::SeeMiracle(const glm::vec3& point, size_t miracle)
@@ -5332,7 +5334,7 @@ void CreatureMindSystem::DoLessonAgain(entt::entity creature, CreatureMindState&
 	}
 	const glm::vec2 position {transform->position.x, transform->position.z};
 	creature_plan_actions::Situation situation;
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		situation.camera = glm::vec2(camera->origin.x, camera->origin.z);
 	}
@@ -5609,7 +5611,7 @@ bool CreatureMindSystem::LookedAtByItsPlayer(entt::entity creature)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.TryGet<const Creature>(creature);
 	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 	if (body == nullptr || transform == nullptr || body->owner != PlayerNames::PLAYER_ONE || !camera.has_value())
 	{
 		return false;

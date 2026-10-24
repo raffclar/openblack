@@ -73,6 +73,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
 	virtual void PlaceHeldForTurn() {}
+	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
+	/// toward the place of their last report, upright and at the size that it had as the hand took it
+	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
 	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves

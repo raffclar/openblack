@@ -42,6 +42,7 @@ void openblack::ecs::reflection::RegisterFields_Components_i(entt::meta_ctx& con
 	    .Field<&components::CitadelInfluence::drawnRadius>("drawnRadius");
 	Reflect<components::VirtualInfluence>(context)
 	    .Field<&components::VirtualInfluence::state>("state")
+	    .Field<&components::VirtualInfluence::shown>("shown")
 	    .Field<&components::VirtualInfluence::hum>("hum");
 	Reflect<components::InterfaceLimits>(context)
 	    .Field<&components::InterfaceLimits::onlyHighlights>("onlyHighlights")
