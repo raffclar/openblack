@@ -84,6 +84,9 @@ struct Request
 	/// The file of the commands of each turn (command_log) that the run does at their turns. The run then does no
 	/// command of its own player: as a computer that only receives the commands of a network game.
 	std::optional<std::filesystem::path> playCommandsPath;
+	/// Tools: log each frame step that changes the synced world, with the parts (the components, or with Fields their
+	/// fields) that it changes. None: no guard.
+	HashDetail frameGuard {HashDetail::None};
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };
