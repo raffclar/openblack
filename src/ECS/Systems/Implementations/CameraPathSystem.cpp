@@ -133,7 +133,7 @@ void CameraPathSystem::HandlePlayerControl(const PlayerControl& control)
 	}
 }
 
-void CameraPathSystem::UpdatePlaced(float seconds)
+void CameraPathSystem::UpdatePlaced(float seconds, float gameSeconds)
 {
 	auto& placed = *_placed;
 	// It goes with the miracle that placed it
@@ -145,7 +145,9 @@ void CameraPathSystem::UpdatePlaced(float seconds)
 		return;
 	}
 	auto& camera = Locator::camera::value();
-	placed.seconds += seconds;
+	// The path goes with the age of the miracle's effect, which moves on by the game's time. The camera glides by its own
+	// time, so while the game is paused it comes to where the path stopped and stays there.
+	placed.seconds += gameSeconds;
 	const float dt = std::min(seconds, k_MaxFrameSeconds);
 	if (placed.seconds > placed.pauseSeconds)
 	{
@@ -194,11 +196,11 @@ void CameraPathSystem::EndPlaced()
 	}
 }
 
-void CameraPathSystem::Update(const std::chrono::microseconds& dt)
+void CameraPathSystem::Update(const std::chrono::microseconds& dt, std::chrono::milliseconds frameGameTime)
 {
 	if (_placed.has_value() && Locator::camera::has_value())
 	{
-		UpdatePlaced(std::chrono::duration<float>(dt).count());
+		UpdatePlaced(std::chrono::duration<float>(dt).count(), std::chrono::duration<float>(frameGameTime).count());
 	}
 	if (_state == CameraPathState::STOPPED || !_path)
 	{

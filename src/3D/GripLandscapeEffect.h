@@ -21,6 +21,7 @@ namespace openblack::GripLandscapeEffect
 {
 /// Throws up a puff of dust at a point on the ground
 void Spawn(glm::vec3 groundPosition);
-/// Grows and fades the puffs, and removes those that have died
-void Update(float deltaSeconds);
+/// Grows and fades the puffs by some seconds of game time, and removes those that have died. With no time, as while the
+/// game is paused, they stand still.
+void Update(float gameSeconds);
 } // namespace openblack::GripLandscapeEffect

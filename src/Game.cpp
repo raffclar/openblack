@@ -2179,10 +2179,23 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		UpdateInterfaceFrame(frame.deltaTime);
 		break;
 	case Step::GripEffect:
-		GripLandscapeEffect::Update(std::chrono::duration_cast<std::chrono::duration<float>>(frame.deltaTime).count());
+		// The dust moves on by the game time of the frame, and stands still while the game is paused
+		GripLandscapeEffect::Update(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
 		break;
 	case Step::Turns:
-		return PlayTurns();
+	{
+		const auto turn = Locator::time::value().GetTurn();
+		const bool played = PlayTurns();
+		// A turn makes the dust of the grips that the hand made before it
+		if (Locator::time::value().GetTurn() != turn)
+		{
+			for (const auto& dust : std::exchange(_gripDust, {}))
+			{
+				GripLandscapeEffect::Spawn(dust);
+			}
+		}
+		return played;
+	}
 	case Step::SendCommands:
 		ReportHand();
 		Locator::playerCommandSystem::value().SendOpenBlock();
@@ -2224,7 +2237,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		}
 		break;
 	case Step::CameraPaths:
-		Locator::cameraPathSystem::value().Update(frame.deltaTime);
+		Locator::cameraPathSystem::value().Update(frame.deltaTime, Locator::time::value().GetFrameGameTime());
 		break;
 	case Step::CameraControllers:
 		UpdateCameraControllers(frame.deltaTime);
@@ -3097,8 +3110,6 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 						}
 					}
 				}
-				UpdateMagicHand(handTransform.position,
-				                std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 			}
 			// A fireball pressed long enough is taken, which catches it
 			Locator::magicSystem::value().HoldFireBall(machine_clock::Ticks(), Locator::time::value().GetTurn());
@@ -5808,10 +5819,12 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	magic.UpdateHand(frame, HandStepSeconds());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
-	// The seeds above the stone hands and worship icons spin as the globes' do
+	// The seeds above the stone hands and worship icons spin as the globes' do, by the game time of the frame: they stand
+	// still while the game is paused
 	if (Locator::spellIconSystem::has_value())
 	{
-		Locator::spellIconSystem::value().Update(deltaSeconds);
+		Locator::spellIconSystem::value().Update(
+		    std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
 	}
 }
 
@@ -5839,9 +5852,8 @@ void Game::PlayHandGrabSound()
 	}
 	if (feedback == hand_grab::GripFeedback::Dust)
 	{
-		// The game throws up a spot visual where the hand grips the land, as it plays the sound
-		GripLandscapeEffect::Spawn(
-		    glm::vec3(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z));
+		// The next turn makes a puff of dust where the hand grips the land. The sound plays at once.
+		_gripDust.emplace_back(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z);
 		// One of G_HandGrabLand_01 to _06, centred on the listener
 		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
 		const auto id = fmt::format("InGame.sad/{}", sample);

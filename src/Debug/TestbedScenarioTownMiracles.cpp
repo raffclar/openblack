@@ -85,6 +85,23 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townBeliefInPlayer = k_TownBelief,
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
+
+	all.push_back({
+	    .id = "town.icon_seeds_paused",
+	    .name = "A pause with seeds over the stone hands",
+	    .facet = Facet::Miracles,
+	    .description = "The same town and temple on the first land, given the heal and the water miracles by the debug "
+	                   "tool. Four seconds in, the game pauses, as the pause key does. Press P to continue the game.",
+	    .expected = "Before the pause, the seeds over the stone hands of the village centre spin. While the game is "
+	                "paused, they stand still. When the game continues, they spin on.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = TownAndTemple(),
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::PauseGame, .delaySeconds = 4.0f, .value = 1}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
 	all.push_back({
 	    .id = "town.miracle_spares_stone_hands",
 	    .name = "A fireball on a village centre with stone hands",
