@@ -40,6 +40,8 @@ struct InputEvent
 		Action,
 		Gesture,
 		Release,
+		/// Letters that the keyboard types, as the text box with the focus gets them
+		Text,
 	};
 	/// When the game sees the pointer's moves and buttons
 	enum class Timing : uint8_t
@@ -71,6 +73,8 @@ struct InputEvent
 	std::string name;
 	/// A gesture drawn with the Action button held throughout, as a circle readying a miracle is
 	bool holdAction {false};
+	/// The letters of a text event, in UTF-8
+	std::string text;
 	/// When the game sees the pointer's moves and buttons
 	Timing timing {Timing::Mouse};
 

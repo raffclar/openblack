@@ -7,8 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-// The rules of the multiplayer front end over the temple's future room, and its calls to the lobby client and the game
-// socket, with a fake lobby and a fake socket
+// The rules of the multiplayer front end over the temple's future room, and its calls to the lobby client and the network
+// game, with a fake lobby, a fake network game and a fake socket
 
 #include <cmath>
 #include <cstdint>
@@ -25,10 +25,12 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkSession.h"
 #include "online/FakeWebSocketClient.h"
 
 using namespace openblack;
@@ -76,6 +78,7 @@ public:
 	}
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return account; }
 	[[nodiscard]] bool IsPushOpen() const override { return true; }
+	[[nodiscard]] bool IsEmailRequired() const override { return emailRequired; }
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override
 	{
 		loginName = std::move(name);
@@ -89,9 +92,10 @@ public:
 	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return known; }
 	void WatchServers(bool watch) override { watchingServers = watch; }
 	void WatchChannel(std::string channel, bool watch) override { watched[channel] = watch; }
-	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override
+	void RequestJoinTicket(std::string serverId, game_socket::Role role, LobbyCallback<lobby_api::JoinTicket> callback) override
 	{
 		ticketFor = std::move(serverId);
+		ticketRoles.push_back(role);
 		ticket = std::move(callback);
 	}
 	void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone>) override
@@ -163,6 +167,8 @@ public:
 	std::map<std::string, bool> watched;
 	std::string ticketFor;
 	LobbyCallback<lobby_api::JoinTicket> ticket;
+	std::vector<game_socket::Role> ticketRoles;
+	bool emailRequired {false};
 	std::string chatChannel;
 	std::string chatText;
 	std::string useClanServer;
@@ -176,6 +182,44 @@ public:
 	LobbyCallback<std::vector<uint8_t>> logo;
 	std::vector<LobbyEventListener> listeners;
 	std::vector<uint32_t> removed;
+};
+
+/// A network game for the tests: a real session on the fake socket, with a clock that the test moves
+class FakeNetworkGame final: public NetworkGameSystemInterface
+{
+public:
+	explicit FakeNetworkGame(online::WebSocketClientInterface& sockets)
+	    : session(sockets, [this] { return now; })
+	{
+	}
+
+	bool Join(NetworkJoin join) override
+	{
+		joins.push_back(join);
+		session.Join(online::NetworkSessionSettings {
+		    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
+		    .ticket = join.ticket,
+		    .gamePassword = join.gamePassword,
+		    .name = join.name,
+		});
+		return true;
+	}
+	void SetReady(bool ready) override { session.SetReady(ready); }
+	void Leave() override
+	{
+		++leaves;
+		session.Leave();
+	}
+	void Update() override { session.Update(); }
+	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override { return std::nullopt; }
+	void BeginPlay() override {}
+	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
+	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
+
+	int64_t now {0};
+	online::NetworkSession session;
+	std::vector<NetworkJoin> joins;
+	int leaves {0};
 };
 
 class FakeLan final: public online::LanDiscoveryInterface
@@ -207,6 +251,7 @@ struct FrontEndTest: public ::testing::Test
 {
 	FakeLobby lobby;
 	test_fakes::FakeWebSocketClient sockets;
+	FakeNetworkGame network {sockets};
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
@@ -215,15 +260,15 @@ struct FrontEndTest: public ::testing::Test
 	{
 		MultiplayerFrontEnd::Services services {
 		    .lobby = &lobby,
-		    .sockets = &sockets,
+		    .network = &network,
 		    .lan = withLan ? &lan : nullptr,
 		    .openPage = [this](std::string_view url) { opened.emplace_back(url); },
-		    .clock = [] { return uint64_t {0}; },
 		    .owner = {},
 		    .poll = {},
 		};
 		MultiplayerFrontEnd::Settings settings {
 		    .registerPage = "https://lobby.test/register/",
+		    .accountPage = "https://lobby.test/account/",
 		    .internetName = u"lobby.test",
 		    .profileName = u"Alice",
 		    .gameVersion = std::string(k_GameVersion),
@@ -251,18 +296,39 @@ struct FrontEndTest: public ::testing::Test
 		FakeLobby::Give(lobby.servers, lobby_api::ServerList {.servers = lobby.known});
 	}
 
-	/// The player joins the first game and its socket opens
+	/// A frame: the socket, the network game and the front end move on
+	void Step()
+	{
+		sockets.Poll();
+		network.Update();
+		frontEnd->Update();
+	}
+
+	/// The game server lets the player in on the last socket
+	void ServerJoins(game_socket::Role role = game_socket::Role::God)
+	{
+		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
+		sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Joined {
+		                                             .role = role, .slot = slot, .session = "s", .name = "Alice"}));
+		Step();
+	}
+
+	/// The player joins the first game, its socket opens and the server lets the player in
 	void ToRoom()
 	{
 		ToGameList();
 		frontEnd->SelectGame(0);
 		frontEnd->Join(u"");
 		ASSERT_EQ(lobby.ticketFor, "w1");
-		FakeLobby::Give(lobby.ticket,
-		                lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0});
+		FakeLobby::Give(
+		    lobby.ticket,
+		    lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
 		ASSERT_FALSE(sockets.order.empty());
 		sockets.Accept(sockets.order.back());
-		sockets.Poll();
+		Step();
+		// The room opens only when the server lets the player in
+		ASSERT_EQ(frontEnd->GetBox(), Box::GameList);
+		ServerJoins();
 		ASSERT_EQ(frontEnd->GetBox(), Box::Room);
 	}
 };
@@ -294,6 +360,19 @@ TEST(MultiplayerRules, LoginFailuresGiveTheGamesMessages)
 	EXPECT_FALSE(AsksAboutName(LobbyErrorKind::Timeout));
 	EXPECT_EQ(ButtonsOf(Message::NotRegistered), MessageButtons::YesNo);
 	EXPECT_EQ(ButtonsOf(Message::WaitingForStart), MessageButtons::Cancel);
+}
+
+TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
+{
+	// On the internet the game shows "Connection Failed." for each failed join
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "banned_from_server"), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "game_started"), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Network, ""), Message::ConnectionFailed);
+	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
+	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
+	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
 }
 
@@ -616,28 +695,155 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.request.url, "wss://lobby.test/game/w1");
 	ASSERT_EQ(socket.sent.size(), 1u);
 	EXPECT_EQ(socket.sent[0].Text(), R"({"ticket":"v4.public.t","type":"room.join"})");
+	// The network game joins for the front end: the server's land loads only after the start
+	ASSERT_EQ(network.joins.size(), 1u);
+	EXPECT_FALSE(network.joins[0].landLoaded);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God}));
 	EXPECT_TRUE(frontEnd->IsJoined());
+	EXPECT_FALSE(frontEnd->IsObserver());
 	EXPECT_TRUE(lobby.watched.at("server-w1"));
 	ASSERT_EQ(frontEnd->GetSeats().size(), 3u);
 	ASSERT_NE(frontEnd->GetOwnSeat(), nullptr);
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
-	// Back leaves the room and its channel
+	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(lobby.watched.at("server-w1"));
+	EXPECT_EQ(network.leaves, 1);
+	EXPECT_EQ(socket.sent.back().Text(), R"({"type":"room.leave"})");
+	Step();
 	EXPECT_EQ(sockets.Count(), 0u);
 }
 
-TEST_F(FrontEndTest, ARefusedTicketCannotConnect)
+TEST_F(FrontEndTest, ARefusedTicketShowsConnectionFailed)
 {
 	ToGameList();
 	frontEnd->SelectGame(1);
 	frontEnd->Join(u"");
 	FakeLobby::Fail(lobby.ticket, LobbyErrorKind::Refused);
-	EXPECT_EQ(frontEnd->GetMessage(), Message::CouldNotConnect);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_TRUE(network.joins.empty());
+}
+
+TEST_F(FrontEndTest, AServerBanShowsConnectionFailed)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto done = std::move(lobby.ticket);
+	done({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 403, .detail = {}, .code = "banned_from_server"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+	EXPECT_EQ(lobby.ticketRoles.size(), 1u);
+}
+
+TEST_F(FrontEndTest, AFullRoomIsJoinedAsAnObserver)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto full = std::move(lobby.ticket);
+	full({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	// The front end asks again, for an observer's ticket, with no message
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
+	FakeLobby::Give(
+	    lobby.ticket,
+	    lobby_api::JoinTicket {.url = "wss://lobby.test/game/w1", .ticket = "v4.public.o", .expires = 0, .role = "observer"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	ServerJoins(game_socket::Role::Observer);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
+	EXPECT_TRUE(frontEnd->IsObserver());
+	// A second full answer for the observer is a failure, not a loop
+	frontEnd->Back();
+	FakeLobby::Give(lobby.servers, lobby_api::ServerList {.servers = lobby.known});
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	full = std::move(lobby.ticket);
+	full({.value = std::nullopt,
+	      .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	auto again = std::move(lobby.ticket);
+	again({.value = std::nullopt,
+	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, ASocketThatNeverOpensShowsConnectionFailed)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.End(sockets.order.back(), {.end = online::WebSocketEnd::Network, .code = 0, .httpStatus = 0});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, AnAccountWithNoEmailIsSentToTheAccountPage)
+{
+	Make();
+	frontEnd->Next();
+	frontEnd->Next();
+	frontEnd->Login(u"Alice", u"secret");
+	lobby.account = lobby_api::AccountRef {.id = 7, .name = "Alice"};
+	lobby.emailRequired = true;
+	FakeLobby::Give(lobby.login, *lobby.account);
+	// The lobby would refuse the list: the box stays on the login
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::EmailRequired);
+	EXPECT_EQ(ButtonsOf(Message::EmailRequired), MessageButtons::YesNo);
+	EXPECT_FALSE(lobby.servers);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes);
+	EXPECT_EQ(opened, (std::vector<std::string> {"https://lobby.test/account/"}));
+}
+
+TEST_F(FrontEndTest, ALostLobbySessionGoesBackToTheLogin)
+{
+	ToRoom();
+	// The lobby ended the session, for example for a ban
+	lobby.account.reset();
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetBox(), Box::Login);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+	EXPECT_EQ(network.leaves, 1);
+}
+
+TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Start {
+	                                             .land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}}));
+	Step();
+	EXPECT_TRUE(frontEnd->IsStarted());
+	// The front end closes, and the network game keeps the socket for the game
+	frontEnd.reset();
+	EXPECT_EQ(network.leaves, 0);
+	EXPECT_EQ(sockets.Count(), 1u);
+	EXPECT_EQ(network.session.GetState(), online::NetworkSession::State::Playing);
 }
 
 TEST_F(FrontEndTest, TheRoomChatUsesTheServersChannel)
@@ -711,7 +917,11 @@ TEST_F(FrontEndTest, TheServerGoingSendsThePlayerToTheList)
 {
 	ToRoom();
 	sockets.End(sockets.order.back(), {.end = online::WebSocketEnd::ClosedByServer, .code = 1000, .httpStatus = 0});
-	sockets.Poll();
+	Step();
+	// The session tries to come back to the server for its time, then gives up
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	network.now += 6LL * 60 * 1'000'000;
+	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::HostLeft);
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
@@ -735,8 +945,9 @@ TEST_F(FrontEndTest, TheLanListComesFromTheSearch)
 	// On the LAN there is no ticket: the profile's name goes in the join
 	ASSERT_FALSE(sockets.order.empty());
 	sockets.Accept(sockets.order.back());
-	sockets.Poll();
+	Step();
 	EXPECT_EQ(sockets.sockets.at(sockets.order.back()).sent[0].Text(), R"({"name":"Alice","type":"room.join"})");
+	ServerJoins();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Room);
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);

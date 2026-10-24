@@ -18,6 +18,8 @@
 //                            nobody works. No merge script and no check may pass it.
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
+//   --trust-spki <hash>      tests on this computer only: trust the certificate of a test server with this key (the
+//                            base64 SHA-256 of its public key), as for a test lobby on 127.0.0.1
 //   --eval <expression>      at the end, print the value of this expression on the page
 //   --checksums <file>       write the checksum line of each turn of the game (--sim-checksums - in the game's
 //                            arguments) to this file, as the game makes them
@@ -81,7 +83,9 @@ const chrome = spawn(chromePath, [
   '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run',
   '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync',
   '--metrics-recording-only', '--disable-component-update', `--window-size=${width},${height}`,
-  '--autoplay-policy=user-gesture-required', ...graphics, 'about:blank',
+  '--autoplay-policy=user-gesture-required', ...graphics,
+  ...(option('--trust-spki', '') ? [`--ignore-certificate-errors-spki-list=${option('--trust-spki', '')}`] : []),
+  'about:blank',
 ], { stdio: 'ignore' });
 console.log(`chrome pid ${chrome.pid} port ${port}`);
 

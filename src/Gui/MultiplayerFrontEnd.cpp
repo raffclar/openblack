@@ -15,9 +15,9 @@
 #include <LobbyApiJson.h>
 
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/LanDiscoveryInterface.h"
-#include "Online/TurnStream.h"
-#include "Online/WebSocketInterface.h"
+#include "Online/NetworkSession.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -90,6 +90,76 @@ void MultiplayerFrontEnd::Update()
 	{
 		_services.lan->Poll();
 	}
+	FollowSession();
+	// The lobby ended the session, for example after a ban: the game list and the room need it
+	if (_loggedIn && _flow.kind == LobbyKind::Internet && _services.lobby != nullptr &&
+	    _services.lobby->GetState() == ecs::systems::LobbySessionState::LoggedOut && !IsStarted())
+	{
+		_loggedIn = false;
+		if (_flow.box == Box::GameList || _flow.box == Box::Room || _flow.box == Box::Conditions)
+		{
+			++_generation;
+			_busy = false;
+			LeaveRoom();
+			_services.lobby->WatchServers(false);
+			_flow.box = Box::Login;
+			_message = Message::ConnectionFailed;
+		}
+	}
+}
+
+const openblack::online::NetworkSession* MultiplayerFrontEnd::Session() const
+{
+	return _services.network != nullptr ? _services.network->Session() : nullptr;
+}
+
+bool MultiplayerFrontEnd::IsStarted() const
+{
+	const auto* session = Session();
+	return _joined && session != nullptr && session->GetStart().has_value();
+}
+
+void MultiplayerFrontEnd::FollowSession()
+{
+	if (!_joining)
+	{
+		return;
+	}
+	const auto* session = Session();
+	if (session == nullptr)
+	{
+		return;
+	}
+	using State = online::NetworkSession::State;
+	const auto state = session->GetState();
+	if (!_joined && session->GetJoined().has_value() && state != State::Ended)
+	{
+		// The server let the player in: the room opens
+		_busy = false;
+		_joined = true;
+		_observer = session->GetJoined()->role == game_socket::Role::Observer;
+		_flow.box = Box::Room;
+		_tab = RoomTab::Chat;
+		_chat.clear();
+		_ready = false;
+		UpdateRoom();
+		return;
+	}
+	if (state != State::Ended || IsStarted())
+	{
+		return;
+	}
+	_joining = false;
+	_busy = false;
+	if (_joined)
+	{
+		// The room's server went, or the player could not come back to it
+		_joined = false;
+		Show(Message::HostLeft);
+		return;
+	}
+	const auto refusal = session->GetEnd() == online::NetworkSession::End::Refused ? session->RefusedReason() : std::string();
+	Show(JoinFailureMessage(refusal, _flow.kind));
 }
 
 bool MultiplayerFrontEnd::TakeLeft()
@@ -210,6 +280,14 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 			_services.openPage(_settings.registerPage);
 		}
 		break;
+	case Message::EmailRequired:
+		// Yes opens the account page of the lobby's site, where the player adds an email address. The player then logs
+		// in again.
+		if (answer == Answer::Yes && _services.openPage && !_settings.accountPage.empty())
+		{
+			_services.openPage(_settings.accountPage);
+		}
+		break;
 	case Message::WaitingForStart:
 		// Cancel takes the tick from the Ready box
 		SetReady(false);
@@ -260,6 +338,13 @@ void MultiplayerFrontEnd::Login(std::u16string name, std::u16string password)
 		    if (result.Ok())
 		    {
 			    _busy = false;
+			    // The lobby refuses the server list until the account has an email address
+			    if (_services.lobby->IsEmailRequired())
+			    {
+				    Show(Message::EmailRequired);
+				    return;
+			    }
+			    _loggedIn = true;
 			    EnterGameList();
 			    return;
 		    }
@@ -354,7 +439,7 @@ void MultiplayerFrontEnd::RefreshGames()
 
 void MultiplayerFrontEnd::Join(std::u16string password)
 {
-	if (_busy || _message != Message::None || !_selectedGame.has_value() || _services.sockets == nullptr)
+	if (_busy || _message != Message::None || !_selectedGame.has_value() || _services.network == nullptr)
 	{
 		return;
 	}
@@ -365,7 +450,7 @@ void MultiplayerFrontEnd::Join(std::u16string password)
 	}
 	const auto server = games[*_selectedGame];
 	_busy = true;
-	const auto generation = ++_generation;
+	++_generation;
 	if (_flow.kind == LobbyKind::Lan)
 	{
 		_room = server;
@@ -375,62 +460,60 @@ void MultiplayerFrontEnd::Join(std::u16string password)
 	if (_services.lobby == nullptr)
 	{
 		_busy = false;
-		Show(Message::CouldNotConnect);
+		Show(Message::ConnectionFailed);
 		return;
 	}
-	_services.lobby->RequestJoinTicket(server.id, [this, generation, server, password = std::move(password)](
-	                                                  ecs::systems::LobbyResult<lobby_api::JoinTicket>&& result) mutable {
-		if (generation != _generation)
-		{
-			return;
-		}
-		if (!result.Ok())
-		{
-			_busy = false;
-			Show(Message::CouldNotConnect);
-			return;
-		}
-		_room = server;
-		_room->url = result.value->url;
-		RoomOpened(std::move(result.value->ticket), std::move(password));
-	});
+	RequestTicket(server, game_socket::Role::God, std::move(password));
+}
+
+void MultiplayerFrontEnd::RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password)
+{
+	const auto generation = _generation;
+	_services.lobby->RequestJoinTicket(
+	    server.id, role,
+	    [this, generation, server, role,
+	     password = std::move(password)](ecs::systems::LobbyResult<lobby_api::JoinTicket>&& result) mutable {
+		    if (generation != _generation)
+		    {
+			    return;
+		    }
+		    if (!result.Ok())
+		    {
+			    // The gods fill the room: the player joins it as an observer
+			    if (role == game_socket::Role::God && result.error.code == lobby_api::problems::k_ServerFull)
+			    {
+				    RequestTicket(server, game_socket::Role::Observer, std::move(password));
+				    return;
+			    }
+			    _busy = false;
+			    Show(TicketFailureMessage(result.error.kind, result.error.code));
+			    return;
+		    }
+		    _room = server;
+		    _room->url = result.value->url;
+		    RoomOpened(std::move(result.value->ticket), std::move(password));
+	    });
 }
 
 void MultiplayerFrontEnd::RoomOpened(std::string ticket, std::u16string password)
 {
-	_stream = std::make_unique<online::TurnStream>(
-	    *_services.sockets, _services.clock ? _services.clock : [] { return uint64_t {0}; });
-	online::WebSocketRequest request {.url = _settings.browser ? PathOf(_room->url) : _room->url};
-	const auto generation = _generation;
 	const auto lanName = _flow.kind == LobbyKind::Lan ? ToUtf8(_settings.profileName) : std::string();
-	online::TurnStreamHandlers handlers {
-	    .opened =
-	        [this, generation, ticket = std::move(ticket), password = ToUtf8(password), lanName] {
-		        if (generation != _generation || _stream == nullptr)
-		        {
-			        return;
-		        }
-		        _stream->SendText(lobby_api::RoomJoinFrame(ticket, password, lanName));
-		        _busy = false;
-		        _joined = true;
-		        _flow.box = Box::Room;
-		        _tab = RoomTab::Chat;
-		        _chat.clear();
-		        _ready = false;
-		        UpdateRoom();
-	        },
-	    .closed =
-	        [this, generation](const online::WebSocketClosed& /*closed*/) {
-		        if (generation != _generation)
-		        {
-			        return;
-		        }
-		        _busy = false;
-		        Show(_joined ? Message::HostLeft : Message::CouldNotConnect);
-		        _joined = false;
-	        },
-	};
-	_stream->Open(std::move(request), std::move(handlers));
+	_joined = false;
+	_observer = false;
+	// The browser opens a game socket only on the page's own host
+	_joining = _services.network->Join(ecs::systems::NetworkJoin {
+	    .url = _settings.browser ? PathOf(_room->url) : _room->url,
+	    .ticket = std::move(ticket),
+	    .gamePassword = ToUtf8(password),
+	    .name = lanName,
+	    .testAuthorities = std::nullopt,
+	    .landLoaded = false,
+	});
+	if (!_joining)
+	{
+		_busy = false;
+		Show(JoinFailureMessage({}, _flow.kind));
+	}
 }
 
 void MultiplayerFrontEnd::UpdateRoom()
@@ -469,13 +552,15 @@ void MultiplayerFrontEnd::LeaveRoom()
 	{
 		_services.lobby->WatchChannel(ChannelOf(_room->id), false);
 	}
-	if (_stream != nullptr)
+	// After the start the network game keeps the session for the game
+	if (_joining && !IsStarted() && _services.network != nullptr)
 	{
-		_stream->Close();
-		_stream.reset();
+		_services.network->Leave();
 	}
+	_joining = false;
 	_room.reset();
 	_joined = false;
+	_observer = false;
 	_ready = false;
 	_seats.clear();
 	_chat.clear();
@@ -670,13 +755,13 @@ void MultiplayerFrontEnd::UseNoClan()
 
 void MultiplayerFrontEnd::SetReady(bool ready)
 {
-	if (!_joined || _stream == nullptr)
+	if (!_joined || _services.network == nullptr)
 	{
 		return;
 	}
 	_ready = ready;
-	_stream->SendText(lobby_api::RoomReadyFrame(ready));
-	// The start of the game comes from the server, which does not make it yet: the box says that the player waits
+	_services.network->SetReady(ready);
+	// The server starts the game when its gods are ready: until then the box says that the player waits
 	if (ready)
 	{
 		Show(Message::WaitingForStart);

@@ -21,6 +21,9 @@ constexpr uint32_t k_InjectedMouse = 0x0B1A0B1Au;
 constexpr uint32_t k_PumpedMouse = 0x0B1A0B1Bu;
 /// Kept in a key event's spare field
 constexpr uint32_t k_InjectedKey = 0x0B1A0B1Au;
+/// The last byte of the letters of a text event that the game made. The game's text events hold at most 30 bytes and
+/// their end, so this byte is free.
+constexpr char k_InjectedText = '';
 
 bool IsInjectedMouse(uint32_t which)
 {
@@ -46,6 +49,9 @@ void openblack::input::MarkInjected(SDL_Event& event)
 	case SDL_KEYUP:
 		event.key.keysym.unused = k_InjectedKey;
 		break;
+	case SDL_TEXTINPUT:
+		event.text.text[sizeof(event.text.text) - 1] = k_InjectedText;
+		break;
 	default:
 		break;
 	}
@@ -65,6 +71,8 @@ bool openblack::input::IsInjected(const SDL_Event& event)
 	case SDL_KEYDOWN:
 	case SDL_KEYUP:
 		return event.key.keysym.unused == k_InjectedKey;
+	case SDL_TEXTINPUT:
+		return event.text.text[sizeof(event.text.text) - 1] == k_InjectedText;
 	default:
 		return false;
 	}

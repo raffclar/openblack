@@ -283,6 +283,8 @@ bool ServerWorld::StartLand()
 		}
 		_scenarioRunner = std::make_unique<testbed_scenarios::Runner>();
 	}
+	// The land starts from the state that every client of the network game starts it from
+	simulation::PrepareNetworkLand(_settings.seed);
 	if (_settings.testbed)
 	{
 		land.LoadTestbed();
@@ -458,6 +460,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .testbed = settings.testbed,
 	    .seed = settings.seed,
 	    .turn = Locator::time::value().GetTurn(),
+	    .opening = settings.testbed ? std::string() : settings.openingName,
 	};
 	if (const auto error = network->Start(*settings.network, start); error.has_value())
 	{

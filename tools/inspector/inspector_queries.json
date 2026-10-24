@@ -2291,6 +2291,20 @@
   "writes": true
  },
  {
+  "description": "Types letters, as the keyboard gives them to the text box that has the focus (a name or a password). It presses no key. The answer does not repeat the letters",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The letters, 1 to 256 bytes of UTF-8",
+    "name": "text",
+    "required": true,
+    "type": "string"
+   }
+  ],
+  "query": "input.text",
+  "writes": true
+ },
+ {
   "description": "Turns the mouse wheel some notches, away from the player positive",
   "kind": "object",
   "parameters": [

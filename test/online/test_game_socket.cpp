@@ -32,9 +32,10 @@ Kind RoundTrip(const Kind& value)
 
 TEST(GameSocket, EachFrameGoesToJsonAndBack)
 {
-	const auto join = RoundTrip(Join {.ticket = "v4.public.abc", .gamePassword = "pw"});
+	const auto join = RoundTrip(Join {.ticket = "v4.public.abc", .gamePassword = "pw", .name = {}});
 	EXPECT_EQ(join.ticket, "v4.public.abc");
 	EXPECT_EQ(join.gamePassword, "pw");
+	EXPECT_EQ(RoundTrip(Join {.ticket = {}, .gamePassword = {}, .name = "lan"}).name, "lan");
 
 	const auto resume = RoundTrip(Resume {.session = "secret", .turn = 4321});
 	EXPECT_EQ(resume.session, "secret");
@@ -52,9 +53,13 @@ TEST(GameSocket, EachFrameGoesToJsonAndBack)
 	EXPECT_FALSE(observer.slot.has_value());
 
 	EXPECT_EQ(RoundTrip(Refused {.reason = "full"}).reason, "full");
-	const auto start = RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 7, .turn = 0});
+	const auto start = RoundTrip(Start {.land = "Land1.txt", .testbed = false, .seed = 7, .turn = 0, .opening = "cow"});
 	EXPECT_EQ(start.land, "Land1.txt");
 	EXPECT_EQ(start.seed, 7u);
+	EXPECT_EQ(start.opening, "cow");
+	// The testbed has no opening, and the frame leaves it out
+	EXPECT_EQ(ToJson(Start {.land = {}, .testbed = true, .seed = 1, .turn = 0, .opening = {}}),
+	          R"({"land":"","seed":1,"testbed":true,"turn":0,"type":"game.start"})");
 	EXPECT_EQ(RoundTrip(Resumed {.turn = 12}).turn, 12u);
 	const auto state = RoundTrip(PlayerState {.slot = 5, .state = PlayerState::State::Left});
 	EXPECT_EQ(state.slot, 5);
@@ -67,6 +72,7 @@ TEST(GameSocket, TheJoinOfTheFrontEndReads)
 	const auto parsed = Parse(R"({"type":"room.join","ticket":"t","game_password":"p","name":"lan"})");
 	ASSERT_TRUE(parsed.has_value());
 	EXPECT_EQ(std::get<Join>(*parsed).ticket, "t");
+	EXPECT_EQ(std::get<Join>(*parsed).name, "lan");
 }
 
 TEST(GameSocket, BadFramesDoNotRead)

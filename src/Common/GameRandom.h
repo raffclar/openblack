@@ -106,6 +106,11 @@ public:
 	/// Both are k_InitialSeed when the game starts and 0 from every map loaded, and saved games keep and restore them
 	virtual void SetSeeds(GameRandomSeeds seeds) = 0;
 
+	/// Puts the state back as it is when the program starts: both seeds k_InitialSeed, no particle stream, the C runtime
+	/// seed 1 and no synced draw counted. A network game that starts in a running program starts from this state, as the
+	/// game server does. A source that keeps no state does nothing.
+	virtual void Restart() {}
+
 	[[nodiscard]] virtual ParticleRandomStream GetParticleStream() const = 0;
 	virtual void SetParticleStream(ParticleRandomStream stream) = 0;
 

@@ -38,6 +38,8 @@ struct NetworkSessionSettings
 	/// The lobby's join ticket
 	std::string ticket;
 	std::string gamePassword;
+	/// The name of the player's profile, on the local network only
+	std::string name;
 	/// How long the client tries to come back after it lost the socket. The server keeps the god for 5 minutes.
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 };
@@ -98,8 +100,8 @@ public:
 	NetworkSession& operator=(NetworkSession&&) = delete;
 
 	void Join(NetworkSessionSettings settings);
-	/// The client loaded the land and is ready for the start
-	void SetReady();
+	/// The player is ready for the start, or cancels the ready before the start
+	void SetReady(bool ready);
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
 	/// Once a frame, after the poll of the sockets: the attempts to come back and the pings

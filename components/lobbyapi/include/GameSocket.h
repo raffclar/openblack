@@ -38,6 +38,8 @@ struct Join
 	std::string ticket;
 	/// The game's password, when the game needs one
 	std::string gamePassword;
+	/// The name of the player's profile, on the local network only, where no ticket names the player
+	std::string name;
 };
 
 /// Client to server: "room.resume". A client that lost its socket opens a new one and sends this in place of a join. It
@@ -89,6 +91,9 @@ struct Start
 	uint32_t seed {0};
 	/// The turn that the world is at when the game starts
 	uint32_t turn {0};
+	/// How the new game on the land starts, as the game's --skip-opening gives it (for example "cow"). Empty for the
+	/// testbed.
+	std::string opening;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.

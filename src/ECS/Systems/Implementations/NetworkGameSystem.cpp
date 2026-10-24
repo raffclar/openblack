@@ -115,28 +115,67 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds);
 	_started = false;
 	_endLogged = false;
+	_awaitingLand = !join.landLoaded;
+	_pendingStart.reset();
 
-	// A network game: the clock never stops for one player. The clock of this computer waits for the server's start, so
-	// that the frames of the wait take no game time.
-	auto& clock = Locator::time::value();
-	clock.SetNetworkGame(true);
-	clock.SetPaused(true);
-	Locator::playerCommandSystem::value().SetSource(_session.get());
-	auto& checksums = Locator::syncChecksumSystem::value();
-	checksums.SetEnabled(true);
-	checksums.SetTurnListener([session = _session.get()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
-		session->LocalChecksum(turn.turn, turn.checksum);
-	});
+	// A join from the command line: the land loaded, so the world is the network game's world from now on. The clock
+	// of this computer waits for the server's start, so that the frames of the wait take no game time.
+	if (join.landLoaded)
+	{
+		Attach();
+		Locator::time::value().SetPaused(true);
+	}
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Joining the game server at {}", join.url);
 	_session->Join(online::NetworkSessionSettings {
 	    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
 	    .ticket = std::move(join.ticket),
 	    .gamePassword = std::move(join.gamePassword),
+	    .name = std::move(join.name),
 	});
-	// The land of the game loaded before the join
-	_session->SetReady();
+	// The land of the game loaded before the join, so the player is ready at once
+	if (join.landLoaded)
+	{
+		_session->SetReady(true);
+	}
 	return true;
+}
+
+void NetworkGameSystem::Attach()
+{
+	// A network game: the clock never stops for one player
+	Locator::time::value().SetNetworkGame(true);
+	Locator::playerCommandSystem::value().SetSource(_session.get());
+	auto& checksums = Locator::syncChecksumSystem::value();
+	checksums.SetEnabled(true);
+	checksums.SetTurnListener([session = _session.get()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
+		session->LocalChecksum(turn.turn, turn.checksum);
+	});
+}
+
+void NetworkGameSystem::SetReady(bool ready)
+{
+	if (_session)
+	{
+		_session->SetReady(ready);
+	}
+}
+
+std::optional<openblack::game_socket::Start> NetworkGameSystem::TakeStart()
+{
+	return std::exchange(_pendingStart, std::nullopt);
+}
+
+void NetworkGameSystem::BeginPlay()
+{
+	if (!_session || !_awaitingLand)
+	{
+		return;
+	}
+	_awaitingLand = false;
+	Attach();
+	Locator::time::value().SetPaused(false);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land of the network game loaded: the world does the server's turns");
 }
 
 void NetworkGameSystem::Leave()
@@ -163,6 +202,14 @@ void NetworkGameSystem::Update()
 	{
 		_started = true;
 		const auto& start = *_session->GetStart();
+		// A join from the front end: the game loads the server's land, then calls BeginPlay
+		if (_awaitingLand)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server starts the game on {} with seed {}",
+			                   start.testbed ? std::string("the testbed") : start.land, start.seed);
+			_pendingStart = start;
+			return;
+		}
 		// The server's world must start from the same land and seed as this computer's world
 		const auto& land = Locator::landSystem::value().GetLandPath();
 		const bool sameLand = std::filesystem::path(start.land).filename() == land.filename();

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 
 #include <SDL_events.h>
@@ -308,6 +309,29 @@ std::string GameInput::Apply(const InputEvent& event)
 	case InputEvent::Kind::Release:
 		Release();
 		return {};
+	case InputEvent::Kind::Text:
+	{
+		// The letters go in pieces of at most 30 bytes, each cut between two whole UTF-8 characters. The last byte of
+		// each event marks it as the game's own.
+		constexpr size_t k_MostTextEventBytes = sizeof(SDL_TextInputEvent::text) - 2;
+		std::string_view rest = event.text;
+		while (!rest.empty())
+		{
+			auto size = std::min(rest.size(), k_MostTextEventBytes);
+			while (size < rest.size() && size > 0 && (static_cast<unsigned char>(rest[size]) & 0xC0U) == 0x80U)
+			{
+				--size;
+			}
+			SDL_Event text {};
+			text.type = SDL_TEXTINPUT;
+			text.text.windowID = WindowId();
+			std::copy_n(rest.data(), size, text.text.text);
+			input::MarkInjected(text);
+			SDL_PushEvent(&text);
+			rest.remove_prefix(size);
+		}
+		return {};
+	}
 	}
 	return "unknown input";
 }

@@ -91,7 +91,10 @@ void NetworkSession::Open(bool resume)
 		                                         else
 		                                         {
 			                                         _stream->SendText(game_socket::ToJson(game_socket::Join {
-			                                             .ticket = _settings.ticket, .gamePassword = _settings.gamePassword}));
+			                                             .ticket = _settings.ticket,
+			                                             .gamePassword = _settings.gamePassword,
+			                                             .name = _settings.name,
+			                                         }));
 			                                         _state = State::Joining;
 		                                         }
 	                                         },
@@ -127,12 +130,12 @@ void NetworkSession::Open(bool resume)
 	_nextPing = _clock() + k_PingMicroseconds;
 }
 
-void NetworkSession::SetReady()
+void NetworkSession::SetReady(bool ready)
 {
-	_ready = true;
-	if (_state == State::Waiting && _stream)
+	_ready = ready;
+	if (_state == State::Waiting && _stream && _stream->IsOpen())
 	{
-		_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = true}));
+		_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = ready}));
 	}
 }
 
