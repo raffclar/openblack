@@ -2714,6 +2714,21 @@ void AddLight(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "light.boost",
+	    .name = "A light boost brightens the light of the land",
+	    .facet = Facet::Light,
+	    .description = "Start the game with --profile-folder on a folder that holds a Profiles.txt and a settings.json "
+	                   "with {\"detail_level\": 5, \"custom_detail\": {\"light_boost\": 1}}. A tiger, a cow and a giant "
+	                   "ape stand still at midday. Start again with \"light_boost\": 0, or with no light_boost, to compare.",
+	    .expected = "With the boost the land, the sky's haze and the creatures are lit brighter than without it, the "
+	                "brightest parts most; at a boost of 0 the light is the same as at every other detail level.",
+	    .environment = {.hour = 12.0f, .clockRuns = false},
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Posed(CreatureType::Tiger, {40.0f, 0.0f}), Posed(CreatureType::Cow, {0.0f, 0.0f}),
+	                  Posed(CreatureType::GiantApe, {-45.0f, 0.0f})},
+	});
+
+	all.push_back({
 	    .id = "light.moving_shadows",
 	    .name = "Shadows of things in flight",
 	    .facet = Facet::Light,

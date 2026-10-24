@@ -54,6 +54,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandColourStamps.h"
 #include "3D/LandIslandInterface.h"
+#include "3D/LandLightFrame.h"
 #include "3D/LandLightTable.h"
 #include "3D/Lightning.h"
 #include "3D/Mists.h"
@@ -4942,7 +4943,8 @@ TextureHandle Renderer::UpdateLandLight() const
 		// The land's light as the sky worked it out for this frame: the clouds over the camera darken the land, and so
 		// does a flash of lightning
 		const auto [skyType, alignment, overcast, flash] = dome->landLight;
-		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash);
+		_landLightTable->Build(*palettes.Handle(LandLightPalette::k_Id.value()), skyType, alignment, overcast, flash,
+		                       FrameRampDivisor());
 		const auto& haze = _landLightTable->GetHaze();
 		const auto& detail = Locator::config::value().detail;
 		// The lower detail levels draw no haze at all
