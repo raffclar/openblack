@@ -93,7 +93,6 @@ public:
 		Ok,
 		Yes,
 		No,
-		Cancel,
 	};
 
 	MultiplayerFrontEnd(Services services, Settings settings);

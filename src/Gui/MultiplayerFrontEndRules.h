@@ -92,8 +92,6 @@ enum class Message : uint8_t
 	/// "The channel host left the channel that you were in.", with OK: the game socket closed while the player was in
 	/// the room. OK goes back to the game list.
 	HostLeft,
-	/// "Waiting for start replies...", with Cancel: the player is ready, and the server waits for the other gods
-	WaitingForStart,
 	/// "Waiting for host to start transferring files...", with no button: the player has the land of the start, and the
 	/// server waits for the other players' replies
 	WaitingForTransfer,
@@ -117,8 +115,6 @@ enum class MessageButtons : uint8_t
 	Ok,
 	/// Yes at the left, No at the right
 	YesNo,
-	/// One Cancel in the middle
-	Cancel,
 	/// No button: the box goes when the work is done
 	None,
 };

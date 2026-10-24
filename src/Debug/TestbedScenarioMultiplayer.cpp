@@ -91,8 +91,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
-	     "A white box says \"Waiting for start replies...\" with Cancel, over the dimmed "
-	     "room. Cancel takes the tick from Ready."},
+	     "The Ready box shows a tick. No message box shows, and the conditions page stays as it is. A click on the tick "
+	     "takes the Ready away."},
 	    {"multiplayer.lan_list", "The multiplayer front end: the local network's games", Stage::LanGameList,
 	     "The front end looks for games on the demonstration's local network.",
 	     "The box \"Find a game on your Local Network.\" lists \"Office game (1/4)\" and \"Upstairs (0/32)\". It has no "
@@ -117,7 +117,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.start_cancelled", "The multiplayer front end: a start that another player stops", Stage::StartCancelled,
 	     "The player joins Bob's game and ticks Ready. The server asks for the land, and another player does not have it.",
 	     "A white box says \"The game could not be started because other people are still downloading the map.\" with "
-	     "OK. OK shows \"Waiting for start replies...\" again, because the player is still ready."},
+	     "OK. OK closes the box, and the player stays ready."},
 	    {"multiplayer.kicked_from_game", "The multiplayer front end: a land file that is not the server's",
 	     Stage::KickedFromGame,
 	     "The player joins Bob's game and ticks Ready. The player's land file is not the server's, so the server removes the "

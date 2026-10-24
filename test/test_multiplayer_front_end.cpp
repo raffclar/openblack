@@ -360,7 +360,6 @@ TEST(MultiplayerRules, LoginFailuresGiveTheGamesMessages)
 	EXPECT_TRUE(AsksAboutName(LobbyErrorKind::Refused));
 	EXPECT_FALSE(AsksAboutName(LobbyErrorKind::Timeout));
 	EXPECT_EQ(ButtonsOf(Message::NotRegistered), MessageButtons::YesNo);
-	EXPECT_EQ(ButtonsOf(Message::WaitingForStart), MessageButtons::Cancel);
 }
 
 TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
@@ -897,18 +896,19 @@ TEST_F(FrontEndTest, UseThisClan)
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
 }
 
-TEST_F(FrontEndTest, ReadyWaitsForTheStart)
+TEST_F(FrontEndTest, ReadyShowsNoBoxAndTheTickTakesItAway)
 {
 	ToRoom();
 	frontEnd->Next();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Conditions);
 	frontEnd->SetReady(true);
 	EXPECT_TRUE(frontEnd->IsReady());
-	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForStart);
+	// The game shows no box while the player waits for the start
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	const auto& socket = sockets.sockets.at(sockets.order.back());
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":true,"type":"room.ready"})");
-	// Cancel takes the tick away
-	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Cancel);
+	// The tick of the Ready box takes the Ready away
+	frontEnd->SetReady(false);
 	EXPECT_FALSE(frontEnd->IsReady());
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":false,"type":"room.ready"})");
@@ -1077,7 +1077,7 @@ TEST_F(FrontEndTest, AStartThatAnotherPlayerCannotMakeShowsTheGamesText)
 	// The player is still ready, and waits for the next start
 	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
 	EXPECT_TRUE(frontEnd->IsReady());
-	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForStart);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 }
 
 TEST_F(FrontEndTest, APlayerWithoutTheLandIsToldAndIsNotReady)
@@ -1112,7 +1112,8 @@ TEST_F(FrontEndTest, APlayerWhoLeavesDuringTheStartTakesAwayItsBoxes)
 	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
 	ServerSends(sockets, game_socket::StartStop {});
 	Step();
-	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForStart);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_TRUE(frontEnd->IsReady());
 }
 
 TEST_F(FrontEndTest, ARemovalFromTheRoomNamesTheServer)

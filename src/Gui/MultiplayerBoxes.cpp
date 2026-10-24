@@ -52,7 +52,6 @@ constexpr glm::ivec2 k_YesPosition {200, 338};
 constexpr glm::ivec2 k_NoPosition {568, 338};
 constexpr int k_AnswerArrowSize = 32;
 constexpr DialogRect k_MessageOk {.min = {325, 338}, .max = {475, 370}};
-constexpr DialogRect k_MessageCancel {.min = {340, 338}, .max = {460, 370}};
 
 /// The texts of the boxes
 constexpr std::string_view k_BackText = "HELP_TEXT_DIALOG_BACK";
@@ -113,7 +112,6 @@ constexpr std::string_view k_ReadyText = "HELP_TEXT_MULTIPLAYER_READY";
 constexpr std::string_view k_SelectMapText = "HELP_TEXT_MULTIPLAYER_SELECT_CONDITION";
 constexpr std::string_view k_YesText = "HELP_TEXT_REQUESTER_BOXES_01";
 constexpr std::string_view k_NoText = "HELP_TEXT_REQUESTER_BOXES_02";
-constexpr std::string_view k_CancelText = "HELP_TEXT_REQUESTER_BOXES_03";
 constexpr std::string_view k_OkText = "HELP_TEXT_REQUESTER_BOXES_04";
 constexpr std::string_view k_YesKeyText = "HELP_TEXT_PAUSE_STATS_145";
 constexpr std::string_view k_NoKeyText = "HELP_TEXT_PAUSE_STATS_144";
@@ -140,8 +138,6 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_DIALOG_ADDITION_127";
 	case Message::AlreadyInRoom:
 		return "HELP_TEXT_MPFE_ERROR_ALREADY_IN_ROOM";
-	case Message::WaitingForStart:
-		return "HELP_TEXT_DIALOG_ADDITION_145";
 	case Message::WaitingForTransfer:
 		return "HELP_TEXT_DIALOG_ADDITION_144";
 	case Message::SendingStartData:
@@ -801,11 +797,6 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		    .onClick = [this] { _frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Yes); };
 		shown.answers.Add<BigButton>(_font, k_NoPosition, k_AnswerArrowSize, Text(k_NoText), LabelSide::Left, Look::RightArrow)
 		    .onClick = [this] { _frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::No); };
-		break;
-	case MessageButtons::Cancel:
-		shown.answers.Add<Button>(k_MessageCancel, Text(k_CancelText), k_Mid).onClick = [this] {
-			_frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Cancel);
-		};
 		break;
 	case MessageButtons::None:
 		break;

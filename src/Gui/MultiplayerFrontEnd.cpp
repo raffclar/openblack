@@ -212,7 +212,7 @@ void MultiplayerFrontEnd::FollowStart()
 			// A player left during the start: the boxes of the start go, with no message
 			if (waiting)
 			{
-				_message = _ready ? Message::WaitingForStart : Message::None;
+				_message = Message::None;
 			}
 			break;
 		}
@@ -351,23 +351,11 @@ void MultiplayerFrontEnd::AnswerMessage(Answer answer)
 			_services.openPage(_settings.accountPage);
 		}
 		break;
-	case Message::WaitingForStart:
-		// Cancel takes the tick from the Ready box
-		SetReady(false);
-		_message = Message::None;
-		break;
 	case Message::HostLeft:
 	case Message::KickedFromGame:
 		LeaveRoom();
 		_flow.box = Box::GameList;
 		EnterGameList();
-		break;
-	case Message::OthersDownloading:
-		// The player is still ready, and waits for the next start
-		if (_ready)
-		{
-			_message = Message::WaitingForStart;
-		}
 		break;
 	default:
 		break;
@@ -875,11 +863,8 @@ void MultiplayerFrontEnd::SetReady(bool ready)
 	}
 	_ready = ready;
 	_services.network->SetReady(ready);
-	// The server starts the game when its gods are ready: until then the box says that the player waits
-	if (ready)
-	{
-		Show(Message::WaitingForStart);
-	}
+	// The server starts the game when its gods are ready. The room shows no box while the player waits, and the tick
+	// of the Ready box takes the Ready away.
 }
 
 void MultiplayerFrontEnd::ShowBox(Box box, LobbyKind kind)
