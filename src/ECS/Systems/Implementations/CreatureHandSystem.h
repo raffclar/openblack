@@ -51,6 +51,7 @@ public:
 	[[nodiscard]] float GetFeedbackSum() const override;
 	[[nodiscard]] float GetLastFeedbackSum() const override;
 	bool TakeFocusTip() override { return std::exchange(_focusTip, false); }
+	void LookAtReportedHand() override;
 
 private:
 	/// Takes hold of a creature by a command, keeping the session if already held to it

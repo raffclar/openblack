@@ -664,6 +664,8 @@ private:
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
 	entt::entity _reportedHand {entt::null};
+	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;

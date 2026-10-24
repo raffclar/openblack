@@ -277,10 +277,18 @@ struct PlayerLeft
 {
 };
 
+/// The thing under the cursor of the player's hand in a network game, sent when it changes. The turn keeps it with the
+/// report of the hand, so that every computer counts the same time that the hand stays over the creature.
+struct HandPick
+{
+	/// The thing under the cursor, or none
+	entt::entity object;
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft>;
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick>;
 
 /// A command and the player that sent it
 struct Command

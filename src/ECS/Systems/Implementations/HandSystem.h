@@ -34,6 +34,8 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera() const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
+	void ReportPick(PlayerNames player, entt::entity object) override;
+	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }

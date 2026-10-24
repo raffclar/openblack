@@ -182,6 +182,7 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.kind));
 		               out.Byte(static_cast<uint8_t>(command.level));
 	               },
+	               [&out](const HandPick& command) { out.Entity(command.object); },
 	               [&out](const HandClick& command) {
 		               out.Entity(command.thing);
 		               out.Byte(static_cast<uint8_t>(command.release ? 1 : 0));
@@ -350,6 +351,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = SeedGesture {.kind = static_cast<SeedGesture::Kind>(kind), .level = level};
 		return DecodeError::None;
 	}
+	case CommandTag::HandPick:
+		action = HandPick {.object = in.Entity()};
+		return DecodeError::None;
 	case CommandTag::HandClick:
 	{
 		HandClick click {};
@@ -499,6 +503,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandClick& /*command*/) { return CommandTag::HandClick; },
 	                      [](const SeedGesture& /*command*/) { return CommandTag::SeedGesture; },
 	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
+	                      [](const HandPick& /*command*/) { return CommandTag::HandPick; },
 	                  },
 	                  action);
 }
@@ -530,6 +535,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
 	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
 	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
+	                                     [](const HandPick& /*command*/) { return k_Entity; },
 	                                 },
 	                                 action);
 	return 1 + fields;
