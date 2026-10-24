@@ -269,6 +269,8 @@
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipChants.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerHand.h"
+#include "ECS/ComputerMind.h"
 #include "ECS/CreatureAttitudeRules.h"
 #include "ECS/FixedOutlines.h"
 #include "ECS/Heartbeat.h"
@@ -612,7 +614,10 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&components::ComputerPlayer::switchedOn>("switchedOn")
 	    .Field<&components::ComputerPlayer::marked>("marked")
 	    .Field<&components::ComputerPlayer::started>("started")
-	    .Field<&components::ComputerPlayer::creatureLike>("creatureLike");
+	    .Field<&components::ComputerPlayer::creatureLike>("creatureLike")
+	    .Field<&components::ComputerPlayer::mind>("mind")
+	    .Field<&components::ComputerPlayer::hand>("hand")
+	    .Field<&components::ComputerPlayer::casts>("casts");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
 	    .Field<&components::PlannedTemple::owner>("owner")
@@ -2388,6 +2393,49 @@ void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context
 	    .Field<&openblack::cave_creature::State::Turn::spin>("spin")
 	    .Field<&openblack::cave_creature::State::Turn::blendedWith>("blendedWith")
 	    .Field<&openblack::cave_creature::State::Turn::blendWeight>("blendWeight");
+	Reflect<openblack::computer_hand::Argument>(context, ValueOnly {})
+	    .Field<&openblack::computer_hand::Argument::object>("object")
+	    .Field<&openblack::computer_hand::Argument::number>("number")
+	    .Field<&openblack::computer_hand::Argument::value>("value");
+	Reflect<openblack::computer_hand::HandAction>(context, ValueOnly {})
+	    .Field<&openblack::computer_hand::HandAction::hand>("hand")
+	    .Field<&openblack::computer_hand::HandAction::coords>("coords")
+	    .Field<&openblack::computer_hand::HandAction::target>("target")
+	    .Field<&openblack::computer_hand::HandAction::kept>("kept")
+	    .Field<&openblack::computer_hand::HandAction::speed>("speed")
+	    .Field<&openblack::computer_hand::HandAction::steps>("steps")
+	    .Field<&openblack::computer_hand::HandAction::part>("part")
+	    .Field<&openblack::computer_hand::HandAction::moveFirst>("moveFirst")
+	    .Field<&openblack::computer_hand::HandAction::insertedMove>("insertedMove")
+	    .Field<&openblack::computer_hand::HandAction::locked>("locked")
+	    .Field<&openblack::computer_hand::HandAction::counter>("counter")
+	    .Field<&openblack::computer_hand::HandAction::progress>("progress")
+	    .Field<&openblack::computer_hand::HandAction::castTarget>("castTarget");
+	Reflect<openblack::computer_hand::Step>(context, ValueOnly {})
+	    .Field<&openblack::computer_hand::Step::kind>("kind")
+	    .Field<&openblack::computer_hand::Step::arguments>("arguments");
+	Reflect<openblack::computer_mind::Mind>(context, ValueOnly {})
+	    .Field<&openblack::computer_mind::Mind::nodes>("nodes")
+	    .Field<&openblack::computer_mind::Mind::doing>("doing")
+	    .Field<&openblack::computer_mind::Mind::lastEmptyTurn>("lastEmptyTurn")
+	    .Field<&openblack::computer_mind::Mind::wasBusy>("wasBusy")
+	    .Field<&openblack::computer_mind::Mind::paused>("paused")
+	    .Field<&openblack::computer_mind::Mind::scriptHold>("scriptHold")
+	    .Field<&openblack::computer_mind::Mind::workedOut>("workedOut")
+	    .Field<&openblack::computer_mind::Mind::castRequested>("castRequested");
+	Reflect<openblack::computer_mind::Node>(context, ValueOnly {})
+	    .Field<&openblack::computer_mind::Node::kind>("kind")
+	    .Field<&openblack::computer_mind::Node::parent>("parent")
+	    .Field<&openblack::computer_mind::Node::children>("children")
+	    .Field<&openblack::computer_mind::Node::childCount>("childCount")
+	    .Field<&openblack::computer_mind::Node::suppression>("suppression")
+	    .Field<&openblack::computer_mind::Node::weight>("weight")
+	    .Field<&openblack::computer_mind::Node::lastWorkedOut>("lastWorkedOut")
+	    .Field<&openblack::computer_mind::Node::lastPerformed>("lastPerformed")
+	    .Field<&openblack::computer_mind::Node::value>("value")
+	    .Field<&openblack::computer_mind::Node::bestLeaf>("bestLeaf")
+	    .Field<&openblack::computer_mind::Node::object>("object")
+	    .Field<&openblack::computer_mind::Node::amount>("amount");
 	Reflect<openblack::creature_audio::Layers>(context, ValueOnly {})
 	    .Field<&openblack::creature_audio::Layers::body>("body")
 	    .Field<&openblack::creature_audio::Layers::gesture>("gesture")
