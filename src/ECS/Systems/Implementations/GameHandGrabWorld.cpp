@@ -497,11 +497,6 @@ void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 	}
 }
 
-bool GameHandGrabWorld::IsNetworkGame() const
-{
-	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-}
-
 void GameHandGrabWorld::SendCommand(player_commands::Action action)
 {
 	if (Locator::playerCommandSystem::has_value())
