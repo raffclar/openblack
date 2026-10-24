@@ -590,7 +590,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 			                             animation.skeleton, mirror);
 		}
 	}
-	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
+	skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents, animation.boneMatrices);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
 creature_head_look::Pose PoseOfBody(const creature_layers::BodyAction& body)

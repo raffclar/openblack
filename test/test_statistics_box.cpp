@@ -301,3 +301,20 @@ TEST(StatisticsGlobal, EveryEntityMadeOnTheLandCounts)
 	registry.Create();
 	EXPECT_EQ(registry.GetEntitiesMade(), 1u);
 }
+
+TEST(StatisticsGlobal, EveryEntityThatGoesCounts)
+{
+	ecs::Registry registry;
+	const auto first = registry.Create();
+	const auto second = registry.Create();
+	EXPECT_EQ(registry.GetEntitiesGone(), 0u);
+	registry.Destroy(first);
+	EXPECT_EQ(registry.GetEntitiesGone(), 1u);
+	std::array<entt::entity, 1> more {second};
+	registry.Destroy(more.begin(), more.end());
+	EXPECT_EQ(registry.GetEntitiesGone(), 2u);
+	// Emptying the registry counts too, and the count does not start again
+	registry.Create();
+	registry.Reset();
+	EXPECT_GT(registry.GetEntitiesGone(), 2u);
+}

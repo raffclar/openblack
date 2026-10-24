@@ -20,6 +20,8 @@ Registry::Registry()
 	_registry.ctx().emplace<RegistryContext>();
 	// Each entity made is counted as it is made, however it is made
 	_registry.on_construct<entt::entity>().connect<&Registry::EntityMade>(*this);
+	// The registry also counts each entity that goes. A reader can then know if entities went since it last looked.
+	_registry.on_destroy<entt::entity>().connect<&Registry::EntityGone>(*this);
 }
 
 void Registry::Release(entt::entity entity)
@@ -51,6 +53,7 @@ void Registry::Reset()
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
+	++_entitiesGone;
 };
 
 void Registry::SetDirty()
