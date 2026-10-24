@@ -77,6 +77,7 @@
 #include "Magic/VortexCrossingRules.h"
 #include "Magic/VortexPullRules.h"
 #include "Magic/VortexRules.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Resources/ResourceManager.h"
@@ -218,12 +219,14 @@ void VortexSystem::DeleteEffects(const Vortex& vortex)
 	}
 }
 
-void VortexSystem::UpdateFrame(float gameSeconds)
+void VortexSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	_groundMarks.clear();
+	// The swirls and the effects over the land step at the pace of the screen's refresh
+	const auto effectStep = particles::drawn_steps::StepSeconds(_effectPace, frameRealTime, frameGameTime, landDrawn);
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
-	registry.Each<Vortex>([this, gameSeconds, particles](entt::entity /*entity*/, Vortex& vortex) {
+	registry.Each<Vortex>([this, effectStep, particles](entt::entity /*entity*/, Vortex& vortex) {
 		const auto seconds = SecondsInState(vortex, ReadIn::Frame);
 		const auto openness = vortex::Openness(vortex.state, seconds);
 		if (openness != 0.0f)
@@ -244,21 +247,21 @@ void VortexSystem::UpdateFrame(float gameSeconds)
 		{
 			return;
 		}
-		// The swirl and the effect over the land grow with the openness, stepped by the frame's game time; the swirl
-		// rises towards the ground as the land is levelled
+		// The swirl and the effect over the land grow with the openness, stepped by the game time since their last step;
+		// the swirl rises towards the ground as the land is levelled
 		const particles::ProcessInfo info {.power = openness, .enabled = true};
-		if (openness != 0.0f && vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
+		if (effectStep.has_value() && openness != 0.0f && vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
 		{
 			const auto ground = Locator::terrainSystem::value().GetHeightAt({vortex.centre.x, vortex.centre.z});
 			const auto depth = vortex::SwirlDepth(vortex::LevelAmount(vortex.state, seconds));
 			particles->SetOrigin(vortex.beforeLandEffect, {vortex.centre.x, ground - depth, vortex.centre.z});
-			if (!particles->ProcessForSpell(vortex.beforeLandEffect, info, gameSeconds))
+			if (!particles->ProcessForSpell(vortex.beforeLandEffect, info, *effectStep))
 			{
 				vortex.beforeLandEffect = ParticleSystemInterface::k_NoEffect;
 			}
 		}
-		if (openness != 0.0f && vortex.afterLandEffect != ParticleSystemInterface::k_NoEffect &&
-		    !particles->ProcessForSpell(vortex.afterLandEffect, info, gameSeconds))
+		if (effectStep.has_value() && openness != 0.0f && vortex.afterLandEffect != ParticleSystemInterface::k_NoEffect &&
+		    !particles->ProcessForSpell(vortex.afterLandEffect, info, *effectStep))
 		{
 			vortex.afterLandEffect = ParticleSystemInterface::k_NoEffect;
 		}

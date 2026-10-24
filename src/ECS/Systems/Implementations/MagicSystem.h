@@ -419,6 +419,8 @@ private:
 	float _handScale {1.0f};
 	/// When the swirls of the dispensers take their next step
 	frame_pace::Pace _swirlPace;
+	/// When the miracle shown in the hand takes its next step
+	frame_pace::Pace _handEffectPace;
 	/// Where the in-hand effect sat when it last stepped
 	glm::vec3 _handAtStep {0.0f};
 	std::optional<entt::entity> _held;

@@ -77,6 +77,38 @@ TEST(DrawnEffectSteps, AFrameBeforeTheStepIsDueDoesNotStep)
 	EXPECT_FLOAT_EQ(*seconds, 0.02f);
 }
 
+TEST(DrawnEffectSteps, StepTimeGivesTheWholeMillisecondsSinceTheLastStep)
+{
+	frame_pace::Pace pace;
+	EXPECT_FALSE(particles::drawn_steps::StepTime(pace, milliseconds(10), milliseconds(7), true).has_value());
+	const auto step = particles::drawn_steps::StepTime(pace, milliseconds(10), milliseconds(9), true);
+	ASSERT_TRUE(step.has_value());
+	EXPECT_EQ(*step, milliseconds(16));
+}
+
+TEST(DrawnEffectSteps, TurnStepsTakeAWholeTurnSixtyTimesASecondAlsoWhenPaused)
+{
+	frame_pace::Pace pace;
+	int steps = 0;
+	// A second of 2 ms frames; the step does not depend on the game time, so a paused game steps too
+	for (int frame = 0; frame < 500; ++frame)
+	{
+		if (const auto seconds = particles::drawn_steps::TurnStepSeconds(pace, milliseconds(2), milliseconds(100), true))
+		{
+			++steps;
+			EXPECT_EQ(*seconds, 100.0f * 0.001f);
+		}
+	}
+	EXPECT_EQ(steps, 60);
+}
+
+TEST(DrawnEffectSteps, TurnStepsDoNotOccurInAFrameThatDoesNotDrawTheLand)
+{
+	frame_pace::Pace pace;
+	EXPECT_FALSE(particles::drawn_steps::TurnStepSeconds(pace, milliseconds(20), milliseconds(100), false).has_value());
+	EXPECT_TRUE(particles::drawn_steps::TurnStepSeconds(pace, milliseconds(20), milliseconds(100), true).has_value());
+}
+
 namespace
 {
 constexpr auto k_A = entt::entity {1};

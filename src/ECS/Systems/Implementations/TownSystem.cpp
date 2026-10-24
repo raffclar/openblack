@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <chrono>
 #include <limits>
 #include <numeric>
 #include <optional>
@@ -90,6 +91,7 @@
 #include "Magic/AreaEffect.h"
 #include "Magic/ResourcePiles.h"
 #include "Magic/TownBelief.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "VillagerBreeding.h"
 #include "VillagerCreatureReactions.h"
 #include "VillagerDiscipleWork.h"
@@ -1214,8 +1216,11 @@ bool TownSystem::LoadState(reflection::BinaryReader& in)
 	return true;
 }
 
-void TownSystem::UpdateFrame(float gameSeconds)
+void TownSystem::UpdateFrame(std::chrono::milliseconds frameRealTime, bool landDrawn)
 {
+	// The symbols step by a whole turn's time at the pace of the screen's refresh
+	const auto step =
+	    particles::drawn_steps::TurnStepSeconds(_beliefPace, frameRealTime, TimeSystemInterface::k_TurnDuration, landDrawn);
 	if (!Locator::particleSystem::has_value() || _registry == nullptr)
 	{
 		return;
@@ -1252,6 +1257,9 @@ void TownSystem::UpdateFrame(float gameSeconds)
 			particles.AddTarget(effect, entity);
 			found = _beliefSymbols.insert_or_assign(entity, effect).first;
 		}
-		particles.ProcessByFrame(found->second, gameSeconds);
+		if (step.has_value())
+		{
+			particles.ProcessByFrame(found->second, *step);
+		}
 	});
 }

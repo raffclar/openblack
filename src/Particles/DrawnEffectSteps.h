@@ -22,17 +22,19 @@
 #include "Common/FramePace.h"
 
 /// When the effects that the land's draw moves on take a step. The game moves some effects on in the draw of the thing
-/// that has them, by the game time of the frame: the pool of a teleport stone and the swirl of a miracle dispenser.
+/// that has them, by the game time of the frame: such as the pool of a teleport stone, the swirl of a miracle dispenser,
+/// the glints of a scroll and the symbols over a village centre.
 /// Such an effect takes a step only in a frame that draws its thing. Its random numbers are only this computer's, so its
 /// steps do not change the world.
 namespace openblack::particles::drawn_steps
 {
 
-/// The seconds by which the effects that the land draws move on after a frame, none in a frame where they do not step.
+/// The game time by which the effects that the land draws move on after a frame, none in a frame where they do not step.
 /// They step no more often than 60 times a second, and each step takes all the game time since the last. In a frame
 /// that does not draw the land, a step that is due does not occur and its game time is lost, as in the game.
-[[nodiscard]] inline std::optional<float> StepSeconds(frame_pace::Pace& pace, std::chrono::milliseconds frameRealTime,
-                                                      std::chrono::milliseconds frameGameTime, bool landDrawn)
+[[nodiscard]] inline std::optional<std::chrono::milliseconds> StepTime(frame_pace::Pace& pace,
+                                                                       std::chrono::milliseconds frameRealTime,
+                                                                       std::chrono::milliseconds frameGameTime, bool landDrawn)
 {
 	pace.gameSinceStep += frameGameTime;
 	if (!frame_pace::Due(pace, frameRealTime))
@@ -44,7 +46,33 @@ namespace openblack::particles::drawn_steps
 	{
 		return std::nullopt;
 	}
-	return std::chrono::duration<float>(step).count();
+	return step;
+}
+
+/// The same steps as StepTime, in seconds
+[[nodiscard]] inline std::optional<float> StepSeconds(frame_pace::Pace& pace, std::chrono::milliseconds frameRealTime,
+                                                      std::chrono::milliseconds frameGameTime, bool landDrawn)
+{
+	const auto step = StepTime(pace, frameRealTime, frameGameTime, landDrawn);
+	if (!step.has_value())
+	{
+		return std::nullopt;
+	}
+	return std::chrono::duration<float>(*step).count();
+}
+
+/// The seconds by which an effect moves on after a frame, for an effect that the game moves on by a whole turn's time
+/// in each frame that draws it, such as the symbols of belief over a village centre: also while the game is paused, and
+/// faster or slower with the frame rate. It steps no more often than 60 times a second, and not in a frame that does not
+/// draw the land.
+[[nodiscard]] inline std::optional<float> TurnStepSeconds(frame_pace::Pace& pace, std::chrono::milliseconds frameRealTime,
+                                                          std::chrono::milliseconds turn, bool landDrawn)
+{
+	if (!frame_pace::Due(pace, frameRealTime) || !landDrawn)
+	{
+		return std::nullopt;
+	}
+	return static_cast<float>(turn.count()) * 0.001f;
 }
 
 /// The order in which the frame draws some things, such as the stones or the dispensers. With a camera and a land the

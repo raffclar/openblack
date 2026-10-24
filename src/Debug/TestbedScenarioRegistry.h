@@ -1161,6 +1161,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town believes this much in the player from the start, so that it stays the
 	/// player's rather than going back to the neutral player at its first turn
 	std::optional<float> townBeliefInPlayer;
+	/// A testbed set-up step: the scenario's town also believes this much in the second player from the start. Put the
+	/// second player in the environment's players.
+	std::optional<float> townBeliefInRival;
 	/// A testbed set-up step: the debug tool gives the scenario's town these miracles, as a land file line gives them. A
 	/// town without a worship site then gets its site, on the first land too.
 	std::vector<MagicType> townMiracles;

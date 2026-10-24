@@ -510,6 +510,20 @@ void AddCaveTrophies(std::vector<Scenario>& all)
 	                 cave(0.5f)},
 	});
 	all.push_back({
+	    .id = "creature_mode.cave_seed_effects_frames",
+	    .name = "Cave trophies: the effects of the seeds stepped in the drawn frames",
+	    .facet = Facet::CreatureMode,
+	    .description = "The player's tiger has learnt the fireball, the heal and the water miracles in full; F5 is "
+	                   "pressed. The effects of the seeds' holders step no more often than 60 times a second.",
+	    .expected = "The seeds hover by the plinths, spinning. The fire of the fireball's holder and the other holders' "
+	                "effects move as they do at 60 frames a second, also at hundreds of frames a second. They do not move "
+	                "faster or flicker more at a high frame rate.",
+	    .framing = {.shot = Shot::Overview},
+	    .creatures = {Player({0.0f, 40.0f}, "yours")},
+	    .commands = {seen(MagicType::Fireball, 1000.0f), seen(MagicType::Heal, 1000.0f), seen(MagicType::Water, 1000.0f),
+	                 main(0.5f), cave(0.5f)},
+	});
+	all.push_back({
 	    .id = "creature_mode.cave_trophies_defensive",
 	    .name = "Cave trophies: a defensive fighter with flocks and a phial",
 	    .facet = Facet::CreatureMode,

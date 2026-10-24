@@ -29,6 +29,7 @@
 #include "3D/TempleMapSpells.h"
 #include "3D/TempleToggles.h"
 #include "3D/TempleToolTips.h"
+#include "Common/FramePace.h"
 #include "Temple/FutureRoomRules.h"
 #include "Temple/SaveGameRoomRules.h"
 #include "Temple/TempleHelp.h"
@@ -192,6 +193,12 @@ private:
 	std::array<std::optional<CaveSeedPlace>, CreatureCaveTrophies::k_BestMiracles> _caveSeedPlaces;
 	/// The seeds drawn this frame
 	std::vector<TempleCaveSeed> _caveSeeds;
+	/// When the effects of the seeds in the creature's room and over the map take their next step, and by how many
+	/// seconds they step in this frame (none in a frame where they do not step)
+	frame_pace::Pace _caveEffectPace;
+	frame_pace::Pace _mapEffectPace;
+	std::optional<float> _caveEffectStep;
+	std::optional<float> _mapEffectStep;
 	float _mapMarkerTurn {0.0f};
 	/// How long the main room's pool has shimmered, in seconds
 	float _poolTime {0.0f};

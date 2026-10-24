@@ -993,6 +993,18 @@ void Runner::Start(const Scenario& scenario)
 			}
 		}
 	}
+	if (scenario.townBeliefInRival.has_value())
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto& towns = registry.Context().towns;
+		if (const auto town = towns.find(k_ScenarioTownId); town != towns.end() && registry.Valid(town->second))
+		{
+			if (auto* impression = registry.TryGet<ecs::components::TownImpression>(town->second))
+			{
+				magic::town_belief::SetInPlayer(impression->belief, PlayerNames::PLAYER_TWO, *scenario.townBeliefInRival);
+			}
+		}
+	}
 	if (scenario.townOwner.has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();

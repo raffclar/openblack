@@ -16,6 +16,7 @@
 #include <ctime>
 
 #include <array>
+#include <chrono>
 #include <unordered_map>
 #include <utility>
 
@@ -89,6 +90,7 @@
 #include "Magic/DispenserRules.h"
 #include "Magic/MagicTables.h"
 #include "Magic/MiracleVisuals.h"
+#include "Particles/DrawnEffectSteps.h"
 #include "Resources/ResourcesInterface.h"
 #include "Temple/TempleControlNames.h"
 #include "Temple/TempleHelpScripts.h"
@@ -1152,9 +1154,10 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 			seed.phialFrame = magic::visuals::StepPhialFrame(seed.phialFrame, seconds);
 			seed.phialPhase = std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(receiveType) * seconds), 1.0f);
 		}
-		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect)
+		if (particles != nullptr && place->holderEffect != ecs::systems::ParticleSystemInterface::k_NoEffect &&
+		    _caveEffectStep.has_value())
 		{
-			particles->ProcessByFrame(place->holderEffect, seconds);
+			particles->ProcessByFrame(place->holderEffect, *_caveEffectStep);
 		}
 		_caveSeeds.push_back(seed);
 	}
@@ -1335,7 +1338,7 @@ void TempleInterior::UpdateMapSpells()
 	const auto gameTime =
 	    Locator::time::has_value() ? std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count() : 0.0f;
 	auto effects = GameMapSpellEffects();
-	_mapSpells.Update(casts, gameTime, effects);
+	_mapSpells.Update(casts, gameTime, _mapEffectStep, effects);
 }
 
 void TempleInterior::ClearMapSpells()
@@ -1604,6 +1607,14 @@ void TempleInterior::Update(std::chrono::microseconds dt)
 			_roomsOpened = true;
 		}
 		const float milliseconds = std::chrono::duration_cast<std::chrono::duration<float, std::milli>>(dt).count();
+		// The effects of the seeds step at the pace of the screen's refresh: in the creature's room by the real time, over
+		// the map by the game's time
+		const auto realTime = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime()
+		                                                 : std::chrono::duration_cast<std::chrono::milliseconds>(dt);
+		const auto gameTime =
+		    Locator::time::has_value() ? Locator::time::value().GetFrameGameTime() : std::chrono::milliseconds {0};
+		_caveEffectStep = particles::drawn_steps::StepSeconds(_caveEffectPace, realTime, realTime, true);
+		_mapEffectStep = particles::drawn_steps::StepSeconds(_mapEffectPace, realTime, gameTime, true);
 		_waterfallSlide += milliseconds * k_WaterfallSlidePerMillisecond;
 		_waterfallSlide -= std::floor(_waterfallSlide);
 

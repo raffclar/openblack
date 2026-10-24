@@ -240,6 +240,20 @@ void AddGlobes(std::vector<Scenario>& all)
 	    .dispensers = everySeed,
 	});
 
+	all.push_back({
+	    .id = "miracles.globe_effect_frames",
+	    .name = "A fireball globe close up, its effect stepped in the drawn frames",
+	    .facet = Facet::Miracles,
+	    .description = "One fireball globe close up, with the camera still. The fireball inside steps in the frames that "
+	                   "draw the globe, no more often than 60 times a second.",
+	    .expected = "The little fireball in the globe burns as it does at 60 frames a second, also at hundreds of frames "
+	                "a second. It does not burn faster or flicker more at a high frame rate. Its random numbers are only "
+	                "this computer's, so the world stays the same.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 7.0f, 15.0f}, .look = {0.0f, 5.0f, 25.0f}},
+	    .dispensers = GlobeRow({MagicType::Fireball}, 25.0f),
+	});
+
 	auto extreme = GlobeRow({MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo}, 34.0f);
 	for (auto& row :
 	     {GlobeRow({MagicType::LightningBolt, MagicType::LightningBoltPowerUpOne, MagicType::LightningBoltPowerUpTwo}, 27.0f),

@@ -3170,7 +3170,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned
 			// to face the camera as it is drawn
 			auto miracleGlobes = profiler.BeginScoped(Profiler::Stage::MiracleGlobesUpdate);
-			Locator::miracleFxSystem::value().UpdateGlobes(std::chrono::duration<float>(gameTime).count());
+			Locator::miracleFxSystem::value().UpdateGlobes(Locator::time::value().GetFrameRealTime(),
+			                                               Locator::time::value().GetFrameGameTime(), simulation::LandDrawn());
 		}
 
 		// The animation of the hand in this frame, and what is below the hand, for the blend of the drawn hand
@@ -3395,7 +3396,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 				{
 					Locator::scriptHighlightSystem::value().UpdateFrame(
 					    std::chrono::duration<float, std::milli>(gameTime).count(), clock.GetTurnFraction(),
-					    Locator::camera::value().GetOrigin());
+					    Locator::camera::value().GetOrigin(), clock.GetFrameRealTime(), simulation::LandDrawn());
 				}
 				Locator::animatedStaticSystem::value().Update(clock.GetFrameGameTime());
 			};
@@ -3435,11 +3436,7 @@ void Game::UpdateEntitiesFrame(std::chrono::microseconds deltaTime)
 					}
 					// The pools of the teleport stones and the swirls of the dispensers that the list draws move on, only in
 					// a frame that draws the land
-					const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-					const bool landHidden =
-					    Locator::videoSystem::has_value() &&
-					    (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
-					const bool landDrawn = !inTemple && !landHidden;
+					const bool landDrawn = simulation::LandDrawn();
 					auto& drawList = Locator::objectDrawListSystem::value();
 					if (Locator::teleportSystem::has_value())
 					{

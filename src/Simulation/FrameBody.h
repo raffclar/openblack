@@ -52,6 +52,10 @@ public:
 	void CloseMenuForCinema() override {}
 };
 
+/// Whether this frame draws the land. The land is not drawn while the player is in the temple, or while a film covers
+/// the screen or hides the world.
+[[nodiscard]] bool LandDrawn();
+
 /// The draw starts: the creatures get their poses before the hand moves. The fights and the walks of the creatures
 /// move on with their animations.
 void PlayCreaturePoses();

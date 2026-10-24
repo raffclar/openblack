@@ -1650,13 +1650,17 @@ void MagicSystem::Update(float /*seconds*/)
 	// (PlaceHandEffect)
 	if (_held.has_value() && registry.Valid(*_held))
 	{
-		// The miracle shown in the hand steps every frame by the frame's game time in whole milliseconds, at least one
-		// even while the game is paused
+		// The miracle shown in the hand steps by the game time since its last step in whole milliseconds, at least one
+		// even while the game is paused. It steps no more often than 60 times a second; between its steps it is drawn
+		// where the hand moved it to (PlaceHandEffect).
 		auto& seed = registry.Get<SpellSeed>(*_held);
-		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
+		const auto step = Locator::time::has_value()
+		                      ? particles::drawn_steps::StepTime(_handEffectPace, Locator::time::value().GetFrameRealTime(),
+		                                                         Locator::time::value().GetFrameGameTime(), true)
+		                      : std::optional(std::chrono::milliseconds {0});
+		if (seed.handEffect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value() && step.has_value())
 		{
-			const auto milliseconds =
-			    Locator::time::has_value() ? std::max<int64_t>(Locator::time::value().GetFrameGameTime().count(), 1) : 1;
+			const auto milliseconds = std::max<int64_t>(step->count(), 1);
 			const auto info = HandEffectInfo(seed);
 			auto& particles = Locator::particleSystem::value();
 			if (!particles.ProcessForSpell(seed.handEffect, info, static_cast<float>(milliseconds) * 0.001f))
@@ -1723,6 +1727,7 @@ void MagicSystem::UpdateDispenserFrame(const ObjectDrawListSystemInterface& draw
 void MagicSystem::Reset()
 {
 	_swirlPace = {};
+	_handEffectPace = {};
 	_spells.clear();
 	_links.clear();
 	StopHoldLoop();

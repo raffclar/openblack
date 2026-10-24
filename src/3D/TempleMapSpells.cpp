@@ -26,7 +26,8 @@ glm::vec3 TempleMapSpells::Middle(glm::vec3 mapPoint)
 	return mapPoint + glm::vec3(0.0f, k_Lift, 0.0f);
 }
 
-void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, Effects& effects)
+void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, std::optional<float> effectSeconds,
+                             Effects& effects)
 {
 	_seeds.clear();
 	std::unordered_map<entt::entity, Shown> shown;
@@ -70,9 +71,9 @@ void TempleMapSpells::Update(std::span<const Cast> casts, float gameSeconds, Eff
 			seed.phialPhase =
 			    std::fmod(seed.phialPhase + (magic::visuals::PhialPulseSpeed(*cast.phialReceiveType) * gameSeconds), 1.0f);
 		}
-		if (place.effect.has_value())
+		if (place.effect.has_value() && effectSeconds.has_value())
 		{
-			effects.Step(*place.effect, holderPoint, gameSeconds);
+			effects.Step(*place.effect, holderPoint, *effectSeconds);
 		}
 		_seeds.push_back(seed);
 		shown.emplace(cast.spell, place);
