@@ -2087,6 +2087,18 @@ void AddAppearance(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.film_surface",
+	    .name = "The 16-bit colours of a film",
+	    .facet = Facet::Interface,
+	    .description = "After a second, the intro film plays full screen. Each picture goes through the 16-bit surface "
+	                   "that the game uses on the display cards of today. The Videos window changes the surface.",
+	    .expected = "The sky and the sea of the film show bands of colour, as the game shows them. Each channel "
+	                "keeps 32 levels. The 565 surface keeps 64 levels of green. The None surface shows smooth colours.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {Command {.kind = Kind::PlayIntroFilm, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "appearance.creature_hand_glows",
 	    .name = "The glows on a creature's hands",
 	    .facet = Facet::Appearance,
@@ -10626,11 +10638,11 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
 	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
 	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
-	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
-	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
-	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
+	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10658,7 +10670,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 175> k_Names {
+	constexpr std::array<std::string_view, 176> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10810,6 +10822,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press the Tab key",
 	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
+	    "play the intro film",
 	    "give hand glows",
 	    "give a creed power",
 	    "attach a script sound",
