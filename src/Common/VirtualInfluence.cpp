@@ -70,7 +70,7 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	// Chants at the worship sites slow the waning with time
 	const float timeScale = 1.0f / (inputs.chants / settings.chantsToDouble + 1.0f);
 	const float power = inputs.influencePower * k_PowerShare;
-	const float nearness = gutils::GetDistanceModifier(distance, power + settings.maxDistance);
+	const float nearness = gutils::GetDistanceModifier(distance, MaximumDistance(inputs.influencePower, settings));
 	const float freshness = gutils::GetDistanceModifier(timeScale * static_cast<float>(inputs.turn - state.lastInsideTurn),
 	                                                    power + static_cast<float>(settings.maxTurns));
 	state.fraction -= 1.0f - freshness * nearness;
@@ -78,6 +78,11 @@ void virtual_influence::ProcessTurn(State& state, const TurnInputs& inputs, cons
 	{
 		state.fraction = 0.0f;
 	}
+}
+
+float virtual_influence::MaximumDistance(float influencePower, const Settings& settings)
+{
+	return influencePower * k_PowerShare + settings.maxDistance;
 }
 
 bool virtual_influence::HumPlays(const State& state, bool handShielded, bool handInInfluence, bool anchorShielded,

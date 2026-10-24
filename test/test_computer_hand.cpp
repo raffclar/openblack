@@ -16,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerMindRules.h"
 
@@ -56,6 +57,19 @@ public:
 		return castWorks;
 	}
 	[[nodiscard]] float CastSeconds(MagicType /*type*/) const override { return 0.5f; }
+	[[nodiscard]] uint32_t SeedGesture(MagicType /*type*/, int32_t stage) const override { return stage == 0 ? 1 : 9; }
+	[[nodiscard]] float GestureLength(uint32_t gesture) const override { return gesture == k_GestureCircle ? 2.0f : 1.0f; }
+	[[nodiscard]] glm::vec3 GesturePoint(uint32_t /*gesture*/, float share) const override
+	{
+		// A line from the bottom left of the square to its top right
+		return {share, 0.0f, share};
+	}
+	void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) override
+	{
+		shown.push_back(gesture);
+		shownAt = corner;
+		shownSize = size;
+	}
 
 	std::map<entt::entity, glm::vec2> places;
 	bool charging {false};
@@ -63,6 +77,9 @@ public:
 	float needed {0.0f};
 	bool castWorks {true};
 	std::vector<MagicType> cast;
+	std::vector<uint32_t> shown;
+	glm::vec3 shownAt {0.0f};
+	float shownSize {0.0f};
 };
 
 } // namespace
@@ -187,6 +204,50 @@ TEST(ComputerHand, MapPositionFollowsTheHandEachTurn)
 	EXPECT_EQ(action.coords.z, map_coords::ToFixed(200.0f));
 }
 
+TEST(ComputerHand, GestureDrawsTheShapeInTheAirThenShowsItOnTheLand)
+{
+	FakeWorld world;
+	HandAction action;
+	action.hand = {100.0f, 30.0f, 200.0f};
+	Add(action, StepKind::MakeGesture, {Argument {.number = static_cast<int32_t>(MagicType::Food)}, Argument {.number = 0}});
+	// The start: the hand goes to the start of the shape, which is the corner here
+	EXPECT_TRUE(Process(action, world));
+	EXPECT_EQ(action.hand, glm::vec3(100.0f, 30.0f, 200.0f));
+	// Half as long as the circle: 15 turns. The shape's x goes east and its z goes up.
+	const float share = GestureSharePerTurn(1.0f, 2.0f);
+	EXPECT_FLOAT_EQ(share, 1.0f / 15.0f);
+	EXPECT_TRUE(Process(action, world));
+	EXPECT_FLOAT_EQ(action.progress, share);
+	EXPECT_FLOAT_EQ(action.hand.x, share * k_GestureSize + 100.0f);
+	EXPECT_FLOAT_EQ(action.hand.y, share * k_GestureSize + 30.0f);
+	EXPECT_FLOAT_EQ(action.hand.z, 200.0f);
+	int turns = 1;
+	while (action.part == 1)
+	{
+		ASSERT_TRUE(Process(action, world));
+		++turns;
+		ASSERT_LT(turns, 40);
+	}
+	EXPECT_EQ(turns, 15);
+	EXPECT_FLOAT_EQ(action.progress, 1.0f);
+	EXPECT_TRUE(world.shown.empty());
+	// The end: the hand goes back, and the shape of the gesture that opens the choice shows on the land there
+	EXPECT_TRUE(Process(action, world));
+	EXPECT_FALSE(Busy(action));
+	EXPECT_EQ(action.hand, glm::vec3(100.0f, 30.0f, 200.0f));
+	ASSERT_EQ(world.shown.size(), 1u);
+	EXPECT_EQ(world.shown[0], 1u);
+	EXPECT_EQ(world.shownAt, action.hand);
+	EXPECT_FLOAT_EQ(world.shownSize, k_GestureSize);
+}
+
+TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
+{
+	EXPECT_FLOAT_EQ(GestureSharePerTurn(0.0f, 2.0f), 1.0f);
+	EXPECT_FLOAT_EQ(GestureSharePerTurn(3.0f, 0.0f), 1.0f);
+	EXPECT_FLOAT_EQ(GestureSharePerTurn(4.0f, 2.0f), 1.0f / 60.0f);
+}
+
 TEST(ComputerMindRules, ChargeShareCountsTheSiteAndTheIcon)
 {
 	const IconFacts icon {
@@ -231,4 +292,37 @@ TEST(ComputerMindRules, WishesAndChoices)
 	ASSERT_TRUE(choice.has_value());
 	EXPECT_EQ(choice->index, 3u);
 	EXPECT_FLOAT_EQ(choice->value, 0.4f);
+}
+
+TEST(ComputerMindRules, NearestEdgeOfTheInfluence)
+{
+	const auto at = [](float x, float z) {
+		return map_coords::MapCoords {.x = map_coords::ToFixed(x), .z = map_coords::ToFixed(z), .altitude = 0.0f};
+	};
+	EXPECT_FALSE(NearestInfluenceEdge(at(0.0f, 0.0f), {}).has_value());
+	// The citadel at (1000, 1000) reaches 100 m; a town at (1500, 1000) reaches 300 m. The place is east of both.
+	const std::vector<InfluenceCircle> circles {{.centre = at(1000.0f, 1000.0f), .radius = 100.0f},
+	                                            {.centre = at(1500.0f, 1000.0f), .radius = 300.0f}};
+	const auto place = at(1900.0f, 1000.0f);
+	const auto edge = NearestInfluenceEdge(place, circles);
+	ASSERT_TRUE(edge.has_value());
+	// The town's edge is nearer: 100 m from the place, east of the town
+	EXPECT_NEAR(map_coords::ToMetres(edge->x), 1800.0f, 0.5f);
+	EXPECT_NEAR(map_coords::ToMetres(edge->z), 1000.0f, 0.5f);
+	// Of two circles at the same distance the first wins
+	const std::vector<InfluenceCircle> same {{.centre = at(1000.0f, 1000.0f), .radius = 100.0f},
+	                                         {.centre = at(1000.0f, 1000.0f), .radius = 100.0f}};
+	EXPECT_TRUE(NearestInfluenceEdge(place, same).has_value());
+}
+
+TEST(ComputerMindRules, PlaceOutsideTheInfluencePullsLessFurtherOut)
+{
+	// The pull is the square of the distance modifier, nearly full at the edge
+	const float edge = gutils::GetDistanceModifier(0.0f, 200.0f);
+	EXPECT_FLOAT_EQ(OutsidePlacePull(0.0f, 200.0f), edge * edge);
+	EXPECT_GT(OutsidePlacePull(0.0f, 200.0f), 0.99f);
+	const float modifier = gutils::GetDistanceModifier(50.0f, 200.0f);
+	EXPECT_FLOAT_EQ(OutsidePlacePull(50.0f, 200.0f), modifier * modifier);
+	// Past the reach it is nothing
+	EXPECT_FLOAT_EQ(OutsidePlacePull(400.0f, 200.0f), 0.0f);
 }

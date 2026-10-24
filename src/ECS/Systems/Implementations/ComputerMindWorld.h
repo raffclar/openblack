@@ -45,6 +45,10 @@ public:
 	[[nodiscard]] bool Angry(MagicType type) const override;
 	bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) override;
 	[[nodiscard]] float CastSeconds(MagicType type) const override;
+	[[nodiscard]] uint32_t SeedGesture(MagicType type, int32_t stage) const override;
+	[[nodiscard]] float GestureLength(uint32_t gesture) const override;
+	[[nodiscard]] glm::vec3 GesturePoint(uint32_t gesture, float share) const override;
+	void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) override;
 
 private:
 	PlayerNames _player;

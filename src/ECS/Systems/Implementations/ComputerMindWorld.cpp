@@ -22,8 +22,13 @@
 
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
+#include "Audio/GameSoundEffects.h"
+#include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/VirtualInfluence.h"
+#include "Creature/CreatureGesture.h"
 #include "ECS/BuildingSites.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
@@ -34,6 +39,7 @@
 #include "ECS/ComputerMindRules.h"
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
@@ -380,6 +386,52 @@ float GameHandWorld::CastSeconds(MagicType type) const
 	           : 0.0f;
 }
 
+uint32_t GameHandWorld::SeedGesture(MagicType type, int32_t stage) const
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return 0;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
+	if (!seed.has_value())
+	{
+		return 0;
+	}
+	const auto& seedInfo = magic::GetSpellSeedInfo(info, *seed);
+	return static_cast<uint32_t>(stage == 0 ? seedInfo.selectionGesture : seedInfo.gesture);
+}
+
+float GameHandWorld::GestureLength(uint32_t gesture) const
+{
+	const auto symbol = Locator::gestureSystem::has_value()
+	                        ? Locator::gestureSystem::value().GetSymbol(static_cast<GestureType>(gesture))
+	                        : std::nullopt;
+	return symbol.has_value() ? symbol->length : 0.0f;
+}
+
+glm::vec3 GameHandWorld::GesturePoint(uint32_t gesture, float share) const
+{
+	const auto symbol = Locator::gestureSystem::has_value()
+	                        ? Locator::gestureSystem::value().GetSymbol(static_cast<GestureType>(gesture))
+	                        : std::nullopt;
+	return symbol.has_value() ? creature_gesture::SamplePath(symbol->points, share) : glm::vec3(0.0f);
+}
+
+void GameHandWorld::ShowGesture(uint32_t gesture, glm::vec3 corner, float size)
+{
+	if (gesture == 0)
+	{
+		return;
+	}
+	if (Locator::gestureSystem::has_value())
+	{
+		Locator::gestureSystem::value().ShowGestureOnLand(static_cast<GestureType>(gesture), corner, size);
+	}
+	// The sound of a recognised gesture plays at the god's hand
+	audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_SpellGestureRecognise), corner);
+}
+
 GameMindWorld::GameMindWorld(PlayerNames player, ComputerPlayer& state)
     : _player(player)
     , _state(state)
@@ -523,11 +575,45 @@ float GameMindWorld::ChargeLevel(MagicType type, entt::entity& icon)
 
 float GameMindWorld::PlacePull(const map_coords::MapCoords& place) const
 {
-	if (!Locator::influenceSystem::has_value())
+	if (!Locator::influenceSystem::has_value() || !Locator::infoConstants::has_value())
 	{
 		return 0.0f;
 	}
-	return Locator::influenceSystem::value().PlayerInfluence(_player, place) > 0.0f ? 1.0f : 0.0f;
+	const auto& influence = Locator::influenceSystem::value();
+	if (influence.PlayerInfluence(_player, place) > 0.0f)
+	{
+		return 1.0f;
+	}
+	// Outside the influence the place pulls less the further it is from the nearest edge of the citadel's or a town's
+	// circle
+	std::vector<computer_mind_rules::InfluenceCircle> circles;
+	if (Locator::worshipSiteSystem::has_value())
+	{
+		if (const auto centre = CoordsOfThing(Locator::worshipSiteSystem::value().TempleOf(_player)))
+		{
+			circles.push_back({.centre = *centre, .radius = influence.CitadelReachOf(_player)});
+		}
+	}
+	for (const auto town : TownsOf(_player))
+	{
+		const auto centre = CoordsOfThing(town);
+		const auto* reach = Entities().TryGet<const TownInfluence>(town);
+		if (centre.has_value() && reach != nullptr)
+		{
+			circles.push_back({.centre = *centre, .radius = reach->radius});
+		}
+	}
+	const auto edge = computer_mind_rules::NearestInfluenceEdge(place, circles);
+	if (!edge.has_value())
+	{
+		return 0.0f;
+	}
+	const auto& citadel = Locator::infoConstants::value().citadel;
+	const float reach = virtual_influence::MaximumDistance(influence.InfluencePower(_player),
+	                                                       {.maxDistance = citadel.virtualInfluenceMaxDistance,
+	                                                        .maxTurns = citadel.virtualInfluenceMaxGameTicks,
+	                                                        .chantsToDouble = citadel.virtualInfluenceChantsToDouble});
+	return computer_mind_rules::OutsidePlacePull(gutils::GetDistanceInMetres(place, *edge), reach);
 }
 
 float GameMindWorld::ShallCast(computer_mind::Mind& mind, uint16_t node, MagicType type, ResourceType resource)

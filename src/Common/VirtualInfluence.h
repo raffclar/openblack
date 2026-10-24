@@ -60,6 +60,10 @@ struct Settings
 	float chantsToDouble;
 };
 
+/// How far past the border the hand keeps its player's influence before it is all gone: the citadel's distance, made
+/// longer by a fifth of the player's influence power
+[[nodiscard]] float MaximumDistance(float influencePower, const Settings& settings);
+
 /// What a turn finds about the hand
 struct TurnInputs
 {

@@ -248,6 +248,42 @@ Result CastEnd(HandAction& action, const World& world, const Step& step)
 	return Result::Continue;
 }
 
+/// The gesture that a step draws, from its magic type and its stage
+uint32_t GestureOf(const World& world, const Step& step)
+{
+	return world.SeedGesture(static_cast<MagicType>(ArgumentAt(step, 0).number), ArgumentAt(step, 1).number);
+}
+
+Result GestureStart(HandAction& action, const World& world, const Step& step)
+{
+	action.kept = action.hand;
+	action.progress = 0.0f;
+	action.hand = GestureHand(action.kept, world.GesturePoint(GestureOf(world, step), 0.0f));
+	return Result::Next;
+}
+
+Result GestureProcess(HandAction& action, const World& world, const Step& step)
+{
+	const auto gesture = GestureOf(world, step);
+	const float share = GestureSharePerTurn(world.GestureLength(gesture), world.GestureLength(k_GestureCircle));
+	action.progress = share + action.progress;
+	if (!(action.progress < 1.0f))
+	{
+		action.progress = 1.0f;
+		return Result::Next;
+	}
+	action.hand = GestureHand(action.kept, world.GesturePoint(gesture, action.progress));
+	return Result::Continue;
+}
+
+Result GestureEnd(HandAction& action, World& world, const Step& step)
+{
+	// The hand goes back to where it started, and the gesture shows on the land there
+	action.hand = action.kept;
+	world.ShowGesture(GestureOf(world, step), action.hand, k_GestureSize);
+	return Result::Next;
+}
+
 /// The part of the first step, for the kinds of steps that the hand knows
 Result RunPart(HandAction& action, World& world, const Step& step)
 {
@@ -276,6 +312,12 @@ Result RunPart(HandAction& action, World& world, const Step& step)
 			return CastStart(action, step);
 		}
 		return action.part == 1 ? CastProcess(action, world, step) : CastEnd(action, world, step);
+	case StepKind::MakeGesture:
+		if (action.part == 0)
+		{
+			return GestureStart(action, world, step);
+		}
+		return action.part == 1 ? GestureProcess(action, world, step) : GestureEnd(action, world, step);
 	default:
 		// No action of the god uses the other kinds yet
 		return Result::Abort;
@@ -368,4 +410,18 @@ bool openblack::computer_hand::Process(HandAction& action, World& world)
 		return true;
 	}
 	return true;
+}
+
+float openblack::computer_hand::GestureSharePerTurn(float length, float circleLength)
+{
+	if (!(length > 0.0f) || !(circleLength > 0.0f))
+	{
+		return 1.0f;
+	}
+	return 1.0f / ((length / circleLength) * k_GestureTurns);
+}
+
+glm::vec3 openblack::computer_hand::GestureHand(glm::vec3 corner, glm::vec3 shapePoint)
+{
+	return {shapePoint.x * k_GestureSize + corner.x, shapePoint.z * k_GestureSize + corner.y, corner.z};
 }

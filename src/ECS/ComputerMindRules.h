@@ -14,6 +14,8 @@
 #include <optional>
 #include <span>
 
+#include "3D/MapCoords.h"
+
 /// The rules by which a computer god finds how much it wants a town's need or a miracle. Pure functions of what the god
 /// sees.
 namespace openblack::computer_mind_rules
@@ -80,5 +82,25 @@ struct ChargeChoice
 	float value {0.0f};
 };
 [[nodiscard]] std::optional<ChargeChoice> ChooseCharge(std::span<const ChargeCandidate> icons);
+
+/// A circle of a player's own influence: its middle and how far it reaches, in metres
+struct InfluenceCircle
+{
+	map_coords::MapCoords centre;
+	float radius {0.0f};
+};
+
+/// The god measures its distance to the edge of its influence from this distance at first
+constexpr float k_FarFromInfluence = 9999999.0f;
+/// Under this pull a place outside the influence counts for nothing
+constexpr double k_LeastPlacePull = 0.01;
+
+/// The point on the edge of the player's influence nearest to a place, from the circles of the citadel first and then
+/// of the towns in their order. The first circle of the smallest distance wins. None when there are no circles.
+[[nodiscard]] std::optional<map_coords::MapCoords> NearestInfluenceEdge(const map_coords::MapCoords& place,
+                                                                        std::span<const InfluenceCircle> circles);
+/// How much a place outside the god's influence pulls, from 0 to 1: less the further it is from the edge of the
+/// influence, out to the reach of the hand past the border. A place that pulls less than a hundredth gives 0.
+[[nodiscard]] float OutsidePlacePull(float distanceToEdge, float reach);
 
 } // namespace openblack::computer_mind_rules

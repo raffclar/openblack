@@ -137,6 +137,13 @@ constexpr float k_OverThingHeights = 2.5f;
 /// The seconds that the worshippers have to start a chant, and to finish it
 constexpr float k_ChantStartSeconds = 5.0f;
 constexpr float k_ChantFinishSeconds = 60.0f;
+/// The hand draws a gesture in the air on an upright square of this many metres, from its place as a corner. The
+/// gesture's shape then shows on the land at the same size.
+constexpr float k_GestureSize = 30.0f;
+/// A gesture as long as the circle takes this many turns to draw. The other gestures take a time that their length gives.
+constexpr float k_GestureTurns = 30.0f;
+/// The gesture whose length measures the time of the others: the circle
+constexpr uint32_t k_GestureCircle = 4;
 
 /// What the steps of the hand read and change in the game
 class World
@@ -163,6 +170,16 @@ public:
 	virtual bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) = 0;
 	/// The seconds that the god keeps its hand over a miracle that it cast
 	[[nodiscard]] virtual float CastSeconds(MagicType type) const = 0;
+	/// The gesture of the seed of a miracle: for stage 0 the gesture that opens the choice of miracles, for stage 1 the
+	/// gesture of the miracle. 0 when the miracle has no seed.
+	[[nodiscard]] virtual uint32_t SeedGesture(MagicType type, int32_t stage) const = 0;
+	/// The length of the shape of a gesture, in a square of side 1. 0 when the gesture has no shape.
+	[[nodiscard]] virtual float GestureLength(uint32_t gesture) const = 0;
+	/// The point of the shape of a gesture at a share of its length, from 0 to 1, in a square of side 1
+	[[nodiscard]] virtual glm::vec3 GesturePoint(uint32_t gesture, float share) const = 0;
+	/// The shape of the gesture shows on the land, as a recognised gesture shows. The square is so many metres across,
+	/// from a corner.
+	virtual void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) = 0;
 };
 
 /// The hand has steps left
@@ -173,5 +190,11 @@ void Add(HandAction& action, StepKind kind, std::vector<Argument> arguments);
 void Clear(HandAction& action);
 /// The hand does a turn of its action. False when the action ended badly, which clears it.
 bool Process(HandAction& action, World& world);
+
+/// The share of a gesture that the hand draws in one turn, from the length of the gesture and of the circle. The hand
+/// draws all of a gesture with no length in one turn.
+[[nodiscard]] float GestureSharePerTurn(float length, float circleLength);
+/// Where the hand is for a point of a gesture's shape: the shape's x goes east and its z goes up from the corner
+[[nodiscard]] glm::vec3 GestureHand(glm::vec3 corner, glm::vec3 shapePoint);
 
 } // namespace openblack::computer_hand

@@ -14,6 +14,7 @@
 #include <optional>
 #include <span>
 
+#include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 
 using namespace openblack;
@@ -100,4 +101,29 @@ std::optional<ChargeChoice> computer_mind_rules::ChooseCharge(std::span<const Ch
 		}
 	}
 	return best;
+}
+
+std::optional<map_coords::MapCoords> computer_mind_rules::NearestInfluenceEdge(const map_coords::MapCoords& place,
+                                                                               std::span<const InfluenceCircle> circles)
+{
+	std::optional<map_coords::MapCoords> nearest;
+	float best = k_FarFromInfluence;
+	for (const auto& circle : circles)
+	{
+		const float distance = gutils::GetDistanceInMetres(circle.centre, place) - circle.radius;
+		if (distance < best)
+		{
+			// The point on the circle in the direction of the place
+			const float angle = gutils::Get3DAngleFromXZ(circle.centre, place);
+			nearest = circle.centre + gutils::GetPosFromAngle(angle, circle.radius);
+			best = distance;
+		}
+	}
+	return nearest;
+}
+
+float computer_mind_rules::OutsidePlacePull(float distanceToEdge, float reach)
+{
+	const float pull = gutils::GetDistanceModifier(distanceToEdge, reach);
+	return static_cast<double>(pull) >= k_LeastPlacePull ? pull * pull : 0.0f;
 }
