@@ -31,6 +31,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -150,7 +151,15 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	{
 		return;
 	}
-	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, transform->position),
+	// A seed in the hand is where the reports of its player put the hand; the frames draw it at the hand of this computer
+	auto position = transform->position;
+	if (_held == spell.seed && Locator::handSystem::has_value())
+	{
+		const auto hand =
+		    Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		position = hand.value_or(position);
+	}
+	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
 	{
 		CloseDown(spellEntity);

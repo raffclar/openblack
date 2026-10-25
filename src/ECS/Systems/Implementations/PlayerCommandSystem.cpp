@@ -133,6 +133,20 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::magicSystem::value().DoSeedGesture(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, HandCast>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCast(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCastUnlock>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCastUnlock(command.player, action.seed);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
 			    if (openblack::Locator::handGrabSystem::has_value())

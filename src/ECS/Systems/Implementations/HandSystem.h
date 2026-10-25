@@ -45,6 +45,7 @@ public:
 	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
+	[[nodiscard]] glm::vec3 GetReportedHandVelocity() const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:

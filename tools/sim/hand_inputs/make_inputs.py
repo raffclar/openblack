@@ -7,8 +7,9 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json and twogods_scoop_throw.json beside this script. strokes.json
-plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes). The twogods inputs play on the
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json, twogods_scoop_throw.json and casts.json beside this script. strokes.json
+plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes), and casts.json on
+miracles.recorded_casts. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
 fight.json is not made here: it is the recording of the fight autopilot on the testbed scenario combat.recorded_presses,
@@ -248,6 +249,43 @@ def scoop_throw(pile):
     return script.events
 
 
+# The gesture that powers up the water miracle of miracles.recorded_casts to its first level
+CASTS_POWER_UP = "spiral"
+
+
+def casts():
+    """The seeds of the testbed scenario miracles.recorded_casts: a power-up, a scribble that stops it and a scribble
+    that drops the first water miracle; the fireball thrown from the moving hand; the second water miracle held on the land
+    while the hand moves, then let go"""
+    script = Script()
+    script.wait(10)
+    script.move((640, 600), 20)
+    # The first water miracle comes into the hand at 4.5 s
+    script.frame = 350
+    script.add({"kind": "gesture", "name": CASTS_POWER_UP, "hold_action": False})
+    script.frame = 480
+    script.add({"kind": "gesture", "name": "scribble", "hold_action": False})
+    script.frame = 610
+    script.add({"kind": "gesture", "name": "scribble", "hold_action": False})
+    # The fireball miracle comes into the hand at 15 s: the hand arms it, moves and throws it as the button comes up
+    script.frame = 760
+    script.move((660, 600), 40)
+    script.wait(50)
+    script.press()
+    script.wait(10)
+    script.move((640, 450), 6)
+    script.release()
+    # The second water miracle comes into the hand at 20 s: the hand holds it on the land and moves
+    script.frame = 1100
+    script.move((660, 600), 20)
+    script.press()
+    script.move((720, 640), 60)
+    script.move((600, 620), 60)
+    script.release()
+    script.wait(100)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -267,6 +305,7 @@ def main():
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
     write("twogods_scoop_throw", scoop_throw((712, 437)))
+    write("casts", casts())
 
 
 if __name__ == "__main__":
