@@ -97,7 +97,7 @@ public:
 
 	void DrawScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void BakeLandShadows(bool drawVegetation) const noexcept final;
-	[[nodiscard]] bool WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept final;
+	void WarmUpScene(const DrawSceneDesc& drawDesc) const noexcept final;
 	void PrepareCreatureSkins(size_t count) const noexcept final;
 	void ReleaseGpuWorkMemory() noexcept final;
 	void DrawMesh(const L3DMesh& mesh, const L3DMeshSubmitDesc& desc, uint8_t subMeshIndex) const noexcept final;
