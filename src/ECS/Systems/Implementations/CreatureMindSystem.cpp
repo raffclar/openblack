@@ -106,7 +106,6 @@
 #include "ECS/Map.h"
 #include "ECS/ObjectPhysics.h"
 #include "ECS/PhysicsEntry.h"
-#include "ECS/PlayerCamera.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ReportedCamera.h"
@@ -830,7 +829,7 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 	constexpr float k_NoLookWhileMovingWithin = 10.0f;
 	if (gaze.camera)
 	{
-		const auto camera = openblack::ecs::ReportedPlayerCamera();
+		const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 		return camera.has_value() ? std::optional(camera->origin) : std::nullopt;
 	}
 	if (gaze.hand)
@@ -845,7 +844,7 @@ std::optional<glm::vec3> GazePoint(const ecs::Registry& registry, entt::entity c
 		{
 			return NearestHand(registry, creature);
 		}
-		const auto camera = openblack::ecs::ReportedPlayerCamera();
+		const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 		return camera.has_value() ? std::optional(camera->origin) : std::nullopt;
 	}
 	if (gaze.feet)
@@ -1120,7 +1119,7 @@ bool WatchedIsInTheAir(const ecs::Registry& registry, const creature_mind::IdleM
 std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registry& registry, entt::entity creature,
                                                               const creature_mind::IdleMind& idle)
 {
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::WatchCamera ||
 	    !camera.has_value())
 	{
@@ -1152,7 +1151,7 @@ std::optional<creature_mind::Senses::CameraView> CameraViewOf(const ecs::Registr
 std::pair<std::optional<glm::vec3>, bool> CameraFocusOf(const ecs::Registry& registry, entt::entity creature,
                                                         const creature_mind::IdleMind& idle)
 {
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 	if (idle.step >= idle.agenda.size() || idle.agenda[idle.step].kind != creature_mind::Step::Kind::FollowCamera ||
 	    !camera.has_value())
 	{
@@ -1278,7 +1277,7 @@ WatchPlayerViewOf(const ecs::Registry& registry, entt::entity creature, const Cr
 	{
 		view.hand = targetOf(*hand);
 	}
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera())
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature))
 	{
 		view.camera = targetOf(camera->origin);
 	}
@@ -2032,7 +2031,7 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		glm::vec3 origin;
 		glm::vec3 focus;
 	};
-	const auto reported = openblack::ecs::ReportedPlayerCamera();
+	const auto reported = openblack::ecs::ReportedCreatureCamera(entity);
 	const auto view =
 	    reported.has_value() ? std::optional(View {.origin = reported->origin, .focus = reported->focus}) : std::nullopt;
 	SetUpMind(entity, creature, mind);
@@ -2959,7 +2958,7 @@ void CreatureMindSystem::HandTookHold(entt::entity creature)
 		return;
 	}
 	// It stops and turns to face the player's eye
-	if (const auto camera = openblack::ecs::ReportedPlayerCamera();
+	if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 	    Locator::creatureLocomotionSystem::has_value() && camera.has_value())
 	{
 		Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature, glm::vec2(camera->origin.x, camera->origin.z));
@@ -3059,7 +3058,7 @@ void CreatureMindSystem::ReceiveFeedback(entt::entity creature, float feedback)
 	// Too slight to count, it only looks at the player
 	if (std::abs(feedback) <= creature_feedback::k_SlightFeedback)
 	{
-		if (const auto camera = openblack::ecs::ReportedPlayerCamera();
+		if (const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 		    Locator::creatureLocomotionSystem::has_value() && camera.has_value())
 		{
 			Locator::creatureLocomotionSystem::value().TurnToFaceAtOnce(creature,
@@ -3564,7 +3563,7 @@ void CreatureMindSystem::UseGift(entt::entity creature, entt::entity object)
 		break;
 	case creature_giving::Use::Throw:
 	{
-		const auto camera = openblack::ecs::ReportedPlayerCamera();
+		const auto camera = openblack::ecs::ReportedCreatureCamera(creature);
 		const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
 		ForcePlan(creature, {.desire = Desire::PlayWithPlayer,
 		                     .action = k_ThrowGivenAction,

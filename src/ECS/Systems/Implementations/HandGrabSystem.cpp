@@ -25,6 +25,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -42,6 +43,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "GameHandGrabWorld.h"
 #include "Hand/HandClickRules.h"
+#include "Hand/OtherHeldDraw.h"
 #include "Help/HelpProfile.h"
 
 using namespace openblack;
@@ -235,13 +237,18 @@ bool HandGrabSystem::HandInInfluence() const
 
 hand_grab::Gate HandGrabSystem::GateOf(entt::entity object) const
 {
+	return GateAt(object, _world->PickedPoint());
+}
+
+hand_grab::Gate HandGrabSystem::GateAt(entt::entity object, std::optional<glm::vec3> point) const
+{
 	const auto& registry = _world->Entities();
 	return {.spaceInHand = true,
 	        .alreadyInHand = registry.AllOf<InHand>(object),
 	        .valid = hand_grab::ValidForPlaceInHand(HoldableOf(object)),
 	        .cannotBePickedUp = registry.AllOf<CannotBePickedUp>(object),
 	        .carried = registry.AllOf<CarriedByTornado>(object),
-	        .inInfluence = HandInInfluence()};
+	        .inInfluence = !point.has_value() || _world->HandInInfluence(_world->HandPlayer(), *point)};
 }
 
 bool HandGrabSystem::MayTake(entt::entity object) const
@@ -1144,8 +1151,9 @@ void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds)
 {
 	auto& registry = _world->Entities();
-	// The pull may have ended on a thing that can no longer be taken: the hand lets go of it
-	if (!MayTake(object))
+	// The pull may have ended on a thing that can no longer be taken: the hand lets go of it. The turn asks the influence
+	// at the point that the last report of the hand's player picked, the same on every computer.
+	if (!hand_grab::PassesGate(GateAt(object, _world->ReportedCollidePoint())))
 	{
 		Empty(grab);
 		return;
@@ -1814,6 +1822,23 @@ void HandGrabSystem::PlaceHeldForTurn()
 	registry.Each<const InHand, Transform>([this](const InHand& inHand, Transform& transform) {
 		transform.position = _world->ReportedPlaceOf(inHand.hand);
 		transform.rotation = inHand.rotation;
+		transform.scale = inHand.scale;
+	});
+}
+
+void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
+{
+	auto& registry = _world->Entities();
+	registry.Each<const InHand, Transform>([this, &registry, frameMs](const InHand& inHand, Transform& transform) {
+		if (!Exists(inHand.hand) || !_world->IsOtherPlayersHand(inHand.hand))
+		{
+			return;
+		}
+		const auto reported = _world->ReportedPlaceOf(inHand.hand);
+		auto* track = registry.TryGet<HeldDrawTrack>(inHand.hand);
+		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		transform.position = _world->AsMapPlace(point);
+		transform.rotation = glm::mat3(1.0f);
 		transform.scale = inHand.scale;
 	});
 }

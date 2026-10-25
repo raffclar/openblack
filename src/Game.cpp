@@ -151,6 +151,7 @@
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
+#include "ECS/OtherPlayerSparkles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
 #include "ECS/Registry.h"
@@ -1997,6 +1998,9 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 	case Step::HandToolTips:
 		ProcessHandToolTipTurn();
 		break;
+	case Step::PlayerSparkles:
+		ecs::other_player_sparkles::AddAtCameras();
+		break;
 	case Step::HelpProfile:
 		// The help's count of what the player did moves on a turn
 		if (Locator::helpProfileSystem::has_value())
@@ -3301,6 +3305,12 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				};
 				holdingSeed = _handHold.Pose(heldThing, holdFrame, _handAnimation.get(), *handTransform);
 			}
+		}
+		// What the hands of the other players of a network game hold moves toward their reported places
+		if (Locator::handGrabSystem::has_value())
+		{
+			Locator::handGrabSystem::value().PlaceOthersHeldForFrame(
+			    static_cast<int32_t>(Locator::time::value().GetFrameGameTime().count()));
 		}
 		{
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned

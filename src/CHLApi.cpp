@@ -1210,7 +1210,7 @@ void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
 	if (ScriptsReadReports())
 	{
-		const auto reported = ecs::ReportedPlayerCamera();
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
 		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
 		return;
 	}
@@ -1223,7 +1223,7 @@ void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
 	if (ScriptsReadReports())
 	{
-		const auto reported = ecs::ReportedPlayerCamera();
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
 		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
 		return;
 	}

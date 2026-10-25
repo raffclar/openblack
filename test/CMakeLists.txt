@@ -1750,3 +1750,5 @@ openblack_setup_and_add_inspector_test(
 )
 openblack_setup_and_add_test(test_network_land online/test_network_land.cpp)
 openblack_setup_and_add_test(test_online_map_land test_online_map_land.cpp)
+openblack_setup_and_add_test(test_player_sparkles test_player_sparkles.cpp)
+openblack_setup_and_add_test(test_other_held_draw test_other_held_draw.cpp)

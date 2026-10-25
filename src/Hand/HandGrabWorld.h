@@ -230,11 +230,19 @@ public:
 	[[nodiscard]] virtual Pose PoseOf(entt::entity object) const = 0;
 	/// The place of the hand in the world: where the last report of its player put it. The turns measure from here.
 	[[nodiscard]] virtual glm::vec3 ReportedHandPlace() const { return PoseOf(Hand()).origin; }
+	/// The point under the cursor that the last report of the hand's player picked, none before the first report. The
+	/// turns ask the influence there.
+	[[nodiscard]] virtual std::optional<glm::vec3> ReportedCollidePoint() const { return PickedPoint(); }
 	/// Where the last report of its player put a hand
 	[[nodiscard]] virtual glm::vec3 ReportedPlaceOf([[maybe_unused]] entt::entity hand) const { return ReportedHandPlace(); }
 	/// The players of a network game, other than the first, whose gods have hands of their own, in the order of the
 	/// players
 	[[nodiscard]] virtual std::vector<PlayerNames> OtherHandPlayers() const { return {}; }
+	/// Whether a hand is the hand of another player of a network game, which this computer does not move or draw
+	[[nodiscard]] virtual bool IsOtherPlayersHand([[maybe_unused]] entt::entity hand) const { return false; }
+	/// A point as the game keeps a place on the map: the ground under it, the height above the ground and the place on
+	/// the map's grid of fixed points
+	[[nodiscard]] virtual glm::vec3 AsMapPlace(glm::vec3 point) const { return point; }
 	virtual void SetPose(entt::entity object, const Pose& pose) = 0;
 	/// A thing's axes at its own size, as they are once it stops being stretched
 	[[nodiscard]] virtual glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const = 0;
