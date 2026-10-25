@@ -10,6 +10,7 @@
 #include "ViewFrustum.h"
 
 #include <algorithm>
+#include <array>
 
 #include <glm/geometric.hpp>
 
@@ -47,6 +48,21 @@ bool SeesSphere(const Frustum& frustum, glm::vec3 centre, float radius) noexcept
 bool SeesSphereOrReflection(const Frustum& frustum, glm::vec3 centre, float radius) noexcept
 {
 	return SeesSphere(frustum, centre, radius) || SeesSphere(frustum, {centre.x, -centre.y, centre.z}, radius);
+}
+
+bool SeesBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima) noexcept
+{
+	std::array<glm::vec3, 8> corners {};
+	for (size_t i = 0; i < corners.size(); ++i)
+	{
+		const glm::vec3 corner {(i & 1u) != 0 ? maxima.x : minima.x, (i & 2u) != 0 ? maxima.y : minima.y,
+		                        (i & 4u) != 0 ? maxima.z : minima.z};
+		corners.at(i) = glm::vec3(model * glm::vec4(corner, 1.0f));
+	}
+	return std::ranges::none_of(frustum.sides, [&corners](const glm::vec4& side) {
+		return std::ranges::all_of(
+		    corners, [&side](const glm::vec3& corner) { return glm::dot(glm::vec3(side), corner) + side.w < -k_BoxMargin; });
+	});
 }
 
 } // namespace openblack::graphics::view_frustum
