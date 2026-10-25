@@ -159,6 +159,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureHandGlows", .field = "motion", .marker = ""},
     // The snow on a thing comes and goes in the frames that draw the thing. Only the draw reads it.
     {.component = "SnowLevel", .field = "", .marker = ""},
+    // The picture of a challenge comes from the screen of this computer, or from its profile's files, in the frames. The
+    // turns only count the pictures that the scripts ask for.
+    {.component = "ChallengePicture", .field = "full", .marker = ""},
+    {.component = "ChallengePicture", .field = "small", .marker = ""},
+    {.component = "ChallengePicture", .field = "waiting", .marker = ""},
+    {.component = "ChallengePicture", .field = "taken", .marker = ""},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.

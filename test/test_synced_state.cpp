@@ -178,6 +178,17 @@ TEST(SyncedState, TheSnowOnTheThingsThatTheFramesDrawIsNotSynced)
 	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "SnowLevel", "level"));
 }
 
+TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "full"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "small"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "waiting"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "taken"));
+	// The turns count the pictures that the scripts ask for
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
