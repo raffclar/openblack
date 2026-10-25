@@ -3593,6 +3593,7 @@ void Runner::Give(const Command& command)
 	case Kind::PointerOnCreature:
 	case Kind::PointerOnAltar:
 	case Kind::PointerOnRope:
+	case Kind::PointerOnObject:
 		break;
 	case Kind::SetDesire:
 	case Kind::SetPhase:
@@ -4721,6 +4722,27 @@ std::optional<glm::ivec2> Runner::AltarOnScreen(glm::vec2 size) const
 	return glm::ivec2(glm::round(glm::vec2(screen)));
 }
 
+std::optional<glm::ivec2> Runner::ObjectOnScreen(size_t object, float height, glm::vec2 size) const
+{
+	const auto entity = ObjectAt(object);
+	if (!entity.has_value() || !Locator::camera::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(*entity);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	glm::vec3 screen;
+	if (!Locator::camera::value().ProjectWorldToScreen(transform->position + glm::vec3(0.0f, height, 0.0f),
+	                                                   {0.0f, 0.0f, size.x, size.y}, screen))
+	{
+		return std::nullopt;
+	}
+	return glm::ivec2(glm::round(glm::vec2(screen)));
+}
+
 std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) const
 {
 	const auto entity = CreatureAt(creature);
@@ -4898,6 +4920,20 @@ std::string Runner::GivePointerCommand(const Command& command)
 		if (!to.has_value())
 		{
 			return "no altar on the screen";
+		}
+		const auto moved = *to - pointer.position;
+		pointer.position = *to;
+		_framesSincePointerMoved = 0;
+		actions.SetScriptedPointer(pointer);
+		PushMotion(pointer, moved);
+		break;
+	}
+	case Kind::PointerOnObject:
+	{
+		const auto to = ObjectOnScreen(command.object, command.amount, size);
+		if (!to.has_value())
+		{
+			return "no object on the screen";
 		}
 		const auto moved = *to - pointer.position;
 		pointer.position = *to;

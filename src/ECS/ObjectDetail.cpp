@@ -61,7 +61,7 @@ bool BandedNow(const Registry& registry, entt::entity entity)
 	{
 		return false;
 	}
-	// Rubble fading by its own alpha is drawn whole until it has gone
+	// The roots of a fallen dead tree are drawn whole while they fade by their own alpha
 	const auto* mark = registry.TryGet<const GroundMark>(entity);
 	return mark == nullptr || !mark->alpha.has_value();
 }
