@@ -90,7 +90,6 @@
 #include "Camera/ScriptCameraModel.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
-#include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
