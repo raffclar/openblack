@@ -363,6 +363,18 @@ void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, 
 	{
 		KeepLeftOutRows(component, codec, fields, keepsField, out, result.rows);
 	}
+	// A component with no values is one row of no bytes for each entity, so that a compare sees the mark
+	if (keepRows && codec == nullptr && fields.empty())
+	{
+		for (const auto row : LiveRows(*component.storage))
+		{
+			result.rows.rows.push_back({.entity = row,
+			                            .field = 0,
+			                            .offset = static_cast<uint32_t>(result.rows.bytes.size()),
+			                            .size = 0,
+			                            .presentation = left.whole || AnyHas(left.rowMarkers, row)});
+		}
+	}
 #endif
 	if (left.whole)
 	{
@@ -462,13 +474,14 @@ void AddRows(WorldRows& world, const ComponentStorage& component, const WorldRow
 		return;
 	}
 	std::vector<std::string> names;
-	if (ComponentCodec(component.type) != nullptr)
+	const auto fields = KeptFields(component.type);
+	if (ComponentCodec(component.type) != nullptr || fields.empty())
 	{
 		names.emplace_back(k_WholeComponent);
 	}
 	else
 	{
-		std::ranges::transform(KeptFields(component.type), std::back_inserter(names),
+		std::ranges::transform(fields, std::back_inserter(names),
 		                       [](const KeptField& field) { return std::string(field.info->name); });
 	}
 	const auto first = static_cast<uint32_t>(world.fields.size());

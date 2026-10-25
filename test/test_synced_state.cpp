@@ -285,6 +285,17 @@ TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
 	const auto shown = std::ranges::count(rows.rows, true, &ecs::reflection::WorldRows::Row::presentation);
 	// The drawn place, the glow and the glow mark
 	EXPECT_EQ(shown, 3);
+	// A mark with no values is a row of no bytes
+	registry.emplace<FakeHidden>(body);
+	ecs::reflection::WorldRows marked;
+	static_cast<void>(synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &marked));
+	const auto hidden = std::ranges::find_if(marked.rows, [&marked](const ecs::reflection::WorldRows::Row& each) {
+		return marked.fields.at(each.field) == "FakeHidden.*";
+	});
+	ASSERT_NE(hidden, marked.rows.end());
+	EXPECT_EQ(hidden->entity, body);
+	EXPECT_EQ(hidden->size, 0u);
+	EXPECT_FALSE(hidden->presentation);
 	const auto& row = *std::ranges::find(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
 	EXPECT_EQ(row.entity, body);
 	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
