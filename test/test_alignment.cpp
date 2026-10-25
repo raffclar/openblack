@@ -90,10 +90,12 @@ public:
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords>, bool) override {}
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override
 	{
-		return player == PlayerNames::PLAYER_ONE ? reported : std::nullopt;
+		return player == own ? reported : std::nullopt;
 	}
+	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return own; }
 
 	std::optional<ReportedCamera> reported;
+	PlayerNames own {PlayerNames::PLAYER_ONE};
 };
 } // namespace
 
@@ -178,6 +180,14 @@ TEST_F(Alignment, TheCameraIsWhereThePlayerLastReportedIt)
 	const auto expected = map_coords::FromMetres({120.5f, 64.25f});
 	EXPECT_EQ(_influence->askedAt->x, expected.x);
 	EXPECT_EQ(_influence->askedAt->z, expected.z);
+
+	// A computer that plays another god reads the camera of its own god
+	hands.own = PlayerNames::PLAYER_TWO;
+	hands.reported->origin = {8.0f, 0.0f, 16.0f};
+	_alignment.UpdatePlayersTurn();
+	const auto own = map_coords::FromMetres({8.0f, 16.0f});
+	EXPECT_EQ(_influence->askedAt->x, own.x);
+	EXPECT_EQ(_influence->askedAt->z, own.z);
 	Locator::handSystem::reset();
 }
 

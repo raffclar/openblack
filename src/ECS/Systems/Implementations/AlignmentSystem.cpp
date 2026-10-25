@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -170,10 +171,12 @@ void AlignmentSystem::UpdatePlayersTurn()
 
 	// The camera takes the alignment of the most influential player at its eye. The eye is the camera that the player of
 	// this computer last reported, not the camera that the frames move.
-	const auto here =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
-	const auto reported =
-	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedCamera(here) : std::nullopt;
+	std::optional<HandSystemInterface::ReportedCamera> reported;
+	if (Locator::handSystem::has_value())
+	{
+		const auto& hands = Locator::handSystem::value();
+		reported = hands.GetReportedCamera(hands.GetOwnPlayer());
+	}
 	const auto eye = reported.has_value() ? reported->origin : glm::vec3(0.0f);
 	std::array<alignment::PlayerAtPlace, static_cast<size_t>(PlayerNames::NEUTRAL)> players {};
 	size_t count = 0;
