@@ -134,6 +134,18 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
+    // A firefly drifts about its place in the frames. The turns go by Firefly::at, and its Transform is that place, which
+    // the hash takes from Firefly::at. Only the frames give it a sprite, while it is in view.
+    {.component = "Firefly", .field = "clock", .marker = ""},
+    {.component = "Firefly", .field = "amplitude", .marker = ""},
+    {.component = "Firefly", .field = "drawn", .marker = ""},
+    {.component = "Transform", .field = "", .marker = "Firefly"},
+    // The opening's hand and the things of the explorers' boat film: the turns make and remove their entities, and the
+    // frames show, move, pose and hide them. The boy that the opening's hand holds is drawn in its grip, which only the
+    // draw and the script camera read.
+    {.component = "*", .field = "", .marker = "IntroHand"},
+    {.component = "*", .field = "", .marker = "BoatFilmPart"},
+    {.component = "HighDetail", .field = "heldAt", .marker = ""},
     {.component = "*", .field = "", .marker = "ScriptHighlightGlow"},
     // The clouds of a storm gather and drift in the frames by the local random numbers, as the game draws them. The
     // rain and the storm's turns read the storm, not its clouds.

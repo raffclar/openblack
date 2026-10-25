@@ -41,8 +41,14 @@ private:
 		Lifting = 12,
 	};
 
-	/// The hand's entity with its model, a clip and where it stands
+	/// The hand's entity with its model, which the turns make, hidden until the frames show it
+	void MakeHiddenHand();
+	/// The hand shown with a clip from its start
+	void ShowHand(std::string_view clipFile);
+	/// The hand's entity, made if there is none, and shown with a clip
 	void MakeHand(std::string_view clipFile);
+	/// The hand gone from view, its entity kept until the turns release it
+	void HideHand();
 	void PlaceHand(const glm::vec3& position, float yaw);
 	void FreeHand();
 	/// The hand's clip moved on; true when it came round

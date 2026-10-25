@@ -1367,8 +1367,13 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        Json parts = Json::array();
 		        if (const auto* registry = Registry(); registry != nullptr)
 		        {
+			        // Only the things of the film that the frames show now
 			        registry->Each<const BoatFilmPart, const Transform>(
 			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
+				            if (registry->AllOf<HiddenByState>(entity))
+				            {
+					            return;
+				            }
 				            auto item = Listed(*registry, entity);
 				            item["role"] = static_cast<int32_t>(part.role);
 				            item["index"] = part.index;
