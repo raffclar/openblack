@@ -462,9 +462,13 @@ bool IsHumanGod(PlayerNames player)
 	return Locator::handSystem::value().GetHandsOf(player).has_value();
 }
 
-/// The player whose creature learns its lean from the blows and the blocks that the player queues. In a game alone,
-/// this is the player at this computer.
-constexpr PlayerNames k_LearningPlayer = PlayerNames::PLAYER_ONE;
+/// Whether the creature of a player learns its lean from the blows and the blocks that the player sends. Each computer
+/// gets the same answer.
+bool LearnsFromPresses(PlayerNames player)
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	return fight::LearnsFromPresses(networkGame, player == PlayerNames::PLAYER_ONE, IsHumanGod(player));
+}
 
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
@@ -3112,7 +3116,7 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	// The creature learns from the moves it makes, whoever asked for them
 	auto* record = registry.TryGet<CreatureFightRecord>(creature);
 	if (order->kind != fight::Order::Kind::EndBlock && front.has_value() && record != nullptr &&
-	    fight::LearnsFromMove(front->move.kind, registry.Get<const Creature>(creature).owner == k_LearningPlayer))
+	    fight::LearnsFromMove(front->move.kind, LearnsFromPresses(registry.Get<const Creature>(creature).owner)))
 	{
 		const auto before = record->tendency;
 		record->tendency = fight::LearnTendency(record->tendency, front->move.kind);

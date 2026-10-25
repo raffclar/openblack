@@ -486,6 +486,11 @@ bool creature_fight::LearnsFromMove(Move::Kind kind, bool humanPlayers)
 	return kind == Move::Kind::Animation || humanPlayers;
 }
 
+bool creature_fight::LearnsFromPresses(bool networkGame, bool firstPlayer, bool humanGod)
+{
+	return networkGame ? humanGod : firstPlayer;
+}
+
 float creature_fight::TendencyAtStart(uint32_t fightsCompleted, float learnt, float alignment)
 {
 	return fightsCompleted == 0 ? FirstTendency(alignment) : learnt;
