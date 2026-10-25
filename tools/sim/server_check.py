@@ -32,6 +32,10 @@ import subprocess
 import sys
 import time
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sim_report  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
 DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
@@ -306,6 +310,13 @@ def main():
         summary["different_without_ignored"] = others[:20]
         summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
         summary["same_without_ignored"] = not others and len(compared) >= options.turns
+    # A component with no registration is left out of the checksum: a change in it would never show here
+    unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
+                                                    os.path.join(server_dir, "record.jsonl"))
+    summary["unregistered"] = sorted(unregistered)
+    if unregistered:
+        summary["same"] = False
+        print(sim_report.unregistered_line(unregistered))
     with open(os.path.join(out, "server_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     print(json.dumps(summary))

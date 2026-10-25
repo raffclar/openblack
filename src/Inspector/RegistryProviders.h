@@ -47,6 +47,7 @@ public:
 private:
 	[[nodiscard]] QueryResult Entity(const ecs::Registry& registry, const Json& params) const;
 	[[nodiscard]] QueryResult Components(const ecs::Registry& registry) const;
+	[[nodiscard]] QueryResult Unregistered(const ecs::Registry& registry) const;
 	[[nodiscard]] QueryResult References(const ecs::Registry& registry, const Json& params) const;
 	[[nodiscard]] QueryResult Hash(const ecs::Registry& registry, const Json& params) const;
 
