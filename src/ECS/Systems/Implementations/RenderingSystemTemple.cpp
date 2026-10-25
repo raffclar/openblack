@@ -79,6 +79,8 @@ RenderingSystemTemple::~RenderingSystemTemple() = default;
 void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The rooms' meshes are things of the temple's rooms
+	const auto& rooms = Locator::temple::value().GetRooms();
 
 	// Count number of instances
 	uint32_t instanceCount = 0;
@@ -118,7 +120,7 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 	std::unordered_map<entt::id_type, TempleRoom> roomMeshIds;
 	const auto currentRoom = temple.GetCurrentRoom();
 	const bool templeReflected = graphics::detail_level::TempleReflected(Locator::config::value().detail);
-	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
+	rooms.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &prep, &mirroredMeshIds, &reflectiveMeshIds, &doorMeshIds, &otherRoomMeshIds, &waterMeshIds, &sideRoomMeshIds,
 	     &roomMeshIds, mainRoomDoorsOnly, currentRoom,
 	     templeReflected](const Mesh& mesh, const Transform& /* unused */, const TempleInteriorPart& templePart) {
@@ -329,12 +331,14 @@ void RenderingSystemTemple::PrepareDrawDescs(bool drawBoundingBox)
 void RenderingSystemTemple::PrepareDrawUploadUniforms(bool drawBoundingBox)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
+	// The rooms' meshes are things of the temple's rooms
+	const auto& rooms = Locator::temple::value().GetRooms();
 
 	// Store offsets of uniforms for descs
 	std::map<entt::id_type, uint32_t> uniformOffsets;
 
 	// Set transforms for instanced draw at offsets
-	registry.Each<const Mesh, const Transform, const TempleInteriorPart>(
+	rooms.Each<const Mesh, const Transform, const TempleInteriorPart>(
 	    [this, &uniformOffsets, drawBoundingBox](const Mesh& mesh, const Transform& transform,
 	                                             const TempleInteriorPart& templePart) {
 		    auto l3dMesh = entt::locator<resources::ResourcesInterface>::value().GetMeshes().Handle(mesh.id);
