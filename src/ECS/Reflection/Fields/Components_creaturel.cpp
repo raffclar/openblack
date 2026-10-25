@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Reflection/ComponentReflection.h"
 
@@ -50,6 +51,10 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturel(entt::meta_
 	    .Field<&components::LeashPost::look>("look")
 	    .Field<&components::LeashPost::hung>("hung")
 	    .Field<&components::LeashPost::glow>("glow");
+	Reflect<components::CreatureLeashRope>(context)
+	    .Field<&components::CreatureLeashRope::rope>("rope")
+	    .Field<&components::CreatureLeashRope::started>("started")
+	    .Field<&components::CreatureLeashRope::held>("held");
 	Reflect<components::CreatureLocomotion>(context)
 	    .Field<&components::CreatureLocomotion::motion>("motion")
 	    .Field<&components::CreatureLocomotion::started>("started")

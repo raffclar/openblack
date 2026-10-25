@@ -73,6 +73,16 @@ std::vector<Action> EachCommand()
 	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
 	    HandPick {.object = Entity(23)},
 	    PlayerJoined {},
+	    MiracleRequest {.seed = SpellSeedType::Heal},
+	    MiracleRepeat {},
+	    HandCast {.object = Entity(24),
+	              .point = {1.0f, 2.0f, 3.0f},
+	              .size = 12.5f,
+	              .handPosition = {4.0f, 5.0f, 6.0f},
+	              .cameraForward = {0.0f, -0.6f, 0.8f},
+	              .handVelocity = {-7.0f, 0.0f, 8.0f},
+	              .spin = -0.5f},
+	    HandCastUnlock {.seed = Entity(25)},
 	};
 }
 
@@ -96,7 +106,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 25)
+	switch (bits(random) % 29)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -178,6 +188,20 @@ Action RandomAction(std::mt19937& random)
 	}
 	case 23:
 		return PlayerJoined {};
+	case 24:
+		return MiracleRequest {.seed = static_cast<SpellSeedType>(bits(random) % 30)};
+	case 25:
+		return MiracleRepeat {};
+	case 26:
+		return HandCast {.object = entity(),
+		                 .point = vector(),
+		                 .size = number(),
+		                 .handPosition = vector(),
+		                 .cameraForward = vector(),
+		                 .handVelocity = vector(),
+		                 .spin = number()};
+	case 27:
+		return HandCastUnlock {.seed = entity()};
 	default:
 		return PlayerLeft {};
 	}
@@ -239,7 +263,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9, 12, 1, 18, 11, 5, 21, 15, 3, 5, 1};
+	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5,  9,  18, 5, 49, 17, 5, 5,  5, 9,
+	                                 12, 1, 18, 11, 5,  21, 15, 3,  5, 1,  2,  1, 61, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -618,4 +643,20 @@ TEST(TurnCodec, AWorldStateSplitsIntoPartsThatGoBackTogether)
 	const auto none = SplitWorld(3, {});
 	ASSERT_EQ(none.size(), 1u);
 	EXPECT_TRUE(none[0].bytes.empty());
+}
+
+TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
+{
+	const auto bytes =
+	    Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {MiracleRequest {.seed = SpellSeedType::BeamExplosion}}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	const auto& block = std::get<CommandBlock>(*decoded.frame);
+	EXPECT_EQ(std::get<MiracleRequest>(block.actions.at(0)).seed, SpellSeedType::BeamExplosion);
+
+	// A seed number after the last seed of the game is refused
+	auto wrong = bytes;
+	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

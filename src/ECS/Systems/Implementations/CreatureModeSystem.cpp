@@ -24,6 +24,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -35,9 +36,6 @@ namespace openblack::ecs::systems
 
 namespace
 {
-/// The local player, whose creature C locks onto
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
-
 bool TempleActive()
 {
 	return Locator::temple::has_value() && Locator::temple::value().Active();
@@ -54,7 +52,10 @@ std::optional<entt::entity> CreatureModeSystem::PlayersCreature() const
 	{
 		return std::nullopt;
 	}
-	return Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
+	// C locks onto the creature of the player whose hand this computer moves
+	const auto player =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::playerSystem::value().GetPrimaryCreature(player);
 }
 
 std::optional<creature_follow::View> CreatureModeSystem::GetView() const

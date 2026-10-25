@@ -602,6 +602,10 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
+	}
 	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {
@@ -696,7 +700,7 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
 	const auto giver = HandPlayer();
 	const bool heldByHand =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == target;
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(giver) == target;
 	return creature_giving::MayGive({
 	    .creatureHasPlayer = true,
 	    .giverHasPlayer = true,
@@ -874,7 +878,8 @@ glm::vec3 GameHandGrabWorld::ReportedPlaceOf(entt::entity hand) const
 
 bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
 {
-	if (!IsNetworkGame() || !Locator::handSystem::has_value())
+	// Only a network game, or a testbed scenario that acts as one, gives hands to the other gods
+	if (!Locator::handSystem::has_value())
 	{
 		return false;
 	}

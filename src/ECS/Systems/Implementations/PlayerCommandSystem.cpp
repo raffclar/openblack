@@ -33,6 +33,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
@@ -130,6 +131,20 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::magicSystem::has_value())
 			    {
 				    openblack::Locator::magicSystem::value().DoSeedGesture(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCast>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCast(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandCastUnlock>)
+		    {
+			    if (openblack::Locator::magicSystem::has_value())
+			    {
+				    openblack::Locator::magicSystem::value().DoCastUnlock(command.player, action.seed);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
@@ -281,6 +296,29 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::handSystem::has_value())
 			    {
 				    openblack::Locator::handSystem::value().ReportPick(command.player, action.object);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, MiracleRequest> || std::is_same_v<Kind, MiracleRepeat>)
+		    {
+			    if (!openblack::Locator::spellIconSystem::has_value())
+			    {
+				    return;
+			    }
+			    // The turn checks again that an icon of the player may give the miracle, then asks for it. A repeat asks
+			    // for the last miracle that went into the player's hand, as the player is at this turn.
+			    auto& icons = openblack::Locator::spellIconSystem::value();
+			    auto seed = openblack::SpellSeedType::None;
+			    if constexpr (std::is_same_v<Kind, MiracleRequest>)
+			    {
+				    seed = action.seed;
+			    }
+			    else
+			    {
+				    seed = icons.LastSeedGained(command.player);
+			    }
+			    if (icons.ValidForRequest(command.player, seed))
+			    {
+				    icons.RequestSeed(command.player, seed);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)

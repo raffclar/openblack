@@ -206,6 +206,59 @@ void openblack::testbed_scenarios::AddTownMiracleScenarios(std::vector<Scenario>
 	    .townMiracles = {MagicType::Heal, MagicType::Water},
 	});
 	all.push_back({
+	    .id = "miracles.selection_request",
+	    .name = "A miracle asked for by gesture from a worship site's icon, then again by the R",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. When the site has its heal and water icons, the site "
+	        "is built and each icon holds the full charge of its miracle. The hand draws a spiral, then a W. Then a scribble "
+	        "drops the water miracle, and the hand draws an R.",
+	    .expected = "The spiral opens the miracle selection: white sparks come out of the hand, and the hints show the "
+	                "gestures of the two miracles. The W closes the selection, and at the next turn the water miracle "
+	                "comes into the hand. The scribble shakes the hand and drops the miracle. The R asks the water icon "
+	                "again: at the next turn the icon starts to charge, and its charge goes up in the tooltip.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 3.0f, .value = static_cast<size_t>(GestureType::Spiral)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 7.0f, .value = static_cast<size_t>(GestureType::WShape)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::Scribble)},
+	                 {.kind = Kind::DrawGesture, .delaySeconds = 9.0f, .value = static_cast<size_t>(GestureType::RShape)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	// The seeds that the recorded input of the hand draws gestures on and casts, for the dedicated server's check
+	// (tools/sim/hand_inputs/casts.json)
+	all.push_back({
+	    .id = "miracles.recorded_casts",
+	    .name = "Seeds for the recorded gestures and casts of the hand",
+	    .facet = Facet::Miracles,
+	    .description =
+	        "The town and temple of town.miracle_debug_given. The site is built and each icon holds the full "
+	        "charge of its miracle. A water miracle from the icon comes into the hand, then a fireball "
+	        "miracle, then a water miracle again. The dedicated server and the game both play this scenario, and the game "
+	        "makes the recorded input of tools/sim/hand_inputs/casts.json: a power-up, a scribble and a second "
+	        "scribble on the first water miracle, the fireball thrown from the moving hand, and the second "
+	        "water miracle held on the land while the hand moves.",
+	    .expected = "At the turn after each gesture, the water miracle powers up, then goes back to its plain miracle, "
+	                "then drops from the hand. The fireball flies the way that the hand moved. The water rains below the "
+	                "hand while the button stays down, and stops when the button comes up.",
+	    .environment = {.dispenserGrid = false, .landNumber = k_FirstLand},
+	    .framing = {.shot = Shot::Placed, .eye = {9.0f, 14.0f, -40.0f}, .look = {9.0f, 2.0f, -19.0f}},
+	    .objects = Town(),
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Kind::BuildWorshipSites, .delaySeconds = 3.0f},
+	                 {.kind = Kind::FillSiteIcons, .delaySeconds = 0.5f, .amount = 1.0f},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 1.0f, .value = static_cast<size_t>(SpellSeedType::Water)},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 10.5f, .value = static_cast<size_t>(SpellSeedType::Fire)},
+	                 {.kind = Kind::HoldSeed, .delaySeconds = 5.0f, .value = static_cast<size_t>(SpellSeedType::Water)}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .townMiracles = {MagicType::Heal, MagicType::Water},
+	});
+	all.push_back({
 	    .id = "advisors.help_key_in_temple",
 	    .name = "The Help key inside the temple",
 	    .facet = Facet::Advisors,

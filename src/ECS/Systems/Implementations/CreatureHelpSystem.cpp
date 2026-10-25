@@ -236,8 +236,7 @@ void CreatureHelpSystem::Raise(entt::entity creature, const help::Message& messa
 	    .stage = mind != nullptr ? mind->developmentPhase : help::k_HelpStage,
 	    .outOrAsleep = OutOrAsleep(registry, creature),
 	    .dialogueTaken = DialogueTaken(),
-	    .handOnCreature =
-	        Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature,
+	    .handOnCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature),
 	    .raisedThisTurn = _toldTurn == turn,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .inDevelopmentScript = mind != nullptr && mind->inDevelopmentScript,

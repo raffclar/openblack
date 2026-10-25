@@ -683,6 +683,17 @@ TEST(ScreenPick, AnInvisibleBallIsHitWithinItsWholePixelRadiusAtItsMiddlesDepth)
 	EXPECT_FALSE(screen_pick::BallHit(View(), {0.0f, 0.0f, -0.5f}, 3.0f).has_value());
 }
 
+// A ball far to the side, just past the near plane, is hundreds of thousands of pixels off the screen. The square of
+// that offset must not wrap round to a small number and give a hit at the middle of the screen.
+TEST(ScreenPick, AnInvisibleBallFarOffTheSideOfTheScreenIsNeverHit)
+{
+	const glm::vec3 middle(2000.0f, 0.0f, -1.5f);
+	for (float x = 0.0f; x < 800.0f; x += 50.0f)
+	{
+		EXPECT_FALSE(screen_pick::BallHit(View({x, 300.0f}), middle, 2.0f).has_value()) << x;
+	}
+}
+
 TEST(ScreenPick, AThingWithAModelAndABallIsPickedByWhicheverIsNearer)
 {
 	const auto view = View();

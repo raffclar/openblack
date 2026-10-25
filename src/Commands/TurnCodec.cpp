@@ -202,6 +202,18 @@ void WriteAction(Writer& out, const Action& action)
 	               },
 	               [](const PlayerLeft& /*command*/) {},
 	               [](const PlayerJoined& /*command*/) {},
+	               [&out](const MiracleRequest& command) { out.Byte(static_cast<uint8_t>(command.seed)); },
+	               [](const MiracleRepeat& /*command*/) {},
+	               [&out](const HandCast& command) {
+		               out.Entity(command.object);
+		               out.Vector(command.point);
+		               out.Float(command.size);
+		               out.Vector(command.handPosition);
+		               out.Vector(command.cameraForward);
+		               out.Vector(command.handVelocity);
+		               out.Float(command.spin);
+	               },
+	               [&out](const HandCastUnlock& command) { out.Entity(command.seed); },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -404,6 +416,35 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::PlayerJoined:
 		action = PlayerJoined {};
 		return DecodeError::None;
+	case CommandTag::MiracleRequest:
+	{
+		const auto seed = in.Byte();
+		if (seed > static_cast<uint8_t>(SpellSeedType::BeamExplosion))
+		{
+			return DecodeError::Value;
+		}
+		action = MiracleRequest {.seed = static_cast<SpellSeedType>(seed)};
+		return DecodeError::None;
+	}
+	case CommandTag::MiracleRepeat:
+		action = MiracleRepeat {};
+		return DecodeError::None;
+	case CommandTag::HandCast:
+	{
+		HandCast cast {};
+		cast.object = in.Entity();
+		cast.point = in.Vector();
+		cast.size = in.Float();
+		cast.handPosition = in.Vector();
+		cast.cameraForward = in.Vector();
+		cast.handVelocity = in.Vector();
+		cast.spin = in.Float();
+		action = cast;
+		return DecodeError::None;
+	}
+	case CommandTag::HandCastUnlock:
+		action = HandCastUnlock {.seed = in.Entity()};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -510,6 +551,10 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const PlayerLeft& /*command*/) { return CommandTag::PlayerLeft; },
 	                      [](const HandPick& /*command*/) { return CommandTag::HandPick; },
 	                      [](const PlayerJoined& /*command*/) { return CommandTag::PlayerJoined; },
+	                      [](const MiracleRequest& /*command*/) { return CommandTag::MiracleRequest; },
+	                      [](const MiracleRepeat& /*command*/) { return CommandTag::MiracleRepeat; },
+	                      [](const HandCast& /*command*/) { return CommandTag::HandCast; },
+	                      [](const HandCastUnlock& /*command*/) { return CommandTag::HandCastUnlock; },
 	                  },
 	                  action);
 }
@@ -543,6 +588,10 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
 	                                     [](const HandPick& /*command*/) { return k_Entity; },
 	                                     [](const PlayerJoined& /*command*/) { return size_t {0}; },
+	                                     [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
+	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
+	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
 	                                 },
 	                                 action);
 	return 1 + fields;
