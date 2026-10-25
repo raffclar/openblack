@@ -12,6 +12,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <span>
@@ -26,6 +27,7 @@
 #include <entt/meta/meta.hpp>
 #include <entt/meta/resolve.hpp>
 
+#include "Common/WorkerPool.h"
 #include "ComponentReflection.h"
 
 using namespace openblack::ecs::reflection;
@@ -192,10 +194,192 @@ void WriteStorage(BinaryWriter& out, const ComponentStorage& component, WorldSav
 	return components;
 }
 
+/// The parts of one component that a hash does not include. The hash finds them one time for each component.
+struct ComponentLeaveOut
+{
+	/// The hash does not include the component
+	bool whole {false};
+	/// The hash does not include the row of an entity in one of these storages
+	std::vector<const entt::sparse_set*> rowMarkers;
+	/// By the index of the field: the hash does not include the field of a row
+	std::vector<bool> fieldAlways;
+	/// By the index of the field: the hash does not include the field of an entity in one of these storages
+	std::vector<std::vector<const entt::sparse_set*>> fieldMarkers;
+};
+
+/// Finds the parts of a component that the hash does not include. The names are the names of the fields, or "*" for a component
+/// that saves as one value.
+[[nodiscard]] ComponentLeaveOut FindLeaveOut(std::span<const HashLeaveOut> leaveOut, std::string_view component,
+                                             std::span<const std::string_view> names)
+{
+	ComponentLeaveOut found {
+	    .whole = false, .rowMarkers = {}, .fieldAlways = std::vector<bool>(names.size()), .fieldMarkers = {}};
+	found.fieldMarkers.resize(names.size());
+	for (const auto& part : leaveOut)
+	{
+		if (part.component != k_WholeComponent && part.component != component)
+		{
+			continue;
+		}
+		if (part.field.empty())
+		{
+			if (part.marker == nullptr)
+			{
+				found.whole = true;
+			}
+			else
+			{
+				found.rowMarkers.push_back(part.marker);
+			}
+			continue;
+		}
+		for (size_t index = 0; index < names.size(); ++index)
+		{
+			if (names[index] != part.field)
+			{
+				continue;
+			}
+			if (part.marker == nullptr)
+			{
+				found.fieldAlways[index] = true;
+			}
+			else
+			{
+				found.fieldMarkers[index].push_back(part.marker);
+			}
+		}
+	}
+	return found;
+}
+
+/// Whether one of the storages has the entity
+[[nodiscard]] bool AnyHas(std::span<const entt::sparse_set* const> storages, entt::entity entity)
+{
+	return std::ranges::any_of(storages, [entity](const entt::sparse_set* storage) { return storage->contains(entity); });
+}
+
 void WriteHeader(BinaryWriter& out)
 {
 	out.Write({reinterpret_cast<const uint8_t*>(k_WorldArchiveMagic.data()), k_WorldArchiveMagic.size()});
 	out.WriteRaw(k_WorldArchiveVersion);
+}
+
+/// The hash of one component of the world, and, when the caller asks, the hash of each of its fields
+struct ComponentHash
+{
+	/// The hash keeps one row or more of the component
+	bool kept {false};
+	uint64_t hash {0};
+	std::vector<uint64_t> fields;
+};
+
+/// FNV-1a over the bytes of each part
+constexpr uint64_t k_HashOffset = 14695981039346656037ull;
+constexpr uint64_t k_HashPrime = 1099511628211ull;
+
+void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
+{
+	for (const auto byte : bytes)
+	{
+		hash = (hash ^ byte) * k_HashPrime;
+	}
+}
+
+/// Hashes the rows of one component. The writer is the scratch memory of the caller.
+[[nodiscard]] ComponentHash HashComponent(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut,
+                                          bool byField, const RowVisitor& visit, BinaryWriter& out)
+{
+	ComponentHash result;
+	// Each row: its entity, then each field that the hash keeps, with the bytes that a save writes
+	const auto* codec = ComponentCodec(component.type);
+	const auto fields = KeptFields(component.type);
+	std::vector<std::string_view> names;
+	if (codec != nullptr)
+	{
+		names.push_back(k_WholeComponent);
+	}
+	else
+	{
+		std::ranges::transform(fields, std::back_inserter(names),
+		                       [](const KeptField& field) { return std::string_view(field.info->name); });
+	}
+	const auto left = FindLeaveOut(leaveOut, component.name, names);
+	if (left.whole)
+	{
+		return result;
+	}
+	const auto keepsField = [&left](size_t index, entt::entity row) {
+		return !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row);
+	};
+	result.hash = k_HashOffset;
+	// The hash of each field on its own, when asked: the whole value of a component that saves as one value
+	result.fields.assign(byField ? std::max<size_t>(fields.size(), 1) : 0, k_HashOffset);
+	const auto mixField = [&](size_t index, std::span<const uint8_t> bytes) {
+		if (byField)
+		{
+			MixBytes(result.fields.at(index), bytes);
+		}
+	};
+	// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
+	// takes its entities in the order of their numbers.
+	auto rows = LiveRows(*component.storage);
+	if (codec == nullptr && fields.empty())
+	{
+		std::ranges::sort(rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
+	}
+	for (const auto row : rows)
+	{
+		if (AnyHas(left.rowMarkers, row))
+		{
+			continue;
+		}
+		result.kept = true;
+		// Each row clears the writer, and its memory stays for the next row
+		out.Bytes().clear();
+		out.WriteRaw(row);
+		const void* value = component.storage->value(row);
+		if (codec != nullptr)
+		{
+			if (keepsField(0, row))
+			{
+				const auto start = out.Bytes().size();
+				codec->save(value, out);
+				mixField(0, std::span(out.Bytes()).subspan(start));
+				if (visit)
+				{
+					visit(component.name, row, k_WholeComponent, std::span(out.Bytes()).subspan(start));
+				}
+			}
+		}
+		else
+		{
+			for (size_t index = 0; index < fields.size(); ++index)
+			{
+				const auto& field = fields.at(index);
+				if (!keepsField(index, row))
+				{
+					continue;
+				}
+				const auto start = out.Bytes().size();
+				if (field.info->saveFrom != nullptr)
+				{
+					field.info->saveFrom(value, out);
+				}
+				else
+				{
+					auto instance = component.type.from_void(value);
+					field.info->save(field.data.get(instance), out);
+				}
+				mixField(index, std::span(out.Bytes()).subspan(start));
+				if (visit)
+				{
+					visit(component.name, row, field.info->name, std::span(out.Bytes()).subspan(start));
+				}
+			}
+		}
+		MixBytes(result.hash, out.Bytes());
+	}
+	return result;
 }
 
 } // namespace
@@ -230,20 +414,20 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const entt::registry& registry,
+                                                                          const entt::meta_ctx& context)
+{
+	std::vector<std::string> unregistered;
+	static_cast<void>(RegisteredStorages(registry, context, unregistered));
+	return unregistered;
+}
+
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
-                                                                              const KeepInHash& keep, bool byField,
-                                                                              const RowVisitor& visit)
+                                                                              std::span<const HashLeaveOut> leaveOut,
+                                                                              bool byField, const RowVisitor& visit,
+                                                                              WorkerPool* pool)
 {
-	// FNV-1a over the bytes of each part
-	constexpr uint64_t k_Offset = 14695981039346656037ull;
-	constexpr uint64_t k_Prime = 1099511628211ull;
-	const auto mix = [](uint64_t& hash, std::span<const uint8_t> bytes) {
-		for (const auto byte : bytes)
-		{
-			hash = (hash ^ byte) * k_Prime;
-		}
-	};
 	WorldHashes hashes;
 	{
 		BinaryWriter out(context);
@@ -255,105 +439,51 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		{
 			out.WriteRaw(entities->data()[i]);
 		}
-		hashes.entities = k_Offset;
-		mix(hashes.entities, out.Bytes());
+		hashes.entities = k_HashOffset;
+		MixBytes(hashes.entities, out.Bytes());
 	}
-	std::vector<std::string> unregistered;
-	for (const auto& component : RegisteredStorages(registry, context, unregistered))
+	const auto components = RegisteredStorages(registry, context, hashes.unregistered);
+	std::vector<ComponentHash> results(components.size());
+	// The hash of a component does not use the other components, so the threads of the pool can share them. The
+	// visitor of the tools must get the rows in order, so then this thread does all of them.
+	if (pool != nullptr && !visit)
 	{
-		if (keep && !keep(component.name, {}, entt::null))
+		std::vector<BinaryWriter> writers(pool->GetLaneCount(), BinaryWriter(context));
+		pool->ForEach(components.size(), [&](size_t index, size_t lane) {
+			results[index] = HashComponent(components[index], leaveOut, byField, visit, writers[lane]);
+		});
+	}
+	else
+	{
+		BinaryWriter out(context);
+		for (size_t index = 0; index < components.size(); ++index)
 		{
-			continue;
+			results[index] = HashComponent(components[index], leaveOut, byField, visit, out);
 		}
-		// Each row: its entity, then each field that the hash keeps, with the bytes that a save writes
-		const auto* codec = ComponentCodec(component.type);
-		const auto fields = KeptFields(component.type);
-		uint64_t hash = k_Offset;
-		// The hash of each field on its own, when asked: the whole value of a component that saves as one value
-		std::vector<uint64_t> fieldHashes(byField ? std::max<size_t>(fields.size(), 1) : 0, k_Offset);
-		const auto mixField = [&](size_t index, std::span<const uint8_t> bytes) {
-			if (byField)
-			{
-				mix(fieldHashes.at(index), bytes);
-			}
-		};
-		// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
-		// takes its entities in the order of their numbers.
-		auto rows = LiveRows(*component.storage);
-		if (codec == nullptr && fields.empty())
-		{
-			std::ranges::sort(rows, {}, [](entt::entity entity) { return entt::to_integral(entity); });
-		}
+	}
+	for (size_t index = 0; index < components.size(); ++index)
+	{
+		const auto& component = components[index];
+		const auto& result = results[index];
 		// A component of which the hash keeps no row is not in the hash, as a component that no entity has
-		bool anyKept = false;
-		for (const auto row : rows)
-		{
-			if (keep && !keep(component.name, {}, row))
-			{
-				continue;
-			}
-			anyKept = true;
-			BinaryWriter out(context);
-			out.WriteRaw(row);
-			const void* value = component.storage->value(row);
-			if (codec != nullptr)
-			{
-				if (!keep || keep(component.name, k_WholeComponent, row))
-				{
-					const auto start = out.Bytes().size();
-					codec->save(value, out);
-					mixField(0, std::span(out.Bytes()).subspan(start));
-					if (visit)
-					{
-						visit(component.name, row, k_WholeComponent, std::span(out.Bytes()).subspan(start));
-					}
-				}
-			}
-			else
-			{
-				for (size_t index = 0; index < fields.size(); ++index)
-				{
-					const auto& field = fields.at(index);
-					if (keep && !keep(component.name, field.info->name, row))
-					{
-						continue;
-					}
-					const auto start = out.Bytes().size();
-					if (field.info->saveFrom != nullptr)
-					{
-						field.info->saveFrom(value, out);
-					}
-					else
-					{
-						auto instance = component.type.from_void(value);
-						field.info->save(field.data.get(instance), out);
-					}
-					mixField(index, std::span(out.Bytes()).subspan(start));
-					if (visit)
-					{
-						visit(component.name, row, field.info->name, std::span(out.Bytes()).subspan(start));
-					}
-				}
-			}
-			mix(hash, out.Bytes());
-		}
-		if (!anyKept)
+		if (!result.kept)
 		{
 			continue;
 		}
-		hashes.components.emplace_back(component.name, hash);
+		hashes.components.emplace_back(component.name, result.hash);
 		if (byField)
 		{
-			if (codec != nullptr || fields.empty())
+			const auto fields = KeptFields(component.type);
+			if (ComponentCodec(component.type) != nullptr || fields.empty())
 			{
-				hashes.fields.emplace_back(component.name + "." + std::string(k_WholeComponent), fieldHashes.front());
+				hashes.fields.emplace_back(component.name + "." + std::string(k_WholeComponent), result.fields.front());
 			}
 			else
 			{
-				for (size_t index = 0; index < fields.size(); ++index)
+				for (size_t field = 0; field < fields.size(); ++field)
 				{
-					hashes.fields.emplace_back(component.name + "." + std::string(fields.at(index).info->name),
-					                           fieldHashes.at(index));
+					hashes.fields.emplace_back(component.name + "." + std::string(fields.at(field).info->name),
+					                           result.fields.at(field));
 				}
 			}
 		}

@@ -188,7 +188,7 @@ public:
 class ListedGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t range) override
+	uint32_t SyncedRand(uint32_t range, DrawSite /*site*/) override
 	{
 		ranges.push_back(range);
 		if (next < numbers.size())
@@ -197,7 +197,7 @@ public:
 		}
 		return 0;
 	}
-	float GameFloatRand(float) override { return 0.0f; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }

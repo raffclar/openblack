@@ -19,6 +19,7 @@
 
 #include <entt/meta/context.hpp>
 #include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -63,8 +64,12 @@ void SyncChecksumSystem::ProcessTurn()
 			dump.push_back(std::move(line));
 		};
 	}
+	if (_pool == nullptr)
+	{
+		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
 	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
-	                                       synced_state::PresentationParts(), _keepParts && _byField, visit);
+	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get());
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
@@ -73,8 +78,19 @@ void SyncChecksumSystem::ProcessTurn()
 		seed = random.GetSeeds().synced;
 		draws = random.GetSyncedDraws();
 	}
-	_last = TurnChecksum {
-	    .turn = turn, .checksum = synced_state::Checksum(hash.hash, seed, draws), .parts = {}, .dump = std::move(dump)};
+	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
+	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->error("{}", synced_state::UnregisteredLine(fresh));
+		}
+	}
+	_last = TurnChecksum {.turn = turn,
+	                      .checksum = synced_state::Checksum(hash.hash, seed, draws),
+	                      .parts = {},
+	                      .dump = std::move(dump),
+	                      .unregistered = hash.unregistered};
 	if (_keepParts)
 	{
 		_last->parts = hash.parts;

@@ -18,6 +18,8 @@
 
 #include <entt/meta/fwd.hpp>
 
+#include "Common/WorkerPool.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -52,12 +54,16 @@ public:
 private:
 	/// The names of the saved components, by which the checksum reads the world
 	std::unique_ptr<entt::meta_ctx> _reflection;
+	/// The threads that share the hash of the components. The first checksum makes them.
+	std::unique_ptr<WorkerPool> _pool;
 	bool _enabled {false};
 	bool _keepParts {false};
 	bool _byField {false};
 	std::optional<uint32_t> _dumpTurn;
 	std::vector<std::string> _dumpComponents;
 	std::optional<TurnChecksum> _last;
+	/// The unregistered components that the log already told of
+	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;
 };
 

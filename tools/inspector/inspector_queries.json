@@ -46,6 +46,12 @@
   "query": "ecs.components"
  },
  {
+  "description": "The component types that have entities but no registration with the reflection, so the sync checksum and the saves leave them out. A correct game gives an empty list.",
+  "kind": "list",
+  "parameters": [],
+  "query": "ecs.unregistered"
+ },
+ {
   "description": "A hash of where every entity is (its id and transform), and of a component's fields when one is named, to tell whether two runs ended the same",
   "kind": "object",
   "parameters": [
@@ -1565,7 +1571,7 @@
   "writes": true
  },
  {
-  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions",
+  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions and the piles of roots",
   "kind": "object",
   "parameters": [],
   "query": "magic.state"

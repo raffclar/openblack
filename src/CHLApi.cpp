@@ -57,6 +57,9 @@
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -274,6 +277,7 @@
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
+#include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Windowing/WindowingInterface.h"
@@ -913,6 +917,17 @@ void Pushb(bool value)
 
 void CHLApi::TaskStopped(uint32_t task)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace keeps the turn of each stop: a stop changes the waits of the tasks before it
+	if (auto* trace = Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace() : nullptr;
+	    trace != nullptr)
+	{
+		const auto& tasks = Locator::vm::value().GetTasks();
+		const auto found = tasks.find(task);
+		trace->TaskStopped(found == tasks.end() ? fmt::format("{}", task)
+		                                        : fmt::format("{} {} {}", task, found->second.filename, found->second.name));
+	}
+#endif
 	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
 	ReleaseDialogue(task);
 	auto& director = Locator::cinematicDirectorSystem::value();
@@ -953,8 +968,6 @@ void CHLApi::StopHelpScriptsByEscape()
 
 bool CHLApi::StartHelpScript(std::string_view name)
 {
-	// The kinds of script a single player game starts by name
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 	auto& dialogue = Locator::dialogueControlSystem::value();
 	if (const auto owner = dialogue.GetOwner(); owner != 0)
 	{
@@ -968,7 +981,7 @@ bool CHLApi::StartHelpScript(std::string_view name)
 			return false;
 		}
 	}
-	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	Locator::vm::value().StartScript(std::string(name), script::start::StartableScripts());
 	return true;
 }
 
@@ -988,7 +1001,6 @@ bool CHLApi::StartChallengeReminder(uint32_t challenge)
 
 bool CHLApi::StartChallengeScript(uint32_t challenge)
 {
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 	if (!Locator::vm::has_value())
 	{
 		return false;
@@ -1005,7 +1017,7 @@ bool CHLApi::StartChallengeScript(uint32_t challenge)
 	{
 		lhvm.Push(argument.value, argument.type);
 	}
-	lhvm.StartScript(record.reminderScript, k_SinglePlayerScripts);
+	lhvm.StartScript(record.reminderScript, script::start::StartableScripts());
 	return true;
 }
 

@@ -11,11 +11,17 @@ lockstep). At the end it compares the checksum of each turn on the server and on
     python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
     python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
     python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hold-creature 2:2942.91,2607.57
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hash-parts
+        --input2 tools/sim/hand_inputs/twogods_slot1_tree_press.json --camera-again-after 700
+        --camera2 '{"focus":[2928.87,88.44,2620.91],"yaw":0,"pitch":20,"distance":25}'
 
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
 the hand holds and strokes it, lets go, clicks it for the leash and leads it with a tap on the land. The creature walks,
 so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer.
+
+With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
+of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
 
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
@@ -40,12 +46,18 @@ import subprocess
 import sys
 import time
 
+import draw_trace
+
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
 from cryptography.hazmat.primitives.asymmetric import ec
 from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import NameOID
 import ipaddress
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sim_report  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
@@ -395,6 +407,9 @@ def main():
     parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--camera-again-after", type=int,
+                        help="put the cameras of --camera1 and --camera2 there again once the client compared this many "
+                        "turns (a multiple of 100), because a land's scripts can move the camera after the start")
     parser.add_argument("--hold-creature", action="append", default=[],
                         help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
@@ -406,6 +421,9 @@ def main():
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
+    parser.add_argument("--trace-draws", action="store_true",
+                        help="the server and the clients write a draw trace, and the summary shows the first draw where "
+                             "each client is not the same as the server")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
@@ -430,7 +448,9 @@ def main():
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
-    for path in [server_log] + [os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")]:
+    server_trace = os.path.join(server_dir, "draws.tsv")
+    for path in [server_log, server_trace] + [os.path.join(d, n) for d in client_dirs
+                                              for n in ("client.log", "record.jsonl", "draws.tsv")]:
         if os.path.exists(path):
             os.remove(path)
 
@@ -442,6 +462,8 @@ def main():
         "--come-back-seconds", str(options.come_back_seconds)]
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
+    if options.trace_draws:
+        server_command += ["--trace-draws", server_trace]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -467,6 +489,8 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+            if options.trace_draws:
+                command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -501,6 +525,7 @@ def main():
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
+        cameras_again = set()
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
             if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
                 break
@@ -510,6 +535,14 @@ def main():
                         [f"Network game: {options.hold_after} turns compared"]):
                     hold_creature(clients[index].pid, near)
                     held.add(index)
+            for index, client in enumerate(clients):
+                camera = options.camera1 if index == 0 else options.camera2
+                if (camera and options.camera_again_after is not None and index not in cameras_again
+                        and client.poll() is None and lines_with(
+                            os.path.join(client_dirs[index], "client.log"),
+                            [f"Network game: {options.camera_again_after} turns compared"])):
+                    set_camera(client.pid, camera)
+                    cameras_again.add(index)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
@@ -545,15 +578,28 @@ def main():
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
                 and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
+        draws = None
+        if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
+            draws = draw_trace.compare(server_trace, os.path.join(client_dir, "draws.tsv"))
+            for line in draw_trace.summary_lines(draws, "server", f"client {index + 1}"):
+                print(line)
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
-            "different": different[:20], "same": same, "parts_against_server": parts,
+            "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the"])
+    # A component with no registration is left out of the checksum: a change in it would never show here
+    unregistered = sim_report.unregistered_in_files(
+        server_log, os.path.join(server_dir, "record.jsonl"),
+        *[os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")])
+    summary["unregistered"] = sorted(unregistered)
+    if unregistered:
+        all_same = False
+        print(sim_report.unregistered_line(unregistered))
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)

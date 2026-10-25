@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <vector>
 
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
@@ -59,6 +60,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The storm's swirl and the trail of a flock are effects of each computer. Each computer gives them its own
+    // numbers, which the turns use only to find the effect again.
+    {.component = "Spell", .field = "castEffect", .marker = ""},
+    {.component = "FlockSpell", .field = "castEffect", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
@@ -276,37 +281,24 @@ bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_vie
 }
 
 Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
-            bool byField, const ecs::reflection::RowVisitor& visit)
+            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool)
 {
-	// The parts that only some entities have, by the storage of their marker component
-	std::vector<std::pair<const PresentationPart*, const entt::sparse_set*>> marked;
+	// The hash does not include the presentation parts. A part that only some entities have uses the storage of its marker
+	// component. When the registry has no such storage, no entity has the marker, and the hash keeps the part.
+	std::vector<ecs::reflection::HashLeaveOut> leaveOut;
+	leaveOut.reserve(presentation.size());
 	for (const auto& part : presentation)
 	{
-		if (!part.marker.empty())
+		if (part.marker.empty())
 		{
-			if (const auto* marker = ecs::reflection::FindStorage(registry, part.marker); marker != nullptr)
-			{
-				marked.emplace_back(&part, marker);
-			}
+			leaveOut.push_back({.component = part.component, .field = part.field, .marker = nullptr});
+		}
+		else if (const auto* marker = ecs::reflection::FindStorage(registry, part.marker); marker != nullptr)
+		{
+			leaveOut.push_back({.component = part.component, .field = part.field, .marker = marker});
 		}
 	}
-	const auto keep = [&marked, presentation](std::string_view component, std::string_view field, entt::entity entity) {
-		if (entity == entt::null)
-		{
-			return !(field.empty() && IsPresentationOnly(presentation, component, {}));
-		}
-		if (!field.empty() && IsPresentationOnly(presentation, component, field))
-		{
-			return false;
-		}
-		return std::ranges::none_of(marked, [&](const auto& entry) {
-			const auto& [part, marker] = entry;
-			const bool componentMatches = part->component == "*" || part->component == component;
-			const bool fieldMatches = part->field.empty() ? field.empty() : part->field == field;
-			return componentMatches && fieldMatches && marker->contains(entity);
-		});
-	};
-	const auto hashes = ecs::reflection::HashWorld(registry, context, keep, byField, visit);
+	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool);
 	Hash result {.hash = k_HashOffset, .parts = {}};
 	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
 	result.parts.emplace_back("entities", hashes.entities);
@@ -317,7 +309,31 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 		result.parts.emplace_back(name, part);
 	}
 	result.parts.insert(result.parts.end(), hashes.fields.begin(), hashes.fields.end());
+	result.unregistered = hashes.unregistered;
 	return result;
+}
+
+std::string UnregisteredLine(std::span<const std::string> names)
+{
+	std::string line(k_UnregisteredWords);
+	for (const auto& name : names)
+	{
+		line += (line.size() == k_UnregisteredWords.size() ? "" : ", ") + name;
+	}
+	return line;
+}
+
+std::vector<std::string> UnregisteredReporter::Fresh(std::span<const std::string> names)
+{
+	std::vector<std::string> fresh;
+	for (const auto& name : names)
+	{
+		if (_seen.insert(name).second)
+		{
+			fresh.push_back(name);
+		}
+	}
+	return fresh;
 }
 
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)
