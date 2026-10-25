@@ -12,8 +12,9 @@ const k_FolderKey = 'game-folder';
 const k_CopyFolder = 'game-copy';
 const k_CopyComplete = '.openblack-copy-complete';
 
-// The top folders of the install that the game reads. The page gives no other folder to the game.
-const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins']);
+// The top folders of the install that the game reads. The page gives no other folder to the game. "Online Maps" has
+// the lands of the network games and their list.
+const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins', 'online maps']);
 
 // The parts of an install that the game needs, without letter case. A name with a slash at the end is a folder.
 const k_Needed = [
