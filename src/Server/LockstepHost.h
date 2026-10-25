@@ -150,6 +150,10 @@ private:
 	void Closed(ConnectionId connection);
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
+	/// A join after the start: the player of a waiting god comes back into it, and any other player is an observer
+	void JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims);
+	/// Sends the server's world at the start of the next turn to a connection. False when the server has no world state.
+	bool SendWorld(ConnectionId connection);
 	void Refuse(ConnectionId connection, std::string_view reason);
 	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
 	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);

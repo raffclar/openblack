@@ -293,12 +293,6 @@ void NetworkGameSystem::Update()
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
 	}
 
-	// After a resync the server's world comes: this computer's world loads it and goes on from its turn
-	if (auto world = _session->TakeWorld(); world.has_value())
-	{
-		LoadWorld(*world);
-	}
-
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
 	// which the game loads before the player is ready
 	if (_fromCommandLine && !_joinReplyRead)
@@ -354,6 +348,15 @@ void NetworkGameSystem::Update()
 			{
 				Locator::time::value().SetPaused(false);
 			}
+		}
+	}
+	// After a resync, or after a join to a game that turns, the server's world comes. This computer's world loads it
+	// after the land of the start, and continues from the turn of the world.
+	if (_started && !_awaitingLand && !_pendingStart.has_value())
+	{
+		if (auto world = _session->TakeWorld(); world.has_value())
+		{
+			LoadWorld(*world);
 		}
 	}
 	if (_session->GetState() == online::NetworkSession::State::Ended && !_endLogged)
