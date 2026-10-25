@@ -584,6 +584,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	Locator::playerCommandSystem::value().SetSource(&host);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The row dump of the tools writes the rows of the turn at which the world of a client parts
+	host.SetPartListener([](uint8_t seat, uint32_t turn) {
+		Locator::syncChecksumSystem::value().DumpPart(turn, fmt::format("slot {} parts", seat), seat);
+	});
+#endif
 	// A client whose world parted gets the world of the server, at the start of the next turn
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
@@ -699,6 +705,12 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 	// network game
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (settings.rowDumpPath.has_value() && !checksums.StartRowDump(*settings.rowDumpPath, settings.rowDump))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
+	}
+#endif
 	checksums.SetTurnListener([&onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
 		if (onTurn)

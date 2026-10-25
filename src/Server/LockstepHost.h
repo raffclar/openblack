@@ -76,6 +76,8 @@ public:
 		uint32_t compared {0};
 		uint32_t same {0};
 		std::optional<uint32_t> firstDifferent;
+		/// The last checksum that the server compared differed from the server's
+		bool differs {false};
 	};
 
 	struct Seat
@@ -107,6 +109,9 @@ public:
 	/// The server's world state at the start of the next turn, which a client whose world parted loads as it comes back
 	using WorldState = std::function<std::vector<uint8_t>()>;
 	void SetWorldState(WorldState worldState) { _worldState = std::move(worldState); }
+	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
+	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
+	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -204,6 +209,7 @@ private:
 	std::map<std::pair<uint8_t, uint32_t>, uint64_t> _early;
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
+	PartListener _partListener;
 };
 
 } // namespace openblack::server
