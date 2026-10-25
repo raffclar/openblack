@@ -216,6 +216,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandCastUnlock& command) { out.Entity(command.seed); },
 	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
 	               [](const HandShakeOff& /*command*/) {},
+	               [](const TempleLeashOff& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -465,6 +466,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandShakeOff:
 		action = HandShakeOff {};
 		return DecodeError::None;
+	case CommandTag::TempleLeashOff:
+		action = TempleLeashOff {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -577,6 +581,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandCastUnlock& /*command*/) { return CommandTag::HandCastUnlock; },
 	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
 	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
+	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                  },
 	                  action);
 }
@@ -616,6 +621,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
 	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
 	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
+	                                     [](const TempleLeashOff& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

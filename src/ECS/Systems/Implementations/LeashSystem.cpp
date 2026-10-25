@@ -810,6 +810,31 @@ bool LeashSystem::Shake(PlayerNames player)
 	return true;
 }
 
+bool LeashSystem::ComesOffAtTemple(PlayerNames player) const
+{
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return false;
+	}
+	const auto* leashes = Locator::entitiesRegistry::value().TryGet<const CreatureLeash>(*creature);
+	const auto holder = leashes != nullptr && leashes->worn.has_value() ? std::optional(leashes->worn->holder) : std::nullopt;
+	return leash::ComesOffAtTemple(player, holder);
+}
+
+bool LeashSystem::TakeOffAtTemple(PlayerNames player)
+{
+	if (!ComesOffAtTemple(player))
+	{
+		return false;
+	}
+	const auto creature = *PlayersCreature(player);
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Player {} goes into the temple: the leash comes off creature {}",
+	                   PlayerNumber(player), entt::to_integral(creature));
+	TakeOff(creature);
+	return true;
+}
+
 bool LeashSystem::TapCreature(PlayerNames player, entt::entity creature)
 {
 	if (IsLeashed(creature))
