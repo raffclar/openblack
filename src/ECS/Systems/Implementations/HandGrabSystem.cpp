@@ -1637,12 +1637,15 @@ void HandGrabSystem::ForgetClicks(uint32_t turn)
 
 void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
 {
-	// The input and the frames of this computer act with its own hand
-	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	// In a network game the turn forgets the old clicks of the hand of every player, the same on every computer
 	if (_world->IsNetworkGame())
 	{
-		ForgetClicks(turn);
+		static constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+		_world->Entities().Each<HandClicked>(
+		    [turn](HandClicked& clicked) { hand_click::Forget(clicked, turn, k_MillisecondsPerTurn); });
 	}
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	auto* grab = Grab();
 	if (grab == nullptr)
 	{
