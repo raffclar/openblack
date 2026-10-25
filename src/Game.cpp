@@ -2208,6 +2208,10 @@ bool Game::Update() noexcept
 		    if (!_frameGuard || step == game_frame::Step::Turns ||
 		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
+			    if (_frameGuard)
+			    {
+				    _frameGuard->Forget();
+			    }
 			    return PlayFrameStep(step, frame);
 		    }
 		    _frameGuard->Before();
@@ -2298,6 +2302,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
+		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
+		if (_scenarioStager && _scenarioRequest.has_value())
+		{
+			_scenarioStager();
+		}
 		const auto turn = Locator::time::value().GetTurn();
 		const bool played = PlayTurns();
 		// A turn makes the dust of the grips that the hand made before it
@@ -2830,14 +2839,6 @@ void Game::UpdateScreenMarks()
 	UpdateLearningMarks(milliseconds);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(milliseconds * 0.001f);
-}
-
-void Game::CatchUpFrame()
-{
-	// The frame steps that change the world, as the frame after a turn does them, with no draw
-	Locator::time::value().CatchUpFrame();
-	simulation::PlayCreaturePoses();
-	simulation::PlayFrameEffects(*this);
 }
 
 void Game::UpdateFrameEffects()
@@ -3966,7 +3967,8 @@ void Game::StartSimulationLogs()
 	}
 	if (_simulation->frameGuard != sim_run::HashDetail::None)
 	{
-		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields);
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
 	}
 	if (_simulation->checksumsPath.has_value())
 	{

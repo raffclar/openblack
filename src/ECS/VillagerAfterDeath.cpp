@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <optional>
 #include <vector>
 
 #include <PackFile.h>
@@ -395,11 +396,15 @@ void villager_after_death::AgeSouls()
 	auto& registry = Entities();
 	constexpr auto k_TurnMs =
 	    static_cast<uint32_t>(std::chrono::milliseconds(systems::TimeSystemInterface::k_TurnDuration).count());
+	// The turns go by the longer of the two clips of a soul. The pick of the clip draws from the random numbers that the
+	// frames draw too, so only the draw reads the clip.
+	const auto heavenMs = villager_clips::ClipMilliseconds(AnimId::PDead1GotoHeaven);
+	const auto hellMs = villager_clips::ClipMilliseconds(AnimId::PDead1GotoHell);
+	const auto clipMs = heavenMs.has_value() && hellMs.has_value() ? std::optional(std::max(*heavenMs, *hellMs)) : std::nullopt;
 	std::vector<entt::entity> gone;
-	registry.Each<RisingSoul>([&gone](entt::entity soul, RisingSoul& rising) {
+	registry.Each<RisingSoul>([&gone, clipMs](entt::entity soul, RisingSoul& rising) {
 		++rising.turns;
-		// A soul with no clip goes at once
-		const auto clipMs = villager_clips::ClipMilliseconds(rising.clip);
+		// With no clip a soul goes at once
 		if (!clipMs.has_value() || villager_death::SoulRemoved(rising.turns, k_TurnMs, static_cast<uint32_t>(*clipMs)))
 		{
 			gone.push_back(soul);

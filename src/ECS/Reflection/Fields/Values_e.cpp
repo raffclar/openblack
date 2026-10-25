@@ -14,6 +14,7 @@
 #include <string_view>
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
@@ -106,6 +107,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
+	Reflect<openblack::ecs::components::CarriedByTornado::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CarriedByTornado::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::CarriedByTornado::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::ChimneySmoke::Puff>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::position>("position")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::velocity>("velocity")
@@ -259,6 +263,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::HeldByCreature::Drawn>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::position>("position")
 	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::rotation>("rotation");
+	Reflect<openblack::ecs::components::InHand::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::InHand::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::InHand::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::MapScriptGlobals>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::MapScriptGlobals::landNumber>("landNumber")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::townInfluenceMultiplier>("townInfluenceMultiplier")

@@ -34,6 +34,23 @@ struct InHand
 	/// poses, which the world never reads.
 	glm::mat3 rotation {1.0f};
 	glm::vec3 scale {1.0f};
+	/// Where the frame draws the thing at the drawn hand. Only the draw reads it.
+	struct Drawn
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: the thing is drawn where its Transform puts it
+	std::optional<Drawn> drawn;
+};
+
+/// The pose that the frames draw a thing in while a hand pulls at it: leaning, and stretched up towards the hand. Only
+/// the draw reads it. The world keeps the thing as it stood before the pull.
+struct HandPulled
+{
+	glm::vec3 position {0.0f};
+	glm::mat3 rotation {1.0f};
+	glm::vec3 scale {1.0f};
 };
 
 /// The light of a thing in a hand, as the game keeps it from the last time that it drew the thing in the hand. The sea

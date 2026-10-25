@@ -65,6 +65,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureScars.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/GamePhysicsHooksWorld.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
@@ -375,8 +376,15 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 
 glm::vec3 ToWorld(entt::entity object, const glm::vec3& local)
 {
-	const auto* transform = Entities().TryGet<const Transform>(object);
-	return transform != nullptr ? transform->position + transform->rotation * (transform->scale * local) : local;
+	const auto& registry = Entities();
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return local;
+	}
+	// The flames go with the thing where the frame draws it: in a hand, or an animal between its last two turns
+	const auto drawn = ecs::drawn_place::DrawnTransformOf(registry, object, *transform);
+	return drawn.position + drawn.rotation * (drawn.scale * local);
 }
 
 /// Where a point of an object's model is in the world now. A point that a bone carries is at that bone of the body as

@@ -285,7 +285,6 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
-	void CatchUpFrame() override;
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -433,6 +432,9 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
+	/// starts, so that only a load or a turn changes the world. None: the window is gone.
+	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -570,6 +572,7 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	std::function<void()> _scenarioStager;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;

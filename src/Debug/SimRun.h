@@ -89,6 +89,8 @@ struct Request
 	HashDetail frameGuard {HashDetail::None};
 	/// The guard starts to look at this turn, because a sample at each step is slow
 	uint32_t frameGuardFrom {0};
+	/// The frame write guard also looks at the saved state of each system, which is outside the registry
+	bool frameGuardSystems {false};
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };

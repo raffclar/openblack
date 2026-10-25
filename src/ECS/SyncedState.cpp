@@ -68,6 +68,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "RisingSoul", .field = "alpha", .marker = ""},
     {.component = "RisingSoul", .field = "bones", .marker = ""},
     {.component = "RisingSoul", .field = "shownOut", .marker = ""},
+    // The soul's clip, heaven or hell, comes from the random numbers that the frames draw too. The turns remove the soul
+    // by the longer clip.
+    {.component = "RisingSoul", .field = "clip", .marker = ""},
     // The frames pose a villager's bones only while it is in view
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
@@ -190,6 +193,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Transform", .field = "", .marker = "Hand"},
     // The frames of this computer move what the hand of another player holds toward the reported place of that hand
     {.component = "HeldDrawTrack", .field = "", .marker = ""},
+    // A dead tree drops its roots the first time that a frame draws it. Only the frames read the mark.
+    {.component = "DropsRoots", .field = "", .marker = ""},
+    // Where the frames draw a thing that a tornado carries. The turns go by its Transform.
+    {.component = "CarriedByTornado", .field = "drawn", .marker = ""},
+    // The pose that the frames draw a thing in while a hand pulls at it. The turns keep the thing as it stood.
+    {.component = "HandPulled", .field = "", .marker = ""},
+    // Where the frames draw a thing at the drawn hand. The turns go by its Transform, at the reported place of the hand.
+    {.component = "InHand", .field = "drawn", .marker = ""},
     // The frames move the rope of a worn leash; the world has the lengths of the leash in CreatureLeash
     {.component = "CreatureLeashRope", .field = "", .marker = ""},
     // The computers that draw make the sparkles of a leash order; the game server makes none

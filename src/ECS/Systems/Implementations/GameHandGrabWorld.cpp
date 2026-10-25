@@ -950,6 +950,34 @@ void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
 	Locator::entitiesRegistry::value().SetDirty();
 }
 
+void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return;
+	}
+	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = glm::length(pose.axes[column]);
+		pulled.rotation[column] = length > 0.0f ? pose.axes[column] / length : pose.axes[column];
+		pulled.scale[column] = length;
+	}
+	registry.AssignOrReplace<HandPulled>(object, pulled);
+	registry.SetDirty();
+}
+
+void GameHandGrabWorld::ForgetPulledPose(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+	{
+		registry.Remove<HandPulled>(object);
+		registry.SetDirty();
+	}
+}
+
 glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat3& axes) const
 {
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(object);

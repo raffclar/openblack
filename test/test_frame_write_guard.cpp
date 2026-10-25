@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <string>
 #include <utility>
 #include <vector>
@@ -64,4 +65,15 @@ TEST(FrameWriteGuard, EachStepHasItsName)
 	EXPECT_EQ(game_frame::Name(game_frame::Step::FrameEffects), "FrameEffects");
 	EXPECT_EQ(game_frame::Name(game_frame::Step::ProfileAlignment), "ProfileAlignment");
 	EXPECT_EQ(game_frame::Name(game_frame::Step::_Count), "unknown");
+}
+
+TEST(FrameWriteGuard, TheChangedEntityIsTheFirstRowThatDiffers)
+{
+	auto before = SampleOf({{"Transform.position", 1}});
+	auto after = SampleOf({{"Transform.position", 2}});
+	before.rows["Transform.position"] = {{7, 10}, {8, 20}};
+	after.rows["Transform.position"] = {{7, 10}, {8, 21}};
+	EXPECT_EQ(frame_write_guard::ChangedEntity(before, after, "Transform.position"), std::optional<uint32_t>(8));
+	EXPECT_FALSE(frame_write_guard::ChangedEntity(before, before, "Transform.position").has_value());
+	EXPECT_FALSE(frame_write_guard::ChangedEntity(before, after, "Animal.move").has_value());
 }

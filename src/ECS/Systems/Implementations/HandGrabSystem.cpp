@@ -1096,7 +1096,8 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 		{
 			axes[1] *= grab.stretch.GetValue();
 		}
-		_world->SetPose(object, {.axes = axes, .origin = tug.base});
+		_world->DrawPulledPose(object, {.axes = axes, .origin = tug.base});
+		_drawnPull = object;
 	}
 	// How far up it the hand grips it, as the hand measures it every frame
 	grab.holdDistance = HoldOfObject(object).loweringMultiplier * size.height;
@@ -1260,7 +1261,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 
 	// The player of most influence where the thing was is where what the hand holds came from
 	_world->NoteTakenAt(_world->PoseOf(object).origin);
-	// It is held at its own size
+	// It is held at its own size, and the frames draw it at the hand from now
+	_world->ForgetPulledPose(object);
 	auto pose = _world->PoseOf(object);
 	pose.axes = _world->UnstretchedAxes(object, pose.axes);
 	_world->SetPose(object, pose);
@@ -1379,6 +1381,14 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
+	// A pull that ended leaves the thing drawn at its own place again
+	const bool tugs = (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
+	                  grab->tug.has_value() && grab->object == _drawnPull;
+	if (_drawnPull != entt::null && !tugs)
+	{
+		_world->ForgetPulledPose(_drawnPull);
+		_drawnPull = entt::null;
+	}
 	// Clicks are forgotten as the game's turns go by. In a network game the turn writes the clicks and forgets them.
 	if (!_world->IsNetworkGame())
 	{
@@ -1873,7 +1883,7 @@ void HandGrabSystem::StandAsBeforePull(const HandGrab& grab)
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 {
 	auto& registry = _world->Entities();
-	registry.Each<const InHand, Transform>([this, &registry, frameMs](const InHand& inHand, Transform& transform) {
+	registry.Each<InHand>([this, &registry, frameMs](InHand& inHand) {
 		if (!Exists(inHand.hand) || !_world->IsOtherPlayersHand(inHand.hand))
 		{
 			return;
@@ -1881,9 +1891,8 @@ void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 		const auto reported = _world->ReportedPlaceOf(inHand.hand);
 		auto* track = registry.TryGet<HeldDrawTrack>(inHand.hand);
 		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
-		transform.position = _world->AsMapPlace(point);
-		transform.rotation = glm::mat3(1.0f);
-		transform.scale = inHand.scale;
+		// Only the draw reads this place. The turns keep the thing at the reported place of the hand.
+		inHand.drawn = InHand::Drawn {.position = _world->AsMapPlace(point), .rotation = glm::mat3(1.0f)};
 	});
 }
 
@@ -1932,6 +1941,7 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 
 void HandGrabSystem::Reset()
 {
+	_drawnPull = entt::null;
 	if (auto* grab = Grab())
 	{
 		if (grab->scoopSource != entt::null)

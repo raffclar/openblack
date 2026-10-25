@@ -12,9 +12,11 @@
 #include <cstdint>
 
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <string_view>
+#include <unordered_map>
 #include <utility>
 #include <vector>
 
@@ -30,10 +32,18 @@ struct Sample
 {
 	synced_state::Hash hash;
 	uint64_t syncedDraws {0};
+	/// With the fields: the hash of each field of each entity, by "component.field" and then by the entity
+	std::unordered_map<std::string, std::unordered_map<uint32_t, uint64_t>> rows;
 };
+
+/// The first entity whose field differs between two samples, none when no row differs
+[[nodiscard]] std::optional<uint32_t> ChangedEntity(const Sample& before, const Sample& after, const std::string& part);
 
 /// The name that a sample gives to the count of synced random numbers, when it changes
 inline constexpr std::string_view k_SyncedDrawsPart = "synced random draws";
+
+/// The start of the name that a sample gives to the saved state of a system
+inline constexpr std::string_view k_SystemPart = "system ";
 
 /// The parts that differ between two samples, in the order of the second sample, and the synced draws when their count
 /// changed. A part that only one sample has also differs.
@@ -47,14 +57,17 @@ inline constexpr std::string_view k_SyncedDrawsPart = "synced random draws";
 class Guard
 {
 public:
-	/// byField: the guard also tells the field of each component that changed. This is slower.
-	explicit Guard(bool byField);
+	/// byField: the guard also tells the field of each component that changed. This is slower. systems: the guard also
+	/// looks at the saved state of each system, which the turns can read outside the registry.
+	explicit Guard(bool byField, bool systems = false);
 	~Guard();
 	Guard(const Guard&) = delete;
 	Guard& operator=(const Guard&) = delete;
 
-	/// Takes the sample before a frame step
+	/// Takes the sample before a frame step. The sample after the last step serves when nothing ran between them.
 	void Before();
+	/// A step that the guard does not look at ran: the next step takes a new sample before it
+	void Forget() { _last.reset(); }
 	/// Takes the sample after the frame step and tells the parts that the step changed for the first time
 	void After(std::string_view step, uint32_t turn);
 
@@ -66,7 +79,9 @@ private:
 
 	std::unique_ptr<entt::meta_ctx> _context;
 	bool _byField;
+	bool _systems;
 	Sample _before;
+	std::optional<Sample> _last;
 	std::set<std::pair<std::string, std::string>> _found;
 };
 

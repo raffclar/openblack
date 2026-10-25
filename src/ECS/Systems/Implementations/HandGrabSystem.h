@@ -172,6 +172,8 @@ private:
 	[[nodiscard]] bool HandInInfluence() const;
 
 	std::unique_ptr<hand_grab::HandGrabWorldInterface> _world;
+	/// The thing that the frames of this computer draw in the pose of a pull, until the pull ends
+	entt::entity _drawnPull {entt::null};
 };
 
 } // namespace openblack::ecs::systems

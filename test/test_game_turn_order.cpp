@@ -373,3 +373,12 @@ TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::Living, Step::CreatureShapes));
 	EXPECT_TRUE(recorder.Before(Step::CreatureShapes, Step::SyncChecksum));
 }
+
+// The frames only read the map's cells: the things that the turn made go into them at the end of the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
+	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
+}
