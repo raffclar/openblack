@@ -11,6 +11,8 @@
 
 #include "HelpProfileSystem.h"
 
+#include <algorithm>
+
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "Help/HelpProfileFile.h"
@@ -52,12 +54,17 @@ HelpProfileSystem::MakeReport(bool boxShows, const std::optional<help::profile::
 	player_commands::HelpReport report {
 	    .events = _reported.Take(),
 	    .boxShows = boxShows,
-	    .cameraShowsWorld = worldCamera.has_value(),
-	    .landAtCentre = worldCamera.has_value() && worldCamera->centreDistance.has_value(),
-	    .centreDistance = worldCamera.has_value() ? worldCamera->centreDistance.value_or(0.0f) : 0.0f,
-	    .pitch = worldCamera.has_value() ? worldCamera->pitch : 0.0f,
 	    .cursorOnPoint = cursorOnPoint,
 	};
+	// The report keeps only the events of the view, so that it changes only when they change
+	if (worldCamera.has_value())
+	{
+		const auto viewEvents = help::profile::CameraViewEvents(*worldCamera);
+		const auto has = [&viewEvents](uint32_t event) { return std::ranges::find(viewEvents, event) != viewEvents.end(); };
+		report.cameraSeesLand = has(help::profile::k_CameraSeesLand);
+		report.cameraNearAndSteep = has(help::profile::k_CameraNearAndSteep);
+		report.cameraSeesSky = has(help::profile::k_CameraSeesSky);
+	}
 	// The events are new in each report. The other values stay until a report changes them.
 	auto unchanged = _lastMade;
 	unchanged.events = report.events;
@@ -76,14 +83,6 @@ void HelpProfileSystem::DoReport(const player_commands::HelpReport& report)
 		Trigger(event);
 	}
 	_lastReport = report;
-	_worldCamera.reset();
-	if (report.cameraShowsWorld)
-	{
-		_worldCamera = help::profile::WorldCameraView {
-		    .centreDistance = report.landAtCentre ? std::optional(report.centreDistance) : std::nullopt,
-		    .pitch = report.pitch,
-		};
-	}
 }
 
 void HelpProfileSystem::ProcessTurn()
@@ -92,12 +91,18 @@ void HelpProfileSystem::ProcessTurn()
 	{
 		return;
 	}
-	if (_worldCamera.has_value())
+	// The events of the view of the camera, in the order that they count
+	if (_lastReport.cameraSeesLand)
 	{
-		for (const auto event : help::profile::CameraViewEvents(*_worldCamera))
-		{
-			_profile.Trigger(event);
-		}
+		_profile.Trigger(help::profile::k_CameraSeesLand);
+	}
+	if (_lastReport.cameraNearAndSteep)
+	{
+		_profile.Trigger(help::profile::k_CameraNearAndSteep);
+	}
+	if (_lastReport.cameraSeesSky)
+	{
+		_profile.Trigger(help::profile::k_CameraSeesSky);
 	}
 	_profile.EndTurn();
 }

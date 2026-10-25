@@ -41,9 +41,8 @@ private:
 	help::profile::ReportedEvents _reported;
 	/// The last report that this computer made
 	player_commands::HelpReport _lastMade {};
-	/// The last report, and the view of the world camera that it gives
+	/// The last report that a turn did
 	player_commands::HelpReport _lastReport {};
-	std::optional<help::profile::WorldCameraView> _worldCamera;
 };
 
 } // namespace openblack::ecs::systems

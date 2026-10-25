@@ -344,15 +344,13 @@ struct HelpReport
 	uint64_t events {0};
 	/// A front-end box shows, for example the menu of the game. The help then counts nothing.
 	bool boxShows {false};
-	/// The world camera of the player shows the world. A script, the temple or a creature can have the camera.
-	bool cameraShowsWorld {false};
-	/// The line from the camera to the middle of the screen touches the land at this distance
-	bool landAtCentre {false};
-	float centreDistance {0.0f};
-	/// How steeply the camera looks down, in radians. Below zero, the camera looks up.
-	float pitch {0.0f};
 	/// The cursor is on a point of the world. Then the point of the report of the hand (HandReport) is under the cursor.
 	bool cursorOnPoint {false};
+	/// The events of the view of the world camera, which the help counts each turn until the next report (see
+	/// help::profile::CameraViewEvents). None when a script, the temple or a creature has the camera.
+	bool cameraSeesLand {false};
+	bool cameraNearAndSteep {false};
+	bool cameraSeesSky {false};
 
 	bool operator==(const HelpReport& other) const = default;
 };

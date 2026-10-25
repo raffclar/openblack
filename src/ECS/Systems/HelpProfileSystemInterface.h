@@ -47,12 +47,13 @@ public:
 	/// other values are those of the last report that this function gave.
 	[[nodiscard]] virtual std::optional<player_commands::HelpReport>
 	MakeReport(bool boxShows, const std::optional<help::profile::WorldCameraView>& worldCamera, bool cursorOnPoint) = 0;
-	/// At the turn: the report of this computer's player. The profile counts its events. It keeps the view of the world
-	/// camera and the front-end box for each turn until the next report.
+	/// At the turn: the report of this computer's player. The profile counts its events. It keeps the events of the view
+	/// of the world camera and the front-end box for each turn until the next report.
 	virtual void DoReport(const player_commands::HelpReport& report) = 0;
-	/// A game turn ends. The profile counts the view of the world camera of the last report, and then its clock moves on.
-	/// Nothing occurs while the last report has a front-end box (the game's menu, for example). The report has no view
-	/// when the player's world camera does not show the world (a script, the temple or a creature has the camera).
+	/// A game turn ends. The profile counts the events of the view of the world camera of the last report, and then its
+	/// clock moves on. Nothing occurs while the last report has a front-end box (the game's menu, for example). The
+	/// report has no view when the player's world camera does not show the world (a script, the temple or a creature has
+	/// the camera).
 	virtual void ProcessTurn() = 0;
 	/// The last report of this computer's player that a turn did. Its events are the events of that report only.
 	[[nodiscard]] virtual const player_commands::HelpReport& GetLastReport() const = 0;

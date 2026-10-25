@@ -95,14 +95,20 @@ TEST(HelpReports, AReportGoesOnlyWhenItHasEventsOrItsValuesChange)
 	EXPECT_FALSE(help.MakeReport(false, std::nullopt, false).has_value());
 	const auto first = help.MakeReport(false, k_NearAndSteep, true);
 	ASSERT_TRUE(first.has_value());
-	EXPECT_TRUE(first->cameraShowsWorld);
-	EXPECT_TRUE(first->landAtCentre);
-	EXPECT_EQ(first->centreDistance, 10.0f);
-	EXPECT_EQ(first->pitch, 0.8f);
+	EXPECT_TRUE(first->cameraSeesLand);
+	EXPECT_TRUE(first->cameraNearAndSteep);
+	EXPECT_FALSE(first->cameraSeesSky);
 	EXPECT_TRUE(first->cursorOnPoint);
 	EXPECT_EQ(first->events, 0u);
 	// The same values again: no report
 	EXPECT_FALSE(help.MakeReport(false, k_NearAndSteep, true).has_value());
+	// A camera that moves but gives the same events of the view: no report
+	EXPECT_FALSE(help.MakeReport(false, profile::WorldCameraView {.centreDistance = 12.0f, .pitch = 0.9f}, true).has_value());
+	// A camera that looks up at the sky: a report
+	const auto sky = help.MakeReport(false, profile::WorldCameraView {.centreDistance = std::nullopt, .pitch = -0.5f}, true);
+	ASSERT_TRUE(sky.has_value());
+	EXPECT_TRUE(sky->cameraSeesSky);
+	EXPECT_FALSE(sky->cameraSeesLand);
 	// An event: a report with the same values
 	help.Report(profile::k_TapThing);
 	const auto withEvent = help.MakeReport(false, k_NearAndSteep, true);
@@ -133,7 +139,7 @@ TEST(HelpReports, EachTurnCountsTheViewOfTheLastReport)
 	EXPECT_EQ(help.Get().Count(profile::k_CameraSeesLand).Total(), 2u);
 	EXPECT_EQ(help.Get().Clock(), 3 * profile::k_MillisecondsPerTurn);
 	// A camera that does not show the world gives no view
-	help.DoReport(player_commands::HelpReport {.cameraShowsWorld = false});
+	help.DoReport(player_commands::HelpReport {});
 	help.ProcessTurn();
 	EXPECT_EQ(help.Get().Count(profile::k_CameraSeesLand).Total(), 2u);
 	EXPECT_EQ(help.Get().Clock(), 4 * profile::k_MillisecondsPerTurn);

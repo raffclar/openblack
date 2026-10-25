@@ -85,11 +85,10 @@ std::vector<Action> EachCommand()
 	    HandCastUnlock {.seed = Entity(25)},
 	    HelpReport {.events = 0x0102030405060708,
 	                .boxShows = false,
-	                .cameraShowsWorld = true,
-	                .landAtCentre = true,
-	                .centreDistance = 14.5f,
-	                .pitch = -0.25f,
-	                .cursorOnPoint = true},
+	                .cursorOnPoint = true,
+	                .cameraSeesLand = true,
+	                .cameraNearAndSteep = true,
+	                .cameraSeesSky = false},
 	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
 	};
 }
@@ -213,11 +212,10 @@ Action RandomAction(std::mt19937& random)
 	case 28:
 		return HelpReport {.events = (uint64_t {bits(random)} << 32) | bits(random),
 		                   .boxShows = bits(random) % 2 == 0,
-		                   .cameraShowsWorld = bits(random) % 2 == 0,
-		                   .landAtCentre = bits(random) % 2 == 0,
-		                   .centreDistance = number(),
-		                   .pitch = number(),
-		                   .cursorOnPoint = bits(random) % 2 == 0};
+		                   .cursorOnPoint = bits(random) % 2 == 0,
+		                   .cameraSeesLand = bits(random) % 2 == 0,
+		                   .cameraNearAndSteep = bits(random) % 2 == 0,
+		                   .cameraSeesSky = bits(random) % 2 == 0};
 	case 29:
 		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
 	default:
@@ -282,7 +280,7 @@ std::vector<Action> BusyCommands()
 TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5,  9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 18, 18};
+	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 10, 18};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -681,16 +679,16 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 
 TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
 {
-	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraShowsWorld = false};
+	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
 	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
 	const auto decoded = Decode(bytes);
 	ASSERT_EQ(decoded.error, DecodeError::None);
 	ASSERT_TRUE(decoded.frame.has_value());
 	EXPECT_EQ(std::get<HelpReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
 
-	// The byte of the flags comes after the tag and the eight bytes of the events. A flag after the fourth is refused.
+	// The byte of the flags comes last, after the tag and the eight bytes of the events. A flag after the fifth is
+	// refused.
 	auto wrong = bytes;
-	const auto flagsAt = wrong.size() - 9;
-	wrong[flagsAt] = 16;
+	wrong.back() = 32;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

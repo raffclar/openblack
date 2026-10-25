@@ -216,10 +216,10 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandCastUnlock& command) { out.Entity(command.seed); },
 	               [&out](const HelpReport& command) {
 		               out.Number(command.events);
-		               out.Byte(static_cast<uint8_t>((command.boxShows ? 1u : 0u) | (command.cameraShowsWorld ? 2u : 0u) |
-		                                             (command.landAtCentre ? 4u : 0u) | (command.cursorOnPoint ? 8u : 0u)));
-		               out.Float(command.centreDistance);
-		               out.Float(command.pitch);
+		               out.Byte(static_cast<uint8_t>((command.boxShows ? 1u : 0u) | (command.cursorOnPoint ? 2u : 0u) |
+		                                             (command.cameraSeesLand ? 4u : 0u) |
+		                                             (command.cameraNearAndSteep ? 8u : 0u) |
+		                                             (command.cameraSeesSky ? 16u : 0u)));
 	               },
 	               [&out](const HelpQuery& command) {
 		               out.Entity(command.thing);
@@ -462,16 +462,15 @@ DecodeError ReadAction(Reader& in, Action& action)
 		HelpReport report {};
 		report.events = in.Number<uint64_t>();
 		const auto flags = in.Byte();
-		if (flags > 15)
+		if (flags > 31)
 		{
 			return DecodeError::Value;
 		}
 		report.boxShows = (flags & 1u) != 0;
-		report.cursorOnPoint = (flags & 8u) != 0;
-		report.cameraShowsWorld = (flags & 2u) != 0;
-		report.landAtCentre = (flags & 4u) != 0;
-		report.centreDistance = in.Float();
-		report.pitch = in.Float();
+		report.cursorOnPoint = (flags & 2u) != 0;
+		report.cameraSeesLand = (flags & 4u) != 0;
+		report.cameraNearAndSteep = (flags & 8u) != 0;
+		report.cameraSeesSky = (flags & 16u) != 0;
 		action = report;
 		return DecodeError::None;
 	}
@@ -638,7 +637,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
 	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
-	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1 + 4 + 4}; },
+	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                                     [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
 	                                 },
 	                                 action);
