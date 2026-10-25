@@ -3766,8 +3766,10 @@ void CreatureFightSystem::WoundSkin(entt::entity victim, const glm::vec3& point,
 	{
 		return;
 	}
-	// The whole line along the blow counts: the wound goes where it first meets the skin
-	const auto hit = posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, point,
+	// The whole line along the blow counts: the wound goes where it first meets the skin, as the body is posed at the end
+	// of its newest game turn
+	const auto turnBones = creature_scars::TurnBones(registry, victim, *drawn->first, drawn->second);
+	const auto hit = posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, turnBones, point,
 	                                             x87::Scaled<x87::SumOrder::Zyx>(vector), true);
 	if (!hit.has_value())
 	{
@@ -3818,6 +3820,9 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 	}
 	auto& drips = *found;
 	const auto drawn = DrawnMeshOf(registry, creature);
+	// The blood runs over the body as it is posed at the end of its newest game turn
+	const auto turnBones = drawn.has_value() ? creature_scars::TurnBones(registry, creature, *drawn->first, drawn->second)
+	                                         : std::vector<glm::mat4> {};
 	for (auto& drip : drips.drips)
 	{
 		if (drip.ms >= CreatureDrips::k_RunMs)
@@ -3827,8 +3832,7 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 		drip.ms += TurnMsOf(registry.TryGet<const CreatureAnimation>(creature));
 		const auto corners =
 		    drawn.has_value()
-		        ? posed_model::CornersOnSkin(registry, creature, *drawn->first, drawn->second,
-		                                     posed_model::BonesOf(registry, creature, *drawn->first),
+		        ? posed_model::CornersOnSkin(registry, creature, *drawn->first, drawn->second, turnBones,
 		                                     {.subMesh = drip.subMesh, .firstIndex = drip.firstIndex, .s = drip.s, .t = drip.t})
 		        : std::nullopt;
 		if (!corners.has_value())
@@ -3841,7 +3845,8 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 		from.y -= fight::k_DripFallPerTurn;
 		// Across the triangle, as long as twice its area: a triangle too small finds no skin
 		const auto across = glm::cross((*corners)[2] - (*corners)[0], (*corners)[1] - (*corners)[0]);
-		const auto hit = posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, from, across, true);
+		const auto hit =
+		    posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, turnBones, from, across, true);
 		if (!hit.has_value())
 		{
 			drip.ms = CreatureDrips::k_RunMs;

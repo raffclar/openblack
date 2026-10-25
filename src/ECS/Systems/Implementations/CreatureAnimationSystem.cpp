@@ -1491,12 +1491,15 @@ void CreatureAnimationSystem::AddPukeDrops(entt::entity creature)
 		return;
 	}
 	const auto* rig = RigOf(body->species);
-	const std::span<const glm::mat4> bones = animation->boneMatrices;
 	if (rig == nullptr)
 	{
 		return;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The sick comes out of the body as it is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const std::span<const glm::mat4> bones = pose.bones;
+	const auto& placement = pose.placement;
 	// The sick comes out of the point at the lips, else out of the head bone
 	glm::vec3 lips(0.0f);
 	if (rig->pukePoint.has_value())
