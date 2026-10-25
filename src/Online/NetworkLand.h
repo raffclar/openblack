@@ -21,6 +21,7 @@
 
 #include <GameSocket.h>
 
+#include "Online/OnlineMapLand.h"
 #include "Story/NewGameChoice.h"
 
 /// The name of the land of a network game on the game socket. The server sends the path of its land under the Scripts
@@ -41,10 +42,34 @@ inline constexpr std::string_view k_ScriptsFolder = "scripts";
 }
 
 /// The name of a land on the game socket: the path of the land after the last Scripts folder of its path, with "/"
-/// between the folders (for example "Land1.txt" or "Playgrounds/construct.txt"). A land that is not in a Scripts folder
-/// gives the name of its file.
+/// between the folders (for example "Land1.txt" or "Playgrounds/construct.txt"). A land of a network game is a map file
+/// of the "Online Maps" folder of the game, not of the Scripts folder: its name starts with that folder (for example
+/// "Online Maps/mpm_2p_1.map"). A land that is not in a Scripts folder gives the name of its file.
 [[nodiscard]] inline std::string WireName(const std::filesystem::path& land)
 {
+	if (online_map_land::IsOnlineMap(land.generic_string()))
+	{
+		// The part of the path after the last "Online Maps" folder, or the file name when the path has no such folder
+		std::filesystem::path afterFolder;
+		bool inFolder = false;
+		for (const auto& part : land)
+		{
+			if (SameName(part.generic_string(), online_map_land::k_Folder))
+			{
+				afterFolder.clear();
+				inFolder = true;
+			}
+			else if (inFolder)
+			{
+				afterFolder /= part;
+			}
+		}
+		if (!inFolder || afterFolder.empty())
+		{
+			afterFolder = land.filename();
+		}
+		return (std::filesystem::path(online_map_land::k_Folder) / afterFolder).generic_string();
+	}
 	std::filesystem::path afterScripts;
 	bool found = false;
 	for (const auto& part : land)
@@ -66,8 +91,10 @@ inline constexpr std::string_view k_ScriptsFolder = "scripts";
 	return afterScripts.generic_string();
 }
 
-/// The path of a land of the game socket under a Scripts folder. None when the name is empty, has a root, or goes out
-/// of the Scripts folder: a client loads only the land scripts of the game.
+/// The path of a land of the game socket: under a Scripts folder, or for a land of a network game (a name that starts
+/// with the "Online Maps" folder) in that folder of the game, which the file system finds as it finds the Scripts
+/// folder. None when the name is empty, has a root, or goes out of the folder: a client loads only the lands of the
+/// game. A map file outside the "Online Maps" folder is not a land.
 [[nodiscard]] inline std::optional<std::filesystem::path> PathOf(std::string_view wireName,
                                                                  const std::filesystem::path& scriptsFolder)
 {
@@ -82,6 +109,25 @@ inline constexpr std::string_view k_ScriptsFolder = "scripts";
 		{
 			return std::nullopt;
 		}
+	}
+	if (online_map_land::IsOnlineMap(wireName))
+	{
+		std::filesystem::path inFolder(online_map_land::k_Folder);
+		bool first = true;
+		for (const auto& part : name)
+		{
+			if (first && !SameName(part.generic_string(), online_map_land::k_Folder))
+			{
+				return std::nullopt;
+			}
+			if (!first)
+			{
+				inFolder /= part;
+			}
+			first = false;
+		}
+		return inFolder == std::filesystem::path(online_map_land::k_Folder) ? std::nullopt
+		                                                                    : std::optional<std::filesystem::path>(inFolder);
 	}
 	return scriptsFolder / name;
 }

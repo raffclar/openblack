@@ -38,6 +38,9 @@ namespace detail
 }
 } // namespace detail
 
+/// The name of the folder of the game that holds the lands of network games
+inline constexpr std::string_view k_Folder = "Online Maps";
+
 /// The extension of a land of a network game
 inline constexpr std::string_view k_Extension = ".map";
 
