@@ -15,6 +15,7 @@
 #include "Common/PortableRotations.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandClicked.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
@@ -51,6 +52,9 @@ entt::entity HandArchetype::Create(const glm::vec3& position, float xAngleRadian
 	if (!rightHanded)
 	{
 		registry.Assign<HandMiracleFx>(entity);
+		// What the hand holds and pulls at. It starts with the hand too, so that the order of the hands in the world does not
+		// depend on which computer first acts with a hand.
+		registry.Assign<HandGrab>(entity);
 	}
 
 	return entity;
