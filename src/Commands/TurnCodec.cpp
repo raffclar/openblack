@@ -217,6 +217,18 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
 	               [](const HandShakeOff& /*command*/) {},
 	               [&out](const GripDust& command) { out.Vector(command.point); },
+	               [&out](const HelpReport& command) {
+		               out.Number(command.events);
+		               out.Byte(static_cast<uint8_t>((command.boxShows ? 1u : 0u) | (command.cursorOnPoint ? 2u : 0u) |
+		                                             (command.cameraSeesLand ? 4u : 0u) |
+		                                             (command.cameraNearAndSteep ? 8u : 0u) |
+		                                             (command.cameraSeesSky ? 16u : 0u)));
+	               },
+	               [&out](const HelpQuery& command) {
+		               out.Entity(command.thing);
+		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
+		               out.Vector(command.ground);
+	               },
 	               [](const CreatureFightCheat& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
@@ -470,6 +482,37 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
+	case CommandTag::HelpReport:
+	{
+		HelpReport report {};
+		report.events = in.Number<uint64_t>();
+		const auto flags = in.Byte();
+		if (flags > 31)
+		{
+			return DecodeError::Value;
+		}
+		report.boxShows = (flags & 1u) != 0;
+		report.cursorOnPoint = (flags & 2u) != 0;
+		report.cameraSeesLand = (flags & 4u) != 0;
+		report.cameraNearAndSteep = (flags & 8u) != 0;
+		report.cameraSeesSky = (flags & 16u) != 0;
+		action = report;
+		return DecodeError::None;
+	}
+	case CommandTag::HelpQuery:
+	{
+		HelpQuery query {};
+		query.thing = in.Entity();
+		const auto hasGround = in.Byte();
+		if (hasGround > 1)
+		{
+			return DecodeError::Value;
+		}
+		query.hasGround = hasGround == 1;
+		query.ground = in.Vector();
+		action = query;
+		return DecodeError::None;
+	}
 	case CommandTag::CreatureFightCheat:
 		action = CreatureFightCheat {};
 		return DecodeError::None;
@@ -586,6 +629,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
 	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
+	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
+	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
 	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
 	                  },
 	                  action);
@@ -627,6 +672,8 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
 	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
 	                                     [](const GripDust& /*command*/) { return k_Vector; },
+	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
+	                                     [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
 	                                     [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);

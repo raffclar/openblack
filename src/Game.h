@@ -370,6 +370,9 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
+	/// world camera, when they changed
+	void ReportHelp();
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -721,6 +724,8 @@ private:
 	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The turn of the last report of the help that this computer sent
+	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land

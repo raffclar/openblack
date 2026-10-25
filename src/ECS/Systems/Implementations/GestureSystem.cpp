@@ -59,12 +59,12 @@ constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
 
-/// The help counts an event, if the help is there
+/// The help counts an event of the player's input at the turn of its next report, if the help is there
 void Help(uint32_t event)
 {
 	if (Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(event);
+		Locator::helpProfileSystem::value().Report(event);
 	}
 }
 

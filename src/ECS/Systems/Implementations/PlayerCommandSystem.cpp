@@ -34,8 +34,11 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -46,6 +49,12 @@ using namespace openblack::player_commands;
 
 namespace
 {
+/// The help of this computer is for the player of this computer only
+bool PlayerOfThisComputer(openblack::PlayerNames player)
+{
+	return !openblack::Locator::playerSystem::has_value() ||
+	       openblack::Locator::playerSystem::value().GetLocalPlayer() == player;
+}
 
 /// Do one command for the player that sent it, at a turn
 void Run(const Command& command, uint32_t turn)
@@ -272,6 +281,22 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::handSystem::has_value())
 			    {
 				    openblack::Locator::handSystem::value().Report(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HelpReport>)
+		    {
+			    // Only the computer of the player counts what the player did
+			    if (openblack::Locator::helpProfileSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpProfileSystem::value().DoReport(action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HelpQuery>)
+		    {
+			    // Only the computer of the player says the help
+			    if (openblack::Locator::helpMessageSystem::has_value() && PlayerOfThisComputer(command.player))
+			    {
+				    openblack::Locator::helpMessageSystem::value().DoHelpQuery(action);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, PlayerJoined>)

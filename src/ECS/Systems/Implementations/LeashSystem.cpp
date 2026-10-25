@@ -1824,10 +1824,10 @@ void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDi
 		const auto* post = picked.has_value() && registry.Valid(*picked) ? registry.TryGet<const LeashPost>(*picked) : nullptr;
 		if (post != nullptr && post->owner == player && post->hung)
 		{
-			// The help counts the tap of this computer's hand on its own leash
+			// The help counts the tap of this computer's hand on its own leash, at the turn of its next report
 			if (Locator::helpProfileSystem::has_value())
 			{
-				Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+				Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 			}
 			// The tap is a command, which the world does at the start of a later turn
 			if (Locator::playerCommandSystem::has_value())
