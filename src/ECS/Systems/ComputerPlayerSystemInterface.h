@@ -33,6 +33,11 @@ public:
 	/// no computer mind plays gets a computer god. Its mind switches on, and it gets a fully grown creature of a random
 	/// species at the creature home of its citadel. The game makes the player when the land has none yet.
 	virtual void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) = 0;
+	/// The land of a network game waits for the humans of the network session before it fills its slots with no player
+	virtual void WaitForHumans() = 0;
+	/// In the turn of the start of a network game: the humans of the network session join. The game makes the player of
+	/// each human when the land has none. Then, when the land waits for its humans, the slots with no player fill.
+	virtual void HumansJoined(std::span<const PlayerNames> humans) = 0;
 };
 
 } // namespace openblack::ecs::systems

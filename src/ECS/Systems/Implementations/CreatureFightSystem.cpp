@@ -21,7 +21,9 @@
 #include <limits>
 #include <optional>
 #include <string_view>
+#include <type_traits>
 #include <utility>
+#include <variant>
 #include <vector>
 
 #include <LNDFile.h>
@@ -43,6 +45,7 @@
 #include "Camera/CreatureInteractCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
+#include "Commands/PlayerCommands.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureArena.h"
@@ -111,6 +114,7 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/ThingCircles.h"
@@ -440,7 +444,7 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 /// nothing yet.
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value())
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value())
 	{
 		return false;
 	}
@@ -1115,7 +1119,7 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 	auto* fighting = self.has_value() ? registry.TryGet<CreatureFighting>(*self) : nullptr;
 	if (fighting != nullptr && registry.Valid(fighting->opponent))
 	{
-		auto& list = fighting->fighter.marks;
+		auto& list = fighting->marks;
 		if (step)
 		{
 			list.Animate();
@@ -1429,7 +1433,7 @@ void CreatureFightSystem::CallOff(entt::entity creature)
 			side->played = true;
 			side->fighter.stopping = true;
 			side->fighter.queue.Clear();
-			side->fighter.marks.Clear();
+			side->marks.Clear();
 		}
 		else if (IsLeadIn(side->stage))
 		{
@@ -1541,7 +1545,7 @@ bool CreatureFightSystem::QueueMove(entt::entity creature, const fight::Move& mo
 		return false;
 	}
 	const auto controlBefore = fighting->fighter.control;
-	const bool queued = fight::PlayerMove(fighting->fighter, move, replace);
+	const bool queued = fight::PlayerMove(fighting->fighter, fighting->marks, move, replace);
 	const auto index = fight_transcript::Note(creature, "move_queued", [&] {
 		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
 		                                 {"move", fight::Name(move.kind)},
@@ -1790,7 +1794,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 	}
 	auto& fighting = registry.Get<CreatureFighting>(*self);
 	// Nothing more is taken while twelve sparkles show
-	if (fighting.fighter.marks.Full())
+	if (fighting.marks.Full())
 	{
 		note("refused_full", {{"queue", static_cast<uint32_t>(fighting.fighter.queue.Size())}});
 		return false;
@@ -1807,9 +1811,10 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		return false;
 	}
 
-	fight::Move move;
+	const bool replace = fight::ReplacesQueue(button);
 	marks::Mark mark;
 	fight_transcript::Fields target;
+	std::optional<player_commands::Action> command;
 	if (under.has_value())
 	{
 		const auto hit = SkinHitOn(registry, *under, rayOrigin, rayDirection);
@@ -1818,6 +1823,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 			note("missed_skin", {{"target", *under == opponent ? "opponent" : "self"}});
 			return true;
 		}
+		fight::Move move;
 		if (*under == opponent)
 		{
 			// High, in the middle or low by where on the opponent's body the press lands
@@ -1835,6 +1841,9 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		target.emplace_back("hit_x", hit->hit.point.x);
 		target.emplace_back("hit_y", hit->hit.point.y);
 		target.emplace_back("hit_z", hit->hit.point.z);
+		target.emplace_back("move", fight::Name(move.kind));
+		command = player_commands::FightMove {
+		    .target = *under, .kind = static_cast<uint8_t>(move.kind), .value = move.value, .replace = replace};
 	}
 	else
 	{
@@ -1852,21 +1861,18 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 			return false;
 		}
 		const auto heading = registry.Get<const CreatureLocomotion>(*self).heading;
-		const auto step = fight::StepTowards(WorldToLocal(point - Flat(selfAt), heading));
-		move = fight::StepMove(step);
 		const glm::vec3 ground {point.x, GroundAt(point), point.y};
 		mark = {.anchor = marks::Anchor::Ground, .local = marks::ToLocal(marks::GroundFrame(selfAt, heading), ground)};
-		target = {{"target", "ground"}, {"ground_x", point.x}, {"ground_z", point.y}, {"step", fight::Name(step)}};
+		target = {{"target", "ground"}, {"ground_x", point.x}, {"ground_z", point.y}};
+		command = player_commands::FightGround {.creature = *self, .point = ground, .replace = replace};
 	}
-	// The sparkle goes up first; a press on a body charges it while held, one on the ground doesn't
-	fighting.fighter.marks.Add(mark);
+	// The sparkle goes up first; a press on a body charges it while held, one on the ground does not. The move itself
+	// goes into the queue at the next turn.
+	fighting.marks.Add(mark);
 	_markHeld = mark.anchor != marks::Anchor::Ground;
 	PlayDirectSound();
-	target.emplace_back("move", fight::Name(move.kind));
 	note("accepted", std::move(target));
-	_queueSource = "hand";
-	QueueMove(*self, move, fight::ReplacesQueue(button));
-	_queueSource = "script";
+	Send(*command);
 	_pressed = Pressed {.creature = *self, .milliseconds = milliseconds, .turn = turn};
 	return true;
 }
@@ -1891,7 +1897,81 @@ void CreatureFightSystem::Release(uint32_t milliseconds, uint32_t turn)
 		                                 {"charge_ms", fight::ReleasedCharge(heldMs)},
 		                                 {"blow_speed", fight::BlowSpeed(fight::ReleasedCharge(heldMs))}};
 	});
-	ReleaseCharge(pressed.creature, heldMs);
+	// The held time is whole milliseconds; the charge goes to the blow at the next turn
+	Send(player_commands::FightCharge {.heldMs = static_cast<uint32_t>(heldMs)});
+}
+
+void CreatureFightSystem::Send(const player_commands::Action& action)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(action);
+		return;
+	}
+	// With no queue of commands (the tests), the world does the command at once
+	std::visit(
+	    [this](const auto& command) {
+		    using Kind = std::decay_t<decltype(command)>;
+		    if constexpr (std::is_same_v<Kind, player_commands::FightGround>)
+		    {
+			    DoGroundPress(k_LocalPlayer, command.creature, command.point, command.replace);
+		    }
+		    else if constexpr (std::is_same_v<Kind, player_commands::FightMove>)
+		    {
+			    DoMove(k_LocalPlayer, command.target,
+			           {.kind = static_cast<fight::Move::Kind>(command.kind), .value = command.value}, command.replace);
+		    }
+		    else if constexpr (std::is_same_v<Kind, player_commands::FightCharge>)
+		    {
+			    DoCharge(k_LocalPlayer, static_cast<float>(command.heldMs));
+		    }
+	    },
+	    action);
+}
+
+void CreatureFightSystem::DoGroundPress(PlayerNames player, entt::entity creature, const glm::vec3& point, bool replace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// Only the sending player's creature in its fight takes a step
+	if (!registry.Valid(creature) || PrimaryCreatureOf(registry, player) != creature ||
+	    !registry.AllOf<CreatureFighting>(creature))
+	{
+		return;
+	}
+	const auto& selfAt = registry.Get<const Transform>(creature).position;
+	const auto heading = registry.Get<const CreatureLocomotion>(creature).heading;
+	const auto step = fight::StepTowards(WorldToLocal(Flat(point) - Flat(selfAt), heading));
+	_queueSource = "hand";
+	QueueMove(creature, fight::StepMove(step), replace);
+	_queueSource = "script";
+}
+
+void CreatureFightSystem::DoMove(PlayerNames player, entt::entity target, const fight::Move& move, bool replace)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	// The thing pressed on must still be a creature; the move goes to the sending player's creature
+	if (!registry.Valid(target) || !registry.AllOf<Creature>(target))
+	{
+		return;
+	}
+	const auto self = PrimaryCreatureOf(registry, player);
+	if (!self.has_value())
+	{
+		return;
+	}
+	const bool gesture = move.kind == fight::Move::Kind::Special || move.kind == fight::Move::Kind::Spell;
+	_queueSource = gesture ? "gesture" : "hand";
+	QueueMove(*self, move, replace);
+	_queueSource = "script";
+}
+
+void CreatureFightSystem::DoCharge(PlayerNames player, float heldMs)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	if (const auto self = PrimaryCreatureOf(registry, player); self.has_value())
+	{
+		ReleaseCharge(*self, heldMs);
+	}
 }
 
 std::optional<fight::Tip> CreatureFightSystem::HandTip(std::optional<entt::entity> under) const
@@ -1923,7 +2003,7 @@ bool CreatureFightSystem::GestureMove(const fight::Move& move)
 {
 	const auto self = PlayersFighter();
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!self.has_value() || registry.Get<const CreatureFighting>(*self).fighter.marks.Full())
+	if (!self.has_value() || registry.Get<const CreatureFighting>(*self).marks.Full())
 	{
 		return false;
 	}
@@ -1932,13 +2012,13 @@ bool CreatureFightSystem::GestureMove(const fight::Move& move)
 	{
 		return false;
 	}
-	// Its sparkle sits where the line to the opponent meets its skin; a gesture charges nothing
+	// Its sparkle sits where the line to the opponent meets its skin; a gesture charges nothing. The move goes into the
+	// queue at the next turn.
 	auto& fighting = registry.Get<CreatureFighting>(*self);
-	fighting.fighter.marks.Add(MarkOnSkin(*seen, marks::Anchor::Opponent));
+	fighting.marks.Add(MarkOnSkin(*seen, marks::Anchor::Opponent));
 	_markHeld = false;
-	_queueSource = "gesture";
-	QueueMove(*self, move, false);
-	_queueSource = "script";
+	Send(player_commands::FightMove {
+	    .target = fighting.opponent, .kind = static_cast<uint8_t>(move.kind), .value = move.value, .replace = false});
 	return true;
 }
 
@@ -2939,7 +3019,7 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	{
 		Locator::helpProfileSystem::value().Trigger(fight::HelpEventOf(front->move.kind));
 	}
-	const auto order = fight::TakeOrder(fighter, inRange);
+	const auto order = fight::TakeOrder(fighter, fighting.marks, inRange);
 	if (!order.has_value())
 	{
 		return;
@@ -3138,7 +3218,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		{
 			if (auto* held = registry.TryGet<CreatureFighting>(*self))
 			{
-				held->fighter.marks.Charge(milliseconds);
+				held->marks.Charge(milliseconds);
 			}
 		}
 	}
@@ -3616,9 +3696,9 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 		    },
 		    blowIndex);
 	}
-	if (victim.queue.Size() != queuedBefore && victim.marks.Size() > 0)
+	if (victim.queue.Size() != queuedBefore && opponentFighting.marks.Size() > 0)
 	{
-		victim.marks.DropNewest();
+		opponentFighting.marks.DropNewest();
 		_markHeld = false;
 	}
 

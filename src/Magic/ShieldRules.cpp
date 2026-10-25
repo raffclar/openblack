@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "InfoConstants.h"
 #include "VillagerReactionRules.h"
@@ -89,7 +90,7 @@ shield::DomePose shield::StepDome(const DomeShape& shape, DomeState& state, floa
 	pose.scale = shape.startScale + (shape.finalScale - shape.startScale) * amount;
 	state.bob = Wrap(state.bob + k_DomeBobSpeed * dt);
 	pose.height = (shape.raiseWithScale * shape.finalScale) + shape.shieldHeight +
-	              ((std::sin(state.bob) + 1.0f) * shape.bobMagnitude * pose.scale * 0.5f);
+	              ((portable_math::Sin(state.bob) + 1.0f) * shape.bobMagnitude * pose.scale * 0.5f);
 	pose.angle = state.angle;
 	return pose;
 }
@@ -214,13 +215,13 @@ bool shield::NeedsShelter(float distance, float radius)
 shield::Shelter shield::ShelterAt(glm::vec2 centre, glm::vec2 villager, float radius, float turn, float u, float faceTurn)
 {
 	const auto away = villager - centre;
-	const float side = std::atan2(away.y, away.x);
+	const float side = portable_math::Atan2(away.y, away.x);
 	const float angle = side + turn - k_ShelterTurnHalf;
 	const float inner = k_ShelterInside * radius;
 	const float distance = inner - (u * u * u * inner);
-	const glm::vec2 point = centre + glm::vec2(std::cos(angle), std::sin(angle)) * distance;
+	const glm::vec2 point = centre + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * distance;
 	const float faceAngle = side + faceTurn - k_ShelterTurnHalf;
-	const glm::vec2 face = centre + glm::vec2(std::cos(faceAngle), std::sin(faceAngle)) * (distance + 1.0f);
+	const glm::vec2 face = centre + glm::vec2(portable_math::Cos(faceAngle), portable_math::Sin(faceAngle)) * (distance + 1.0f);
 	return {.point = point, .faceTowards = face};
 }
 
@@ -273,8 +274,8 @@ uint32_t shield::VillagerAgainTurns(bool hasTown, uint32_t sinceAttacked, uint32
 glm::vec2 shield::LookOut(glm::vec2 centre, glm::vec2 villager, float turn)
 {
 	const auto away = villager - centre;
-	const float angle = std::atan2(away.y, away.x) + turn - k_ShelterTurnHalf;
-	return villager + glm::vec2(std::cos(angle), std::sin(angle));
+	const float angle = portable_math::Atan2(away.y, away.x) + turn - k_ShelterTurnHalf;
+	return villager + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle));
 }
 
 bool shield::TownIgnoresShield(Reaction reaction, bool townAttackedByShieldPlayer, bool physical)

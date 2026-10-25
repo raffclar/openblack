@@ -34,6 +34,8 @@ public:
 	virtual entt::entity CreateStone(glm::vec3 point, PlayerNames player, entt::entity spell) = 0;
 	/// The stone goes, with its pool, its sound and its reaction
 	virtual void RemoveStone(entt::entity stone) = 0;
+	/// A miracle closes down or goes: its stones go at that time, in the miracle's turn
+	virtual void RemoveStonesOf(entt::entity spell) = 0;
 	/// Whether a stone may be put at a point: nothing standing fixed on the land within its reach
 	[[nodiscard]] virtual bool CanPlaceStone(glm::vec3 point) const = 0;
 	/// Whether a stone stands where a new building would go: nothing may be built on one
@@ -72,8 +74,8 @@ public:
 	/// way to the site again. Whether it did.
 	virtual bool RouteWorshipper(entt::entity villager, glm::vec3 site) = 0;
 
-	/// Once a game turn: stones of miracles that have gone go, and the travellers that gave up are dropped. A creature
-	/// is dropped when its plan has no step of the teleport left.
+	/// Once a game turn, with the players' towns: the stones of miracles that are not there go, and the travellers that
+	/// gave up are dropped. A creature is dropped when its plan has no step of the teleport left.
 	virtual void ProcessTurn() = 0;
 	/// A new land: no stones
 	virtual void Reset() = 0;

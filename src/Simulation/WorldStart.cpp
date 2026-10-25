@@ -52,6 +52,8 @@
 #include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Common/BufferedLogSink.h"
+#include "Common/GameRandom.h"
+#include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
@@ -73,9 +75,11 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1045,6 +1049,38 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 	}
 }
 
+void PrepareNetworkLand(uint32_t seed)
+{
+	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().Restart();
+	}
+	Locator::rng::value().SetRunSeed(seed);
+}
+
+void LoadEveryResource()
+{
+	auto& loading = Locator::resources::value();
+	const auto loadStart = std::chrono::steady_clock::now();
+	while (loading.PendingCount() > 0)
+	{
+		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
+		// The graphics card takes what the loading made, as on the loading screen
+		Locator::rendererInterface::value().Frame();
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every resource loaded in {:.0f} ms",
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+}
+
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 {
 	// Everything the map made goes into the map's cells, in the order it was made
@@ -1072,16 +1108,7 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	// picture or its model then starts after the same frames each run, at any speed.
 	if (loadAllFirst)
 	{
-		auto& loading = Locator::resources::value();
-		const auto loadStart = std::chrono::steady_clock::now();
-		while (loading.PendingCount() > 0)
-		{
-			loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
-			// The graphics card takes what the loading made, as on the loading screen
-			Locator::rendererInterface::value().Frame();
-		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
-		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+		LoadEveryResource();
 	}
 	view.BeforeFirstFrame(continued);
 	// Just before its first frame, the game puts the turn timer back to the start of the current turn. Thus the time of

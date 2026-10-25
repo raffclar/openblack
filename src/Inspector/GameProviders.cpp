@@ -71,6 +71,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -180,6 +181,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/MistSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PathfindingSystemInterface.h"
@@ -244,6 +246,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 #include "Particles/LightSheet.h"
 #include "Profiler.h"
@@ -375,6 +378,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"httpClient", "engine.online"},
     LocatorCoverage {"webSocketClient", "engine.online"},
     LocatorCoverage {"lobbyClient", "engine.online"},
+    LocatorCoverage {"networkGame", "engine.online"},
     LocatorCoverage {"realWeatherSystem", "land.real_weather"},
     LocatorCoverage {"tattooEditorSystem", "creatures.systems"},
     LocatorCoverage {"tattooMenuSystem", "creatures.systems"},
@@ -623,33 +627,59 @@ Json UnlockedBonusCreatureNames(const creature_swap::Unlocked& unlocked)
 std::unique_ptr<ProviderInterface> EngineProvider()
 {
 	auto provider = std::make_unique<FunctionProvider>("engine");
-	provider->Add(Query("online",
-	                    "The web client, the WSS client and the lobby client: the requests that wait, the open sockets, "
-	                    "the session and the push channel"),
-	              [](const QueryContext& /*context*/) {
-		              Json result {
-		                  {"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0},
-		                  {"websockets", Locator::webSocketClient::has_value() ? Locator::webSocketClient::value().Count() : 0},
-		              };
-		              if (!Locator::lobbyClient::has_value())
-		              {
-			              result["lobby"] = nullptr;
-			              return QueryResult::Value(std::move(result));
-		              }
-		              const auto& lobby = Locator::lobbyClient::value();
-		              const auto state = lobby.GetState();
-		              const auto account = lobby.GetAccount();
-		              result["lobby"] = Json {
-		                  {"configured", lobby.IsConfigured()},
-		                  {"state", state == ecs::systems::LobbySessionState::LoggedIn    ? "logged_in"
-		                            : state == ecs::systems::LobbySessionState::LoggingIn ? "logging_in"
-		                                                                                  : "logged_out"},
-		                  {"account", account.has_value() ? Json(account->name) : Json(nullptr)},
-		                  {"push_open", lobby.IsPushOpen()},
-		                  {"known_servers", lobby.GetKnownServers().size()},
-		              };
-		              return QueryResult::Value(std::move(result));
-	              });
+	provider->Add(
+	    Query("online", "The web client, the WSS client, the lobby client and the network game: the requests that wait, "
+	                    "the open sockets, the session, the push channel, and the turns and checksums of the game server"),
+	    [](const QueryContext& /*context*/) {
+		    Json result {
+		        {"http_pending", Locator::httpClient::has_value() ? Locator::httpClient::value().Pending() : 0},
+		        {"websockets", Locator::webSocketClient::has_value() ? Locator::webSocketClient::value().Count() : 0},
+		    };
+		    const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+		    if (session == nullptr)
+		    {
+			    result["network_game"] = nullptr;
+		    }
+		    else
+		    {
+			    const auto& compares = session->GetCompares();
+			    const auto& joined = session->GetJoined();
+			    const auto roundTrip = session->RoundTrip();
+			    result["network_game"] = Json {
+			        {"state", online::StateName(session->GetState())},
+			        {"end", online::EndName(session->GetEnd())},
+			        {"role", joined.has_value() ? Json(game_socket::RoleName(joined->role)) : Json(nullptr)},
+			        {"slot", joined.has_value() && joined->slot.has_value() ? Json(*joined->slot) : Json(nullptr)},
+			        {"turns_done", session->TurnsDone()},
+			        {"checksums_compared", compares.compared},
+			        {"checksums_same", compares.same},
+			        {"first_different", compares.firstDifferent.has_value() ? Json(*compares.firstDifferent) : Json(nullptr)},
+			        {"resyncing", session->ShowsResync()},
+			        {"resync_tries", session->Resync().Tries()},
+			        {"resumes", session->Resumes()},
+			        {"buffer_ms", static_cast<double>(session->Playout().BufferMicroseconds()) / 1000.0},
+			        {"round_trip_ms", roundTrip.has_value() ? Json(static_cast<double>(*roundTrip) / 1000.0) : Json(nullptr)},
+			    };
+		    }
+		    if (!Locator::lobbyClient::has_value())
+		    {
+			    result["lobby"] = nullptr;
+			    return QueryResult::Value(std::move(result));
+		    }
+		    const auto& lobby = Locator::lobbyClient::value();
+		    const auto state = lobby.GetState();
+		    const auto account = lobby.GetAccount();
+		    result["lobby"] = Json {
+		        {"configured", lobby.IsConfigured()},
+		        {"state", state == ecs::systems::LobbySessionState::LoggedIn    ? "logged_in"
+		                  : state == ecs::systems::LobbySessionState::LoggingIn ? "logging_in"
+		                                                                        : "logged_out"},
+		        {"account", account.has_value() ? Json(account->name) : Json(nullptr)},
+		        {"push_open", lobby.IsPushOpen()},
+		        {"known_servers", lobby.GetKnownServers().size()},
+		    };
+		    return QueryResult::Value(std::move(result));
+	    });
 	provider->Add(
 	    Query("config", "The engine's settings: what is drawn, the display and the camera's clip"),
 	    Serve<Locator::config>("the config", [](const EngineConfig& config, const QueryContext& /*context*/) {
@@ -818,6 +848,22 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                               {"storms", std::move(storms)},
 		                               {"season", weather.GetSeason(turn)},
 		                               {"days_from_start", weather.GetDaysFromStart(turn)}};
+	                  }));
+	provider->Add(Query("storm_clouds", "The clouds of the storms that the frames make and draw: for each, its storm, its "
+	                                    "place in the order that its storm gathered them, where it is drawn, its size and "
+	                                    "its alpha"),
+	              Serve<Locator::cloudSystem>(
+	                  "the clouds", [](const ecs::systems::CloudSystemInterface& clouds, const QueryContext& /*c*/) {
+		                  Json list = Json::array();
+		                  for (const auto& cloud : clouds.GetStormClouds())
+		                  {
+			                  list.push_back({{"storm", entt::to_integral(cloud.storm)},
+			                                  {"index", cloud.index},
+			                                  {"position", Point(cloud.position)},
+			                                  {"size", cloud.mist.size},
+			                                  {"alpha", cloud.mist.colour >> 24u}});
+		                  }
+		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
 	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
 	                                    "its storm and the background weather"),
@@ -2136,7 +2182,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 	});
 	provider->Add(
 	    Query("state", "The hand's miracle, the spells and dispensers there are, and the other miracles' "
-	                   "systems: shields, tornadoes, explosions"),
+	                   "systems: shields, tornadoes, explosions and the piles of roots"),
 	    Serve<Locator::magicSystem>("magic", [](const ecs::systems::MagicSystemInterface& magic, const QueryContext& /*c*/) {
 		    Json result = {{"spells", magic.GetSpells().size()},
 		                   {"dispensers", magic.GetDispensers().size()},
@@ -2156,6 +2202,16 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		    {
 			    result["shaking"] = Locator::explosionSystem::value().IsShaking();
 			    result["ghosts"] = Locator::explosionSystem::value().Ghosts().size();
+			    // The piles of roots that this computer draws, with the milliseconds that stay for each
+			    auto piles = Json::array();
+			    for (const auto& pile : Locator::explosionSystem::value().RootsPiles())
+			    {
+				    piles.push_back({{"position", {pile.position.x, pile.position.y, pile.position.z}},
+				                     {"scale", pile.scale},
+				                     {"ms_left", pile.millisecondsLeft},
+				                     {"alpha", pile.alpha.has_value() ? Json(*pile.alpha) : Json(nullptr)}});
+			    }
+			    result["roots_piles"] = std::move(piles);
 		    }
 		    if (Locator::floatingNumberSystem::has_value())
 		    {
@@ -2494,7 +2550,7 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		              return QueryResult::Value(std::move(result));
 	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
-	                             "creature and its effects, and whether films and 16-bit colour are on"),
+	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {
 		              Json result = Json::object();
 		              if (Locator::videoSystem::has_value())
@@ -2504,7 +2560,13 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 			              result["covers_screen"] = videos.CoversScreen();
 			              result["hides_world"] = videos.HidesWorld();
 			              result["films"] = videos.AreFilmsEnabled();
-			              result["sixteen_bit_colour"] = videos.IsSixteenBitColour();
+			              const auto surface = videos.GetFilmSurface();
+			              result["sixteen_bit_colour"] = surface.has_value();
+			              result["film_surface"] = "none";
+			              if (surface)
+			              {
+				              result["film_surface"] = *surface == graphics::film_surface::Format::Rgb555 ? "555" : "565";
+			              }
 			              if (const auto status = videos.GetStatus())
 			              {
 				              result["frame"] = status->frame;
@@ -3211,15 +3273,16 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    if (leashes->worn.has_value())
 		    {
 			    const auto& worn = *leashes->worn;
-			    const auto& rope = worn.rope;
+			    const auto* drawn = registry.TryGet<const ecs::components::CreatureLeashRope>(creature);
+			    const auto rope = drawn != nullptr ? drawn->rope : leash_rope::Rope {};
 			    result["type"] = static_cast<int>(worn.type);
 			    result["works"] = worn.works;
 			    result["tied_to"] = Id(worn.tiedTo);
-			    result["held_rope"] = worn.held.has_value();
+			    result["held_rope"] = drawn != nullptr && drawn->held.has_value();
 			    result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
 			                      {"end", {rope.end.x, rope.end.y, rope.end.z}},
-			                      {"slack_length", rope.slackLength},
-			                      {"max_length", rope.maxLength},
+			                      {"slack_length", worn.slackLength},
+			                      {"max_length", worn.maxLength},
 			                      {"tension", rope.tension}};
 		    }
 		    return QueryResult::Value(std::move(result));
@@ -3987,6 +4050,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::liquidParticleSystem::value().Particles();
+	    },
+	    .playerLiquids = [](PlayerNames player) -> std::span<const liquid_particles::Particle> {
+		    if (!Locator::liquidParticleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
 	    },
 	}));
 

@@ -146,4 +146,16 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 	}
 }
 
+void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool landWaits)
+{
+	for (const auto human : humans)
+	{
+		world.MakePlayer(human);
+	}
+	if (landWaits)
+	{
+		FillEmptySlots(world, k_SlotGods, humans);
+	}
+}
+
 } // namespace openblack::computer_player

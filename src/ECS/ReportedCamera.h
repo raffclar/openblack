@@ -11,17 +11,26 @@
 
 #include <optional>
 
-#include "ECS/Systems/HandSystemInterface.h"
-#include "Locator.h"
+#include <entt/entity/fwd.hpp>
 
+#include "ECS/Systems/HandSystemInterface.h"
+#include "Enums.h"
+
+/// The cameras of the players as the turns of the world read them. Each player reports where its camera is and what it
+/// looks at once a turn, and all the computers of a network game read the same reports.
 namespace openblack::ecs
 {
 
-/// Where the world has the player's camera and the point that it looks at, from the last report that a turn did. The
-/// turns read the camera only here, so that all the computers see the same camera. None before the first report.
-[[nodiscard]] inline std::optional<systems::HandSystemInterface::ReportedCamera> ReportedPlayerCamera()
-{
-	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedCamera() : std::nullopt;
-}
+/// Where the world has the camera of a player, from the last report of the player that a turn did. None before the
+/// first report, or for a player with no hands.
+[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedPlayerCamera(PlayerNames player);
+
+/// The reported camera that a creature reads. In a network game it is the camera of the creature's player, and a
+/// creature with no player reads no camera. A game with one player has one camera, which every creature reads.
+[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> ReportedCreatureCamera(entt::entity creature);
+
+/// The camera of a player for a turn reader that reads the camera of this computer in a game with one player. In a
+/// network game it is the reported camera of the player. None when there is no camera.
+[[nodiscard]] std::optional<systems::HandSystemInterface::ReportedCamera> TurnCamera(PlayerNames player);
 
 } // namespace openblack::ecs

@@ -133,8 +133,11 @@ TEST(NewGameChoice, TheDevelopersStartAnswersAtOnce)
 // A story land started first begins the story and asks the question; a playground started first does neither
 TEST(NewGameChoice, APlaygroundStartsNoStory)
 {
-	EXPECT_TRUE(FirstLandStartsStory(false));
-	EXPECT_FALSE(FirstLandStartsStory(true));
+	EXPECT_TRUE(FirstLandStartsStory(false, false));
+	EXPECT_FALSE(FirstLandStartsStory(true, false));
+	// A network game starts no story, on any land
+	EXPECT_FALSE(FirstLandStartsStory(false, true));
+	EXPECT_FALSE(FirstLandStartsStory(true, true));
 }
 
 TEST(NewGameChoice, SelectionsAreBroughtIntoRange)

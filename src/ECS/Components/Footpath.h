@@ -11,13 +11,14 @@
 
 #include <cstdint>
 
-#include <memory>
 #include <optional>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "Creature/CreatureRouteSearch.h"
 
 namespace openblack::ecs::components
 {
@@ -72,13 +73,30 @@ struct FootpathWalk
 /// steps a turn, and the path is laid once the way is found. The path keeps only its two ends until then.
 struct FootpathFinder
 {
-	/// The search and what it goes round, kept from turn to turn
-	struct Plan;
+	/// The search for the way of the path and what it goes round, kept from turn to turn until the path is found
+	struct Plan
+	{
+		creature_route::Obstacles obstacles;
+		std::optional<creature_route::Search> search;
+		glm::vec2 start {0.0f};
+		glm::vec2 goal {0.0f};
+		/// Whether the obstacles know again how to fill a block and which circles to leave out. A save does not keep
+		/// this, so a loaded plan gets it again before its next step.
+		bool live {false};
+
+		/// Gives the values that a saved game keeps to a visitor
+		template <typename Self, typename Visitor>
+		static void VisitSaved(Self& self, Visitor&& visit)
+		{
+			visit(self.obstacles, self.search, self.start, self.goal);
+		}
+	};
 
 	entt::entity from {entt::null};
 	entt::entity to {entt::null};
 	entt::entity footpath {entt::null};
-	std::shared_ptr<Plan> plan;
+	/// None after the load of a saved game: the search then starts again from the two ends, as the game does
+	std::optional<Plan> plan;
 };
 
 /// A thing that the footpaths go round, put on the map or removed from it: its radius across the ground in metres and its

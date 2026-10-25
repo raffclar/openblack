@@ -21,13 +21,16 @@
 #include <string>
 #include <string_view>
 #include <utility>
+#include <vector>
 
 #include <ComputerSettings.h>
 #include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 #include <spdlog/common.h>
 
 #include "3D/HandCrossFade.h"
 #include "3D/HandNavigationPose.h"
+#include "Common/BuildVersionFile.h"
 #include "Common/LoadTimer.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/Zoomer.h"
@@ -37,6 +40,7 @@
 #include "ECS/StatisticsRules.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "EngineConfig.h"
 #include "GameFrameOrder.h"
 #include "GameSession.h"
@@ -95,7 +99,15 @@ namespace online
 {
 class LanDiscoveryInterface;
 }
+namespace game_socket
+{
+struct Start;
+}
 namespace command_log
+{
+class Writer;
+}
+namespace checksum_log
 {
 class Writer;
 }
@@ -146,6 +158,8 @@ struct Arguments
 	std::string startLevel;
 	/// Start on the flat creature testbed rather than startLevel
 	bool startTestbed {false};
+	/// Start on the network map for 32 gods rather than startLevel
+	bool startGodsRingMap {false};
 	/// Log frame time statistics every so many frames, never when 0
 	uint32_t frameStatsInterval {0};
 	/// With the frame statistics, the GPU time of each render view
@@ -156,6 +170,7 @@ struct Arguments
 	bool warmUpFirstFrame {true};
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
+	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
 	bool dynamicTreeShadows {false};
@@ -168,6 +183,9 @@ struct Arguments
 	creature_swap::Unlocked unlockedBonusCreatures;
 	/// A full-screen video to play once the land is loaded: "intro", "fall" or a path under the game's folder
 	std::string playVideo;
+	/// Debug: the 16-bit surface of the films, "555", "565" or "none". Empty keeps the surface of the display cards of
+	/// today
+	std::string filmSurface;
 	/// Play the pre-intro film at start-up, as on a first run
 	bool preIntro {false};
 	/// Leave out the logo pictures at start-up
@@ -180,6 +198,8 @@ struct Arguments
 	bool continueGame {false};
 	/// The switches of the original game's command line, such as -NEWGAME
 	launch_switches::Switches launchSwitches;
+	/// The developer options that a build without the developer tools ignored, with their values, for the log
+	std::vector<std::string> ignoredDeveloperOptions;
 	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
 	/// the player's profiles, or with it answered at once; as the game decides when none
 	std::optional<new_game_choice::NewGameStart> newGameStart;
@@ -202,6 +222,8 @@ struct Arguments
 	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
 	/// turns read no part of a frame
 	bool networkGame {false};
+	/// Join a game server once the land loaded: the world then turns only with the turns of the server
+	std::optional<ecs::systems::NetworkJoin> networkJoin;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
 	/// connected, from the start, or never
 	input::LockMode inspectInputLock {input::LockMode::Auto};
@@ -261,6 +283,7 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
+	void CatchUpFrame() override;
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -410,8 +433,9 @@ public:
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
-	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
-	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
+	/// without the developer tools, and a live network game, refuse it: then the result is false.
+	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
@@ -459,6 +483,10 @@ private:
 	void PlayStartupScreens();
 	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
 	void StartFightTools();
+	/// The recorded input of a tool's run and the record of the input, from the first frame of the next land
+	void StartInputTools();
+	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
+	void StartSimulationLogs();
 	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
 	void PlayLogoScreens();
 	/// The pre-intro film in its own loop with the trailer music, until its last frame or a key
@@ -510,6 +538,8 @@ private:
 	std::optional<LoadTimer> _startupTimer;
 	/// The size drawn at, following the window's
 	windowing::SizeFollower _windowSize;
+	/// The openblack commit of this build, from the version file next to the game
+	build_version::BuildVersion _buildVersion;
 	/// Times the loading of every resource registered at the start, on the loading threads or where first wanted
 	std::optional<LoadTimer> _prefetchTimer;
 
@@ -518,6 +548,7 @@ private:
 
 	std::filesystem::path _startMap;
 	std::string _playVideo;
+	std::string _filmSurface;
 	bool _preIntro {false};
 	bool _skipLogos {false};
 	bool _logoEffectAsked {false};
@@ -535,6 +566,7 @@ private:
 	/// The tips screen has faded in once: later loads show it at once
 	bool _tipFadedIn {false};
 	bool _startTestbed {false};
+	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
@@ -543,6 +575,8 @@ private:
 	std::optional<sim_run::Request> _simulation;
 	/// The file that a tool's run writes the commands of each turn to
 	std::unique_ptr<command_log::Writer> _commandLog;
+	/// The file that a tool's run writes the checksum of each turn to
+	std::unique_ptr<checksum_log::Writer> _checksumLog;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -552,6 +586,14 @@ private:
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
+	std::optional<ecs::systems::NetworkJoin> _networkJoin;
+	/// The game joined a game server from the command line, and stops when that network game ends
+	bool _joinedFromCommandLine {false};
+	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
+	bool _networkLandPending {false};
+	/// The out-of-sync box was asked; the player answered No to it
+	bool _outOfSyncAsked {false};
+	bool _leaveNetworkGame {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
@@ -643,6 +685,8 @@ private:
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
 	entt::entity _reportedHand {entt::null};
+	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
@@ -668,7 +712,6 @@ private:
 	std::optional<entt::entity> _creatureUnderHand;
 	/// Grabbing the sea plays G_HandInWater_01 to _10 in turn
 	uint32_t _handInWaterSample {0};
-
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds
@@ -709,8 +752,14 @@ private:
 	void HandleInterfaceAction();
 	/// The main menu's tattoo editor: its button shows while it may, and the creature it shows is posed each frame
 	void UpdateTattooMenu(float milliseconds);
-	/// The multiplayer front end ends when the player leaves its first box, or when the temple closes
+	/// The multiplayer front end ends when the player leaves its first box, or when the temple closes. When the game
+	/// server starts the game that the player joined, the front end closes and the server's land loads.
 	void UpdateMultiplayerFrontEnd();
+	/// Loads the land of a network game's start with the server's seed, as the game server loaded it
+	bool StartNetworkLand(const game_socket::Start& start);
+	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
+	/// creature
+	std::optional<bool> _startQuestionAfterFrontEnd;
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.

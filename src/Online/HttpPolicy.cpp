@@ -58,6 +58,25 @@ bool IsWssAddress(std::string_view url) noexcept
 	return IsAddressOf(url, "wss://");
 }
 
+bool IsLoopbackAddress(std::string_view url) noexcept
+{
+	std::string_view rest;
+	if (IsHttpsAddress(url))
+	{
+		rest = url.substr(std::string_view("https://").size());
+	}
+	else if (IsWssAddress(url))
+	{
+		rest = url.substr(std::string_view("wss://").size());
+	}
+	else
+	{
+		return false;
+	}
+	const auto host = rest.substr(0, rest.find_first_of(":/?#"));
+	return host == "localhost" || host.starts_with("127.");
+}
+
 bool IsSameOriginPath(std::string_view url) noexcept
 {
 	// "//host/..." is an address of another origin with the scheme of the page

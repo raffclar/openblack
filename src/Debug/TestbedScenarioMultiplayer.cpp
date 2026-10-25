@@ -38,7 +38,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 13> boxes = {{
+	const std::array<BoxScenario, 17> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -56,7 +56,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.game_list", "The multiplayer front end: the game list", Stage::GameList,
 	     "The player logs in as Alice, and the first game of the list is picked.",
 	     "The box \"Find/Create a game on the Internet.\" lists \"Bob's game (2/4)\", \"Fun (1/2) - PLAYING\", \"Test "
-	     "(1/4) (Wrong Version)\", \"Clan war (3/4)(Needs Password)-Locked\" and \"Thirty-two gods (32/32)\". The "
+	     "(1/4) (Wrong Version)\", \"Clan war (3/4)(Needs Password)-Locked\", \"Thirty-two gods (32/32)\" and \"Full "
+	     "game (2/2)\". The "
 	     "players of Bob's game show at the right. \"Join game\" is at the bottom right. Click no game: the help "
 	     "shows, and the second box reads \"Game Name Filter:\"."},
 	    {"multiplayer.room_chat", "The multiplayer front end: the game room's chat", Stage::RoomChat,
@@ -90,8 +91,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
-	     "A white box says \"You are in the game. Wait for the start of the game.\" with Cancel, over the dimmed "
-	     "room. Cancel takes the tick from Ready."},
+	     "The Ready box shows a tick. No message box shows, and the conditions page stays as it is. A click on the tick "
+	     "takes the Ready away."},
 	    {"multiplayer.lan_list", "The multiplayer front end: the local network's games", Stage::LanGameList,
 	     "The front end looks for games on the demonstration's local network.",
 	     "The box \"Find a game on your Local Network.\" lists \"Office game (1/4)\" and \"Upstairs (0/32)\". It has no "
@@ -105,6 +106,23 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The chat shows 31 lines, \"God1: I am god 1.\" to \"God31: I am god 31.\". Gods 1 to 4 are red, green, blue "
 	     "and yellow. Each of gods 5 to 31 has a different colour, and each line is easy to read on the chat box. Scroll "
 	     "the chat to see all the lines. The list of gods at the side uses the same colours."},
+	    {"multiplayer.full_room_observer", "The multiplayer front end: a full room joined as an observer",
+	     Stage::FullRoomObserver,
+	     "The player picks \"Full game (2/2)\" and joins it. The lobby gives no god's ticket for the full room.",
+	     "No message shows. The game room of \"Full game\" opens, with Ivy and Jon as gods 1 and 2. The player is an "
+	     "observer, with no god."},
+	    {"multiplayer.start_transfer", "The multiplayer front end: the creature files of the start", Stage::StartTransfer,
+	     "The player joins Bob's game and ticks Ready. The server asks for the land, and then for the creature files.",
+	     "A white box says \"Sending/Receiving start data...\" with no button, over the dimmed room."},
+	    {"multiplayer.start_cancelled", "The multiplayer front end: a start that another player stops", Stage::StartCancelled,
+	     "The player joins Bob's game and ticks Ready. The server asks for the land, and another player does not have it.",
+	     "A white box says \"The game could not be started because other people are still downloading the map.\" with "
+	     "OK. OK closes the box, and the player stays ready."},
+	    {"multiplayer.kicked_from_game", "The multiplayer front end: a land file that is not the server's",
+	     Stage::KickedFromGame,
+	     "The player joins Bob's game and ticks Ready. The player's land file is not the server's, so the server removes the "
+	     "player from the room.",
+	     "A white box says \"Bob's game has kicked you from the game.\" with OK. OK goes back to the game list."},
 	}};
 	for (const auto& box : boxes)
 	{
@@ -120,4 +138,31 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 		};
 		all.push_back(std::move(scenario));
 	}
+}
+
+void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
+{
+	using Kind = Command::Kind;
+	// Another god's hand holds a barrel high over the land, and that god's camera stands above it
+	all.push_back({
+	    .id = "multiplayer.other_god_hand",
+	    .name = "Another god's sparkles and held thing",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game in which the second player is another god. After a second, the "
+	                   "second player's hand takes the barrel to the east, and the second player reports the hand 5 m above "
+	                   "the land to the west and the camera 30 m above that hand. This computer does not draw the hand of "
+	                   "the other god.",
+	    .expected = "The barrel moves from where it stood to the west and stays in the air 5 m above the land, with no hand "
+	                "about it. High above the barrel, sparkles in the second player's colour come out one after another "
+	                "and fall down slowly. They do not stop while the scenario runs.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .objects = {{.type = MobileObjectInfo::EgyptBarrel, .offset = {20.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .object = 0,
+	                  .radius = 5.0f}},
+	});
 }

@@ -9,6 +9,8 @@
 
 #include "Registry.h"
 
+#include <utility>
+
 #include "Locator.h"
 #include "Systems/RenderingSystemInterface.h"
 
@@ -20,6 +22,8 @@ Registry::Registry()
 	_registry.ctx().emplace<RegistryContext>();
 	// Each entity made is counted as it is made, however it is made
 	_registry.on_construct<entt::entity>().connect<&Registry::EntityMade>(*this);
+	// The registry also counts each entity that goes. A reader can then know if entities went since it last looked.
+	_registry.on_destroy<entt::entity>().connect<&Registry::EntityGone>(*this);
 }
 
 void Registry::Release(entt::entity entity)
@@ -48,10 +52,17 @@ void Registry::Reset()
 {
 	SetLayoutDirty();
 	_registry.clear();
+	// The store of the ids forgets the ids of the entities that went, so that the next ids are those of a new registry.
+	// The components' stores, their signals and the context stay.
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_registry.storage<entt::entity>().clear();
+	}
 	_registry.ctx().erase<RegistryContext>();
 	_registry.ctx().emplace<RegistryContext>();
 	_entitiesMade = 0;
-};
+	++_entitiesGone;
+}
 
 void Registry::SetDirty()
 {

@@ -530,3 +530,63 @@ TEST(GameClock, AHoldThatStartedBeforeTheNetworkGameEnds)
 	clock.now += 100;
 	EXPECT_TRUE(clock.Frame());
 }
+
+TEST(GameClock, ANetworkGameCatchesUpTenTurnsAFrameAndKeepsTheTimeItLost)
+{
+	Clock alone;
+	alone.time.StartGameClock(false);
+	Clock network;
+	network.time.SetNetworkGame(true);
+	network.time.SetCatchesUp(true);
+	network.time.StartGameClock(false);
+	// Three seconds behind: alone, the game gives up the lost time after two seconds and does one turn a frame
+	alone.now += 3000;
+	network.now += 3000;
+	const auto turns = [](Clock& clock) {
+		uint32_t count = 0;
+		while (clock.time.IsTurnDue())
+		{
+			clock.time.StartTurn();
+			++count;
+		}
+		clock.time.UpdateFrame();
+		return count;
+	};
+	EXPECT_EQ(turns(alone), 1u);
+	EXPECT_EQ(turns(network), 10u);
+	EXPECT_EQ(turns(network), 10u);
+	EXPECT_EQ(turns(network), 10u);
+	// The 31 turns of the three seconds are done; the next is due after its time
+	EXPECT_EQ(turns(network), 1u);
+	EXPECT_EQ(turns(network), 0u);
+	EXPECT_EQ(network.time.GetTurn(), 31u);
+	EXPECT_EQ(turns(alone), 0u);
+}
+
+TEST(GameClock, AFrameBetweenTwoTurnsOfOneFrameTakesTheTimeOfATurnAndKeepsTheCount)
+{
+	Clock network;
+	network.time.SetNetworkGame(true);
+	network.time.SetCatchesUp(true);
+	network.time.StartGameClock(false);
+	network.now += 3000;
+	// A computer that is behind puts its timer at each turn, as the turns of the server are there
+	uint32_t turns = 0;
+	while (true)
+	{
+		network.time.ResetTimerToTurn();
+		if (!network.time.IsTurnDue())
+		{
+			break;
+		}
+		network.time.StartTurn();
+		network.time.CatchUpFrame();
+		EXPECT_EQ(network.time.GetFrameGameTime(), std::chrono::milliseconds(100)) << turns;
+		++turns;
+	}
+	// The frames between the turns keep the count of the frame: ten turns at most
+	EXPECT_EQ(turns, 10u);
+	network.time.UpdateFrame();
+	network.time.ResetTimerToTurn();
+	EXPECT_TRUE(network.time.IsTurnDue());
+}

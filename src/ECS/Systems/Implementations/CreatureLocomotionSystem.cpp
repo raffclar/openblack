@@ -33,6 +33,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureAnimation.h"
 #include "Creature/CreatureAudio.h"
 #include "Creature/CreatureCastMoves.h"
@@ -247,7 +248,7 @@ float HeightAt(glm::vec2 point)
 GameHeading HeadingOfRotation(const glm::mat3& rotation)
 {
 	// The drawn body is turned about y by a yaw; its mesh looks back along +z
-	return GameHeading::FromYaw(std::atan2(rotation[2].x, rotation[2].z));
+	return GameHeading::FromYaw(portable_math::Atan2(rotation[2].x, rotation[2].z));
 }
 
 /// How far round its middle a species' body reaches at its drawn scale of one: the furthest any of its base mesh's bones
@@ -1718,7 +1719,7 @@ bool ShowAt(CreatureLocomotion& self, Transform& transform, CreatureAnimation& a
 {
 	const auto position = self.fromPosition + ((self.toPosition - self.fromPosition) * f);
 	const auto heading = GameHeading(self.fromHeading.Radians() + (self.toHeading.TurnFrom(self.fromHeading) * f));
-	const auto rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
+	const auto rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	bool moved = false;
 	if (position != transform.position || rotation != transform.rotation)
 	{

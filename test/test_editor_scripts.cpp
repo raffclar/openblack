@@ -79,7 +79,7 @@ TEST(EditorScripts, SortsScriptsIntoKindsAndSearchesThem)
 	const FakeProgram fake;
 	EXPECT_EQ(CategoryOf(lhvm::ScriptType::Script), Category::Script);
 	EXPECT_EQ(CategoryOf(lhvm::ScriptType::ChallengeHelp), Category::ChallengeHelp);
-	EXPECT_EQ(CategoryOf(lhvm::ScriptType::Unknown5), Category::Other);
+	EXPECT_EQ(CategoryOf(lhvm::ScriptType::Multiplayer), Category::Other);
 	for (size_t i = 0; i < k_CategoryCount; ++i)
 	{
 		EXPECT_FALSE(Name(static_cast<Category>(i)).empty());

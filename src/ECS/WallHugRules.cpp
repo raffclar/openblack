@@ -21,6 +21,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableMath.h"
 #include "Common/X87Angle.h"
 #include "Creature/CreatureCastMoves.h"
 #include "ECS/MapCells.h"
@@ -297,7 +298,7 @@ SingleSweep SweepOnce(const CircleSweepInput& input, glm::vec2 centre, float rad
 
 	auto& end = nearest.bounds[1].point;
 	Normalise(end);
-	float angle = std::acos(Dot(end, dir));
+	float angle = portable_math::Acos(Dot(end, dir));
 	if (clockwise ? Cross(end, dir) > 0.0f : Cross(end, dir) < 0.0f)
 	{
 		angle = k_FullTurn - angle;
@@ -501,7 +502,7 @@ bool ShutInByCircles(glm::vec2 point, std::span<const BlockingCircle> circles)
 	const auto turn = [&circles, point](size_t a, size_t b) {
 		const glm::vec2 from = circles[a].centre - point;
 		const glm::vec2 to = circles[b].centre - point;
-		return std::atan2(from.x * to.y - from.y * to.x, Dot(from, to));
+		return portable_math::Atan2(from.x * to.y - from.y * to.x, Dot(from, to));
 	};
 	std::vector<std::optional<float>> bearing(count);
 	std::vector<size_t> queue;
@@ -679,7 +680,7 @@ std::vector<BlockingCircle> CirclesOf(const ThingOnMap& thing)
 		// At the temple's place on the map, turned as its model is
 		const glm::vec3 xAxis = thing.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
 		return TempleRingCircles({map_coords::Quantise(thing.position.x), map_coords::Quantise(thing.position.z)},
-		                         std::atan2(xAxis.z, xAxis.x));
+		                         portable_math::Atan2(xAxis.z, xAxis.x));
 	}
 	case ThingShape::WorshipSiteBalls:
 	{
@@ -743,8 +744,8 @@ std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle)
 	float angle = yAngle + k_FirstSpokeTurn;
 	for (int spoke = 0; spoke < k_Spokes; ++spoke)
 	{
-		const auto sine = static_cast<float>(std::sin(static_cast<double>(angle)));
-		const auto cosine = static_cast<float>(std::cos(static_cast<double>(angle)));
+		const auto sine = static_cast<float>(portable_math::Sin(static_cast<double>(angle)));
+		const auto cosine = static_cast<float>(portable_math::Cos(static_cast<double>(angle)));
 		float distance = k_Reach * 0.74f;
 		const int straight = spoke < k_BentSpokes ? k_StraightCircles : k_PlainSpokeCircles;
 		for (int i = 0; i < straight; ++i)
@@ -759,7 +760,7 @@ std::vector<BlockingCircle> TempleRingCircles(glm::vec2 centre, float yAngle)
 			for (size_t i = 0; i < k_BendTurn.size(); ++i)
 			{
 				const double turned = side * k_BendTurn.at(i) + angle;
-				circles.push_back(blocking(at(distance, std::cos(turned), std::sin(turned)), radius));
+				circles.push_back(blocking(at(distance, portable_math::Cos(turned), portable_math::Sin(turned)), radius));
 				distance = static_cast<float>(static_cast<double>(k_Reach) * k_BendStep.at(i) + distance);
 			}
 		}

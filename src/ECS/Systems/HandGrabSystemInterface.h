@@ -73,8 +73,14 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
 	virtual void PlaceHeldForTurn() {}
+	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
+	/// toward the place of their last report, upright and at the size that it had as the hand took it
+	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
+	/// At the turn: a scribble of the player's hand shakes off the thing that the hand holds (see
+	/// player_commands::HandShakeOff)
+	virtual void DoShakeOff(PlayerNames player) = 0;
 	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves
 	/// at this velocity rather than the spring's
 	virtual void SetRecordedThrow(glm::vec3 velocity) = 0;
@@ -96,6 +102,8 @@ public:
 	virtual void DoLock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the hand uses the thing that it holds on a target (player_commands::HandApply)
 	virtual void DoApply(PlayerNames /*player*/, entt::entity /*target*/) {}
+	/// The turn of a click of the hand that a player sent in a network game: the click that the scripts read
+	virtual void DoClick(PlayerNames /*player*/, const player_commands::HandClick& /*click*/, uint32_t /*turn*/) {}
 	/// At the turn: the lock ends, and with it the scoop (player_commands::HandUnlock)
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
@@ -108,6 +116,9 @@ public:
 	/// For the debug tools: the empty hand takes a thing at once, as if picked up from where it stands; and gives what it
 	/// holds to a creature, as the Action button pressed over the creature does. Whether it could.
 	virtual bool TakeIntoHand(entt::entity /*object*/) { return false; }
+	/// For the debug tools: the empty hand of another player takes a thing at once, also outside the player's influence.
+	/// Whether it could.
+	virtual bool TakeIntoHandOf(PlayerNames /*player*/, entt::entity /*object*/) { return false; }
 	virtual bool GiveHeldTo(entt::entity /*creature*/) { return false; }
 	/// For the debug tools: the hand releases the thing that it holds, as a release of the Action button does. With no
 	/// velocity, the hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. This
@@ -123,6 +134,8 @@ public:
 
 	/// What the hand holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
+	/// What the hand of a player holds, none when it holds nothing of its own
+	[[nodiscard]] virtual std::optional<entt::entity> GetHeldOf(PlayerNames player) const = 0;
 	/// The field, fish farm or pile the hand is locked onto while it scoops from it, none when it scoops from nothing
 	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOn() const { return std::nullopt; }
 	/// Whether the Action button is down to throw what the hand holds
@@ -131,10 +144,15 @@ public:
 	[[nodiscard]] virtual bool CreatureTakesHeld(entt::entity /*creature*/) const { return false; }
 	/// Whether the hand is taking, holding or about to throw a thing, so that other uses of the button leave it be
 	[[nodiscard]] virtual bool IsBusy() const = 0;
+	/// Whether the hand of a player is taking, holding or about to throw a thing. The turns read this, because it is the
+	/// same on every computer.
+	[[nodiscard]] virtual bool IsBusyOf(PlayerNames player) const = 0;
 	/// Whether the hand is pulling a thing out of the ground, from the press until it holds it
 	[[nodiscard]] virtual bool IsPulling() const = 0;
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
+	/// Whether the point of the hand of a player on the land is in the influence of that player
+	[[nodiscard]] virtual bool IsInInfluenceOf(PlayerNames player) const = 0;
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
 	/// a script holding it out of reach...); empty when it would
 	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;

@@ -30,6 +30,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -193,6 +194,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 		const bool landHidden = Locator::videoSystem::has_value() &&
 		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
 		Locator::footprintSystem::value().Update(gameTime, !inTemple && !landHidden);
+		// The piles of roots fade and go only on a frame that draws the land, before the draw
+		if (!inTemple && !landHidden)
+		{
+			Locator::explosionSystem::value().AgeRootsPiles(clock.GetFrameGameTime());
+		}
 	}
 	{
 		// Their skins are painted again where their alignment, tattoos or marks have changed
@@ -216,6 +222,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
 	}
 	Locator::mistSystem::value().Update(gameTime);
+	Locator::cloudSystem::value().AnimateStormClouds(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();

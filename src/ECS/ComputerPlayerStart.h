@@ -129,6 +129,8 @@ public:
 	[[nodiscard]] virtual bool HasCitadel(PlayerNames player) const = 0;
 	/// The player is marked as a computer player
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames player) const = 0;
+	/// The game makes the player when the land has none yet
+	virtual void MakePlayer(PlayerNames player) = 0;
 	/// The computer mind of the player switches on, as a land script switches it on
 	virtual void SwitchOn(PlayerNames player) = 0;
 	/// Makes the creature of the player at the creature home of its citadel, names it with the words of the help text
@@ -141,5 +143,15 @@ public:
 /// takes a random help text for the name and a random species, switches the mind of the god on, and makes its creature
 /// fully grown at the creature home of its citadel.
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans);
+
+/// The gods of the slots of a network game, in the order of the players. The neutral player is not a god of a slot.
+constexpr std::array<PlayerNames, 7> k_SlotGods {PlayerNames::PLAYER_ONE,  PlayerNames::PLAYER_TWO,  PlayerNames::PLAYER_THREE,
+                                                 PlayerNames::PLAYER_FOUR, PlayerNames::PLAYER_FIVE, PlayerNames::PLAYER_SIX,
+                                                 PlayerNames::PLAYER_SEVEN};
+
+/// At the start of a network game, all the humans of the network session join in the same turn. The game makes the
+/// player of each human when the land has none. Then, when the land waits for its humans, each slot with no player
+/// gets a computer god.
+void HumansJoin(SlotWorld& world, std::span<const PlayerNames> humans, bool landWaits);
 
 } // namespace openblack::computer_player

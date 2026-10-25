@@ -103,6 +103,7 @@
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
+#include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
@@ -278,6 +279,7 @@ using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
+using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
@@ -441,10 +443,48 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	// The browser cannot send headers in the handshake
 	constexpr auto k_PushAuth = online::PushAuth::Subprotocol;
 #else
-	Locator::httpClient::emplace<online::CurlHttpClient>();
-	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	// Tests on this computer only: a lobby on a loopback address with a certificate of a test authority
+	const auto testAuthorities = Locator::config::has_value() ? Locator::config::value().lobbyTestAuthorities : std::nullopt;
+	const bool loopbackLobby = Locator::config::has_value() && Locator::config::value().lobbyOrigin.has_value() &&
+	                           online::http_policy::IsLoopbackAddress(*Locator::config::value().lobbyOrigin);
+	if (testAuthorities.has_value() && loopbackLobby)
+	{
+		Locator::httpClient::emplace<online::CurlHttpClient>(std::nullopt, std::filesystem::path(*testAuthorities));
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>(*testAuthorities);
+	}
+	else
+	{
+		if (testAuthorities.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a lobby on a loopback address");
+		}
+		Locator::httpClient::emplace<online::CurlHttpClient>();
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	}
 	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
+	Locator::networkGame::emplace<NetworkGameSystem>(
+	    Locator::webSocketClient::value(),
+	    [](const std::string& authorities) -> std::unique_ptr<online::WebSocketClientInterface> {
+#if defined(__EMSCRIPTEN__)
+		    static_cast<void>(authorities);
+		    return nullptr;
+#else
+		    return std::make_unique<online::CurlWebSocketClient>(authorities);
+#endif
+	    },
+	    [creatureMinds = profiles.creatureMinds]() -> std::vector<uint8_t> {
+		    // The creature of the player's profile goes to the other players before a network game starts
+		    const auto file =
+		        Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().CreatureFile() : std::nullopt;
+		    if (!file.has_value() || !creatureMinds.has_value())
+		    {
+			    return {};
+		    }
+		    auto& fileSystem = Locator::filesystem::value();
+		    const auto path = *creatureMinds / *file;
+		    return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+	    });
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
@@ -611,7 +651,10 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 	Locator::gameActionSystem::emplace<GameActionMap>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	InitializeOnline(profiles);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+#endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
 
@@ -734,6 +777,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();
+	Locator::networkGame::reset();
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();

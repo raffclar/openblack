@@ -147,8 +147,8 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) = 0;
 	/// When a creature's catch takes hold, in milliseconds from its start, none for a species without it
 	[[nodiscard]] virtual std::optional<float> CatchMs(entt::entity creature) const = 0;
-	/// The creature the hand holds, none when it holds none
-	[[nodiscard]] virtual std::optional<entt::entity> HandHeldCreature() const = 0;
+	/// Whether the hand of a player holds the creature
+	[[nodiscard]] virtual bool HandHolds(entt::entity creature) const = 0;
 	/// Whether creatures act on objects at all, and whether a flying thing is one they may catch
 	[[nodiscard]] virtual bool HasCreatureActions() const = 0;
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity object) const = 0;

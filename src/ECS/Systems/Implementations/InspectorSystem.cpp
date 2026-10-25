@@ -25,6 +25,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
@@ -136,8 +137,7 @@ public:
 		{
 			return false;
 		}
-		game->RequestScenario({.id = std::string(id), .benchmark = false});
-		return true;
+		return game->RequestScenario({.id = std::string(id), .benchmark = false});
 	}
 	[[nodiscard]] std::vector<inspector::ScenarioSummary> Scenarios() const override
 	{
@@ -168,6 +168,8 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	// Points of the world are found on the screen through the view drawn, an override's while one is shown
 	_inputTarget->SetCamera(_controls->camera);
 	inspector::reflection::RegisterComponents(*_reflection);
+	// A live network game refuses the queries that change the shared world
+	_inspector.SetNetworkGameLive([]() { return developer_tools::NetworkSessionLive(); });
 	_inspector.SetWriteLog([](const inspector::Request& request, const inspector::QueryResult& answer) {
 		if (answer.Ok())
 		{
@@ -192,6 +194,9 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 	_inspector.Add(std::move(input));
 	// The fight autopilot fights for the player through the same input
 	_autopilot = std::make_unique<inspector::FightAutopilot>(*_inputTarget);
+	// A recording of the input also has the input of the autopilot
+	_autopilot->SetRecorder(
+	    [input = _input](uint64_t frame, const inspector::InputEvent& event) { input->Record(frame, event); });
 	// The game's dialogs are clicked through the input's queue, behind any input asked for before
 	_controls->gui.SetInputSender(
 	    [input = _input](std::span<const inspector::InputEvent> events) { return input->Send(events); });
@@ -242,6 +247,36 @@ InspectorSystem::~InspectorSystem()
 	{
 		_loadingHelper.join();
 	}
+	WriteRecordedInput();
+}
+
+void InspectorSystem::RecordInputOnLoad(const std::filesystem::path& path)
+{
+	_recordInputTo = path;
+	_recordInputOnLoad = true;
+}
+
+void InspectorSystem::WriteRecordedInput()
+{
+	if (!_recordInputTo.has_value() || _input == nullptr)
+	{
+		return;
+	}
+	std::ofstream file(*_recordInputTo, std::ios::binary | std::ios::trunc);
+	if (!file.is_open())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The recorded input does not write to {}", _recordInputTo->string());
+		return;
+	}
+	// One event a line, as the files of tools/sim/hand_inputs keep them
+	const auto events = _input->StopRecording();
+	file << "[\n";
+	for (size_t i = 0; i < events.size(); ++i)
+	{
+		file << events[i].dump() << (i + 1 < events.size() ? ",\n" : "\n");
+	}
+	file << "]\n";
+	_recordInputTo.reset();
 }
 
 void InspectorSystem::BeginLoading(std::string_view what)
@@ -290,6 +325,12 @@ void InspectorSystem::EndLoading()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The camera of the recorded input is not put: {}", error);
 		}
 		_cameraOnLoad.reset();
+	}
+	// A tool's recording of the input starts at the same frame as a replay would
+	if (_recordInputOnLoad)
+	{
+		_input->StartRecording();
+		_recordInputOnLoad = false;
 	}
 	// A tool's recorded input starts at the first frame of the land
 	if (_replayOnLoad.has_value())
@@ -385,7 +426,9 @@ void InspectorSystem::Service()
 		// A request answered here may load a land, while the loading helper answers the others
 		_server->Poll([this](std::string_view line) {
 			auto answer = _inspector.Handle(line);
-			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes", line, answer.size());
+			// The letters of input.text can be a password: the log does not keep the request
+			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Inspector: {} -> {} bytes",
+			                    line.find("\"input.text\"") == std::string_view::npos ? line : "input.text", answer.size());
 			return answer;
 		});
 	}

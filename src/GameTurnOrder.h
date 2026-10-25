@@ -193,6 +193,8 @@ enum class Step : uint8_t
 	ScriptHighlights,
 	Climates,
 	HeldThing,
+	/// The sparkles at the cameras of the other players of a network game
+	PlayerSparkles,
 	Rewards,
 	Guidance,
 	CameraChecks,
@@ -253,6 +255,9 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Players, .stage = Stage::Players},
     // A town's totem takes its turn with the buildings of its town
     {.step = Step::VillageTotems, .stage = Stage::Players},
+    // After its towns, each player drops the travellers of its teleport stones that no longer go to them. The stones of
+    // a miracle go in the miracle's own turn, when it closes down.
+    {.step = Step::Teleports, .stage = Stage::Players},
     {.step = Step::TownFlags, .stage = std::nullopt},
     {.step = Step::AppleBarrel, .stage = std::nullopt},
     {.step = Step::ComputerPlayers, .stage = Stage::Players},
@@ -279,7 +284,6 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::MapCellsAfterLiving, .stage = Stage::Living},
     {.step = Step::Fires, .stage = Stage::Fires},
     {.step = Step::Reactions, .stage = Stage::Reactions},
-    {.step = Step::Teleports, .stage = std::nullopt},
     {.step = Step::WorshipChants, .stage = Stage::Spells},
     {.step = Step::Miracles, .stage = Stage::Spells},
     {.step = Step::Shields, .stage = Stage::Spells},
@@ -304,6 +308,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
+    {.step = Step::PlayerSparkles, .stage = Stage::Hand},
     {.step = Step::Rewards, .stage = Stage::Rewards},
     {.step = Step::Guidance, .stage = Stage::Guidance},
     // The advisors cheer the player's turning of the camera

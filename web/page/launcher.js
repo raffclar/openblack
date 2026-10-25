@@ -12,8 +12,9 @@ const k_FolderKey = 'game-folder';
 const k_CopyFolder = 'game-copy';
 const k_CopyComplete = '.openblack-copy-complete';
 
-// The top folders of the install that the game reads. The page gives no other folder to the game.
-const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins']);
+// The top folders of the install that the game reads. The page gives no other folder to the game. A network game plays
+// a land of the folder "Online Maps".
+const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins', 'online maps']);
 
 // The parts of an install that the game needs, without letter case. A name with a slash at the end is a folder.
 const k_Needed = [
@@ -22,6 +23,50 @@ const k_Needed = [
 ];
 
 const element = (id) => document.getElementById(id);
+
+// The build writes the openblack commit that it comes from into version.txt next to the page: the full git commit hash,
+// with "-dirty" when the source tree had changes, or "unknown". The page shows the short hash with a link to the
+// commit, and gives the text of the file to the game, which shows it on its loading screen.
+const k_VersionFile = 'version.txt';
+const k_CommitAddress = 'https://github.com/raffclar/openblack/commit/';
+const k_ShortHash = 7;
+
+/** The build version in the text of the version file */
+function parseVersion(text) {
+  const match = /^([0-9a-f]{40})(-dirty)?$/i.exec((text ?? '').trim());
+  if (!match) {
+    return { file: text, text: 'unknown', short: 'unknown', address: null };
+  }
+  const hash = match[1].toLowerCase();
+  const dirty = match[2] ? '-dirty' : '';
+  return { file: text, text: hash + dirty, short: hash.slice(0, k_ShortHash) + dirty, address: k_CommitAddress + hash };
+}
+
+// A build with the developer tools puts developer-tools.txt next to the page. Only then does the page take its
+// developer parameters: "args" (more arguments for the game) and "tool-file". The builds that players get do not have
+// the file, thus their page ignores these parameters.
+const k_DeveloperToolsFile = 'developer-tools.txt';
+const developerTools = fetch(k_DeveloperToolsFile, { cache: 'no-cache' })
+  .then((response) => response.ok)
+  .catch(() => false);
+
+const buildVersion = fetch(k_VersionFile, { cache: 'no-cache' })
+  .then((response) => (response.ok ? response.text() : undefined))
+  .catch(() => undefined)
+  .then(parseVersion);
+
+/** Show the build on the launcher and on the badge that the page shows while the game plays */
+function showVersion(version) {
+  for (const link of document.querySelectorAll('.build-link')) {
+    link.textContent = version.short;
+    link.title = `openblack build ${version.text}`;
+    if (version.address) {
+      link.href = version.address;
+    } else {
+      link.removeAttribute('href');
+    }
+  }
+}
 const logElement = element('log');
 
 // The page keeps the last lines of the game log. It writes them into the log box only while the box is open, and at most
@@ -46,7 +91,15 @@ function showLog() {
   logElement.scrollTop = logElement.scrollHeight;
 }
 
+// The checksum lines of a tool's run (--sim-checksums -), which the page keeps all of, for the cross-play check
+const k_ChecksumTag = 'openblack-checksum ';
+const checksumLines = [];
+
 function log(text) {
+  if (text.startsWith(k_ChecksumTag)) {
+    checksumLines.push(text.slice(k_ChecksumTag.length));
+    return;
+  }
   logLines.push(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
@@ -61,6 +114,8 @@ function log(text) {
 
 /** All the lines of the game log that the page keeps, for the test scripts */
 globalThis.openblackLogText = () => logLines.join('\n');
+/** The checksum lines of the turns from a first line on, and the count of all of them, for the test scripts */
+globalThis.openblackChecksums = (from = 0) => ({ count: checksumLines.length, lines: checksumLines.slice(from) });
 logElement.parentElement.addEventListener('toggle', showLog);
 
 /** Show a message on the page. The game calls this too, for an error that stops it. */
@@ -256,9 +311,6 @@ function showFrame(frame) {
   if (screen.width !== frame.width || screen.height !== frame.height) {
     screen.width = frame.width;
     screen.height = frame.height;
-    const canvas = element('canvas');
-    canvas.style.width = `${frame.width}px`;
-    canvas.style.height = `${frame.height}px`;
   }
   screenContext ??= screen.getContext('bitmaprenderer');
   screenContext.transferFromImageBitmap(frame);
@@ -325,6 +377,26 @@ async function chooseRenderer(parameters, gameArguments) {
   return { backend: 'OpenGLES', reason: 'the browser gives no WebGPU adapter' };
 }
 
+// A test script can give the game more files: each page parameter "tool-file" names a file on the page's own server.
+// The game reads it at /game/tool-files/<name>, beside the game folder. For example the commands of a tool's run.
+async function addToolFiles(parameters) {
+  for (const name of parameters.getAll('tool-file')) {
+    if (!/^[\w.-]+$/.test(name)) {
+      log(`The page does not take the tool file "${name}": use letters, digits, ".", "-" and "_" only.`);
+      continue;
+    }
+    const response = await fetch(name, { cache: 'no-store' });
+    if (!response.ok) {
+      log(`The page cannot get the tool file ${name}: ${response.status}`);
+      continue;
+    }
+    const file = new File([await response.blob()], name);
+    chosen = chosen.filter((entry) => entry.path !== `tool-files/${name}`);
+    chosen.push({ file, path: `tool-files/${name}` });
+    log(`The game gets the tool file ${name} at /game/tool-files/${name} (${file.size} bytes).`);
+  }
+}
+
 async function start() {
   if (!chosen) {
     return;
@@ -340,34 +412,48 @@ async function start() {
     // Ask the browser to keep the saves when it needs space
     navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
   }
-  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const parameters = new URLSearchParams(location.search);
-  const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
+  const developer = await developerTools;
+  if (developer) {
+    await addToolFiles(parameters);
+  } else if (parameters.has('args') || parameters.has('tool-file')) {
+    log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
+  }
+  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
+  const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);
   }
   log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
     `because ${renderer.reason}.`);
+  const version = await buildVersion;
   element('chooser').hidden = true;
   element('game').hidden = false;
+  element('build-badge').hidden = false;
   document.body.classList.add('playing');
   const canvas = element('canvas');
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  // SDL takes the size of a window that the player can change from the size of the canvas on the page. Thus the canvas
-  // starts with the window size that the game asks for: the game's default, or the size on the command line.
-  const size = (short, long, fallback) => {
+  // SDL takes the size of a window that the player can change from the size of the canvas on the page. The canvas fills
+  // the page (page.css). A size on the command line gives the canvas that fixed size, for the tests.
+  const size = (short, long) => {
     const at = gameArguments.findIndex((argument) => argument === short || argument === long);
-    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : fallback;
+    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : undefined;
   };
-  canvas.style.width = `${size('-W', '--width', 1280)}px`;
-  canvas.style.height = `${size('-H', '--height', 1024)}px`;
+  const width = size('-W', '--width');
+  const height = size('-H', '--height');
+  if (width && height) {
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
     print: log,
     printErr: log,
-    openblackWeb: { folder: { list, files: chosen.map((entry) => entry.file) }, storage, showFrame, setPresent },
+    openblackWeb: {
+      folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
+    },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
   const script = document.createElement('script');
@@ -376,6 +462,18 @@ async function start() {
 }
 
 async function main() {
+  buildVersion.then((version) => {
+    showVersion(version);
+    log(`openblack build ${version.text}`);
+  });
+  // While the game plays, the log is a panel over the game, which the badge opens and closes
+  element('log-toggle').addEventListener('click', (event) => {
+    const open = document.body.classList.toggle('log-open');
+    logElement.parentElement.open = open;
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
+
   if (!globalThis.crossOriginIsolated) {
     showMessage('The page cannot start the game',
       'The site does not send the headers that the game threads need (COOP and COEP).');

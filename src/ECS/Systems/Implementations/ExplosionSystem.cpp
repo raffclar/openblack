@@ -22,7 +22,6 @@
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Mesh.h"
-#include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -148,20 +147,21 @@ bool ExplosionSystem::LoadState(reflection::BinaryReader& in)
 {
 	reflection::Load(in, _shakes);
 	reflection::Load(in, _puffs);
+	// A load starts with no piles of roots, as a new land does
+	_piles.clear();
 	return !in.Failed();
 }
 
-void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
+void ExplosionSystem::AddRubble(const glm::vec3& centre, const glm::mat3& rotation, float scale)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, centre, glm::mat3(glm::eulerAngleY(yaw)), glm::vec3(scale));
-	registry.Assign<Mesh>(entity, resources::HashIdentifier(particles::blast::k_RubbleMesh), static_cast<int8_t>(0),
-	                      static_cast<int8_t>(0));
-	registry.Assign<GroundMark>(entity, GroundMark {.millisecondsLeft = particles::blast::k_RubbleMilliseconds});
-	// It lies over the land's shape
-	registry.Assign<MorphWithTerrain>(entity);
+	_piles.push_back({.position = centre, .rotation = rotation, .scale = scale});
 	_puffs.push_back(dust_puff::Make(centre, k_DustSize, LocalRandom));
+}
+
+void ExplosionSystem::AgeRootsPiles(std::chrono::milliseconds gameTime)
+{
+	const auto milliseconds = static_cast<int32_t>(gameTime.count());
+	std::erase_if(_piles, [milliseconds](roots_pile::Pile& pile) { return !roots_pile::Age(pile, milliseconds); });
 }
 
 void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour)
@@ -184,30 +184,7 @@ void ExplosionSystem::Update(float milliseconds)
 	if (Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
-		std::vector<entt::entity> gone;
-		bool fading = false;
 		AdvanceRoots(registry, milliseconds / 1000.0f);
-		registry.Each<GroundMark>(
-		    [&](entt::entity entity, GroundMark& mark) {
-			    const auto aged = particles::blast::AgeHeap(mark.millisecondsLeft, mark.alpha, milliseconds);
-			    // Blending it changes how its model is drawn
-			    fading = fading || (aged.alpha.has_value() && !mark.alpha.has_value());
-			    mark.millisecondsLeft = aged.millisecondsLeft;
-			    mark.alpha = aged.alpha;
-			    if (aged.gone)
-			    {
-				    gone.push_back(entity);
-			    }
-		    },
-		    entt::exclude<FallingRoots>);
-		for (const auto entity : gone)
-		{
-			registry.Destroy(entity);
-		}
-		if (fading)
-		{
-			registry.SetDirty();
-		}
 	}
 	// A destroyed building's ghost runs down by the frames' time once drawn, and goes as it reaches nothing
 	std::erase_if(_ghosts, [milliseconds](DestructionGhost& ghost) {
@@ -284,6 +261,7 @@ void ExplosionSystem::Reset()
 	_shakes.clear();
 	_puffs.clear();
 	_ghosts.clear();
+	_piles.clear();
 	if (Locator::camera::has_value())
 	{
 		Locator::camera::value().SetShake(glm::vec3(0.0f), glm::vec3(0.0f));

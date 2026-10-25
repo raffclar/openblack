@@ -11,7 +11,15 @@
 
 #include "SyncChecksumSystem.h"
 
+#include <algorithm>
+#include <span>
+#include <string>
+#include <string_view>
+#include <vector>
+
 #include <entt/meta/context.hpp>
+#include <fmt/format.h>
+#include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -36,8 +44,32 @@ void SyncChecksumSystem::ProcessTurn()
 	{
 		return;
 	}
-	const auto hash =
-	    synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection, synced_state::PresentationParts());
+	const auto turn = Locator::time::value().GetTurn();
+	std::vector<std::string> dump;
+	ecs::reflection::RowVisitor visit;
+	if (_dumpTurn == turn)
+	{
+		visit = [this, &dump](std::string_view component, entt::entity entity, std::string_view field,
+		                      std::span<const uint8_t> bytes) {
+			if (std::ranges::find(_dumpComponents, component) == _dumpComponents.end() &&
+			    std::ranges::find(_dumpComponents, "*") == _dumpComponents.end())
+			{
+				return;
+			}
+			auto line = fmt::format("{} {} {} ", component, entt::to_integral(entity), field);
+			for (const auto byte : bytes)
+			{
+				line += fmt::format("{:02x}", byte);
+			}
+			dump.push_back(std::move(line));
+		};
+	}
+	if (_pool == nullptr)
+	{
+		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
+	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
+	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get());
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
@@ -46,7 +78,23 @@ void SyncChecksumSystem::ProcessTurn()
 		seed = random.GetSeeds().synced;
 		draws = random.GetSyncedDraws();
 	}
-	_last = TurnChecksum {.turn = Locator::time::value().GetTurn(), .checksum = synced_state::Checksum(hash.hash, seed, draws)};
+	// A component with no registration is left out of the checksum, so a change in it is never seen: tell of each name once
+	if (const auto fresh = _reported.Fresh(hash.unregistered); !fresh.empty())
+	{
+		if (const auto logger = spdlog::get("game"); logger != nullptr)
+		{
+			logger->error("{}", synced_state::UnregisteredLine(fresh));
+		}
+	}
+	_last = TurnChecksum {.turn = turn,
+	                      .checksum = synced_state::Checksum(hash.hash, seed, draws),
+	                      .parts = {},
+	                      .dump = std::move(dump),
+	                      .unregistered = hash.unregistered};
+	if (_keepParts)
+	{
+		_last->parts = hash.parts;
+	}
 	if (_listener)
 	{
 		_listener(*_last);

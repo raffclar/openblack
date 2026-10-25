@@ -54,6 +54,8 @@ private:
 		components::Player::Miracles miracles;
 		/// What their hand keeps of their influence past the border, and whether a script switched it off
 		std::optional<virtual_influence::State> virtualInfluence;
+		/// What the frames showed of it: the hum and the mana path
+		virtual_influence::Shown virtualInfluenceShown;
 		/// Their histories of influence and population, which run on over the whole game
 		statistics::History influenceHistory;
 		statistics::History populationHistory;

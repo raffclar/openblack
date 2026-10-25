@@ -15,6 +15,7 @@
 #include <string_view>
 #include <utility>
 
+#include "Common/DeveloperTools.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -125,7 +126,8 @@ void SkipBox::Show(bool currentProfileHasCreature)
 	// A choice that can't be taken is hidden, the others keeping their places
 	for (size_t i = 0; i < new_game_choice::k_ChoiceCount; ++i)
 	{
-		const bool offered = new_game_choice::IsAvailable(static_cast<Choice>(i), currentProfileHasCreature);
+		const bool offered =
+		    new_game_choice::IsShown(static_cast<Choice>(i), currentProfileHasCreature, developer_tools::k_Built);
 		_radios.at(i)->visible = offered;
 		_answerTexts.at(i)->visible = offered;
 	}

@@ -17,11 +17,15 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/GripLandscapeEffect.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -44,6 +48,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -416,6 +421,16 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
 		}
+		// A miracle locked on in the hand sends its cast again while the button stays down
+		if (Locator::magicSystem::has_value())
+		{
+			Locator::magicSystem::value().InterfaceTurn();
+		}
+		// In a network game the held creature looks at the hand that its player reported
+		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
+		{
+			Locator::creatureHandSystem::value().LookAtReportedHand();
+		}
 		break;
 	case Step::TurnCheering:
 		// The view does this step
@@ -642,6 +657,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
 		Locator::particleSystem::value().ProcessTurn();
+		// The puffs of dust of the hand's grips count down too
+		GripLandscapeEffect::ProcessTurn();
 		break;
 	}
 	case Step::Tornadoes:
@@ -748,6 +765,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 			Locator::handGrabSystem::value().ProcessTurn();
 		}
 		break;
+	case Step::PlayerSparkles:
+		// The view does this step
+		view.PlayViewStep(step, cameraPosition);
+		break;
 	case Step::Rewards:
 		// A reward chest that fell to the ground goes into the map's cells
 		if (Locator::rewardSystem::has_value())
@@ -851,6 +872,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 
 void PlayTurn(TurnViewInterface& view)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace gives each synced draw of the turn the number of the turn. The turn count moves on at the start of
+	// the turn, so the number is the same as the number of the turn's checksum and record.
+	const draw_trace::TurnScope traceTurn(Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace()
+	                                                                       : nullptr,
+	                                      Locator::time::value().GetTurn() + 1);
+#endif
 	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); });
 }
 

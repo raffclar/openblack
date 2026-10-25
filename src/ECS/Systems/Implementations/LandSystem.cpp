@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <exception>
@@ -26,12 +27,14 @@
 #include <vector>
 
 #include <LHVM.h>
+#include <LNDFile.h>
 #include <OnlineMapFile.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/FlatLand.h"
 #include "3D/GodsRingLand.h"
+#include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
@@ -47,6 +50,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/PrayerPower.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
@@ -122,8 +126,10 @@
 #include "Level.h"
 #include "Locator.h"
 #include "Online/GodsRingMap.h"
+#include "Online/OnlineMapLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptStart.h"
 #include "Serializer/FotFile.h"
 #include "Temple/TempleHelp.h"
 #include "Windowing/WindowingInterface.h"
@@ -138,6 +144,14 @@ constexpr float k_TestbedInfluenceRadius = 400.0f;
 constexpr float k_TestbedPrayer = 1.0e6f;
 /// How many times longer a turn takes than at the normal speed, at the normal speed
 constexpr float k_NormalTurnDurationMultiplier = 1.0f;
+
+/// The landscape that the file of a land of a network game holds
+std::vector<uint8_t> LandscapeBytes(const onlinemap::OnlineMapFile& file)
+{
+	std::vector<uint8_t> bytes(file.landscape.size());
+	std::ranges::transform(file.landscape, bytes.begin(), [](std::byte b) { return static_cast<uint8_t>(b); });
+	return bytes;
+}
 
 } // namespace
 
@@ -175,14 +189,31 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	LoadTimer timer(fmt::format("land {}", path.stem().string()));
 	View().BeginLoadingScreen(look);
 	const auto data = fileSystem.ReadAll(path);
-	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
+	auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
+	// A land of a network game holds its script and its landscape in one file. Its script loads the landscape that it
+	// holds.
+	_mapLandscape.clear();
+	if (online_map_land::IsOnlineMap(path.generic_string()))
+	{
+		const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
+			View().EndLoadingScreen();
+			return false;
+		}
+		source = std::string(file->script);
+		_mapLandscape = LandscapeBytes(*file);
+	}
 
 	PrepareNewLand(change);
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 
-	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
-	Locator::entitiesRegistry::value().Context().skirmish = IsPlaygroundLand(path);
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game. A land of a network game
+	// is played the same way: no story starts on it and losing a temple does not end the game.
+	Locator::entitiesRegistry::value().Context().skirmish =
+	    IsPlaygroundLand(path) || online_map_land::IsOnlineMap(path.generic_string());
 	_landPath = path;
 
 	lhscriptx::Script script;
@@ -195,6 +226,13 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	{
 		// A script that can't be read leaves the land as far as it got, rather than ending the game
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
+	}
+	_mapLandscape.clear();
+	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
+	// land made for network play does.
+	if (_humansFromSession || online_map_land::IsOnlineMap(path.generic_string()))
+	{
+		FillSlotsOfNetworkLand(computer_player::k_SlotGods);
 	}
 
 	timer.Step("map script");
@@ -397,21 +435,15 @@ bool LandSystem::LoadGodsRingMap()
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the script of the map for 32 gods: {}", e.what());
 	}
-	// As at the start of a network game, each slot whose god no human plays gets a computer god. On this computer alone,
-	// the local player is the one human.
-	if (Locator::computerPlayerSystem::has_value() && Locator::playerSystem::has_value())
+	std::vector<PlayerNames> gods;
+	for (const auto& slot : slots)
 	{
-		std::vector<PlayerNames> gods;
-		for (const auto& slot : slots)
+		if (slot.god.has_value())
 		{
-			if (slot.god.has_value())
-			{
-				gods.push_back(*slot.god);
-			}
+			gods.push_back(*slot.god);
 		}
-		const std::array humans {Locator::playerSystem::value().GetLocalPlayer()};
-		Locator::computerPlayerSystem::value().FillEmptySlots(gods, humans);
 	}
+	FillSlotsOfNetworkLand(gods);
 	// As on a land, the things go into their map cells before the footpaths, and then the towns find their worship
 	// sites and their forests
 	Locator::entitiesMap::value().Sync();
@@ -444,8 +476,25 @@ bool LandSystem::LoadGodsRingMap()
 	return true;
 }
 
+void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
+{
+	if (!Locator::computerPlayerSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return;
+	}
+	auto& minds = Locator::computerPlayerSystem::value();
+	if (_humansFromSession)
+	{
+		minds.WaitForHumans();
+		return;
+	}
+	// On this computer alone, the local player is the one human
+	const std::array humans {Locator::playerSystem::value().GetLocalPlayer()};
+	minds.FillEmptySlots(gods, humans);
+}
+
 bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-                               const std::function<bool()>& restore)
+                               const std::function<bool()>& restore, SavedLandUse use)
 {
 	const InspectorLoading loading(landPath.filename().generic_string());
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
@@ -466,6 +515,19 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 			InitializeLevel(gods_ring_land::Build());
 			SetUpLandscape();
 		}
+		else if (online_map_land::IsOnlineMap(landPath.generic_string()))
+		{
+			// The landscape of a land of a network game is in the land's own file, as when its script loaded it
+			const auto data = Locator::filesystem::value().ReadAll(landPath);
+			const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+			if (!file.has_value())
+			{
+				throw std::runtime_error("the land is not a land of a network game");
+			}
+			_mapLandscape = LandscapeBytes(*file);
+			LoadLandscape(landscape);
+			_mapLandscape.clear();
+		}
 		else
 		{
 			LoadLandscape(landscape);
@@ -473,6 +535,7 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	catch (const std::exception& e)
 	{
+		_mapLandscape.clear();
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The landscape {} of the saved game does not load: {}",
 		                    landscape.generic_string(), e.what());
 		View().EndLoadingScreen();
@@ -511,13 +574,17 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	RemakeModelsAfterLoad();
 	registry.SetDirty();
-	// Each load starts a game: the player is as good or evil as their profile keeps them, not as the save keeps them
-	if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
+	if (use == SavedLandUse::SavedGame)
 	{
-		SetPlayerAlignmentFromProfile();
+		// The player is as good or evil as their profile keeps them, not as the save keeps them
+		if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+		{
+			SetPlayerAlignmentFromProfile();
+		}
+		// The players' statistics note the alignments they start the loaded game at, and the towns on the land
+		player_statistics::GameStarts(registry);
 	}
-	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
-	player_statistics::GameStarts(registry);
 	// Each load starts a game: the square of the player of this computer takes the symbol of the profile played now. The
 	// save keeps no symbol.
 	View().MakeSymbolSheet();
@@ -849,6 +916,21 @@ void LandSystem::StartNewLand(land_change::Kind change)
 
 void LandSystem::LoadLandscape(const std::filesystem::path& path)
 {
+	// The script of a land of a network game loads the landscape that the land's file holds
+	if (!_mapLandscape.empty() && online_map_land::IsOwnLandscape(_landPath.generic_string(), path.generic_string()))
+	{
+		lnd::LNDFile lnd;
+		if (const auto result = lnd.Open(_mapLandscape); result != lnd::LNDResult::Success)
+		{
+			throw std::runtime_error("Could not read the landscape of " + _landPath.generic_string() + ": " +
+			                         std::string(lnd::ResultToStr(result)));
+		}
+		LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+		_landscapePath = path;
+		InitializeLevel(LandData::FromLnd(lnd));
+		SetUpLandscape();
+		return;
+	}
 	auto& fileSystem = Locator::filesystem::value();
 
 	auto fixedName = fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path));
@@ -969,7 +1051,7 @@ bool LandSystem::StartChallengeScripts(bool startStory)
 
 void LandSystem::StartStoryScripts()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
+	const bool started = Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
 	// The question comes whether or not the story started
 	const bool asked = AskNewGameChoice();
 	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening
@@ -1039,15 +1121,33 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		return;
 	}
 
-	if (!clock.IsTurnDue())
+	// A network game waits for the commands of the turn from the game server. A computer that is behind the server's
+	// turns catches up, up to 10 turns a frame: when the next turn is there too, the clock of this computer follows the
+	// server's and the turn is due.
+	const auto& commands = Locator::playerCommandSystem::value();
+	bool played = false;
+	while (commands.TurnReady(clock.GetTurn()))
 	{
-		return;
-	}
-	// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
-	simulation::PlayTurn(view);
+		if (commands.IsBehind(clock.GetTurn()))
+		{
+			clock.ResetTimerToTurn();
+		}
+		if (!clock.IsTurnDue())
+		{
+			return;
+		}
+		// A second turn in the frame comes after the frame steps of the turn before it
+		if (played)
+		{
+			view.CatchUpFrame();
+		}
+		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+		simulation::PlayTurn(view);
+		played = true;
 
-	_lastGameLoopTime = currentTime;
-	_turnDeltaTime = delta;
+		_lastGameLoopTime = currentTime;
+		_turnDeltaTime = delta;
+	}
 }
 
 void LandSystem::PlayTurns(simulation::TurnViewInterface& view)

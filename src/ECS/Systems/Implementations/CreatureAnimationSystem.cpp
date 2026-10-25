@@ -590,7 +590,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 			                             animation.skeleton, mirror);
 		}
 	}
-	animation.boneMatrices = skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents);
+	skeletal_animation::ComposeBoneMatrices(poses, animation.skeleton.parents, animation.boneMatrices);
 }
 /// The pose of a body that plays an action, a start, loop and end, or nothing
 creature_head_look::Pose PoseOfBody(const creature_layers::BodyAction& body)
@@ -815,7 +815,7 @@ void CreatureAnimationSystem::ProcessTurn()
 void CreatureAnimationSystem::BodyTurn(entt::entity creature)
 {
 	// While the player's hand holds the creature to interact with it, the body keeps its looks
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature))
 	{
 		return;
 	}

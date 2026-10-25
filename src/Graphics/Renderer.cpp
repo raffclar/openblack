@@ -66,6 +66,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/WaterRings.h"
+#include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
 #include "Common/Platform.h"
@@ -108,7 +109,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
-#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -127,6 +127,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -526,6 +527,12 @@ std::unique_ptr<RendererInterface> RendererInterface::Create(GraphicsBackend bac
 		break;
 	case GraphicsBackend::WebGPU:
 		init.type = bgfx::RendererType::WebGPU;
+		break;
+	case GraphicsBackend::Direct3D11:
+		init.type = bgfx::RendererType::Direct3D11;
+		break;
+	case GraphicsBackend::OpenGL:
+		init.type = bgfx::RendererType::OpenGL;
 		break;
 	default:
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("graphics"), "Got impossible graphics backend.");
@@ -994,7 +1001,7 @@ glm::vec3 HandGlowColour()
 		return glm::vec3(0.0f);
 	}
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* glow = Locator::entitiesRegistry::value().TryGet<ecs::components::HandGlow>(hand);
 	if (glow == nullptr)
 	{
@@ -2715,7 +2722,7 @@ void Renderer::DrawHandWaterGlow(const DrawSceneDesc& desc) const
 		return;
 	}
 	const auto handEntity =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	const auto* transform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity);
 	if (transform == nullptr)
 	{
@@ -2900,25 +2907,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const ProgramUniform u_mistUniform {*program, "u_mist"};
 	const ProgramUniform u_mistColourUniform {*program, "u_mistColour"};
 
-	desc.entities.Each<const Mist, const ecs::components::Transform>([&](entt::entity entity, const Mist& mist,
-	                                                                     const ecs::components::Transform& transform) {
-		auto colour = mist.colour;
-		if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
-		{
-			if (!cloudsShown)
-			{
-				return;
-			}
-			// How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
-		}
-		// A storm's cloud takes the land's colour, darkened by the storm's shade, and is lit by its lightning
-		const auto* stormCloud = desc.entities.TryGet<ecs::components::StormCloud>(entity);
-		if (stormCloud != nullptr)
-		{
-			colour = (colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud->shade);
-		}
+	// A storm's cloud is lit by the lightning of its storm
+	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,
+	                          const ecs::systems::StormCloud* stormCloud) {
 		const auto alpha = static_cast<float>(colour >> 24u);
 		if (alpha <= 0.0f)
 		{
@@ -2928,9 +2919,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		glm::vec3 scale {mist.size};
 		if (mist.shrinksEdgeOn)
 		{
-			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, transform.position - origin);
+			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, position - origin);
 		}
-		const auto model = glm::translate(transform.position) * glm::mat4(facing) * glm::scale(scale);
+		const auto model = glm::translate(position) * glm::mat4(facing) * glm::scale(scale);
 		const auto frame = mists::FrameOffset(mists::Frame(mist.counter), mist.shrinksEdgeOn);
 		const glm::vec4 u_mist {frame, 0.0f, 0.0f};
 		const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
@@ -2969,11 +2960,35 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				// Both sides, blended over what is behind, tested against but not writing depth
 				bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 				// In its place among everything that blends, the farthest first
-				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
-				                zsort::Depth(transform.position, origin));
+				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), zsort::Depth(position, origin));
 			}
 		}
-	});
+	};
+
+	desc.entities.Each<const Mist, const ecs::components::Transform>(
+	    [&](entt::entity entity, const Mist& mist, const ecs::components::Transform& transform) {
+		    auto colour = mist.colour;
+		    if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
+		    {
+			    if (!cloudsShown)
+			    {
+				    return;
+			    }
+			    // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+			    const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+			    colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
+		    }
+		    drawMist(mist, transform.position, colour, nullptr);
+	    });
+	// A storm's cloud takes the land's colour, darkened by the storm's shade
+	if (Locator::cloudSystem::has_value())
+	{
+		for (const auto& stormCloud : Locator::cloudSystem::value().GetStormClouds())
+		{
+			const auto colour = (stormCloud.mist.colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud.shade);
+			drawMist(stormCloud.mist, stormCloud.position, colour, &stormCloud);
+		}
+	}
 }
 
 void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
@@ -4236,7 +4251,7 @@ void Renderer::DrawLandLuminosityPass(const DrawSceneDesc& drawDesc) const
 	if (drawDesc.drawHand && Locator::handSystem::has_value())
 	{
 		const auto hand =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		if (const auto* transform = drawDesc.entities.TryGet<ecs::components::Transform>(hand); transform != nullptr)
 		{
 			frame.hand = transform->position;
@@ -4516,7 +4531,7 @@ const ecs::components::HandMorph* PlayerHandMorph()
 		return nullptr;
 	}
 	const auto hand =
-	    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 	return Locator::entitiesRegistry::value().TryGet<const ecs::components::HandMorph>(hand);
 }
 } // namespace
@@ -4968,7 +4983,7 @@ glm::vec4 Renderer::GetModelLight() const
 	if (Locator::handSystem::has_value() && Locator::skySystem::has_value() && Locator::camera::has_value())
 	{
 		const auto handEntity =
-		    Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+		    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 		if (const auto* transform = Locator::entitiesRegistry::value().TryGet<ecs::components::Transform>(handEntity);
 		    transform != nullptr)
 		{
@@ -5288,8 +5303,8 @@ void Renderer::DrawGroundShadowPass(const DrawSceneDesc& drawDesc) const
 		// The hand's, cast from the sun and laid on the ground beneath it, with what it holds
 		if (drawDesc.drawHand && Locator::handSystem::has_value() && Locator::skySystem::has_value())
 		{
-			const auto handEntity = Locator::handSystem::value()
-			                            .GetPlayerHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
 			const auto& registry = Locator::entitiesRegistry::value();
 			const auto [hand, mesh, transform] =
 			    registry.TryGet<ecs::components::Hand, ecs::components::Mesh, ecs::components::Transform>(handEntity);
@@ -7269,7 +7284,35 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					              renderCtx.heldInstanceBuffer);
 				}
 			};
+			// The piles of roots, which only this computer draws: the opaque piles here, the piles that fade with the
+			// blended things, each in its own place in the sort
+			const auto rootsPileMesh = resources::HashIdentifier(roots_pile::k_Mesh);
+			const auto drawRootsPiles = [&](bool fading) {
+				const auto first = fading ? renderCtx.rootsPileOpaqueCount : 0;
+				const auto end =
+				    fading ? static_cast<uint32_t>(renderCtx.rootsPileInstances.size()) : renderCtx.rootsPileOpaqueCount;
+				if (first == end || !meshManager.Contains(rootsPileMesh))
+				{
+					return;
+				}
+				RenderContext::InstancedDrawDesc placers {first, end - first, true};
+				placers.instanceAlpha = fading;
+				if (!fading)
+				{
+					drawInstances(rootsPileMesh, placers, false, first, end - first, nullptr, nullptr,
+					              renderCtx.rootsPileInstanceBuffer);
+					return;
+				}
+				for (uint32_t instance = first; instance < end; ++instance)
+				{
+					submitDesc.sortDepth =
+					    zsort::Depth(glm::vec3(renderCtx.rootsPileInstances.at(instance).model[3]), cameraOrigin);
+					drawInstances(rootsPileMesh, placers, false, instance, 1, nullptr, nullptr,
+					              renderCtx.rootsPileInstanceBuffer);
+				}
+			};
 			drawHeld(false);
+			drawRootsPiles(false);
 			DrawTempleUnderside(desc);
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
@@ -7321,6 +7364,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawHeld(true);
+			drawRootsPiles(true);
 			// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
 			// reflect them
 			if (desc.viewId != RenderPass::Reflection)
@@ -7990,9 +8034,22 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
 	// All the renderers of bgfx can copy and read back textures
 	constexpr bool k_CanReadBack = true;
-	// Vulkan lets go of the window's buffers while it is minimised, where the other renderers keep drawing into them
-	const bool screenDropped = bgfx::getRendererType() == bgfx::RendererType::Vulkan;
-	switch (const auto plan = PlanScreenshot(screenDropped, minimised, k_CanReadBack, size); plan.route)
+	// Vulkan releases the window's buffers while the window is minimised. OpenGL on the desktop reads the window's own
+	// pixels, which have no defined value where other windows cover the window. This often occurs in background runs.
+	// The other renderers keep the whole frame in the window's buffers.
+	auto buffers = graphics::WindowBuffers::Kept;
+	switch (bgfx::getRendererType())
+	{
+	case bgfx::RendererType::Vulkan:
+		buffers = graphics::WindowBuffers::DroppedWhenMinimised;
+		break;
+	case bgfx::RendererType::OpenGL:
+		buffers = graphics::WindowBuffers::UncoveredOnly;
+		break;
+	default:
+		break;
+	}
+	switch (const auto plan = PlanScreenshot(buffers, minimised, k_CanReadBack, size); plan.route)
 	{
 	case ScreenshotRoute::Screen:
 	{
@@ -8001,8 +8058,7 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 		break;
 	}
 	case ScreenshotRoute::Offscreen:
-		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "The window is minimised: drawing the frame aside for {}",
-		                   filepath.string());
+		SPDLOG_LOGGER_INFO(spdlog::get("graphics"), "Drawing the frame aside for {}", filepath.string());
 		_offscreenShots->Begin(filepath, size);
 		break;
 	case ScreenshotRoute::Refused:
