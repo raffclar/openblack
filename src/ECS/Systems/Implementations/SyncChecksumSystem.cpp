@@ -63,8 +63,12 @@ void SyncChecksumSystem::ProcessTurn()
 			dump.push_back(std::move(line));
 		};
 	}
+	if (_pool == nullptr)
+	{
+		_pool = std::make_unique<WorkerPool>(WorkerPool::DefaultThreadCount());
+	}
 	const auto hash = synced_state::HashOf(Locator::entitiesRegistry::value().Underlying(), *_reflection,
-	                                       synced_state::PresentationParts(), _keepParts && _byField, visit);
+	                                       synced_state::PresentationParts(), _keepParts && _byField, visit, _pool.get());
 	uint32_t seed = 0;
 	uint64_t draws = 0;
 	if (Locator::gameRandom::has_value())
