@@ -240,7 +240,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "pulling", .marker = ""},
     {.component = "HandGrab", .field = "grips", .marker = ""},
     {.component = "HandGrab", .field = "tug", .marker = ""},
-    {.component = "HandGrab", .field = "pullPosition", .marker = ""},
     {.component = "HandGrab", .field = "pullRotation", .marker = ""},
     {.component = "HandGrab", .field = "pullScale", .marker = ""},
     {.component = "HandGrab", .field = "hold", .marker = ""},
