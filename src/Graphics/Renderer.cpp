@@ -649,6 +649,7 @@ Renderer::~Renderer() noexcept
 {
 	_offscreenShots.reset();
 	_creatureSkins.clear();
+	_roomCreatureSkins.clear();
 	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -4312,17 +4313,16 @@ const Texture2D& Renderer::GetLandColour() const
 	return Locator::terrainSystem::value().GetCellColourMap();
 }
 
-void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
+void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const
 {
 	std::vector<entt::entity> seen;
-	drawDesc.entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity,
-	                                                                const ecs::components::CreatureSkin& skin) {
+	entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity, const ecs::components::CreatureSkin& skin) {
 		if (skin.skins.empty())
 		{
 			return;
 		}
 		seen.push_back(entity);
-		auto& entry = _creatureSkins[entity];
+		auto& entry = skins[entity];
 		if (entry.revision == skin.revision && entry.textures.size() == skin.skins.size())
 		{
 			return;
@@ -4357,7 +4357,7 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	});
 	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
 	std::ranges::sort(seen);
-	std::erase_if(_creatureSkins, [this, &seen](auto& entry) {
+	std::erase_if(skins, [this, &seen](auto& entry) {
 		if (std::ranges::binary_search(seen, entry.first))
 		{
 			return false;
@@ -5879,7 +5879,12 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
 	{
-		UploadCreatureSkins(drawDesc);
+		UploadCreatureSkins(drawDesc.entities, _creatureSkins);
+		// The copy of the creature in the temple's creature room has a skin of its own
+		if (Locator::temple::has_value())
+		{
+			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
+		}
 	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
@@ -6768,11 +6773,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// A copy drawn elsewhere looks as its creature does, in a pose of its own
 				const bool copy = drawn.posedBy != entt::null;
 				const auto poser = copy ? drawn.posedBy : entity;
+				// The copy is a thing of the temple's rooms
+				const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
 				const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser);
-				if (mesh == nullptr || !meshManager.Contains(mesh->id))
+				const auto* animation =
+				    posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
+				if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
 				{
 					continue;
 				}
@@ -6796,12 +6804,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    .blendSeams = Locator::config::value().blendCreatureSeams,
 					};
 					// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
-					auto skins = copy ? _creatureSkins.find(poser) : _creatureSkins.end();
-					if (skins == _creatureSkins.end())
+					if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
+					    own != _roomCreatureSkins.end())
 					{
-						skins = _creatureSkins.find(entity);
+						targets->skins = own->second.drawn;
 					}
-					if (skins != _creatureSkins.end())
+					else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
 					{
 						targets->skins = skins->second.drawn;
 					}
@@ -6817,7 +6825,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
-				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(poser);
+				const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
 				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
 				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
@@ -6868,22 +6876,22 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.posedModelLight = false;
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+				if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
 				{
 					DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
 				}
 				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
 				// A copy draws the hair of its own, which hangs from its own pose
-				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(poser);
-				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(poser);
+				const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
+				const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
 					DrawCreatureHair(desc, *hair, transform->position);
 				}
 				// The glows on its body, where its pose put them
-				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
+				if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
 				    glows != nullptr && transform != nullptr)
 				{
 					DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,

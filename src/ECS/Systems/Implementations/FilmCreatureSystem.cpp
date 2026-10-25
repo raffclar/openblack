@@ -105,7 +105,7 @@ void FilmCreatureSystem::Start()
 	// nowhere.
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(copy, static_cast<float>(film_creature::k_FirstPoseMs));
+		Locator::creatureAnimationSystem::value().PoseCopy(registry, copy, static_cast<float>(film_creature::k_FirstPoseMs));
 	}
 	if (auto action = creature_layers::PlayOnce(animation.body, film_creature::k_Action, false); action.has_value())
 	{
@@ -172,11 +172,12 @@ void FilmCreatureSystem::Update(int32_t filmMs, std::chrono::steady_clock::time_
 			{
 				animations.AddAlignmentMotesOf(*_copy);
 			}
-			animations.PoseCopy(*_copy, milliseconds);
+			animations.PoseCopy(Locator::entitiesRegistry::value(), *_copy, milliseconds);
 		}
 		if (Locator::creatureHairSystem::has_value())
 		{
-			Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
+			Locator::creatureHairSystem::value().StepCopy(Locator::entitiesRegistry::value(), *_copy,
+			                                              std::chrono::duration<float, std::milli>(milliseconds));
 		}
 	}
 
