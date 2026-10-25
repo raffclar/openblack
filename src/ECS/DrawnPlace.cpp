@@ -9,8 +9,10 @@
 
 #include "DrawnPlace.h"
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Registry.h"
 
 namespace openblack::ecs
@@ -27,6 +29,14 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	    holder != nullptr && holder->drawn.has_value())
 	{
 		return {.position = holder->drawn->position, .rotation = holder->drawn->rotation, .scale = transform.scale};
+	}
+	if (const auto* animal = registry.TryGet<const components::Animal>(entity); animal != nullptr && animal->drawn.has_value())
+	{
+		return {.position = animal->drawn->position, .rotation = animal->drawn->rotation, .scale = transform.scale};
+	}
+	if (const auto* shark = registry.TryGet<const components::Shark>(entity); shark != nullptr && shark->drawn.has_value())
+	{
+		return {.position = shark->drawn->position, .rotation = shark->drawn->rotation, .scale = transform.scale};
 	}
 	return transform;
 }

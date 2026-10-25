@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/Animal.h"
 #include "ECS/Components/ChimneySmoke.h"
 #include "ECS/Components/CreatureAudio.h"
 #include "ECS/Components/CreatureBody.h"
@@ -31,6 +32,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/MapScriptGlobals.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Shark.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownCreatureAttitude.h"
 #include "ECS/Components/VillageLight.h"
@@ -100,6 +102,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::impressiveMiracleCastTurn>("impressiveMiracleCastTurn")
 	    .Field<&openblack::ecs::RegistryContext::explorationMap>("explorationMap")
 	    .Field<&openblack::ecs::RegistryContext::globalStatistics>("globalStatistics");
+	Reflect<openblack::ecs::components::Animal::DrawnPlace>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Animal::DrawnPlace::position>("position")
+	    .Field<&openblack::ecs::components::Animal::DrawnPlace::rotation>("rotation");
 	Reflect<openblack::ecs::components::ChimneySmoke::Puff>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::position>("position")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::velocity>("velocity")
@@ -266,6 +271,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Player::Miracles::allEnabled>("allEnabled")
 	    .Field<&openblack::ecs::components::Player::Miracles::tribalPower>("tribalPower")
 	    .Field<&openblack::ecs::components::Player::Miracles::maxTribalPower>("maxTribalPower");
+	Reflect<openblack::ecs::components::Shark::DrawnPlace>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Shark::DrawnPlace::position>("position")
+	    .Field<&openblack::ecs::components::Shark::DrawnPlace::rotation>("rotation");
 	Reflect<openblack::ecs::components::TeleportStone::Traveller>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::living>("living")
 	    .Field<&openblack::ecs::components::TeleportStone::Traveller::destination>("destination")

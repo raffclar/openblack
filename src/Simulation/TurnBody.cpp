@@ -102,6 +102,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Profiler.h"
@@ -198,6 +199,8 @@ void PlayLivingTurn()
 		auto animalsEnd = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
 		animals.EndTurn();
 	}
+	// The souls of the dead that the frames have drawn to their ends go
+	ecs::villager_after_death::AgeSouls();
 }
 
 } // namespace

@@ -23,8 +23,8 @@ class Registry;
 namespace openblack::ecs::drawn_place
 {
 
-/// The Transform that the frame draws a thing with: a walking creature between its last two turns, a thing in a
-/// creature's hand where the drawn hand is, else the thing's own Transform
+/// The Transform that the frame draws a thing with: a walking creature, an animal or a shark between its last two turns,
+/// a thing in a creature's hand where the drawn hand is, else the thing's own Transform
 [[nodiscard]] components::Transform DrawnTransformOf(const Registry& registry, entt::entity entity,
                                                      const components::Transform& transform);
 
