@@ -189,6 +189,14 @@ TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
 }
 
+TEST(SyncedState, TheCopyOfTheCreatureInTheCaveOfTheTempleIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "CaveCreature";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
