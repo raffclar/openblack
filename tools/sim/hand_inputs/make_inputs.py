@@ -313,6 +313,9 @@ def two_gods_slot1_tree_press():
     script.wait(30)
     script.move((600, 600), 20)
     script.wait(20)
+    return script.events
+
+
 def busy_hand(cycles):
     """A hand that keeps busy on any land, from the camera that the land gives: in each cycle it takes what is at a
     point near the middle of the screen and throws it, drags the land, taps a second point and moves about"""
@@ -346,18 +349,20 @@ def busy_hand(cycles):
 
 
 # The cameras of the online maps' store inputs: 35 m from the storage pit of each god slot's first town, looking down at 40
-# degrees (net_check.py --cameraN), and the pixels of the middles of the store's food pile and wood pile from there (a store
-# with an empty wood pile has only its food pile)
+# degrees (net_check.py --cameraN), and from there the pixels of the store's piles that have food or wood in the first
+# turns: the food pile first, then the wood pile. Each pixel is the middle of the pixels at which the hand picks that pile
+# (the inspector's pick, in steps of 10 pixels, at turns 50 to 820 of a seed 1 game). A pixel from the pile's place on the
+# land can fall on the pit's wall, and an empty pile does not let the hand scoop.
 ONLINE_MAP_STORES = {
-    "mpm_2p_1": [((2199.33, 2406.03), [(714, 397), (548, 399)]),
-                 ((2922.59, 2653.02), [(653, 386), (477, 433)])],
-    "mpm_3p_1": [((2571.61, 2196.73), [(515, 582), (694, 663)]),
-                 ((2217.39, 2671.21), [(652, 423), (476, 433)]),
-                 ((2806.55, 2811.45), [(707, 438), (541, 395)])],
-    "mpm_4p_1": [((3102.37, 2169.45), [(652, 468), (481, 461)]),
-                 ((1987.71, 1958.34), [(709, 657), (856, 545)]),
-                 ((1812.98, 3026.09), [(494, 560)]),
-                 ((3090.47, 2966.72), [(678, 665)])],
+    "mpm_2p_1": [((2199.33, 2406.03), [(780, 480), (550, 420)]),
+                 ((2922.59, 2653.02), [(780, 480), (470, 400)])],
+    "mpm_3p_1": [((2571.61, 2196.73), [(520, 520), (710, 620)]),
+                 ((2217.39, 2671.21), [(750, 440), (460, 410)]),
+                 ((2806.55, 2811.45), [(780, 480), (540, 400)])],
+    "mpm_4p_1": [((3102.37, 2169.45), [(770, 500)]),
+                 ((1987.71, 1958.34), [(730, 650)]),
+                 ((1812.98, 3026.09), [(670, 530), (560, 660)]),
+                 ((3090.47, 2966.72), [(680, 640)])],
 }
 
 
