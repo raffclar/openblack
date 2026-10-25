@@ -55,7 +55,7 @@ int main(int argc, char* argv[])
 	// clang-format off
 	options.add_options()
 		("g,game-path", "The folder of the game's data.", cxxopts::value<std::string>())
-		("s,start-level", "The script of the land under the game's Scripts folder.", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
+		("s,start-level", "The script of the land under the game's Scripts folder, or a land of a network game such as Online Maps/mpm_2p_1.map (the default).", cxxopts::value<std::string>()->default_value(std::string(openblack::server::k_ServerDefaultLand)))
 		("testbed", "The flat testbed in place of a land.")
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")

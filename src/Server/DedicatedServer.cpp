@@ -238,6 +238,8 @@ bool ServerWorld::Initialize()
 	auto& land = Locator::landSystem::value();
 	land.SetView(&_landView);
 	land.SetNewGameStart(_settings.opening);
+	// The game server gets the humans of its land from the network session
+	land.SetHumansFromSession(_settings.network.has_value());
 
 	// Every random number from the seed, the date pinned
 	Locator::rng::value().SetRunSeed(_settings.seed);
