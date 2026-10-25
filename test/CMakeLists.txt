@@ -1766,3 +1766,4 @@ openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp
 openblack_setup_and_add_test(test_script_start test_script_start.cpp)
 target_link_libraries(test_script_start PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_help_reports test_help_reports.cpp)
+openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)

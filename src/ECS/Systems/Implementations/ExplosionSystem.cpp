@@ -17,12 +17,10 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
-#include "Common/PortableRotations.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
 #include "ECS/Components/Mesh.h"
-#include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
@@ -111,26 +109,26 @@ bool ExplosionSystem::LoadState(reflection::BinaryReader& in)
 {
 	reflection::Load(in, _shakes);
 	reflection::Load(in, _puffs);
+	// A load starts with no piles of roots, as a new land does
+	_piles.clear();
 	return !in.Failed();
 }
 
-void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
+void ExplosionSystem::AddRubble(const glm::vec3& centre, const glm::mat3& rotation, float scale)
 {
-	// It lies over the land's shape. Only the frames draw it, so the world does not change.
-	_marks.push_back({
-	    .mesh = resources::HashIdentifier(particles::blast::k_RubbleMesh),
-	    .transform = {.position = centre, .rotation = glm::mat3(portable_math::EulerAngleY(yaw)), .scale = glm::vec3(scale)},
-	    .millisecondsLeft = particles::blast::k_RubbleMilliseconds,
-	    .alpha = std::nullopt,
-	    .morphWithTerrain = true,
-	    .falling = std::nullopt,
-	});
+	_piles.push_back({.position = centre, .rotation = rotation, .scale = scale});
 	_puffs.push_back(dust_puff::Make(centre, k_DustSize, LocalRandom));
 	// The draw lists make room for it
 	if (Locator::entitiesRegistry::has_value())
 	{
 		Locator::entitiesRegistry::value().SetDirty();
 	}
+}
+
+void ExplosionSystem::AgeRootsPiles(std::chrono::milliseconds gameTime)
+{
+	const auto milliseconds = static_cast<int32_t>(gameTime.count());
+	std::erase_if(_piles, [milliseconds](roots_pile::Pile& pile) { return !roots_pile::Age(pile, milliseconds); });
 }
 
 void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour)
@@ -169,28 +167,23 @@ void ExplosionSystem::Update(float milliseconds)
 			}
 		}
 		const auto before = _marks.size();
-		std::erase_if(_marks, [&changed, milliseconds, seconds](GroundMark& mark) {
-			// The falling roots drop, settle, fade and go by the game's time
-			if (mark.falling.has_value())
+		// The falling roots drop, settle, fade and go by the game's time
+		std::erase_if(_marks, [&changed, seconds](GroundMark& mark) {
+			if (!mark.falling.has_value())
 			{
-				namespace objects = physics::objects;
-				mark.falling->seconds += seconds;
-				if (objects::RootsGone(mark.falling->seconds))
-				{
-					return true;
-				}
-				mark.transform.position.y =
-				    objects::RootsHeight(mark.falling->startHeight, mark.falling->restHeight, mark.falling->seconds);
-				mark.alpha = objects::RootsAlpha(mark.falling->seconds);
-				changed = true;
-				return false;
+				return true;
 			}
-			const auto aged = particles::blast::AgeHeap(mark.millisecondsLeft, mark.alpha, milliseconds);
-			// Blending it changes how its model is drawn
-			changed = changed || (aged.alpha.has_value() && !mark.alpha.has_value());
-			mark.millisecondsLeft = aged.millisecondsLeft;
-			mark.alpha = aged.alpha;
-			return aged.gone;
+			namespace objects = physics::objects;
+			mark.falling->seconds += seconds;
+			if (objects::RootsGone(mark.falling->seconds))
+			{
+				return true;
+			}
+			mark.transform.position.y = objects::RootsHeight(mark.falling->startHeight, mark.falling->restHeight,
+			                                                 mark.falling->seconds);
+			mark.alpha = objects::RootsAlpha(mark.falling->seconds);
+			changed = true;
+			return false;
 		});
 		if (changed || _marks.size() != before)
 		{
@@ -253,7 +246,7 @@ void ExplosionSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 			    .creator = &DustCreator(),
 			    .position = sprite.position,
 			    // The sprite's roll is read from the rotation about the vertical
-			    .rotation = glm::mat3(portable_math::EulerAngleY(-sprite.angle)),
+			    .rotation = glm::mat3(glm::eulerAngleY(-sprite.angle)),
 			    .scale = sprite.halfWidth,
 			    .stretch = 1.0f,
 			    .alpha = sprite.alpha,
@@ -271,6 +264,7 @@ void ExplosionSystem::Reset()
 	_shakes.clear();
 	_puffs.clear();
 	_ghosts.clear();
+	_piles.clear();
 	if (Locator::camera::has_value())
 	{
 		Locator::camera::value().SetShake(glm::vec3(0.0f), glm::vec3(0.0f));

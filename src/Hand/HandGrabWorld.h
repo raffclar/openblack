@@ -213,8 +213,9 @@ public:
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full
 	/// grown conifer made at its place. None when it gives none.
 	virtual std::optional<entt::entity> TreeFromBigForest(entt::entity /*bigForest*/) { return std::nullopt; }
-	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke
-	virtual void LeaveRootsHole(entt::entity tree) = 0;
+	/// A tree pulled out of the ground leaves its roots in a hole, with a puff of smoke. The hole has the place, the
+	/// turn and the size that the tree had before the pull. Only the computer that pulls the tree draws the hole.
+	virtual void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) = 0;
 	/// Make the land's draw list again on the next frames, this number of frames
 	virtual void RemakeDrawList(uint32_t frames) = 0;
 	/// A pot taken stops calling the people to it
