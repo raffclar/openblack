@@ -61,6 +61,11 @@ std::optional<PlayerNames> GameTempleDestructionWorld::LocalPlayer() const
 	return Locator::playerSystem::value().GetLocalPlayer();
 }
 
+bool GameTempleDestructionWorld::NetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner)
 {
 	if (!Locator::audio::has_value())

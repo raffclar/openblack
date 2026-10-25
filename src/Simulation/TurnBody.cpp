@@ -65,6 +65,7 @@
 #include "ECS/Systems/FishFarmSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -523,6 +524,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::worshipSiteSystem::has_value())
 		{
 			Locator::worshipSiteSystem::value().UpdateTurn();
+		}
+		break;
+	case Step::GameEnd:
+		// A god with no temple is out of a skirmish or a network game, and the game is decided when one god is left
+		if (Locator::gameEndSystem::has_value())
+		{
+			Locator::gameEndSystem::value().ProcessTurn(turn);
 		}
 		break;
 	case Step::PlayerAlignment:

@@ -1465,6 +1465,12 @@
   "query": "players.heartbeat"
  },
  {
+  "description": "The end of a skirmish or a network game: whether it is decided, and where each god stands",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.game_end"
+ },
+ {
   "description": "This computer's hands: where they are, and what the hand holds or takes",
   "kind": "object",
   "parameters": [],

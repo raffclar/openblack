@@ -80,6 +80,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/GameStanding.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -157,6 +158,7 @@
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -409,6 +411,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
+    LocatorCoverage {"gameEndSystem", "players.game_end"},
     LocatorCoverage {"playerCommandSystem", "players.commands"},
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
@@ -1902,6 +1905,30 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                  });
 		                  return items;
 	                  }));
+	provider->Add(
+	    Query("game_end", "The end of a skirmish or a network game: whether it is decided, and where each god stands"),
+	    Serve<Locator::gameEndSystem>(
+	        "the end of the game", [](const ecs::systems::GameEndSystemInterface& end, const QueryContext& /*c*/) {
+		        Json gods = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const Player, const ecs::components::GameStanding>(
+			            [&gods](const Player& player, const ecs::components::GameStanding& standing) {
+				            gods.push_back({{"player", static_cast<int>(player.name)},
+				                            {"out", standing.out},
+				                            {"finished", standing.finished},
+				                            {"share", standing.share},
+				                            {"place", standing.place.has_value() ? Json(*standing.place) : Json(nullptr)},
+				                            {"left", standing.reason == ecs::components::OutReason::Left}});
+			            });
+		        }
+		        Json events = Json::array();
+		        for (const auto& event : end.LastEvents())
+		        {
+			        events.push_back({{"god", static_cast<int>(event.god)}, {"kind", static_cast<int>(event.kind)}});
+		        }
+		        return Json {{"decided", end.IsDecided()}, {"gods", gods}, {"last_events", events}};
+	        }));
 	provider->Add(
 	    Query("hand", "This computer's hands: where they are, and what the hand holds or takes"),
 	    Serve<Locator::handSystem>("the hands", [](const ecs::systems::HandSystemInterface& hands, const QueryContext& /*c*/) {
