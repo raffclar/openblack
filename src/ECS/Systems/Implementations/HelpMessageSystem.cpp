@@ -117,6 +117,12 @@ bool HelpMessageSystem::LoadState(reflection::BinaryReader& in)
 
 void HelpMessageSystem::Remember(Started started)
 {
+	// The log lets the tools compare the turns of the help at different frame rates
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The help starts the script {} with the texts {} to {} at turn {}", started.script,
+		                   started.first, started.last, started.turn);
+	}
 	_started.push_back(std::move(started));
 	if (_started.size() > k_StartedKept)
 	{
