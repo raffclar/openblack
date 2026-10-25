@@ -265,24 +265,24 @@ bool Effect::IsHierarchy(int group) const
 	return group >= 0 && group < static_cast<int>(k_GroupCount) && _hierarchies.at(static_cast<size_t>(group));
 }
 
-float Effect::Random(float max)
+float Effect::Random(float max, DrawSite site)
 {
-	return _services.random.ParticleFloatRand(max);
+	return _services.random.ParticleFloatRand(max, site);
 }
 
-float Effect::Random(float min, float max)
+float Effect::Random(float min, float max, DrawSite site)
 {
-	return _services.random.ParticleFloatRand(min, max);
+	return _services.random.ParticleFloatRand(min, max, site);
 }
 
-int32_t Effect::Rand(int32_t n)
+int32_t Effect::Rand(int32_t n, DrawSite site)
 {
-	return _services.random.ParticleRand(n);
+	return _services.random.ParticleRand(n, site);
 }
 
-glm::vec3 Effect::RandomInBall()
+glm::vec3 Effect::RandomInBall(DrawSite site)
 {
-	return _services.random.ParticleRandR3();
+	return _services.random.ParticleRandR3(site);
 }
 
 float Effect::FloatProvider(const std::string& name, float fallback) const
