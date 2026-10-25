@@ -31,6 +31,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -192,7 +193,7 @@ void GameTempleDestructionWorld::StartScript(std::string_view name)
 {
 	if (Locator::vm::has_value())
 	{
-		Locator::vm::value().StartScript(std::string(name), lhvm::ScriptType::All);
+		Locator::vm::value().StartScript(std::string(name), script::start::StartableScripts());
 	}
 }
 
