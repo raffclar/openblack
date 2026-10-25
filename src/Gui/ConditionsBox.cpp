@@ -78,6 +78,7 @@ ConditionsBox::ConditionsBox(const TextDatabase& texts, const GameFont& font, st
 	    .onClick = back;
 	_graph = &statistics_box::AddLineGraph(dialog, k_GraphRect, std::u16string(), false);
 	_list = &dialog.Add<List>(font, k_ListRect, DialogPainter::k_MidTextSize, false, true, true);
+	_list->ShowScrollBarWhenNeeded();
 	_list->drawUnder = [this](const DialogPainter& painter, const List::ItemPlace& place) { DrawValues(painter, place); };
 	for (size_t i = 0; i < k_Gods; ++i)
 	{

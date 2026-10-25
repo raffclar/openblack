@@ -360,7 +360,7 @@ List::List(const GameFont& font, DialogRect rect, int size, bool centred, bool s
 
 int List::GetBoxRight() const
 {
-	return _scrollBar ? rect.max.x - 2 - GetScrollBarWidth() : rect.max.x;
+	return ShowsScrollBar() ? rect.max.x - 2 - GetScrollBarWidth() : rect.max.x;
 }
 
 int List::GetContentHeight() const
@@ -376,6 +376,24 @@ int List::GetContentHeight() const
 void List::SetItems(std::vector<Item> items)
 {
 	_items = std::move(items);
+	_scrollBarShown = true;
+	if (_scrollBarWhenNeeded)
+	{
+		_scrollBarShown = false;
+		MeasureItems();
+		constexpr int k_Margin = 8;
+		_scrollBarShown = GetContentHeight() > rect.Height() - k_Margin;
+	}
+	MeasureItems();
+	if (_selection && *_selection >= _items.size())
+	{
+		_selection.reset();
+	}
+	ScrollTo(_scroll);
+}
+
+void List::MeasureItems()
+{
 	_heights.clear();
 	const auto width = static_cast<float>(GetBoxRight() - rect.min.x - 8);
 	for (const auto& item : _items)
@@ -385,11 +403,6 @@ void List::SetItems(std::vector<Item> items)
 		// TODO(raffclar): the gap is measured from the original's screens, not worked out from its code
 		_heights.push_back((static_cast<int>(lines) * _size) + k_ItemGap);
 	}
-	if (_selection && *_selection >= _items.size())
-	{
-		_selection.reset();
-	}
-	ScrollTo(_scroll);
 }
 
 std::optional<size_t> List::ItemAt(int y) const
@@ -548,7 +561,7 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 		top = bottom;
 	}
 
-	if (_scrollBar)
+	if (ShowsScrollBar())
 	{
 		const auto barLeft = boxRight + 2;
 		painter.DrawBevelBox({.min = {barLeft, rect.min.y}, .max = {barLeft + GetScrollBarWidth(), rect.max.y}}, 1,
@@ -566,7 +579,7 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 void List::MouseDown(glm::ivec2 point)
 {
 	_draggingThumb = false;
-	if (_scrollBar && point.x >= GetBoxRight())
+	if (ShowsScrollBar() && point.x >= GetBoxRight())
 	{
 		const auto track = static_cast<float>(rect.Height() - 6);
 		const auto content = static_cast<float>(std::max(GetContentHeight(), rect.Height()));

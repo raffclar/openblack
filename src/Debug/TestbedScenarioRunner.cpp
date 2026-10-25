@@ -2887,6 +2887,13 @@ void Runner::Give(const Command& command)
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
+		if (command.value == 3)
+		{
+			game->GetInterface()->GetMenu().SetNetworkGame(true);
+			game->GetInterface()->OpenMenu();
+			Log(fmt::format("{:.1f}s: {}: the main menu of a network game opens", _seconds, Name(command.kind)));
+			return;
+		}
 		if (command.value == 0)
 		{
 			game->AskToLeaveNetworkGame();

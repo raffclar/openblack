@@ -973,7 +973,7 @@ struct Command
 		OtherGodHand,
 		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
 		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
-		/// Needs no creature.
+		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
 		EndBox,
 	};
 	Kind kind {Kind::Stop};

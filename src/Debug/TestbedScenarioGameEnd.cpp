@@ -130,7 +130,7 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .name = "The Multiplayer tab of the end box",
 	    .facet = Facet::Multiplayer,
 	    .description = "A skirmish of three gods: the player and the computer gods of players two and three, each with a "
-	                   "temple. 31 seconds in, the player's temple starts its destruction. 12 seconds after that, the "
+	                   "temple. 31 seconds in, the player's temple starts its destruction. 25 seconds after that, the "
 	                   "Multiplayer tab of the end box opens.",
 	    .expected = "The box of the winning conditions replaces the end box: five tabs (Game Over, Multiplayer and three "
 	                "empty tabs) with Multiplayer open, \"Multiplayer Winning Condition Status\" on a dark band, a line "
@@ -148,6 +148,21 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	                {.offset = k_ThirdTemple, .owner = PlayerNames::PLAYER_THREE}},
 	    .landScript = k_ThreeComputerGods,
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 31.0f, .value = 0},
-	                 {.kind = Kind::EndBox, .delaySeconds = 12.0f, .value = 1}},
+	                 {.kind = Kind::EndBox, .delaySeconds = 25.0f, .value = 1}},
+	});
+	all.push_back({
+	    .id = "game_end.network_menu",
+	    .name = "The main menu of a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods. One second in, the main menu opens as it shows in a network game.",
+	    .expected = "The main menu has four buttons: Continue Game, Exit Online Game., Options and Quit Black & White, 80 "
+	                "high and 100 apart from the top at 150, with no Start Skirmish Game. Its third tab reads Multiplayer "
+	                "and opens the box of the winning conditions with Main Menu as its first tab. Exit Online Game. closes "
+	                "the menu and the end box asks \"Are you sure you want to quit this game?\".",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 3}},
 	});
 }
