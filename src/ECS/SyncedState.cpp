@@ -169,6 +169,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
     {.component = "ShownRoots", .field = "", .marker = ""},
+    // The snow that a thing shows eases only while this computer draws the thing. Only the draw reads it.
+    {.component = "SnowLevel", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},

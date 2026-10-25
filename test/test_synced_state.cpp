@@ -17,6 +17,7 @@
 #include <gtest/gtest.h>
 
 #include "Common/WorkerPool.h"
+#include "ECS/Components/SnowLevel.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/SyncedState.h"
 
@@ -235,4 +236,26 @@ TEST(SyncedState, TheThreadsOfAPoolGiveTheSameHash)
 		EXPECT_EQ(shared.hash, alone.hash);
 		EXPECT_EQ(shared.parts, alone.parts);
 	}
+}
+
+TEST(SyncedState, TheSnowThatAThingShowsDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<ecs::components::SnowLevel>(context).Field<&ecs::components::SnowLevel::level>("level");
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto tree = registry.create();
+	registry.emplace<FakeBody>(tree, FakeBody {.place = 3.0f});
+	registry.emplace<ecs::components::SnowLevel>(tree, ecs::components::SnowLevel {.level = 10});
+	const auto parts = synced_state::PresentationParts();
+	const auto before = synced_state::HashOf(registry, context, parts).hash;
+	// The frames of one computer draw the two things in the snow: the snow eases on the tree and starts on the body
+	registry.get<ecs::components::SnowLevel>(tree).level = 40;
+	registry.emplace<ecs::components::SnowLevel>(body, ecs::components::SnowLevel {.level = 5});
+	EXPECT_EQ(synced_state::HashOf(registry, context, parts).hash, before);
+	// The turn moves the tree: the synced state changes
+	registry.get<FakeBody>(tree).place = 4.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, parts).hash, before);
 }
