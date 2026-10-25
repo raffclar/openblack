@@ -15,7 +15,6 @@
 
 #include "3D/SkeletalAnimation.h"
 #include "3D/SkyDome.h"
-#include "3D/StormClouds.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/StatisticsRules.h"
 #include "ScriptHeaders/ScriptChallengeSnapshots.h"
@@ -74,9 +73,4 @@ void openblack::ecs::reflection::RegisterFields_Values_s(entt::meta_ctx& context
 	Reflect<openblack::statistics::Satisfaction>(context, ValueOnly {})
 	    .Field<&openblack::statistics::Satisfaction::total>("total")
 	    .Field<&openblack::statistics::Satisfaction::samples>("samples");
-	Reflect<openblack::storm_clouds::Drift>(context, ValueOnly {})
-	    .Field<&openblack::storm_clouds::Drift::place>("place")
-	    .Field<&openblack::storm_clouds::Drift::target>("target")
-	    .Field<&openblack::storm_clouds::Drift::step>("step")
-	    .Field<&openblack::storm_clouds::Drift::stepsLeft>("stepsLeft");
 }
