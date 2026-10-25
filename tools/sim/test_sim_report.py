@@ -162,5 +162,39 @@ class CompareSavesTests(unittest.TestCase):
         self.assertEqual(sim_report.compare_saves(b"ECSW12", b"ECSW123"), {"size": [6, 7]})
 
 
+class UnregisteredTests(unittest.TestCase):
+    def test_a_log_line_gives_its_names(self):
+        line = "[2026-10-25 12:00:00] [game] [error] unregistered component storage: Alpha, Beta"
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha", "Beta"})
+
+    def test_a_record_gives_the_names_of_its_synced_part(self):
+        line = json.dumps({"type": "record", "turn": 5, "synced": {"hash": "a", "unregistered": ["Alpha"]}})
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha"})
+
+    def test_a_checksum_line_gives_its_names(self):
+        line = '{"turn":1,"checksum":"0000000000000002","unregistered":["Alpha","Beta"]}'
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha", "Beta"})
+
+    def test_a_flag_that_quotes_the_message_is_not_read_as_names(self):
+        flag = {"kind": "Log", "what": "unregistered component storage: Alpha", "detail": "x"}
+        line = json.dumps({"type": "record", "turn": 5, "flags": [flag]})
+        self.assertEqual(sim_report.unregistered_in_text([line]), set())
+
+    def test_a_clean_run_has_none(self):
+        self.assertEqual(sim_report.unregistered_in_text(["[info] nothing", json.dumps(record(1))]), set())
+
+    def test_a_missing_file_has_none(self):
+        self.assertEqual(sim_report.unregistered_in_files("no/such/file.log", None), set())
+
+    def test_the_summary_is_a_problem_when_a_log_has_a_name(self):
+        result = sim_report.summary({}, [record(10)], {"turn": 10}, ["[error] unregistered component storage: Alpha"], 0)
+        self.assertEqual(result["unregistered"], ["Alpha"])
+        self.assertEqual(result["verdict"], "problems")
+        self.assertIn("unregistered component storage: Alpha", sim_report.markdown(result))
+
+    def test_the_line_has_the_sorted_names(self):
+        self.assertEqual(sim_report.unregistered_line({"Beta", "Alpha"}), "unregistered component storage: Alpha, Beta")
+
+
 if __name__ == "__main__":
     unittest.main()

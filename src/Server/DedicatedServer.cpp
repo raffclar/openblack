@@ -30,6 +30,9 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -259,6 +262,13 @@ bool ServerWorld::Initialize()
 	{
 		Locator::time::value().SetFixedFrameTime(*_simulation.frameTime);
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation.traceDrawsPath.has_value() && !draw_trace::Start(Locator::gameRandom::value(), *_simulation.traceDrawsPath))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+		                    _simulation.traceDrawsPath->string());
+	}
+#endif
 	// The run record of the tools starts with the inspector
 	if (_simulation.recordPath.has_value() && StartInspector(0))
 	{
@@ -330,9 +340,11 @@ bool ServerWorld::StartLand()
 		}
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
-	// The story's scripts run the first land, but not the testbed or a playground
+	// The story's scripts run the first land, but not the testbed or a playground. The server's world is the world of a
+	// network game, which starts no story.
 	const bool startStory = !_settings.testbed && !_settings.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish,
+	                                                              Locator::time::value().IsNetworkGame());
 	if (!land.StartChallengeScripts(startStory))
 	{
 		return false;
@@ -631,6 +643,7 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
+	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
 	{
 		simulation.recordPath = settings.recordPath;
