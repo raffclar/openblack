@@ -264,6 +264,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
     {.component = "SoundTag", .field = "emitter", .marker = ""},
+    // The dust of a reward chest: the C library's random numbers place it, and the frames fade it. Only the draw reads it.
+    {.component = "Reward", .field = "dust", .marker = ""},
+    {.component = "Reward", .field = "dustMilliseconds", .marker = ""},
 });
 
 } // namespace

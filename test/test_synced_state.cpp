@@ -127,6 +127,16 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
+{
+	// The C library's random numbers place the dust, and the frames fade it. The game server draws neither.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dust"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	// The turn reads the state of the chest
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
