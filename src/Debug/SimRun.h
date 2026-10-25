@@ -87,6 +87,8 @@ struct Request
 	/// Tools: log each frame step that changes the synced world, with the parts (the components, or with Fields their
 	/// fields) that it changes. None: no guard.
 	HashDetail frameGuard {HashDetail::None};
+	/// The guard starts to look at this turn, because a sample at each step is slow
+	uint32_t frameGuardFrom {0};
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };

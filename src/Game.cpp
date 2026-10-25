@@ -2163,7 +2163,8 @@ bool Game::Update() noexcept
 	FrameState frame;
 	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
 		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world
-		    if (!_frameGuard || step == game_frame::Step::Turns)
+		    if (!_frameGuard || step == game_frame::Step::Turns ||
+		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
 			    return PlayFrameStep(step, frame);
 		    }
