@@ -1565,7 +1565,7 @@
   "writes": true
  },
  {
-  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions",
+  "description": "The hand's miracle, the spells and dispensers there are, and the other miracles' systems: shields, tornadoes, explosions and the piles of roots",
   "kind": "object",
   "parameters": [],
   "query": "magic.state"

@@ -11,6 +11,9 @@ lockstep). At the end it compares the checksum of each turn on the server and on
     python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
     python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
     python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hold-creature 2:2942.91,2607.57
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hash-parts
+        --input2 tools/sim/hand_inputs/twogods_slot1_tree_press.json --camera-again-after 700
+        --camera2 '{"focus":[2928.87,88.44,2620.91],"yaw":0,"pitch":20,"distance":25}'
 
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
@@ -576,6 +579,9 @@ def main():
     parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--camera-again-after", type=int,
+                        help="put the cameras of --camera1 and --camera2 there again once the client compared this many "
+                        "turns (a multiple of 100), because a land's scripts can move the camera after the start")
     parser.add_argument("--hold-creature", action="append", default=[],
                         help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
@@ -686,6 +692,7 @@ def main():
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
+        cameras_again = set()
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
             if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
                 break
@@ -699,6 +706,14 @@ def main():
             if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
                     os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
                 miracle_done = slot_miracle(clients[slot].pid, slot)
+            for index, client in enumerate(clients):
+                camera = options.camera1 if index == 0 else options.camera2
+                if (camera and options.camera_again_after is not None and index not in cameras_again
+                        and client.poll() is None and lines_with(
+                            os.path.join(client_dirs[index], "client.log"),
+                            [f"Network game: {options.camera_again_after} turns compared"])):
+                    set_camera(client.pid, camera)
+                    cameras_again.add(index)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])

@@ -501,9 +501,21 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	{
 	case HandGrab::State::Grabbing:
 	{
-		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap
+		// The pull freed the thing: the hand takes it, also when the button is let go in the same frame
+		if (grab->tug.has_value() && !grab->pulling && Exists(grab->object))
+		{
+			SendTake(*grab, grab->object);
+			return std::nullopt;
+		}
+		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap.
+		// Only this computer pulled it and the other computers did not see the lean. Thus in a network game, the thing
+		// stands again as it stood before the pull, so that all the worlds stay the same.
 		const auto object = grab->object;
 		const bool tap = hand_grab::ElapsedMs(nowMs, grab->pressMs, turn, grab->pressTurn) <= hand_grab::k_GrabWaitMs;
+		if (_world->IsNetworkGame())
+		{
+			StandAsBeforePull(*grab);
+		}
 		Empty(*grab);
 		// It still becomes the thing last let go, which a flying thing's twist then finds
 		grab->released = object;
@@ -1066,10 +1078,11 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 		grab.stretch.Update(frame.seconds);
 		if (result.comesFree)
 		{
-			// A standing tree pulled out of the ground leaves its roots in a hole
+			// A standing tree pulled out of the ground leaves its roots in a hole. The hole is at the base of the tree,
+			// with the turn and the size of the tree before the pull, because the lean changes only the drawn tree.
 			if (tree && !_world->IsFlying(object))
 			{
-				_world->LeaveRootsHole(object);
+				_world->LeaveRootsHole(object, tug.base, grab.pullRotation, grab.pullScale.x);
 			}
 			// Make the land's draw list again when the hand pulls a living thing free
 			if (const auto kind = KindOf(object); kind == GrabKind::Villager || kind == GrabKind::Animal)
@@ -1114,9 +1127,14 @@ void HandGrabSystem::PlayTakeSounds(entt::entity object)
 
 void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 {
-	// A thing that the hand can no longer take is let go of
+	// A thing that the hand can no longer take is let go of. In a network game, a pulled thing stands again as it stood
+	// before the pull, as when the hand lets go of it before it comes free.
 	if (!MayTake(object))
 	{
+		if (_world->IsNetworkGame())
+		{
+			StandAsBeforePull(grab);
+		}
 		Empty(grab);
 		return;
 	}
@@ -1827,14 +1845,9 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
 	// The turn runs on every computer: it never gives a hand a grab that only this computer would have
 	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	if (const auto* grab = std::as_const(*this).Grab();
-	    grab != nullptr && (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
-	    grab->tug.has_value() && Exists(grab->object))
+	if (const auto* grab = std::as_const(*this).Grab(); grab != nullptr)
 	{
-		auto& pulled = _world->Entities().Get<Transform>(grab->object);
-		pulled.position = grab->pullPosition;
-		pulled.rotation = grab->pullRotation;
-		pulled.scale = grab->pullScale;
+		StandAsBeforePull(*grab);
 	}
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
@@ -1843,6 +1856,19 @@ void HandGrabSystem::PlaceHeldForTurn()
 		transform.rotation = inHand.rotation;
 		transform.scale = inHand.scale;
 	});
+}
+
+void HandGrabSystem::StandAsBeforePull(const HandGrab& grab)
+{
+	if ((grab.state != HandGrab::State::Grabbing && grab.state != HandGrab::State::Taking) || !grab.tug.has_value() ||
+	    !Exists(grab.object))
+	{
+		return;
+	}
+	auto& pulled = _world->Entities().Get<Transform>(grab.object);
+	pulled.position = grab.pullPosition;
+	pulled.rotation = grab.pullRotation;
+	pulled.scale = grab.pullScale;
 }
 
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
