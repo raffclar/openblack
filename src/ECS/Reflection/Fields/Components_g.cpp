@@ -40,7 +40,8 @@ void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& con
 	    .Field<&components::GripLandscapeParticle::centre>("centre")
 	    .Field<&components::GripLandscapeParticle::offset>("offset")
 	    .Field<&components::GripLandscapeParticle::age>("age")
-	    .Field<&components::GripLandscapeParticle::frame>("frame");
+	    .Field<&components::GripLandscapeParticle::frame>("frame")
+	    .Field<&components::GripLandscapeParticle::turnsLeft>("turnsLeft");
 	Reflect<components::GroundMark>(context)
 	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
 	    .Field<&components::GroundMark::alpha>("alpha");
