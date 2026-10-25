@@ -7,12 +7,16 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <algorithm>
 #include <array>
+#include <string>
+#include <utility>
 
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "Common/WorkerPool.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/SyncedState.h"
 
@@ -56,6 +60,9 @@ constexpr auto k_Presentation = std::to_array<synced_state::PresentationPart>({
     {.component = "FakeBody", .field = "drawnPlace", .marker = ""},
     {.component = "*", .field = "", .marker = "FakeGlowMark"},
 });
+
+/// The hash of the fixed world of the test TheHashOfAWorldStaysTheSame
+constexpr uint64_t k_FixedWorldHash = 7309699159427777647ull;
 
 } // namespace
 
@@ -124,4 +131,96 @@ TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 	// The turn hides the body: the synced state changes
 	registry.emplace<FakeHidden>(body);
 	EXPECT_NE(synced_state::HashOf(registry, context, k_Presentation).hash, before);
+}
+
+TEST(SyncedState, AFieldWithAMarkerLeavesOutOnlyTheMarkedEntities)
+{
+	// The place of each body that has the glow mark, and the whole glow of each entity
+	constexpr auto k_Parts = std::to_array<synced_state::PresentationPart>({
+	    {.component = "FakeBody", .field = "place", .marker = "FakeGlowMark"},
+	    {.component = "FakeGlow", .field = "", .marker = ""},
+	});
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto marked = registry.create();
+	registry.emplace<FakeGlowMark>(marked);
+	registry.emplace<FakeBody>(marked, FakeBody {.place = 1.0f});
+	const auto plain = registry.create();
+	registry.emplace<FakeBody>(plain, FakeBody {.place = 1.0f});
+	registry.emplace<FakeGlow>(plain, FakeGlow {.shine = 0.5f});
+	const auto before = synced_state::HashOf(registry, context, k_Parts);
+	// The glow and the place of the marked body are not in the hash
+	registry.get<FakeGlow>(plain).shine = 0.9f;
+	registry.get<FakeBody>(marked).place = 2.0f;
+	const auto after = synced_state::HashOf(registry, context, k_Parts);
+	EXPECT_EQ(after.hash, before.hash);
+	EXPECT_EQ(std::ranges::count(after.parts, std::string("FakeGlow"), &std::pair<std::string, uint64_t>::first), 0);
+	// The drawn place of the marked body is in the hash
+	registry.get<FakeBody>(marked).drawnPlace = 2.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, k_Parts).hash, before.hash);
+	// The place of the body with no mark is in the hash
+	registry.get<FakeBody>(marked).drawnPlace = 0.0f;
+	registry.get<FakeBody>(plain).place = 2.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, k_Parts).hash, before.hash);
+}
+
+TEST(SyncedState, APartWithAMarkerThatNoStorageHasStaysInTheHash)
+{
+	constexpr auto k_Parts = std::to_array<synced_state::PresentationPart>({
+	    {.component = "FakeBody", .field = "place", .marker = "FakeNoSuchMark"},
+	});
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto before = synced_state::HashOf(registry, context, k_Parts).hash;
+	registry.get<FakeBody>(body).place = 2.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, k_Parts).hash, before);
+}
+
+TEST(SyncedState, TheHashOfAWorldStaysTheSame)
+{
+	// A fixed world gives a fixed hash, so that a change to the code of the hash does not change the checksums
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.5f, .drawnPlace = 3.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow, FakeGlowMark {.kind = 2});
+	registry.emplace<FakeGlow>(glow, FakeGlow {.shine = 0.25f});
+	registry.emplace<FakeHidden>(body);
+	registry.emplace<FakeHidden>(glow);
+	EXPECT_EQ(synced_state::HashOf(registry, context, k_Presentation).hash, k_FixedWorldHash);
+}
+
+TEST(SyncedState, TheThreadsOfAPoolGiveTheSameHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	for (int i = 0; i < 20; ++i)
+	{
+		const auto entity = registry.create();
+		registry.emplace<FakeBody>(entity, FakeBody {.place = static_cast<float>(i), .drawnPlace = 0.5f});
+		if (i % 3 == 0)
+		{
+			registry.emplace<FakeGlowMark>(entity, FakeGlowMark {.kind = i});
+			registry.emplace<FakeGlow>(entity, FakeGlow {.shine = static_cast<float>(i) * 0.25f});
+		}
+		if (i % 4 == 0)
+		{
+			registry.emplace<FakeHidden>(entity);
+		}
+	}
+	WorkerPool pool(3);
+	for (const bool byField : {false, true})
+	{
+		const auto alone = synced_state::HashOf(registry, context, k_Presentation, byField);
+		const auto shared = synced_state::HashOf(registry, context, k_Presentation, byField, {}, &pool);
+		EXPECT_EQ(shared.hash, alone.hash);
+		EXPECT_EQ(shared.parts, alone.parts);
+	}
 }
