@@ -1094,8 +1094,8 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 
 	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
 	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
-	// what they point at.
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	// what they point at. A network game does not pause: the world's turns go on while the player is in the temple.
+	if (!clock.IsNetworkGame() && Locator::temple::has_value() && Locator::temple::value().Active())
 	{
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{

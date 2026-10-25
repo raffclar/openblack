@@ -611,6 +611,13 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	};
 }
 
+/// The player of this computer is in the temple. In a network game the world's turns go on there, and their audio
+/// plays the temple's sounds.
+bool PlayerInTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
+}
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -2054,13 +2061,13 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 			        },
 			    .paused = false,
 			    .turn = clock.GetTurn(),
-			    .inCitadel = false,
+			    .inCitadel = PlayerInTemple(),
 			    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 			});
 		}
 		break;
 	case Step::Music:
-		ProcessMusicTurn(cameraPosition, false);
+		ProcessMusicTurn(cameraPosition, PlayerInTemple());
 		break;
 	default:
 		// The world does the other steps (see simulation::PlayTurnStep)
