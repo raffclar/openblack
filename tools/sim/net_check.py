@@ -280,19 +280,22 @@ def session_counts(log):
     return None if found is None else (found[0], found[1], resumes)
 
 
+INSPECTOR_ADAPTER = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+
+
 def set_camera(pid, camera):
-    """Puts the camera of a client where its input plays, through the inspector"""
-    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+    """Puts the camera of a client where its input plays, through the inspector; false when the inspector did not do
+    it. A camera that stays at the start makes the hand input miss the things that it must take."""
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", "camera_set", camera], timeout=120,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", "camera_set", camera],
+                          timeout=120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    return done.returncode == 0
 
 
 def inspector_call(pid, query, request):
     """One request to the inspector of a client, its answer (none when it fails)"""
-    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    done = subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", query, json.dumps(request)],
+    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", query, json.dumps(request)],
                           timeout=120, capture_output=True, text=True, creationflags=flags)
     try:
         return json.loads(done.stdout).get("result")
@@ -394,7 +397,7 @@ def main():
     parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
-    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
+    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients (1 to 1000)")
     parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin")
@@ -408,8 +411,13 @@ def main():
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
     parser.add_argument("--camera-again-after", type=int,
-                        help="put the cameras of --camera1 and --camera2 there again once the client compared this many "
-                        "turns (a multiple of 100), because a land's scripts can move the camera after the start")
+                        help="put the camera of each client (--camera1 to --camera4) there again once the client "
+                        "compared this many turns (a multiple of 100), because a land's scripts can move the camera "
+                        "after the start")
+    parser.add_argument("--input3", help="recorded input for the third client's hand")
+    parser.add_argument("--input4", help="recorded input for the fourth client's hand")
+    parser.add_argument("--camera3", help="the camera of the third client before its input (JSON)")
+    parser.add_argument("--camera4", help="the camera of the fourth client before its input (JSON)")
     parser.add_argument("--hold-creature", action="append", default=[],
                         help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
@@ -420,7 +428,8 @@ def main():
                              "come back in step by the server's world state")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
-    parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
+    parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
+                        help="the number of clients (a god slot each)")
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
@@ -428,7 +437,15 @@ def main():
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
+    if not 1.0 <= options.frame_ms <= 1000.0:
+        # The game does not start with another frame time, and the run would only say that the first client did not join
+        parser.error("--frame-ms takes 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
+    client_inputs = [options.input, options.input2, options.input3, options.input4]
+    client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
+    if (any(client_cameras) or options.hold_creature) and not os.path.isfile(INSPECTOR_ADAPTER):
+        # A copy of tools/sim alone cannot move the cameras: the inputs would play at the start camera
+        parser.error(f"--cameraN and --hold-creature need the inspector adapter {os.path.normpath(INSPECTOR_ADAPTER)}")
 
     out = os.path.abspath(options.out)
     if SWITCH_IN_PATH.search(out):
@@ -495,13 +512,13 @@ def main():
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
                 command.append("--sim-hash-parts")
-            client_input = options.input if index == 0 else options.input2
+            client_input = client_inputs[index]
             if client_input:
                 command += ["--sim-input",
-                            shifted_input(client_input, client_dir, options.input2_delay_frames if index else 0)]
+                            shifted_input(client_input, client_dir, options.input2_delay_frames * index)]
             else:
                 command.append("--sim-still-hand")
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             if camera or index in holds:
                 command += ["--inspect-port", "0"]
@@ -509,18 +526,23 @@ def main():
                 command += ["--join-part-at", str(options.part_second_at)]
             clients.append(start(command, client_dir))
             processes.append(clients[-1])
-            if index == 0:
-                # The world has one human hand for now (the first god slot), so the client with the input joins first
-                if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[0]):
-                    print(f"the first client did not join; see {client_dir}")
-                    return 1
+            # The server gives the god slots in join order: client N must join before client N + 1 starts,
+            # so that client N gets slot N - 1 and its input and camera play at that god
+            if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[-1]):
+                print(f"client {index + 1} did not join; see {client_dir}")
+                return 1
+            joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
+            if any("in slot" in line for line in joins) and not any(line.endswith(f"in slot {index}") for line in joins):
+                print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
+                return 1
         # Each client looks where its input plays, once its network game started
         for index, client in enumerate(clients):
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             if camera:
                 log = os.path.join(client_dirs[index], "client.log")
-                if wait_for_line(log, "Joined the game server", client):
-                    set_camera(client.pid, camera)
+                if wait_for_line(log, "Joined the game server", client) and not set_camera(client.pid, camera):
+                    print(f"the camera of client {index + 1} was not set; see {client_dirs[index]}")
+                    return 1
         started = time.monotonic()
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
@@ -536,12 +558,14 @@ def main():
                     hold_creature(clients[index].pid, near)
                     held.add(index)
             for index, client in enumerate(clients):
-                camera = options.camera1 if index == 0 else options.camera2
+                camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again
                         and client.poll() is None and lines_with(
                             os.path.join(client_dirs[index], "client.log"),
                             [f"Network game: {options.camera_again_after} turns compared"])):
-                    set_camera(client.pid, camera)
+                    if not set_camera(client.pid, camera):
+                        print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
+                        return 1
                     cameras_again.add(index)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
