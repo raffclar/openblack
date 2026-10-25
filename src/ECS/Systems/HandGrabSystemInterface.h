@@ -113,6 +113,9 @@ public:
 	/// For the debug tools: the empty hand takes a thing at once, as if picked up from where it stands; and gives what it
 	/// holds to a creature, as the Action button pressed over the creature does. Whether it could.
 	virtual bool TakeIntoHand(entt::entity /*object*/) { return false; }
+	/// For the debug tools: the empty hand of another player takes a thing at once, also outside the player's influence.
+	/// Whether it could.
+	virtual bool TakeIntoHandOf(PlayerNames /*player*/, entt::entity /*object*/) { return false; }
 	virtual bool GiveHeldTo(entt::entity /*creature*/) { return false; }
 	/// For the debug tools: the hand releases the thing that it holds, as a release of the Action button does. With no
 	/// velocity, the hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. This

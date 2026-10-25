@@ -10523,6 +10523,7 @@ std::vector<Scenario> Build()
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
 	AddMultiplayerFrontEndScenarios(all);
+	AddOtherGodScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
@@ -10681,7 +10682,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       IsPointerCommand(kind);
+	       kind == Kind::OtherGodHand || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10709,7 +10710,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 177> k_Names {
+	constexpr std::array<std::string_view, 178> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10887,6 +10888,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make a dance",
 	    "open a multiplayer box",
 	    "build the worship sites",
+	    "show another god's hand",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

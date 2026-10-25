@@ -57,8 +57,6 @@ public:
 	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
 	void ForgetClicks(uint32_t turn);
-	/// As ForgetClicks, for the hands of all the players
-	void ForgetAllClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
@@ -84,6 +82,7 @@ public:
 	[[nodiscard]] float GetCursorRaise() const override;
 	bool HandOver(entt::entity object) override;
 	bool TakeIntoHand(entt::entity object) override;
+	bool TakeIntoHandOf(PlayerNames player, entt::entity object) override;
 	bool LetGoAt(glm::vec3 velocity) override;
 	bool GiveHeldTo(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
@@ -119,7 +118,9 @@ private:
 	glm::vec3 Pull(components::HandGrab& grab, const Frame& frame);
 	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops. With
 	/// sounds, the hand also plays the sounds of the take.
-	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true);
+	/// Without askInfluence, the hand takes the thing outside its player's influence too (the debug tools only)
+	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true,
+	          bool askInfluence = true);
 	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take
 	void SendTake(components::HandGrab& grab, entt::entity object);
 	/// The pick-up sound of a thing, and the cry of a villager

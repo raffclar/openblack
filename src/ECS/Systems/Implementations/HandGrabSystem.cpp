@@ -12,6 +12,7 @@
 #include "HandGrabSystem.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/geometric.hpp>
 
@@ -1148,12 +1149,12 @@ void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 	Take(*grab, object, true, false);
 }
 
-void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds)
+void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds, bool askInfluence)
 {
 	auto& registry = _world->Entities();
 	// The pull may have ended on a thing that can no longer be taken: the hand lets go of it. The turn asks the influence
 	// at the point that the last report of the hand's player picked, the same on every computer.
-	if (!hand_grab::PassesGate(GateAt(object, _world->ReportedCollidePoint())))
+	if (!hand_grab::PassesGate(GateAt(object, askInfluence ? _world->ReportedCollidePoint() : std::nullopt)))
 	{
 		Empty(grab);
 		return;
@@ -1164,7 +1165,7 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	{
 		if (const auto tree = _world->TreeFromBigForest(object); tree.has_value() && Exists(*tree))
 		{
-			Take(grab, *tree, true, sounds);
+			Take(grab, *tree, true, sounds, askInfluence);
 		}
 		else
 		{
@@ -1635,24 +1636,17 @@ void HandGrabSystem::ForgetClicks(uint32_t turn)
 	}
 }
 
-void HandGrabSystem::ForgetAllClicks(uint32_t turn)
-{
-	_world->Entities().Each<HandClicked>([turn](entt::entity, HandClicked& clicked) {
-		constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
-		hand_click::Forget(clicked, turn, k_MillisecondsPerTurn);
-	});
-}
-
 void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
 {
-	// The input and the frames of this computer act with its own hand
-	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	// In a network game, every computer forgets the clicks of all the hands. The hand of this computer is not
-	// the same on all computers, so the turn must not use it.
+	// In a network game the turn forgets the old clicks of the hand of every player, the same on every computer
 	if (_world->IsNetworkGame())
 	{
-		ForgetAllClicks(turn);
+		static constexpr auto k_MillisecondsPerTurn = static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count());
+		_world->Entities().Each<HandClicked>(
+		    [turn](HandClicked& clicked) { hand_click::Forget(clicked, turn, k_MillisecondsPerTurn); });
 	}
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	auto* grab = Grab();
 	if (grab == nullptr)
 	{
@@ -1708,6 +1702,18 @@ bool HandGrabSystem::TakeIntoHand(entt::entity object)
 		return false;
 	}
 	Take(*grab, object, true);
+	return grab->state == HandGrab::State::Holding;
+}
+
+bool HandGrabSystem::TakeIntoHandOf(PlayerNames player, entt::entity object)
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	auto* grab = Grab();
+	if (grab == nullptr || grab->state != HandGrab::State::Empty || !Exists(object))
+	{
+		return false;
+	}
+	Take(*grab, object, true, true, false);
 	return grab->state == HandGrab::State::Holding;
 }
 
@@ -1818,9 +1824,11 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
 	// that it had as the hand took it.
 	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
-	if (const auto* grab = Grab(); grab != nullptr &&
-	                               (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
-	                               grab->tug.has_value() && Exists(grab->object))
+	// The turn runs on every computer: it never gives a hand a grab that only this computer would have
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	if (const auto* grab = std::as_const(*this).Grab();
+	    grab != nullptr && (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
+	    grab->tug.has_value() && Exists(grab->object))
 	{
 		auto& pulled = _world->Entities().Get<Transform>(grab->object);
 		pulled.position = grab->pullPosition;
