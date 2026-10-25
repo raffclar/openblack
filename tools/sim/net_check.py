@@ -516,7 +516,9 @@ def slot_cast(pid, player):
     if pixel is None:
         return done
     inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
-    done["held_seed"] = wait_for(lambda: (inspector_call(pid, "magic.state", {}) or {}).get("held_seed"), 120)
+    time.sleep(3.0)
+    done["tapped"] = [found for found in slot_icons(pid, player) if found.get("id") == icon["id"]]
+    done["held_seed"] = wait_for(lambda: (inspector_call(pid, "magic.state", {}) or {}).get("held_seed"), 240)
     if not done["held_seed"]:
         return done
     # The seed waits until it is ready, then the hand casts it on the land below the icon
@@ -526,11 +528,13 @@ def slot_cast(pid, player):
     time.sleep(0.5)
     inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
     time.sleep(1.0)
+    # A miracle cast from the hand while the button is down (as water pours) shows among the spells then
+    spells_held = (inspector_call(pid, "magic.state", {}) or {}).get("spells")
     inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
     time.sleep(3.0)
     state = inspector_call(pid, "magic.state", {}) or {}
-    done["cast"] = {"spells_before": spells_before, "spells_after": state.get("spells"), "held_after": state.get("held_seed"),
-                    "last_hand_result": state.get("last_hand_result")}
+    done["cast"] = {"spells_before": spells_before, "spells_while_held": spells_held, "spells_after": state.get("spells"),
+                    "held_after": state.get("held_seed"), "last_hand_result": state.get("last_hand_result")}
     return done
 
 
