@@ -116,6 +116,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The rise that the totem last showed, by which the hand's tooltip of its share comes
     {.component = "VillageTotem", .field = "lastShownRise", .marker = ""},
     {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
+    // The frames move the totem and its icon to the share they ease to, and move and show the second totem
+    {.component = "Transform", .field = "position", .marker = "VillageTotem"},
+    {.component = "Transform", .field = "position", .marker = "VillageTotemIcon"},
+    {.component = "*", .field = "", .marker = "VillageTotemGhost"},
+    // The fish of a farm's shoal swim in the frames while the camera is near, by the local random numbers; the turns
+    // read only the shoal's centre, which the farm keeps from when it was made
+    {.component = "FishFarm", .field = "shoal", .marker = ""},
+    {.component = "FishFarm", .field = "shownAlpha", .marker = ""},
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},

@@ -1026,7 +1026,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	provider->Add(
 	    Query("totems",
 	          "The village centres' totems: their town centre and icon, the share they stand at, ease to and are "
-	          "held at, how fast they move, whether the hand grips one, and their see-through second totem",
+	          "held at, how fast they move, whether the hand grips one, and their see-through second totem and "
+	          "whether it shows",
 	          {}, ResultKind::List),
 	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		    Json items = Json::array();
@@ -1044,6 +1045,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    item["held"] = totem.held;
 			    item["gripped"] = gripped.has_value() && *gripped == entity;
 			    item["ghost"] = Id(totem.ghost);
+			    item["ghost_shown"] = registry.Valid(totem.ghost) && !registry.AllOf<VillageTotemGhostHidden>(totem.ghost);
 			    items.push_back(std::move(item));
 		    });
 		    return items;

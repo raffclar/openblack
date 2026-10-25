@@ -26,6 +26,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
@@ -104,6 +105,12 @@ public:
 		return hand;
 	}
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
+	[[nodiscard]] bool IsOtherPlayersHand(entt::entity of) const override { return otherHands.contains(of); }
+	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
+	{
+		const auto found = reportedPlaces.find(of);
+		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
+	}
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
@@ -411,6 +418,9 @@ public:
 	entt::entity hand {entt::null};
 	/// The hand of the second player, which a command of that player acts with
 	entt::entity secondHand {entt::null};
+	/// The hands of the other gods of a network game, and where each last reported its hand
+	std::set<entt::entity> otherHands;
+	std::map<entt::entity, glm::vec3> reportedPlaces;
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
@@ -2344,4 +2354,24 @@ TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
 	system->DoUnlock(world->HandPlayer(), *handful);
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheSeedInTheHandOfAnotherGodIsDrawnAtTheHandItReported)
+{
+	auto& registry = world->registry;
+	const auto seed = registry.Create();
+	registry.Assign<Transform>(seed, glm::vec3(1.0f, 2.0f, 3.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->secondHand, HandHeldSeed {.seed = seed});
+	const auto ownSeed = registry.Create();
+	registry.Assign<Transform>(ownSeed, glm::vec3(7.0f, 8.0f, 9.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->hand, HandHeldSeed {.seed = ownSeed});
+	world->otherHands.insert(world->secondHand);
+	world->reportedPlaces[world->secondHand] = glm::vec3(40.0f, 5.0f, 60.0f);
+	system->PlaceOthersHeldForFrame(20);
+	// Upright at the reported hand, as another god's held thing is
+	const auto& placed = registry.Get<const Transform>(seed);
+	EXPECT_EQ(placed.position, glm::vec3(40.0f, 5.0f, 60.0f));
+	EXPECT_EQ(placed.rotation, glm::mat3(1.0f));
+	// The seed of the own hand is where the hand's pose puts it
+	EXPECT_EQ(registry.Get<const Transform>(ownSeed).position, glm::vec3(7.0f, 8.0f, 9.0f));
 }

@@ -75,6 +75,7 @@
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Graveyards.h"
@@ -215,7 +216,8 @@ void EachBySegment(const Place& place, SegmentPasses passes)
 	using namespace openblack::ecs::components;
 	do
 	{
-		passes.registry.Each<Components...>(place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+		passes.registry.Each<Components...>(
+		    place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	} while (passes.placed++ < passes.last);
 }
 
@@ -347,7 +349,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);

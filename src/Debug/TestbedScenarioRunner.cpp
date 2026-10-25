@@ -2068,7 +2068,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		std::ignore = hands.MakeHandsOf(command.player);
 		// The hand takes the thing before the first report, which asks the influence at no point
 		std::string held = "the hand holds nothing";
-		if (const auto object = ObjectAt(command.object); object.has_value() && Locator::handGrabSystem::has_value())
+		if (command.heldSeed.has_value() && Locator::magicSystem::has_value())
+		{
+			const auto seed = Locator::magicSystem::value().GiveSeedToHand(command.player, *command.heldSeed, 0, 1.0f);
+			held = seed != entt::null ? "the hand holds the seed" : "the hand can't hold the seed";
+		}
+		else if (const auto object = ObjectAt(command.object); object.has_value() && Locator::handGrabSystem::has_value())
 		{
 			held = Locator::handGrabSystem::value().TakeIntoHandOf(command.player, *object) ? "the hand holds the thing"
 			                                                                                : "the hand can't take the thing";
