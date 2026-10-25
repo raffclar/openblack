@@ -15,6 +15,7 @@
 
 #include <LHVMTypes.h>
 
+#include "3D/CameraPath.h"
 #include "3D/CameraTrack.h"
 #include "3D/DayNightClock.h"
 #include "3D/SkyDome.h"
@@ -131,6 +132,12 @@ void openblack::ecs::reflection::RegisterHandWrittenFields(entt::meta_ctx& conte
 	ReflectMoveState<components::MoveStateStepThroughTag>(context);
 	ReflectMoveState<components::MoveStateFinalStepTag>(context);
 	ReflectMoveState<components::MoveStateArrivedTag>(context);
+	// The point of a camera path is a component too, though its struct is not in src/ECS/Components
+	Reflect<CameraPoint>(context)
+	    .Field<&CameraPoint::start>("start")
+	    .Field<&CameraPoint::next>("next")
+	    .Field<&CameraPoint::position>("position")
+	    .Field<&CameraPoint::focus>("focus");
 	ReflectExtremes<uint32_t>(context);
 	ReflectExtremes<float>(context);
 	// A value that a script gave keeps its bits, whatever type the script gave it as

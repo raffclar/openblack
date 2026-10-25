@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <functional>
+#include <set>
 #include <span>
 #include <string>
 #include <string_view>
@@ -54,6 +56,26 @@ struct Hash
 	/// The list of the entities, then each component by its name, and with the fields each field as
 	/// "component.field". The hash mixes the entities and the components, not the fields.
 	std::vector<std::pair<std::string, uint64_t>> parts;
+	/// The components that have an entity but no registration. The hash leaves them out, so a change in them is never seen.
+	/// A correct game has none.
+	std::vector<std::string> unregistered;
+};
+
+/// What the logs and the tools say before the names of the unregistered components. The check tools look for these words.
+inline constexpr std::string_view k_UnregisteredWords = "unregistered component storage: ";
+
+/// The line that tells of unregistered components: the words, then the names with commas between them
+[[nodiscard]] std::string UnregisteredLine(std::span<const std::string> names);
+
+/// Remembers the unregistered components that were told of, so that each name is told of once
+class UnregisteredReporter
+{
+public:
+	/// The names that this reporter has not seen yet, in the order that they came. It keeps them as seen.
+	[[nodiscard]] std::vector<std::string> Fresh(std::span<const std::string> names);
+
+private:
+	std::set<std::string, std::less<>> _seen;
 };
 
 /// The hash of the synced state of a world: its entities and every saved component, without the presentation parts.

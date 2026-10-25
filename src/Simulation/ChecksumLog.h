@@ -22,7 +22,8 @@
 /// Tools: the file of the checksum of each turn of a run. Two builds of the game (for example the desktop build and the
 /// web build) that play the same land with the same seed and the same commands must write the same lines. Each line is
 /// one turn, as JSON: {"turn": N, "checksum": "...", "parts": {"name": "...", ...}}. The parts are there only when the
-/// run keeps them.
+/// run keeps them. A line also has "unregistered": ["name", ...] when components with no registration are in the world; the
+/// checksum leaves them out, and the check tools fail on them.
 namespace openblack::checksum_log
 {
 
@@ -33,7 +34,8 @@ constexpr std::string_view k_StandardOutput = "-";
 constexpr std::string_view k_OutputTag = "openblack-checksum ";
 
 /// The line of a turn
-[[nodiscard]] std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts);
+[[nodiscard]] std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts,
+                                 const std::vector<std::string>& unregistered = {});
 
 /// The turn and the checksum of a line, none when the line is not one
 struct Turn
@@ -49,7 +51,8 @@ class Writer
 public:
 	explicit Writer(const std::filesystem::path& path);
 	[[nodiscard]] bool IsOpen() const { return _toOutput || _file.is_open(); }
-	void Write(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts);
+	void Write(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts,
+	           const std::vector<std::string>& unregistered = {});
 	/// Writes each line of a dump of a turn, as {"dump_turn": N, "row": "..."}
 	void WriteDump(uint32_t turn, const std::vector<std::string>& rows);
 

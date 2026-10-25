@@ -230,6 +230,14 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const entt::registry& registry,
+                                                                          const entt::meta_ctx& context)
+{
+	std::vector<std::string> unregistered;
+	static_cast<void>(RegisteredStorages(registry, context, unregistered));
+	return unregistered;
+}
+
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
                                                                               const KeepInHash& keep, bool byField,
@@ -258,8 +266,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		hashes.entities = k_Offset;
 		mix(hashes.entities, out.Bytes());
 	}
-	std::vector<std::string> unregistered;
-	for (const auto& component : RegisteredStorages(registry, context, unregistered))
+	for (const auto& component : RegisteredStorages(registry, context, hashes.unregistered))
 	{
 		if (keep && !keep(component.name, {}, entt::null))
 		{
