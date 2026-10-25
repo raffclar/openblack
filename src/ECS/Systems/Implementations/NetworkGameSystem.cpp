@@ -259,12 +259,18 @@ void NetworkGameSystem::Update()
 		                   Locator::time::value().GetTurn());
 	}
 
-	// The god of this computer's slot: its pointer moves that god's hand
-	if (const auto& joined = _session->GetJoined();
-	    joined.has_value() && joined->slot.has_value() && Locator::handSystem::has_value() &&
-	    Locator::handSystem::value().GetOwnPlayer() != static_cast<PlayerNames>(*joined->slot))
+	// The god of this computer's slot: its pointer moves that god's hand. An observer has no god of its own.
+	if (const auto& joined = _session->GetJoined(); joined.has_value() && Locator::handSystem::has_value())
 	{
-		Locator::handSystem::value().SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+		auto& hands = Locator::handSystem::value();
+		if (!joined->slot.has_value())
+		{
+			hands.ClearOwnPlayer();
+		}
+		else if (!hands.IsOwnPlayer(static_cast<PlayerNames>(*joined->slot)))
+		{
+			hands.SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+		}
 	}
 
 	// The world of a loaded state goes on as the server's turn of the state is here: the next frame does that turn
