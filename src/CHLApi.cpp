@@ -620,7 +620,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	// The hand takes the miracle only when it is ready for an object
 	const bool holdsSomething =
 	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
-	    Locator::magicSystem::value().IsHandBusy();
+	    Locator::magicSystem::value().IsHandBusyOf(player);
 	const bool holdsCreature =
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(player).has_value();
 	if (!hand_grab::ReadyForObject(holdsSomething, holdsCreature))
@@ -6199,7 +6199,8 @@ void GetObjectHeld199() // 199 GET_OBJECT_HELD
 	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
 	if (!held.has_value() && Locator::magicSystem::has_value())
 	{
-		held = Locator::magicSystem::value().GetHeldSeed();
+		held = Locator::magicSystem::value().GetHeldSeedOf(
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE);
 	}
 	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
 	{

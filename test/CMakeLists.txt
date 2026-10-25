@@ -1777,3 +1777,5 @@ add_test(NAME test_draw_trace_compare
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
 )
+openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
+target_link_libraries(test_hand_held_seeds PRIVATE edt psys)
