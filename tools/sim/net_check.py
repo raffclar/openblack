@@ -532,7 +532,8 @@ def slot_fight(pids, seconds):
                                   {"params": {"records": 3000, "kinds": "learning"}, "max_bytes": 4000000})
         entries = answer.get("entries", []) if isinstance(answer, dict) else []
         learnt = [[entry["turn"], entry["fields"].get("creature"), entry["fields"].get("move"),
-                   entry["fields"].get("before"), entry["fields"].get("after")] for entry in entries]
+                   entry["fields"].get("before"), entry["fields"].get("after")] for entry in entries
+                  if entry["fields"].get("what") == "tendency"]
         leans = {}
         for _, creature, _, before, after in learnt:
             lean = leans.setdefault(str(creature), {"first": before, "last": after, "count": 0})
