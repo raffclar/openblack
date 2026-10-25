@@ -1178,7 +1178,7 @@
   "query": "living.apple_barrel"
  },
  {
-  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
+  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem and whether it shows",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"

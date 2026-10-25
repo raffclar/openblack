@@ -59,6 +59,9 @@ void openblack::ecs::reflection::RegisterFields_Components_v(entt::meta_ctx& con
 	    .Field<&components::VillageTotem::ghostIcon>("ghostIcon")
 	    .Field<&components::VillageTotem::lastShownRise>("lastShownRise")
 	    .Field<&components::VillageTotem::quietOnce>("quietOnce");
+	Reflect<components::VillageTotemIcon> {context};
+	Reflect<components::VillageTotemGhost> {context};
+	Reflect<components::VillageTotemGhostHidden> {context};
 	Reflect<components::Villager>(context)
 	    .Field<&components::Villager::life>("life")
 	    .Field<&components::Villager::birthTurn>("birthTurn")

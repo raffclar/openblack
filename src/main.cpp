@@ -151,6 +151,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
 		("join-part-at", "Tests: at this turn the world of this computer draws one synced random number more, so that it parts from the server's world and resynchronises.", cxxopts::value<uint32_t>())
+		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
@@ -352,6 +353,9 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			    .partAt =
 			        result.count("join-part-at") != 0 ? std::optional(result["join-part-at"].as<uint32_t>()) : std::nullopt,
 			    .partAgain = result.count("join-part-again") != 0,
+			    .testCreatureFile = result.count("join-creature") != 0
+			                            ? std::optional(result["join-creature"].as<std::string>())
+			                            : std::nullopt,
 			};
 		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)

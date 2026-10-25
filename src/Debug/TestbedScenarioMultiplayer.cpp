@@ -165,4 +165,43 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .object = 0,
 	                  .radius = 5.0f}},
 	});
+	// Another god's hand holds a miracle seed whose model shows in the hand, and that god's camera stands above it
+	all.push_back({
+	    .id = "multiplayer.other_god_seed",
+	    .name = "Another god's held miracle",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game in which the second player is another god. After a second, the "
+	                   "second player's hand holds a miracle seed, and the second player reports the hand 5 m above the "
+	                   "land to the west and the camera 30 m above that hand. This computer does not draw the hand of the "
+	                   "other god, or the effect of the seed in that hand.",
+	    .expected = "After a short time, the model of the miracle shows 5 m above the land to the west, with no hand about it "
+	                "and no effect round it. High above it, sparkles in the second player's colour come out one after "
+	                "another and fall down slowly.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .heldSeed = SpellSeedType::Food,
+	                  .radius = 5.0f}},
+	});
+	// The second god brings its player's creature at the start of a network game
+	all.push_back({
+	    .id = "multiplayer.brought_creature",
+	    .name = "A god brings its player's creature into a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north. After a second, the god of player two brings a creature "
+	                   "as at the start of a network game. The mind file LethysCreature of the game takes the place of the "
+	                   "creature file that the player of that god sends before the start.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple of player two, at once and with no "
+	                "sparkle. It belongs to player two, it knows every leash, and its mind and body come from the file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::BringCreature,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .mindFile = "LethysCreature"}},
+	});
 }
