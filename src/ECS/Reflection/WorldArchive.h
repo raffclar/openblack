@@ -29,6 +29,11 @@
 #include "BinaryArchive.h"
 #include "ComponentReflection.h"
 
+namespace openblack
+{
+class WorkerPool;
+}
+
 /// The archive of a whole world: every entity of a registry and every registered component of each entity. The archive
 /// keeps the entities with their versions and the list of free entities, so that a load into an empty registry gives
 /// the same entities. Each component has a block with its name and its length, and each field of a component has its
@@ -100,14 +105,22 @@ struct WorldHashes
 	std::vector<std::string> unregistered;
 };
 
-/// Whether a hash of the world keeps a part of a component. The hash asks first about the whole component (no field and
-/// no entity), then about the row of each entity (no field), then about each field of the row. The field is "*" for a
-/// component that saves as one value.
-using KeepInHash = std::function<bool(std::string_view component, std::string_view field, entt::entity entity)>;
+/// A part of the world that a hash does not include: a component or one field of it, of each entity or only of the
+/// entities that have a marker component
+struct HashLeaveOut
+{
+	/// The component, or "*" for each component
+	std::string_view component;
+	/// The field, or empty for the whole component. The field is "*" for a component that saves as one value.
+	std::string_view field;
+	/// The storage of the marker component, or null for each entity
+	const entt::sparse_set* marker {nullptr};
+};
 
-/// Makes the hashes of the parts of the world, with no save in memory of the whole world. With a keep function, the hash
-/// of a component leaves out the parts that the function does not keep. The hash of each component goes over its live
-/// rows in the order of the storage. With byField, the hashes also keep each field of each component on its own.
+/// Makes the hashes of the parts of the world, with no save in memory of the whole world. The hash of a component does
+/// not include the parts in leaveOut. The hash of each component goes over its live rows in the order of the storage.
+/// With byField, the hashes also keep each field of each component on its own. With a pool, the threads of the pool
+/// share the components, and the hashes are the same.
 /// Tools: gets the bytes that the hash takes of each field of a row (the field is "*" for a component that saves as one
 /// value), to compare two builds' worlds value by value
 using RowVisitor = std::function<void(std::string_view component, entt::entity entity, std::string_view field,
@@ -117,8 +130,31 @@ using RowVisitor = std::function<void(std::string_view component, entt::entity e
 /// these out, so the game must have none.
 [[nodiscard]] std::vector<std::string> UnregisteredStorages(const entt::registry& registry, const entt::meta_ctx& context);
 
-[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {},
-                                    bool byField = false, const RowVisitor& visit = {});
+/// Tools: the bytes that a hash took of each field of each row, to find the field that parts two computers. A build
+/// without the developer tools does not fill it.
+struct WorldRows
+{
+	struct Row
+	{
+		entt::entity entity {};
+		/// The index of the field in fields
+		uint32_t field {0};
+		/// The first byte of the value in bytes
+		uint32_t offset {0};
+		uint32_t size {0};
+	};
+	/// Each field as "component.field", in the order that the hash first took it. A component that saves as one value
+	/// has the field "*".
+	std::vector<std::string> fields;
+	/// Each field of each row, in the order of the hash: the components in the order of their names, the rows in the
+	/// order of the storage
+	std::vector<Row> rows;
+	std::vector<uint8_t> bytes;
+};
+
+[[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
+                                    std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the

@@ -79,10 +79,12 @@ private:
 };
 
 /// The hash of the synced state of a world: its entities and every saved component, without the presentation parts.
-/// With byField, the parts also keep the hash of each field.
+/// With byField, the parts also keep the hash of each field. With a pool, its threads share the work. Tools: with rows,
+/// it also keeps the bytes of each field of each row that the hash took.
 [[nodiscard]] Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context,
                           std::span<const PresentationPart> presentation, bool byField = false,
-                          const ecs::reflection::RowVisitor& visit = {});
+                          const ecs::reflection::RowVisitor& visit = {}, WorkerPool* pool = nullptr,
+                          ecs::reflection::WorldRows* rows = nullptr);
 
 /// The checksum of a turn: the hash of the synced state, mixed with the synced seed and the count of synced draws
 [[nodiscard]] uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws);

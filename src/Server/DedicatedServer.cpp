@@ -436,15 +436,26 @@ bool ServerWorld::Frame()
 			return out;
 		};
 		const auto ordersBefore = orders();
-		const auto before = hash();
+		// The time of each step in milliseconds, so that the tools can see the cost of a world state for a client
+		const auto timed = [](auto&& step) {
+			const auto start = std::chrono::steady_clock::now();
+			auto result = step();
+			return std::pair(std::move(result),
+			                 std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count());
+		};
+		const auto [before, hashMs] = timed(hash);
 		const auto drawsBefore = Locator::gameRandom::value().GetSyncedDraws();
-		const auto state = saves.WorldState();
-		const bool loaded = saves.LoadWorldState(state);
+		const auto [state, saveMs] = timed([&saves] { return saves.WorldState(); });
+		const auto [loaded, loadMs] = timed([&saves, &state] { return saves.LoadWorldState(state); });
 		const auto after = hash();
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The world state of turn {} ({} bytes) loaded again: {}, synced state the same: {}, draws {} and {}",
 		                   *_settings.reloadAt, state.size(), loaded, before.hash == after.hash, drawsBefore,
 		                   Locator::gameRandom::value().GetSyncedDraws());
+		SPDLOG_LOGGER_INFO(
+		    spdlog::get("game"),
+		    "The world state took {:.2f} ms to make and {:.2f} ms to load; the hash of each field took {:.2f} ms", saveMs,
+		    loadMs, hashMs);
 		const auto ordersAfter = orders();
 		for (const auto& [name, order] : ordersBefore)
 		{
@@ -567,6 +578,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	Locator::playerCommandSystem::value().SetSource(&host);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The row dump of the tools writes the rows of the turn at which the world of a client parts
+	host.SetPartListener([](uint8_t seat, uint32_t turn) {
+		Locator::syncChecksumSystem::value().DumpPart(turn, fmt::format("slot {} parts", seat), seat);
+	});
+#endif
 	// A client whose world parted gets the world of the server, at the start of the next turn
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
@@ -682,6 +699,12 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 	// network game
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (settings.rowDumpPath.has_value() && !checksums.StartRowDump(*settings.rowDumpPath, settings.rowDump))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
+	}
+#endif
 	checksums.SetTurnListener([&onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
 		if (onTurn)

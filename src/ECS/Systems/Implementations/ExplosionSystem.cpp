@@ -17,7 +17,6 @@
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
-#include "Common/PortableRotations.h"
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
@@ -244,7 +243,7 @@ void ExplosionSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 			    .creator = &DustCreator(),
 			    .position = sprite.position,
 			    // The sprite's roll is read from the rotation about the vertical
-			    .rotation = glm::mat3(portable_math::EulerAngleY(-sprite.angle)),
+			    .rotation = glm::mat3(glm::eulerAngleY(-sprite.angle)),
 			    .scale = sprite.halfWidth,
 			    .stretch = 1.0f,
 			    .alpha = sprite.alpha,

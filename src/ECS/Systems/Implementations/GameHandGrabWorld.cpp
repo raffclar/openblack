@@ -33,7 +33,6 @@
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
-#include "Common/PortableMath.h"
 #include "Common/X87Angle.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureHelp.h"
