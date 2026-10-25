@@ -2096,7 +2096,7 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		// The game's own mind file takes the place of the file that the god's player sends before the start
 		auto& fileSystem = Locator::filesystem::value();
 		const auto path = fileSystem.GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
-		const auto bytes = fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+		const auto bytes = creaturemind::ReadFileBytes(path).value_or(std::vector<uint8_t> {});
 		const auto brought = ecs::creature_from_file::Bring(command.player, bytes);
 		return brought.creature.has_value() ? fmt::format("creature {}", entt::to_integral(*brought.creature))
 		                                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal));
