@@ -493,14 +493,13 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	std::vector<entt::entity> creatures;
 	registry.Each<const Creature, const Transform>(
 	    [&creatures](entt::entity creature, const Creature&, const Transform&) { creatures.push_back(creature); });
-	const auto handHeld = world.HandHeldCreature();
 	const float objectWeight = world.WeightOf(object);
 	for (const auto creature : creatures)
 	{
 		// Not one the hand is holding, one that plans to fight or is fighting, one a script controls, nor one whose plan
 		// is a catch, a catch still waiting for its body included. Also not one that may not take up a reaction now,
 		// unless a desire was made its only desire.
-		if (handHeld == creature || PlansToFightOrCatch(world, registry, creature) ||
+		if (world.HandHolds(creature) || PlansToFightOrCatch(world, registry, creature) ||
 		    registry.AllOf<CreatureFighting>(creature) || registry.AllOf<ScriptControlled>(creature) ||
 		    !world.FreeToCatch(creature) || registry.AllOf<PendingCatch>(creature))
 		{

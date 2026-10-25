@@ -239,7 +239,7 @@ public:
 		return stepTravel;
 	}
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity /*creature*/) const override { return catchMs; }
-	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override { return std::nullopt; }
+	[[nodiscard]] bool HandHolds(entt::entity /*creature*/) const override { return false; }
 	[[nodiscard]] bool HasCreatureActions() const override { return true; }
 	[[nodiscard]] bool CanBeCaught(entt::entity /*object*/) const override { return true; }
 	[[nodiscard]] bool FreeToCatch(entt::entity /*creature*/) const override { return freeToCatch; }

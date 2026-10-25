@@ -71,11 +71,31 @@ namespace feedback = openblack::creature_feedback;
 
 namespace
 {
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// The player whose hand this computer moves: the first player, unless a network game gave this computer another god
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 
+/// The left hand that this computer moves and draws. Only the frames keep their hold of a creature on it.
 entt::entity PlayerHand()
 {
-	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
+/// The left hand of a player in the world, none for a player with no hands
+std::optional<entt::entity> HandOf(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto hands = Locator::handSystem::value().GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
+	return (*hands)[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 
 /// Whether the hand tells the mind how it treated the creature as it lets go, from how still the creature is now
@@ -267,48 +287,69 @@ bool CreatureHandSystem::Grab()
 	}
 	else
 	{
-		DoLock(k_LocalPlayer, *nearest);
+		DoLock(OwnPlayer(), *nearest);
 	}
 	return true;
 }
 
-std::optional<entt::entity> CreatureHandSystem::GetLockedCreature() const
+std::optional<entt::entity> CreatureHandSystem::GetLockedCreature(PlayerNames player) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	if (!Locator::handSystem::has_value())
+	const auto hand = HandOf(player);
+	if (!hand.has_value() || !registry.Valid(*hand))
 	{
 		return std::nullopt;
 	}
-	const auto* locked = registry.TryGet<const HandLockedCreature>(PlayerHand());
+	const auto* locked = registry.TryGet<const HandLockedCreature>(*hand);
 	return locked != nullptr && registry.Valid(locked->creature) ? std::optional(locked->creature) : std::nullopt;
 }
 
-void CreatureHandSystem::DoLock([[maybe_unused]] PlayerNames player, entt::entity creature)
+bool CreatureHandSystem::IsLocked(entt::entity creature) const
 {
-	// There is one human, with the left hand of this computer
+	// Only the hand of the creature's own player can hold it
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
+	return body != nullptr && GetLockedCreature(body->owner) == creature;
+}
+
+void CreatureHandSystem::DoLock(PlayerNames player, entt::entity creature)
+{
+	// The lock goes on the left hand of the player of the command
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!Locator::handSystem::has_value() || !registry.Valid(creature) || !MayHold(creature))
+	const auto hand = HandOf(player);
+	if (!hand.has_value() || !registry.Valid(*hand) || !registry.Valid(creature) || !MayHoldFor(player, creature))
 	{
 		return;
 	}
-	registry.AssignOrReplace<HandLockedCreature>(PlayerHand(), HandLockedCreature {.creature = creature});
+	registry.AssignOrReplace<HandLockedCreature>(*hand, HandLockedCreature {.creature = creature});
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The hand of player {} holds creature {}", static_cast<int>(player),
+		                   entt::to_integral(creature));
+	}
 	if (Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().HandTookHold(creature);
 	}
 }
 
-void CreatureHandSystem::DoUnlock([[maybe_unused]] PlayerNames player, entt::entity creature)
+void CreatureHandSystem::DoUnlock(PlayerNames player, entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!Locator::handSystem::has_value())
+	const auto hand = HandOf(player);
+	if (!hand.has_value() || !registry.Valid(*hand))
 	{
 		return;
 	}
-	if (const auto* locked = registry.TryGet<const HandLockedCreature>(PlayerHand());
+	if (const auto* locked = registry.TryGet<const HandLockedCreature>(*hand);
 	    locked != nullptr && locked->creature == creature)
 	{
-		registry.Remove<HandLockedCreature>(PlayerHand());
+		registry.Remove<HandLockedCreature>(*hand);
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "The hand of player {} lets go of creature {}", static_cast<int>(player),
+			                   entt::to_integral(creature));
+		}
 	}
 }
 
@@ -390,12 +431,17 @@ void CreatureHandSystem::GiveCameraBack()
 
 bool CreatureHandSystem::MayHold(entt::entity creature) const
 {
+	return MayHoldFor(OwnPlayer(), creature);
+}
+
+bool CreatureHandSystem::MayHoldFor(PlayerNames player, entt::entity creature)
+{
 	const auto holdable = HoldableOf(Locator::entitiesRegistry::value(), creature);
 	if (!holdable.has_value())
 	{
 		return false;
 	}
-	if (!creature_hand::MayHold(*holdable, k_LocalPlayer))
+	if (!creature_hand::MayHold(*holdable, player))
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"),
 		                   "The hand can't hold creature {}: it isn't the player's own, is an ogre, or is asleep, frozen "
@@ -416,7 +462,7 @@ creature_hand::InteractTip CreatureHandSystem::InteractTipOver(entt::entity crea
 	}
 	const auto* contact = Locator::handSystem::has_value() ? registry.TryGet<const HandOnCreature>(PlayerHand()) : nullptr;
 	const bool held = contact != nullptr && contact->creature == creature;
-	return creature_hand::InteractTipOf(k_LocalPlayer, *holdable, held, handInInfluence);
+	return creature_hand::InteractTipOf(OwnPlayer(), *holdable, held, handInInfluence);
 }
 
 bool CreatureHandSystem::IsClick() const
@@ -453,7 +499,7 @@ void CreatureHandSystem::Bruise(entt::entity creature, const glm::vec3& rayOrigi
 		Locator::playerCommandSystem::value().Submit(bruise);
 		return;
 	}
-	ApplyBruise(k_LocalPlayer, bruise);
+	ApplyBruise(OwnPlayer(), bruise);
 }
 
 bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mirrored,
@@ -560,7 +606,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	if (_cameraModel != nullptr)
 	{
 		const bool playerHasCreature =
-		    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer).has_value();
+		    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(OwnPlayer()).has_value();
 		_cameraModel->SetTarget(playerHasCreature ? InteractViewOf(registry, creatureEntity) : std::nullopt);
 	}
 
@@ -665,7 +711,7 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 void CreatureHandSystem::LookAtReportedHand()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto creatureEntity = GetLockedCreature();
+	const auto creatureEntity = GetLockedCreature(PlayerNames::PLAYER_ONE);
 	if (!creatureEntity.has_value() || IsHeldByCommand() ||
 	    !registry.AllOf<Creature, CreatureAnimation, Transform>(*creatureEntity))
 	{
@@ -844,7 +890,7 @@ void CreatureHandSystem::Release()
 	}
 	else
 	{
-		DoUnlock(k_LocalPlayer, creature);
+		DoUnlock(OwnPlayer(), creature);
 	}
 }
 

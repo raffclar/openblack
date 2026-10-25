@@ -4187,12 +4187,13 @@ void CreatureMindSystem::PlanTurn()
 	std::vector<entt::entity> creatures;
 	registry.Each<const Creature, CreatureMindState>(
 	    [&creatures](entt::entity entity, const Creature&, CreatureMindState&) { creatures.push_back(entity); });
-	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
-	const auto held =
-	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetLockedCreature() : std::nullopt;
+	// While the hand of a player holds a creature, it decides nothing: it keeps the plan that it had
+	const auto held = [](entt::entity creature) {
+		return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature);
+	};
 	for (const auto entity : creatures)
 	{
-		if (auto* mind = registry.TryGet<CreatureMindState>(entity); mind != nullptr && held != entity)
+		if (auto* mind = registry.TryGet<CreatureMindState>(entity); mind != nullptr && !held(entity))
 		{
 			PlanCreature(entity, *mind);
 		}
@@ -4206,10 +4207,9 @@ void CreatureMindSystem::PlanCreatureTurn(entt::entity creature)
 	{
 		return;
 	}
-	// While the player's hand holds a creature, it decides nothing: it keeps the plan that it had
-	const auto held =
-	    Locator::creatureHandSystem::has_value() ? Locator::creatureHandSystem::value().GetLockedCreature() : std::nullopt;
-	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && held != creature)
+	// While the hand of a player holds a creature, it decides nothing: it keeps the plan that it had
+	const bool held = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature);
+	if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr && !held)
 	{
 		PlanCreature(creature, *mind);
 	}

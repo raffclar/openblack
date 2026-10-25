@@ -10,6 +10,12 @@ lockstep). At the end it compares the checksum of each turn on the server and on
     python tools/sim/net_check.py --testbed --input tools/sim/hand_inputs/testbed.json --turns 600
     python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
     python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --turns 2000 --hold-creature 2:2942.91,2607.57
+
+With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
+--hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
+the hand holds and strokes it, lets go, clicks it for the leash and leads it with a tap on the land. The creature walks,
+so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the pointer.
 
 With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
 of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
@@ -275,6 +281,87 @@ def set_camera(pid, camera):
                    stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
 
 
+def inspector_call(pid, query, request):
+    """One request to the inspector of a client, its answer (none when it fails)"""
+    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    done = subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", query, json.dumps(request)],
+                          timeout=120, capture_output=True, text=True, creationflags=flags)
+    try:
+        return json.loads(done.stdout).get("result")
+    except ValueError:
+        return None
+
+
+def hold_creature(pid, near):
+    """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
+    and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
+    pixel where the interface picks the creature."""
+    x, z = (float(value) for value in near.split(","))
+    found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z], "radius": 600,
+                                                "limit": 1})
+    items = found.get("items", []) if isinstance(found, dict) else []
+    if not items:
+        print("hold: no creature near", near)
+        return
+    creature = items[0]["id"]
+    def pixel_on_creature():
+        """Looks at the creature from each side in turn, and gives a pixel where the interface picks it: the pointer goes
+        to points of the creature's body, from its feet up"""
+        for yaw in (0, 90, 180, 270):
+            inspector_call(pid, "camera.frame", {"params": {"id": creature, "yaw": yaw, "pitch": 40, "distance": 18}})
+            time.sleep(1.0)
+            for height in (1.0, 2.0, 0.5, 3.0, 1.5, 4.0, 2.5):
+                found = inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": [x, z],
+                                                             "radius": 600, "limit": 1})
+                items = found.get("items", []) if isinstance(found, dict) else []
+                if not items:
+                    return None
+                at = items[0]["position"]
+                moved = inspector_call(pid, "input.pointer", {"params": {"world": [at[0], at[1] + height, at[2]],
+                                                                         "timing": "immediate"}})
+                time.sleep(0.2)
+                pick = inspector_call(pid, "players.pick", {})
+                pointer = moved.get("pointer") if isinstance(moved, dict) else None
+                if os.environ.get("NET_CHECK_DEBUG"):
+                    print("hold debug", yaw, height, json.dumps(moved)[:160], pick.get("object") if isinstance(pick, dict) else pick)
+                if isinstance(pick, dict) and pick.get("object") == creature and isinstance(pointer, list):
+                    return [int(value) for value in pointer]
+        return None
+
+    # The creature walks among the houses and the people: the search tries again a while later
+    pixel = None
+    for _ in range(8):
+        pixel = pixel_on_creature()
+        if pixel is not None:
+            break
+        time.sleep(4.0)
+    if pixel is None:
+        print("hold: the pointer found no pixel on creature", creature)
+        return
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
+    time.sleep(1.0)
+    # The hand goes round a little on the body while it holds the creature
+    for dx, dy in ((10, 0), (0, 10), (-10, 0), (0, -10), (0, 0)):
+        inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0] + dx, pixel[1] + dy]}})
+        time.sleep(0.3)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+    # The camera flies back to where it was before the hold
+    time.sleep(8.0)
+    # A click on the creature puts the leash on
+    pixel = pixel_on_creature()
+    if pixel is None:
+        print("hold: the pointer found no pixel on creature", creature, "for the leash")
+        return
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
+    time.sleep(2.0)
+    # A tap on the land below leads the creature there
+    inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0], min(pixel[1] + 300, 1000)], "timing": "immediate"}})
+    time.sleep(0.5)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
+    print(f"hold: held creature {creature} at pixel {pixel}, clicked it and tapped the land")
+
+
 def shifted_input(path, folder, extra=0):
     """The recorded input with its frames moved after the start of the network game, and the extra frames"""
     with open(path, encoding="utf-8") as file:
@@ -313,6 +400,11 @@ def main():
     parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--hold-creature", action="append", default=[],
+                        help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
+                        "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
+                        "it for the leash and leads it with a tap on the land. Give it once for each client.")
+    parser.add_argument("--hold-after", type=int, default=300, help="the turns before --hold-creature")
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
@@ -400,7 +492,8 @@ def main():
             else:
                 command.append("--sim-still-hand")
             camera = options.camera1 if index == 0 else options.camera2
-            if camera:
+            holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
+            if camera or index in holds:
                 command += ["--inspect-port", "0"]
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
@@ -420,9 +513,17 @@ def main():
                     set_camera(client.pid, camera)
         started = time.monotonic()
         stopped_second = False
+        holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
+        held = {index for index in holds if index >= len(clients)}
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
             if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
                 break
+            for index, near in holds.items():
+                if index not in held and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"),
+                        [f"Network game: {options.hold_after} turns compared"]):
+                    hold_creature(clients[index].pid, near)
+                    held.add(index)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
