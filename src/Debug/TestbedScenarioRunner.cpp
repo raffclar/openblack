@@ -25,6 +25,7 @@
 #include <system_error>
 #include <type_traits>
 #include <variant>
+#include <vector>
 
 #include <LHVM.h>
 #include <MindFile.h>
@@ -2248,6 +2249,28 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::BuildWorshipSites:
+	{
+		if (!Locator::worshipSiteSystem::has_value())
+		{
+			return "no worship sites";
+		}
+		auto& sites = Locator::worshipSiteSystem::value();
+		auto& registry = Locator::entitiesRegistry::value();
+		std::vector<entt::entity> unbuilt;
+		registry.Each<const ecs::components::WorshipSite>(
+		    [&](entt::entity site, const ecs::components::WorshipSite& component) {
+			    if (component.player == command.player && !sites.IsBuilt(site))
+			    {
+				    unbuilt.push_back(site);
+			    }
+		    });
+		for (const auto site : unbuilt)
+		{
+			sites.BuildBy(site, 1.0f);
+		}
+		return fmt::format("{} worship sites built", unbuilt.size());
+	}
 	case Kind::HandRelease:
 		if (!Locator::handGrabSystem::has_value() || !Locator::handGrabSystem::value().LetGoAt(command.velocity))
 		{
@@ -2747,9 +2770,9 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
-	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
-	    command.kind == Kind::MakeDance)
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
+	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3479,6 +3502,7 @@ void Runner::Give(const Command& command)
 	case Kind::PlayGuidanceVoice:
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
+	case Kind::BuildWorshipSites:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:

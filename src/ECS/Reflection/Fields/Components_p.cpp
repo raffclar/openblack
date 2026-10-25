@@ -44,6 +44,7 @@ void openblack::ecs::reflection::RegisterFields_Components_p(entt::meta_ctx& con
 	    .Field<&components::Player::handTookFrom>("handTookFrom")
 	    .Field<&components::Player::damageFrom>("damageFrom")
 	    .Field<&components::Player::lastCast>("lastCast")
+	    .Field<&components::Player::lastSeedGained>("lastSeedGained")
 	    .Field<&components::Player::windResistance>("windResistance")
 	    .Field<&components::Player::miracles>("miracles");
 	Reflect<components::PlayerCreatures>(context).Field<&components::PlayerCreatures::acquired>("acquired");

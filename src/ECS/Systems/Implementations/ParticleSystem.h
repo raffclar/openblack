@@ -267,7 +267,7 @@ public:
 private:
 	/// A thing holding a visual a script started has been deleted: its visual ends at once
 	void OnScriptSpotVisualGone(entt::registry& registry, entt::entity thing);
-	/// Steps the effect of a selection at the hand
+	/// The effect of a selection at the hand steps
 	void StepSelectionEffect(float gameSeconds, const HandFrame& hand);
 	std::vector<entt::scoped_connection> _connections;
 	/// The effect that throws the pieces of what the blasts break
@@ -279,7 +279,7 @@ private:
 	/// all the time, started again whenever they end
 	EffectId _gestureTrails {k_NoEffect};
 	EffectId _gestureChain {k_NoEffect};
-	/// The effect round the hand while the leash picker is open
+	/// The effect round the hand while the miracle selection or the leash picker is open
 	EffectId _selectionEffect {k_NoEffect};
 	struct Running
 	{
