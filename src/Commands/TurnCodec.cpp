@@ -217,6 +217,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
 	               [](const HandShakeOff& /*command*/) {},
 	               [&out](const GripDust& command) { out.Vector(command.point); },
+	               [](const CreatureFightCheat& /*command*/) {},
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -469,6 +470,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
+	case CommandTag::CreatureFightCheat:
+		action = CreatureFightCheat {};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -582,6 +586,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
 	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
+	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
 	                  },
 	                  action);
 }
@@ -622,6 +627,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
 	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
 	                                     [](const GripDust& /*command*/) { return k_Vector; },
+	                                     [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
 	                                 },
 	                                 action);
 	return 1 + fields;

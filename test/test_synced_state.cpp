@@ -133,6 +133,14 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheStaticOfAFizzOnlyThisComputerSlidesIsNotSynced)
+{
+	// Each computer slides the static only while it draws the creature. The turns read how far the creature fizzed.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "fizz"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

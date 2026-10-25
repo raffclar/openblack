@@ -46,6 +46,7 @@
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/FightCameraModel.h"
 #include "Commands/PlayerCommands.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Vector.h"
 #include "Creature/CreatureArena.h"
@@ -123,6 +124,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Input/GameActionMapInterface.h"
+#include "Input/LocalPlayer.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "MagicLiving.h"
@@ -442,9 +444,31 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 
 /// Whether the hand of the player holds nothing: no thing and no miracle. A hand that only starts to take a thing holds
 /// nothing yet.
+/// The player whose hand this computer moves. The fight view, the sparkles, the presses, the help and the music
+/// follow the creature of this player. The turns use the sender of each command.
+PlayerNames OwnPlayer()
+{
+	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
+}
+
+/// Whether a human god plays the player: the player has hands. Each computer has the same hands, thus the turns can
+/// read this.
+bool IsHumanGod(PlayerNames player)
+{
+	if (!Locator::handSystem::has_value())
+	{
+		return player == PlayerNames::PLAYER_ONE;
+	}
+	return Locator::handSystem::value().GetHandsOf(player).has_value();
+}
+
+/// The player whose creature learns its lean from the blows and the blocks that the player queues. In a game alone,
+/// this is the player at this computer.
+constexpr PlayerNames k_LearningPlayer = PlayerNames::PLAYER_ONE;
+
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value())
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(OwnPlayer()).has_value())
 	{
 		return false;
 	}
@@ -452,7 +476,7 @@ bool HandHoldsNothing(const ecs::Registry& registry)
 	{
 		return true;
 	}
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* grab = registry.Valid(hand) ? registry.TryGet<const HandGrab>(hand) : nullptr;
 	return grab == nullptr || grab->state == HandGrab::State::Empty || grab->state == HandGrab::State::Grabbing ||
 	       grab->state == HandGrab::State::Taking;
@@ -518,10 +542,6 @@ void FaceOpponentNow(ecs::Registry& registry, entt::entity creature, entt::entit
 	}
 }
 
-/// Who is in a duel with whom, both of them still at it
-/// The player at this computer
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
-
 /// A player's creature for every purpose of the game: the first one they got. Creatures are made as they are got, so
 /// it is the earliest made of theirs. This stands in for the game-wide lookup of a player's creature until there is one.
 std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, PlayerNames player)
@@ -536,6 +556,7 @@ std::optional<entt::entity> PrimaryCreatureOf(const ecs::Registry& registry, Pla
 	return first;
 }
 
+/// Who is in a duel with whom, both of them still at it
 bool InDuel(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* fighting = registry.TryGet<const CreatureFighting>(creature);
@@ -1012,8 +1033,8 @@ CreatureFightSystemInterface::StartResult CreatureFightSystem::StartFight(entt::
 		auto& fighter = fighting.fighter;
 		fighter.health = fight::FightHealthAtStart(bodyNeeds.life);
 		fighter.stamina = fight::StaminaAtStart(bodyNeeds.energy, bodyNeeds.exhaustion);
-		// The human player directs their own creature; any other fights by itself
-		fighter.control = body.owner == k_LocalPlayer ? fight::Control::Player : fight::Control::Computer;
+		// A human god directs their own creature, in each slot of a network game. The computer fights any other.
+		fighter.control = IsHumanGod(body.owner) ? fight::Control::Player : fight::Control::Computer;
 		fighter.computerWaitMs = fight::k_ComputerWaitsAtStartMs;
 		// The creature that started the fight takes its learnt lean to choose its moves by; the other keeps the lean
 		// of the last fight that it started
@@ -1118,7 +1139,7 @@ void CreatureFightSystem::DrawMarks(float realMs, const glm::vec3& eye)
 	auto& registry = Locator::entitiesRegistry::value();
 	const bool step = _marksPace.Advance(realMs);
 	// Only the local player's creature shows its sparkles, for as long as it has an opponent
-	const auto self = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto self = PrimaryCreatureOf(registry, OwnPlayer());
 	auto* fighting = self.has_value() ? registry.TryGet<CreatureFighting>(*self) : nullptr;
 	if (fighting != nullptr && registry.Valid(fighting->opponent))
 	{
@@ -1277,7 +1298,7 @@ void CreatureFightSystem::TryStartView(entt::entity first, entt::entity second, 
 {
 	auto& camera = Locator::camera::value();
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto own = PrimaryCreatureOf(registry, OwnPlayer());
 	const bool involved = own == first || own == second;
 	const bool scripted = registry.AnyOf<ScriptControlled>(first) || registry.AnyOf<ScriptControlled>(second);
 	// The camera is too far when it is far from the arena now, and so is the land in the middle of the screen. A double
@@ -1719,7 +1740,7 @@ CreatureFightSystem::FindOrMakeArena(const glm::vec3& point, entt::entity creatu
 std::optional<entt::entity> CreatureFightSystem::PlayersFighter() const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto creature = PrimaryCreatureOf(registry, OwnPlayer());
 	if (!creature.has_value() || !InDuel(registry, *creature))
 	{
 		return std::nullopt;
@@ -1766,7 +1787,7 @@ bool CreatureFightSystem::Press(const glm::vec3& rayOrigin, const glm::vec3& ray
 		{
 			return;
 		}
-		const auto own = PrimaryCreatureOf(registry, k_LocalPlayer);
+		const auto own = PrimaryCreatureOf(registry, OwnPlayer());
 		if (!own.has_value() || !registry.AllOf<CreatureFighting>(*own))
 		{
 			return;
@@ -1917,16 +1938,16 @@ void CreatureFightSystem::Send(const player_commands::Action& action)
 		    using Kind = std::decay_t<decltype(command)>;
 		    if constexpr (std::is_same_v<Kind, player_commands::FightGround>)
 		    {
-			    DoGroundPress(k_LocalPlayer, command.creature, command.point, command.replace);
+			    DoGroundPress(OwnPlayer(), command.creature, command.point, command.replace);
 		    }
 		    else if constexpr (std::is_same_v<Kind, player_commands::FightMove>)
 		    {
-			    DoMove(k_LocalPlayer, command.target,
+			    DoMove(OwnPlayer(), command.target,
 			           {.kind = static_cast<fight::Move::Kind>(command.kind), .value = command.value}, command.replace);
 		    }
 		    else if constexpr (std::is_same_v<Kind, player_commands::FightCharge>)
 		    {
-			    DoCharge(k_LocalPlayer, static_cast<float>(command.heldMs));
+			    DoCharge(OwnPlayer(), static_cast<float>(command.heldMs));
 		    }
 	    },
 	    action);
@@ -1974,6 +1995,54 @@ void CreatureFightSystem::DoCharge(PlayerNames player, float heldMs)
 	if (const auto self = PrimaryCreatureOf(registry, player); self.has_value())
 	{
 		ReleaseCharge(*self, heldMs);
+	}
+}
+
+void CreatureFightSystem::DoFightCheat(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto self = PrimaryCreatureOf(registry, player);
+	if (!self.has_value())
+	{
+		return;
+	}
+	if (Locator::leashSystem::has_value() && Locator::leashSystem::value().IsLeashed(*self))
+	{
+		Locator::leashSystem::value().TakeOff(*self);
+	}
+	// A creature in a duel stops its fight with no winner
+	if (IsDuelling(*self))
+	{
+		AbortFight(*self);
+		return;
+	}
+	// Any other creature fights the nearest creature by the distance on the map. The first creature found at the least
+	// distance wins.
+	const auto at = registry.Get<const Transform>(*self).position;
+	std::optional<entt::entity> nearest;
+	float least = std::numeric_limits<float>::max();
+	registry.Each<const Creature, const Transform>(
+	    [&nearest, &least, at, own = *self](entt::entity entity, const Creature& /*creature*/, const Transform& transform) {
+		    if (entity == own)
+		    {
+			    return;
+		    }
+		    const auto distance = gutils::GetDistanceInMetres(at, transform.position);
+		    if (distance < least)
+		    {
+			    least = distance;
+			    nearest = entity;
+		    }
+	    });
+	if (nearest.has_value())
+	{
+		const auto result = StartFight(*self, *nearest);
+		fight_transcript::Note(*self, "fight_cheat", [&] {
+			return fight_transcript::Fields {{"creature", fight_transcript::Id(*self)},
+			                                 {"opponent", fight_transcript::Id(*nearest)},
+			                                 {"player", static_cast<int32_t>(player)},
+			                                 {"started", result == StartResult::Started}};
+		});
 	}
 }
 
@@ -3016,9 +3085,9 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	auto& fighter = fighting.fighter;
 	const auto front = fighter.queue.Front();
 	const bool inRange = fight::WithinRange(fighting.arena, opponentAt);
-	// The help record counts the moves of the player's creature
+	// The help record of this computer counts the moves of the creature of its own player
 	if (fight::CountsHelpEvent(fighter.state, inRange, front.has_value()) &&
-	    registry.Get<const Creature>(creature).owner == k_LocalPlayer && Locator::helpProfileSystem::has_value())
+	    registry.Get<const Creature>(creature).owner == OwnPlayer() && Locator::helpProfileSystem::has_value())
 	{
 		Locator::helpProfileSystem::value().Trigger(fight::HelpEventOf(front->move.kind));
 	}
@@ -3043,7 +3112,7 @@ void CreatureFightSystem::CheckQueue(entt::entity creature)
 	// The creature learns from the moves it makes, whoever asked for them
 	auto* record = registry.TryGet<CreatureFightRecord>(creature);
 	if (order->kind != fight::Order::Kind::EndBlock && front.has_value() && record != nullptr &&
-	    fight::LearnsFromMove(front->move.kind, registry.Get<const Creature>(creature).owner == k_LocalPlayer))
+	    fight::LearnsFromMove(front->move.kind, registry.Get<const Creature>(creature).owner == k_LearningPlayer))
 	{
 		const auto before = record->tendency;
 		record->tendency = fight::LearnTendency(record->tendency, front->move.kind);
@@ -3217,7 +3286,7 @@ void CreatureFightSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	// A press held on a body charges the sparkle added last
 	if (_markHeld)
 	{
-		if (const auto self = PrimaryCreatureOf(registry, k_LocalPlayer))
+		if (const auto self = PrimaryCreatureOf(registry, OwnPlayer()))
 		{
 			if (auto* held = registry.TryGet<CreatureFighting>(*self))
 			{
@@ -4226,7 +4295,7 @@ void CreatureFightSystem::KnockedOutTurn(entt::entity entity)
 bool CreatureFightSystem::FightMusicHeard(const glm::vec3& camera) const
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto creature = PrimaryCreatureOf(registry, k_LocalPlayer);
+	const auto creature = PrimaryCreatureOf(registry, OwnPlayer());
 	if (!creature.has_value())
 	{
 		return false;

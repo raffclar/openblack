@@ -186,6 +186,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "row-dump-keep", .takesValue = true},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "test-commands"},
 };
 
 /// Whether an option of the command line, by its long name, is one of the developer options

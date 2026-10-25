@@ -347,6 +347,13 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureFightCheat>)
+		    {
+			    if (openblack::Locator::creatureFightSystem::has_value())
+			    {
+				    openblack::Locator::creatureFightSystem::value().DoFightCheat(command.player);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))

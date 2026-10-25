@@ -149,7 +149,7 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 class LockstepTest: public ::testing::Test
 {
 protected:
-	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000)
+	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, bool testCommands = false)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
@@ -159,7 +159,8 @@ protected:
 		        .godsToStart = gods,
 		        .godSlots = 7,
 		        .comeBackMicroseconds = comeBack,
-		        .keptTurns = 3200});
+		        .keptTurns = 3200,
+		        .testCommands = testCommands});
 	}
 
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
@@ -318,6 +319,28 @@ TEST_F(LockstepTest, AClientCannotSendTheLeaveOfTheServer)
 	Frames({&alice}, 3);
 	EXPECT_EQ(host->RefusedBlocks(), 2u);
 	EXPECT_EQ(host->Seats()[0].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, AServerLeavesOutTheFightCheatWithoutItsTestCommands)
+{
+	MakeHost(1);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	alice.session.Send(CreatureFightCheat {});
+	Frames({&alice}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 1u);
+	EXPECT_EQ(host->Seats()[0].commands.count(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 0u);
+}
+
+TEST_F(LockstepTest, AServerWithItsTestCommandsOnTakesTheFightCheat)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, true);
+	Computer bob(network, now, "god:bob");
+	Frames({&bob}, 6);
+	bob.session.Send(CreatureFightCheat {});
+	Frames({&bob}, 3);
+	EXPECT_EQ(host->RefusedBlocks(), 0u);
+	EXPECT_EQ(host->Seats()[0].commands.at(static_cast<uint8_t>(turn_codec::CommandTag::CreatureFightCheat)), 1u);
 }
 
 TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMissed)

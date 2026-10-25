@@ -179,6 +179,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The sparkles of the moves that the player queued in a fight: only the computer of the player adds them, as the
     // game draws them. The turns read the queue, not its sparkles.
     {.component = "CreatureFighting", .field = "marks", .marker = ""},
+    // The static that a creature fizzes through slides only while this computer draws it, as a knocked out fighter
+    // fades. The turns read how far it fizzed, not the static.
+    {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
     // The glow of the hand while a gesture is drawn, which only the computer that draws the gesture shows
     {.component = "HandGlow", .field = "", .marker = ""},
     // The sum of the strokes and slaps that the hand let go of a creature with, which only the creature's status panel
