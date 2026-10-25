@@ -135,12 +135,14 @@ struct WorldRows
 		/// The first byte of the value in bytes
 		uint32_t offset {0};
 		uint32_t size {0};
+		/// The hash leaves the field out: a part that only shows the world on one computer
+		bool presentation {false};
 	};
 	/// Each field as "component.field", in the order that the hash first took it. A component that saves as one value
 	/// has the field "*".
 	std::vector<std::string> fields;
 	/// Each field of each row, in the order of the hash: the components in the order of their names, the rows in the
-	/// order of the storage
+	/// order of the storage. The fields that the hash leaves out come before the kept fields of their component.
 	std::vector<Row> rows;
 	std::vector<uint8_t> bytes;
 };

@@ -288,6 +288,51 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 	}
 }
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// Tools: keeps the bytes of each field of each row that the hash leaves out, marked as a part that only shows the world
+template <typename KeepsField>
+void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, std::span<const KeptField> fields,
+                     const KeepsField& keepsField, BinaryWriter& out, WorldRows& kept)
+{
+	const auto keep = [&](size_t index, entt::entity row, std::span<const uint8_t> bytes) {
+		kept.rows.push_back({.entity = row,
+		                     .field = static_cast<uint32_t>(index),
+		                     .offset = static_cast<uint32_t>(kept.bytes.size()),
+		                     .size = static_cast<uint32_t>(bytes.size()),
+		                     .presentation = true});
+		kept.bytes.insert(kept.bytes.end(), bytes.begin(), bytes.end());
+	};
+	for (const auto row : LiveRows(*component.storage))
+	{
+		const void* value = component.storage->value(row);
+		const size_t count = codec != nullptr ? 1 : fields.size();
+		for (size_t index = 0; index < count; ++index)
+		{
+			if (keepsField(index, row))
+			{
+				continue;
+			}
+			out.Bytes().clear();
+			if (codec != nullptr)
+			{
+				codec->save(value, out);
+			}
+			else if (fields[index].info->saveFrom != nullptr)
+			{
+				fields[index].info->saveFrom(value, out);
+			}
+			else
+			{
+				auto instance = component.type.from_void(value);
+				fields[index].info->save(fields[index].data.get(instance), out);
+			}
+			keep(index, row, out.Bytes());
+		}
+	}
+	out.Bytes().clear();
+}
+#endif
+
 /// Hashes the rows of one component. The writer is the scratch memory of the caller.
 [[nodiscard]] ComponentHash HashComponent(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut,
                                           bool byField, const RowVisitor& visit, BinaryWriter& out, bool keepRows)
@@ -307,13 +352,22 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 		                       [](const KeptField& field) { return std::string_view(field.info->name); });
 	}
 	const auto left = FindLeaveOut(leaveOut, component.name, names);
+	const auto keepsField = [&left](size_t index, entt::entity row) {
+		return !left.whole && !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row) &&
+		       !AnyHas(left.rowMarkers, row);
+	};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// Tools: the rows also keep the fields that the hash leaves out, with a mark, so that a compare shows what each
+	// computer draws of the thing that parts
+	if (keepRows)
+	{
+		KeepLeftOutRows(component, codec, fields, keepsField, out, result.rows);
+	}
+#endif
 	if (left.whole)
 	{
 		return result;
 	}
-	const auto keepsField = [&left](size_t index, entt::entity row) {
-		return !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row);
-	};
 	result.hash = k_HashOffset;
 	// The hash of each field on its own, when asked: the whole value of a component that saves as one value
 	result.fields.assign(byField ? std::max<size_t>(fields.size(), 1) : 0, k_HashOffset);
@@ -506,18 +560,18 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	{
 		const auto& component = components[index];
 		const auto& result = results[index];
-		// A component of which the hash keeps no row is not in the hash, as a component that no entity has
-		if (!result.kept)
-		{
-			continue;
-		}
-		hashes.components.emplace_back(component.name, result.hash);
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 		if (rows != nullptr)
 		{
 			AddRows(*rows, component, result.rows);
 		}
 #endif
+		// A component of which the hash keeps no row is not in the hash, as a component that no entity has
+		if (!result.kept)
+		{
+			continue;
+		}
+		hashes.components.emplace_back(component.name, result.hash);
 		if (byField)
 		{
 			const auto fields = KeptFields(component.type);

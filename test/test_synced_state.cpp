@@ -278,9 +278,14 @@ TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
 	const auto hash = synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &rows);
 	// The rows do not change the hash
 	EXPECT_EQ(hash.hash, synced_state::HashOf(registry, context, k_Presentation).hash);
-	// The body keeps its place only: the drawn place and the marked glow are presentation parts
-	ASSERT_EQ(rows.rows.size(), 1u);
-	const auto& row = rows.rows.front();
+	// The hash keeps the place of the body only: the drawn place and the marked glow are presentation parts, which the
+	// rows mark
+	const auto synced = std::ranges::count(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	ASSERT_EQ(synced, 1);
+	const auto shown = std::ranges::count(rows.rows, true, &ecs::reflection::WorldRows::Row::presentation);
+	// The drawn place, the glow and the glow mark
+	EXPECT_EQ(shown, 3);
+	const auto& row = *std::ranges::find(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
 	EXPECT_EQ(row.entity, body);
 	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
 	ASSERT_EQ(row.size, sizeof(float));

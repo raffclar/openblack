@@ -94,6 +94,10 @@ bool RowDump::Write(uint32_t turn, const ecs::reflection::WorldRows& rows, std::
 			line += k_Digits.at(byte >> 4U);
 			line += k_Digits.at(byte & 0xfU);
 		}
+		if (row.presentation)
+		{
+			line += " shown";
+		}
 		line += '\n';
 		_out << line;
 	}
