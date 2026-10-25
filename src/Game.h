@@ -288,6 +288,7 @@ public:
 	void MakeSymbolSheet() override;
 	void StartLandAudio() override;
 	void TestbedLoaded() override;
+	void StartCameraAtTemple() override;
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
 	/// The parts of the effects of a frame that the view of the player does

@@ -4624,6 +4624,11 @@ void Game::MakeSymbolSheet()
 	MakePlayersSymbols();
 }
 
+void Game::StartCameraAtTemple()
+{
+	_shortcutKeys.StartAtTemple(OwnPlayer());
+}
+
 void Game::TestbedLoaded()
 {
 	if (Locator::debugGui::has_value() && _testbedWindow)
