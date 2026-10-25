@@ -378,7 +378,10 @@ TEST(VillageTotemSystem, ItGoesWithItsTownCentre)
 	auto village = MakeVillage(true);
 	auto& registry = village.world->registry;
 	registry.Destroy(registry.Get<VillageTotem>(village.totem).townCentre);
-	village.system->Update(10.0f);
+	// At the next turn, not in a frame
+	village.system->Update(10);
+	EXPECT_TRUE(registry.Valid(village.totem));
+	village.system->ProcessTurn(10);
 	EXPECT_FALSE(registry.Valid(village.totem));
 	EXPECT_FALSE(registry.Valid(village.icon));
 }
@@ -420,14 +423,21 @@ TEST(VillageTotemSystem, HeldApartFromItsShareASeeThroughSecondTotemShowsTheTown
 	auto village = MakeVillage(true);
 	auto& registry = village.world->registry;
 	auto& system = *village.system;
-	system.Update(10);
-	EXPECT_TRUE(registry.Get<VillageTotem>(village.totem).ghost == entt::null);
-	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
-	system.Slide(300.0f, 600.0f);
-	system.Update(20);
+	// The turn made the second plinth and icon with the totem, hidden
 	const auto& totem = registry.Get<VillageTotem>(village.totem);
 	ASSERT_TRUE(registry.Valid(totem.ghost));
 	ASSERT_TRUE(registry.Valid(totem.ghostIcon));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhost>(totem.ghost));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhost>(totem.ghostIcon));
+	EXPECT_TRUE(registry.AllOf<VillageTotemIcon>(village.icon));
+	system.Update(10);
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghostIcon));
+	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
+	system.Slide(300.0f, 600.0f);
+	system.Update(20);
+	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghostIcon));
 	// Half see-through, at the town's share of none, with the plinth's and the icon's models
 	EXPECT_EQ(registry.Get<SeeThrough>(totem.ghost).alpha, 0x80);
 	EXPECT_EQ(registry.Get<SeeThrough>(totem.ghostIcon).alpha, 0x80);
@@ -435,14 +445,51 @@ TEST(VillageTotemSystem, HeldApartFromItsShareASeeThroughSecondTotemShowsTheTown
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(totem.ghostIcon).position.y, 3.0f + vt::k_IconAbovePlinth);
 	EXPECT_EQ(registry.Get<Mesh>(totem.ghost).id, k_Plinth);
 	EXPECT_EQ(registry.Get<Mesh>(totem.ghostIcon).id, k_ApeIcon);
-	// Let go, it eases to its share with the second where it is going; once there the second goes
+	// Let go, it eases to its share with the second where it is going; once there the second is hidden
 	system.LetGo();
 	system.Update(30);
-	ASSERT_TRUE(registry.Valid(totem.ghost));
+	EXPECT_FALSE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
 	EXPECT_FLOAT_EQ(registry.Get<Transform>(totem.ghost).position.y, 3.0f + 0.3f * 8.0f);
 	system.Update(5230);
-	EXPECT_TRUE(totem.ghost == entt::null);
-	EXPECT_TRUE(totem.ghostIcon == entt::null);
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghost));
+	EXPECT_TRUE(registry.AllOf<VillageTotemGhostHidden>(totem.ghostIcon));
+}
+
+TEST(VillageTotemSystem, TheFramesMakeAndRemoveNoEntity)
+{
+	// A network game's computers draw different frames, so the frames must leave the world's entities as they are
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	const auto made = registry.GetEntitiesMade();
+	const auto gone = registry.GetEntitiesGone();
+	ASSERT_TRUE(system.Grip(village.totem, PlayerNames::PLAYER_ONE));
+	system.Slide(300.0f, 600.0f);
+	system.Update(20);
+	system.LetGo();
+	system.Update(5300);
+	// Its town centre goes: the frames leave the totem to the next turn
+	registry.Destroy(registry.Get<VillageTotem>(village.totem).townCentre);
+	const auto goneWithCentre = registry.GetEntitiesGone();
+	system.Update(5400);
+	EXPECT_EQ(registry.GetEntitiesMade(), made);
+	EXPECT_EQ(goneWithCentre, gone + 1);
+	EXPECT_EQ(registry.GetEntitiesGone(), goneWithCentre);
+	EXPECT_TRUE(registry.Valid(village.totem));
+}
+
+TEST(VillageTotemSystem, AtTheTurnATotemGoesWithItsTownCentreWithItsIconAndSecondTotem)
+{
+	auto village = MakeVillage(true);
+	auto& registry = village.world->registry;
+	auto& system = *village.system;
+	const auto totem = registry.Get<VillageTotem>(village.totem);
+	registry.Destroy(totem.townCentre);
+	system.ProcessTurn(10);
+	EXPECT_FALSE(registry.Valid(village.totem));
+	EXPECT_FALSE(registry.Valid(totem.icon));
+	EXPECT_FALSE(registry.Valid(totem.ghost));
+	EXPECT_FALSE(registry.Valid(totem.ghostIcon));
 }
 
 TEST(VillageTotemSystem, AsItMovesItsPlayerSeesTheShareItIsHeldAtButNotJustAfterItsIconIsPutOn)
@@ -506,7 +553,7 @@ TEST(VillageTotemSystem, ItsSecondTotemGoesWithIt)
 	const auto ghost = registry.Get<VillageTotem>(village.totem).ghost;
 	ASSERT_TRUE(registry.Valid(ghost));
 	registry.Destroy(registry.Get<VillageTotem>(village.totem).townCentre);
-	village.system->Update(10.0f);
+	village.system->ProcessTurn(10);
 	EXPECT_FALSE(registry.Valid(ghost));
 }
 
