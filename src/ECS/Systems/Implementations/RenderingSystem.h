@@ -14,9 +14,9 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+#include <entt/entity/sparse_set.hpp>
 #include <glm/mat4x4.hpp>
 
 #include "3D/AllMeshes.h"
@@ -136,7 +136,7 @@ private:
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;
-	std::unordered_set<entt::entity> _goneThings;
+	entt::sparse_set _goneThings;
 	/// The detail the explorers' boat was last drawn at, which the sea mirrors it at the frame after (kept while it is
 	/// too far off to be drawn)
 	std::unordered_map<entt::entity, uint8_t> _filmReflectionLevels;
