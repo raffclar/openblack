@@ -91,6 +91,7 @@ enum class CommandTag : uint8_t
 	HandCastUnlock = 29,
 	HelpReport = 30,
 	HelpQuery = 31,
+	ViewReport = 36,
 };
 
 /// The sizes of the parts of the frames, in bytes

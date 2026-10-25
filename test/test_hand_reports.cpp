@@ -406,6 +406,49 @@ TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
 	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
 }
 
+TEST_F(ReportedHands, TheWorldHasNoViewBeforeTheFirstViewReport)
+{
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+	// The report of the hand and the camera does not give a view
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 1.0f, 30.0f}));
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
+{
+	const ViewReport first {.eye = {1.0f, 2.0f, 3.0f},
+	                        .focus = {4.0f, 5.0f, 6.0f},
+	                        .lens = 1.2f,
+	                        .nearClip = 2.0f,
+	                        .inclusionDistance = 50.0f,
+	                        .cameraOrders = 3,
+	                        .cameraArrived = false,
+	                        .gripsLand = true,
+	                        .otherButton = false};
+	auto second = first;
+	second.inclusionDistance = 0.0f;
+	second.cameraOrders = 4;
+	second.cameraArrived = true;
+	second.gripsLand = false;
+	second.otherButton = true;
+	_hands.ReportView(PlayerNames::PLAYER_ONE, first);
+	_hands.ReportView(PlayerNames::PLAYER_ONE, second);
+	const auto view = _hands.GetReportedView(PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(view.has_value());
+	EXPECT_EQ(view->eye, second.eye);
+	EXPECT_EQ(view->focus, second.focus);
+	EXPECT_EQ(view->lens, second.lens);
+	EXPECT_EQ(view->nearClip, second.nearClip);
+	EXPECT_EQ(view->inclusionDistance, 0.0f);
+	EXPECT_EQ(view->cameraOrders, 4u);
+	EXPECT_TRUE(view->cameraArrived);
+	EXPECT_FALSE(view->gripsLand);
+	EXPECT_TRUE(view->otherButton);
+	// A player with no hands has no view
+	_hands.ReportView(PlayerNames::PLAYER_TWO, first);
+	EXPECT_FALSE(_hands.GetReportedView(PlayerNames::PLAYER_TWO).has_value());
+}
+
 // The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does
 TEST_F(ReportedHands, TheWorldHoldsACreatureFromTheLockToItsEnd)
 {

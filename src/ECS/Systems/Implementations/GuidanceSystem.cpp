@@ -415,7 +415,7 @@ void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerN
 		return;
 	}
 	// Only a building the player can see
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(LocalPlayer());
 	if (!view.has_value() || !Locator::entitiesRegistry::value().Valid(building) ||
 	    !ecs::thing_on_screen::OnScreen(*view, building))
 	{
@@ -470,7 +470,7 @@ void GuidanceSystem::KilledVillager(entt::entity villager)
 	{
 		return;
 	}
-	const auto view = ecs::thing_on_screen::ScreenView();
+	const auto view = ecs::thing_on_screen::ScreenView(LocalPlayer());
 	if (view.has_value() && Locator::entitiesRegistry::value().Valid(villager) &&
 	    ecs::thing_on_screen::OnScreen(*view, villager))
 	{

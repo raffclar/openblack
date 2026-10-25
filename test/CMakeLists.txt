@@ -1787,3 +1787,4 @@ add_test(NAME test_draw_trace_compare
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
 )
+openblack_setup_and_add_test(test_reported_view test_reported_view.cpp)

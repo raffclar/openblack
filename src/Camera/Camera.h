@@ -136,6 +136,9 @@ public:
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
 
+	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
+	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
+
 	void Update(std::chrono::microseconds dt);
 	void HandleActions(std::chrono::microseconds dt);
 	/// The keys of the current camera, after its step in this frame. They move the camera in the next frame.
@@ -231,8 +234,6 @@ protected:
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
-	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
-	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };

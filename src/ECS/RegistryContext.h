@@ -55,6 +55,10 @@ struct RegistryContext
 	/// The scripts let the player go into their temple by tapping its entrance. They allow it until they say otherwise, and
 	/// every land starts allowing it again.
 	bool scriptLetsTempleBeEntered {true};
+	/// How many orders the scripts gave the camera: each command that takes, moves, turns or gives back the camera adds
+	/// one. The view report of a player tells how many of them its camera got, so that the turns know when the camera's
+	/// arrival in the report comes after the last order.
+	uint32_t scriptCameraOrders {0};
 	/// Each player's temple entrances take the cursor from the first turn a temple of theirs stands fully built on this
 	/// land, until the land is left
 	std::array<bool, static_cast<size_t>(PlayerNames::_COUNT)> templeEntrancesTakeCursor {};

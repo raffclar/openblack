@@ -226,6 +226,16 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
 		               out.Vector(command.ground);
 	               },
+	               [&out](const ViewReport& command) {
+		               out.Vector(command.eye);
+		               out.Vector(command.focus);
+		               out.Float(command.lens);
+		               out.Float(command.nearClip);
+		               out.Float(command.inclusionDistance);
+		               out.Number(command.cameraOrders);
+		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
+		                                             (command.otherButton ? 4u : 0u)));
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -488,6 +498,26 @@ DecodeError ReadAction(Reader& in, Action& action)
 		action = query;
 		return DecodeError::None;
 	}
+	case CommandTag::ViewReport:
+	{
+		ViewReport report {};
+		report.eye = in.Vector();
+		report.focus = in.Vector();
+		report.lens = in.Float();
+		report.nearClip = in.Float();
+		report.inclusionDistance = in.Float();
+		report.cameraOrders = in.Number<uint32_t>();
+		const auto flags = in.Byte();
+		if (flags > 7)
+		{
+			return DecodeError::Value;
+		}
+		report.cameraArrived = (flags & 1u) != 0;
+		report.gripsLand = (flags & 2u) != 0;
+		report.otherButton = (flags & 4u) != 0;
+		action = report;
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -600,6 +630,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HandCastUnlock& /*command*/) { return CommandTag::HandCastUnlock; },
 	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
 	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
+	                      [](const ViewReport& /*command*/) { return CommandTag::ViewReport; },
 	                  },
 	                  action);
 }
@@ -639,6 +670,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
 	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                                     [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
+	                                     [](const ViewReport& /*command*/) { return 2 * k_Vector + 4 + 4 + 4 + 4 + 1; },
 	                                 },
 	                                 action);
 	return 1 + fields;

@@ -90,6 +90,15 @@ std::vector<Action> EachCommand()
 	                .cameraNearAndSteep = true,
 	                .cameraSeesSky = false},
 	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
+	    ViewReport {.eye = {1.0f, 2.0f, 3.0f},
+	                .focus = {4.0f, 5.0f, 6.0f},
+	                .lens = 1.2f,
+	                .nearClip = 0.5f,
+	                .inclusionDistance = 30.0f,
+	                .cameraOrders = 7,
+	                .cameraArrived = true,
+	                .gripsLand = false,
+	                .otherButton = true},
 	};
 }
 
@@ -113,7 +122,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 31)
+	switch (bits(random) % 32)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -218,6 +227,16 @@ Action RandomAction(std::mt19937& random)
 		                   .cameraSeesSky = bits(random) % 2 == 0};
 	case 29:
 		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
+	case 30:
+		return ViewReport {.eye = vector(),
+		                   .focus = vector(),
+		                   .lens = number(),
+		                   .nearClip = number(),
+		                   .inclusionDistance = number(),
+		                   .cameraOrders = bits(random),
+		                   .cameraArrived = bits(random) % 2 == 0,
+		                   .gripsLand = bits(random) % 2 == 0,
+		                   .otherButton = bits(random) % 2 == 0};
 	default:
 		return PlayerLeft {};
 	}
@@ -279,15 +298,17 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5,  9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 10, 18};
+	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5,  9,  12,
+	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 10, 18, 42};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		// The tags follow the order of the commands. The leave of the server has tag 17.
-		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i]) ? 17 : i + 1;
+		// The tags follow the order of the commands. The leave of the server has tag 17, the view report tag 36.
+		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i])   ? 17
+		                   : std::holds_alternative<ViewReport>(commands[i]) ? 36
+		                                                                     : i + 1;
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -690,5 +711,28 @@ TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
 	// refused.
 	auto wrong = bytes;
 	wrong.back() = 32;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
+{
+	const ViewReport report {.eye = {10.0f, 20.0f, 30.0f},
+	                         .focus = {-1.0f, 0.0f, 1.0f},
+	                         .lens = 1.2217305f,
+	                         .nearClip = 2.0f,
+	                         .inclusionDistance = 12.5f,
+	                         .cameraOrders = 0x01020304,
+	                         .cameraArrived = false,
+	                         .gripsLand = true,
+	                         .otherButton = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<ViewReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last. A flag after the third is refused.
+	auto wrong = bytes;
+	wrong.back() = 8;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

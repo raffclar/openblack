@@ -11,13 +11,16 @@
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_inverse.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 
 #include "3D/L3DMesh.h"
 #include "3D/MapCoords.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraLens.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
@@ -26,9 +29,24 @@
 using namespace openblack;
 using namespace openblack::ecs::components;
 
-std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView()
+screen_pick::View ecs::thing_on_screen::ViewOf(const ViewInputs& inputs)
 {
-	if (!Locator::camera::has_value() || !Locator::windowing::has_value())
+	// The same perspective and view as the camera makes them
+	const auto projection =
+	    glm::infinitePerspective(camera_lens::VerticalFieldOfView(inputs.lens, inputs.aspect), inputs.aspect, inputs.nearClip);
+	const auto view = glm::lookAt(inputs.eye, inputs.focus, glm::vec3(0.0f, 1.0f, 0.0f));
+	return screen_pick::FourByThreeMiddle({
+	    .worldToClip = projection * view,
+	    .resolution = inputs.resolution,
+	    .near = inputs.nearClip,
+	    .xScale = projection[0][0],
+	    .camera = glm::vec3(glm::inverse(view)[3]),
+	});
+}
+
+std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView(PlayerNames player)
+{
+	if (!Locator::camera::has_value() || !Locator::windowing::has_value() || !Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
@@ -37,13 +55,18 @@ std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView()
 	{
 		return std::nullopt;
 	}
-	const auto& camera = Locator::camera::value();
-	return screen_pick::FourByThreeMiddle({
-	    .worldToClip = camera.GetViewProjectionMatrix(),
+	const auto reported = Locator::handSystem::value().GetReportedView(player);
+	if (!reported.has_value())
+	{
+		return std::nullopt;
+	}
+	return ViewOf({
+	    .eye = reported->eye,
+	    .focus = reported->focus,
+	    .lens = reported->lens,
+	    .nearClip = reported->nearClip,
+	    .aspect = Locator::camera::value().GetAspect(),
 	    .resolution = glm::vec2(size),
-	    .near = camera.GetNearClip(),
-	    .xScale = camera.GetProjectionMatrix()[0][0],
-	    .camera = glm::vec3(glm::inverse(camera.GetViewMatrix(Camera::Interpolation::Current))[3]),
 	});
 }
 
