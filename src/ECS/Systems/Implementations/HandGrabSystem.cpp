@@ -490,15 +490,10 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			SendTake(*grab, grab->object);
 			return std::nullopt;
 		}
-		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap.
-		// Only this computer pulled it and the other computers did not see the lean. Thus in a network game, the thing
-		// stands again as it stood before the pull, so that all the worlds stay the same.
+		// Let go before the thing came free: it stays where the turns put it, and a short press was a tap. The lean of
+		// the pull was only drawn, so the world does not change here.
 		const auto object = grab->object;
 		const bool tap = hand_grab::ElapsedMs(nowMs, grab->pressMs, turn, grab->pressTurn) <= hand_grab::k_GrabWaitMs;
-		if (_world->IsNetworkGame())
-		{
-			StandAsBeforePull(*grab);
-		}
 		Empty(*grab);
 		// It still becomes the thing last let go, which a flying thing's twist then finds
 		grab->released = object;
@@ -1030,7 +1025,6 @@ void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 	grab.stretch.Reset(1.0f);
 	grab.tug = tug;
 	const auto& before = _world->Entities().Get<const Transform>(object);
-	grab.pullPosition = before.position;
 	grab.pullRotation = before.rotation;
 	grab.pullScale = before.scale;
 }
@@ -1114,14 +1108,10 @@ void HandGrabSystem::PlayTakeSounds(entt::entity object)
 
 void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 {
-	// A thing that the hand can no longer take is let go of. In a network game, a pulled thing stands again as it stood
-	// before the pull, as when the hand lets go of it before it comes free.
+	// A thing that the hand can no longer take is let go of. It stays where the turns put it, as when the hand lets go
+	// of it before it comes free.
 	if (!MayTake(object))
 	{
-		if (_world->IsNetworkGame())
-		{
-			StandAsBeforePull(grab);
-		}
 		Empty(grab);
 		return;
 	}
@@ -1827,13 +1817,8 @@ void HandGrabSystem::PlaceHeldForTurn()
 {
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
 	// that it had as the hand took it.
-	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
-	// The turn runs on every computer: it never gives a hand a grab that only this computer would have
-	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	if (const auto* grab = std::as_const(*this).Grab(); grab != nullptr)
-	{
-		StandAsBeforePull(*grab);
-	}
+	// A thing that the hand of this computer pulls at is not changed here. Only this computer knows of the pull, and
+	// the frames only draw the lean. Thus a pulled villager continues to walk in the same way on every computer.
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
 	registry.Each<const InHand, Transform>([this](const InHand& inHand, Transform& transform) {
@@ -1841,19 +1826,6 @@ void HandGrabSystem::PlaceHeldForTurn()
 		transform.rotation = inHand.rotation;
 		transform.scale = inHand.scale;
 	});
-}
-
-void HandGrabSystem::StandAsBeforePull(const HandGrab& grab)
-{
-	if ((grab.state != HandGrab::State::Grabbing && grab.state != HandGrab::State::Taking) || !grab.tug.has_value() ||
-	    !Exists(grab.object))
-	{
-		return;
-	}
-	auto& pulled = _world->Entities().Get<Transform>(grab.object);
-	pulled.position = grab.pullPosition;
-	pulled.rotation = grab.pullRotation;
-	pulled.scale = grab.pullScale;
 }
 
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)

@@ -1100,6 +1100,11 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	{
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			// The scripts' clock moves on by the temple's turn, and the dialogue takes the player's clicks
+			if (Locator::helpTextSystem::has_value())
+			{
+				Locator::helpTextSystem::value().ProcessTurn(temple_help::k_TurnMilliseconds);
+			}
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
 			// The bars that the temple's scripts wait for slide by the real time of the temple's turn, as the game's draw
 			// slides them by real time in the temple

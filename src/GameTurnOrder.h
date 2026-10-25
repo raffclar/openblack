@@ -180,6 +180,8 @@ enum class Step : uint8_t
 	Fireflies,
 	Physics,
 	Vortices,
+	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
+	ScriptVoices,
 	Scripts,
 	ScriptObjects,
 	ScriptFade,
@@ -299,6 +301,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fireflies, .stage = Stage::Fireflies},
     {.step = Step::Physics, .stage = Stage::Physics},
     {.step = Step::Vortices, .stage = Stage::ParticleEnd},
+    // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
+    {.step = Step::ScriptVoices, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
     {.step = Step::ScriptObjects, .stage = Stage::Scripts},
     {.step = Step::ScriptFade, .stage = Stage::Scripts},

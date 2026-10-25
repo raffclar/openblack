@@ -50,6 +50,10 @@ from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 from cryptography.x509.oid import NameOID
 import ipaddress
 
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sim_report  # noqa: E402
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
 DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
@@ -480,9 +484,9 @@ def main():
             os.makedirs(client_dir, exist_ok=True)
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"Player{index + 1}", "god", 600)
-            # A frame time of 0 lets the client run at its real frame rate, as a player's game does
+            # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
+            # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
-            # No land, seed or start option: the client takes them from the server
             command = [game_exe, "-g", options.game_path, "--skip-logos"] + frame_time + [
                        "--sim-until-turn", str(options.turns),
                        "--sim-record", os.path.join(client_dir, "record.jsonl"), "--sim-record-every", "1",
@@ -585,6 +589,14 @@ def main():
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the"])
+    # A component with no registration is left out of the checksum: a change in it would never show here
+    unregistered = sim_report.unregistered_in_files(
+        server_log, os.path.join(server_dir, "record.jsonl"),
+        *[os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")])
+    summary["unregistered"] = sorted(unregistered)
+    if unregistered:
+        all_same = False
+        print(sim_report.unregistered_line(unregistered))
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
