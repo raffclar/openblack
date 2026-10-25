@@ -11,6 +11,9 @@ lockstep). At the end it compares the checksum of each turn on the server and on
     python tools/sim/net_check.py --turns 600 --config RelWithDebInfo
     python tools/sim/net_check.py --testbed --turns 400 --stop-second-after 40 --come-back-seconds 5
 
+With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
+of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
+
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
@@ -33,6 +36,8 @@ import shutil
 import subprocess
 import sys
 import time
+
+import draw_trace
 
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -314,6 +319,9 @@ def main():
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
+    parser.add_argument("--trace-draws", action="store_true",
+                        help="the server and the clients write a draw trace, and the summary shows the first draw where "
+                             "each client is not the same as the server")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
@@ -338,7 +346,9 @@ def main():
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
-    for path in [server_log] + [os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl")]:
+    server_trace = os.path.join(server_dir, "draws.tsv")
+    for path in [server_log, server_trace] + [os.path.join(d, n) for d in client_dirs
+                                              for n in ("client.log", "record.jsonl", "draws.tsv")]:
         if os.path.exists(path):
             os.remove(path)
 
@@ -350,6 +360,8 @@ def main():
         "--come-back-seconds", str(options.come_back_seconds)]
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
+    if options.trace_draws:
+        server_command += ["--trace-draws", server_trace]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -375,6 +387,8 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+            if options.trace_draws:
+                command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -444,11 +458,16 @@ def main():
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
                 and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
+        draws = None
+        if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
+            draws = draw_trace.compare(server_trace, os.path.join(client_dir, "draws.tsv"))
+            for line in draw_trace.summary_lines(draws, "server", f"client {index + 1}"):
+                print(line)
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
-            "different": different[:20], "same": same, "parts_against_server": parts,
+            "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
