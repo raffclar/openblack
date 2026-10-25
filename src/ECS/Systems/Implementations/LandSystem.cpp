@@ -1124,7 +1124,6 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	// turns catches up, up to 10 turns a frame: when the next turn is there too, the clock of this computer follows the
 	// server's and the turn is due.
 	const auto& commands = Locator::playerCommandSystem::value();
-	bool played = false;
 	while (commands.TurnReady(clock.GetTurn()))
 	{
 		if (commands.IsBehind(clock.GetTurn()))
@@ -1135,14 +1134,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		{
 			return;
 		}
-		// A second turn in the frame comes after the frame steps of the turn before it
-		if (played)
-		{
-			view.CatchUpFrame();
-		}
-		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
+		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
 		simulation::PlayTurn(view);
-		played = true;
 
 		_lastGameLoopTime = currentTime;
 		_turnDeltaTime = delta;

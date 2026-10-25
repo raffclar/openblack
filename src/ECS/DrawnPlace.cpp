@@ -10,8 +10,10 @@
 #include "DrawnPlace.h"
 
 #include "ECS/Components/Animal.h"
+#include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Registry.h"
 
@@ -29,6 +31,19 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	    holder != nullptr && holder->drawn.has_value())
 	{
 		return {.position = holder->drawn->position, .rotation = holder->drawn->rotation, .scale = transform.scale};
+	}
+	if (const auto* carried = registry.TryGet<const components::CarriedByTornado>(entity);
+	    carried != nullptr && carried->drawn.has_value())
+	{
+		return {.position = carried->drawn->position, .rotation = carried->drawn->rotation, .scale = transform.scale};
+	}
+	if (const auto* pulled = registry.TryGet<const components::HandPulled>(entity); pulled != nullptr)
+	{
+		return {.position = pulled->position, .rotation = pulled->rotation, .scale = pulled->scale};
+	}
+	if (const auto* inHand = registry.TryGet<const components::InHand>(entity); inHand != nullptr && inHand->drawn.has_value())
+	{
+		return {.position = inHand->drawn->position, .rotation = inHand->drawn->rotation, .scale = transform.scale};
 	}
 	if (const auto* animal = registry.TryGet<const components::Animal>(entity); animal != nullptr && animal->drawn.has_value())
 	{

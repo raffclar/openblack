@@ -213,6 +213,8 @@ enum class Step : uint8_t
 	WalkerLookahead,
 	/// A new creature, or one with a new body, gets the skeleton of its shape and its first pose
 	CreatureShapes,
+	/// The things that the turn made go into the map's cells
+	MapCellsAtTurnEnd,
 	InfluenceTurnEnd,
 	/// The checksum of the synced world, as the turn left it, for a network game
 	SyncChecksum,
@@ -332,6 +334,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     // The frames only draw, so a creature that the turn made gets its skeleton and its first pose at the end of the turn
     {.step = Step::CreatureShapes, .stage = Stage::AfterTurn},
+    // The frames only read the map's cells, so the things that the turn made go into them at the end of the turn
+    {.step = Step::MapCellsAtTurnEnd, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
     // The checksum of the world that the turn left, which a network game sends after each turn
     {.step = Step::SyncChecksum, .stage = Stage::AfterTurn},

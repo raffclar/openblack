@@ -182,6 +182,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Transform", .field = "", .marker = "Hand"},
     // The frames of this computer move what the hand of another player holds toward the reported place of that hand
     {.component = "HeldDrawTrack", .field = "", .marker = ""},
+    // Where the frames draw a thing that a tornado carries. The turns go by its Transform.
+    {.component = "CarriedByTornado", .field = "drawn", .marker = ""},
+    // The pose that the frames draw a thing in while a hand pulls at it. The turns keep the thing as it stood.
+    {.component = "HandPulled", .field = "", .marker = ""},
+    // Where the frames draw a thing at the drawn hand. The turns go by its Transform, at the reported place of the hand.
+    {.component = "InHand", .field = "drawn", .marker = ""},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The press, the pull, the spring, the offer and the scoop of this computer's hand are its own input. The world
     // has what the hand holds from the turns: the InHand of the thing.

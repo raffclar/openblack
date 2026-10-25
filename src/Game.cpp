@@ -2826,14 +2826,6 @@ void Game::UpdateScreenMarks()
 	UpdateFloatingNumbers(milliseconds * 0.001f);
 }
 
-void Game::CatchUpFrame()
-{
-	// The frame steps that change the world, as the frame after a turn does them, with no draw
-	Locator::time::value().CatchUpFrame();
-	simulation::PlayCreaturePoses();
-	simulation::PlayFrameEffects(*this);
-}
-
 void Game::UpdateFrameEffects()
 {
 	// The game is the view of the effects of the frame
@@ -3959,7 +3951,8 @@ void Game::StartSimulationLogs()
 	}
 	if (_simulation->frameGuard != sim_run::HashDetail::None)
 	{
-		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields);
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
 	}
 	if (_simulation->checksumsPath.has_value())
 	{

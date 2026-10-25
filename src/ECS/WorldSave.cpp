@@ -339,18 +339,7 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSyste
 
 gamesave::Chunk SystemsChunk(const entt::meta_ctx& reflection)
 {
-	std::vector<reflection::NamedSection> sections;
-	for (const auto& [name, find] : k_SavedSystems)
-	{
-		if (const auto* system = find(); system != nullptr)
-		{
-			reflection::BinaryWriter out(reflection);
-			out.SetPlace(name, "");
-			system->SaveState(out);
-			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
-		}
-	}
-	return {.tag = gamesave::k_SystemsTag, .bytes = reflection::SaveSections(sections)};
+	return {.tag = gamesave::k_SystemsTag, .bytes = reflection::SaveSections(world_save::SavedSystemSections(reflection))};
 }
 
 bool LoadSystems(const entt::meta_ctx& reflection, std::span<const uint8_t> bytes)
@@ -410,6 +399,22 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 }
 
 } // namespace
+
+std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection)
+{
+	std::vector<reflection::NamedSection> sections;
+	for (const auto& [name, find] : k_SavedSystems)
+	{
+		if (const auto* system = find(); system != nullptr)
+		{
+			reflection::BinaryWriter out(reflection);
+			out.SetPlace(name, "");
+			system->SaveState(out);
+			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+		}
+	}
+	return sections;
+}
 
 std::vector<world_save::PendingChunk> world_save::SaveWorld(const entt::meta_ctx& reflection, SaveSummary& summary)
 {

@@ -854,6 +854,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// A creature that has no skeleton or no pose yet gets them, so that the frames have a body to draw
 		Locator::creatureAnimationSystem::value().ShapeBodies();
 		break;
+	case Step::MapCellsAtTurnEnd:
+		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing
+		Locator::entitiesMap::value().FileMade();
+		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);
 		// The view's steps fix the reach of a citadel that the turn made. With no view, the end of the turn fixes it.
