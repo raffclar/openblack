@@ -96,15 +96,36 @@ TEST(EndGameBox, AnotherGodOutOpensTheBoxWithOk)
 	EXPECT_EQ(opened.godOut, k_Three);
 }
 
-// After an end box opened once in the game, no box with OK opens again
-TEST(EndGameBox, NoBoxWithOkAfterAnEndBox)
+// While the end box shows itself, no box with OK opens. After the player closes it, the box with OK opens again.
+TEST(EndGameBox, NoBoxWithOkWhileTheEndBoxShows)
 {
 	State state;
 	const std::array first {Event {.kind = Event::Kind::GodOut, .god = k_One}};
 	std::ignore = Follow(first, k_One, state);
 	const std::array next {Event {.kind = Event::Kind::GodOut, .god = k_Three}};
-	const auto opened = Follow(next, k_One, state);
-	EXPECT_FALSE(opened.godOut.has_value());
+	EXPECT_FALSE(Follow(next, k_One, state).godOut.has_value());
+	StoppedShowing(state);
+	EXPECT_EQ(Follow(next, k_One, state).godOut, k_Three);
+}
+
+// The question to leave is an end box: the game goes on for the player, and no box with OK opens while it shows
+TEST(EndGameBox, TheQuestionToLeaveIsAnEndBoxOfItsOwn)
+{
+	State state;
+	const auto box = AskToLeave(state);
+	EXPECT_EQ(box.kind, Kind::LeaveQuestion);
+	EXPECT_FALSE(box.watch);
+	EXPECT_TRUE(state.gameGoesOn);
+	EXPECT_FALSE(StopsTheGame(box, state));
+	const std::array out {Event {.kind = Event::Kind::GodOut, .god = k_Three}};
+	EXPECT_FALSE(Follow(out, k_One, state).godOut.has_value());
+	// A player who asked to leave and went back does not stop the turns when the game is decided later
+	StoppedShowing(state);
+	const std::array decided {Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two}};
+	const auto opened = Follow(decided, k_One, state);
+	ASSERT_TRUE(opened.endBox.has_value());
+	EXPECT_EQ(opened.endBox->kind, Kind::Won);
+	EXPECT_FALSE(StopsTheGame(*opened.endBox, state));
 }
 
 // An end box later in the same turn closes the box with OK

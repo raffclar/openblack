@@ -631,6 +631,8 @@ def main():
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--temple-loss", help="PLAYER:TURN: at the turn the temple of the player (from 0) starts its "
                         "destruction on the server and on every client, so that the game is decided and its turns stop")
+    parser.add_argument("--leave", help="CLIENT:TURN: at the turn the client (from 0) leaves the game as a player does: "
+                        "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
@@ -662,6 +664,7 @@ def main():
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
+    leaver, leave_turn = (int(part) for part in options.leave.split(":")) if options.leave else (None, None)
     server_trace = os.path.join(server_dir, "draws.tsv")
     for path in [server_log, server_trace, os.path.join(server_dir, "rows.txt")] + [
             os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl", "draws.tsv", "rows.txt")]:
@@ -720,6 +723,8 @@ def main():
                     command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.temple_loss:
                 command += ["--sim-temple-loss", options.temple_loss]
+            if leaver == index:
+                command += ["--sim-leave-at", str(leave_turn)]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -825,14 +830,20 @@ def main():
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
         client_stop = lines_with(os.path.join(client_dir, "client.log"), ["The turns of the network game stopped after turn"])
         client_stopped_after = (int(re.search(r"after turn (\d+)", client_stop[-1]).group(1)) if client_stop else None)
-        if stopped_after is not None:
+        left = index == leaver
+        if left:
+            # The client that left did the turns up to the turn that it left at, the same as the server, and stopped
+            expected = leave_turn
+            if not lines_with(os.path.join(client_dir, "client.log"), ["The player leaves the network game"]):
+                different = different + [-2]
+        elif stopped_after is not None:
             # The client did every turn up to the last turn of the game, and none after it
             expected = stopped_after
             if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after + 1:
                 different = different + [-1]
         same = (not different and len(compared) >= expected // 2 and counts is not None
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
-                and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
+                and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         draws = None
         if options.trace_draws and os.path.exists(server_trace) and os.path.exists(os.path.join(client_dir, "draws.tsv")):
@@ -842,7 +853,8 @@ def main():
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
             "stopped_after": client_stopped_after,
-            "end_box": lines_with(os.path.join(client_dir, "client.log"), ["The end box opens"])[-2:],
+            "end_box": lines_with(os.path.join(client_dir, "client.log"),
+                                  ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
@@ -853,7 +865,7 @@ def main():
     if options.slot_miracle:
         summary["slot_miracle"] = miracle_done
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
-                                                "turns of the game stop"])
+                                                "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(
         server_log, os.path.join(server_dir, "record.jsonl"),

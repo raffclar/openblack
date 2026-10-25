@@ -252,6 +252,31 @@ void NetworkGameSystem::Leave()
 	}
 }
 
+void NetworkGameSystem::EndNetworkGame()
+{
+	if (!_session)
+	{
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game of this computer ends");
+	Detach();
+	_started = false;
+	_awaitingLand = false;
+	_fromCommandLine = false;
+	_joinReplyRead = false;
+	_stopped = false;
+	_pendingStart.reset();
+	_resumeTurn.reset();
+	// The clock is the clock of a game alone again, and it no longer waits for the turns of a server
+	auto& clock = Locator::time::value();
+	clock.SetNetworkGame(false);
+	clock.SetPaused(false);
+	if (Locator::syncChecksumSystem::has_value())
+	{
+		Locator::syncChecksumSystem::value().SetEnabled(false);
+	}
+}
+
 void NetworkGameSystem::StopGame()
 {
 	if (_session)

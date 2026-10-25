@@ -975,6 +975,10 @@ struct Command
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
+		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
+		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
+		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
+		EndBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

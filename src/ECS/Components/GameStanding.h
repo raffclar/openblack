@@ -41,6 +41,8 @@ struct GameStanding
 {
 	/// The number of the winning conditions of the game
 	static constexpr size_t k_ConditionCount = 15;
+	/// The number of the values that the history of the god's score keeps
+	static constexpr size_t k_ScoreHistoryCount = 500;
 
 	/// The winning conditions of the network game, by condition number. A condition that the game does not use is empty.
 	std::array<std::optional<WinCondition>, k_ConditionCount> conditions {};
@@ -54,6 +56,11 @@ struct GameStanding
 	std::optional<int32_t> place;
 	/// Why the god is out
 	OutReason reason {OutReason::Defeated};
+	/// The history of the god's score, a value each ten turns: its share of the winning conditions, or its share of the
+	/// influence. The first value stays 0. When the history is full, the oldest value goes.
+	std::array<float, k_ScoreHistoryCount> scoreHistory {};
+	/// The place of the last value in the history. The values before it are the history that the game shows.
+	int32_t scoreHistoryIndex {0};
 };
 
 } // namespace openblack::ecs::components

@@ -10703,7 +10703,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::OtherGodHand || kind == Kind::BringCreature || IsPointerCommand(kind);
+	       kind == Kind::OtherGodHand || kind == Kind::BringCreature || kind == Kind::EndBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10912,6 +10912,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "build the worship sites",
 	    "show another god's hand",
 	    "bring a creature into a network game",
+	    "end box",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
