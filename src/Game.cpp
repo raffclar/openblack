@@ -2353,6 +2353,8 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		Locator::time::value().UpdateFrame();
 		// The steps of a sixtieth of a second that the hand, the strokes, the throws and the camera take in this frame
 		Locator::time::value().StepInput(InputStepTime(frame.deltaTime));
+		// The camera reads the mouse of the frame divided across these steps
+		Locator::gameActionSystem::value().SplitInput(Locator::time::value().GetInputSteps());
 		break;
 	case Step::FilmClock:
 		// The clock of a full-screen video counts the frames that are due by the real clock
@@ -2381,9 +2383,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::CameraMouse:
 		// The camera reads the movement of the mouse and of the hand of this frame as it moves, after the turns
-		if (!Locator::cameraPathSystem::value().HoldsCamera())
+		// The first step of the input reads its part of the mouse. A frame with no step keeps the mouse for the next step.
+		if (const auto& steps = Locator::time::value().GetInputSteps();
+		    steps.count > 0 && !Locator::cameraPathSystem::value().HoldsCamera())
 		{
-			Locator::camera::value().HandleActions(frame.deltaTime);
+			auto& actions = Locator::gameActionSystem::value();
+			actions.UseInputStep(0);
+			Locator::camera::value().HandleActions(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(0)));
+			actions.UseInputStep(std::nullopt);
 		}
 		break;
 	case Step::CameraPaths:
@@ -2684,8 +2691,7 @@ void Game::UpdateCamera()
 		{
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
-		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()),
-		              Locator::time::value().GetInputSteps());
+		camera.Update(Locator::time::value().GetInputSteps());
 	}
 	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
 	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
@@ -3708,9 +3714,13 @@ void Game::UpdateCameraKeys(std::chrono::microseconds deltaTime)
 	     .frameMilliseconds = static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(deltaTime).count()),
 	     .grippingLand = _handGripping && !_handRotating});
 	// The camera that the path gives back reads the keys from the next frame
-	if (!pathHeld)
+	// The keys go to the last step of the input in this frame. A frame with no step does not read them.
+	if (const auto& steps = Locator::time::value().GetInputSteps(); !pathHeld && steps.count > 0)
 	{
-		camera.HandleKeys(deltaTime);
+		auto& gameActions = Locator::gameActionSystem::value();
+		gameActions.UseInputStep(steps.count - 1);
+		camera.HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(steps.count - 1)));
+		gameActions.UseInputStep(std::nullopt);
 	}
 	// A grip of the land ends the camera of a dance. A zoom with the land held does not end it.
 	hand::script_state::Facts grip {.gripsLand = _handSelectGrip, .otherButton = _handOtherButton};

@@ -74,7 +74,6 @@ public:
 	[[nodiscard]] glm::vec3 GetFocusSpeed() const { return SpeedOf(_focus); }
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
-	[[nodiscard]] bool StepsWithTheInput() const override { return true; }
 	/// The player's controls don't move it
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;

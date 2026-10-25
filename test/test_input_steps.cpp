@@ -29,7 +29,6 @@
 #include "Creature/CreatureTouchStep.h"
 #include "ECS/Components/HandOnCreature.h"
 #include "Gestures/GestureRecorder.h"
-#include "Help/TurnCheer.h"
 
 using namespace openblack;
 using namespace std::chrono_literals;
@@ -245,35 +244,6 @@ TEST(InputSteps, AtSixtyFramesASecondEachFrameWeighsOnceAtItsCursor)
 	}
 }
 
-TEST(InputSteps, TheCheeringMeasuresTheSameTurningSpeedAtAnyFrameRate)
-{
-	// The camera turns at 3 radians a second for half a second, then stands still
-	const auto measure = [](int framesPerSecond, uint32_t count) {
-		float speed = 0.0f;
-		float time = 0.0f;
-		help::turn_cheer::SpeedSinceStep since;
-		RunSteps(framesPerSecond, count, [&](std::chrono::microseconds frame, const input_steps::Steps& steps) {
-			const float seconds = std::chrono::duration<float>(frame).count();
-			const float turning = std::clamp(0.5f - time, 0.0f, seconds);
-			time += seconds;
-			speed = help::turn_cheer::MeasureSpeed(speed, since, 3.0f * turning, seconds, steps.count);
-		});
-		return speed;
-	};
-	for (const int rate : k_FrameRates)
-	{
-		// Turning steadily, and after six steps standing still
-		EXPECT_NEAR(measure(rate, 24), 3.0f, 1e-3f) << rate << " frames a second";
-		const float still = measure(60, 36);
-		EXPECT_NEAR(measure(rate, 36), still, still * 0.02f) << rate << " frames a second";
-	}
-	// At 60 frames a second the measure moves 0.4 of the way at each frame, as it did once a frame
-	float speed = 1.0f;
-	help::turn_cheer::SpeedSinceStep since;
-	speed = help::turn_cheer::MeasureSpeed(speed, since, 0.0f, 1.0f / 60.0f, 1);
-	EXPECT_FLOAT_EQ(speed, help::turn_cheer::SmoothSpeed(1.0f, 0.0f, 1.0f / 60.0f));
-}
-
 TEST(InputSteps, TheGesturesSampleTheCursorThirtyTimesASecondAtAnyFrameRate)
 {
 	for (const int rate : k_FrameRates)
@@ -296,7 +266,7 @@ public:
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds /*dt*/, const Camera& /*camera*/) override
 	{
 		return CameraInterpolationUpdateInfo {
-		    .origin = {100.0f, 50.0f, 0.0f}, .focus = {100.0f, 0.0f, 50.0f}, .duration = 400'000us, .eachStep = true};
+		    .origin = {100.0f, 50.0f, 0.0f}, .focus = {100.0f, 0.0f, 50.0f}, .duration = 400'000us};
 	}
 	void HandleActions(std::chrono::microseconds /*dt*/) override {}
 	void SetFlight(glm::vec3 /*origin*/, glm::vec3 /*focus*/, float /*rise*/) override {}
@@ -311,7 +281,7 @@ glm::vec3 CameraOriginAfter(int framesPerSecond, uint32_t count)
 	camera.SetModel(std::make_unique<StillTargetModel>());
 	camera.SetOrigin({0.0f, 10.0f, 0.0f}).SetFocus({0.0f, 0.0f, 10.0f});
 	RunSteps(framesPerSecond, count,
-	         [&](std::chrono::microseconds frame, const input_steps::Steps& steps) { camera.Update(frame, steps); });
+	         [&](std::chrono::microseconds /*frame*/, const input_steps::Steps& steps) { camera.Update(steps); });
 	return camera.GetOrigin();
 }
 } // namespace

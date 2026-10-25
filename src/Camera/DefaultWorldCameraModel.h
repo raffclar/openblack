@@ -23,7 +23,6 @@
 #include "ClearView.h"
 #include "Common/Zoomer.h"
 #include "DoubleClickFlight.h"
-#include "Help/TurnCheer.h"
 #include "PushScroll.h"
 
 class TestDefaultCameraModel;
@@ -247,8 +246,6 @@ private:
 	bool _heldBack {false};
 	/// The angle the player turned the camera by this frame, in radians, none when the player didn't turn it
 	std::optional<float> _turnedThisFrame;
-	/// The turn and the time that the measure of the turning speed did not take in yet
-	help::turn_cheer::SpeedSinceStep _turnSinceStep;
 	/// What the player did with the controls this frame, as GetAsked gives it
 	bool _controlsUsed {false};
 	bool _landGripped {false};

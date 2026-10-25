@@ -38,17 +38,6 @@ constexpr int32_t k_Cheers = 14;
 /// didn't turn it, which slows the measure down towards still)
 [[nodiscard]] float SmoothSpeed(float speed, float turned, float seconds);
 
-/// The turn of the camera and the time that the measure did not take in yet: the frames that take no step of the input
-struct SpeedSinceStep
-{
-	float turned {0.0f};
-	float seconds {0.0f};
-};
-/// The camera's turning speed after a frame of some seconds that turned it by an angle and takes some steps of the
-/// input. A frame with no step keeps its turn and time for the next step. Each step moves the measure to the speed since
-/// the last step.
-[[nodiscard]] float MeasureSpeed(float speed, SpeedSinceStep& since, float turned, float seconds, uint32_t steps);
-
 /// Whether the advisors are cheering, and the game turns of their last cheer and of their last best praise
 struct Cheering
 {

@@ -389,47 +389,41 @@ void Camera::Update(std::chrono::microseconds dt)
 	Advance(dt);
 }
 
-void Camera::Update(std::chrono::microseconds dt, const input_steps::Steps& steps)
+void Camera::Update(const input_steps::Steps& steps)
 {
-	CountModelTime(dt);
 	_stepViewCount = 0;
-	// A model that eases with no input of the player steps with the input: none to a few steps a frame
-	if (_model->StepsWithTheInput())
-	{
-		for (uint32_t i = 0; i < steps.count; ++i)
+	auto* actions = Locator::gameActionSystem::has_value() ? &Locator::gameActionSystem::value() : nullptr;
+	const auto useStep = [actions](std::optional<uint32_t> step) {
+		if (actions != nullptr)
 		{
-			if (const auto updateInfo = _model->Update(input_steps::k_StepTime, *this))
-			{
-				SetOff(*updateInfo);
-			}
-			KeepInsideTheWorld();
-			Advance(input_steps::k_StepTime);
-			KeepStepView();
+			actions->UseInputStep(step);
 		}
-		return;
-	}
-	// Another model takes the input of the whole frame at once
-	const auto updateInfo = _model->Update(dt, *this);
-	if (updateInfo)
-	{
-		SetOff(*updateInfo);
-	}
-	KeepInsideTheWorld();
-	// A frame with no step leaves the camera where it is. A frame with more steps sets off again at each step, as the
-	// frames at 60 a second do.
+	};
+	// A frame with no step leaves the camera where it is
 	for (uint32_t i = 0; i < steps.count; ++i)
 	{
+		const auto time = std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i));
+		// The first step read its mouse and the keys of the last frame at their places in the frame. Each next step first
+		// reads the keys after the step before it, and then the part of the mouse that it takes, as each frame at 60 a
+		// second does.
 		if (i > 0)
 		{
-			if (updateInfo && updateInfo->eachStep)
-			{
-				SetOff(*updateInfo);
-			}
-			KeepInsideTheWorld();
+			useStep(i - 1);
+			_model->HandleKeys(std::chrono::duration_cast<std::chrono::microseconds>(steps.Time(i - 1)));
+			useStep(i);
+			_model->HandleActions(time);
 		}
-		Advance(input_steps::k_StepTime);
+		useStep(i);
+		CountModelTime(time);
+		if (const auto updateInfo = _model->Update(time, *this))
+		{
+			SetOff(*updateInfo);
+		}
+		KeepInsideTheWorld();
+		Advance(time);
 		KeepStepView();
 	}
+	useStep(std::nullopt);
 }
 
 void Camera::KeepStepView()

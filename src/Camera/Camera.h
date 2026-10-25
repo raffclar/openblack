@@ -145,10 +145,10 @@ public:
 
 	/// One step of the camera, as long as the frame
 	void Update(std::chrono::microseconds dt);
-	/// A frame of this length goes by. The camera eases in the fixed steps of the player's input that the frame takes,
-	/// none to a few (see input_steps). A model that eases with no input steps with them too. Another model takes the
-	/// input of the whole frame at once.
-	void Update(std::chrono::microseconds dt, const input_steps::Steps& steps);
+	/// A frame goes by. The model and the camera take the fixed steps of the player's input that the frame takes, none
+	/// to a few (see input_steps), each step for its whole milliseconds. At each step after the first, the model reads
+	/// the keys after the step before and the part of the mouse that the step takes.
+	void Update(const input_steps::Steps& steps);
 	void HandleActions(std::chrono::microseconds dt);
 	/// The keys of the current camera, after its step in this frame. They move the camera in the next frame.
 	void HandleKeys(std::chrono::microseconds dt);
