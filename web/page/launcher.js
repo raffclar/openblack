@@ -336,15 +336,22 @@ async function choose(entries, source) {
   }
   element('check-version').textContent = check.version;
   element('check').hidden = false;
-  element('play').disabled = true;
+  setPlayEnabled(false);
   log(`The page has ${entries.length} files from ${source}. Missing: ${check.missing.join(', ') || 'none'}.`);
   if (check.missing.length === 0 && element('keep-copy').checked && source !== 'the copy in this browser') {
     await copyToStorage(entries);
   }
-  element('play').disabled = check.missing.length > 0;
+  setPlayEnabled(check.missing.length === 0);
   if (check.missing.length === 0 && new URLSearchParams(location.search).has('autoplay')) {
     start();
   }
+}
+
+// The Play button starts the game as the desktop game starts. The Join Online Game button starts the game at the
+// multiplayer front end. The page parameter "multiplayer" shows only the second button.
+function setPlayEnabled(enabled) {
+  element('play').disabled = !enabled;
+  element('play-online').disabled = !enabled;
 }
 
 // The game draws with WebGPU, and with WebGL 2 when the browser has no WebGPU. The page asks the browser for a WebGPU
@@ -397,7 +404,7 @@ async function addToolFiles(parameters) {
   }
 }
 
-async function start() {
+async function start(online = false) {
   if (!chosen) {
     return;
   }
@@ -406,7 +413,7 @@ async function start() {
       'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs.');
     return;
   }
-  element('play').disabled = true;
+  setPlayEnabled(false);
   const storage = (await storageRoot()) !== undefined;
   if (storage && navigator.storage.persist) {
     // Ask the browser to keep the saves when it needs space
@@ -421,10 +428,11 @@ async function start() {
   }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
-  // The page parameter "multiplayer" gives the game the -MULTIPLAYER switch, as the shortcut of the desktop game does:
-  // the multiplayer front end opens in place of the menu. Every build takes it, because the menu stays shut while the
-  // first land's opening has its cut scenes.
-  if (parameters.has('multiplayer') && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
+  // The Join Online Game button and the page parameter "multiplayer" give the game the -MULTIPLAYER switch, as the
+  // shortcut of the desktop game does: the multiplayer front end opens in place of the menu. With no profile, the game
+  // asks for the new player's name first. Every build takes the switch.
+  const multiplayer = online || parameters.has('multiplayer');
+  if (multiplayer && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
     gameArguments.push('-MULTIPLAYER');
   }
   const renderer = await chooseRenderer(parameters, gameArguments);
@@ -452,6 +460,15 @@ async function start() {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
   }
+  // The Join Online Game button over the game asks the game for the multiplayer front end. The game takes the request
+  // at its next frame, also while a cut scene has the cinema bars in.
+  const requests = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  element('join-online').addEventListener('click', (event) => {
+    Atomics.store(requests, 0, 1);
+    log('Join Online Game: the page asks the game for the multiplayer front end.');
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
@@ -459,6 +476,7 @@ async function start() {
     printErr: log,
     openblackWeb: {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
+      requests,
     },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
@@ -548,7 +566,11 @@ async function main() {
     element('keep-copy-label').hidden = true;
   }
 
-  element('play').addEventListener('click', start);
+  element('play').addEventListener('click', () => start(false));
+  element('play-online').addEventListener('click', () => start(true));
+  if (new URLSearchParams(location.search).has('multiplayer')) {
+    element('play').hidden = true;
+  }
 }
 
 main();
