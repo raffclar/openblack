@@ -119,6 +119,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -3089,8 +3090,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
-	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
+	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
+		    // A villager in a creature's hand is where the frame draws the hand
+		    const auto transform = ecs::drawn_place::DrawnTransformOf(desc.entities, entity, placed);
 		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;

@@ -3879,7 +3879,9 @@ void Runner::UpdateCamera()
 	case Shot::Head:
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
-			const auto& transform = registry.Get<Transform>(*entity);
+			// The camera keeps up with the body where the frame draws it
+			const auto transform =
+			    DrawnTransform(registry.Get<Transform>(*entity), registry.TryGet<CreatureAnimation>(*entity));
 			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);

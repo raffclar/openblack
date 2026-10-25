@@ -1146,7 +1146,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
-		    const auto standing = PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // A tree in a creature's hand has its roots where the drawn hand holds it
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, tree, transform);
+		    const auto standing = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
 		    const auto placed = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(tree));
 		    const float halfWidth = meshes.Contains(mesh.id) ? meshes.Handle(mesh.id)->GetBoundingBox().Size().x * 0.5f : 0.0f;
 		    for (const float scale : scales)
@@ -1544,7 +1546,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
 			                           : TreePlace::InTheLand;
 			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
-			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, transform.position, transform.scale.y,
+			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, drawnPlace.position, transform.scale.y,
 			                                                 swayable.swaySlot)
 			                      : modelMatrix;
 		    }
