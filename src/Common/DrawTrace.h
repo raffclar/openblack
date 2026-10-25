@@ -33,6 +33,8 @@
 ///   the context: the script task that runs, or nothing.
 /// - "restart", when the generator goes back to its start for a new network game.
 /// - "set" and the count, when a world load puts back the count of synced draws.
+/// - "stop", the turn, the phase and the script task, when a script task stops. A task that stops makes the tasks
+///   before it in the list count the turn two times, so a stop at another turn moves the waits of other tasks.
 namespace openblack
 {
 class GameRandomInterface;
@@ -77,10 +79,12 @@ public:
 
 	/// Records a draw on the synced seed. The index is the count of synced draws after this draw.
 	void Draw(uint64_t index, const std::source_location& site);
-	/// Records that the generator goes back to its start
+	/// Records that the generator goes back to its start. The turn goes back to 0.
 	void Restart();
 	/// Records that a world load puts back the count of synced draws
 	void SetDraws(uint64_t draws);
+	/// Records that a script task stops
+	void TaskStopped(std::string_view task);
 	/// The function that gives the context of each draw, such as the script task that runs. None gives no context.
 	void SetContext(std::function<std::string()> context) { _context = std::move(context); }
 

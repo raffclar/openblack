@@ -153,6 +153,21 @@ TEST(DrawTrace, ParticleDrawsShowTheCallerOfTheParticleFunction)
 	EXPECT_EQ(LinesOf(*stream).size(), 1u);
 }
 
+TEST(DrawTrace, ContextAndTaskStopsGoToTheTrace)
+{
+	auto [trace, stream] = MakeTrace();
+	trace->SetContext([] { return std::string("script a.txt Wait at 7"); });
+	{
+		const TurnScope scope(trace.get(), 9);
+		trace->Draw(1, std::source_location::current());
+		trace->TaskStopped("4 a.txt Wait");
+	}
+	const auto lines = LinesOf(*stream);
+	ASSERT_EQ(lines.size(), 2u);
+	EXPECT_TRUE(lines[0].ends_with("\tscript a.txt Wait at 7")) << lines[0];
+	EXPECT_EQ(lines[1], "stop\t9\tturn\t4 a.txt Wait");
+}
+
 TEST(DrawTrace, GeneratorWritesRestartsAndLoadedCounts)
 {
 	auto [trace, stream] = MakeTrace();

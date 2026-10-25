@@ -73,8 +73,16 @@ void DrawTrace::Draw(uint64_t index, const std::source_location& site)
 
 void DrawTrace::Restart()
 {
+	// The new game has no turn yet
+	_turn = 0;
+	_phase = Phase::Frame;
 	// A file trace keeps all lines up to the restart, also when the program stops later
 	*_out << "restart\n" << std::flush;
+}
+
+void DrawTrace::TaskStopped(std::string_view task)
+{
+	*_out << "stop\t" << _turn << '\t' << NameOf(_phase) << '\t' << task << '\n';
 }
 
 void DrawTrace::SetDraws(uint64_t draws)

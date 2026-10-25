@@ -85,6 +85,24 @@ class DrawTraceTest(unittest.TestCase):
         self.assertEqual(result["first"]["reference"]["where"], "src/A.cpp:2")
         self.assertIsNone(result["first"]["other"])
 
+    def test_a_task_stop_at_another_turn_is_shown(self):
+        first = ["restart", draw(1, 1, "src/A.cpp:1"), "stop\t2\tturn\t7 a.txt Wait", draw(3, 2, "src/A.cpp:1")]
+        second = ["restart", draw(1, 1, "src/A.cpp:1"), "stop\t3\tturn\t7 a.txt Wait", draw(3, 2, "src/A.cpp:1")]
+        result = draw_trace.compare(self.write("a", first), self.write("b", second))
+        self.assertNotIn("first", result)
+        self.assertEqual(result["stops"]["other_turn"]["reference"]["turn"], 2)
+        self.assertEqual(result["stops"]["other_turn"]["other"]["turn"], 3)
+        self.assertIn("7 a.txt Wait", "\n".join(draw_trace.summary_lines(result)))
+
+    def test_an_extra_task_on_one_side_is_shown(self):
+        # The extra help task takes a task number, so the numbers of the tasks after it are not the same
+        first = ["restart", "stop\t0\tframe\t3 Load.txt Load", "stop\t5\tturn\t8 b.txt Note", draw(6, 1, "src/A.cpp:1")]
+        second = ["restart", "stop\t4\tturn\t8 Help.txt Banter", "stop\t5\tturn\t9 b.txt Note", draw(6, 1, "src/A.cpp:1")]
+        result = draw_trace.compare(self.write("a", first), self.write("b", second))
+        self.assertEqual(result["stops"]["only_one_side"]["task"], "8 Help.txt Banter")
+        self.assertEqual(result["stops"]["only_one_side"]["side"], "other")
+        self.assertNotIn("other_turn", result["stops"])
+
     def test_loads_are_kept(self):
         lines = ["restart", draw(1, 1, "src/A.cpp:1"), "set\t40", draw(2, 41, "src/A.cpp:1")]
         draws, loads = draw_trace.read(self.write("a", lines))

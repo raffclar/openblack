@@ -13,8 +13,9 @@ The game writes a draw trace with --sim-trace-draws FILE, and the game server wi
 one draw on the synced seed: the turn, the phase ("turn" in a game turn, "frame" between the turns), the count of synced
 draws after it, the place of the call (file:line), the function and the context (the script task that runs, if any). A "restart" line starts a new network game, so the
 compare starts after the last "restart" of each file. A "set" line, from a world load, puts back the count of draws: the
-draws go by their counts, so the compare continues after a load. The compare stops at the last turn that both traces
-have.
+draws go by their counts, so the compare continues after a load. A "stop" line is a script task that stops: a stop makes
+the tasks before it count the turn two times, so the compare also shows the first stop that is not the same. The compare
+stops at the last turn that both traces have.
 
     python tools/sim/draw_trace.py server/draws.tsv client2/draws.tsv
 """
@@ -25,6 +26,52 @@ import json
 import sys
 
 FIELDS = ("turn", "phase", "index", "where", "function")
+
+
+def read_stops(path):
+    """The script task stops of a trace after its last restart, as dicts"""
+    stops = []
+    with open(path, encoding="utf-8", errors="replace") as file:
+        for line in file:
+            parts = line.rstrip("\r\n").split("\t")
+            if parts[0] == "restart":
+                stops = []
+            elif parts[0] == "stop" and len(parts) >= 4:
+                stops.append({"turn": int(parts[1]), "phase": parts[2], "task": parts[3]})
+    return stops
+
+
+def keyed_stops(stops, last):
+    """The stops up to the last turn by their script and their count for that script. The task numbers are not in the
+    key, because an extra task on one computer changes the numbers of the tasks after it."""
+    counts = collections.Counter()
+    keyed = {}
+    for stop in stops:
+        # A stop before the first turn belongs to the load of the land, which the computers do at other times
+        if stop["turn"] < 1 or stop["turn"] > last:
+            continue
+        script = stop["task"].split(" ", 1)[-1]
+        keyed[(script, counts[script])] = stop
+        counts[script] += 1
+    return keyed
+
+
+def stop_differences(reference, other, last):
+    """The first stop that only one trace has, and the first stop that the traces have at other turns, in turn order"""
+    ours = keyed_stops(reference, last)
+    theirs = keyed_stops(other, last)
+    one_side = sorted([dict(stop, side="reference") for key, stop in ours.items() if key not in theirs] +
+                      [dict(stop, side="other") for key, stop in theirs.items() if key not in ours],
+                      key=lambda stop: stop["turn"])
+    moved = sorted([{"reference": stop, "other": theirs[key]} for key, stop in ours.items()
+                    if key in theirs and stop["turn"] != theirs[key]["turn"]],
+                   key=lambda pair: min(pair["reference"]["turn"], pair["other"]["turn"]))
+    result = {}
+    if one_side:
+        result["only_one_side"] = one_side[0]
+    if moved:
+        result["other_turn"] = moved[0]
+    return result
 
 
 def read(path):
@@ -89,6 +136,9 @@ def compare(reference_path, other_path, context=3):
     reference, other, last = common_turns(reference, other)
     result = {"compared_turns": last, "reference_draws": len(reference), "other_draws": len(other),
               "reference_loads": reference_loads, "other_loads": other_loads}
+    stops = stop_differences(read_stops(reference_path), read_stops(other_path), last)
+    if stops:
+        result["stops"] = stops
     found = first_difference(reference, other)
     if found is None:
         return result
@@ -123,6 +173,18 @@ def summary_lines(result, reference_name="reference", other_name="other"):
     """A short text of a compare"""
     lines = [f"{result['compared_turns']} turns compared: {reference_name} {result['reference_draws']} draws, "
              f"{other_name} {result['other_draws']} draws"]
+    def stop_text(value):
+        return f"turn {value['turn']} {value['phase']} task {value['task']}"
+
+    stops = result.get("stops", {})
+    if "only_one_side" in stops:
+        stop = stops["only_one_side"]
+        name = reference_name if stop["side"] == "reference" else other_name
+        lines.append(f"first script task stop that only {name} has: {stop_text(stop)}")
+    if "other_turn" in stops:
+        pair = stops["other_turn"]
+        lines.append(f"first script task stop at another turn: {reference_name} {stop_text(pair['reference'])}, "
+                     f"{other_name} {stop_text(pair['other'])}")
     first = result.get("first")
     if first is None:
         lines.append("all draws the same")
