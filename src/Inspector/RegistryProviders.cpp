@@ -23,6 +23,7 @@
 
 #include "ComponentReflection.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/Registry.h"
 
 using namespace openblack;
@@ -205,6 +206,12 @@ std::vector<QueryDescription> RegistryProvider::Describe() const
 	     .parameters = {},
 	     .kind = ResultKind::List,
 	     .needsNear = false},
+	    {.name = "unregistered",
+	     .description = "The component types that have entities but no registration with the reflection, so the sync "
+	                    "checksum and the saves leave them out. A correct game gives an empty list.",
+	     .parameters = {},
+	     .kind = ResultKind::List,
+	     .needsNear = false},
 	    {.name = "hash",
 	     .description = "A hash of where every entity is (its id and transform), and of a component's fields when one is "
 	                    "named, to tell whether two runs ended the same",
@@ -251,6 +258,10 @@ QueryResult RegistryProvider::Run(std::string_view query, const QueryContext& co
 	if (query == "components")
 	{
 		return Components(*registry);
+	}
+	if (query == "unregistered")
+	{
+		return Unregistered(*registry);
 	}
 	if (query == "hash")
 	{
@@ -431,6 +442,16 @@ QueryResult RegistryProvider::Components(const ecs::Registry& registry) const
 		});
 	}
 	std::stable_sort(items.begin(), items.end(), [](const Json& a, const Json& b) { return a["count"] > b["count"]; });
+	return QueryResult::Value(std::move(items));
+}
+
+QueryResult RegistryProvider::Unregistered(const ecs::Registry& registry) const
+{
+	Json items = Json::array();
+	for (const auto& name : ecs::reflection::UnregisteredStorages(registry.Underlying(), _context))
+	{
+		items.push_back({{"name", name}});
+	}
 	return QueryResult::Value(std::move(items));
 }
 

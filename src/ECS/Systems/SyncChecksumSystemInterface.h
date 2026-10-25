@@ -35,6 +35,8 @@ public:
 		/// Tools: at the turn of a dump, each field of each row of the dumped components as "component entity field
 		/// bytes", the bytes in hexadecimal
 		std::vector<std::string> dump;
+		/// The components that have an entity but no registration, so the checksum leaves them out. A correct game has none.
+		std::vector<std::string> unregistered;
 	};
 
 	virtual ~SyncChecksumSystemInterface() = default;
