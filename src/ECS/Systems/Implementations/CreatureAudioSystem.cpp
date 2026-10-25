@@ -172,7 +172,8 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 {
 	creature_audio::Layers layers;
 	// The animations played by weight stand in for the body's own action
-	if (animation.slots.empty() && creature_layers::IsPlaying(animation.body))
+	const auto& slots = DrawnSlots(animation);
+	if (slots.empty() && creature_layers::IsPlaying(animation.body))
 	{
 		layers.body = creature_audio::Played {creature_layers::CurrentAnimation(animation.body), animation.body.timeMs};
 	}
@@ -187,7 +188,7 @@ creature_audio::Layers LayersOf(const CreatureAnimation& animation)
 	}
 	std::vector<float> weights;
 	std::vector<size_t> animations;
-	for (const auto& slot : animation.slots)
+	for (const auto& slot : slots)
 	{
 		layers.slots.push_back({slot.animation, slot.timeMs});
 		weights.push_back(slot.weight);
@@ -258,8 +259,10 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 	}
 
 	registry.Each<const Creature, const CreatureAnimation, const Transform, CreatureAudio>(
-	    [&](entt::entity entity, const Creature& creature, const CreatureAnimation& animation, const Transform& transform,
+	    [&](entt::entity entity, const Creature& creature, const CreatureAnimation& animation, const Transform& turnTransform,
 	        CreatureAudio& heard) {
+		    // The sounds come from the body where the frame draws it
+		    const auto transform = DrawnTransform(turnTransform, &animation);
 		    heard.clockMs += gameTime.count();
 		    const auto* rig = RigOf(creature);
 		    const auto layers = LayersOf(animation);
@@ -322,7 +325,7 @@ void CreatureAudioSystem::Update(std::chrono::duration<float, std::milli> gameTi
 		if (const auto* transform = registry.TryGet<const Transform>(emitter.owner);
 		    transform != nullptr && registry.AnyOf<Creature>(emitter.owner))
 		{
-			emitter.position = transform->position;
+			emitter.position = DrawnTransform(*transform, registry.TryGet<const CreatureAnimation>(emitter.owner)).position;
 		}
 	});
 }

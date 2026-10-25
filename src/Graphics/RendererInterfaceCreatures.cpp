@@ -126,9 +126,11 @@ void Renderer::DrawInterfaceCreatures(const DrawSceneDesc& desc, const Interface
 		const auto depth = interface_creatures::Depth(ecs::components::ShownSize(*creature), shown.size, 1.0f);
 		const auto point =
 		    interface_creatures::PointFromScreen(view, projection, interface_creatures::k_Space, shown.anchor, depth);
-		const auto model = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+		// The drawn bones go with the place where the frame draws the body
+		const auto drawnPlace = ecs::components::DrawnTransform(*transform, animation);
+		const auto model = creature::PlacementMatrix(drawnPlace.position, drawnPlace.rotation, drawnPlace.scale);
 		const auto move =
-		    glm::translate(glm::mat4(1.0f), interface_creatures::MoveToPoint(point, model, bones, transform->position.y));
+		    glm::translate(glm::mat4(1.0f), interface_creatures::MoveToPoint(point, model, bones, drawnPlace.position.y));
 		instances.push_back({.model = move * model});
 
 		Body drawn {.mesh = mesh->id, .bones = bones, .targets = std::nullopt, .eyes = std::nullopt};

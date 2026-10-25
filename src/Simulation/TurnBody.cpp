@@ -69,6 +69,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -105,6 +106,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/VillagerAfterDeath.h"
 #include "LivingTurnOrder.h"
 #include "Locator.h"
 #include "Profiler.h"
@@ -201,6 +203,8 @@ void PlayLivingTurn()
 		auto animalsEnd = profiler.BeginScoped(Profiler::Stage::AnimalsUpdate);
 		animals.EndTurn();
 	}
+	// The souls of the dead that the frames have drawn to their ends go
+	ecs::villager_after_death::AgeSouls();
 }
 
 } // namespace
@@ -312,6 +316,10 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 		// Its marks heal
 		Locator::creatureSkinSystem::value().CreatureTurn(creature);
 		break;
+	case Step::CreatureMorph:
+		// The shape that its body is drawn with follows its alignment, fatness and strength
+		Locator::creatureAnimationSystem::value().MorphTurn(creature);
+		break;
 	case Step::CreatureMotes:
 		Locator::creatureAnimationSystem::value().MotesTurn(creature);
 		break;
@@ -400,7 +408,9 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::animalSystem::value().ShowTurnEnd();
 		// The creatures that walk go back to where their last turn took them, with the clips of that turn's end, and what
 		// they hold goes back into their hands as their last turn posed them
-		Locator::creatureLocomotionSystem::value().Update(1.0f);
+		Locator::creatureLocomotionSystem::value().ShowTurnEnds();
+		// A creature that came into the world since the last turn gets its skeleton and its first pose before the turn
+		Locator::creatureAnimationSystem::value().ShapeBodies();
 		Locator::creatureObjectActionSystem::value().ShowHeldAtTurnEnd();
 		// What the god's hand holds goes to where the last report put the hand
 		if (Locator::handGrabSystem::has_value())
@@ -432,8 +442,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::magicSystem::value().InterfaceTurn();
 		}
-		// In a network game the held creature looks at the hand that its player reported
-		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
+		// The held creature looks at the hand that its player reported
+		if (Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
 		{
 			Locator::creatureHandSystem::value().LookAtReportedHand();
 		}
@@ -516,11 +526,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::PlayerAlignment:
 		// Each player's waiting change moves its alignment. Then the camera takes the alignment of the player of most
-		// influence at its eye.
-		Locator::alignmentSystem::value().UpdatePlayersTurn(cameraPosition);
+		// influence where the player of this computer last reported its camera.
+		Locator::alignmentSystem::value().UpdatePlayersTurn();
 		break;
 	case Step::VillageTotems:
-		// A town totem that arrives at its share rings the village bell
+		// A town totem that arrives at its share rings the village bell. The totems ease by the clock of this computer, as
+		// the game does. The ease and the bell are only for the look and the sound, so the synced world does not read them.
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:
@@ -582,6 +593,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::CreatureFights:
 	case Step::CreatureFizz:
 	case Step::CreatureHelp:
+	case Step::CreatureMorph:
 	case Step::CreatureMotes:
 	case Step::CreatureBlood:
 	case Step::CreatureSway:
@@ -691,6 +703,15 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::vortexSystem::has_value())
 		{
 			Locator::vortexSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::ScriptVoices:
+		// The scripts' clock moves on by the turn's time, and the clicks of the frames since the last turn reach the
+		// dialogue
+		if (Locator::helpTextSystem::has_value())
+		{
+			Locator::helpTextSystem::value().ProcessTurn(
+			    static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count()));
 		}
 		break;
 	case Step::Scripts:
@@ -852,6 +873,14 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::WalkerLookahead:
 		// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
 		Locator::pathfindingSystem::value().ProcessLookahead();
+		break;
+	case Step::CreatureShapes:
+		// A creature that has no skeleton or no pose yet gets them, so that the frames have a body to draw
+		Locator::creatureAnimationSystem::value().ShapeBodies();
+		break;
+	case Step::MapCellsAtTurnEnd:
+		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing
+		Locator::entitiesMap::value().FileMade();
 		break;
 	case Step::InfluenceTurnEnd:
 		// The view's steps fix the reach of a citadel that the turn made. With no view, the end of the turn fixes it.

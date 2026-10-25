@@ -397,7 +397,8 @@ def main():
     parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
-    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients (1 to 1000)")
+    parser.add_argument("--frame-ms", type=float, default=20.0,
+                        help="the frame time of the clients; 0 for their real frame time")
     parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin")
@@ -437,9 +438,9 @@ def main():
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
-    if not 1.0 <= options.frame_ms <= 1000.0:
+    if options.frame_ms != 0 and not 1.0 <= options.frame_ms <= 1000.0:
         # The game does not start with another frame time, and the run would only say that the first client did not join
-        parser.error("--frame-ms takes 1 to 1000 milliseconds, as the game's --sim-frame-ms")
+        parser.error("--frame-ms takes 0 (real frame time) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
     client_inputs = [options.input, options.input2, options.input3, options.input4]
     client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
@@ -499,9 +500,11 @@ def main():
             os.makedirs(client_dir, exist_ok=True)
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
             ticket = make_ticket(key, kid, 100 + index, f"Player{index + 1}", "god", 600)
-            # No land, seed or start option: the client takes them from the server
-            command = [game_exe, "-g", options.game_path, "--skip-logos",
-                       "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(options.turns),
+            # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
+            # the client run at its real frame rate, as a player's game does
+            frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
+            command = [game_exe, "-g", options.game_path, "--skip-logos"] + frame_time + [
+                       "--sim-until-turn", str(options.turns),
                        "--sim-record", os.path.join(client_dir, "record.jsonl"), "--sim-record-every", "1",
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),

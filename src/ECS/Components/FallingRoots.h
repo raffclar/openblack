@@ -19,16 +19,6 @@ struct DropsRoots
 {
 };
 
-/// The roots of a tree that fell dead, dropping to the land under it and fading away
-struct FallingRoots
-{
-	/// The game's seconds since they began to fall
-	float seconds {0.0f};
-	/// The height they fell from, and the height they come to rest at
-	float startHeight {0.0f};
-	float restHeight {0.0f};
-};
-
 /// A tree out of the land, drawn with its roots under it, and where it is, which says how many roots and how big
 struct ShownRoots
 {

@@ -249,6 +249,25 @@ public:
 		}
 		transform.position = pose.origin;
 	}
+	// As the game's world: the frames draw the pulled pose apart from the world's Transform
+	void DrawPulledPose(entt::entity object, const Pose& pose) override
+	{
+		HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+		for (glm::length_t column = 0; column < 3; ++column)
+		{
+			const float length = glm::length(pose.axes[column]);
+			pulled.rotation[column] = pose.axes[column] / length;
+			pulled.scale[column] = length;
+		}
+		registry.AssignOrReplace<HandPulled>(object, pulled);
+	}
+	void ForgetPulledPose(entt::entity object) override
+	{
+		if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+		{
+			registry.Remove<HandPulled>(object);
+		}
+	}
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity, const glm::mat3& axes) const override
 	{
 		glm::mat3 result = axes;
@@ -1151,7 +1170,7 @@ TEST_F(HandGrabSystemWithWorld, AHeavyTreeIsNeverPulledFree)
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
 }
 
-TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPulled)
+TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeIsDrawnLeaningAndKeepsItsPlaceInTheWorld)
 {
 	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
 	const auto before = world->registry.Get<const Transform>(tree);
@@ -1161,35 +1180,41 @@ TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPu
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	// The frames draw the lean and the stretch; the world keeps the tree as it stood
+	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(pulled, nullptr);
+	EXPECT_TRUE(pulled->rotation != before.rotation || pulled->scale != before.scale);
 	EXPECT_FALSE(Release().has_value());
-	// Alone, the thing keeps the lean and the stretch of the pull
-	const auto& after = world->registry.Get<const Transform>(tree);
-	EXPECT_EQ(after.position, pulled.position);
-	EXPECT_EQ(after.rotation, pulled.rotation);
-	EXPECT_EQ(after.scale, pulled.scale);
-}
-
-TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsAsBeforeThePull)
-{
-	world->networkGame = true;
-	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
-	const auto before = world->registry.Get<const Transform>(tree);
-	world->underCursor = tree;
-	EXPECT_TRUE(Press());
-	for (int i = 0; i < 100; ++i)
-	{
-		Frame(10, {20.0f, 30.0f, 0.0f});
-	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
-	EXPECT_FALSE(Release().has_value());
-	// The other computers never saw the lean, so the thing stands as it stood before the pull
 	const auto& after = world->registry.Get<const Transform>(tree);
 	EXPECT_EQ(after.position, before.position);
 	EXPECT_EQ(after.rotation, before.rotation);
 	EXPECT_EQ(after.scale, before.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameAPulledThingKeepsThePlaceThatTheTurnsGaveIt)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// The turns of every computer move the thing while this hand pulls at it, as they move a villager that walks
+	auto& transform = world->registry.Get<Transform>(tree);
+	transform.position = {4.0f, 0.5f, -3.0f};
+	const auto walked = transform;
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
+	// The let go does not put it back where the pull started
+	EXPECT_FALSE(Release().has_value());
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
 }
 
@@ -1207,8 +1232,9 @@ TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNot
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto leaned = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(leaned.rotation != before.rotation || leaned.scale != before.scale);
+	const auto* leaned = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(leaned, nullptr);
+	ASSERT_TRUE(leaned->rotation != before.rotation || leaned->scale != before.scale);
 	ASSERT_TRUE(world->holes.empty());
 	// Light again, it comes free and leaves its hole where it stood before the pull
 	world->weights[tree] = 10.0f;

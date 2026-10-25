@@ -1777,3 +1777,11 @@ add_test(NAME test_draw_trace_compare
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
 )
+openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
+add_test(NAME test_frame_time_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
+)
+openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
+openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
+openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp)
