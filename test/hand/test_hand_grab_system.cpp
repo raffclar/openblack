@@ -965,6 +965,7 @@ TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 	world->underCursor = rock;
 	// Even out of the influence, where it isn't tapped
 	world->influence = false;
+	commandTurn = now / 100;
 	EXPECT_FALSE(Press());
 	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
 	ASSERT_NE(clicked, nullptr);
@@ -1003,11 +1004,13 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(7);
+	commandTurn = 7;
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1015,13 +1018,12 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.placeTurn, 8u);
 }
 
-TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+TEST_F(HandGrabSystemWithWorld, TheTurnWritesTheClicks)
 {
-	world->networkGame = true;
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
 	commandTurn = 12;
-	system->ClickThing(rock, 7);
+	system->ClickThing(rock);
 	ASSERT_EQ(world->sent.size(), 1u);
 	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
 	// The click has the number of the turn that wrote it, not of the frame that sent it
@@ -1031,7 +1033,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
 	commandTurn = 13;
-	system->ClickReleased(8);
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1041,7 +1043,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor = gone;
 	waiting.clear();
 	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
-	system->ClickReleased(9);
+	system->ClickReleased();
 	world->registry.Destroy(gone);
 	RunWaiting();
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
@@ -1054,12 +1056,13 @@ TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
 	world->underCursor = chest;
 	world->looseLeash = true;
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.placeTurn, 8u);
 	world->looseLeash = false;
-	system->ClickReleased(9);
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
 }
 
@@ -1067,11 +1070,16 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(now / 100);
-	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	commandTurn = now / 100;
+	system->ClickReleased();
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more.
+	// The turn forgets the clicks, not the frames.
 	Frame(14900);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
@@ -2297,8 +2305,14 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	Frame(50);
 	Release();
 	EXPECT_TRUE(world->tapped.empty());
-	ASSERT_EQ(world->sent.size(), 1u);
-	EXPECT_TRUE(std::holds_alternative<player_commands::HandTap>(world->sent.front()));
+	// The tap and the click of the thing under the hand go to the turn
+	ASSERT_EQ(world->sent.size(), 2u);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandTap>(action); }),
+	          1);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandClick>(action); }),
+	          1);
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);

@@ -510,9 +510,9 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
                                std::optional<creature_face::Request> face, float interruptsAfter)
 {
 	auto& minds = Locator::creatureMindSystem::value();
-	// In a network game the reaction is a command, which every computer plays at the same turn. The frame only asks
-	// whether the creature can take it now, for what the hand counts.
-	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame() && Locator::playerCommandSystem::has_value())
+	// The reaction is a command, which the next turn plays, the same at each frame rate and on every computer. The frame
+	// only asks whether the creature can take it now, for what the hand counts.
+	if (Locator::playerCommandSystem::has_value())
 	{
 		const bool takes = minds.CanForceAction(creature, animation, mirrored, interruptsAfter);
 		Locator::playerCommandSystem::value().Submit(player_commands::CreatureReaction {
@@ -527,7 +527,7 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 		});
 		return takes;
 	}
-	// Alone, the creature reacts at once, in the frame of the stroke or the slap
+	// With no commands, the creature reacts at once
 	return minds.ForceAction(creature, animation, mirrored, face, interruptsAfter);
 }
 

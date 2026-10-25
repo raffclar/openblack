@@ -837,7 +837,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		// scripts; not while the game is paused
 		if (handTakesPresses && !_actionPressTaken && !handHoldsThing && !magic.IsHandBusy() && !inTemple && !IsPaused())
 		{
-			handGrab->ClickReleased(Locator::time::value().GetTurn());
+			handGrab->ClickReleased();
 		}
 	}
 	// The action button (the right) casts the miracle in the hand, which comes before the creatures: pressed, it arms,
@@ -938,7 +938,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				_actionPressTaken = true;
 				if (handGrab != nullptr)
 				{
-					handGrab->ClickThing(*under, Locator::time::value().GetTurn());
+					handGrab->ClickThing(*under);
 				}
 				if (!creatureHand.Grab())
 				{
@@ -2783,9 +2783,9 @@ void Game::ReportHand()
 		_lastHandReport = {};
 		_lastHandPick = entt::null;
 	}
-	// In a network game the thing under the cursor goes too, when it changes, so that every computer counts the same
-	// time that the hand stays over the creature
-	if (Locator::time::value().IsNetworkGame() && Locator::pickingSystem::has_value())
+	// The thing under the cursor goes too, when it changes, so that the turn counts the same time that the hand stays
+	// over the creature at each frame rate and on every computer
+	if (Locator::pickingSystem::has_value())
 	{
 		const auto picked = Locator::pickingSystem::value().GetPick().object;
 		const auto object = picked.has_value() && registry.Valid(*picked) ? *picked : entt::entity {entt::null};

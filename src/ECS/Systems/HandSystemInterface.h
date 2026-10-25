@@ -91,9 +91,9 @@ public:
 	[[nodiscard]] virtual glm::vec3 GetReportedHandVelocity() const noexcept { return glm::vec3(0.0f); }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
-	/// At the turn of a network game: a player reports the thing under the cursor (see player_commands::HandPick)
+	/// At the turn: a player reports the thing under the cursor (see player_commands::HandPick)
 	virtual void ReportPick([[maybe_unused]] PlayerNames player, [[maybe_unused]] entt::entity object) {}
-	/// The thing under the cursor of the player's hand from the last pick that a turn did. None in a single game.
+	/// The thing under the cursor of the player's hand from the last pick that a turn did. None before the first pick.
 	[[nodiscard]] virtual entt::entity GetReportedPick() const noexcept { return entt::null; }
 	/// Each frame the hands catch up with their player's alignment once it has moved far enough, and blend their skin
 	/// again as they go into or out of the player's influence, tested at the point picked under the cursor (see

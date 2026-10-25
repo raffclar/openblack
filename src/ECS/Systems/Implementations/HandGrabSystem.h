@@ -43,8 +43,8 @@ public:
 
 	bool Press(uint32_t nowMs, uint32_t turn) override;
 	std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) override;
-	void ClickReleased(uint32_t turn) override;
-	void ClickThing(entt::entity object, uint32_t turn) override;
+	void ClickReleased() override;
+	void ClickThing(entt::entity object) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
 	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
@@ -56,7 +56,6 @@ public:
 	void DoApply(PlayerNames player, entt::entity target) override;
 	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
-	void ForgetClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;

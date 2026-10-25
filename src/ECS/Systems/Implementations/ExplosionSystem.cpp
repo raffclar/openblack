@@ -179,8 +179,8 @@ void ExplosionSystem::Update(float milliseconds)
 			{
 				return true;
 			}
-			mark.transform.position.y = objects::RootsHeight(mark.falling->startHeight, mark.falling->restHeight,
-			                                                 mark.falling->seconds);
+			mark.transform.position.y =
+			    objects::RootsHeight(mark.falling->startHeight, mark.falling->restHeight, mark.falling->seconds);
 			mark.alpha = objects::RootsAlpha(mark.falling->seconds);
 			changed = true;
 			return false;
