@@ -324,6 +324,7 @@
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
 #include "Online/OpenPage.h"
+#include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
 #include "Parsers/InfoFile.h"
 #include "Particles/LiquidParticles.h"
@@ -4967,8 +4968,11 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	{
 		LoadTestbed();
 	}
-	else if (!LoadMapWithFreshScripts(start.land, land_change::Kind::NewGame))
+	else if (!online::start_rules::IsLandPath(start.land) ||
+	         !LoadMapWithFreshScripts(Locator::filesystem::value().GetPath<filesystem::Path::Scripts>() / start.land,
+	                                  land_change::Kind::NewGame))
 	{
+		// The server names a land in the Scripts folder of the game, and never a path out of it
 		return false;
 	}
 	// The story's scripts run the first land, but not the testbed or a playground

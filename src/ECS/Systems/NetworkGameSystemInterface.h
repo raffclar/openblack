@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <string>
 
@@ -17,7 +19,8 @@
 namespace openblack::online
 {
 class NetworkSession;
-}
+enum class StartEvent : uint8_t;
+} // namespace openblack::online
 
 namespace openblack::ecs::systems
 {
@@ -77,6 +80,8 @@ public:
 	[[nodiscard]] virtual bool InGame() const = 0;
 	/// The session, while there is one
 	[[nodiscard]] virtual const online::NetworkSession* Session() const = 0;
+	/// The next step of the start of the game, for the front end to show, one time each
+	[[nodiscard]] virtual std::optional<online::StartEvent> TakeStartEvent() = 0;
 };
 
 } // namespace openblack::ecs::systems

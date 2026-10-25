@@ -149,8 +149,8 @@ MessageButtons ButtonsOf(Message message) noexcept
 	case Message::NotRegistered:
 	case Message::EmailRequired:
 		return MessageButtons::YesNo;
-	case Message::WaitingForStart:
-		return MessageButtons::Cancel;
+	case Message::WaitingForTransfer:
+	case Message::SendingStartData:
 	case Message::None:
 		return MessageButtons::None;
 	default:

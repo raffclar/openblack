@@ -66,6 +66,7 @@
 // The game role has sockets and TLS, which only the desktop builds have
 #if !defined(__EMSCRIPTEN__) && !defined(__ANDROID__)
 #define OPENBLACK_GAME_ROLE 1
+#include "Online/StartRules.h"
 #include "Server/Desktop/GameRole.h"
 #endif
 
@@ -518,14 +519,28 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
 {
 	network = std::make_unique<GameRole>();
+	// The clients find the land by its path in the Scripts folder, and compare the checksum of its file before the start
+	auto& fileSystem = Locator::filesystem::value();
+	const auto landPath = Locator::landSystem::value().GetLandPath();
+	const auto scripts = fileSystem.GetPath<filesystem::Path::Scripts>();
+	auto relative = landPath.lexically_relative(scripts);
+	if (relative.empty() || relative.begin()->string() == "..")
+	{
+		relative = landPath.filename();
+	}
+	uint64_t landChecksum = online::start_rules::LandChecksum({});
+	if (!settings.testbed && fileSystem.Exists(landPath))
+	{
+		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
+	}
 	const game_socket::Start start {
-	    .land = Locator::landSystem::value().GetLandPath().filename().string(),
+	    .land = relative.generic_string(),
 	    .testbed = settings.testbed,
 	    .seed = settings.seed,
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = settings.testbed ? std::string() : settings.openingName,
 	};
-	if (const auto error = network->Start(*settings.network, start); error.has_value())
+	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
 		network.reset();
