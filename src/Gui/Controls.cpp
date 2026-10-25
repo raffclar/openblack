@@ -1036,7 +1036,7 @@ void SymbolPicture::MouseDown(glm::ivec2 /*point*/)
 	_ring.SetDestination(1.0f, k_RingOpenSeconds);
 }
 
-void SymbolPicture::Release()
+void SymbolPicture::CloseRing()
 {
 	_ringOpen = false;
 	_ring.SetDestination(0.0f, k_RingCloseSeconds);
@@ -1053,6 +1053,6 @@ void SymbolPicture::Activate(glm::ivec2 point)
 			onChange(_symbol);
 		}
 	}
-	Release();
+	CloseRing();
 	Control::Activate(point);
 }

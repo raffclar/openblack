@@ -923,6 +923,7 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 	}
 	auto& fighter = fighting.fighter;
 	std::optional<fight::Step> step;
+	std::string_view stepName {"none"};
 	if (fighter.state == fight::State::Block)
 	{
 		fight::Enter(fighter, fight::State::BlockEnd);
@@ -941,12 +942,12 @@ bool KeepInArena(ecs::Registry& registry, entt::entity creature, CreatureFightin
 		if (step.has_value())
 		{
 			fight::Enter(fighter, fight::State::Action, fight::StepAnimation(*step));
+			stepName = fight::Name(*step);
 		}
 	}
 	fight_transcript::Note(creature, "keep_in_arena", [&] {
-		return fight_transcript::Fields {{"creature", fight_transcript::Id(creature)},
-		                                 {"state", fight::Name(fighter.state)},
-		                                 {"step", step.has_value() ? fight::Name(*step) : std::string_view("none")}};
+		return fight_transcript::Fields {
+		    {"creature", fight_transcript::Id(creature)}, {"state", fight::Name(fighter.state)}, {"step", stepName}};
 	});
 	return true;
 }
