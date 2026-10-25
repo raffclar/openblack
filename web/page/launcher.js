@@ -421,6 +421,12 @@ async function start() {
   }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
+  // The page parameter "multiplayer" gives the game the -MULTIPLAYER switch, as the shortcut of the desktop game does:
+  // the multiplayer front end opens in place of the menu. Every build takes it, because the menu stays shut while the
+  // first land's opening has its cut scenes.
+  if (parameters.has('multiplayer') && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
+    gameArguments.push('-MULTIPLAYER');
+  }
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);
