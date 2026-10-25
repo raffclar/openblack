@@ -378,7 +378,7 @@ def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
         inspector_call(pid, "camera.frame", {"params": {"id": entity, "yaw": yaw, "pitch": 40, "distance": 30}})
         time.sleep(1.0)
         found = inspector_call(pid, "ecs.entity", {"params": {"id": entity}})
-        at = (found or {}).get("components", {}).get("Transform", {}).get("position") if isinstance(found, dict) else None
+        at = found.get("position") if isinstance(found, dict) else None
         if not isinstance(at, list):
             return None
         for height in heights:
@@ -393,31 +393,60 @@ def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
 
 
 def slot_miracle(pid, player):
-    """The hand of a client in any god slot asks an icon of its own worship site for a miracle, casts it on the land,
+    """The hand of a client in any god slot asks an icon of its own worship site for a miracle and casts it on the land,
     then draws the leash gesture and a scribble that shakes the leash off. Every step goes through the inspector's input,
     so the client sends its commands as a player would. Returns what each step did."""
+    done = {"miracle": slot_cast(pid, player)}
+    near = done["miracle"].get("near")
+
+    def leashes():
+        """Whether each creature near the god's worship site wears a leash, and which"""
+        if near is None:
+            return None
+        found = items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": near,
+                                                            "radius": 2000, "limit": 4}))
+        result = {}
+        for creature in found:
+            leash = inspector_call(pid, "creatures.leash", {"params": {"id": creature["id"]}})
+            if isinstance(leash, dict):
+                result[creature["id"]] = {key: leash.get(key) for key in ("leashed", "worn", "picked", "tied")}
+        return result
+
+    done["leash_before"] = leashes()
+    # The leash gesture (the square spiral) puts the leash on the creature, and a scribble of the empty hand shakes it off
+    for name in ("square spiral", "scribble"):
+        drawn = inspector_call(pid, "input.gesture", {"params": {"name": name}})
+        time.sleep(3.0)
+        gestures = inspector_call(pid, "players.gestures", {})
+        done[f"gesture_{name}"] = {"drawn": drawn, "last": (gestures or {}).get("last_recognised")
+                                   if isinstance(gestures, dict) else gestures, "leash": leashes()}
+    print("slot miracle:", json.dumps(done)[:3000])
+    return done
+
+
+def slot_cast(pid, player):
+    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand"""
     done = {}
-    icon = None
+    icons = []
     for town in items_of(inspector_call(pid, "town.list", {})):
         if town.get("owner") != player:
             continue
         spells = inspector_call(pid, "town.spells", {"params": {"id": town.get("id")}})
-        for site_icon in (spells or {}).get("site_icons", []) if isinstance(spells, dict) else []:
-            icon = icon or site_icon
-    done["icon"] = icon
+        icons += (spells or {}).get("site_icons", []) if isinstance(spells, dict) else []
+    icon = max(icons, key=lambda found: found.get("store", 0.0)) if icons else None
+    done["icons"] = icons
     if icon is None:
-        print("slot miracle: the player has no worship icon")
         return done
+    place = inspector_call(pid, "ecs.entity", {"params": {"id": icon["id"]}})
+    at = place.get("position") if isinstance(place, dict) else None
+    done["near"] = [at[0], at[2]] if isinstance(at, list) else None
     pixel = pixel_on(pid, icon["id"])
     done["icon_pixel"] = pixel
     if pixel is None:
-        print("slot miracle: the pointer found no pixel on icon", icon["id"])
         return done
     inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
-    held = wait_for(lambda: (inspector_call(pid, "magic.state", {}) or {}).get("held_seed"), 90)
-    done["held_seed"] = held
-    if not held:
-        print("slot miracle: no miracle came into the hand")
+    done["held_seed"] = wait_for(lambda: (inspector_call(pid, "magic.state", {}) or {}).get("held_seed"), 120)
+    if not done["held_seed"]:
         return done
     # The seed waits until it is ready, then the hand casts it on the land below the icon
     time.sleep(6.0)
@@ -431,14 +460,6 @@ def slot_miracle(pid, player):
     state = inspector_call(pid, "magic.state", {}) or {}
     done["cast"] = {"spells_before": spells_before, "spells_after": state.get("spells"), "held_after": state.get("held_seed"),
                     "last_hand_result": state.get("last_hand_result")}
-    # The leash gesture puts the leash on the creature, and a scribble of the empty hand shakes it off
-    for name in ("leash", "scribble"):
-        drawn = inspector_call(pid, "input.gesture", {"params": {"name": name}})
-        time.sleep(3.0)
-        gestures = inspector_call(pid, "players.gestures", {})
-        done[f"gesture_{name}"] = {"drawn": drawn, "last": (gestures or {}).get("last") if isinstance(gestures, dict)
-                                   else gestures}
-    print("slot miracle:", json.dumps(done)[:2000])
     return done
 
 
