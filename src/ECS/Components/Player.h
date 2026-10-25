@@ -66,6 +66,9 @@ struct Player
 		uint32_t turn {0};
 	};
 	std::optional<Cast> lastCast;
+	/// The seed of the last miracle that went into the player's hand, none before the first one. The R gesture and the R
+	/// key ask the player's icons for this miracle again.
+	SpellSeedType lastSeedGained {SpellSeedType::None};
 	/// A script made the things the player's hand throws fly without the air's drag
 	uint32_t windResistance {0};
 	Miracles miracles;

@@ -152,8 +152,8 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 
 void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& hand)
 {
-	// The effect of a selection runs all the time at the hand. It shows while the leash picker is open, with the
-	// strength of the size of the hand.
+	// The effect of a selection runs all the time at the hand. It shows while the miracle selection or the leash
+	// picker is open, with the strength of the size of the hand.
 	if (!IsRunning(_selectionEffect))
 	{
 		_selectionEffect = Start(ParticleType::SpellSelection, glm::vec3(0.0f), 1.0f, false);
