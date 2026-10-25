@@ -495,6 +495,16 @@ void List::Draw(const DialogPainter& painter, bool hovered, bool focused, bool /
 			                    : item.colour.has_value() ? *item.colour
 			                                              : TextColour(hoveredItem == i, focused);
 
+			if (drawUnder)
+			{
+				drawUnder(painter, {.index = i,
+				                    .top = top,
+				                    .bottom = bottom,
+				                    .right = boxRight,
+				                    .shownTop = std::max(top, rect.min.y),
+				                    .shownBottom = std::min(bottom, rect.max.y)});
+				painter.SetAlpha(alpha);
+			}
 			// The list fades the lines the box cuts through
 			const auto left = rect.min.x + 4;
 			const auto right = boxRight - 4;

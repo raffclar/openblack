@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -610,6 +611,49 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .wireframe = config.wireframe,
 	    .drawHand = drawHand,
 	};
+}
+
+/// A network game with a session: the menu has Exit Online Game and the Multiplayer tab
+bool InNetworkGame()
+{
+	return Locator::networkGame::has_value() && Locator::networkGame::value().Session() != nullptr &&
+	       Locator::time::value().IsNetworkGame();
+}
+
+/// What the box of the winning conditions shows: the score history and the conditions of each god among the first four
+/// players that plays, and the conditions of the player of this computer
+gui::conditions_box::Figures ConditionsFigures()
+{
+	gui::conditions_box::Figures figures;
+	if (!Locator::gameEndSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return figures;
+	}
+	const auto local = Locator::playerSystem::value().GetLocalPlayer();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
+	{
+		if (god == local)
+		{
+			for (size_t number = 0; number < standing.conditions.size(); ++number)
+			{
+				if (const auto& condition = standing.conditions.at(number); condition.has_value())
+				{
+					figures.conditions.push_back({.number = number, .target = condition->target});
+				}
+			}
+		}
+		if (!game_end::CanLose(god))
+		{
+			continue;
+		}
+		const auto scores = game_end::ShownScores(standing);
+		figures.gods.push_back({.player = god,
+		                        .colour = gui::statistics_box::PlayerColour(god, landNumber),
+		                        .scores = std::vector<float>(scores.begin(), scores.end()),
+		                        .conditions = standing.conditions});
+	}
+	return figures;
 }
 
 } // namespace
@@ -2480,30 +2524,36 @@ void Game::FollowGameEnd()
 	{
 		return;
 	}
+	// Tests: at a turn, the player leaves the network game as a player does
+	if (const auto leaveAt = Locator::simulation::value().GetSettings().leaveAt;
+	    leaveAt.has_value() && !_testLeaveDone && Locator::time::value().GetTurn() >= *leaveAt && InNetworkGame())
+	{
+		_testLeaveDone = true;
+		LeaveAsAPlayerDoes();
+	}
 	auto& gameEnd = Locator::gameEndSystem::value();
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	// The end box stops to show itself when it closes, or when the box of one of its tabs opens over it
+	if (!_interface->GetEndGameBox().ShowsItself())
+	{
+		end_game_box::StoppedShowing(_endGameBoxState);
+	}
 	// The player's choice in the end box: Leave Game leaves the network game. A skirmish has no front end to go back to yet.
 	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
 	{
 		if (session != nullptr)
 		{
-			Locator::networkGame::value().Leave();
-			_leaveNetworkGame = true;
+			LeaveNetworkGame();
+			return;
 		}
-		else
-		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
-		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
 	}
 	const auto events = gameEnd.TakeEventsToShow();
 	if (events.empty())
 	{
 		return;
 	}
-	// A looker-on of a network game has no god: the game names it player seven
-	const bool looksOn =
-	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
-	const auto local = looksOn ? PlayerNames::PLAYER_SEVEN : OwnPlayer();
+	const auto local = LocalGodForGameEnd();
 	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
 
 	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
@@ -4008,11 +4058,24 @@ const gui::TextDatabase* Game::MakeInterface()
 			// A save that did not write its world files completely is told to the player in a box
 			Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
 		}
-		// The Game Statistics box takes the players' figures as it opens
-		_interface->GetMenu().SetStatisticsSource([] {
+		// The Game Statistics box takes the players' figures as it opens, from the menu and from the end box
+		const auto statistics = [] {
 			const auto local =
 			    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 			return std::pair(player_statistics::Box(), local);
+		};
+		_interface->GetMenu().SetStatisticsSource(statistics);
+		_interface->GetEndGameBox().SetStatisticsSource(statistics);
+		// The box of the winning conditions takes the gods' standings as it opens
+		_interface->GetMenu().SetConditionsSource(ConditionsFigures);
+		_interface->GetEndGameBox().SetConditionsSource(ConditionsFigures);
+		// Each time the end box shows that the player lost while the game goes on, the advisors can say their one-off
+		// line about it
+		_interface->GetEndGameBox().SetShownHandler([](const gui::EndGameBox::Contents& contents) {
+			if (contents.box.kind == end_game_box::Kind::Lost && Locator::guidanceSystem::has_value())
+			{
+				Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::NotVeryGood);
+			}
 		});
 		if (Locator::temple::has_value())
 		{
@@ -4424,20 +4487,10 @@ void Game::BeforeFirstFrame(bool continued)
 		PlayLogoEffect();
 	}
 	// The -MULTIPLAYER switch: the multiplayer front end opens in place of the menu
-	if (std::exchange(_frontEndOnStart, false))
+	if (std::exchange(_frontEndOnStart, false) && OpenFrontEndInPlaceOfMenu())
 	{
-		if (OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
-		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -MULTIPLAYER switch: the multiplayer front end opens");
-			return;
-		}
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
-		// The land's start-of-game question waited for the front end, which did not open
-		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
-		    hasCreature.has_value() && _interface)
-		{
-			_interface->ShowSkipBox(*hasCreature);
-		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -MULTIPLAYER switch: the multiplayer front end opens");
+		return;
 	}
 	// A game that continued from the save on exit starts under the menu
 	if (game_session::ShowsMenuOnStart(game_session::Start::Continue, continued))
@@ -4834,6 +4887,7 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::OpenMenu:
 		// The game keeps the help record of the player when Escape opens the menu
 		SaveHelpRecord();
+		_interface->GetMenu().SetNetworkGame(InNetworkGame());
 		_interface->OpenMenu();
 		// The menu reads the profile's own pictures again as it opens
 		ReadTattooPictures();
@@ -4999,6 +5053,12 @@ void Game::HandleInterfaceAction()
 	case Action::StartSkirmish:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
+	case Action::ExitOnlineGame:
+		ExitOnlineGame();
+		break;
+	case Action::AskToLeave:
+		AskToLeaveNetworkGame();
+		break;
 	case Action::Continue:
 	case Action::None:
 		break;
@@ -5058,6 +5118,144 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
+}
+
+bool Game::OpenFrontEndInPlaceOfMenu()
+{
+	if (OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+	{
+		return true;
+	}
+	SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+	// The land's start-of-game question waited for the front end, which did not open
+	if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
+	    hasCreature.has_value() && _interface)
+	{
+		_interface->ShowSkipBox(*hasCreature);
+	}
+	return false;
+}
+
+void Game::StartAfterNetworkGame()
+{
+	// The network game of this computer ends: the next land is a land of this computer alone. As the -MULTIPLAYER switch
+	// does, the start land loads as a plain start does, and the multiplayer front end opens in place of the menu.
+	if (Locator::networkGame::has_value())
+	{
+		Locator::networkGame::value().EndNetworkGame();
+	}
+	_endGameBoxState = {};
+	_frontEndOnStart = true;
+	ContinueGame();
+	_frontEndOnStart = false;
+	if (OpenFrontEndInPlaceOfMenu())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the multiplayer front end opens");
+	}
+}
+
+void Game::AskToLeaveNetworkGame()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	// The end box asks the question to leave, in place of the menu
+	const auto box = end_game_box::AskToLeave(_endGameBoxState);
+	const auto& texts = _interface->GetTexts();
+	const auto title = end_game_box::Title(
+	    box.kind, false, {},
+	    {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"), .lost = {}, .won = {}, .gameOver = {}, .winnerFormat = {}});
+	const auto local = LocalGodForGameEnd();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	_interface->OpenEndGameBox({.box = box, .title = title, .colour = colour});
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box asks the question to leave the network game");
+}
+
+void Game::ExitOnlineGame()
+{
+	// The question to leave, unless the god of the player is out of the game already: then the player leaves at once
+	if (Locator::gameEndSystem::has_value())
+	{
+		const auto local = LocalGodForGameEnd();
+		for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
+		{
+			if (god == local && standing.out)
+			{
+				if (_interface)
+				{
+					_interface->GetMenu().Close();
+				}
+				LeaveNetworkGame();
+				return;
+			}
+		}
+	}
+	AskToLeaveNetworkGame();
+}
+
+void Game::LeaveNetworkGame()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+	{
+		return;
+	}
+	// The game server makes the god of the player a leaver for every computer
+	Locator::networkGame::value().Leave();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the network game");
+	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes back to it.
+	const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
+	if (_joinedFromCommandLine || toolRun)
+	{
+		_leaveNetworkGame = true;
+		return;
+	}
+	_gameEndAsked = game_session::End::Online;
+}
+
+void Game::LeaveAsAPlayerDoes()
+{
+	// The centre of the control of a name, among the controls that a box shows now
+	const auto centreOf = [](const std::vector<gui::Dialog::NamedControl>& controls,
+	                         std::u16string_view name) -> std::optional<glm::ivec2> {
+		const auto found = std::ranges::find(controls, name, &gui::Dialog::NamedControl::name);
+		if (found == controls.end())
+		{
+			return std::nullopt;
+		}
+		return (found->rect.min + found->rect.max) / 2;
+	};
+	// Escape opens the menu, Exit Online Game asks the question to leave, and Leave Game leaves
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Tests: the player leaves the network game at turn {}",
+	                   Locator::time::value().GetTurn());
+	auto& menu = _interface->GetMenu();
+	menu.SetNetworkGame(InNetworkGame());
+	_interface->OpenMenu();
+	const auto& texts = _interface->GetTexts();
+	if (const auto exit = centreOf(menu.GetNamedControls(), texts.Get("HELP_TEXT_FRONT_END_03")); exit.has_value())
+	{
+		menu.MouseDown(*exit);
+		if (menu.MouseUp(*exit) == gui::GameMenu::Action::ExitOnlineGame)
+		{
+			ExitOnlineGame();
+		}
+	}
+	auto& endBox = _interface->GetEndGameBox();
+	if (const auto leave = centreOf(endBox.GetNamedControls(), texts.Get("HELP_TEXT_DIALOG_LEAVE_GAME")); leave.has_value())
+	{
+		endBox.MouseDown(*leave);
+		std::ignore = endBox.MouseUp(*leave);
+	}
+}
+
+PlayerNames Game::LocalGodForGameEnd() const
+{
+	// A looker-on of a network game has no god: the game names it player seven
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const bool looksOn =
+	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
+	return looksOn ? PlayerNames::PLAYER_SEVEN : OwnPlayer();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
@@ -5446,7 +5644,9 @@ void Game::AskForAnotherPlayer(bool canCancel)
 void Game::EndGame(game_session::End end)
 {
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends: {}",
-	                   end == game_session::End::NewGame ? "a new game starts" : "the game continues as the profile picked");
+	                   end == game_session::End::NewGame  ? "a new game starts"
+	                   : end == game_session::End::Online ? "the player left the network game"
+	                                                      : "the game continues as the profile picked");
 	SaveAsGameEnds(end, false);
 	// The next game has no previous profile until the Players page opens again
 	if (_interface)
@@ -5488,8 +5688,10 @@ void Game::StartNextGameWhenSaved()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The new game could not start");
 		}
 		break;
-	case game_session::Start::SavedGame:
 	case game_session::Start::Online:
+		StartAfterNetworkGame();
+		break;
+	case game_session::Start::SavedGame:
 	case game_session::Start::Skirmish:
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This start of a game is not available yet");
 		break;
@@ -5600,6 +5802,7 @@ void Game::ShowMenuOnStart()
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
+	_interface->GetMenu().SetNetworkGame(InNetworkGame());
 	_interface->OpenMenu();
 	// The menu reads the profile's own pictures again as it opens
 	ReadTattooPictures();

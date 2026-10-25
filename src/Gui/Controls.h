@@ -292,6 +292,8 @@ public:
 		int shownBottom {0};
 	};
 	std::function<void(const DialogPainter&, const ItemPlace&)> drawOver;
+	/// Drawn under each item the list shows, before its text, with the same places as drawOver
+	std::function<void(const DialogPainter&, const ItemPlace&)> drawUnder;
 	/// The item at a height of the dialog space, as the list is scrolled
 	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 

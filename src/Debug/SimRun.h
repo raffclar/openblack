@@ -63,6 +63,8 @@ struct Settings
 	bool stillHand {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
+	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
+	std::optional<uint32_t> leaveAt;
 };
 
 /// What the command line asks of a simulation run

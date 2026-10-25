@@ -971,6 +971,10 @@ struct Command
 		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
 		/// creature.
 		OtherGodHand,
+		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
+		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
+		/// Needs no creature.
+		EndBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

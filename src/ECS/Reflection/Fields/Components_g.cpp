@@ -41,7 +41,9 @@ void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& con
 	    .Field<&components::GameStanding::out>("out")
 	    .Field<&components::GameStanding::finished>("finished")
 	    .Field<&components::GameStanding::place>("place")
-	    .Field<&components::GameStanding::reason>("reason");
+	    .Field<&components::GameStanding::reason>("reason")
+	    .Field<&components::GameStanding::scoreHistory>("scoreHistory")
+	    .Field<&components::GameStanding::scoreHistoryIndex>("scoreHistoryIndex");
 	Reflect<components::GodHand>(context).Field<&components::GodHand::player>("player");
 	Reflect<components::Graveyard>(context).Field<&components::Graveyard::burials>("burials");
 	Reflect<components::StandInGraves>(context)

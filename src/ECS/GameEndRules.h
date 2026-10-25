@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <vector>
 
 #include "ECS/Components/GameStanding.h"
@@ -26,6 +27,8 @@
 // - A god among the first four players with no temple is out. Its creature goes from the land.
 // - For each god that is now out, the game counts the god out. When only one god is left, the game is decided.
 // - A god that the game finished with stops its computer mind. When the game is decided, every god finished.
+// - Each ten turns, each god keeps its score in a history: its share of the conditions in a game with conditions, or its
+//   share of the influence of the gods when no conditions are set or a god with no temple is not out yet.
 //
 // Only gods that a human or a computer mind plays take part. Players five to seven never lose by the temple rule.
 //
@@ -73,6 +76,15 @@ struct ConditionsDone
 };
 [[nodiscard]] ConditionsDone ShareOfConditions(const ecs::components::GameStanding& standing, float shareOfEach);
 
+/// The score history of a god takes one more value. When the history is full, the values move down one place and the
+/// oldest goes.
+void AddScore(ecs::components::GameStanding& standing, float score);
+/// The part of the score history that the game shows: the values before the place of the last value, so the last value
+/// is not shown
+[[nodiscard]] std::span<const float> ShownScores(const ecs::components::GameStanding& standing);
+/// The score history takes a value on each tenth turn
+inline constexpr uint32_t k_ScoreTurns = 10;
+
 /// The world that the end of the game looks at and changes
 class World
 {
@@ -86,6 +98,8 @@ public:
 	[[nodiscard]] virtual ecs::components::GameStanding& Standing(PlayerNames player) = 0;
 	/// The share of all the influence of the land that the player has
 	[[nodiscard]] virtual float InfluenceShare(PlayerNames player) const = 0;
+	/// The influence of the player
+	[[nodiscard]] virtual float InfluencePower(PlayerNames player) const = 0;
 	/// The creature of the player goes from the land, if the player has one
 	virtual void RemoveCreature(PlayerNames player) = 0;
 	/// The statistics of the player count one more god defeated

@@ -109,4 +109,45 @@ void testbed_scenarios::AddGameEndScenarios(std::vector<Scenario>& all)
 	    .landScript = k_ThreeComputerGods,
 	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 1.0f, .value = 1}},
 	});
+	all.push_back({
+	    .id = "game_end.leave_question",
+	    .name = "The question to leave a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of two gods: the player and the computer god of player two, each with a temple. One "
+	                   "second in, the end box asks the question to leave, as Exit Online Game of the menu asks it in a "
+	                   "network game.",
+	    .expected = "The end box fades in over half a second with \"Are you sure you want to quit this game?\" in the "
+	                "middle of the box on a band of the player's red at half opacity, Back to Game at the bottom left and "
+	                "Leave Game at the bottom right. The world goes on behind the box. Back to Game closes the box.",
+	    .environment = {.dispenserGrid = false, .players = {PlayerNames::PLAYER_TWO}, .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple}, {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO}},
+	    .landScript = k_TwoComputerGods,
+	    .commands = {{.kind = Kind::EndBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+	all.push_back({
+	    .id = "game_end.conditions",
+	    .name = "The Multiplayer tab of the end box",
+	    .facet = Facet::Multiplayer,
+	    .description = "A skirmish of three gods: the player and the computer gods of players two and three, each with a "
+	                   "temple. 31 seconds in, the player's temple starts its destruction. 12 seconds after that, the "
+	                   "Multiplayer tab of the end box opens.",
+	    .expected = "The box of the winning conditions replaces the end box: five tabs (Game Over, Multiplayer and three "
+	                "empty tabs) with Multiplayer open, \"Multiplayer Winning Condition Status\" on a dark band, a line "
+	                "graph from 0 to 1 with one line for each god in its colour (the share of the influence each ten turns, "
+	                "as a game with no winning conditions keeps it), the check boxes Player 1, Player 2 and Player 3 under "
+	                "it, and an empty list, because a skirmish has no winning conditions. A click on a check box takes the "
+	                "line of the god out of the graph or puts it back. A click on the graph shows the lines as shares. Game "
+	                "Over and Back go back to the end box.",
+	    .environment = {.dispenserGrid = false,
+	                    .players = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_THREE},
+	                    .skirmish = true},
+	    .framing = k_Overview,
+	    .temples = {{.offset = k_OwnTemple},
+	                {.offset = k_SecondTemple, .owner = PlayerNames::PLAYER_TWO},
+	                {.offset = k_ThirdTemple, .owner = PlayerNames::PLAYER_THREE}},
+	    .landScript = k_ThreeComputerGods,
+	    .commands = {{.kind = Kind::DestroyTemple, .delaySeconds = 31.0f, .value = 0},
+	                 {.kind = Kind::EndBox, .delaySeconds = 12.0f, .value = 1}},
+	});
 }

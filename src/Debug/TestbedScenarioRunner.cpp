@@ -2879,6 +2879,25 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::EndBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 0)
+		{
+			game->AskToLeaveNetworkGame();
+			Log(fmt::format("{:.1f}s: {}: the question to leave opens", _seconds, Name(command.kind)));
+			return;
+		}
+		const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(command.value);
+		Log(fmt::format("{:.1f}s: {}: tab {} {}", _seconds, Name(command.kind), command.value,
+		                opened ? "opens its box" : "does not open"));
+		return;
+	}
 	if (command.kind == Kind::OpenMenuPage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
@@ -3569,6 +3588,7 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
+	case Kind::EndBox:
 	case Kind::OtherGodHand:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:

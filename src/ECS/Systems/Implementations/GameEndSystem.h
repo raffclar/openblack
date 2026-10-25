@@ -28,6 +28,7 @@ public:
 	[[nodiscard]] bool IsDecided() const override;
 	[[nodiscard]] std::vector<game_end::Event> TakeEventsToShow() override { return std::exchange(_eventsToShow, {}); }
 	[[nodiscard]] std::optional<PlayerNames> LastGodIn() const override;
+	[[nodiscard]] std::vector<GodStanding> Standings() const override;
 
 private:
 	std::vector<game_end::Event> _events;
