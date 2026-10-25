@@ -25,6 +25,10 @@ CREATE_CREATURE_FROM_FILE("PLAYER_TWO", 3, "ComputerControlledCreature", "25.0,0
 SET_COMPUTER_PLAYER_CREATURE_LIKE("PLAYER_TWO", "PLAYER_ONE")
 )";
 
+/// The line of the Island Wars land that makes an anti-influence of 20 m for player one, here 40 m north of the middle
+constexpr std::string_view k_AntiInfluenceRingScript = R"(CREATE_INFLUENCE_RING("0.0,40.0", 0, 20.000000, 202594004)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
@@ -42,5 +46,18 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 0.0f}, .size = 1.0f}},
 	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
 	    .landScript = k_ComputerPlayerScript,
+	});
+
+	all.push_back({
+	    .id = "multiplayer.land_anti_influence_ring",
+	    .name = "An anti-influence ring that a land's script makes",
+	    .facet = Facet::Multiplayer,
+	    .description = "The line of the Island Wars land that makes an influence ring. Its last value is not 0, so it is "
+	                   "an anti-influence of 20 m for player one, here 40 m north of the middle, inside the player's "
+	                   "testbed influence.",
+	    .expected = "Inside 20 m of the spot the player has no influence: the hand cannot pick up, drop or cast there, and "
+	                "the influence.at query gives 0 for player one. Just outside it the hand works as before.",
+	    .environment = {.dispenserGrid = false},
+	    .landScript = k_AntiInfluenceRingScript,
 	});
 }

@@ -1749,3 +1749,4 @@ openblack_setup_and_add_inspector_test(
   test_inspector_network_gate inspector/test_inspector_network_gate.cpp
 )
 openblack_setup_and_add_test(test_network_land online/test_network_land.cpp)
+openblack_setup_and_add_test(test_online_map_land test_online_map_land.cpp)

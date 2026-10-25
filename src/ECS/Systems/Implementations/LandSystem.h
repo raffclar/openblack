@@ -15,6 +15,7 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <vector>
 
 #include "ECS/Systems/LandSystemInterface.h"
 
@@ -78,6 +79,8 @@ private:
 	NoLandView _noView;
 	std::filesystem::path _landPath;
 	std::filesystem::path _landscapePath;
+	/// The landscape of the land of a network game whose script runs now, empty for any other land
+	std::vector<uint8_t> _mapLandscape;
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};

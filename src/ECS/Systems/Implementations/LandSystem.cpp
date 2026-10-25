@@ -14,6 +14,7 @@
 #include <cmath>
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <chrono>
 #include <exception>
@@ -26,12 +27,14 @@
 #include <vector>
 
 #include <LHVM.h>
+#include <LNDFile.h>
 #include <OnlineMapFile.h>
 #include <fmt/format.h>
 #include <spdlog/spdlog.h>
 
 #include "3D/FlatLand.h"
 #include "3D/GodsRingLand.h"
+#include "3D/LandData.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
@@ -122,6 +125,7 @@
 #include "Level.h"
 #include "Locator.h"
 #include "Online/GodsRingMap.h"
+#include "Online/OnlineMapLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Serializer/FotFile.h"
@@ -175,14 +179,32 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	LoadTimer timer(fmt::format("land {}", path.stem().string()));
 	View().BeginLoadingScreen(look);
 	const auto data = fileSystem.ReadAll(path);
-	const auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
+	auto source = std::string(reinterpret_cast<const char*>(data.data()), data.size());
+	// A land of a network game holds its script and its landscape in one file. Its script loads the landscape that it
+	// holds.
+	_mapLandscape.clear();
+	if (online_map_land::IsOnlineMap(path.generic_string()))
+	{
+		const auto file = onlinemap::Parse(std::as_bytes(std::span(data)));
+		if (!file.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land {} is not a land of a network game", path.generic_string());
+			View().EndLoadingScreen();
+			return false;
+		}
+		source = std::string(file->script);
+		_mapLandscape.resize(file->landscape.size());
+		std::ranges::transform(file->landscape, _mapLandscape.begin(), [](std::byte b) { return static_cast<uint8_t>(b); });
+	}
 
 	PrepareNewLand(change);
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 
-	// A playground land is played as a skirmish, in which losing a temple doesn't end the game
-	Locator::entitiesRegistry::value().Context().skirmish = IsPlaygroundLand(path);
+	// A playground land is played as a skirmish, in which losing a temple doesn't end the game. A land of a network game
+	// is played the same way: no story starts on it and losing a temple does not end the game.
+	Locator::entitiesRegistry::value().Context().skirmish =
+	    IsPlaygroundLand(path) || online_map_land::IsOnlineMap(path.generic_string());
 	_landPath = path;
 
 	lhscriptx::Script script;
@@ -196,6 +218,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 		// A script that can't be read leaves the land as far as it got, rather than ending the game
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "Error in the map script {}: {}", path.generic_string(), e.what());
 	}
+	_mapLandscape.clear();
 
 	timer.Step("map script");
 	// The game puts each thing on the map as the script makes it, before the footpaths load: the things go into their
@@ -849,6 +872,21 @@ void LandSystem::StartNewLand(land_change::Kind change)
 
 void LandSystem::LoadLandscape(const std::filesystem::path& path)
 {
+	// The script of a land of a network game loads the landscape that the land's file holds
+	if (!_mapLandscape.empty() && online_map_land::IsOwnLandscape(_landPath.generic_string(), path.generic_string()))
+	{
+		lnd::LNDFile lnd;
+		if (const auto result = lnd.Open(_mapLandscape); result != lnd::LNDResult::Success)
+		{
+			throw std::runtime_error("Could not read the landscape of " + _landPath.generic_string() + ": " +
+			                         std::string(lnd::ResultToStr(result)));
+		}
+		LoadTimer timer(fmt::format("landscape {}", path.stem().string()));
+		_landscapePath = path;
+		InitializeLevel(LandData::FromLnd(lnd));
+		SetUpLandscape();
+		return;
+	}
 	auto& fileSystem = Locator::filesystem::value();
 
 	auto fixedName = fileSystem.FindPath(filesystem::FileSystemInterface::FixPath(path));
