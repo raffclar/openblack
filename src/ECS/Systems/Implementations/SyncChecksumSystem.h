@@ -50,6 +50,7 @@ public:
 	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
+	[[nodiscard]] std::function<void(const TurnChecksum&)> GetTurnListener() const override { return _listener; }
 
 private:
 	/// The names of the saved components, by which the checksum reads the world

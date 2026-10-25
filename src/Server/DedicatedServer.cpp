@@ -45,6 +45,7 @@
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -243,6 +244,11 @@ bool ServerWorld::Initialize()
 	land.SetNewGameStart(_settings.opening);
 	// The game server gets the humans of its land from the network session
 	land.SetHumansFromSession(_settings.network.has_value());
+	// No player sits at the game server, so no god's tap takes the server into the temple or another state of a player
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().ClearOwnPlayer();
+	}
 
 	// Every random number from the seed, the date pinned
 	Locator::rng::value().SetRunSeed(_settings.seed);
