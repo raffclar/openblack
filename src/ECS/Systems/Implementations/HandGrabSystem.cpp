@@ -12,6 +12,7 @@
 #include "HandGrabSystem.h"
 
 #include <algorithm>
+#include <utility>
 
 #include <glm/geometric.hpp>
 
@@ -1833,10 +1834,11 @@ void HandGrabSystem::PlaceHeldForTurn()
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
 	// that it had as the hand took it.
 	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
+	// The turn runs on every computer: it never gives a hand a grab that only this computer would have
 	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	if (const auto* grab = Grab(); grab != nullptr &&
-	                               (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
-	                               grab->tug.has_value() && Exists(grab->object))
+	if (const auto* grab = std::as_const(*this).Grab();
+	    grab != nullptr && (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
+	    grab->tug.has_value() && Exists(grab->object))
 	{
 		auto& pulled = _world->Entities().Get<Transform>(grab->object);
 		pulled.position = grab->pullPosition;

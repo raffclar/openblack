@@ -27,6 +27,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
+#include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/ReportedHand.h"
@@ -328,6 +329,23 @@ TEST_F(ReportedHands, TheGodOfAnotherPlayerGetsHandsOfItsOwnAndItsReportsMoveOnl
 	}
 	EXPECT_EQ(registry.Get<const ecs::components::HandStillness>(made[0]).stillTurns,
 	          registry.Get<const ecs::components::HandStillness>(_hand).stillTurns);
+}
+
+// The left hand of a god has its grab from the start, so that the order of the hands in the world is the same on every
+// computer whichever computer first acts with a hand
+TEST_F(ReportedHands, TheLeftHandOfAGodStartsWithItsGrabAndTheRightHandHasNone)
+{
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	const auto hands = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto& registry = Locator::entitiesRegistry::value();
+	EXPECT_TRUE(
+	    registry.AllOf<ecs::components::HandGrab>(hands[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)]));
+	EXPECT_FALSE(
+	    registry.AllOf<ecs::components::HandGrab>(hands[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Right)]));
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
 }
 
 TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)

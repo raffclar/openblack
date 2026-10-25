@@ -108,6 +108,18 @@ TEST(SyncedState, TheGamesPresentationPartsHaveAComponentEach)
 	}
 }
 
+TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
+{
+	// Each computer numbers its particle effects. The computers that draw start more effects than the server.
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Spell", "effect"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Spell", "castEffect"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffect"));
+	// The turn reads the rest of a miracle
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Spell", "magnitude"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
