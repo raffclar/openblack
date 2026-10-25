@@ -6309,8 +6309,8 @@ void Game::UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds)
 	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 	frame.overWorld = !inTemple && !Locator::debugGui::value().IsMouseOverWindow();
 	auto& magic = Locator::magicSystem::value();
-	// The hand's movement, and the spin it gives a miracle, are measured by what the hand steps by
-	magic.UpdateHand(frame, HandStepSeconds());
+	// The hand's movement, and the spin it gives a miracle, are measured at the steps of the input
+	magic.UpdateHand(frame, Locator::time::value().GetInputSteps());
 	magic.Update(deltaSeconds);
 	Locator::magicShieldSystem::value().Update(deltaSeconds);
 	// The seeds above the stone hands and worship icons spin as the globes' do, by the game time of the frame: they stand

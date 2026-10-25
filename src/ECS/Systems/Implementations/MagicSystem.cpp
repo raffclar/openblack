@@ -1722,6 +1722,7 @@ void MagicSystem::Reset()
 	_turn = 0;
 	_driven.reset();
 	_lastHandPosition.reset();
+	_lastFrameHandPosition.reset();
 	_handVelocity = glm::vec3(0.0f);
 	_handEffectPoint.reset();
 	_handScale = 1.0f;
@@ -2127,7 +2128,7 @@ bool MagicSystem::TapGlobe(entt::entity orb)
 
 // The hand
 
-void MagicSystem::UpdateHand(const HandFrame& mouseFrame, float seconds)
+void MagicSystem::UpdateHand(const HandFrame& mouseFrame, const input_steps::Steps& steps)
 {
 	auto frame = _driven.has_value() ? *_driven : mouseFrame;
 	// The hand a scenario puts is placed from there as the mouse's hand is: kept where a pour began, lifted by the pour
@@ -2147,17 +2148,24 @@ void MagicSystem::UpdateHand(const HandFrame& mouseFrame, float seconds)
 			_handVelocity = glm::vec3(0.0f);
 		}
 	}
-	if (_lastHandPosition.has_value() && seconds > 0.0f)
+	const auto frameStart = _lastFrameHandPosition.value_or(frame.handPosition);
+	for (uint32_t i = 0; i < steps.count; ++i)
 	{
-		const auto step = frame.handPosition - *_lastHandPosition;
-		_handVelocity = magic::FilterHandVelocity(_handVelocity, step / seconds, seconds);
-		// While it holds a miracle, how the way it moves turns is the spin it gives the miracle
-		if (held != entt::null)
+		const auto position = input_steps::Between(frameStart, frame.handPosition, steps.Point(i));
+		if (_lastHandPosition.has_value())
 		{
-			magic::StepHandSpin(_handSpin, step, _handVelocity, seconds);
+			constexpr float k_Seconds = input_steps::k_StepSeconds;
+			const auto step = position - *_lastHandPosition;
+			_handVelocity = magic::FilterHandVelocity(_handVelocity, step / k_Seconds, k_Seconds);
+			// While it holds a miracle, how the way it moves turns is the spin it gives the miracle
+			if (held != entt::null)
+			{
+				magic::StepHandSpin(_handSpin, step, _handVelocity, k_Seconds);
+			}
 		}
+		_lastHandPosition = position;
 	}
-	_lastHandPosition = frame.handPosition;
+	_lastFrameHandPosition = frame.handPosition;
 	_hand = frame;
 }
 

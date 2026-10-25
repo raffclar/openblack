@@ -730,7 +730,7 @@ private:
 
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
