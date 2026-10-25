@@ -1100,6 +1100,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
+			// The bars that the temple's scripts wait for slide by the real time of the temple's turn, as the game's draw
+			// slides them by real time in the temple
+			Locator::cinematicDirectorSystem::value().ProcessTempleTurn();
 			view.PlayTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
 			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
