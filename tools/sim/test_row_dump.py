@@ -21,6 +21,7 @@ import row_dump  # noqa: E402
 SERVER = """turn 40 slot 0 parts
 Transform.position 7 0000803f0000004000004040
 Villager.age 7 05
+VillagerPose.place 7 00 shown
 Transform.position 9 00000000
 turn 52 slot 0 parts (the rows of the turn are not kept)
 """
@@ -30,6 +31,7 @@ Transform.position 7 00
 turn 40 parts from the server
 Transform.position 7 0000803f0000004000005040
 Villager.age 7 05
+VillagerPose.place 7 01 shown
 Transform.position 1048585 00000000
 """
 
@@ -57,8 +59,10 @@ class RowDumpTest(unittest.TestCase):
         self.assertIn("floats 1,2,3.25", first["second"])
         # Entity 9 has a new version on the client: each dump has a row that the other does not have
         self.assertEqual((result["only_first"], result["only_second"]), (1, 1))
-        self.assertEqual(result["entities"][0]["components"], ["Transform", "Villager"])
+        self.assertEqual(result["entities"][0]["components"], ["Transform", "Villager", "VillagerPose"])
         self.assertEqual(result["entities"][2]["entity_text"], "9v1")
+        # A shown field is not a difference of the synced world, but the entity lists it
+        self.assertEqual([field["field"] for field in result["entities"][0]["shown_fields"]], ["VillagerPose.place"])
 
     def test_a_turn_with_no_rows_on_one_side_is_an_error(self):
         result = row_dump.compare(row_dump.read_dump(self.server), row_dump.read_dump(self.client), 52)

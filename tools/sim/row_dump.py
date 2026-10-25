@@ -16,7 +16,8 @@ Each dump has one line "turn T reason" for each turn that it wrote, then one lin
 4294967295. With no --turn, the script takes the first turn of both dumps with a difference, else the first turn
 that both wrote. It prints the
 first field that differs (in the order of the first dump), each entity that has a different field with its
-components, and the rows that only one dump has.
+components, and the rows that only one dump has. A field that the checksum leaves out has the word "shown" after its
+bytes; for each different entity the script also prints the shown fields that differ, which the turn must not read.
 """
 
 import argparse
@@ -37,15 +38,18 @@ def read_dump(path):
                 turn = int(words[1])
                 reason = words[2] if len(words) > 2 else ""
                 if reason.endswith("(the rows of the turn are not kept)"):
-                    turns.setdefault(turn, {"reason": reason, "rows": None, "order": []})
+                    turns.setdefault(turn, {"reason": reason, "rows": None, "order": [], "shown": {}})
                     current = None
                     continue
-                current = {"reason": reason, "rows": {}, "order": []}
+                current = {"reason": reason, "rows": {}, "order": [], "shown": {}}
                 turns[turn] = current
                 continue
             if current is None or not line:
                 continue
             parts = line.split(" ")
+            if len(parts) == 4 and parts[3] == "shown":
+                current["shown"][(parts[0], int(parts[1]))] = parts[2]
+                continue
             if len(parts) != 3:
                 continue
             key = (parts[0], int(parts[1]))
@@ -95,12 +99,16 @@ def compare(first, second, turn=None):
         if entity in seen:
             continue
         seen.add(entity)
-        components = sorted({key[0].split(".")[0] for key in a["order"] if key[1] == entity}
-                            | {key[0].split(".")[0] for key in b["order"] if key[1] == entity})
+        components = sorted({key[0].split(".")[0] for key in list(a["order"]) + list(a["shown"]) if key[1] == entity}
+                            | {key[0].split(".")[0] for key in list(b["order"]) + list(b["shown"]) if key[1] == entity})
         fields = [{"field": key[0], "first": value_text(a["rows"].get(key)), "second": value_text(b["rows"].get(key))}
                   for key in dict.fromkeys(different + only_first + only_second) if key[1] == entity]
+        # The fields that each computer only shows: the turn must not read them
+        shown = [{"field": key[0], "first": value_text(a["shown"].get(key)), "second": value_text(b["shown"].get(key))}
+                 for key in sorted(set(a["shown"]) | set(b["shown"]))
+                 if key[1] == entity and a["shown"].get(key) != b["shown"].get(key)]
         entities.append({"entity": entity, "entity_text": entity_text(entity), "components": components,
-                         "fields": fields})
+                         "fields": fields, "shown_fields": shown})
     result = {"turn": turn, "first_reason": a["reason"], "second_reason": b["reason"], "rows": len(a["order"]),
               "different": len(different), "only_first": len(only_first), "only_second": len(only_second),
               "entities": entities}
@@ -130,6 +138,8 @@ def print_result(result, limit):
         print(f"entity {entity['entity_text']} ({entity['entity']}): {' '.join(entity['components'])}")
         for field in entity["fields"]:
             print(f"  {field['field']}: {field['first']}  |  {field['second']}")
+        for field in entity["shown_fields"]:
+            print(f"  shown {field['field']}: {field['first']}  |  {field['second']}")
     if len(result["entities"]) > limit:
         print(f"... {len(result['entities']) - limit} more entities")
 

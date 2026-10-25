@@ -50,7 +50,8 @@ void AddValue(ecs::reflection::WorldRows& rows, std::string_view name, std::span
 /// turn, both write the rows of that turn, and tools/sim/row_dump.py finds the first field that differs.
 ///
 /// The text has one line "turn T reason" for each written turn, then one line for each field of each row:
-/// "component.field entity bytes", the bytes in hexadecimal.
+/// "component.field entity bytes", the bytes in hexadecimal. A field that the checksum leaves out (a part that only
+/// shows the world on this computer) has the word "shown" after its bytes.
 class RowDump
 {
 public:
