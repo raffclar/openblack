@@ -153,6 +153,15 @@ TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
 	}));
 }
 
+TEST(SyncedState, TheCopyOfTheCreatureInAFilmIsNotSynced)
+{
+	// The film shows the copy on this computer only, while the game waits
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "FilmCreature";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
