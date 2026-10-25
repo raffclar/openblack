@@ -38,10 +38,10 @@ struct NetworkJoin
 	/// Tests on this computer only: a PEM file of more certificate authorities, for a test server on a loopback address.
 	/// The join refuses it for any other address.
 	std::optional<std::string> testAuthorities;
-	/// True when the land of the game loaded before the join, as for a join from the command line: the player is ready
-	/// at once and the world waits for the server's start. False for a join from the multiplayer front end: the player
-	/// waits in the game room, and the game loads the server's land after the start (see TakeStart).
-	bool landLoaded {true};
+	/// True for a join from the command line: the game loads the server's land as the server lets the player in (see
+	/// TakeStart), then the player is ready and the world waits for the server's start. False for a join from the
+	/// multiplayer front end: the player waits in the game room, and the game loads the server's land after the start.
+	bool fromCommandLine {true};
 	/// Tests: at this turn the world draws one synced random number more, so that it parts from the server's world
 	std::optional<uint32_t> partAt;
 	/// Tests: the world parts again after each load of the server's world
@@ -56,6 +56,10 @@ struct NetworkJoin
 /// Ready, and the land on this computer plays on as before. When the server starts the game, the game takes the start
 /// (TakeStart), loads the server's land with the server's seed, and then calls BeginPlay: from then on the world does
 /// only the server's turns.
+///
+/// A join from the command line gets the server's land, seed and start in the server's reply to the join. The game takes
+/// them (TakeStart), loads that land with that seed, and calls BeginPlay. The player is then ready, and the world waits,
+/// paused, for the server's start. Thus each computer starts the game from the server's world.
 class NetworkGameSystemInterface
 {
 public:
@@ -67,10 +71,11 @@ public:
 	virtual void SetReady(bool ready) = 0;
 	/// The player leaves the network game
 	virtual void Leave() = 0;
-	/// The start of the game that the server sent to a join from the front end, one time. None for a join from the
-	/// command line and before the start.
+	/// The land, the seed and the start of the server's world, one time: for a join from the front end when the server
+	/// starts the game, and for a join from the command line when the server lets the player in. None before that.
 	[[nodiscard]] virtual std::optional<game_socket::Start> TakeStart() = 0;
-	/// After the game loaded the land of the start: the world does the server's turns from now on
+	/// After the game loaded the land of the start: the world does the server's turns from now on. For a join from the
+	/// command line, the player is ready and the world waits for the server's start.
 	virtual void BeginPlay() = 0;
 	/// After the session ended: the world of this computer turns alone from now on, with no server
 	virtual void PlayAlone() = 0;

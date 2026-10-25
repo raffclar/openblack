@@ -41,6 +41,10 @@ public:
 	static constexpr size_t k_RememberedWrites = 50;
 
 	void SetWriteLog(WriteLog log) { _writeLog = std::move(log); }
+	/// Tells whether a network game is live on this computer. While it is, the inspector refuses the queries of
+	/// RefusedInNetworkGame, so that no tool changes the shared world.
+	using NetworkGameLive = std::function<bool()>;
+	void SetNetworkGameLive(NetworkGameLive live) { _networkGameLive = std::move(live); }
 	/// What "ping" answers beside pong: the game's port, process and the like, for tools telling games apart. Every
 	/// answer also names the game it came from ("game": its pid, port and worktree), so that a tool talking to several
 	/// games can tell when an answer isn't from the one it meant.
@@ -80,12 +84,18 @@ private:
 
 	std::vector<std::unique_ptr<ProviderInterface>> _providers;
 	WriteLog _writeLog;
+	NetworkGameLive _networkGameLive;
 	Json _identity = Json::object();
 	/// The identity's pid, port and worktree, put in every answer
 	Json _tag = Json::object();
 	/// Kept as requests are answered, which reading the game's state doesn't change
 	mutable std::deque<Json> _writes;
 };
+
+/// Whether a live network game refuses a query: each query that writes, and the queries that control the run or load a
+/// scenario. Some queries that write stay: the input, the camera, the pictures, the run record and the fight
+/// transcripts. They act only on this computer, as the player's own mouse and keyboard do.
+[[nodiscard]] bool RefusedInNetworkGame(std::string_view query, bool writes);
 
 /// A query's description as JSON
 [[nodiscard]] Json ToJson(const QueryDescription& description, std::string_view provider);

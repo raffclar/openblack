@@ -206,6 +206,33 @@
       "description": "Configure with Makefiles to use system-installed dependencies",
       "generator": "Unix Makefiles",
       "inherits": "template-system-deps"
+    },
+    {
+      "name": "ninja-multi-vcpkg-shipping",
+      "displayName": "Ninja Multi-Config (vcpkg), for players",
+      "description": "As ninja-multi-vcpkg, without the developer tools: the desktop game and the game server that players get",
+      "inherits": "ninja-multi-vcpkg",
+      "cacheVariables": {
+        "OPENBLACK_DEVELOPER_TOOLS": false
+      }
+    },
+    {
+      "name": "msvc-17-vcpkg-shipping",
+      "displayName": "Visual Studio 2022 (vcpkg), for players",
+      "description": "As msvc-17-vcpkg, without the developer tools: the desktop game that players get",
+      "inherits": "msvc-17-vcpkg",
+      "cacheVariables": {
+        "OPENBLACK_DEVELOPER_TOOLS": false
+      }
+    },
+    {
+      "name": "emscripten-vcpkg-shipping",
+      "displayName": "Web Assembly (vcpkg), for players",
+      "description": "As emscripten-vcpkg, without the developer tools: the web build that players get",
+      "inherits": "emscripten-vcpkg",
+      "cacheVariables": {
+        "OPENBLACK_DEVELOPER_TOOLS": false
+      }
     }
   ],
   "buildPresets": [
@@ -389,6 +416,27 @@
       "configurePreset": "linux-system-deps",
       "displayName": "Build linux-system-deps-release",
       "description": "Build linux-system-deps Release configuration",
+      "configuration": "Release"
+    },
+    {
+      "name": "ninja-multi-vcpkg-shipping-release",
+      "configurePreset": "ninja-multi-vcpkg-shipping",
+      "displayName": "Build ninja-multi-vcpkg-shipping-release",
+      "description": "Build the Release configuration without the developer tools, for players",
+      "configuration": "Release"
+    },
+    {
+      "name": "msvc-17-vcpkg-shipping-release",
+      "configurePreset": "msvc-17-vcpkg-shipping",
+      "displayName": "Build msvc-17-vcpkg-shipping-release",
+      "description": "Build the Release configuration without the developer tools, for players",
+      "configuration": "Release"
+    },
+    {
+      "name": "emscripten-vcpkg-shipping-release",
+      "configurePreset": "emscripten-vcpkg-shipping",
+      "displayName": "Build emscripten-vcpkg-shipping-release",
+      "description": "Build the Web Assembly Release configuration without the developer tools, for players",
       "configuration": "Release"
     }
   ],

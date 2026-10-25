@@ -130,6 +130,40 @@ std::optional<PlayerState::State> StateFrom(std::string_view name) noexcept
 	return std::nullopt;
 }
 
+/// Reads the members of a start: the land, the seed and the start of the server's world
+bool ReadStart(const Json& object, Start& start)
+{
+	constexpr auto k_MostNumber = std::numeric_limits<uint32_t>::max();
+	uint64_t seed = 0;
+	uint64_t turn = 0;
+	if (!ReadString(object, "land", start.land, false) || !ReadBool(object, "testbed", start.testbed, false) ||
+	    !ReadUnsigned(object, "seed", k_MostNumber, seed) || !ReadUnsigned(object, "turn", k_MostNumber, turn, false) ||
+	    !ReadString(object, "opening", start.opening, false) || !ReadBool(object, "gods_ring_map", start.godsRingMap, false))
+	{
+		return false;
+	}
+	start.seed = static_cast<uint32_t>(seed);
+	start.turn = static_cast<uint32_t>(turn);
+	return true;
+}
+
+/// Writes the members of a start. The frame leaves out an empty opening and a false map for 32 gods.
+void WriteStart(const Start& start, Json& object)
+{
+	object["land"] = start.land;
+	object["testbed"] = start.testbed;
+	object["seed"] = start.seed;
+	object["turn"] = start.turn;
+	if (!start.opening.empty())
+	{
+		object["opening"] = start.opening;
+	}
+	if (start.godsRingMap)
+	{
+		object["gods_ring_map"] = true;
+	}
+}
+
 std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 {
 	constexpr auto k_MostTurn = std::numeric_limits<uint32_t>::max();
@@ -198,6 +232,15 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		{
 			return std::nullopt;
 		}
+		if (const auto* startMember = Member(object, "start"); startMember != nullptr && !startMember->is_null())
+		{
+			Start start;
+			if (!startMember->is_object() || !ReadStart(*startMember, start))
+			{
+				return std::nullopt;
+			}
+			joined.start = std::move(start);
+		}
 		return joined;
 	}
 	if (type == k_Refused)
@@ -212,16 +255,10 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Start)
 	{
 		Start start;
-		uint64_t seed = 0;
-		uint64_t turn = 0;
-		if (!ReadString(object, "land", start.land, false) || !ReadBool(object, "testbed", start.testbed, false) ||
-		    !ReadUnsigned(object, "seed", k_MostTurn, seed) || !ReadUnsigned(object, "turn", k_MostTurn, turn, false) ||
-		    !ReadString(object, "opening", start.opening, false))
+		if (!ReadStart(object, start))
 		{
 			return std::nullopt;
 		}
-		start.seed = static_cast<uint32_t>(seed);
-		start.turn = static_cast<uint32_t>(turn);
 		return start;
 	}
 	if (type == k_Resumed)
@@ -380,6 +417,12 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["name"] = value.name;
 			    }
+			    if (value.start.has_value())
+			    {
+				    Json start = Json::object();
+				    WriteStart(*value.start, start);
+				    object["start"] = std::move(start);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Refused>)
 		    {
@@ -387,15 +430,8 @@ std::string ToJson(const Frame& frame)
 		    }
 		    else if constexpr (std::is_same_v<Kind, Start>)
 		    {
-			    object = Json {{"type", k_Start},
-			                   {"land", value.land},
-			                   {"testbed", value.testbed},
-			                   {"seed", value.seed},
-			                   {"turn", value.turn}};
-			    if (!value.opening.empty())
-			    {
-				    object["opening"] = value.opening;
-			    }
+			    object = Json {{"type", k_Start}};
+			    WriteStart(value, object);
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resumed>)
 		    {

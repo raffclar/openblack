@@ -196,6 +196,8 @@ struct Arguments
 	bool continueGame {false};
 	/// The switches of the original game's command line, such as -NEWGAME
 	launch_switches::Switches launchSwitches;
+	/// The developer options that a build without the developer tools ignored, with their values, for the log
+	std::vector<std::string> ignoredDeveloperOptions;
 	/// For developers and agents: how a new game on the first land starts, asked the start-of-game question whatever
 	/// the player's profiles, or with it answered at once; as the game decides when none
 	std::optional<new_game_choice::NewGameStart> newGameStart;
@@ -429,8 +431,9 @@ public:
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
-	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame
-	void RequestScenario(ScenarioRequest request) { _scenarioRequest = std::move(request); }
+	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
+	/// without the developer tools, and a live network game, refuse it: then the result is false.
+	bool RequestScenario(ScenarioRequest request);
 	[[nodiscard]] std::chrono::duration<float, std::milli> GetDeltaTime() const;
 	[[nodiscard]] const glm::ivec2& GetMousePosition() const { return _mousePosition; }
 	/// Puts the cursor the game works with somewhere in the window, until the mouse next moves
@@ -478,6 +481,8 @@ private:
 	void PlayStartupScreens();
 	/// Once the inspector has started: the folder of the fight transcript and the fight autopilot from the command line
 	void StartFightTools();
+	/// The recorded input of a tool's run and the record of the input, from the first frame of the next land
+	void StartInputTools();
 	/// The checksum of each turn and the commands to play of a tool's run, from the command line. These need no inspector.
 	void StartSimulationLogs();
 	/// The logo film's two pictures, each fading in and out, any key or mouse button hurrying them on
@@ -582,6 +587,8 @@ private:
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};
+	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
+	bool _networkLandPending {false};
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};

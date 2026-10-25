@@ -105,6 +105,26 @@ option(OPENBLACK_INSPECTOR
        "Build the debug inspector into the game (debug and development builds)"
        ${OPENBLACK_INSPECTOR_DEFAULT}
 )
+# The developer tools: the debug windows and the editor, the inspector, the testbed scenarios, the debug keys, and the
+# options of the command line and the web page that only developers and tools use. The builds that players get (the
+# *-shipping presets) set it off. Then the program does not have these tools, and it ignores their options.
+option(
+  OPENBLACK_DEVELOPER_TOOLS
+  "Build the developer tools into the game (off for the builds that players get)"
+  ON
+)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  add_compile_definitions(OPENBLACK_DEVELOPER_TOOLS)
+elseif (OPENBLACK_INSPECTOR)
+  message(STATUS "OPENBLACK_DEVELOPER_TOOLS is off: the build has no inspector")
+  set(OPENBLACK_INSPECTOR
+      OFF
+      CACHE
+        BOOL
+        "Build the debug inspector into the game (debug and development builds)"
+        FORCE
+  )
+endif ()
 # The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)

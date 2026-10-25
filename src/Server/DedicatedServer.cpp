@@ -56,6 +56,7 @@
 #include "Gui/GameInterface.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
+#include "Online/NetworkLand.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
 #include "Simulation/CommandLog.h"
@@ -519,26 +520,24 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
                   const std::function<void(uint32_t turn, uint64_t checksum)>& onTurn)
 {
 	network = std::make_unique<GameRole>();
-	// The clients find the land by its path in the Scripts folder, and compare the checksum of its file before the start
+	// The land goes as its path under the Scripts folder, so that each client finds it in its own game folder, and the
+	// clients compare the checksum of its file before the start. The clients take the land, the seed and the start from
+	// the server as they join.
 	auto& fileSystem = Locator::filesystem::value();
+	const bool scriptLand = !settings.testbed && !settings.godsRingMap;
 	const auto landPath = Locator::landSystem::value().GetLandPath();
-	const auto scripts = fileSystem.GetPath<filesystem::Path::Scripts>();
-	auto relative = landPath.lexically_relative(scripts);
-	if (relative.empty() || relative.begin()->string() == "..")
-	{
-		relative = landPath.filename();
-	}
 	uint64_t landChecksum = online::start_rules::LandChecksum({});
-	if (!settings.testbed && fileSystem.Exists(landPath))
+	if (scriptLand && fileSystem.Exists(landPath))
 	{
 		landChecksum = online::start_rules::LandChecksum(fileSystem.ReadAll(landPath));
 	}
 	const game_socket::Start start {
-	    .land = relative.generic_string(),
+	    .land = scriptLand ? network_land::WireName(landPath) : std::string(),
 	    .testbed = settings.testbed,
 	    .seed = settings.seed,
 	    .turn = Locator::time::value().GetTurn(),
-	    .opening = settings.testbed ? std::string() : settings.openingName,
+	    .opening = scriptLand ? settings.openingName : std::string(),
+	    .godsRingMap = settings.godsRingMap,
 	};
 	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
 	{
