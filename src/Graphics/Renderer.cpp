@@ -415,8 +415,12 @@ struct BgfxCallback: public bgfx::CallbackI
 	// The driver's compiled pipelines, kept between runs
 	uint32_t cacheReadSize(uint64_t id) override
 	{
-		// The renderer asks for the cache once for each pipeline that it makes
-		++pipelinesMade;
+		// The renderer asks for the cache once for each pipeline that it makes. The Vulkan renderer also asks one time for
+		// all the kept pipelines, as number 0, when it starts.
+		if (id != 0)
+		{
+			++pipelinesMade;
+		}
 		return pipelines.has_value() ? pipelines->ReadSize(id) : 0;
 	}
 	bool cacheRead(uint64_t id, void* data, uint32_t size) override
