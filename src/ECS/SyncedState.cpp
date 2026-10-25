@@ -146,6 +146,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
     // hand
     {.component = "Spell", .field = "effect", .marker = ""},
+    // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
+    // numbered it
+    {.component = "Temple", .field = "beamSource", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
@@ -190,6 +193,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandPulled", .field = "", .marker = ""},
     // Where the frames draw a thing at the drawn hand. The turns go by its Transform, at the reported place of the hand.
     {.component = "InHand", .field = "drawn", .marker = ""},
+    // The frames move the rope of a worn leash; the world has the lengths of the leash in CreatureLeash
+    {.component = "CreatureLeashRope", .field = "", .marker = ""},
+    // The computers that draw make the sparkles of a leash order; the game server makes none
+    {.component = "LeashOrderSparkles", .field = "", .marker = ""},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The press, the pull, the spring, the offer and the scoop of this computer's hand are its own input. The world
     // has what the hand holds from the turns: the InHand of the thing.

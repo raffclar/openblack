@@ -960,6 +960,11 @@ struct Command
 		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
+		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
+		/// takes the scenario's object (object). Then the player reports its hand at the point (point), so high above
+		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
+		/// creature.
+		OtherGodHand,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1202,6 +1207,8 @@ struct Scenario
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The boxes of the multiplayer front end over the temple's future room, with the demonstration lobby
 void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
+/// The hands of the other gods of a network game, as this computer shows them, with no game server
+void AddOtherGodScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up

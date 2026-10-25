@@ -23,6 +23,7 @@
 #include <ranges>
 #include <string>
 #include <system_error>
+#include <tuple>
 #include <type_traits>
 #include <variant>
 #include <vector>
@@ -58,6 +59,7 @@
 #include "Camera/Camera.h"
 #include "Camera/CameraModel.h"
 #include "Camera/DoubleClickFlight.h"
+#include "Commands/PlayerCommands.h"
 #include "Common/FileDialog.h"
 #include "Common/MachineClock.h"
 #include "Common/PortableMath.h"
@@ -106,6 +108,7 @@
 #include "ECS/Components/CreatureFriends.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureNeeds.h"
@@ -303,6 +306,8 @@ constexpr uint32_t k_CrowdFood = 2000;
 /// hold
 constexpr uint32_t k_ScenarioTownId = 900;
 constexpr uint32_t k_ScenarioTownFood = 500;
+/// How high above its hand another god reports its camera, in metres
+constexpr float k_OtherGodCameraAbove = 30.0f;
 constexpr uint32_t k_ScenarioTownWood = 500;
 
 /// The scenario's town, a Celtic town of the player's in the middle of the map, made when first needed
@@ -2049,6 +2054,34 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		ecs::world_objects::Remove(*object);
 		return "removed";
 	}
+	case Kind::OtherGodHand:
+	{
+		if (!Locator::handSystem::has_value() || !Locator::terrainSystem::has_value())
+		{
+			return "no hands";
+		}
+		auto& hands = Locator::handSystem::value();
+		if (command.player == hands.GetOwnPlayer())
+		{
+			return "the player is the god of this computer";
+		}
+		std::ignore = hands.MakeHandsOf(command.player);
+		// The hand takes the thing before the first report, which asks the influence at no point
+		std::string held = "the hand holds nothing";
+		if (const auto object = ObjectAt(command.object); object.has_value() && Locator::handGrabSystem::has_value())
+		{
+			held = Locator::handGrabSystem::value().TakeIntoHandOf(command.player, *object) ? "the hand holds the thing"
+			                                                                                : "the hand can't take the thing";
+		}
+		const auto at = MapPoint(_middle, command.point);
+		const glm::vec3 ground {at.x, Locator::terrainSystem::value().GetHeightAt(at), at.y};
+		const auto hand = ground + glm::vec3(0.0f, command.radius, 0.0f);
+		hands.Report(command.player, {.collidePoint = ground,
+		                              .handPoint = hand,
+		                              .camera = hand + glm::vec3(0.0f, k_OtherGodCameraAbove, 0.0f),
+		                              .focus = ground});
+		return held;
+	}
 	case Kind::RemoveTeleportStone:
 	{
 		if (!Locator::teleportSystem::has_value())
@@ -2772,7 +2805,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
 	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance)
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3511,6 +3544,7 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
+	case Kind::OtherGodHand:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -4697,7 +4731,8 @@ std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) 
 		return std::nullopt;
 	}
 	const auto* leash = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeash>(*entity);
-	if (leash == nullptr || !leash->worn.has_value())
+	const auto* drawn = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureLeashRope>(*entity);
+	if (leash == nullptr || !leash->worn.has_value() || drawn == nullptr)
 	{
 		return std::nullopt;
 	}
@@ -4705,7 +4740,7 @@ std::optional<glm::ivec2> Runner::RopeOnScreen(size_t creature, glm::vec2 size) 
 	// points of the straight line are tried from its middle out, away from the collar and the thing. Below each point
 	// on the screen, the first pixel that touches the rope is taken.
 	const auto& camera = Locator::camera::value();
-	const auto& rope = leash->worn->rope;
+	const auto& rope = drawn->rope;
 	auto& leashes = Locator::leashSystem::value();
 	constexpr int k_Steps = 16;
 	constexpr int k_MostPixelsBelow = 200;

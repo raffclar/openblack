@@ -23,6 +23,7 @@
 #include "ECS/Components/CreatureHair.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -169,7 +170,6 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::fight>("fight")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::object>("object")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::point>("point")
-	    .Field<&openblack::ecs::components::CreatureLeash::Order::sparkles>("sparkles")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::ring>("ring")
 	    .Field<&openblack::ecs::components::CreatureLeash::Order::footprint>("footprint");
 	Reflect<openblack::ecs::components::CreatureLeash::Worn>(context, ValueOnly {})
@@ -178,12 +178,11 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::works>("works")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::rope>("rope")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::ropeStarted>("ropeStarted")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::held>("held");
-	Reflect<openblack::ecs::components::CreatureLeash::Worn::HeldRopes>(context, ValueOnly {})
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toCollar>("toCollar")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::HeldRopes::toTied>("toTied");
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::slackLength>("slackLength")
+	    .Field<&openblack::ecs::components::CreatureLeash::Worn::maxLength>("maxLength");
+	Reflect<openblack::ecs::components::CreatureLeashRope::HeldRopes>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureLeashRope::HeldRopes::toCollar>("toCollar")
+	    .Field<&openblack::ecs::components::CreatureLeashRope::HeldRopes::toTied>("toTied");
 	Reflect<openblack::ecs::components::CreatureLocomotion::GaveUp>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::destination>("destination")
 	    .Field<&openblack::ecs::components::CreatureLocomotion::GaveUp::met>("met");

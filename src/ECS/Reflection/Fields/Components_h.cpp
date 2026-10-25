@@ -147,7 +147,8 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	Reflect<components::HandStillness>(context)
 	    .Field<&components::HandStillness::stillTurns>("stillTurns")
 	    .Field<&components::HandStillness::drift>("drift")
-	    .Field<&components::HandStillness::last>("last");
+	    .Field<&components::HandStillness::last>("last")
+	    .Field<&components::HandStillness::velocity>("velocity");
 	Reflect<components::Heartbeat>(context).Field<&components::Heartbeat::state>("state");
 	Reflect<components::HeldDrawTrack>(context)
 	    .Field<&components::HeldDrawTrack::from>("from")

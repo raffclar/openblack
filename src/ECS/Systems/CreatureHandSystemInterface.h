@@ -78,10 +78,16 @@ public:
 
 	/// The creature the hand is held to, if any
 	[[nodiscard]] virtual std::optional<entt::entity> GetCreature() const = 0;
-	/// The creature that the world has the player's hand hold, from the turn that did the lock of the press to the turn
-	/// that does its end. The turns read only this, never the creature that the frames hold the hand to.
-	[[nodiscard]] virtual std::optional<entt::entity> GetLockedCreature() const { return std::nullopt; }
-	/// At the turn: the player's hand locks on to a creature, which stops and turns to the player's camera
+	/// The creature that the world has the hand of a player hold, from the turn that did the lock of the press to the
+	/// turn that does its end. The turns read only this, never the creature that the frames hold the hand to.
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedCreature([[maybe_unused]] PlayerNames player) const
+	{
+		return std::nullopt;
+	}
+	/// Whether the world has the hand of a player hold the creature (see GetLockedCreature). Only the hand of the
+	/// creature's own player can hold it.
+	[[nodiscard]] virtual bool IsLocked([[maybe_unused]] entt::entity creature) const { return false; }
+	/// At the turn: the hand of the player locks on to a creature, which stops and turns to the player's camera
 	/// (player_commands::HandLock)
 	virtual void DoLock(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// At the turn: the lock on the creature ends (player_commands::HandUnlock)
