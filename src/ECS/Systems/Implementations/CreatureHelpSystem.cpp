@@ -97,7 +97,8 @@ bool InView(const ecs::Registry& registry, entt::entity creature)
 	{
 		return false;
 	}
-	const auto camera = ecs::TurnCamera(body->owner);
+	// A camera of the creature's player looks at it: the camera that the player last reported, in a game alone too
+	const auto camera = ecs::ReportedPlayerCamera(body->owner);
 	return camera.has_value() && help::LooksAt(camera->origin, camera->focus, transform->position);
 }
 

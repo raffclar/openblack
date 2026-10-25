@@ -13,6 +13,7 @@
 #include <chrono>
 #include <limits>
 #include <memory>
+#include <optional>
 #include <span>
 
 #include <gtest/gtest.h>
@@ -22,6 +23,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -45,8 +47,9 @@ public:
 	void BordersChanged() override {}
 	void Update(std::chrono::duration<float, std::milli>) override {}
 	void ShowHandInfluence(std::chrono::duration<float, std::milli>) override {}
-	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords&) const override
+	[[nodiscard]] float PlayerInfluence(PlayerNames player, const map_coords::MapCoords& position) const override
 	{
+		askedAt = position;
 		return influence.at(static_cast<size_t>(player));
 	}
 	[[nodiscard]] float HandPointInfluence(PlayerNames player, const map_coords::MapCoords&) const override
@@ -66,6 +69,31 @@ public:
 	[[nodiscard]] std::span<const influence::Ripple> GetRipples() const override { return {}; }
 
 	std::array<float, 8> influence {};
+	/// The last place where the influence was asked
+	mutable std::optional<map_coords::MapCoords> askedAt;
+};
+
+/// The hands of the player of this computer, with the camera that the player last reported
+class FakeHands final: public systems::HandSystemInterface
+{
+public:
+	bool Initialize() noexcept override { return true; }
+	[[nodiscard]] std::array<entt::entity, static_cast<size_t>(Side::_Count)> GetPlayerHands() const noexcept override
+	{
+		return {entt::null, entt::null};
+	}
+	[[nodiscard]] std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
+	GetPlayerHandPositions() const noexcept override
+	{
+		return {};
+	}
+	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords>, bool) override {}
+	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override
+	{
+		return player == PlayerNames::PLAYER_ONE ? reported : std::nullopt;
+	}
+
+	std::optional<ReportedCamera> reported;
 };
 } // namespace
 
@@ -124,15 +152,33 @@ TEST_F(Alignment, TheCameraTakesTheMostInfluentialPlayersAtTheTurn)
 	influence.influence.at(0) = 0.3f;
 	influence.influence.at(1) = 0.2f;
 	EXPECT_EQ(_alignment.GetCameraAlignment(), 0.0f);
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	EXPECT_FLOAT_EQ(_alignment.GetCameraAlignment(), -0.75f);
 	influence.influence.at(1) = 0.4f;
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	EXPECT_FLOAT_EQ(_alignment.GetCameraAlignment(), 0.5f);
 	// Where no player has any influence the place is the neutral player's
 	influence.influence = {};
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	EXPECT_EQ(_alignment.GetCameraAlignment(), 0.0f);
+}
+
+TEST_F(Alignment, TheCameraIsWhereThePlayerLastReportedIt)
+{
+	// Before the first report the camera is at the middle of the world's axes
+	_alignment.UpdatePlayersTurn();
+	ASSERT_TRUE(_influence->askedAt.has_value());
+	EXPECT_EQ(_influence->askedAt->x, 0);
+	EXPECT_EQ(_influence->askedAt->z, 0);
+
+	// After a report the turn reads the reported camera, not the camera that the frames move
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	hands.reported = systems::HandSystemInterface::ReportedCamera {.origin = {120.5f, 300.0f, 64.25f}, .focus = {}};
+	_alignment.UpdatePlayersTurn();
+	const auto expected = map_coords::FromMetres({120.5f, 64.25f});
+	EXPECT_EQ(_influence->askedAt->x, expected.x);
+	EXPECT_EQ(_influence->askedAt->z, expected.z);
+	Locator::handSystem::reset();
 }
 
 TEST(AlignmentRules, TheMostInfluentialPlayerHoldsAPlace)
@@ -183,7 +229,7 @@ TEST(AlignmentRules, TheLandShowsAnAlignmentHeldBetweenEvilAndGood)
 TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)
 {
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, -1.0f);
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	_alignment.Update(500ms);
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -0.5f);
 	// Not while paused
@@ -193,7 +239,7 @@ TEST_F(Alignment, TheSkyTurnsAWholeASecondOfGameTime)
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), -1.0f);
 	// And back the other way
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 1.0f);
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	_alignment.Update(1500ms);
 	EXPECT_FLOAT_EQ(_alignment.GetSkyAlignment(), 0.5f);
 }
@@ -209,10 +255,10 @@ TEST_F(Alignment, WhatTheirDeedsChangeScalesOneTurnsChange)
 	// Setting the alignment keeps what is still to come
 	_alignment.SetPlayerAlignment(PlayerNames::PLAYER_ONE, 0.5f);
 	// The turn's change is the limit times what waits, and the rest of what waited is gone
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
 	EXPECT_FLOAT_EQ(_alignment.GetPendingAlignment(PlayerNames::PLAYER_ONE), 0.0f);
-	_alignment.UpdatePlayersTurn({});
+	_alignment.UpdatePlayersTurn();
 	EXPECT_FLOAT_EQ(_alignment.GetPlayerAlignment(PlayerNames::PLAYER_ONE), 0.5f - (0.025f * 0.01f));
 	Locator::infoConstants::reset();
 }

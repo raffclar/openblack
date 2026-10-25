@@ -25,6 +25,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "InfoConstants.h"
@@ -146,7 +147,7 @@ void AlignmentSystem::AddPlayerAlignment(PlayerNames player, float change)
 	SetPlayerAlignment(player, alignment::AddedAlignment(GetPlayerAlignment(player), change));
 }
 
-void AlignmentSystem::UpdatePlayersTurn(const glm::vec3& eye)
+void AlignmentSystem::UpdatePlayersTurn()
 {
 	// What the players' deeds changed comes through: each turn the change that waits, held to a whole one, moves the
 	// alignment by that share of the owner's change a turn, and the rest is gone
@@ -167,7 +168,13 @@ void AlignmentSystem::UpdatePlayersTurn(const glm::vec3& eye)
 		});
 	}
 
-	// The camera takes the alignment of the most influential player at its eye
+	// The camera takes the alignment of the most influential player at its eye. The eye is the camera that the player of
+	// this computer last reported, not the camera that the frames move.
+	const auto here =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto reported =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetReportedCamera(here) : std::nullopt;
+	const auto eye = reported.has_value() ? reported->origin : glm::vec3(0.0f);
 	std::array<alignment::PlayerAtPlace, static_cast<size_t>(PlayerNames::NEUTRAL)> players {};
 	size_t count = 0;
 	if (Locator::influenceSystem::has_value())
