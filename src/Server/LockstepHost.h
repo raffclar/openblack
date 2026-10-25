@@ -15,6 +15,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -116,6 +117,9 @@ public:
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
 	/// The world of the server turns by its own clock
 	[[nodiscard]] bool IsBehind(uint32_t /*turn*/) const override { return false; }
+	/// The creature file that the god of the slot sent before the start. The world of the server makes the same
+	/// creatures as the worlds of the clients from these files.
+	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -188,6 +192,9 @@ private:
 	StartStep _startStep {StartStep::None};
 	/// The connections whose reply or creature file the server waits for in the step of the start
 	std::set<ConnectionId> _awaited;
+	/// The creature files that the gods sent in the start, by god slot. The server sends each file to all the players and
+	/// keeps it only in memory, for its own world.
+	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
 	bool _pausedBefore {false};
 	uint32_t _turnsDone {0};
 	/// The blocks that came since the last turn

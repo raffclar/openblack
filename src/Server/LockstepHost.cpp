@@ -491,6 +491,7 @@ void LockstepHost::TransferCreatures()
 {
 	_startStep = StartStep::Transfer;
 	_awaited = GodConnections();
+	_startCreatures.clear();
 	Log(spdlog::level::info, "Every god has the land: the gods send their creatures");
 	Broadcast(game_socket::StartTransfer {});
 }
@@ -502,9 +503,10 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 		return;
 	}
 	_awaited.erase(connection);
-	// The server keeps no file: each player gets the creature file of each god at once
+	// Each player gets the creature file of each god at once. The server keeps the file in memory for its own world.
 	Log(spdlog::level::info,
 	    fmt::format("The god of slot {} sends a creature file of {} bytes", *peer.seat, creature.file.size()));
+	_startCreatures[*peer.seat] = creature.file;
 	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file});
 	if (_awaited.empty())
 	{
@@ -537,10 +539,17 @@ void LockstepHost::StopStart(const game_socket::Frame& why)
 {
 	_startStep = StartStep::None;
 	_awaited.clear();
+	_startCreatures.clear();
 	Broadcast(why);
 }
 
 void LockstepHost::Send(const player_commands::Action& /*action*/) {}
+
+std::span<const uint8_t> LockstepHost::StartCreatureFile(PlayerNames god) const
+{
+	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
 
 bool LockstepHost::AnyGodConnected() const
 {

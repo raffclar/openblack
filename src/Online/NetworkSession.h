@@ -15,6 +15,7 @@
 #include <map>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -135,6 +136,9 @@ public:
 	void Send(const player_commands::Action& action) override;
 	[[nodiscard]] bool HasTurn(uint32_t turn) const override;
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
+	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
+	/// The god of the slot that the server gave to this computer. None for an observer.
+	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 
 	[[nodiscard]] State GetState() const { return _state; }
 	[[nodiscard]] End GetEnd() const { return _end; }
