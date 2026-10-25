@@ -215,7 +215,11 @@ public:
 		treesGiven.emplace_back(bigForest, tree);
 		return tree;
 	}
-	void LeaveRootsHole(entt::entity tree) override { holes.push_back(tree); }
+	void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) override
+	{
+		holes.push_back(tree);
+		holePlaces.push_back({.place = place, .rotation = rotation, .scale = scale});
+	}
 	void RemakeDrawList(uint32_t frames) override
 	{
 		++drawListsRemade;
@@ -443,6 +447,13 @@ public:
 	std::vector<entt::entity> uprooted;
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
 	std::vector<entt::entity> holes;
+	struct HolePlace
+	{
+		glm::vec3 place;
+		glm::mat3 rotation;
+		float scale;
+	};
+	std::vector<HolePlace> holePlaces;
 	int drawListsRemade {0};
 	std::vector<uint32_t> drawListFrames;
 	std::vector<entt::entity> poured;
@@ -1108,6 +1119,99 @@ TEST_F(HandGrabSystemWithWorld, AHeavyTreeIsNeverPulledFree)
 	EXPECT_FALSE(Release().has_value());
 	EXPECT_FALSE(system->GetPullPose().has_value());
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPulled)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	const auto before = world->registry.Get<const Transform>(tree);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	const auto pulled = world->registry.Get<const Transform>(tree);
+	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	EXPECT_FALSE(Release().has_value());
+	// Alone, the thing keeps the lean and the stretch of the pull
+	const auto& after = world->registry.Get<const Transform>(tree);
+	EXPECT_EQ(after.position, pulled.position);
+	EXPECT_EQ(after.rotation, pulled.rotation);
+	EXPECT_EQ(after.scale, pulled.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsAsBeforeThePull)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	const auto before = world->registry.Get<const Transform>(tree);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	const auto pulled = world->registry.Get<const Transform>(tree);
+	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	EXPECT_FALSE(Release().has_value());
+	// The other computers never saw the lean, so the thing stands as it stood before the pull
+	const auto& after = world->registry.Get<const Transform>(tree);
+	EXPECT_EQ(after.position, before.position);
+	EXPECT_EQ(after.rotation, before.rotation);
+	EXPECT_EQ(after.scale, before.scale);
+	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNotItsLean)
+{
+	const auto tree = world->AddTree({3.0f, 1.0f, -2.0f}, 1.0e6f);
+	auto& transform = world->registry.Get<Transform>(tree);
+	transform.rotation = glm::mat3(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	transform.scale = glm::vec3(1.5f);
+	const auto before = transform;
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	// Too heavy to come free, the tree leans towards the hand
+	for (int i = 0; i < 50; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	const auto leaned = world->registry.Get<const Transform>(tree);
+	ASSERT_TRUE(leaned.rotation != before.rotation || leaned.scale != before.scale);
+	ASSERT_TRUE(world->holes.empty());
+	// Light again, it comes free and leaves its hole where it stood before the pull
+	world->weights[tree] = 10.0f;
+	for (int i = 0; i < 30 && world->holes.empty(); ++i)
+	{
+		Frame(10, {20.0f, 50.0f, 0.0f});
+	}
+	ASSERT_EQ(world->holes, std::vector<entt::entity> {tree});
+	ASSERT_EQ(world->holePlaces.size(), 1u);
+	EXPECT_EQ(world->holePlaces.front().place, before.position);
+	EXPECT_EQ(world->holePlaces.front().rotation, before.rotation);
+	EXPECT_EQ(world->holePlaces.front().scale, 1.5f);
+}
+
+TEST_F(HandGrabSystemWithWorld, ATreeThatThePullFreedIsTakenWhenTheButtonIsLetGoBeforeTheTake)
+{
+	deferCommands = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30 && world->holes.empty(); ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	ASSERT_EQ(world->holes, std::vector<entt::entity> {tree});
+	ASSERT_TRUE(world->sent.empty());
+	// The take comes before the release, so a short press is no tap
+	EXPECT_FALSE(Release().has_value());
+	ASSERT_EQ(world->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandTake>(world->sent.front()));
+	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, tree);
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(tree));
 }
 
 TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
