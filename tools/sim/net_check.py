@@ -394,7 +394,7 @@ def main():
     parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
-    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
+    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients (1 to 1000)")
     parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin")
@@ -433,6 +433,9 @@ def main():
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
+    if not 1.0 <= options.frame_ms <= 1000.0:
+        # The game does not start with another frame time, and the run would only say that the first client did not join
+        parser.error("--frame-ms takes 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
     client_inputs = [options.input, options.input2, options.input3, options.input4]
     client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
@@ -516,11 +519,15 @@ def main():
                 command += ["--join-part-at", str(options.part_second_at)]
             clients.append(start(command, client_dir))
             processes.append(clients[-1])
-            if index == 0:
-                # The world has one human hand for now (the first god slot), so the client with the input joins first
-                if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[0]):
-                    print(f"the first client did not join; see {client_dir}")
-                    return 1
+            # The server gives the god slots in join order: client N must join before client N + 1 starts,
+            # so that client N gets slot N - 1 and its input and camera play at that god
+            if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[-1]):
+                print(f"client {index + 1} did not join; see {client_dir}")
+                return 1
+            joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
+            if any("in slot" in line for line in joins) and not any(line.endswith(f"in slot {index}") for line in joins):
+                print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
+                return 1
         # Each client looks where its input plays, once its network game started
         for index, client in enumerate(clients):
             camera = client_cameras[index]

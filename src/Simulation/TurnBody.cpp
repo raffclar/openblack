@@ -387,12 +387,16 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	auto& profiler = Locator::profiler::value();
 	const auto turn = clock.GetTurn();
 
+	// The full turn, from the players' commands on, measures the influence from where the hands were at the turn, not
+	// from where this computer shows its hand now
+	if (step == game_turn::k_TurnHandsInfluenceStart || step == game_turn::k_TurnHandsInfluenceEnd)
+	{
+		Locator::influenceSystem::value().SetInGameTurn(game_turn::MeasuresInfluenceFromTurnHands(step));
+	}
+
 	switch (step)
 	{
 	case Step::DrawnPlaces:
-		// The full turn, from the players' commands on, measures the influence from where the hands were at the turn,
-		// not from where this computer shows its hand now. Then all computers get the same result.
-		Locator::influenceSystem::value().SetInGameTurn(true);
 		Locator::animalSystem::value().ShowTurnEnd();
 		// The creatures that walk go back to where their last turn took them, with the clips of that turn's end, and what
 		// they hold goes back into their hands as their last turn posed them
@@ -850,7 +854,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::pathfindingSystem::value().ProcessLookahead();
 		break;
 	case Step::InfluenceTurnEnd:
-		Locator::influenceSystem::value().SetInGameTurn(false);
 		// The view's steps fix the reach of a citadel that the turn made. With no view, the end of the turn fixes it.
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
