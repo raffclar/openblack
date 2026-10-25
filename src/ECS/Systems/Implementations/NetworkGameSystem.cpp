@@ -29,6 +29,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
+#include "Online/NetworkLand.h"
 
 using namespace openblack::ecs::systems;
 
@@ -92,6 +93,11 @@ void NetworkGameSystem::Detach()
 	{
 		Locator::playerCommandSystem::value().SetSource(nullptr);
 	}
+	// The next land that loads has the player of this computer as its one human again
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetHumansFromSession(false);
+	}
 	if (Locator::time::has_value())
 	{
 		Locator::time::value().SetCatchesUp(false);
@@ -124,18 +130,24 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		sockets = _testClient.get();
 	}
 	_session = std::make_unique<online::NetworkSession>(*sockets, Microseconds);
+	// A land that loads after the join gets its humans from the session at the start of the game
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetHumansFromSession(true);
+	}
 	_partAt = join.partAt;
 	_partAgain = join.partAgain;
 	_started = false;
 	_endLogged = false;
-	_awaitingLand = !join.landLoaded;
+	_awaitingLand = !join.fromCommandLine;
+	_fromCommandLine = join.fromCommandLine;
+	_joinReplyRead = false;
 	_pendingStart.reset();
 
-	// A join from the command line: the land loaded, so the world is the network game's world from now on. The clock
-	// of this computer waits for the server's start, so that the frames of the wait take no game time.
-	if (join.landLoaded)
+	// A join from the command line: the clock of this computer waits for the server's land and start, so that the frames
+	// of the wait take no game time
+	if (join.fromCommandLine)
 	{
-		Attach();
 		Locator::time::value().SetPaused(true);
 	}
 
@@ -146,22 +158,18 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
-		    // The land of the start is a file in the Scripts folder of the game on this computer
+		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file in its
+		    // "Online Maps" folder
 		    auto& fileSystem = Locator::filesystem::value();
-		    const auto path = fileSystem.GetPath<filesystem::Path::Scripts>() / std::filesystem::path(land);
-		    if (!fileSystem.Exists(path))
+		    const auto path = network_land::PathOf(land, fileSystem.GetPath<filesystem::Path::Scripts>());
+		    if (!path.has_value() || !fileSystem.Exists(*path))
 		    {
 			    return std::nullopt;
 		    }
-		    return fileSystem.ReadAll(path);
+		    return fileSystem.ReadAll(*path);
 	    },
 	    .readCreature = _readCreature,
 	});
-	// The land of the game loaded before the join, so the player is ready at once
-	if (join.landLoaded)
-	{
-		_session->SetReady(true);
-	}
 	return true;
 }
 
@@ -200,6 +208,14 @@ void NetworkGameSystem::BeginPlay()
 	}
 	_awaitingLand = false;
 	Attach();
+	if (_fromCommandLine)
+	{
+		// The land of the server loaded: the player is ready, and the world waits for the server's start
+		Locator::time::value().SetPaused(true);
+		_session->SetReady(true);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land of the game server loaded: the player is ready for the start");
+		return;
+	}
 	Locator::time::value().SetPaused(false);
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land of the network game loaded: the world does the server's turns");
 }
@@ -266,32 +282,61 @@ void NetworkGameSystem::Update()
 		LoadWorld(*world);
 	}
 
+	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
+	// which the game loads before the player is ready
+	if (_fromCommandLine && !_joinReplyRead)
+	{
+		if (const auto& joined = _session->GetJoined(); joined.has_value())
+		{
+			_joinReplyRead = true;
+			if (joined->start.has_value())
+			{
+				const auto& start = *joined->start;
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server plays {} with seed {}: the game loads that land",
+				                   network_land::DisplayName(start), start.seed);
+				_pendingStart = start;
+				_awaitingLand = true;
+			}
+			else
+			{
+				// A server that gives no land in its reply: the land of this computer must be the server's land
+				Attach();
+				_session->SetReady(true);
+			}
+		}
+	}
+
 	if (!_started && _session->GetStart().has_value())
 	{
-		_started = true;
 		const auto& start = *_session->GetStart();
-		// A join from the front end: the game loads the server's land, then calls BeginPlay
-		if (_awaitingLand)
+		if (_awaitingLand && !_fromCommandLine)
 		{
+			// A join from the front end: the game loads the server's land, then calls BeginPlay
+			_started = true;
 			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game server starts the game on {} with seed {}",
-			                   start.testbed ? std::string("the testbed") : start.land, start.seed);
+			                   network_land::DisplayName(start), start.seed);
 			_pendingStart = start;
 			return;
 		}
-		// The server's world must start from the same land and seed as this computer's world
-		const auto& land = Locator::landSystem::value().GetLandPath();
-		const bool sameLand = std::filesystem::path(start.land).filename() == land.filename();
-		const bool sameSeed = Locator::rng::value().GetRunSeed() == start.seed;
-		if (!sameLand || !sameSeed)
+		// A join from the command line that loads the server's land does the start once the land loaded
+		if (!_awaitingLand)
 		{
-			SPDLOG_LOGGER_ERROR(spdlog::get("game"),
-			                    "The game server plays land {} with seed {}; this computer has {} with seed {}", start.land,
-			                    start.seed, land.string(), Locator::rng::value().GetRunSeed());
-			_session->Leave();
-		}
-		else
-		{
-			Locator::time::value().SetPaused(false);
+			_started = true;
+			// The server's world must start from the same land and seed as this computer's world
+			const auto& land = Locator::landSystem::value().GetLandPath();
+			const bool sameLand = start.testbed || start.godsRingMap || network_land::IsLand(land, start.land);
+			const bool sameSeed = Locator::rng::value().GetRunSeed() == start.seed;
+			if (!sameLand || !sameSeed)
+			{
+				SPDLOG_LOGGER_ERROR(
+				    spdlog::get("game"), "The game server plays land {} with seed {}; this computer has {} with seed {}",
+				    network_land::DisplayName(start), start.seed, land.generic_string(), Locator::rng::value().GetRunSeed());
+				_session->Leave();
+			}
+			else
+			{
+				Locator::time::value().SetPaused(false);
+			}
 		}
 	}
 	if (_session->GetState() == online::NetworkSession::State::Ended && !_endLogged)

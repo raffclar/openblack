@@ -16,6 +16,8 @@
 #include <tuple>
 #include <type_traits>
 #include <utility>
+#include <variant>
+#include <vector>
 
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LeftGame.h"
@@ -23,6 +25,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -328,9 +331,20 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		_listener(turn, commands);
 	}
+	std::vector<PlayerNames> joined;
 	for (const auto& command : commands)
 	{
 		Run(command, turn);
+		if (std::holds_alternative<PlayerJoined>(command.action))
+		{
+			joined.push_back(command.player);
+		}
+	}
+	// The humans of the network session joined at the start of the game: each gets its player, and the slots with no
+	// player fill
+	if (!joined.empty() && openblack::Locator::computerPlayerSystem::has_value())
+	{
+		openblack::Locator::computerPlayerSystem::value().HumansJoined(joined);
 	}
 }
 

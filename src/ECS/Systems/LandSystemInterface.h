@@ -109,6 +109,9 @@ public:
 
 	/// How a new game on the first land starts: the start-of-game question, or its answer at once
 	virtual void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) = 0;
+	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
+	/// the player of this computer is the one human when the land loads.
+	virtual void SetHumansFromSession(bool fromSession) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

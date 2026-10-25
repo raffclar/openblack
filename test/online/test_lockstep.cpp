@@ -150,12 +150,13 @@ protected:
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
-		    server::HostSettings {.start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0},
-		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
-		                          .godsToStart = gods,
-		                          .godSlots = 7,
-		                          .comeBackMicroseconds = comeBack,
-		                          .keptTurns = 3200});
+		    server::HostSettings {
+		        .start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow", .godsRingMap = false},
+		        .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		        .godsToStart = gods,
+		        .godSlots = 7,
+		        .comeBackMicroseconds = comeBack,
+		        .keptTurns = 3200});
 	}
 
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
@@ -201,6 +202,12 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
 	ASSERT_TRUE(alice.session.GetJoined().has_value());
 	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	// The reply to the join gives the land, the seed and the start of the server's world before the start
+	ASSERT_TRUE(alice.session.GetJoined()->start.has_value());
+	EXPECT_EQ(alice.session.GetJoined()->start->land, "Land1.txt");
+	EXPECT_EQ(alice.session.GetJoined()->start->seed, 1u);
+	EXPECT_EQ(alice.session.GetJoined()->start->opening, "cow");
+	EXPECT_FALSE(alice.session.GetStart().has_value());
 	EXPECT_FALSE(host->Started());
 	// No turn before the start
 	EXPECT_EQ(serverWorld.turns, 0u);
@@ -253,8 +260,8 @@ TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)
 	{
 		commands += count;
 	}
-	// The first turn gives the god of slot 1 its hands
-	EXPECT_EQ(commands, 1 + 600u / 7 + 1 + 2 * (600u / 11 + 1));
+	// The first turn names the humans of slots 0 and 1
+	EXPECT_EQ(commands, 2 + 600u / 7 + 1 + 2 * (600u / 11 + 1));
 }
 
 TEST_F(LockstepTest, TheServerRefusesBadTicketsLateJoinersAndTheCommandsOfObservers)
@@ -326,14 +333,14 @@ TEST_F(LockstepTest, AClientThatLosesTheSocketComesBackAndGetsTheTurnsThatItMiss
 	EXPECT_EQ(host->Seats()[1].resumes, 1u);
 	EXPECT_GE(bob.world.turns, turnsWhileAway);
 	EXPECT_EQ(bob.session.GetCompares().compared, bob.session.GetCompares().same);
-	// The tap that waited for the socket went to the server after the resume, after the hands of slot 1 in the first
-	// turn
+	// The tap that waited for the socket went to the server after the resume, after the humans of slots 0 and 1 in the
+	// first turn
 	size_t commands = 0;
 	for (const auto count : alice.played)
 	{
 		commands += count;
 	}
-	EXPECT_EQ(commands, 2u);
+	EXPECT_EQ(commands, 3u);
 }
 
 TEST_F(LockstepTest, TheWorldWaitsWithNoPlayersAndAGodThatDoesNotComeBackIsDefeated)
@@ -370,13 +377,13 @@ TEST_F(LockstepTest, AnAwayGodIsDefeatedAfterTheTimeToComeBack)
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
 	// Every computer did the defeat at the same turn: Alice is still in step with the server
 	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
-	// The hands of slot 1 in the first turn, and its defeat
+	// The humans of slots 0 and 1 in the first turn, and the defeat of slot 1
 	size_t commands = 0;
 	for (const auto count : alice.played)
 	{
 		commands += count;
 	}
-	EXPECT_EQ(commands, 2u);
+	EXPECT_EQ(commands, 3u);
 }
 
 TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)

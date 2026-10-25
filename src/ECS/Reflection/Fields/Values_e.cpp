@@ -82,6 +82,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::templeEntrancesTakeCursor>("templeEntrancesTakeCursor", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
 	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")
+	    .Field<&openblack::ecs::RegistryContext::slotsWaitForHumans>("slotsWaitForHumans")
 	    .Field<&openblack::ecs::RegistryContext::partnersAlwaysAgree>("partnersAlwaysAgree")
 	    .Field<&openblack::ecs::RegistryContext::nextHeartBeamSound>("nextHeartBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")

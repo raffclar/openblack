@@ -185,7 +185,8 @@ void LockstepHost::Join(ConnectionId connection, Peer& peer, const game_socket::
 		Refuse(connection, "started");
 		return;
 	}
-	game_socket::Joined joined {.role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name};
+	game_socket::Joined joined {
+	    .role = claims.role, .slot = std::nullopt, .session = {}, .name = claims.name, .start = _settings.start};
 	if (claims.role == game_socket::Role::God)
 	{
 		const auto same = std::ranges::find_if(
@@ -448,7 +449,9 @@ void LockstepHost::QueryLands()
 	_awaited = GodConnections();
 	Log(spdlog::level::info, fmt::format("The gods are ready: the server asks {} gods if they have the land", _awaited.size()));
 	const auto& start = _settings.start;
-	Broadcast(game_socket::StartQuery {.land = start.land, .testbed = start.testbed, .checksum = _settings.landChecksum});
+	// The testbed and the map for 32 gods have no land file, so the players need nothing to compare
+	Broadcast(game_socket::StartQuery {
+	    .land = start.land, .testbed = start.testbed || start.godsRingMap, .checksum = _settings.landChecksum});
 }
 
 void LockstepHost::StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply)
@@ -518,8 +521,9 @@ void LockstepHost::StartGame()
 	start.turn = _turnsDone;
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
-	// The first turn gives the gods of the other slots their hands, on every computer
-	for (size_t i = 1; i < _seats.size(); ++i)
+	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
+	// with no human fill
+	for (size_t i = 0; i < _seats.size(); ++i)
 	{
 		if (_seats[i].state == SeatState::Taken)
 		{

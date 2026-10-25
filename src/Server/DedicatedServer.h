@@ -33,6 +33,10 @@ namespace openblack::server
 /// turn, and the server plays 10 turns a second.
 constexpr double k_DefaultFrameMilliseconds = 100.0;
 
+/// The land of the server when none is asked for: the first land for two gods of a network game, as the game's first
+/// network map
+inline constexpr std::string_view k_ServerDefaultLand = "Online Maps/mpm_2p_1.map";
+
 /// The game role of the server: the game socket that the clients join with a ticket of the lobby
 struct NetworkSettings
 {
@@ -69,8 +73,8 @@ struct ServerSettings
 {
 	/// The folder of the game's data
 	std::filesystem::path gamePath;
-	/// The script of the land under the game's Scripts folder
-	std::string land {k_DefaultStartLevel};
+	/// The script of the land under the game's Scripts folder, or a land of a network game in the game's folder
+	std::string land {k_ServerDefaultLand};
 	/// The flat testbed in place of a land
 	bool testbed {false};
 	/// Tools: the testbed scenario of this id, which the server plays on the testbed from its first frame, as the game's

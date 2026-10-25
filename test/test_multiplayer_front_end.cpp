@@ -310,8 +310,9 @@ struct FrontEndTest: public ::testing::Test
 	void ServerJoins(game_socket::Role role = game_socket::Role::God)
 	{
 		const std::optional<uint8_t> slot = role == game_socket::Role::God ? std::optional<uint8_t>(1) : std::nullopt;
-		sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Joined {
-		                                             .role = role, .slot = slot, .session = "s", .name = "Alice"}));
+		sockets.ServerText(sockets.order.back(),
+		                   game_socket::ToJson(game_socket::Joined {
+		                       .role = role, .slot = slot, .session = "s", .name = "Alice", .start = std::nullopt}));
 		Step();
 	}
 
@@ -698,7 +699,7 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(socket.sent[0].Text(), R"({"ticket":"v4.public.t","type":"room.join"})");
 	// The network game joins for the front end: the server's land loads only after the start
 	ASSERT_EQ(network.joins.size(), 1u);
-	EXPECT_FALSE(network.joins[0].landLoaded);
+	EXPECT_FALSE(network.joins[0].fromCommandLine);
 	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God}));
 	EXPECT_TRUE(frontEnd->IsJoined());
 	EXPECT_FALSE(frontEnd->IsObserver());
@@ -836,8 +837,9 @@ TEST_F(FrontEndTest, TheStartGivesTheSessionToTheNetworkGame)
 	ToRoom();
 	frontEnd->Next();
 	frontEnd->SetReady(true);
-	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Start {
-	                                             .land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}}));
+	sockets.ServerText(sockets.order.back(),
+	                   game_socket::ToJson(game_socket::Start {
+	                       .land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}, .godsRingMap = false}));
 	Step();
 	EXPECT_TRUE(frontEnd->IsStarted());
 	// The front end closes, and the network game keeps the socket for the game

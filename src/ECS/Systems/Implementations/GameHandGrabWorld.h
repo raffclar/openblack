@@ -26,6 +26,9 @@ public:
 	[[nodiscard]] entt::entity Hand() const override;
 	[[nodiscard]] PlayerNames HandPlayer() const override;
 	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
+	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
+	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;
+	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override;
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
 	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;
 	[[nodiscard]] bool IsNetworkGame() const override;

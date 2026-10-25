@@ -2,8 +2,9 @@
 
 The script makes a test key pair for the join tickets and a test certificate authority with a certificate for
 127.0.0.1, all in the output folder (never the live keys of the lobby). It starts the game server with --listen on a free
-port of 127.0.0.1 (wss), then two openblack clients with --join and a ticket each. The first client plays recorded hand
-input (--input), the second keeps a still hand. The world turns only with the turns of the server (authoritative
+port of 127.0.0.1 (wss), then two openblack clients with --join and a ticket each. The land, the seed and the start
+options go to the server only: each client takes them from the server's reply to its join and loads that land. The
+first client plays recorded hand input (--input), the second keeps a still hand. The world turns only with the turns of the server (authoritative
 lockstep). At the end it compares the checksum of each turn on the server and on both clients.
 
     python tools/sim/net_check.py --testbed --input tools/sim/hand_inputs/testbed.json --turns 600
@@ -370,12 +371,13 @@ def main():
             ticket = make_ticket(key, kid, 100 + index, f"Player{index + 1}", "god", 600)
             # A frame time of 0 lets the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
-            command = [game_exe, "-g", options.game_path, "--skip-logos", "--seed", str(options.seed)] + frame_time + [
+            # No land, seed or start option: the client takes them from the server
+            command = [game_exe, "-g", options.game_path, "--skip-logos"] + frame_time + [
                        "--sim-until-turn", str(options.turns),
                        "--sim-record", os.path.join(client_dir, "record.jsonl"), "--sim-record-every", "1",
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
-                       "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]] + where
+                       "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:

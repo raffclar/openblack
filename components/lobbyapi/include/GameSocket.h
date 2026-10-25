@@ -67,6 +67,23 @@ struct Leave
 {
 };
 
+/// Server to client: "game.start". The world starts to turn from this turn.
+struct Start
+{
+	/// The script of the land, as a path under the Scripts folder of the game (for example "Land1.txt" or
+	/// "Playgrounds/construct.txt"). None for the testbed and the network map for 32 gods.
+	std::string land;
+	bool testbed {false};
+	uint32_t seed {0};
+	/// The turn that the world is at when the game starts
+	uint32_t turn {0};
+	/// How the new game on the land starts, as the game's --skip-opening gives it (for example "cow"). Empty for the
+	/// testbed.
+	std::string opening;
+	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
+	bool godsRingMap {false};
+};
+
 /// Server to client: "room.joined". The server accepted the ticket.
 struct Joined
 {
@@ -77,6 +94,9 @@ struct Joined
 	std::string session;
 	/// The name of the account
 	std::string name;
+	/// The land, the seed and the start of the server's world ("start", optional). A client that joins from the command
+	/// line loads this land with this seed before it is ready, so the game starts from the same world on each computer.
+	std::optional<Start> start;
 };
 
 /// Server to client: "room.refused". The server closes the socket after this frame.
@@ -84,20 +104,6 @@ struct Refused
 {
 	/// A short word for the reason: "ticket", "full", "started", "closed", "protocol", "resync", "kicked"
 	std::string reason;
-};
-
-/// Server to client: "game.start". The world starts to turn from this turn.
-struct Start
-{
-	/// The script of the land under the Scripts folder of the game, or none for the testbed
-	std::string land;
-	bool testbed {false};
-	uint32_t seed {0};
-	/// The turn that the world is at when the game starts
-	uint32_t turn {0};
-	/// How the new game on the land starts, as the game's --skip-opening gives it (for example "cow"). Empty for the
-	/// testbed.
-	std::string opening;
 };
 
 /// Server to client: "room.resumed". The server accepted the resume. The turns after the client's turn follow.
