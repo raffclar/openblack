@@ -275,19 +275,22 @@ def session_counts(log):
     return None if found is None else (found[0], found[1], resumes)
 
 
+INSPECTOR_ADAPTER = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+
+
 def set_camera(pid, camera):
-    """Puts the camera of a client where its input plays, through the inspector"""
-    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+    """Puts the camera of a client where its input plays, through the inspector; false when the inspector did not do
+    it. A camera that stays at the start makes the hand input miss the things that it must take."""
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", "camera_set", camera], timeout=120,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", "camera_set", camera],
+                          timeout=120, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    return done.returncode == 0
 
 
 def inspector_call(pid, query, request):
     """One request to the inspector of a client, its answer (none when it fails)"""
-    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    done = subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", query, json.dumps(request)],
+    done = subprocess.run([sys.executable, INSPECTOR_ADAPTER, "--pid", str(pid), "--call", query, json.dumps(request)],
                           timeout=120, capture_output=True, text=True, creationflags=flags)
     try:
         return json.loads(done.stdout).get("result")
@@ -432,6 +435,9 @@ def main():
     options.hash_parts = options.hash_parts or options.hash_fields
     client_inputs = [options.input, options.input2, options.input3, options.input4]
     client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
+    if (any(client_cameras) or options.hold_creature) and not os.path.isfile(INSPECTOR_ADAPTER):
+        # A copy of tools/sim alone cannot move the cameras: the inputs would play at the start camera
+        parser.error(f"--cameraN and --hold-creature need the inspector adapter {os.path.normpath(INSPECTOR_ADAPTER)}")
 
     out = os.path.abspath(options.out)
     if SWITCH_IN_PATH.search(out):
@@ -520,8 +526,9 @@ def main():
             camera = client_cameras[index]
             if camera:
                 log = os.path.join(client_dirs[index], "client.log")
-                if wait_for_line(log, "Joined the game server", client):
-                    set_camera(client.pid, camera)
+                if wait_for_line(log, "Joined the game server", client) and not set_camera(client.pid, camera):
+                    print(f"the camera of client {index + 1} was not set; see {client_dirs[index]}")
+                    return 1
         started = time.monotonic()
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
@@ -542,7 +549,9 @@ def main():
                         and client.poll() is None and lines_with(
                             os.path.join(client_dirs[index], "client.log"),
                             [f"Network game: {options.camera_again_after} turns compared"])):
-                    set_camera(client.pid, camera)
+                    if not set_camera(client.pid, camera):
+                        print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
+                        return 1
                     cameras_again.add(index)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
