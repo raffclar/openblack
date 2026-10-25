@@ -382,7 +382,7 @@ def main():
     parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
     parser.add_argument("--opening", default="cow")
-    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients")
+    parser.add_argument("--frame-ms", type=float, default=20.0, help="the frame time of the clients (1 to 1000)")
     parser.add_argument("--server-frame-ms", type=float, help="the frame time of the server (its own default with none)")
     parser.add_argument("--config", default="RelWithDebInfo")
     parser.add_argument("--bin")
@@ -395,6 +395,10 @@ def main():
     parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--input3", help="recorded input for the third client's hand")
+    parser.add_argument("--input4", help="recorded input for the fourth client's hand")
+    parser.add_argument("--camera3", help="the camera of the third client before its input (JSON)")
+    parser.add_argument("--camera4", help="the camera of the fourth client before its input (JSON)")
     parser.add_argument("--hold-creature", action="append", default=[],
                         help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
@@ -405,12 +409,18 @@ def main():
                              "come back in step by the server's world state")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
-    parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
+    parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
+                        help="the number of clients (a god slot each)")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
+    if not 1.0 <= options.frame_ms <= 1000.0:
+        # The game does not start with another frame time, and the run would only say that the first client did not join
+        parser.error("--frame-ms takes 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
+    client_inputs = [options.input, options.input2, options.input3, options.input4]
+    client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
 
     out = os.path.abspath(options.out)
     if SWITCH_IN_PATH.search(out):
@@ -471,13 +481,13 @@ def main():
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
                 command.append("--sim-hash-parts")
-            client_input = options.input if index == 0 else options.input2
+            client_input = client_inputs[index]
             if client_input:
                 command += ["--sim-input",
-                            shifted_input(client_input, client_dir, options.input2_delay_frames if index else 0)]
+                            shifted_input(client_input, client_dir, options.input2_delay_frames * index)]
             else:
                 command.append("--sim-still-hand")
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             if camera or index in holds:
                 command += ["--inspect-port", "0"]
@@ -492,7 +502,7 @@ def main():
                     return 1
         # Each client looks where its input plays, once its network game started
         for index, client in enumerate(clients):
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             if camera:
                 log = os.path.join(client_dirs[index], "client.log")
                 if wait_for_line(log, "Joined the game server", client):
