@@ -19,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include "3D/GripLandscapeEffect.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -148,6 +149,10 @@ void Run(const Command& command, uint32_t turn)
 			    {
 				    openblack::Locator::magicSystem::value().DoCastUnlock(command.player, action.seed);
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GripDust>)
+		    {
+			    openblack::GripLandscapeEffect::Spawn(action.point);
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
