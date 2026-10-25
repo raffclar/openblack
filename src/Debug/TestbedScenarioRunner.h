@@ -192,6 +192,7 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
 	/// Where the middle of the foot of the scenario's town's worship site altar is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size) const;
+	[[nodiscard]] std::optional<glm::ivec2> ObjectOnScreen(size_t object, float height, glm::vec2 size) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
 	/// of a size
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);

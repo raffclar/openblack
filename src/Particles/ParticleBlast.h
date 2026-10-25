@@ -37,12 +37,8 @@ namespace openblack::particles::blast
 constexpr float k_DefaultEffectRadius = 5.0f;
 /// The rocks it throws up
 constexpr MeshId k_RockMesh = MeshId::Z_SpellRock01;
-/// The heap of rubble it leaves on dry land, this big, for so long
-constexpr MeshId k_RubbleMesh = MeshId::TreeRootsPile;
+/// The size of the pile of rubble that it leaves on dry land (see roots_pile)
 constexpr float k_RubbleScale = 8.0f;
-constexpr float k_RubbleMilliseconds = 15000.0f;
-/// The heap fades out over its last second
-constexpr float k_RubbleFadeMilliseconds = 1000.0f;
 /// The pieces fly out from this far below its centre
 constexpr float k_FragmentDrop = 5.0f;
 /// A chain of joined triangles holds at most this many
@@ -50,19 +46,6 @@ constexpr size_t k_MostTrianglesInPiece = 16;
 /// The wave's range grows with the caster's tribal power within these
 constexpr float k_LeastTribalPower = 1.0f;
 constexpr float k_MostTribalPower = 5.0f;
-
-/// A heap of rubble or roots lying on the land after a frame
-struct HeapAge
-{
-	float millisecondsLeft {0.0f};
-	/// Its alpha, 0 to 255, once it is fading
-	std::optional<uint8_t> alpha;
-	bool gone {false};
-};
-/// Ages a heap by a frame's game time. Its life runs down by the game's time only, so it lasts as long whatever the frame
-/// rate; in its last second its alpha is the time it has left as a share of that second, taken before the frame passes,
-/// and it goes once less than a millisecond is left
-[[nodiscard]] HeapAge AgeHeap(float millisecondsLeft, std::optional<uint8_t> alpha, float frameMilliseconds);
 
 /// The explosion rule's properties
 struct ExplosionRules

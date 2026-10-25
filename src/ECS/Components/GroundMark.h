@@ -16,10 +16,11 @@
 namespace openblack::ecs::components
 {
 
-/// A heap of rubble a blast left on the land: it lies there for a while of the game's time and fades away in its last
-/// second
+/// The roots of a dead tree that fell, which fade by their own alpha. The piles of roots of blasts and of trees that the
+/// hand pulls free are not things of the world (see roots_pile).
 struct GroundMark
 {
+	/// Not in use. The saves of earlier versions keep it.
 	float millisecondsLeft {0.0f};
 	/// Its alpha, 0 to 255, once it is fading; drawn without blending until then
 	std::optional<uint8_t> alpha;
