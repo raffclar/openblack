@@ -7830,10 +7830,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    }
 					    const auto* texture = found->texture;
 					    const auto* alpha = found->alpha;
+					    // A sprite that moves between the turns is drawn at its drawn place
+					    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
 					    glm::mat4 modelMatrix = glm::mat4(1.0f);
-					    modelMatrix = glm::translate(modelMatrix, transform.position);
-					    modelMatrix *= glm::mat4(transform.rotation);
-					    modelMatrix = glm::scale(modelMatrix, transform.scale);
+					    modelMatrix = glm::translate(modelMatrix, placed.position);
+					    modelMatrix *= glm::mat4(placed.rotation);
+					    modelMatrix = glm::scale(modelMatrix, placed.scale);
 
 					    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
@@ -7856,7 +7858,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    bgfx::setState(SpriteState(sprite.additive));
 
 					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-					                         zsort::Depth(transform.position, cameraOrigin));
+					                         zsort::Depth(placed.position, cameraOrigin));
 				    });
 				DrawTempleLeashes(desc);
 			}
