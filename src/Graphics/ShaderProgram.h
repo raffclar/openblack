@@ -25,7 +25,6 @@
 
 namespace openblack::graphics
 {
-class DescriptorSetTally;
 class DrawWindow;
 class SamplerDefaults;
 class Texture2D;
@@ -42,11 +41,10 @@ public:
 
 	ShaderProgram() = delete;
 	/// The samplers are those the program's shaders declare, which it keeps bound on every submit with the defaults.
-	/// The tally, when there is one, counts the descriptor sets its draws take. The window, when there is one, can hold
-	/// back its draws.
+	/// The window, when there is one, can hold back its draws.
 	ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
 	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-	              DescriptorSetTally* tally = nullptr, DrawWindow* window = nullptr);
+	              DrawWindow* window = nullptr);
 	~ShaderProgram();
 	ShaderProgram(const ShaderProgram&) = delete;
 	ShaderProgram& operator=(const ShaderProgram&) = delete;
@@ -97,7 +95,6 @@ private:
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
 	SamplerDefaults& _samplerDefaults;
-	DescriptorSetTally* _tally;
 	DrawWindow* _window;
 	/// The programs for a mesh with one bone and with a few bones; null for this program
 	const ShaderProgram* _singleBone {nullptr};
