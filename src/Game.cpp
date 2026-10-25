@@ -4843,7 +4843,7 @@ void Game::MakeSymbolSheet()
 
 void Game::StartCameraAtTemple()
 {
-	_shortcutKeys.StartAtTemple(OwnPlayer());
+	_shortcutKeys.StartAtTemple(LocalInputPlayer());
 }
 
 void Game::TestbedLoaded()
@@ -5321,7 +5321,7 @@ PlayerNames Game::LocalGodForGameEnd() const
 	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
 	const bool looksOn =
 	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
-	return looksOn ? PlayerNames::PLAYER_SEVEN : OwnPlayer();
+	return looksOn ? PlayerNames::PLAYER_SEVEN : LocalInputPlayer();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)

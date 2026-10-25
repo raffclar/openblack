@@ -416,9 +416,11 @@ TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
 {
 	TurnRecorder recorder;
 	PlayTurn([&recorder](Step step) { recorder(step); }, true);
-	const std::vector<Step> expected {Step::DrawnPlaces,      Step::PlayerCommands, Step::HandStillness, Step::HandInterface,
-	                                  Step::ChimneySmoke,     Step::Clock,          Step::RealWeather,   Step::WalkerLookahead,
-	                                  Step::InfluenceTurnEnd, Step::SyncChecksum,   Step::RunRecord};
+	const std::vector<Step> expected {Step::DrawnPlaces,       Step::PlayerCommands,   Step::HandStillness,
+	                                  Step::HandInterface,     Step::ChimneySmoke,     Step::Clock,
+	                                  Step::RealWeather,       Step::WalkerLookahead,  Step::CreatureShapes,
+	                                  Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd, Step::SyncChecksum,
+	                                  Step::RunRecord};
 	EXPECT_EQ(recorder.Steps(), expected);
 }
 

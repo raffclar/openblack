@@ -1196,7 +1196,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				if (const auto& box = MeshBox(mark.mesh); box.has_value())
 				{
 					const auto choice = ChooseDetail(
-					    *box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *camera, modelDetail);
+					    *box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *view, modelDetail);
 					if (!choice.mesh.has_value())
 					{
 						gone = true;
