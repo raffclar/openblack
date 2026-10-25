@@ -1556,6 +1556,7 @@ void CreatureAnimationSystem::LoadCreedPowers(
 	                                                          : registry.Assign<CreatureHandGlows>(creature);
 	const auto hum = creature_hand_glow::LoadCreedPowers(glows.glows, powers);
 	glows.placed = {};
+	glows.motion = {};
 	ApplyHum(creature, hum);
 }
 
@@ -1614,9 +1615,11 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 	{
 		auto& glow = hand->glows.at(i);
 		auto& placed = hand->placed.at(i);
+		auto& motion = hand->motion.at(i);
 		placed.reset();
 		if (!glow.has_value())
 		{
+			motion = {};
 			continue;
 		}
 		const auto place = static_cast<Place>(i);
@@ -1625,8 +1628,8 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		if (place == Place::Circling)
 		{
 			// It turns about the up axis above the body
-			creature_hand_glow::Turn(*glow, gameMs);
-			axes = creature_hand_glow::CirclingAxes(glow->turn);
+			creature_hand_glow::Turn(motion, gameMs);
+			axes = creature_hand_glow::CirclingAxes(motion.turn);
 			point = creature_hand_glow::CirclingPoint(transform->position, body->size);
 		}
 		else
@@ -1663,11 +1666,11 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		}
 		// The shell reaches out by the power it had when it was drawn, and its texture slides on
 		const float zoom = creature_hand_glow::Zoom(*glow);
-		creature_hand_glow::Slide(*glow, frameMs);
+		creature_hand_glow::Slide(motion, frameMs);
 		placed = CreatureHandGlows::Placed {
 		    .model = creature_hand_glow::ModelMatrix(axes, point, transform->scale.x, glow->scale),
 		    .zoom = zoom,
-		    .slide = glow->slide,
+		    .slide = motion.slide,
 		};
 	}
 }

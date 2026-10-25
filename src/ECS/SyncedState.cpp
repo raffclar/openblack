@@ -151,6 +151,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "*", .field = "", .marker = "TempleInteriorPart"},
     // The copy of the creature in the film of a falling spell. The film shows it while the game waits.
     {.component = "*", .field = "", .marker = "FilmCreature"},
+    // The glows on a creature's body turn and slide in the frames, and the frames place them where the body is drawn.
+    // The turns set their powers and scales.
+    {.component = "CreatureHandGlows", .field = "slidePace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "turnPace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "placed", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "motion", .marker = ""},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.

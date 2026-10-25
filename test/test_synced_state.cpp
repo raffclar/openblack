@@ -162,6 +162,17 @@ TEST(SyncedState, TheCopyOfTheCreatureInAFilmIsNotSynced)
 	}));
 }
 
+TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "motion"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "placed"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "slidePace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "turnPace"));
+	// The turns set the powers and the scales
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "glows"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
