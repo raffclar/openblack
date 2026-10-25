@@ -10,6 +10,7 @@
 #include <cstdint>
 #include <cstring>
 
+#include <algorithm>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -178,6 +179,17 @@ protected:
 		}
 	}
 
+	/// The world state of the fake world: its hash and its turns
+	void GiveWorldState()
+	{
+		host->SetWorldState([this] {
+			std::vector<uint8_t> bytes(sizeof(uint64_t) + sizeof(uint32_t));
+			std::memcpy(bytes.data(), &serverWorld.hash, sizeof(uint64_t));
+			std::memcpy(bytes.data() + sizeof(uint64_t), &serverWorld.turns, sizeof(uint32_t));
+			return bytes;
+		});
+	}
+
 	void Frames(std::vector<Computer*> computers, int count)
 	{
 		for (int i = 0; i < count; ++i)
@@ -287,7 +299,7 @@ TEST_F(LockstepTest, TheServerRefusesBadTicketsLateJoinersAndTheCommandsOfObserv
 	EXPECT_GT(watcher.world.turns, 10u);
 	EXPECT_EQ(watcher.session.GetCompares().compared, watcher.session.GetCompares().same);
 
-	// A god who comes after the start needs the live world, which the server does not send yet
+	// A player who comes after the start needs the live world. This server has no world state to send.
 	Computer late(network, now, "god:dave");
 	Frames({&watcher, &alice, &late}, 3);
 	EXPECT_EQ(late.session.GetEnd(), NetworkSession::End::Refused);
@@ -407,13 +419,7 @@ TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 TEST_F(LockstepTest, AClientThatPartsLoadsTheWorldOfTheServerAndStaysInStep)
 {
 	MakeHost(1);
-	// The world state of the fake world: its hash and its turns
-	host->SetWorldState([this] {
-		std::vector<uint8_t> bytes(sizeof(uint64_t) + sizeof(uint32_t));
-		std::memcpy(bytes.data(), &serverWorld.hash, sizeof(uint64_t));
-		std::memcpy(bytes.data() + sizeof(uint64_t), &serverWorld.turns, sizeof(uint32_t));
-		return bytes;
-	});
+	GiveWorldState();
 	Computer alice(network, now, "god:alice");
 	alice.world.partsAfter = 20;
 	Frames({&alice}, 120);
@@ -522,4 +528,115 @@ TEST_F(LockstepTest, AGodWhoLeavesDuringTheStartStopsIt)
 		stopped = stopped || *event == online::StartEvent::Stopped;
 	}
 	EXPECT_TRUE(stopped);
+}
+
+TEST_F(LockstepTest, ANewProcessOfAnAwayGodsPlayerComesBackIntoTheGodWithTheWorldOfTheServer)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob");
+	Frames({&alice, bob.get()}, 30);
+	ASSERT_TRUE(host->Started());
+	const auto oldSession = bob->session.GetJoined()->session;
+
+	// Bob's program stops: the god waits for him
+	network.Cut(bob->sockets->Ids().back());
+	bob.reset();
+	Frames({&alice}, 20);
+	ASSERT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Away);
+
+	// Bob starts the program again with a new ticket of the same account
+	Computer again(network, now, "god:bob");
+	Frames({&alice, &again}, 40);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->role, game_socket::Role::God);
+	EXPECT_EQ(again.session.GetJoined()->slot, std::optional<uint8_t>(1));
+	EXPECT_NE(again.session.GetJoined()->session, oldSession);
+	EXPECT_EQ(again.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(again.loads, 1u);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	EXPECT_EQ(host->Seats()[1].resumes, 1u);
+	// The god plays on: its commands reach the server, and every turn is the same as the server's
+	again.session.Send(HandTap {.object = Entity(5)});
+	Frames({&alice, &again}, 20);
+	EXPECT_EQ(again.world.hash, serverWorld.hash);
+	EXPECT_EQ(again.world.turns, serverWorld.turns);
+	EXPECT_GT(again.session.GetCompares().same, 40u);
+	EXPECT_EQ(again.session.GetCompares().compared, again.session.GetCompares().same);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	EXPECT_EQ(host->Seats()[1].commands.size(), 1u);
+}
+
+TEST_F(LockstepTest, ANewProcessReplacesTheOldSocketOfTheSamePlayer)
+{
+	MakeHost(2);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 30);
+	ASSERT_TRUE(host->Started());
+
+	// The old program of Bob still has its socket when the new one joins, as after a reload of the page
+	Computer again(network, now, "god:bob");
+	Frames({&alice, &bob, &again}, 40);
+	EXPECT_EQ(again.session.GetJoined()->slot, std::optional<uint8_t>(1));
+	EXPECT_EQ(again.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+	// The old program cannot take the god back with the secret of its session
+	EXPECT_EQ(bob.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(bob.session.RefusedReason(), "resume");
+	EXPECT_EQ(again.session.GetCompares().compared, again.session.GetCompares().same);
+	EXPECT_GT(again.session.GetCompares().same, 20u);
+}
+
+TEST_F(LockstepTest, PlayersWhoJoinAfterTheStartAreObserversWithTheWorldOfTheServer)
+{
+	MakeHost(1);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 30);
+	ASSERT_TRUE(host->Started());
+
+	// A new god's account and an observer come after the start (MP-Q12)
+	Computer dave(network, now, "god:dave");
+	Computer carol(network, now, "observer:carol");
+	Frames({&alice, &dave, &carol}, 30);
+	for (const auto* late : {&dave, &carol})
+	{
+		ASSERT_TRUE(late->session.GetJoined().has_value());
+		EXPECT_EQ(late->session.GetJoined()->role, game_socket::Role::Observer);
+		EXPECT_FALSE(late->session.GetJoined()->slot.has_value());
+		EXPECT_EQ(late->loads, 1u);
+		EXPECT_EQ(late->world.turns, serverWorld.turns);
+		EXPECT_EQ(late->world.hash, serverWorld.hash);
+		EXPECT_EQ(late->session.GetCompares().compared, late->session.GetCompares().same);
+	}
+	EXPECT_EQ(host->Observers(), 2u);
+	EXPECT_EQ(std::ranges::count(host->Seats(), LockstepHost::SeatState::Taken, &LockstepHost::Seat::state), 1);
+	// An observer's commands do not reach the server
+	dave.session.Send(HandTap {.object = Entity(3)});
+	Frames({&alice, &dave, &carol}, 5);
+	EXPECT_TRUE(host->Seats()[1].commands.empty());
+}
+
+TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
+{
+	MakeHost(2, 2 * 1'000'000);
+	GiveWorldState();
+	Computer alice(network, now, "god:alice");
+	auto bob = std::make_unique<Computer>(network, now, "god:bob");
+	Frames({&alice, bob.get()}, 10);
+	network.Cut(bob->sockets->Ids().back());
+	bob.reset();
+	Frames({&alice}, 40);
+	ASSERT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+
+	// The slot of a defeated god stays closed (MP-Q5): its player can only watch
+	Computer again(network, now, "god:bob");
+	Frames({&alice, &again}, 20);
+	ASSERT_TRUE(again.session.GetJoined().has_value());
+	EXPECT_EQ(again.session.GetJoined()->role, game_socket::Role::Observer);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
+	EXPECT_EQ(again.world.hash, serverWorld.hash);
 }
