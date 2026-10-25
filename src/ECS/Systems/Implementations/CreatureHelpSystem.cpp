@@ -40,6 +40,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -53,9 +54,6 @@ constexpr uint32_t k_TurnsPerSecond =
     static_cast<uint32_t>(std::chrono::milliseconds(std::chrono::seconds(1)) / TimeSystemInterface::k_TurnDuration);
 /// The messages kept for the inspector
 constexpr size_t k_ToldKept = 16;
-/// The kinds of script a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
-
 uint32_t Turn()
 {
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
@@ -191,7 +189,7 @@ void Say(std::string_view script, uint32_t text)
 	}
 	auto& vm = Locator::vm::value();
 	vm.Pushf(static_cast<float>(text));
-	vm.StartScript(std::string(script), k_SinglePlayerScripts);
+	vm.StartScript(std::string(script), script::start::StartableScripts());
 }
 
 help::Memory& MemoryOf(ecs::Registry& registry, entt::entity creature)
@@ -273,7 +271,7 @@ void CreatureHelpSystem::Tell(entt::entity creature, const help::Message& messag
 		const auto land = static_cast<uint32_t>(registry.Context().mapScriptGlobals.landNumber);
 		if (const auto script = help::StageScript(message.kind, land); script.has_value() && Locator::vm::has_value())
 		{
-			Locator::vm::value().StartScript(std::string(*script), k_SinglePlayerScripts);
+			Locator::vm::value().StartScript(std::string(*script), script::start::StartableScripts());
 			if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr)
 			{
 				mind->inDevelopmentScript = true;
