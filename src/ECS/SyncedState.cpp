@@ -146,6 +146,14 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "*", .field = "", .marker = "IntroHand"},
     {.component = "*", .field = "", .marker = "BoatFilmPart"},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
+    // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
+    // numbers. Only the draw reads them.
+    {.component = "HighDetail", .field = "eyes", .marker = ""},
+    {.component = "HighDetail", .field = "drawnEyes", .marker = ""},
+    // A fish farm's shoal swims and darts in the frames near the camera, by the local random numbers. The turns go by
+    // the farm's fish; the shoal's centre never moves.
+    {.component = "FishFarm", .field = "shoal", .marker = ""},
+    {.component = "FishFarm", .field = "shownAlpha", .marker = ""},
     {.component = "*", .field = "", .marker = "ScriptHighlightGlow"},
     // The clouds of a storm gather and drift in the frames by the local random numbers, as the game draws them. The
     // rain and the storm's turns read the storm, not its clouds.
