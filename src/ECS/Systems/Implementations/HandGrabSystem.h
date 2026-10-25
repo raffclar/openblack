@@ -57,6 +57,8 @@ public:
 	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
 	void ForgetClicks(uint32_t turn);
+	/// As ForgetClicks, for the hands of all the players
+	void ForgetAllClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
 	void SetRecordedThrow(glm::vec3 velocity) override;

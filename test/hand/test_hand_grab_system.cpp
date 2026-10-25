@@ -106,6 +106,7 @@ public:
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
+	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override { return nearHand; }
 	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override { return pickedPoint; }
@@ -413,6 +414,8 @@ public:
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
+	/// The player whose hands this computer moves, when it is not the first player
+	std::optional<PlayerNames> ownHandPlayer;
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
@@ -1062,6 +1065,33 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameEveryComputerForgetsTheClicksOfAllHands)
+{
+	// This computer moves the hands of the second player. The first player clicked a place, and the second a thing.
+	world->networkGame = true;
+	world->secondPlayerHasHands = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoClick(PlayerNames::PLAYER_ONE,
+	                player_commands::HandClick {.thing = entt::null,
+	                                            .release = true,
+	                                            .hasPlace = true,
+	                                            .placeX = map_coords::ToFixed(20.0f),
+	                                            .placeZ = map_coords::ToFixed(30.0f)},
+	                10);
+	system->DoClick(PlayerNames::PLAYER_TWO, player_commands::HandClick {.thing = rock, .release = false}, 10);
+	ASSERT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, map_coords::ToFixed(20.0f));
+	ASSERT_EQ(world->registry.Get<HandClicked>(world->secondHand).thing, rock);
+	// Before 15 seconds, the turn keeps both clicks
+	system->InterfaceTurn(15900, 159);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->secondHand).thing, rock);
+	// After 15 seconds, the turn forgets the click of the first player too, not only the click of this computer's hand
+	system->InterfaceTurn(16000, 160);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, 0);
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->secondHand).thing == entt::null);
 }
 
 TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)
