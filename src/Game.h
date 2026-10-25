@@ -111,6 +111,10 @@ namespace checksum_log
 {
 class Writer;
 }
+namespace frame_write_guard
+{
+class Guard;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -570,6 +574,8 @@ private:
 	std::unique_ptr<command_log::Writer> _commandLog;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
+	/// A tool's run that looks for the frame steps that change the synced world
+	std::unique_ptr<frame_write_guard::Guard> _frameGuard;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box

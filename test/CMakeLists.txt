@@ -1744,3 +1744,8 @@ openblack_setup_and_add_test(test_build_sized_save test_build_sized_save.cpp)
 openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp)
 openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
 openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
+openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
+add_test(NAME test_frame_time_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
+)
