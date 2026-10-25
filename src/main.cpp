@@ -158,7 +158,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
 		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
 		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
-		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>());
+		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
+		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
@@ -402,6 +403,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (result.count("sim-play-commands") != 0)
 			{
 				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
+			}
+			if (result.count("sim-trace-draws") != 0)
+			{
+				simulation.traceDrawsPath = std::filesystem::path(result["sim-trace-draws"].as<std::string>());
 			}
 			args.simulation = simulation;
 		}

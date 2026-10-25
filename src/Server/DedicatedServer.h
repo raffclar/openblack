@@ -104,6 +104,8 @@ struct ServerSettings
 	std::optional<std::filesystem::path> recordPath;
 	/// Tools: the run record also has the hash of each field of each component
 	bool recordFields {false};
+	/// Tools: the server writes each draw on the synced seed to this file, as the game's --sim-trace-draws does
+	std::optional<std::filesystem::path> traceDrawsPath;
 	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same
 	/// turns, as if the game sent them over the network.
 	std::optional<std::filesystem::path> commandsPath;

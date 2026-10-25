@@ -67,6 +67,7 @@ int main(int argc, char* argv[])
 		("profile-folder", "The folder of the server's own profile. With none, the profile of a tool's run in the working folder.", cxxopts::value<std::string>())
 		("record", "Tools: write the run record of each turn to this file, with the hash of each component.", cxxopts::value<std::string>())
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
+		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
@@ -150,6 +151,10 @@ int main(int argc, char* argv[])
 		{
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
+		}
+		if (result.count("trace-draws") != 0)
+		{
+			settings.traceDrawsPath = std::filesystem::path(result["trace-draws"].as<std::string>());
 		}
 		if (result.count("reload-at") != 0)
 		{

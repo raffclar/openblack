@@ -92,6 +92,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -3850,7 +3853,8 @@ bool Game::Initialize() noexcept
 		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
 		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
 	}
-	if (_networkGame)
+	// A game that joins a server from the command line loads its land as a network game, as the server does
+	if (_networkGame || _networkJoin.has_value())
 	{
 		Locator::time::value().SetNetworkGame(true);
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world plays as a network game");
@@ -3951,6 +3955,16 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->traceDrawsPath.has_value())
+	{
+		if (!draw_trace::Start(Locator::gameRandom::value(), *_simulation->traceDrawsPath))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+			                    _simulation->traceDrawsPath->string());
+		}
+	}
+#endif
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
@@ -3966,7 +3980,7 @@ void Game::StartSimulationLogs()
 			}
 			checksums.SetTurnListener(
 			    [log = _checksumLog.get()](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-				    log->Write(turn.turn, turn.checksum, turn.parts);
+				    log->Write(turn.turn, turn.checksum, turn.parts, turn.unregistered);
 				    if (!turn.dump.empty())
 				    {
 					    log->WriteDump(turn.turn, turn.dump);
@@ -4219,10 +4233,11 @@ Game::RunStart Game::StartRun() noexcept
 
 	// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
 	// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and the
-	// start-of-game question isn't asked
+	// start-of-game question isn't asked. A network game starts no story either.
 	auto& lands = Locator::landSystem::value();
 	const bool startStory = !_startTestbed && start == game_session::Start::NewGame &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish,
+	                                                              Locator::time::value().IsNetworkGame());
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return RunStart::Failed;
@@ -5089,7 +5104,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
 	const bool startStory = !start.testbed && !start.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish, true);
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return false;
