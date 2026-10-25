@@ -335,11 +335,24 @@ struct HandCastUnlock
 	entt::entity seed {entt::null};
 };
 
+/// The gesture of the leash picker chose a leash: the creature of the player changes to the leash of this type, if it
+/// knows that leash
+struct LeashPick
+{
+	LeashType type;
+};
+
+/// A scribble of the hand shakes off the thing that the hand holds. The thing falls from where the hand holds it, with
+/// no speed, and the turn does not plant it again.
+struct HandShakeOff
+{
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
                             FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock>;
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff>;
 
 /// A command and the player that sent it
 struct Command
