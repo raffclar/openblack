@@ -94,6 +94,8 @@ private:
 	ProgramHandle _program;
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
+	/// The uniform of each sampler, in the order of the samplers, found one time when the program is made
+	std::vector<UniformHandle> _samplerUniforms;
 	SamplerDefaults& _samplerDefaults;
 	DrawWindow* _window;
 	/// The programs for a mesh with one bone and with a few bones; null for this program
