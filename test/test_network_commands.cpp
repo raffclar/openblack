@@ -21,6 +21,7 @@
 
 #include "Commands/PlayerCommands.h"
 #include "Commands/TurnCommandSource.h"
+#include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
@@ -29,6 +30,7 @@
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
+#include "Common/RandomNumberManagerTesting.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 
 using namespace openblack;
@@ -164,6 +166,30 @@ TEST_F(NetworkCommands, TheLeaveOfTheServerDefeatsTheGodOfThePlayerAtTheTurn)
 	_commands.RunSent(5);
 	EXPECT_EQ(registry.Get<ecs::components::LeftGame>(god).turn, 4u);
 	_commands.SetSource(nullptr);
+}
+
+TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer)
+{
+	Locator::rng::emplace<RandomNumberManagerTesting>();
+	auto& registry = Locator::entitiesRegistry::value();
+	_commands.SetSource(&_source);
+	// The own grip goes to the server, and makes no dust before the server's turn
+	_commands.Submit(GripDust {.point = {10.0f, 2.0f, 30.0f}});
+	ASSERT_EQ(_source.sent.size(), 1u);
+	EXPECT_EQ(std::get<GripDust>(_source.sent[0]).point, glm::vec3(10.0f, 2.0f, 30.0f));
+	EXPECT_EQ(registry.Size<ecs::components::GripLandscapeParticle>(), 0u);
+	_source.turns[3] = {{.player = PlayerNames::PLAYER_TWO, .action = GripDust {.point = {100.0f, 5.0f, 200.0f}}}};
+	_commands.RunSent(3);
+	size_t sprites = 0;
+	registry.Each<const ecs::components::GripLandscapeParticle>(
+	    [&sprites](const ecs::components::GripLandscapeParticle& particle) {
+		    ++sprites;
+		    EXPECT_EQ(particle.centre.x, 100.0f);
+		    EXPECT_EQ(particle.centre.z, 200.0f);
+	    });
+	EXPECT_EQ(sprites, 8u);
+	_commands.SetSource(nullptr);
+	Locator::rng::reset();
 }
 
 TEST_F(NetworkCommands, TheJoinOfTheServerGivesTheGodOfThePlayerItsHandsAtTheTurn)

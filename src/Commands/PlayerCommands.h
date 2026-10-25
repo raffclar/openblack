@@ -335,11 +335,19 @@ struct HandCastUnlock
 	entt::entity seed {entt::null};
 };
 
+/// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
+/// makes the same dust at the same turn.
+struct GripDust
+{
+	/// The point on the ground under the hand at the grip
+	glm::vec3 point {0.0f};
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
                             FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock>;
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, GripDust>;
 
 /// A command and the player that sent it
 struct Command

@@ -2286,17 +2286,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
-		const auto turn = Locator::time::value().GetTurn();
-		const bool played = PlayTurns();
-		// A turn makes the dust of the grips that the hand made before it
-		if (Locator::time::value().GetTurn() != turn)
-		{
-			for (const auto& dust : std::exchange(_gripDust, {}))
-			{
-				GripLandscapeEffect::Spawn(dust);
-			}
-		}
-		return played;
+		return PlayTurns();
 	}
 	case Step::SendCommands:
 		// A tool's run that plays the commands of a file does no command of its own player
@@ -6267,10 +6257,13 @@ void Game::PlayHandGrabSound()
 	}
 	if (feedback == hand_grab::GripFeedback::Dust)
 	{
-		// The next turn makes a puff of dust where the hand grips the land. The sound plays at once.
-		_gripDust.emplace_back(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z);
-		// One of G_HandGrabLand_01 to _06, centred on the listener
-		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
+		// The next turn makes a puff of dust where the hand grips the land, on each computer of a network game. The sound
+		// plays at once, only on this computer.
+		Locator::playerCommandSystem::value().Submit(player_commands::GripDust {
+		    .point = {position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z}});
+		// One of G_HandGrabLand_01 to _06, centred on the listener. The number comes from this computer's own seed, so
+		// that the synced numbers of the world do not change.
+		const auto sample = 4 + Locator::gameRandom::value().LocalRand(6);
 		const auto id = fmt::format("InGame.sad/{}", sample);
 		// The grip is a sound of its own to the voice rules
 		audio::StartGameSoundEffect(entt::hashed_string(id.c_str()), {.voiceOwner = audio::VoiceOwner::OwnSound});
