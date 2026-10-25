@@ -38,7 +38,7 @@ public:
 	void LoadTestbed() override;
 	bool LoadGodsRingMap() override;
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-	                   const std::function<bool()>& restore) override;
+	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;

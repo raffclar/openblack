@@ -848,6 +848,22 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                               {"season", weather.GetSeason(turn)},
 		                               {"days_from_start", weather.GetDaysFromStart(turn)}};
 	                  }));
+	provider->Add(Query("storm_clouds", "The clouds of the storms that the frames make and draw: for each, its storm, its "
+	                                    "place in the order that its storm gathered them, where it is drawn, its size and "
+	                                    "its alpha"),
+	              Serve<Locator::cloudSystem>(
+	                  "the clouds", [](const ecs::systems::CloudSystemInterface& clouds, const QueryContext& /*c*/) {
+		                  Json list = Json::array();
+		                  for (const auto& cloud : clouds.GetStormClouds())
+		                  {
+			                  list.push_back({{"storm", entt::to_integral(cloud.storm)},
+			                                  {"index", cloud.index},
+			                                  {"position", Point(cloud.position)},
+			                                  {"size", cloud.mist.size},
+			                                  {"alpha", cloud.mist.colour >> 24u}});
+		                  }
+		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
+	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
 	                                    "its storm and the background weather"),
 	              Serve<Locator::realWeatherSystem>(

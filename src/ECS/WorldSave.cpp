@@ -45,6 +45,7 @@
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureHandGlows.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/SoundTag.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/WalkPath.h"
@@ -630,6 +631,8 @@ void world_save::ForgetUnsavedState(entt::registry& registry)
 		mind.leftAreaActions.clear();
 		mind.agendaRefused = false;
 	});
+	// A footpath that the game still looks for starts its search again from its two ends, as the game loads it
+	registry.view<components::FootpathFinder>().each([](components::FootpathFinder& finder) { finder.plan.reset(); });
 	// A save from inside the temple has the rooms of the temple, so the load removes them
 	ForgetTempleRooms(registry);
 }

@@ -31,7 +31,6 @@
 #include "ECS/Components/SpellSeed.h"
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/StoragePit.h"
-#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/Swayable.h"
@@ -232,13 +231,6 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	Reflect<components::StoragePit>(context)
 	    .Field<&components::StoragePit::woodPiles>("woodPiles")
 	    .Field<&components::StoragePit::foodPile>("foodPile");
-	Reflect<components::StormCloud>(context)
-	    .Field<&components::StormCloud::storm>("storm")
-	    .Field<&components::StormCloud::index>("index")
-	    .Field<&components::StormCloud::drift>("drift")
-	    .Field<&components::StormCloud::sizeFactor>("sizeFactor")
-	    .Field<&components::StormCloud::shade>("shade")
-	    .Field<&components::StormCloud::flashGrey>("flashGrey");
 	Reflect<components::Stream>(context).Field<&components::Stream::id>("id").Field<&components::Stream::points>("points");
 	Reflect<components::StreamSegment> {context};
 	Reflect<components::StreetLantern>(context)
