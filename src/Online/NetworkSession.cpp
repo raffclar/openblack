@@ -158,6 +158,21 @@ void NetworkSession::Leave()
 	FinishWith(End::Left);
 }
 
+void NetworkSession::StopGame()
+{
+	// The request goes once. A request that cannot go now waits for no socket: another computer stops the turns, or the
+	// player leaves.
+	if (_stopAsked || _stoppedAfter.has_value())
+	{
+		return;
+	}
+	if (_stream && _stream->IsOpen())
+	{
+		_stopAsked = true;
+		_stream->SendText(game_socket::ToJson(game_socket::StopRequest {}));
+	}
+}
+
 void NetworkSession::DropStream()
 {
 	// The handlers of the old socket do nothing more. The socket closes in the next update, never inside its own handler.
@@ -220,6 +235,11 @@ void NetworkSession::Text(std::string_view text)
 			_playout.Reset();
 		}
 		SendWaiting();
+	}
+	else if (const auto* stop = std::get_if<game_socket::GameStop>(&*frame))
+	{
+		_stoppedAfter = stop->turn;
+		Log(spdlog::level::info, fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
 	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
@@ -405,6 +425,10 @@ void NetworkSession::Send(const player_commands::Action& action)
 bool NetworkSession::HasTurn(uint32_t turn) const
 {
 	if ((_state != State::Playing && _state != State::Reconnecting) || _worldTurn.has_value())
+	{
+		return false;
+	}
+	if (_stoppedAfter.has_value() && turn > *_stoppedAfter)
 	{
 		return false;
 	}

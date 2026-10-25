@@ -126,6 +126,8 @@ public:
 	[[nodiscard]] bool Paused() const;
 	/// True when the game started and every god left or was defeated: no player can come back
 	[[nodiscard]] bool GameOver() const;
+	/// The last turn of the game, after a client asked the server to stop the turns of a decided game. None before.
+	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	[[nodiscard]] const std::vector<Seat>& Seats() const { return _seats; }
 	[[nodiscard]] size_t Observers() const;
 	/// The blocks of commands that the server did not accept: from an observer, before the start, or a command that only
@@ -166,6 +168,8 @@ private:
 	void BroadcastBinary(std::span<const uint8_t> bytes);
 	void CloseSeat(uint8_t seat);
 	void CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum);
+	/// The end box of a decided game opened on a client: no turn comes after the turns closed so far
+	void StopTurns();
 	[[nodiscard]] bool AnyGodConnected() const;
 
 	WebSocketServerInterface& _sockets;
@@ -190,6 +194,8 @@ private:
 	std::set<ConnectionId> _awaited;
 	bool _pausedBefore {false};
 	uint32_t _turnsDone {0};
+	/// The last turn of the game, once the turns stopped
+	std::optional<uint32_t> _stoppedAfter;
 	/// The blocks that came since the last turn
 	std::vector<turn_codec::StampedBlock> _pending;
 	/// The slots whose god leaves at the next turn

@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -36,6 +37,15 @@ enum class HashDetail : uint8_t
 	Fields,
 };
 
+/// Tests: at a turn, the temple of a player starts its destruction, as when its heart loses the last of its life. Each
+/// computer of a network game must have the same switch, so that every world does the same at the same turn.
+struct TempleLoss
+{
+	/// The number of the player, from 0
+	uint8_t player {0};
+	uint32_t turn {0};
+};
+
 /// How the game runs its frames
 struct Settings
 {
@@ -51,6 +61,8 @@ struct Settings
 	/// The hand stays where it starts and does not follow the pointer: the player gives no input with the hand. The
 	/// frames ease the hand to the pointer, so a hand that moves gives other places at other frame rates.
 	bool stillHand {false};
+	/// Tests: the loss of a temple at a turn
+	std::optional<TempleLoss> templeLoss;
 };
 
 /// What the command line asks of a simulation run
@@ -104,6 +116,9 @@ constexpr uint32_t k_LongestFrameMs = 1000;
 
 /// Whether the run is at its end at this turn
 [[nodiscard]] bool Finished(const Settings& settings, uint32_t turn);
+
+/// The loss of a temple from the text "player:turn", such as "1:300". None for another text or a player past the seventh.
+[[nodiscard]] std::optional<TempleLoss> ParseTempleLoss(std::string_view text);
 
 /// How long the frame waits at its end so that it takes its fixed game time in real time; no wait in fast mode, without
 /// a fixed frame time, or once the frame took that long or longer

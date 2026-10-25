@@ -413,6 +413,8 @@ def main():
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
+    parser.add_argument("--temple-loss", help="PLAYER:TURN: at the turn the temple of the player (from 0) starts its "
+                        "destruction on the server and on every client, so that the game is decided and its turns stop")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
@@ -448,6 +450,8 @@ def main():
         "--come-back-seconds", str(options.come_back_seconds)]
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
+    if options.temple_loss:
+        server_command += ["--temple-loss", options.temple_loss]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -473,6 +477,8 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+            if options.temple_loss:
+                command += ["--sim-temple-loss", options.temple_loss]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -540,7 +546,13 @@ def main():
 
     server_turns = server_checksums(server_log)
     summary = {"turns": options.turns, "server_turns": len(server_turns), "clients": []}
+    # A decided game: the server stops its turns after one turn, and every computer must stop at that turn
+    stop_lines = lines_with(server_log, ["the turns of the game stop after turn"])
+    stopped_after = int(re.search(r"after turn (\d+)", stop_lines[-1]).group(1)) if stop_lines else None
+    summary["stopped_after"] = stopped_after
     all_same = True
+    if options.temple_loss and stopped_after is None:
+        all_same = False
     for index, client_dir in enumerate(client_dirs):
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
@@ -556,19 +568,29 @@ def main():
             back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
             different = [turn for turn in different if turn > back_at]
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
+        client_stop = lines_with(os.path.join(client_dir, "client.log"), ["The turns of the network game stopped after turn"])
+        client_stopped_after = (int(re.search(r"after turn (\d+)", client_stop[-1]).group(1)) if client_stop else None)
+        if stopped_after is not None:
+            # The client did every turn up to the last turn of the game, and none after it
+            expected = stopped_after
+            if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after + 1:
+                different = different + [-1]
         same = (not different and len(compared) >= expected // 2 and counts is not None
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
                 and counts[0] >= expected - 100 and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
+            "stopped_after": client_stopped_after,
+            "end_box": lines_with(os.path.join(client_dir, "client.log"), ["The end box opens"])[-2:],
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
             "different": different[:20], "same": same, "parts_against_server": parts,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
-    summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the"])
+    summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
+                                                "turns of the game stop"])
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)

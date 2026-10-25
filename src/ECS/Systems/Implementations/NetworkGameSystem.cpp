@@ -228,6 +228,14 @@ void NetworkGameSystem::Leave()
 	}
 }
 
+void NetworkGameSystem::StopGame()
+{
+	if (_session)
+	{
+		_session->StopGame();
+	}
+}
+
 void NetworkGameSystem::PlayAlone()
 {
 	if (InGame())
@@ -274,6 +282,15 @@ void NetworkGameSystem::Update()
 		clock.SetPaused(false);
 		clock.ResetTimerToTurn();
 		_resumeTurn.reset();
+	}
+
+	// After the last turn of a decided game, the clock of this computer stops. The world stands still, and the frames
+	// take no game time, as in a pause.
+	if (const auto last = _session->StoppedAfter(); last.has_value() && !_stopped && Locator::time::value().GetTurn() > *last)
+	{
+		_stopped = true;
+		Locator::time::value().SetPaused(true);
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the game stopped after turn {}: the clock stops", *last);
 	}
 
 	// After a resync the server's world comes: this computer's world loads it and goes on from its turn

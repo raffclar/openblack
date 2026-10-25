@@ -169,3 +169,20 @@ TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"start.reply"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.query","land":"Land1.txt"})").has_value());
 }
+
+// The start names the players of the gods by slot, and the server tells the clients that the turns of the game stopped
+TEST(GameSocket, TheNamesOfTheGodsAndTheStopOfTheGameGoToJsonAndBack)
+{
+	const auto start = RoundTrip(Start {.land = "Online Maps/mpm_2p_1.map",
+	                                    .testbed = false,
+	                                    .seed = 3,
+	                                    .turn = 0,
+	                                    .opening = {},
+	                                    .godsRingMap = false,
+	                                    .names = {"Alice", "", "Bob"}});
+	EXPECT_EQ(start.names, (std::vector<std::string> {"Alice", "", "Bob"}));
+	RoundTrip(StopRequest {});
+	EXPECT_EQ(RoundTrip(GameStop {.turn = 1254}).turn, 1254u);
+	EXPECT_FALSE(Parse(R"({"type":"game.stop"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"names":[1]})").has_value());
+}
