@@ -19,6 +19,7 @@
 #include <functional>
 #include <iterator>
 #include <memory>
+#include <mutex>
 #include <random>
 #include <sstream>
 #include <string>
@@ -52,6 +53,7 @@
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/RegistryContext.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
@@ -399,7 +401,19 @@ void LogNames(std::string_view what, const Range& names)
 void LogWorldReport(const reflection::WorldSaveReport& report)
 {
 	SPDLOG_LOGGER_INFO(Log(), "The saved world keeps {} entities with {} components", report.entities, report.components);
-	LogNames("components with no registration", report.unregisteredComponents);
+	// A component with no registration is not in the save, so a load loses it: tell of each name once as an error. The
+	// writer's thread calls this, so the names that were told of are kept under a lock.
+	static std::mutex toldMutex;
+	static synced_state::UnregisteredReporter told;
+	std::vector<std::string> fresh;
+	{
+		const std::lock_guard lock(toldMutex);
+		fresh = told.Fresh(report.unregisteredComponents);
+	}
+	if (!fresh.empty())
+	{
+		SPDLOG_LOGGER_ERROR(Log(), "{}", synced_state::UnregisteredLine(fresh));
+	}
 	std::vector<std::string> unsaved;
 	for (const auto& value : report.unsavedValues)
 	{

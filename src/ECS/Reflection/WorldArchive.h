@@ -95,6 +95,9 @@ struct WorldHashes
 	/// When asked, each field of each registered component as "component.field", in the order of the components. A
 	/// component that saves as one value has the field "*".
 	std::vector<std::pair<std::string, uint64_t>> fields;
+	/// The components that have an entity but no registration, so the hash leaves them out: a change in them is never seen.
+	/// The names are in order.
+	std::vector<std::string> unregistered;
 };
 
 /// Whether a hash of the world keeps a part of a component. The hash asks first about the whole component (no field and
@@ -109,6 +112,10 @@ using KeepInHash = std::function<bool(std::string_view component, std::string_vi
 /// value), to compare two builds' worlds value by value
 using RowVisitor = std::function<void(std::string_view component, entt::entity entity, std::string_view field,
                                       std::span<const uint8_t> bytes)>;
+
+/// The names of the components that have an entity but no registration, in order. A save and the hash of the world leave
+/// these out, so the game must have none.
+[[nodiscard]] std::vector<std::string> UnregisteredStorages(const entt::registry& registry, const entt::meta_ctx& context);
 
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context, const KeepInHash& keep = {},
                                     bool byField = false, const RowVisitor& visit = {});

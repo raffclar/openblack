@@ -306,7 +306,31 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 		result.parts.emplace_back(name, part);
 	}
 	result.parts.insert(result.parts.end(), hashes.fields.begin(), hashes.fields.end());
+	result.unregistered = hashes.unregistered;
 	return result;
+}
+
+std::string UnregisteredLine(std::span<const std::string> names)
+{
+	std::string line(k_UnregisteredWords);
+	for (const auto& name : names)
+	{
+		line += (line.size() == k_UnregisteredWords.size() ? "" : ", ") + name;
+	}
+	return line;
+}
+
+std::vector<std::string> UnregisteredReporter::Fresh(std::span<const std::string> names)
+{
+	std::vector<std::string> fresh;
+	for (const auto& name : names)
+	{
+		if (_seen.insert(name).second)
+		{
+			fresh.push_back(name);
+		}
+	}
+	return fresh;
 }
 
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)

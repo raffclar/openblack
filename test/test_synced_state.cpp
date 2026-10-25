@@ -8,12 +8,16 @@
  *******************************************************************************/
 
 #include <array>
+#include <string>
+#include <vector>
 
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CameraPath.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
 
 using namespace openblack;
@@ -124,4 +128,83 @@ TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 	// The turn hides the body: the synced state changes
 	registry.emplace<FakeHidden>(body);
 	EXPECT_NE(synced_state::HashOf(registry, context, k_Presentation).hash, before);
+}
+
+namespace
+{
+
+/// A component that nothing registered with the reflection
+struct FakeUnregistered
+{
+	int value {0};
+};
+
+} // namespace
+
+TEST(SyncedStateUnregistered, AWorldOfRegisteredComponentsHasNoneUnregistered)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body);
+	registry.emplace<FakeHidden>(body);
+	EXPECT_TRUE(synced_state::HashOf(registry, context, k_Presentation).unregistered.empty());
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
+}
+
+TEST(SyncedStateUnregistered, AComponentWithNoRegistrationIsNamedInTheHashAndLeftOutOfIt)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body);
+	const auto before = synced_state::HashOf(registry, context, k_Presentation);
+	registry.emplace<FakeUnregistered>(body, FakeUnregistered {.value = 7});
+	const auto after = synced_state::HashOf(registry, context, k_Presentation);
+	EXPECT_EQ(after.unregistered, std::vector<std::string> {"FakeUnregistered"});
+	EXPECT_EQ(UnregisteredStorages(registry, context), after.unregistered);
+	// The hash cannot see the component, which is why the game must have none
+	EXPECT_EQ(after.hash, before.hash);
+	registry.get<FakeUnregistered>(body).value = 8;
+	EXPECT_EQ(synced_state::HashOf(registry, context, k_Presentation).hash, before.hash);
+}
+
+TEST(SyncedStateUnregistered, AnEmptyStorageIsNotUnregistered)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto entity = registry.create();
+	registry.emplace<FakeUnregistered>(entity);
+	registry.erase<FakeUnregistered>(entity);
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
+}
+
+TEST(SyncedStateUnregistered, TheReporterTellsOfEachNameOnce)
+{
+	synced_state::UnregisteredReporter reporter;
+	const std::vector<std::string> first {"Alpha", "Beta"};
+	EXPECT_EQ(reporter.Fresh(first), first);
+	EXPECT_TRUE(reporter.Fresh(first).empty());
+	const std::vector<std::string> more {"Beta", "Gamma"};
+	EXPECT_EQ(reporter.Fresh(more), std::vector<std::string> {"Gamma"});
+}
+
+TEST(SyncedStateUnregistered, TheLineHasTheWordsThatTheToolsLookFor)
+{
+	const std::vector<std::string> names {"Alpha", "Beta"};
+	EXPECT_EQ(synced_state::UnregisteredLine(names), "unregistered component storage: Alpha, Beta");
+}
+
+// Every component that the game's reflection registers gives no unregistered storage, with the real registration
+TEST(SyncedStateUnregistered, TheGamesOwnRegistrationCoversACameraPoint)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry registry;
+	const auto entity = registry.create();
+	registry.emplace<CameraPoint>(entity);
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
 }

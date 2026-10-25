@@ -609,6 +609,19 @@ if (Python3_Interpreter_FOUND)
       ${Python3_EXECUTABLE}
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
+  # Every type that the game assigns to an entity has a registration with the reflection: a component without one is left
+  # out of the sync checksum and the saves, so the list of unregistered components must stay empty
+  add_test(
+    NAME test_registered_components
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py
+  )
+  add_test(
+    NAME test_registered_components_script
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py --test
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other

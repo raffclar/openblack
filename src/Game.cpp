@@ -3929,7 +3929,7 @@ void Game::StartSimulationLogs()
 			}
 			checksums.SetTurnListener(
 			    [log = _checksumLog.get()](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-				    log->Write(turn.turn, turn.checksum, turn.parts);
+				    log->Write(turn.turn, turn.checksum, turn.parts, turn.unregistered);
 				    if (!turn.dump.empty())
 				    {
 					    log->WriteDump(turn.turn, turn.dump);
