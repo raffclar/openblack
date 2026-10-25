@@ -28,6 +28,55 @@ TURNS_PER_SECOND = 10.0
 TREND_SHARE = 0.1
 LOG_LINE = re.compile(r"\[(error|critical|warning)\]", re.IGNORECASE)
 ASSERT_WORD = re.compile(r"assert", re.IGNORECASE)
+# What the game says when a component has entities but no registration: the sync checksum and the saves leave it out, so a
+# change in it is never seen. A correct game has none, and every check tool fails when it finds one.
+UNREGISTERED_WORDS = "unregistered component storage: "
+
+
+def unregistered_in_text(lines):
+    """The names of the unregistered components that lines of a log, a record or a checksum file tell of. A log tells
+    them as the words and the names with commas between them; a record or a checksum line has an "unregistered" list."""
+    names = set()
+    for line in lines:
+        if line.lstrip().startswith("{"):
+            if '"unregistered"' not in line:
+                continue
+            try:
+                value = json.loads(line)
+            except json.JSONDecodeError:
+                continue
+            if not isinstance(value, dict):
+                continue
+            synced = value.get("synced")
+            for holder in (value, synced if isinstance(synced, dict) else {}):
+                listed = holder.get("unregistered")
+                if isinstance(listed, list):
+                    names.update(str(name) for name in listed)
+            continue
+        at = line.find(UNREGISTERED_WORDS)
+        if at >= 0:
+            tail = line[at + len(UNREGISTERED_WORDS):].strip()
+            names.update(name.strip() for name in tail.split(",") if name.strip())
+    return names
+
+
+def unregistered_in_files(*paths):
+    """The names of the unregistered components that these files tell of (a missing file tells of none)"""
+    names = set()
+    for path in paths:
+        if not path:
+            continue
+        try:
+            with open(path, encoding="utf-8", errors="replace") as file:
+                names |= unregistered_in_text(file)
+        except OSError:
+            continue
+    return names
+
+
+def unregistered_line(names):
+    """The line that a tool prints for a failure: the words and the sorted names"""
+    return UNREGISTERED_WORDS + ", ".join(sorted(names))
 
 
 def read_records(lines):
@@ -169,7 +218,9 @@ def summary(start, records, end, log_lines=None, exit_code=None):
         "longest": (end or {}).get("longest", [])[:20],
         "log": log,
     }
-    problems = sum(flag_counts.values())
+    unregistered = unregistered_in_text(log_lines or ()) | unregistered_in_text(json.dumps(record) for record in records)
+    result["unregistered"] = sorted(unregistered)
+    problems = sum(flag_counts.values()) + (1 if unregistered else 0)
     if log is not None:
         problems += sum(log["counts"].get(level, 0) for level in ("error", "critical", "assert"))
     crashed = exit_code not in (None, 0)
@@ -340,6 +391,8 @@ def markdown(result, title="Simulation run"):
     lines.append(f"- Plans (records): {result['plans']}")
     lines.append(f"- Activities (records): {result['activities']}")
     lines += ["", "## Problems", "", f"- Flags: {result['flag_counts'] or 'none'}"]
+    if result.get("unregistered"):
+        lines.append(f"- {unregistered_line(result['unregistered'])}")
     for flag in result["flags"][:15]:
         lines.append(f"  - turn {flag['turn']}: {flag['kind']} {flag['what']}: {flag['detail']}")
     if result["log"] is not None:

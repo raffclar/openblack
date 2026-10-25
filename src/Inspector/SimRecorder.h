@@ -27,6 +27,7 @@
 
 #include "Debug/SimChecks.h"
 #include "Debug/SimRun.h"
+#include "ECS/SyncedState.h"
 
 namespace openblack::inspector
 {
@@ -89,6 +90,8 @@ private:
 	sim_checks::TurnTimeTrend _turnTime;
 	std::vector<sim_checks::Flag> _flags;
 	std::set<std::string, std::less<>> _flagged;
+	/// The unregistered components that the log already told of
+	synced_state::UnregisteredReporter _unregisteredTold;
 	std::shared_ptr<SimLogSink> _sink;
 	uint64_t _frame {0};
 	/// What the records keep of the hashes of the parts of the world
