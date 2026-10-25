@@ -175,6 +175,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "record-fields"},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "log-checksums"},
 };
 
 /// Whether an option of the command line, by its long name, is one of the developer options

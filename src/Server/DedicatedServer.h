@@ -112,6 +112,8 @@ struct ServerSettings
 	std::optional<NetworkSettings> network;
 	std::string logFile {"stdout"};
 	spdlog::level::level_enum logLevel {spdlog::level::info};
+	/// Tools: write the checksum of each turn to the log. A deployed server does not: its log would fill the disk.
+	bool logChecksums {false};
 };
 
 /// The configuration of the engine for the server: no window, no device for the renderer or the audio
