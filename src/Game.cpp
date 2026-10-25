@@ -5091,7 +5091,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
 	const bool startStory = !start.testbed && !start.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish, true);
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return false;
