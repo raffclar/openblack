@@ -407,6 +407,10 @@ def main():
     parser.add_argument("--camera1", help="the camera of the first client before its input, as the inspector's "
                                            "camera_set takes it (JSON)")
     parser.add_argument("--camera2", help="the camera of the second client before its input (JSON)")
+    parser.add_argument("--input3", help="recorded input for the third client's hand")
+    parser.add_argument("--input4", help="recorded input for the fourth client's hand")
+    parser.add_argument("--camera3", help="the camera of the third client before its input (JSON)")
+    parser.add_argument("--camera4", help="the camera of the fourth client before its input (JSON)")
     parser.add_argument("--camera-again-after", type=int,
                         help="put the cameras of --camera1 and --camera2 there again once the client compared this many "
                         "turns (a multiple of 100), because a land's scripts can move the camera after the start")
@@ -420,7 +424,8 @@ def main():
                              "come back in step by the server's world state")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
-    parser.add_argument("--clients", type=int, choices=(1, 2), default=2, help="the number of clients")
+    parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
+                        help="the number of clients (a god slot each)")
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
@@ -429,6 +434,8 @@ def main():
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
     options.hash_parts = options.hash_parts or options.hash_fields
+    client_inputs = [options.input, options.input2, options.input3, options.input4]
+    client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
 
     out = os.path.abspath(options.out)
     if SWITCH_IN_PATH.search(out):
@@ -495,13 +502,13 @@ def main():
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
                 command.append("--sim-hash-parts")
-            client_input = options.input if index == 0 else options.input2
+            client_input = client_inputs[index]
             if client_input:
                 command += ["--sim-input",
-                            shifted_input(client_input, client_dir, options.input2_delay_frames if index else 0)]
+                            shifted_input(client_input, client_dir, options.input2_delay_frames * index)]
             else:
                 command.append("--sim-still-hand")
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             if camera or index in holds:
                 command += ["--inspect-port", "0"]
@@ -516,7 +523,7 @@ def main():
                     return 1
         # Each client looks where its input plays, once its network game started
         for index, client in enumerate(clients):
-            camera = options.camera1 if index == 0 else options.camera2
+            camera = client_cameras[index]
             if camera:
                 log = os.path.join(client_dirs[index], "client.log")
                 if wait_for_line(log, "Joined the game server", client):
@@ -536,7 +543,7 @@ def main():
                     hold_creature(clients[index].pid, near)
                     held.add(index)
             for index, client in enumerate(clients):
-                camera = options.camera1 if index == 0 else options.camera2
+                camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again
                         and client.poll() is None and lines_with(
                             os.path.join(client_dirs[index], "client.log"),

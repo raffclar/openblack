@@ -314,6 +314,38 @@ def casts():
     return script.events
 
 
+def busy_hand(cycles):
+    """A hand that keeps busy on any land, from the camera that the land gives: in each cycle it takes what is at a
+    point near the middle of the screen and throws it, drags the land, taps a second point and moves about"""
+    points = [(640, 600), (560, 640), (720, 560), (600, 520), (700, 680), (520, 560), (760, 620), (640, 700)]
+    script = Script()
+    script.wait(10)
+    for cycle in range(cycles):
+        take = points[cycle % len(points)]
+        tap = points[(cycle + 3) % len(points)]
+        script.move(take, 30)
+        script.press()
+        script.wait(60)
+        script.move((take[0], take[1] - 80), 30)
+        script.move((take[0] - 120, take[1] + 60), 4)
+        script.release()
+        script.wait(40)
+        # Drag the land a little
+        script.move((640, 800), 30)
+        script.press()
+        script.move((660, 720), 40)
+        script.release()
+        script.wait(30)
+        script.move(tap, 30)
+        script.press()
+        script.wait(3)
+        script.release()
+        script.wait(30)
+        script.circle((640, 600), 100, 120, 1.0)
+        script.wait(250)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -336,6 +368,8 @@ def main():
     # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
     write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
     write("casts", casts())
+    # Any land, every god slot (net_check.py --input ... --input4 on the online maps)
+    write("busy_hand", busy_hand(18))
     # The second god's conifer on TwoGods (net_check.py --input2 with --camera2 TWO_GODS_SLOT1_TREE_CAMERA)
     write("twogods_slot1_tree_press", two_gods_slot1_tree_press())
 
