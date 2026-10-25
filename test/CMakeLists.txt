@@ -1777,3 +1777,4 @@ add_test(NAME test_frame_time_check
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
 )
 openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
+openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)

@@ -46,6 +46,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Animal", .field = "bank", .marker = ""},
     {.component = "AnimalPose", .field = "", .marker = ""},
     {.component = "Transform", .field = "rotation", .marker = "Animal"},
+    // Where the frame draws an animal between its last two turns. The turns go by its Transform.
+    {.component = "Animal", .field = "drawn", .marker = ""},
+    // A shark swims through its clip in the frames, drawn between the start of its turn and its place, facing the way
+    // it moved. The turns go by Shark::position and its Transform.
+    {.component = "Shark", .field = "clipPlace", .marker = ""},
+    {.component = "Shark", .field = "heading", .marker = ""},
+    {.component = "Shark", .field = "drawn", .marker = ""},
     {.component = "AnimatedStaticPose", .field = "", .marker = ""},
     {.component = "AppleBarrelWorm", .field = "place", .marker = ""},
     // The villagers are drawn gliding between their turns
@@ -56,6 +63,11 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "drawnHeading", .marker = ""},
     {.component = "VillagerPose", .field = "detailedHeading", .marker = ""},
     {.component = "VillagerPose", .field = "slopeLift", .marker = ""},
+    // A villager's soul plays its clip and fades in the frames. The turns remove it by the turns since it rose.
+    {.component = "RisingSoul", .field = "timeMs", .marker = ""},
+    {.component = "RisingSoul", .field = "alpha", .marker = ""},
+    {.component = "RisingSoul", .field = "bones", .marker = ""},
+    {.component = "RisingSoul", .field = "shownOut", .marker = ""},
     // The frames pose a villager's bones only while it is in view
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
