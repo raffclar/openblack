@@ -957,6 +957,9 @@ struct Command
 		/// The multiplayer front end opens over the temple's future room with the demonstration lobby, and goes to a
 		/// box or a page (value, by testbed_multiplayer::Stage). Needs no creature.
 		OpenMultiplayerBox,
+		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
+		/// put on the last of it. Needs no creature.
+		BuildWorshipSites,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

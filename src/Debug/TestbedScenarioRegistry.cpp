@@ -10680,7 +10680,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
-	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || IsPointerCommand(kind);
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10885,6 +10886,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove the teleport stone",
 	    "make a dance",
 	    "open a multiplayer box",
+	    "build the worship sites",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

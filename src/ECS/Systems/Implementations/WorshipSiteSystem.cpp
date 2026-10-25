@@ -482,6 +482,11 @@ float WorshipSiteSystem::ChantsAvailable(entt::entity site) const
 	return magic::WorshipAvailable(_world->Entities().Get<const WorshipChants>(site));
 }
 
+float WorshipSiteSystem::TotalChantsAvailable(entt::entity site) const
+{
+	return magic::WorshipTotalAvailable(_world->Entities().Get<const WorshipChants>(site));
+}
+
 float WorshipSiteSystem::TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces)
 {
 	auto& registry = _world->Entities();

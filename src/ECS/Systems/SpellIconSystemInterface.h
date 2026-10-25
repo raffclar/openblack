@@ -59,6 +59,21 @@ public:
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
 	[[nodiscard]] virtual bool IsIcon(entt::entity entity) const = 0;
+
+	/// Whether the hand of a player has space for a miracle now: only the hand at this machine, while it holds nothing
+	[[nodiscard]] virtual bool IsHandReady(PlayerNames player) const = 0;
+	/// The seeds of the icons at a player's worship sites that a gesture may ask for, of the miracles whose chain of
+	/// gestures in the miracle selection starts with a gesture
+	[[nodiscard]] virtual std::vector<SpellSeedType> SeedsForSelection(PlayerNames player, GestureType opening) const = 0;
+	/// Whether a gesture may ask an icon of a seed at one of a player's worship sites for its miracle
+	[[nodiscard]] virtual bool ValidForRequest(PlayerNames player, SpellSeedType seed) const = 0;
+	/// A gesture asks for the miracle of a seed. Of the player's icons of the seed that may give it, the icon at the
+	/// site with the most prayer power left this turn gives it: the miracle goes into the hand when it is charged, else
+	/// the icon starts to charge it. Whether an icon did something.
+	virtual bool RequestSeed(PlayerNames player, SpellSeedType seed) = 0;
+	/// The seed of the last miracle that went into a player's hand, none before the first one: the R gesture and the R
+	/// key ask for it again
+	[[nodiscard]] virtual SpellSeedType LastSeedGained(PlayerNames player) const = 0;
 	/// The charge that a worship site's icon shows after the name of its miracle, in percent. None for a thing that is
 	/// not such an icon, and for an icon whose charge is zero.
 	[[nodiscard]] virtual std::optional<float> ShownCharge(entt::entity icon) const = 0;
