@@ -314,6 +314,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
     {.component = "SoundTag", .field = "emitter", .marker = ""},
+    // The frames draw a reward chest that falls between its last two turns. The turns go by its Transform and clock.
+    {.component = "Reward", .field = "drawn", .marker = ""},
+    // The lid of an opened chest lifts in the frames that draw it, and its dust fades in the frames
+    {.component = "Reward", .field = "clipPlace", .marker = ""},
+    {.component = "Reward", .field = "dustMilliseconds", .marker = ""},
+    // The miracle above an opened chest spins and pulses in the frames
+    {.component = "RewardSeed", .field = "spin", .marker = ""},
+    {.component = "RewardSeed", .field = "phialFrame", .marker = ""},
+    {.component = "RewardSeed", .field = "phialPhase", .marker = ""},
 });
 
 } // namespace

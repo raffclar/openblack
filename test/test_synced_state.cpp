@@ -130,6 +130,20 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
+{
+	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "drawn"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "clipPlace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "RewardSeed", "spin"));
+	// The turns move its clock and its state
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
