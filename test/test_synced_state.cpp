@@ -173,6 +173,11 @@ TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "glows"));
 }
 
+TEST(SyncedState, TheSnowOnTheThingsThatTheFramesDrawIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "SnowLevel", "level"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
