@@ -169,6 +169,8 @@ private:
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, glm::vec3 velocity);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
 	void Empty(components::HandGrab& grab);
+	/// A thing that the hand pulls at stands again as it stood before the pull
+	void StandAsBeforePull(const components::HandGrab& grab);
 
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] bool HandInInfluence() const;

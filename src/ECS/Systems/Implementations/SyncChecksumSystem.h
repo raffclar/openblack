@@ -18,6 +18,7 @@
 
 #include <entt/meta/fwd.hpp>
 
+#include "Common/WorkerPool.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -52,6 +53,8 @@ public:
 private:
 	/// The names of the saved components, by which the checksum reads the world
 	std::unique_ptr<entt::meta_ctx> _reflection;
+	/// The threads that share the hash of the components. The first checksum makes them.
+	std::unique_ptr<WorkerPool> _pool;
 	bool _enabled {false};
 	bool _keepParts {false};
 	bool _byField {false};

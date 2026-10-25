@@ -345,6 +345,14 @@ struct RenderContext
 	graphics::DynamicVertexBufferHandle soulInstanceBuffer;
 	uint32_t soulCapacity {0};
 
+	/// The piles of roots that this frame draws (see roots_pile), on the land and with its light. The opaque piles are
+	/// first, then the piles that fade, which blend by the alpha in their looks. Their instances are in
+	/// rootsPileInstanceBuffer.
+	std::vector<ObjectInstance> rootsPileInstances;
+	uint32_t rootsPileOpaqueCount {0};
+	graphics::DynamicVertexBufferHandle rootsPileInstanceBuffer;
+	uint32_t rootsPileCapacity {0};
+
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;
