@@ -609,6 +609,19 @@ if (Python3_Interpreter_FOUND)
       ${Python3_EXECUTABLE}
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
+  # Every type that the game assigns to an entity has a registration with the reflection: a component without one is left
+  # out of the sync checksum and the saves, so the list of unregistered components must stay empty
+  add_test(
+    NAME test_registered_components
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py
+  )
+  add_test(
+    NAME test_registered_components_script
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py --test
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other
@@ -1708,6 +1721,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_hand_reports test_hand_reports.cpp)
 openblack_setup_and_add_test(test_magic_pile_height test_magic_pile_height.cpp)
 openblack_setup_and_add_test(test_build_version test_build_version.cpp)
+openblack_setup_and_add_test(test_build_version_file test_build_version_file.cpp)
 openblack_setup_and_add_test(test_gods_ring_map online/test_gods_ring_map.cpp)
 target_link_libraries(test_gods_ring_map PRIVATE lnd)
 openblack_setup_and_add_test(test_gods_ring_land test_gods_ring_land.cpp)
@@ -1716,3 +1730,44 @@ openblack_setup_and_add_test(test_online_map_file test_online_map_file.cpp)
 target_link_libraries(test_online_map_file PRIVATE onlinemap)
 openblack_setup_and_add_test(test_computer_settings test_computer_settings.cpp)
 target_link_libraries(test_plain_image PRIVATE psys ScriptLibrary edt)
+openblack_setup_and_add_test(test_destruction_ghosts test_destruction_ghosts.cpp)
+openblack_setup_and_add_test(test_film_surface graphics/test_film_surface.cpp)
+openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
+  add_test(
+    NAME test_system_pointer_calls
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
+            ${CMAKE_SOURCE_DIR}
+  )
+target_link_libraries(test_challenge_pictures PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(
+  test_challenge_picture_files test_challenge_picture_files.cpp
+)
+openblack_setup_and_add_test(test_reflection_order test_reflection_order.cpp)
+openblack_setup_and_add_test(test_grip_landscape_effect test_grip_landscape_effect.cpp)
+openblack_setup_and_add_test(test_game_socket online/test_game_socket.cpp)
+openblack_setup_and_add_test(test_join_ticket online/test_join_ticket.cpp)
+openblack_setup_and_add_test(test_websocket_frames online/test_websocket_frames.cpp)
+openblack_setup_and_add_test(test_turn_playout online/test_turn_playout.cpp)
+openblack_setup_and_add_test(test_lockstep online/test_lockstep.cpp)
+openblack_setup_and_add_test(test_network_commands test_network_commands.cpp)
+openblack_setup_and_add_test(test_lobby_status online/test_lobby_status.cpp)
+openblack_setup_and_add_test(test_checksum_log test_checksum_log.cpp)
+openblack_setup_and_add_test(test_portable_math test_portable_math.cpp)
+openblack_setup_and_add_test(test_build_sized_save test_build_sized_save.cpp)
+openblack_setup_and_add_test(test_registry_fresh_ids test_registry_fresh_ids.cpp)
+openblack_setup_and_add_test(test_particle_turn_order test_particle_turn_order.cpp)
+openblack_setup_and_add_test(test_start_rules online/test_start_rules.cpp)
+openblack_setup_and_add_test(test_developer_tools test_developer_tools.cpp)
+openblack_setup_and_add_inspector_test(
+  test_inspector_network_gate inspector/test_inspector_network_gate.cpp
+)
+openblack_setup_and_add_test(test_network_land online/test_network_land.cpp)
+openblack_setup_and_add_test(test_online_map_land test_online_map_land.cpp)
+openblack_setup_and_add_test(test_player_sparkles test_player_sparkles.cpp)
+openblack_setup_and_add_test(test_other_held_draw test_other_held_draw.cpp)
+openblack_setup_and_add_test(test_miracle_selection test_miracle_selection.cpp)
+openblack_setup_and_add_test(test_hand_cast_commands test_hand_cast_commands.cpp)
+target_link_libraries(test_hand_cast_commands PRIVATE edt psys)
+openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
+openblack_setup_and_add_test(test_script_start test_script_start.cpp)
+target_link_libraries(test_script_start PRIVATE ScriptLibrary)

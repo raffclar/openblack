@@ -44,6 +44,7 @@
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
+#include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -416,6 +417,16 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::handGrabSystem::value().InterfaceTurn(machine_clock::Ticks(), turn);
 		}
+		// A miracle locked on in the hand sends its cast again while the button stays down
+		if (Locator::magicSystem::has_value())
+		{
+			Locator::magicSystem::value().InterfaceTurn();
+		}
+		// In a network game the held creature looks at the hand that its player reported
+		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
+		{
+			Locator::creatureHandSystem::value().LookAtReportedHand();
+		}
 		break;
 	case Step::TurnCheering:
 		// The view does this step
@@ -747,6 +758,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::handGrabSystem::value().ProcessTurn();
 		}
+		break;
+	case Step::PlayerSparkles:
+		// The view does this step
+		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::Rewards:
 		// A reward chest that fell to the ground goes into the map's cells

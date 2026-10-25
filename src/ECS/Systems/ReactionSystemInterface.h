@@ -152,6 +152,9 @@ public:
 	[[nodiscard]] virtual uint32_t CurrentTurn() const { return 0; }
 	/// A new land: none going
 	virtual void Reset() = 0;
+	/// The next Reset also starts the ids of the reactions again from the first, as each computer of a network game
+	/// starts its land
+	virtual void SetFreshIdsAtNextReset() {}
 	/// A town's turn of belief, in its own turn: what its people were impressed by is believed, its wants that go unmet
 	/// cost its player belief, and the player it believes in most takes it at once
 	virtual void BelieveInTown(entt::entity /*town*/) {}

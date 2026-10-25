@@ -31,6 +31,12 @@ namespace openblack::magic
 struct EffectSource;
 } // namespace openblack::magic
 
+namespace openblack::player_commands
+{
+struct SeedGesture;
+struct HandCast;
+} // namespace openblack::player_commands
+
 namespace openblack::ecs::systems
 {
 
@@ -262,6 +268,20 @@ public:
 	virtual void HoldFireBall(uint32_t nowMs, uint32_t turn) = 0;
 	/// The action button came up: let go quickly, the fireball pressed is tapped
 	virtual void ReleaseFireBall(uint32_t nowMs, uint32_t turn) = 0;
+	/// At the turn: the tap or the take of a fireball that the hand sent (player_commands::HandTap, HandTake). Another
+	/// player's ball is caught into the empty hand; the player's own slips through.
+	virtual void DoCatchFireBall(PlayerNames /*player*/, entt::entity /*ball*/) {}
+	/// At the turn: the use of the miracle in the hand on a thing that the hand sent (player_commands::HandApply). A ready
+	/// fire seed takes in a fireball. Whether the miracle in the hand took the command.
+	virtual bool DoApplySeed(PlayerNames /*player*/, entt::entity /*target*/) { return false; }
+	/// At the turn: a gesture on the miracle in the hand that the hand sent (player_commands::SeedGesture)
+	virtual void DoSeedGesture(PlayerNames /*player*/, const player_commands::SeedGesture& /*gesture*/) {}
+	/// At the turn: the cast of the miracle in the hand that the hand sent (player_commands::HandCast)
+	virtual void DoCast(PlayerNames /*player*/, const player_commands::HandCast& /*cast*/) {}
+	/// At the turn: the let go of a miracle locked on in the hand that the hand sent (player_commands::HandCastUnlock)
+	virtual void DoCastUnlock(PlayerNames /*player*/, entt::entity /*seed*/) {}
+	/// The hand's own work of each turn, before the turn: a miracle locked on in the hand sends its cast again
+	virtual void InterfaceTurn() {}
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took

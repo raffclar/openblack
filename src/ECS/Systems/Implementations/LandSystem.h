@@ -15,8 +15,11 @@
 #include <filesystem>
 #include <functional>
 #include <optional>
+#include <span>
+#include <vector>
 
 #include "ECS/Systems/LandSystemInterface.h"
+#include "Enums.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "ECS System implementations should only be included in Locator.cpp"
@@ -35,7 +38,7 @@ public:
 	void LoadTestbed() override;
 	bool LoadGodsRingMap() override;
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-	                   const std::function<bool()>& restore) override;
+	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
@@ -44,6 +47,7 @@ public:
 	[[nodiscard]] std::filesystem::path ChallengePath() override;
 
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
+	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
 
@@ -78,12 +82,21 @@ private:
 	NoLandView _noView;
 	std::filesystem::path _landPath;
 	std::filesystem::path _landscapePath;
+	/// The landscape of the land of a network game whose script runs now, empty for any other land
+	std::vector<uint8_t> _mapLandscape;
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
+	/// The humans of a land of a network game come from the network session
+	bool _humansFromSession {false};
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time
 	std::optional<uint32_t> _lastTempleTurnTime;
 	std::chrono::steady_clock::duration _turnDeltaTime {0};
+
+	/// After the script of a land of a network game: each slot whose god no human plays gets a computer god. With a
+	/// network session, the land waits for its humans until the start of the game. Without one, the player of this
+	/// computer is the one human.
+	void FillSlotsOfNetworkLand(std::span<const PlayerNames> gods);
 };
 
 } // namespace openblack::ecs::systems

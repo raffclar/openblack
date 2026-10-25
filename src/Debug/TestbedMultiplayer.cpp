@@ -16,16 +16,21 @@
 #include <map>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <utility>
+#include <variant>
 #include <vector>
 
+#include <GameSocket.h>
 #include <LobbyApi.h>
 #include <LobbyApiJson.h>
 
 #include "Common/BuildVersion.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Online/LanDiscoveryInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/WebSocketInterface.h"
 
 using namespace openblack;
@@ -82,7 +87,10 @@ std::vector<lobby_api::ServerEntry> DemoServers()
 	}
 	// The player is the last god of the big room
 	big.players.push_back(Player(k_PlayerId, "Alice", "god"));
-	std::vector servers = {bob, fun, test, clans, big};
+	// A room whose gods are all there: the lobby gives only an observer's ticket for it
+	auto full = Server("w6", "Full game", "mpm_2p_1", 2);
+	full.players = {Player(16, "Ivy", "god"), Player(17, "Jon", "god")};
+	std::vector servers = {bob, fun, test, clans, big, full};
 	for (auto& server : servers)
 	{
 		server.numplayers =
@@ -142,6 +150,10 @@ std::vector<uint8_t> DemoLogo()
 	return bmp;
 }
 
+/// The tickets of the demonstration, which say the role
+constexpr std::string_view k_GodTicket = "demo";
+constexpr std::string_view k_ObserverTicket = "demo-observer";
+
 /// A lobby with no network: each call answers at once with the demonstration's data
 class DemoLobby final: public LobbyClientSystemInterface
 {
@@ -154,6 +166,7 @@ public:
 	}
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return _account; }
 	[[nodiscard]] bool IsPushOpen() const override { return _account.has_value(); }
+	[[nodiscard]] bool IsEmailRequired() const override { return false; }
 	void Login(std::string name, std::string, LobbyCallback<lobby_api::AccountRef> callback) override
 	{
 		// Every name but the demonstration's has no account
@@ -193,9 +206,25 @@ public:
 			}
 		}
 	}
-	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override
+	void RequestJoinTicket(std::string serverId, game_socket::Role role, LobbyCallback<lobby_api::JoinTicket> callback) override
 	{
-		callback({.value = lobby_api::JoinTicket {.url = "wss://demo.invalid/game/" + serverId, .ticket = "demo", .expires = 0},
+		// A god's ticket for a full room is refused, as the lobby refuses it
+		const auto server = std::ranges::find(_servers, serverId, &lobby_api::ServerEntry::id);
+		if (role == game_socket::Role::God && server != _servers.end() && server->numplayers >= server->maxplayers &&
+		    std::ranges::none_of(server->players, [](const lobby_api::RoomPlayer& p) { return p.account.id == k_PlayerId; }))
+		{
+			callback({.value = std::nullopt,
+			          .error = {.kind = LobbyErrorKind::Refused,
+			                    .status = 409,
+			                    .detail = "The room is full. You can still join as an observer.",
+			                    .code = std::string(lobby_api::problems::k_ServerFull)}});
+			return;
+		}
+		callback({.value = lobby_api::JoinTicket {.url = "wss://demo.invalid/game/" + serverId,
+		                                          .ticket = std::string(role == game_socket::Role::Observer ? k_ObserverTicket
+		                                                                                                    : k_GodTicket),
+		                                          .expires = 0,
+		                                          .role = std::string(game_socket::RoleName(role))},
 		          .error = {}});
 	}
 	void SendChatLine(std::string, std::string text, LobbyCallback<LobbyDone> callback) override
@@ -286,7 +315,8 @@ private:
 	int64_t _seq {0};
 };
 
-/// A game socket with no network: each connection opens at the next frame
+/// A game socket with no network: each connection opens at the next frame, and the server lets each join in at the
+/// frame after it
 class DemoSockets final: public online::WebSocketClientInterface
 {
 public:
@@ -297,11 +327,52 @@ public:
 		_opening.push_back(id);
 		return id;
 	}
-	bool SendText(online::WebSocketId id, std::string_view) override { return IsOpen(id); }
+	bool SendText(online::WebSocketId id, std::string_view text) override
+	{
+		if (!IsOpen(id))
+		{
+			return false;
+		}
+		const auto frame = game_socket::Parse(text);
+		if (frame.has_value() && std::holds_alternative<game_socket::Join>(*frame))
+		{
+			_joins.emplace_back(id, std::get<game_socket::Join>(*frame).ticket == k_ObserverTicket);
+		}
+		return true;
+	}
 	bool SendBinary(online::WebSocketId id, std::span<const uint8_t>) override { return IsOpen(id); }
 	void Close(online::WebSocketId id, uint16_t) override { _sockets.erase(id); }
+	/// The server sends a frame to each open socket at the next frame
+	void ServerSends(const game_socket::Frame& frame) { _toClients.push_back(game_socket::ToJson(frame)); }
 	void Poll() override
 	{
+		auto toClients = std::move(_toClients);
+		_toClients.clear();
+		for (const auto& text : toClients)
+		{
+			for (auto& [id, socket] : _sockets)
+			{
+				if (socket.open && socket.handlers.text)
+				{
+					socket.handlers.text(text);
+				}
+			}
+		}
+		auto joins = std::move(_joins);
+		_joins.clear();
+		for (const auto& [id, observer] : joins)
+		{
+			const auto found = _sockets.find(id);
+			if (found != _sockets.end() && found->second.handlers.text)
+			{
+				found->second.handlers.text(game_socket::ToJson(
+				    game_socket::Joined {.role = observer ? game_socket::Role::Observer : game_socket::Role::God,
+				                         .slot = observer ? std::nullopt : std::optional<uint8_t>(1),
+				                         .session = "demo",
+				                         .name = "Alice",
+				                         .start = std::nullopt}));
+			}
+		}
 		auto opening = std::move(_opening);
 		_opening.clear();
 		for (const auto id : opening)
@@ -343,7 +414,43 @@ private:
 
 	std::map<online::WebSocketId, Socket> _sockets;
 	std::vector<online::WebSocketId> _opening;
+	/// The joins to let in, and whether the ticket is an observer's
+	std::vector<std::pair<online::WebSocketId, bool>> _joins;
+	std::vector<std::string> _toClients;
 	online::WebSocketId _nextId {0};
+};
+
+/// The network game of the demonstration: a session on the demonstration's sockets. Its server never starts a game.
+class DemoNetworkGame final: public ecs::systems::NetworkGameSystemInterface
+{
+public:
+	explicit DemoNetworkGame(online::WebSocketClientInterface& sockets)
+	    : _session(sockets, [] { return int64_t {0}; })
+	{
+	}
+
+	bool Join(ecs::systems::NetworkJoin join) override
+	{
+		_session.Join(online::NetworkSessionSettings {
+		    .request = {.url = std::move(join.url), .headers = {}, .subprotocols = {}},
+		    .ticket = std::move(join.ticket),
+		    .gamePassword = std::move(join.gamePassword),
+		    .name = std::move(join.name),
+		});
+		return true;
+	}
+	void SetReady(bool ready) override { _session.SetReady(ready); }
+	void Leave() override { _session.Leave(); }
+	void Update() override { _session.Update(); }
+	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override { return std::nullopt; }
+	void BeginPlay() override {}
+	void PlayAlone() override {}
+	[[nodiscard]] bool InGame() const override { return _session.GetState() != online::NetworkSession::State::Ended; }
+	[[nodiscard]] const online::NetworkSession* Session() const override { return &_session; }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return _session.TakeStartEvent(); }
+
+private:
+	online::NetworkSession _session;
 };
 
 /// The servers on the demonstration's local network
@@ -369,6 +476,7 @@ struct DemoServices
 {
 	DemoLobby lobby;
 	DemoSockets sockets;
+	DemoNetworkGame network {sockets};
 	DemoLan lan;
 	Stage stage {Stage::ChooseConnection};
 	/// The steps after the join wait for the game socket to open
@@ -411,11 +519,12 @@ void Begin(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		demo.staged = true;
 		return;
 	}
-	if (stage == Stage::RoomChat32)
+	if (stage == Stage::RoomChat32 || stage == Stage::FullRoomObserver)
 	{
 		const auto games = frontEnd.GetGames();
-		const auto big = std::ranges::find(games, std::string("w5"), &lobby_api::ServerEntry::id);
-		frontEnd.SelectGame(static_cast<size_t>(std::distance(games.begin(), big)));
+		const auto room =
+		    std::ranges::find(games, std::string(stage == Stage::RoomChat32 ? "w5" : "w6"), &lobby_api::ServerEntry::id);
+		frontEnd.SelectGame(static_cast<size_t>(std::distance(games.begin(), room)));
 	}
 	else
 	{
@@ -448,6 +557,30 @@ void Finish(MultiplayerFrontEnd& frontEnd, DemoServices& demo)
 		frontEnd.Next();
 		frontEnd.SetReady(true);
 		break;
+	case Stage::StartTransfer:
+	case Stage::StartCancelled:
+	case Stage::KickedFromGame:
+	{
+		// The demonstration's server makes the steps of the start that the stage shows
+		frontEnd.Next();
+		frontEnd.SetReady(true);
+		auto& sockets = demo.sockets;
+		sockets.ServerSends(game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+		if (demo.stage == Stage::StartTransfer)
+		{
+			sockets.ServerSends(game_socket::StartTransfer {});
+		}
+		else if (demo.stage == Stage::StartCancelled)
+		{
+			sockets.ServerSends(game_socket::StartCancel {});
+		}
+		else
+		{
+			sockets.ServerSends(game_socket::StartCancel {});
+			sockets.ServerSends(game_socket::Refused {.reason = "kicked"});
+		}
+		break;
+	}
 	default:
 		break;
 	}
@@ -463,13 +596,13 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	bool begun = false;
 	MultiplayerFrontEnd::Services services {
 	    .lobby = &demo->lobby,
-	    .sockets = &demo->sockets,
+	    .network = &demo->network,
 	    .lan = &demo->lan,
 	    .openPage = [](std::string_view) {},
-	    .clock = [] { return uint64_t {0}; },
 	    .owner = demo,
 	    .poll =
 	        [state = demo.get(), begun](MultiplayerFrontEnd& frontEnd) mutable {
+		        state->network.Update();
 		        state->sockets.Poll();
 		        state->lobby.Poll();
 		        if (!begun)
@@ -485,6 +618,7 @@ std::unique_ptr<MultiplayerFrontEnd> testbed_multiplayer::MakeDemoFrontEnd(Stage
 	};
 	MultiplayerFrontEnd::Settings settings {
 	    .registerPage = {},
+	    .accountPage = {},
 	    .internetName = u"demo.invalid",
 	    .profileName = std::move(profileName),
 	    .gameVersion = std::string(build_version::Text()),

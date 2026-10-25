@@ -16,6 +16,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreaturePhysiology.h"
 #include "Creature/TemplePen.h"
@@ -167,7 +168,7 @@ entt::entity CreatureArchetype::Create(const glm::vec3& position, PlayerNames pl
 	// It is named as it is made, by who it belongs to and how many creatures there are with it
 	registry.Get<Creature>(entity).name = creature_naming::NewName(playerName, registry.Size<Creature>());
 	// Its own size is kept as given; only the size it is drawn at is kept within what a creature can be drawn at
-	registry.Assign<Transform>(entity, position, glm::eulerAngleY(yAngleRadians),
+	registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(yAngleRadians),
 	                           glm::vec3(DrawnScale(creatureType, creature_morph::ClampScale(scale))));
 	// Its owner keeps their creatures in the order they got them, the first being their primary creature
 	if (Locator::playerSystem::has_value())

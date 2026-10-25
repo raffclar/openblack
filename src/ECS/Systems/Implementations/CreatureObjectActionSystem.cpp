@@ -37,6 +37,8 @@
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableMath.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 #include "Creature/CreatureAnimation.h"
@@ -189,7 +191,7 @@ float BearingTo(const Transform& transform, const glm::vec3& target)
 	{
 		return 0.0f;
 	}
-	return std::acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
+	return portable_math::Acos(std::clamp(glm::dot(ahead, glm::normalize(towards)), -1.0f, 1.0f));
 }
 
 /// Where the creature's head bone is as posed at the end of its newest game turn, or its position when its species has
@@ -1026,9 +1028,9 @@ glm::vec2 FacingToReach(const Transform& transform, const creature_reach::Points
 	}
 	// How far round from ahead the middle of the reach is, and so which way to face for it to lie on the target
 	const glm::vec2 ahead {0.0f, -1.0f};
-	const auto offset = std::atan2((ahead.x * middle.y) - (ahead.y * middle.x), glm::dot(ahead, middle));
-	const auto c = std::cos(-offset);
-	const auto s = std::sin(-offset);
+	const auto offset = portable_math::Atan2((ahead.x * middle.y) - (ahead.y * middle.x), glm::dot(ahead, middle));
+	const auto c = portable_math::Cos(-offset);
+	const auto s = portable_math::Sin(-offset);
 	return from + glm::vec2((towards.x * c) - (towards.y * s), (towards.x * s) + (towards.y * c));
 }
 
@@ -1047,7 +1049,7 @@ Transform AsFacing(const ecs::Registry& registry, entt::entity creature, const T
 	auto facing = transform;
 	if (const auto* walking = registry.TryGet<const CreatureLocomotion>(creature); walking != nullptr && walking->started)
 	{
-		facing.rotation = glm::mat3(glm::eulerAngleY(walking->heading.Yaw()));
+		facing.rotation = glm::mat3(portable_math::EulerAngleY(walking->heading.Yaw()));
 	}
 	return facing;
 }
@@ -2016,8 +2018,8 @@ std::optional<glm::vec3> CreatureObjectActionSystem::TakePoint(entt::entity crea
 		return std::nullopt;
 	}
 	const glm::vec2 towards {facing.x - transform.position.x, facing.z - transform.position.z};
-	const auto heading = glm::length(towards) > 0.0f ? std::atan2(-towards.x, -towards.y) : 0.0f;
-	return transform.position + glm::vec3(glm::eulerAngleY(heading) * glm::vec4(*hand, 0.0f));
+	const auto heading = glm::length(towards) > 0.0f ? portable_math::Atan2(-towards.x, -towards.y) : 0.0f;
+	return transform.position + glm::vec3(portable_math::EulerAngleY(heading) * glm::vec4(*hand, 0.0f));
 }
 
 bool CreatureObjectActionSystem::PickUp(entt::entity creature, entt::entity object)
@@ -3112,8 +3114,12 @@ void Trample(ecs::Registry& registry, entt::entity only)
 	std::vector<entt::entity> starting;
 	registry.Each<const Creature, const Transform, const CreatureAnimation>(
 	    [&](entt::entity creature, const Creature& body, const Transform& transform, const CreatureAnimation& animation) {
+		    if (creature != only)
+		    {
+			    return;
+		    }
 		    const auto* points = PointsOf(body);
-		    if (creature != only || points == nullptr)
+		    if (points == nullptr)
 		    {
 			    return;
 		    }

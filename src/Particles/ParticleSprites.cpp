@@ -13,6 +13,8 @@
 
 #include <algorithm>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack::particles;
 using namespace openblack::graphics;
 
@@ -67,8 +69,8 @@ std::array<glm::vec3, 4> sprites::Corners(const SpriteInstance& sprite, const gl
 	const glm::vec3 position(sprite.positionHalfWidth);
 	const float halfWidth = sprite.positionHalfWidth.w;
 	const float halfHeight = sprite.shape.x;
-	const float c = std::cos(sprite.shape.y);
-	const float s = std::sin(sprite.shape.y);
+	const float c = openblack::portable_math::Cos(sprite.shape.y);
+	const float s = openblack::portable_math::Sin(sprite.shape.y);
 	const glm::vec2 origin(sprite.shape.z, sprite.shape.w);
 	std::array<glm::vec3, 4> corners {};
 	for (size_t i = 0; i < corners.size(); ++i)

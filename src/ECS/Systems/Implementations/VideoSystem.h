@@ -88,8 +88,8 @@ public:
 
 	void SetFilmsEnabled(bool enabled) override { _filmsEnabled = enabled; }
 	[[nodiscard]] bool AreFilmsEnabled() const override { return _filmsEnabled; }
-	void SetSixteenBitColour(bool on) override { _sixteenBitColour = on; }
-	[[nodiscard]] bool IsSixteenBitColour() const override { return _sixteenBitColour; }
+	void SetFilmSurface(std::optional<graphics::film_surface::Format> surface) override { _filmSurface = surface; }
+	[[nodiscard]] std::optional<graphics::film_surface::Format> GetFilmSurface() const override { return _filmSurface; }
 
 	[[nodiscard]] std::optional<Status> GetStatus() const override;
 
@@ -131,7 +131,7 @@ private:
 	bool _previousWideScreen {false};
 	bool _noSkip {false};
 	bool _filmsEnabled {true};
-	bool _sixteenBitColour {true};
+	std::optional<graphics::film_surface::Format> _filmSurface {graphics::film_surface::k_TodaysCards};
 	bool _fallingSpell {false};
 	video::FallingSpellTimeline _timeline;
 	std::vector<video::FallingSpellCue> _cues;

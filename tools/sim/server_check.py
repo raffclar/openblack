@@ -8,9 +8,16 @@ the game sent them over the network. Each turn of the server must have the same 
     python tools/sim/server_check.py --turns 100
     python tools/sim/server_check.py --turns 100 --config RelWithDebInfo --out E:/runs/server
     python tools/sim/server_check.py --turns 150 --frame-ms 20 --input tools/sim/hand_inputs/land1.json
+    python tools/sim/server_check.py --turns 2000 --testbed --server-fast --wsl-server /root/ob/bin/openblack-server
+
+With --wsl-server, the server is a Linux build that runs in WSL (wsl -d DISTRO): the script gives it the paths of the
+game data, the log and the commands as WSL paths (/mnt/<drive>/...). So the Linux server and the Windows game play the
+same turns, and each turn's checksum must be the same.
 
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
+The input can also be an object with the list as "events" and a "camera" as camera.set takes it: the game puts its camera
+there before the first frame of the land (tools/sim/hand_inputs/twogods.json).
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -24,6 +31,10 @@ import re
 import subprocess
 import sys
 import time
+
+sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+
+import sim_report  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
@@ -41,18 +52,32 @@ def default_bin(config):
     return os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()), "bin", config)
 
 
-def run(command, cwd, limit=RUN_LIMIT_SECONDS):
-    """Runs a program with no console window of its own, and stops it by its own process id after the limit"""
+def run(command, cwd, limit=RUN_LIMIT_SECONDS, output=None):
+    """Runs a program with no console window of its own, and stops it by its own process id after the limit. With an
+    output path, the program's standard output and error go to that file."""
     os.makedirs(cwd, exist_ok=True)
     flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
-    process = subprocess.Popen(command, cwd=cwd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                               creationflags=flags)
+    sink = open(output, "wb") if output else subprocess.DEVNULL
     try:
-        return process.wait(timeout=limit)
-    except subprocess.TimeoutExpired:
-        process.kill()
-        process.wait()
-        raise RuntimeError(f"{command[0]} (pid {process.pid}) did not finish in {limit} s")
+        process = subprocess.Popen(command, cwd=cwd, stdin=subprocess.DEVNULL, stdout=sink,
+                                   stderr=subprocess.STDOUT if output else subprocess.DEVNULL, creationflags=flags)
+        try:
+            return process.wait(timeout=limit)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait()
+            raise RuntimeError(f"{command[0]} (pid {process.pid}) did not finish in {limit} s")
+    finally:
+        if output:
+            sink.close()
+
+
+def wsl_path(path):
+    """The path of a Windows file as WSL sees it: C:/a/b is /mnt/c/a/b"""
+    path = os.path.abspath(path).replace("\\", "/")
+    if len(path) > 1 and path[1] == ":":
+        return f"/mnt/{path[0].lower()}{path[2:]}"
+    return path
 
 
 def server_checksums(log):
@@ -136,13 +161,19 @@ def main():
     parser.add_argument("--turns", type=int, default=100)
     parser.add_argument("--seed", type=int, default=1)
     parser.add_argument("--land", default="Land1.txt")
+    parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true", help="the creature testbed instead of a land")
+    parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
+                                           "frame, so that the recorded input gets to what it sets up")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
+    parser.add_argument("--wsl-server", help="the Linux openblack-server in WSL, such as /root/ob/bin/openblack-server")
+    parser.add_argument("--wsl-distro", default="Ubuntu", help="with --wsl-server, the WSL distribution")
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "server-check"))
+    parser.add_argument("--server-args", default="", help="more arguments for the server, such as \"--reload-at 50\"")
     parser.add_argument("--server-fast", action="store_true", help="the server too plays with no wait")
     parser.add_argument("--hash-parts", action="store_true",
                         help="both runs record the hash of each component, to find what made them part")
@@ -151,6 +182,9 @@ def main():
     parser.add_argument("--no-relay", action="store_true",
                         help="the server plays first and gets no commands of the game (the hand reports part them)")
     parser.add_argument("--draw-every", type=int, help="the game draws one frame in this many (0 for none)")
+    parser.add_argument("--game-args", default="",
+                        help="more arguments of the game, divided by spaces, such as the fight autopilot and "
+                             "--sim-record-input to record an input for --input")
     parser.add_argument("--ignore-parts", default="",
                         help="with --hash-parts, components (comma separated) left out of a second comparison of the "
                              "turns, for a difference that waits on a decision")
@@ -169,7 +203,12 @@ def main():
         if os.path.exists(path):
             os.remove(path)
 
-    where = ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening]
+    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
+             else ["-s", options.land, "--skip-opening", options.opening])
+    server_where = where
+    if options.scenario:
+        where = ["--scenario", options.scenario, "--scenario-hide-window"]
+        server_where = ["--scenario", options.scenario]
     events = None
     if options.input:
         with open(options.input, encoding="utf-8") as file:
@@ -181,17 +220,23 @@ def main():
     if os.path.exists(commands):
         os.remove(commands)
 
-    server_command = [server_exe, "-g", options.game_path] + where + [
+    # A Linux server in WSL takes WSL paths
+    local = wsl_path if options.wsl_server else (lambda path: path)
+    server_command = [server_exe, "-g", options.game_path] + server_where + [
                       "--seed", str(options.seed), "-n", str(options.turns), "--frame-ms", str(options.frame_ms),
-                      "-l", server_log]
+                      "-l", local(server_log)]
+    if options.wsl_server:
+        server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
+                          local(options.game_path)] + server_command[3:]
+    server_command += options.server_args.split()
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
-        server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
+        server_command += ["--record", local(os.path.join(server_dir, "record.jsonl"))]
     if options.hash_fields:
         server_command.append("--record-fields")
     if relay:
-        server_command += ["--commands", commands]
+        server_command += ["--commands", local(commands)]
 
     # The game stops as it gets to its last turn, before the record of that turn: it runs one turn more. The server's
     # world is a network game, so the game plays as one too
@@ -207,6 +252,7 @@ def main():
         game_command += ["--sim-input", os.path.abspath(options.input)]
     if relay:
         game_command += ["--sim-commands", commands]
+    game_command += [argument for argument in options.game_args.split(" ") if argument]
     if options.hash_fields:
         game_command.append("--sim-hash-fields")
     elif options.hash_parts:
@@ -214,7 +260,9 @@ def main():
 
     def play_server():
         started = time.monotonic()
-        code = run(server_command, server_dir)
+        # The output of wsl.exe goes to a file, which tells why a Linux server did not start
+        code = run(server_command, server_dir,
+                   output=os.path.join(server_dir, "wsl-output.txt") if options.wsl_server else None)
         if code != 0:
             print(f"the server ended with exit code {code}; see {server_log}")
         return code, time.monotonic() - started
@@ -262,6 +310,13 @@ def main():
         summary["different_without_ignored"] = others[:20]
         summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
         summary["same_without_ignored"] = not others and len(compared) >= options.turns
+    # A component with no registration is left out of the checksum: a change in it would never show here
+    unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
+                                                    os.path.join(server_dir, "record.jsonl"))
+    summary["unregistered"] = sorted(unregistered)
+    if unregistered:
+        summary["same"] = False
+        print(sim_report.unregistered_line(unregistered))
     with open(os.path.join(out, "server_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     print(json.dumps(summary))

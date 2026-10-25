@@ -77,6 +77,7 @@
 #include "Particles/ParticleClassRegistry.h"
 #include "Particles/ParticleMiracleMaths.h"
 #include "Particles/ParticleSoundRelease.h"
+#include "Particles/ParticleTurnOrder.h"
 #include "Particles/ParticleTypes.h"
 #include "Particles/VolumeGlow.h"
 #include "Resources/ResourcesInterface.h"
@@ -270,7 +271,7 @@ std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::
 
 bool GameParticleWorld::IsTargetHeld(entt::entity target) const
 {
-	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == target;
+	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(target);
 }
 
 void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
@@ -1298,11 +1299,14 @@ void ParticleSystem::ProcessTurn()
 	_pendingStormBolts.clear();
 	KeepGestureTrails();
 	const auto* registry = Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
-	// By id: a step may start other effects
-	std::vector<EffectId> ids;
-	ids.reserve(_effects.size());
-	std::ranges::transform(_effects, std::back_inserter(ids), &Running::id);
-	for (const auto id : ids)
+	// By id: a step may start other effects, which take their first step in the next turn. The spot visuals take their
+	// steps last, the newest first.
+	std::vector<particles::turn_order::Entry> started;
+	started.reserve(_effects.size());
+	std::ranges::transform(_effects, std::back_inserter(started), [](const Running& running) {
+		return particles::turn_order::Entry {.id = running.id, .spotVisual = running.turnsLeft.has_value()};
+	});
+	for (const auto id : particles::turn_order::Steps(started))
 	{
 		const auto it = FindRunning(id);
 		if (it == _effects.end() || it->ownedBySpell || it->everyFrame)
@@ -1361,6 +1365,10 @@ void ParticleSystem::Reset()
 	_gestureChain = k_NoEffect;
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 }
 
 void ParticleSystem::FindTextureStems()

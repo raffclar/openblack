@@ -101,6 +101,7 @@
 #include "ECS/Systems/ForestSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -108,6 +109,7 @@
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1325,6 +1327,11 @@ void MagicSystem::CloseDown(entt::entity entity)
 		StopHandGrain(*spell);
 	}
 	spell->closedDown = true;
+	// The things that the miracle made and that go with it, its teleport stones, go at once
+	if (Locator::teleportSystem::has_value())
+	{
+		Locator::teleportSystem::value().RemoveStonesOf(entity);
+	}
 	if (spell->effect != ParticleSystemInterface::k_NoEffect)
 	{
 		Locator::particleSystem::value().CloseDown(spell->effect);
@@ -1365,6 +1372,35 @@ bool MagicSystem::OnSpellEvent(entt::entity entity, const particles::SpellEventI
 {
 	auto* spell = FindSpell(entity);
 	return spell != nullptr && magic::spells::OnEvent(*this, *spell, event);
+}
+
+particles::ProcessInfo MagicSystem::TurnHandInfo(const particles::ProcessInfo& last) const
+{
+	// The turn reads the hand of the player as the reports give it, never the hand that this computer draws. Before the
+	// first report the miracle keeps what it had.
+	auto info = last;
+	if (!Locator::handSystem::has_value())
+	{
+		return info;
+	}
+	const auto& hands = Locator::handSystem::value();
+	if (const auto hand = hands.GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	    hand.has_value())
+	{
+		info.handPosition = *hand;
+	}
+	// The camera looks along the line from the camera to its focus, made a unit line
+	if (const auto camera = hands.GetReportedCamera(PlayerNames::PLAYER_ONE); camera.has_value())
+	{
+		const auto line = camera->focus - camera->origin;
+		if (line != glm::vec3(0.0f))
+		{
+			info.cameraForward = line * (1.0f / glm::length(line));
+		}
+	}
+	info.direction = hands.GetReportedHandVelocity();
+	info.enabled = true;
+	return info;
 }
 
 particles::ProcessInfo MagicSystem::HandInfo() const
@@ -1414,19 +1450,18 @@ void MagicSystem::Maintain(entt::entity entity, Spell& spell)
 		// itself, which hangs a little short of where the cursor points
 		const float power = spell.processInfo.power;
 		const float spin = spell.processInfo.spin;
-		spell.processInfo = HandInfo();
+		spell.processInfo = TurnHandInfo(spell.processInfo);
 		spell.processInfo.power = power;
 		spell.processInfo.spin = spin;
-		const auto& hand = _hand.handPosition;
+		const auto& hand = spell.processInfo.handPosition;
 		spell.castPosition = {hand.x, _world.LandHeight({hand.x, hand.z}), hand.z};
-		LetGoIfOutsideCastRule(spell);
 	}
 	else if (magic::spells::FollowsHand(*this, spell))
 	{
 		// A flock keeps taking the hand's sweep while it makes its animals, keeping the spin it was cast with
 		const float power = spell.processInfo.power;
 		const float spin = spell.processInfo.spin;
-		spell.processInfo = HandInfo();
+		spell.processInfo = TurnHandInfo(spell.processInfo);
 		spell.processInfo.power = power;
 		spell.processInfo.spin = spin;
 	}
@@ -1494,6 +1529,11 @@ void MagicSystem::Delete(entt::entity entity)
 	auto& registry = EntityRegistry();
 	if (auto* spell = FindSpell(entity))
 	{
+		// A miracle that goes closes down first: its teleport stones go with it
+		if (Locator::teleportSystem::has_value())
+		{
+			Locator::teleportSystem::value().RemoveStonesOf(entity);
+		}
 		if (spell->effect != ParticleSystemInterface::k_NoEffect)
 		{
 			Locator::particleSystem::value().Delete(spell->effect);
@@ -1573,26 +1613,14 @@ void MagicSystem::ProcessTurn()
 			}
 			// The hand looks again at how it holds the seed, and the miracle shows in the hand once ready
 			ShowHeldSeed();
-			// A locked miracle whose prayer power or time ran out is over, and its seed with it
-			if (_held.has_value() && _input.state == magic::CastInput::State::Locked)
+			// A miracle locked on in the hand whose prayer power or time ran out is over, and its seed with it
+			if (_held.has_value() && registry.Get<SpellSeed>(*_held).spell != entt::null)
 			{
 				const auto spellEntity = registry.Get<SpellSeed>(*_held).spell;
 				const auto* spell = FindSpell(spellEntity);
 				if (spellEntity != entt::null && (spell == nullptr || spell->closedDown))
 				{
 					LetGoOfSeed(true);
-				}
-			}
-			// While the button stays down a locked miracle is applied where the hand is; moved somewhere it may not be
-			// cast it isn't applied there, and stays locked until the button comes up
-			if (_held.has_value() && _input.state == magic::CastInput::State::Locked)
-			{
-				// Where it may not be applied this turn it waits; the miracle itself lets go only once the hand points
-				// outside its cast rule
-				const bool valid = _input.onObject ? HeldSeedTarget().has_value() : HandPointValid();
-				if (const auto apply = magic::Tick(_input, _turn, valid); apply.cast.has_value())
-				{
-					CastHeldSeed(*apply.cast);
 				}
 			}
 		}
@@ -1716,7 +1744,8 @@ entt::entity MagicSystem::CreateDispenser(glm::vec3 position, MagicType type, fl
 	auto& dispenser = EntityRegistry().Get<SpellDispenser>(entity);
 	if (Locator::particleSystem::has_value())
 	{
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world
+		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	// Its first bubble comes once it has counted its period, as every later one does. A debug tool makes it, so it has
 	// no town.
@@ -1739,7 +1768,8 @@ entt::entity MagicSystem::CreateScriptDispenser(glm::vec3 position, AbodeInfo bu
 	JoinTown(entity, DispenserTown(town));
 	if (Locator::particleSystem::has_value())
 	{
-		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f, true);
+		// Its swirl uses only this computer's random numbers: the swirl does not change the world
+		dispenser.effect = Locator::particleSystem::value().Start(ParticleType::SpelldispenserVortex, position, 1.0f);
 	}
 	return entity;
 }
@@ -1971,6 +2001,13 @@ entt::entity MagicSystem::GiveSeedToHand(PlayerNames player, SpellSeedType seedT
 	seed.power = magic::SeedPower(seed.chantStore, magic::GetChantsRequiredToCreate(Info(), type));
 	_held = entity;
 	_input = {};
+	// The player's last miracle is now this one: the R gesture and the R key ask for it again
+	EntityRegistry().Each<components::Player>([player, seedType](entt::entity, components::Player& record) {
+		if (record.name == player)
+		{
+			record.lastSeedGained = seedType;
+		}
+	});
 	// A miracle that goes into the hand makes the hand start the path of its gesture again
 	if (Locator::gestureSystem::has_value())
 	{
@@ -2253,15 +2290,21 @@ std::optional<entt::entity> MagicSystem::HeldSeedTarget() const
 	return target;
 }
 
-void MagicSystem::LetGoIfOutsideCastRule(const Spell& spell)
+void MagicSystem::LetGoIfOutsideCastRule()
 {
-	// Only the local hand's own miracle, held locked in it, by a player's hand; over nothing the hand keeps it
-	if (!spell.fromLocalHand || spell.caster.kind != SpellCaster::Kind::Player || !_held.has_value() || spell.seed != *_held ||
-	    _input.state != magic::CastInput::State::Locked || !_hand.point.has_value())
+	// Only the local hand's own miracle, held locked in it; over nothing the hand keeps it
+	if (!_held.has_value() || _input.state != magic::CastInput::State::Locked || !_hand.point.has_value() ||
+	    !EntityRegistry().Valid(*_held))
 	{
 		return;
 	}
-	if (!magic::spells::MeetsCastRule(*this, spell.magicType, spell.caster.player, *_hand.point, _ignoreInfluence))
+	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
+	const auto* spell = FindSpell(seed.spell);
+	if (spell == nullptr || spell->closedDown || !spell->castFromHand || spell->caster.kind != SpellCaster::Kind::Player)
+	{
+		return;
+	}
+	if (!magic::spells::MeetsCastRule(*this, spell->magicType, spell->caster.player, *_hand.point, _ignoreInfluence))
 	{
 		Do(magic::Cancel(_input));
 	}
@@ -2269,12 +2312,16 @@ void MagicSystem::LetGoIfOutsideCastRule(const Spell& spell)
 
 bool MagicSystem::HandPointValid() const
 {
-	if (!_held.has_value() || !_hand.point.has_value() || !EntityRegistry().Valid(*_held))
+	return _hand.point.has_value() && PointValidForHeld(*_hand.point);
+}
+
+bool MagicSystem::PointValidForHeld(glm::vec3 point) const
+{
+	if (!_held.has_value() || !EntityRegistry().Valid(*_held))
 	{
 		return false;
 	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
-	const auto point = *_hand.point;
 	auto& self = const_cast<MagicSystem&>(*this);
 	// Every cast from the hand needs the hand in the player's influence, whatever the miracle's own rule
 	if (!_ignoreInfluence && !_world.HandInInfluence(seed.player, point))
@@ -2284,7 +2331,177 @@ bool MagicSystem::HandPointValid() const
 	return self.CanCastAt(HeldMagicType(), seed.player, point);
 }
 
-entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
+bool MagicSystem::HeldSpellRunsInHand() const
+{
+	if (!_held.has_value() || !EntityRegistry().Valid(*_held))
+	{
+		return false;
+	}
+	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
+	const auto* spell = const_cast<MagicSystem&>(*this).FindSpell(seed.spell);
+	return spell != nullptr && !spell->closedDown && spell->castFromHand;
+}
+
+std::optional<player_commands::HandCast> MagicSystem::MakeCast(magic::CastTarget target)
+{
+	auto& registry = EntityRegistry();
+	if (!_held.has_value() || !registry.Valid(*_held))
+	{
+		return std::nullopt;
+	}
+	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
+	player_commands::HandCast cast {.point = _hand.point.value_or(glm::vec3(0.0f)),
+	                                .size = k_PlainHandMagnitude,
+	                                .handPosition = _hand.handPosition,
+	                                .cameraForward = _hand.cameraForward,
+	                                .handVelocity = _handVelocity,
+	                                .spin = _handSpin.spin};
+	// A locked miracle that still runs is applied again where it is: the turn checks nothing more
+	if (const auto* running = FindSpell(seed.spell); running != nullptr && !running->closedDown)
+	{
+		if (target == magic::CastTarget::Object)
+		{
+			cast.object = HeldSeedTarget().value_or(entt::entity {entt::null});
+		}
+		return cast;
+	}
+	if (target == magic::CastTarget::Object)
+	{
+		const auto object = HeldSeedTarget();
+		if (!object.has_value())
+		{
+			return std::nullopt;
+		}
+		cast.object = *object;
+	}
+	else if (seedInfo.sizingGesture == GestureType::Circle)
+	{
+		// The storms and shields go where the circle was drawn, as big as it was, while it is remembered
+		if (!_circle.has_value() || _turn - _circle->turn > magic::k_CircleTurns)
+		{
+			_circle.reset();
+			_lastHandResult = HandResult::NoCircle;
+			return std::nullopt;
+		}
+		cast.point = _circle->centre;
+		cast.size = _circle->radius;
+		if ((!_ignoreInfluence && !_world.InInfluence(seed.player, cast.point)) ||
+		    !CanCastAt(HeldMagicType(), seed.player, cast.point))
+		{
+			return std::nullopt;
+		}
+	}
+	else if (!HandPointValid())
+	{
+		return std::nullopt;
+	}
+	return cast;
+}
+
+void MagicSystem::SendCast(magic::CastTarget target)
+{
+	const auto cast = MakeCast(target);
+	if (!cast.has_value())
+	{
+		_input = {};
+		FailCast();
+		return;
+	}
+	auto& registry = EntityRegistry();
+	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
+	if (!HeldSpellRunsInHand())
+	{
+		// The help counts a cast of a miracle with a power-up, as the hand sends it
+		if (Locator::helpProfileSystem::has_value())
+		{
+			const auto last =
+			    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
+			const gesture::HandContext::Seed facts {.ready = seed.ready,
+			                                        .cast = seed.hasCast,
+			                                        .sizingGesture = seedInfo.sizingGesture,
+			                                        .powerUp = seed.powerUp,
+			                                        .canPowerUp = seed.hasIcon};
+			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
+			{
+				Locator::helpProfileSystem::value().Trigger(help::profile::k_GestureCastPoweredUp);
+			}
+		}
+		// The circle drawn is used up by the cast that it sizes
+		if (target != magic::CastTarget::Object && seedInfo.sizingGesture == GestureType::Circle)
+		{
+			_circle.reset();
+		}
+	}
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(*cast);
+		return;
+	}
+	DoCast(PlayerNames::PLAYER_ONE, *cast);
+}
+
+void MagicSystem::SendCastUnlock()
+{
+	if (!_held.has_value())
+	{
+		return;
+	}
+	const player_commands::HandCastUnlock unlock {.seed = *_held};
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(unlock);
+		return;
+	}
+	DoCastUnlock(PlayerNames::PLAYER_ONE, unlock.seed);
+}
+
+void MagicSystem::DoCast(PlayerNames player, const player_commands::HandCast& cast)
+{
+	// There is one human, with the hand of this computer
+	if (player != PlayerNames::PLAYER_ONE || !_held.has_value())
+	{
+		return;
+	}
+	auto& registry = EntityRegistry();
+	if (!registry.Valid(*_held) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// A miracle put to the player's own dispenser goes into it as a one-shot globe. The hand does not cast it.
+	if (cast.object != entt::null && registry.Valid(cast.object) && registry.AllOf<SpellDispenser>(cast.object))
+	{
+		const auto& seed = registry.Get<const SpellSeed>(*_held);
+		if (IsOwnDispenser(cast.object, seed.player) && !seed.hasCast && !registry.AllOf<ScriptHighlight>(cast.object))
+		{
+			StoreHeldSeedIn(cast.object);
+		}
+		return;
+	}
+	const bool locked = _input.state == magic::CastInput::State::Locked;
+	const auto spell = CastHeldSeed(cast);
+	if (spell == entt::null)
+	{
+		// The turn may not cast it there: the hand of this computer forgets the press
+		_input = {};
+		return;
+	}
+	_lastHandResult = locked ? HandResult::CastHeld : HandResult::Cast;
+	AfterCast(spell);
+}
+
+void MagicSystem::DoCastUnlock(PlayerNames player, entt::entity seed)
+{
+	// There is one human, with the hand of this computer
+	if (player != PlayerNames::PLAYER_ONE || !_held.has_value() || *_held != seed)
+	{
+		return;
+	}
+	UnlockHeldMiracle();
+}
+
+entt::entity MagicSystem::CastHeldSeed(const player_commands::HandCast& command)
 {
 	auto& registry = EntityRegistry();
 	if (!_held.has_value() || !registry.Valid(*_held))
@@ -2292,9 +2509,10 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 		return entt::null;
 	}
 	auto& seed = registry.Get<SpellSeed>(*_held);
+	const bool onObject = command.object != entt::null;
 	// Using the held miracle on the land counts as a turn more for what the hand keeps of the player's influence past
 	// the border, before it is known whether it may be used there
-	if (target != magic::CastTarget::Object)
+	if (!onObject)
 	{
 		_world.HeldThingUsedOnLand(seed.player);
 	}
@@ -2309,25 +2527,20 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	glm::vec3 point(0.0f);
 	// Without a gesture to size it, a miracle takes the plain size
 	float size = k_PlainHandMagnitude;
-	if (target == magic::CastTarget::Object)
+	if (onObject)
 	{
-		object = HeldSeedTarget();
-		if (!object.has_value())
+		// The turn checks again that the miracle may be cast on the thing
+		if (!registry.Valid(command.object) || seedInfo.castOnObject == 0 || !CanCastOn(type, command.object))
 		{
 			return entt::null;
 		}
+		object = command.object;
 	}
 	else if (seedInfo.sizingGesture == GestureType::Circle)
 	{
-		// The storms and shields go where the circle was drawn, as big as it was, while it is remembered
-		if (!_circle.has_value() || _turn - _circle->turn > magic::k_CircleTurns)
-		{
-			_circle.reset();
-			_lastHandResult = HandResult::NoCircle;
-			return entt::null;
-		}
-		point = _circle->centre;
-		size = _circle->radius;
+		// The storms and shields go where the circle was drawn, as big as it was
+		point = command.point;
+		size = command.size;
 		if (!_ignoreInfluence && !_world.InInfluence(seed.player, point))
 		{
 			return entt::null;
@@ -2339,25 +2552,10 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	}
 	else
 	{
-		if (!HandPointValid())
+		point = command.point;
+		if (!PointValidForHeld(point))
 		{
 			return entt::null;
-		}
-		point = *_hand.point;
-	}
-	// The help counts a cast of a miracle with a power-up, before the miracle starts
-	if (Locator::helpProfileSystem::has_value())
-	{
-		const auto last =
-		    Locator::gestureSystem::has_value() ? Locator::gestureSystem::value().GetLastRecognised() : std::nullopt;
-		const gesture::HandContext::Seed facts {.ready = seed.ready,
-		                                        .cast = seed.hasCast,
-		                                        .sizingGesture = seedInfo.sizingGesture,
-		                                        .powerUp = seed.powerUp,
-		                                        .canPowerUp = seed.hasIcon};
-		if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
-		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_GestureCastPoweredUp);
 		}
 	}
 	auto cast = magic::SeedCastData(Info(), type, seed.seedType, seed.castMultiplier, size);
@@ -2375,15 +2573,20 @@ entt::entity MagicSystem::CastHeldSeed(magic::CastTarget target)
 	                          .withoutIcon = !seed.hasIcon,
 	                          .worshipSite = seed.worshipSite,
 	                          .madeBySpellIcon = seed.hasIcon};
+	// The miracle starts with the hand as the command gives it
+	const particles::ProcessInfo hand {
+	    .handPosition = command.handPosition,
+	    .cameraForward = command.cameraForward,
+	    .direction = command.handVelocity,
+	    .power = 1.0f,
+	    .enabled = true,
+	    .spin = command.spin,
+	};
 	const auto spellEntity =
-	    object.has_value() ? CastOn(type, caster, *object, cast, HandInfo()) : Cast(type, caster, point, cast, HandInfo());
+	    object.has_value() ? CastOn(type, caster, *object, cast, hand) : Cast(type, caster, point, cast, hand);
 	if (spellEntity == entt::null)
 	{
 		return entt::null;
-	}
-	if (seedInfo.sizingGesture == GestureType::Circle)
-	{
-		_circle.reset();
 	}
 	auto& spell = registry.Get<Spell>(spellEntity);
 	auto& after = registry.Get<SpellSeed>(heldEntity);
@@ -2497,37 +2700,35 @@ void MagicSystem::Do(const magic::CastActions& actions)
 	}
 	if (actions.unlock)
 	{
-		UnlockHeldMiracle();
+		SendCastUnlock();
 	}
 	if (actions.fail)
 	{
 		FailCast();
 	}
-	if (actions.notReady)
-	{
-		_lastHandResult = HandResult::NotReady;
-	}
 	if (actions.cast.has_value())
 	{
-		// A miracle put to the player's own dispenser goes into it as a one-shot globe. The hand does not cast it.
-		if (*actions.cast == magic::CastTarget::Object)
+		SendCast(*actions.cast);
+	}
+}
+
+void MagicSystem::InterfaceTurn()
+{
+	if (!_held.has_value() || !EntityRegistry().Valid(*_held) || !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	// A miracle held locked in the hand that the hand moved outside its cast rule is let go, as the button would
+	LetGoIfOutsideCastRule();
+	// While the button stays down a locked miracle is sent again where the hand is, at the turn that starts now; moved
+	// somewhere it may not be cast it isn't sent, and stays locked until the button comes up
+	if (_input.state == magic::CastInput::State::Locked)
+	{
+		const bool valid = _input.onObject ? HeldSeedTarget().has_value() : HandPointValid();
+		if (const auto apply = magic::Tick(_input, _turn + 1, valid); apply.cast.has_value())
 		{
-			if (const auto target = HeldSeedTarget(); target.has_value() && EntityRegistry().AllOf<SpellDispenser>(*target))
-			{
-				StoreHeldSeedIn(*target);
-				return;
-			}
+			SendCast(*apply.cast);
 		}
-		const bool locked = _input.state == magic::CastInput::State::Locked;
-		const auto spell = CastHeldSeed(*actions.cast);
-		if (spell == entt::null)
-		{
-			_input = {};
-			FailCast();
-			return;
-		}
-		_lastHandResult = locked ? HandResult::CastHeld : HandResult::Cast;
-		AfterCast(spell);
 	}
 }
 
@@ -2609,10 +2810,11 @@ void MagicSystem::HoldFireBall(uint32_t nowMs, uint32_t turn)
 	}
 	const auto ball = _fireBallPress->ball;
 	_fireBallPress.reset();
+	// The hand sends the take, which catches the ball at the turn
 	if (!_held.has_value() && EntityRegistry().Valid(ball) && EntityRegistry().AllOf<MagicFireBall>(ball) &&
 	    EmptyHandInInfluence())
 	{
-		TapFireBall(ball);
+		SendFireBallCommand(ball, true);
 	}
 }
 
@@ -2636,8 +2838,39 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 		{
 			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
 		}
-		TapFireBall(press.ball);
+		// The hand sends the tap, which catches the ball at the turn
+		SendFireBallCommand(press.ball, false);
 	}
+}
+
+void MagicSystem::SendFireBallCommand(entt::entity ball, bool take)
+{
+	if (!Locator::playerCommandSystem::has_value())
+	{
+		DoCatchFireBall(PlayerNames::PLAYER_ONE, ball);
+		return;
+	}
+	auto& commands = Locator::playerCommandSystem::value();
+	if (take)
+	{
+		commands.Submit(player_commands::HandTake {.object = ball});
+	}
+	else
+	{
+		commands.Submit(player_commands::HandTap {.object = ball});
+	}
+}
+
+void MagicSystem::DoCatchFireBall(PlayerNames player, entt::entity ball)
+{
+	// Every computer catches it into the hand of the player that sent the tap or the take, if the hand is still empty.
+	// The press asked for the player's influence. There is one human, with this computer's hand.
+	if (player != PlayerNames::PLAYER_ONE || !Locator::infoConstants::has_value() || _held.has_value() ||
+	    !EntityRegistry().Valid(ball) || !EntityRegistry().AllOf<MagicFireBall>(ball))
+	{
+		return;
+	}
+	CatchFireBall(ball);
 }
 
 bool MagicSystem::CatchFireBall(entt::entity ball)
@@ -2664,18 +2897,40 @@ bool MagicSystem::CatchFireBall(entt::entity ball)
 	return true;
 }
 
-bool MagicSystem::AbsorbFireBall(entt::entity ball)
+bool MagicSystem::AbsorbsFireBalls() const
 {
-	auto& registry = EntityRegistry();
+	const auto& registry = EntityRegistry();
 	if (!_held.has_value() || !registry.Valid(*_held))
 	{
 		return false;
 	}
-	auto& seed = registry.Get<SpellSeed>(*_held);
-	if (!seed.ready || seed.seedType != SpellSeedType::Fire)
+	const auto& seed = registry.Get<const SpellSeed>(*_held);
+	return seed.ready && seed.seedType == SpellSeedType::Fire;
+}
+
+bool MagicSystem::DoApplySeed(PlayerNames player, entt::entity target)
+{
+	// There is one human, with the hand of this computer. A miracle in the hand takes the command, also when the thing
+	// is gone by the turn.
+	if (player != PlayerNames::PLAYER_ONE || !_held.has_value())
 	{
 		return false;
 	}
+	if (EntityRegistry().Valid(target) && EntityRegistry().AllOf<MagicFireBall>(target))
+	{
+		AbsorbFireBall(target);
+	}
+	return true;
+}
+
+bool MagicSystem::AbsorbFireBall(entt::entity ball)
+{
+	auto& registry = EntityRegistry();
+	if (!AbsorbsFireBalls())
+	{
+		return false;
+	}
+	auto& seed = registry.Get<SpellSeed>(*_held);
 	// The catch uses the row of the fireball table that the ball uses
 	const auto row = EntityRegistry().Get<const MagicFireBall>(ball).infoRow;
 	seed.power *= 1.0f + Info().magicFireBall.at(row).catchIncreaseFactor;
@@ -2696,10 +2951,19 @@ bool MagicSystem::PressAction()
 		return false;
 	}
 	_actionDown = true;
-	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand
+	// A ready fire seed put to a fireball, anyone's, takes it in: the seed grows stronger and stays in the hand. The hand
+	// sends the use of the seed on the ball, which the turn does.
 	if (const auto ball = PickedUnderHand();
-	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbFireBall(*ball))
+	    ball.has_value() && EntityRegistry().AllOf<MagicFireBall>(*ball) && AbsorbsFireBalls())
 	{
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::HandApply {.target = *ball});
+		}
+		else
+		{
+			AbsorbFireBall(*ball);
+		}
 		return true;
 	}
 	const auto& seed = EntityRegistry().Get<const SpellSeed>(*_held);
@@ -2759,7 +3023,16 @@ void MagicSystem::DiscardHeldSeed()
 	{
 		return;
 	}
-	Do(magic::Cancel(_input));
+	// The hand of this computer calls off its press. A miracle locked on in the hand stores back what it has left, as the
+	// let go of the button does.
+	if (magic::Cancel(_input).stopHoldLoop)
+	{
+		StopHoldLoop();
+	}
+	if (HeldSpellRunsInHand())
+	{
+		UnlockHeldMiracle();
+	}
 	auto& registry = EntityRegistry();
 	if (_held.has_value() && registry.Valid(*_held))
 	{
@@ -2903,30 +3176,67 @@ void MagicSystem::TakeGestures()
 			_circle = Circle {.centre = centre, .radius = event.radius, .turn = _turn};
 			break;
 		}
+		// The gestures on the seed in the hand go as commands of the player, which the turn does
 		case GestureEvent::Kind::PowerUp:
-			PowerUpHeldSeed(event.powerUpLevel);
+			SendSeedGesture(
+			    {.kind = player_commands::SeedGesture::Kind::PowerUp, .level = static_cast<int8_t>(event.powerUpLevel)});
 			break;
 		case GestureEvent::Kind::Scribble:
-		{
-			// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
-			const auto* seed = _held.has_value() && EntityRegistry().Valid(*_held)
-			                       ? EntityRegistry().TryGet<const SpellSeed>(*_held)
-			                       : nullptr;
-			if (seed != nullptr && magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) ==
-			                           magic::ScribbleResult::StopPowerUp)
-			{
-				PowerUpHeldSeed(-1);
-			}
-			else
-			{
-				DiscardHeldSeed();
-			}
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Scribble, .level = 0});
 			break;
-		}
 		case GestureEvent::Kind::Shake:
-			DiscardHeldSeed();
+			SendSeedGesture({.kind = player_commands::SeedGesture::Kind::Shake, .level = 0});
 			break;
 		}
+	}
+}
+
+void MagicSystem::SendSeedGesture(const player_commands::SeedGesture& gesture)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(gesture);
+		return;
+	}
+	DoSeedGesture(PlayerNames::PLAYER_ONE, gesture);
+}
+
+void MagicSystem::DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture)
+{
+	// There is one human, with the hand of this computer
+	if (player != PlayerNames::PLAYER_ONE)
+	{
+		return;
+	}
+	switch (gesture.kind)
+	{
+	case player_commands::SeedGesture::Kind::PowerUp:
+		PowerUpHeldSeed(gesture.level);
+		break;
+	case player_commands::SeedGesture::Kind::Scribble:
+	{
+		// A scribble first stops the power-up and keeps the seed in the hand; a second scribble drops it
+		const auto* seed =
+		    _held.has_value() && EntityRegistry().Valid(*_held) ? EntityRegistry().TryGet<const SpellSeed>(*_held) : nullptr;
+		if (seed != nullptr &&
+		    magic::ScribbleOn(seed->hasIcon, seed->ready, seed->hasCast, seed->powerUp) == magic::ScribbleResult::StopPowerUp)
+		{
+			// The hand shakes as it does when the scribble drops the miracle
+			if (Locator::miracleFxSystem::has_value())
+			{
+				Locator::miracleFxSystem::value().HandShaken();
+			}
+			PowerUpHeldSeed(-1);
+		}
+		else
+		{
+			DiscardHeldSeed();
+		}
+		break;
+	}
+	case player_commands::SeedGesture::Kind::Shake:
+		DiscardHeldSeed();
+		break;
 	}
 }
 
@@ -3129,11 +3439,11 @@ float MagicSystem::SpellStrength(entt::entity entity)
 
 // For the debug window
 
-void MagicSystem::StartCastEffect(Spell& spell, ParticleType type)
+void MagicSystem::StartCastEffect(Spell& spell, ParticleType type, bool synced)
 {
 	auto& particles = Locator::particleSystem::value();
-	// It plays out by itself, the same on every machine, as big as the miracle and heading the way it was cast
-	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, true);
+	// It plays out by itself, as big as the miracle and heading the way it was cast
+	spell.castEffect = particles.Start(type, spell.castPosition, spell.magnitude, synced);
 	if (auto* effect = particles.Find(spell.castEffect))
 	{
 		effect->SetDirection(spell.direction);

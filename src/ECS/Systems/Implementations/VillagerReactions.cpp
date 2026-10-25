@@ -34,6 +34,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
@@ -196,7 +197,7 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	{
 		return true;
 	}
-	const float wanted = std::atan2(diff.y, diff.x);
+	const float wanted = portable_math::Atan2(diff.y, diff.x);
 	float turn = std::remainder(wanted - wallHug.yAngle, 2.0f * std::numbers::pi_v<float>);
 	const bool faces = std::abs(turn) < step;
 	if (!faces)
@@ -206,7 +207,7 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	wallHug.yAngle += turn;
 	// Turning the walker turns the way its walk faces as well
 	wallHug.gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(wallHug.yAngle));
-	transform.rotation = glm::eulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
+	transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - std::numbers::pi_v<float> * 0.5f);
 	return faces;
 }
 /// The awe of a villager's people at a miracle, heard now and then near the hand

@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <map>
+
 #include <entt/entity/entity.hpp>
 
 #include "Commands/PlayerCommands.h"
@@ -32,13 +34,25 @@ public:
 	GetPlayerHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
+	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
+	GetHandsOf(PlayerNames player) const noexcept override;
+	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	void SetOwnPlayer(PlayerNames player) override { _ownPlayer = player; }
+	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer; }
+	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
+	void ReportPick(PlayerNames player, entt::entity object) override;
+	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
+	[[nodiscard]] glm::vec3 GetReportedHandVelocity() const noexcept override;
 	[[nodiscard]] hand_trace::HandTrace* GetTrace() noexcept override { return &_trace; }
 
 private:
 	std::array<entt::entity, 2> _hands {entt::null, entt::null};
+	/// The hands of the gods of the other players of a network game, by player
+	std::map<PlayerNames, std::array<entt::entity, 2>> _godHands;
+	PlayerNames _ownPlayer {PlayerNames::PLAYER_ONE};
 	hand_trace::HandTrace _trace;
 };
 } // namespace openblack::ecs::systems

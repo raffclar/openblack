@@ -143,11 +143,13 @@ void LandBlock::SetLndBlock(const lnd::LNDBlock& block)
 	_highestAltitude = std::ranges::max(_block->cells, {}, &lnd::LNDCell::altitude).altitude;
 }
 
-void LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
+bool LandBlock::SetCellAltitude(size_t index, uint8_t altitude)
 {
 	assert(_block);
-	if (_block && index < _block->cells.size())
+	if (!_block || index >= _block->cells.size() || _block->cells.at(index).altitude == altitude)
 	{
-		_block->cells.at(index).altitude = altitude;
+		return false;
 	}
+	_block->cells.at(index).altitude = altitude;
+	return true;
 }

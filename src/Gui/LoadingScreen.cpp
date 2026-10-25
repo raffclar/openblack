@@ -10,6 +10,7 @@
 #include "LoadingScreen.h"
 
 #include <algorithm>
+#include <iterator>
 #include <utility>
 
 #include <bgfx/bgfx.h>
@@ -145,6 +146,13 @@ LoadingScreen::LoadingScreen(TextDatabase texts, GameFont font, std::vector<uint
 
 LoadingScreen::~LoadingScreen() = default;
 
+void LoadingScreen::SetBuild(std::string_view shortVersion)
+{
+	_build = u"openblack ";
+	std::ranges::transform(shortVersion, std::back_inserter(_build),
+	                       [](char character) { return static_cast<char16_t>(static_cast<unsigned char>(character)); });
+}
+
 void LoadingScreen::PrepareTip(uint32_t milliseconds, bool hasProfiles)
 {
 	if (_picture)
@@ -165,10 +173,10 @@ void LoadingScreen::MakePicture()
 	{
 		return;
 	}
-	// The blur is made from the picture as the game copies it, 5 bits a channel
+	// The game makes the blur from its 16-bit copy of the picture
 	const auto& still = *picture.still;
-	const auto sixteen = loading::ToSixteenBit(still.bgrx, still.width, still.height, loading::Rgb16::Rgb555);
-	const auto blur = loading::BlurPicture(sixteen, still.width, still.height, loading::Rgb16::Rgb555);
+	const auto sixteen = loading::ToSixteenBit(still.bgrx, still.width, still.height, graphics::film_surface::k_TodaysCards);
+	const auto blur = loading::BlurPicture(sixteen, still.width, still.height, graphics::film_surface::k_TodaysCards);
 	if (blur.texels.empty())
 	{
 		return;
@@ -176,7 +184,7 @@ void LoadingScreen::MakePicture()
 	const auto* texels = bgfx::alloc(static_cast<uint32_t>(blur.texels.size() * 4));
 	for (size_t i = 0; i < blur.texels.size(); ++i)
 	{
-		const auto rgba = loading::ToRgba8(blur.texels[i], loading::Rgb16::Rgb555);
+		const auto rgba = loading::ToRgba8(blur.texels[i], graphics::film_surface::k_TodaysCards);
 		std::ranges::copy(rgba, texels->data + (i * 4));
 	}
 	picture.blur = std::make_unique<graphics::Texture2D>("LoadingScreenBlur");
@@ -361,14 +369,15 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 		{
 			_canvas.End();
 			_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.sharpAlpha,
-			               true);
+			               graphics::film_surface::k_TodaysCards);
 			begin();
 		}
 	}
 	else if (tip.still)
 	{
 		_canvas.End();
-		_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.alpha, true);
+		_overlay->Draw(graphics::RenderPass::Interface, resolution, tip.still->GetPlanes(), pictureRect, levels.alpha,
+		               graphics::film_surface::k_TodaysCards);
 		begin();
 	}
 
@@ -400,6 +409,13 @@ void LoadingScreen::DrawTips(glm::u16vec2 resolution, float fade, float progress
 	_painter->DrawString(
 	    {static_cast<float>(width) - versionWidth - 2.0f, static_cast<float>(height) - layout.versionSize - 2.0f}, _version,
 	    layout.versionSize, glm::vec4(k_BackdropColour, alpha));
+
+	// The openblack build, in the bottom left corner, as small as the version
+	if (!_build.empty())
+	{
+		_painter->DrawString({2.0f, static_cast<float>(height) - layout.versionSize - 2.0f}, _build, layout.versionSize,
+		                     glm::vec4(k_BackdropColour, alpha));
+	}
 
 	DrawBar(layout, progress, levels.alpha);
 	_canvas.End();
@@ -464,5 +480,5 @@ void LoadingScreen::DrawPicture(glm::u16vec2 resolution, const graphics::VideoOv
 {
 	_canvas.Begin(resolution);
 	_canvas.End();
-	_overlay->Draw(graphics::RenderPass::Interface, resolution, planes, rect, alpha, true);
+	_overlay->Draw(graphics::RenderPass::Interface, resolution, planes, rect, alpha, graphics::film_surface::k_TodaysCards);
 }

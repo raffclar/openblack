@@ -73,6 +73,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// At the start of each turn: what the hand holds is where the last report put the hand, at its own turn and size
 	virtual void PlaceHeldForTurn() {}
+	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
+	/// toward the place of their last report, upright and at the size that it had as the hand took it
+	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
 	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves
@@ -91,6 +94,15 @@ public:
 	virtual void DoLetGo(PlayerNames /*player*/, const player_commands::HandLetGo& /*letGo*/) {}
 	/// The hand taps a thing
 	virtual void DoTap(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand locks on to a pile, a field or a fish farm, and starts to scoop from it
+	/// (player_commands::HandLock)
+	virtual void DoLock(PlayerNames /*player*/, entt::entity /*object*/) {}
+	/// At the turn: the hand uses the thing that it holds on a target (player_commands::HandApply)
+	virtual void DoApply(PlayerNames /*player*/, entt::entity /*target*/) {}
+	/// The turn of a click of the hand that a player sent in a network game: the click that the scripts read
+	virtual void DoClick(PlayerNames /*player*/, const player_commands::HandClick& /*click*/, uint32_t /*turn*/) {}
+	/// At the turn: the lock ends, and with it the scoop (player_commands::HandUnlock)
+	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
 	/// The hand gives the thing that it holds to a creature
@@ -101,6 +113,9 @@ public:
 	/// For the debug tools: the empty hand takes a thing at once, as if picked up from where it stands; and gives what it
 	/// holds to a creature, as the Action button pressed over the creature does. Whether it could.
 	virtual bool TakeIntoHand(entt::entity /*object*/) { return false; }
+	/// For the debug tools: the empty hand of another player takes a thing at once, also outside the player's influence.
+	/// Whether it could.
+	virtual bool TakeIntoHandOf(PlayerNames /*player*/, entt::entity /*object*/) { return false; }
 	virtual bool GiveHeldTo(entt::entity /*creature*/) { return false; }
 	/// For the debug tools: the hand releases the thing that it holds, as a release of the Action button does. With no
 	/// velocity, the hand puts the thing on the land below it. Else, the hand throws the thing at the velocity. This

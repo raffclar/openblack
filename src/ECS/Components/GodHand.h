@@ -9,18 +9,16 @@
 
 #pragma once
 
-#include <cstdint>
+#include "Enums.h"
 
-#include <entt/entity/fwd.hpp>
-#include <glm/vec3.hpp>
+namespace openblack::ecs::components
+{
 
-namespace openblack::ecs::archetypes
+/// On a hand of a god of a network game that is not the first player's: the player whose hand it is. The hands of the
+/// first player have none. Every computer makes these hands at the same turn, from the command of the game server.
+struct GodHand
 {
-/// A number that floats up from a point for a few seconds, written as a whole number
-class FloatingNumberArchetype
-{
-public:
-	/// The number, in a colour (0xAARRGGBB)
-	static entt::entity Create(const glm::vec3& position, float value, uint32_t colour);
+	PlayerNames player {PlayerNames::PLAYER_TWO};
 };
-} // namespace openblack::ecs::archetypes
+
+} // namespace openblack::ecs::components

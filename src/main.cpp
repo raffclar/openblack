@@ -9,6 +9,7 @@
 
 #include <algorithm>
 #include <iostream>
+#include <iterator>
 #include <map>
 #include <memory>
 #include <span>
@@ -30,6 +31,7 @@
 
 #include "Common/BuildVersion.h"
 #include "Common/CrashHandler.h"
+#include "Common/DeveloperTools.h"
 #include "Common/FatalMessage.h"
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
@@ -98,17 +100,32 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("g,game-path", "Path to the Data/ and Scripts/ directories of the original Black & White game. (Required)", cxxopts::value<std::string>())
 		("W,width", "Window resolution in the x axis.", cxxopts::value<uint16_t>()->default_value("1280"))
 		("H,height", "Window resolution in the y axis.", cxxopts::value<uint16_t>()->default_value("1024"))
-		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
-		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
-		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
 		("V,vsync", "Enable Vertical Sync.")
 		("detail-level", "Graphics detail level of the original game: 0 Minimum, 1 Low, 2 Medium, 3 High, 4 Maximum (the default), 5 Custom, 6 Super. Without it, the settings.json of this computer gives the level, if it keeps one; the same holds for the window's size and mode and the vertical sync.", cxxopts::value<uint16_t>()->default_value("4"))
 		("m,window-mode", "Which mode to run window.", cxxopts::value<std::string>()->default_value("windowed"))
-		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
+		("b,backend-type", "Which backend to use for rendering: Vulkan (VK), Direct3D12 (D3D12, DX12), Direct3D11 (D3D11, DX11), OpenGL (GL), Metal, WebGPU (WGPU) or Noop.", cxxopts::value<std::string>())
 		("n,num-frames-to-simulate", "Number of frames to simulate before quitting.", cxxopts::value<uint32_t>()->default_value("0"))
 		("l,log-file", "Output file for logs, 'stdout'/'logcat' for terminal output.", cxxopts::value<std::string>()->default_value(defaultLogFile))
 		("L,log-level", "Level (trace, debug, info, warning, error, critical, off) of logging per subsystem (" + loggingSubsystems + ").",
 		    cxxopts::value<std::vector<std::string>>()->default_value("all=debug"))
+		("background", "Tools: keep the window out of the way of the desk: it never takes the focus, never comes to the front, never holds or moves the mouse, and it stays in a window (the display mode is ignored). Input from the inspector still works.")
+		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
+		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
+		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
+		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
+		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
+		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
+		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
+		("join-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test game server on a loopback address (127.0.0.1).", cxxopts::value<std::string>())
+		("lobby-test-ca", "Tests on this computer only: a PEM file of a certificate authority of a test lobby on a loopback address (127.0.0.1). The lobby's calls, its push channel and the game sockets also trust it.", cxxopts::value<std::string>());
+	// The options that only developers and tools use. A build without the developer tools ignores them (see
+	// FilterDeveloperOptions), and its help does not show them.
+	options.add_options("Developer")
+		("u,ui-scale", "Scaling of the GUI", cxxopts::value<float>()->default_value("1.0"))
+		("s,start-level", "Level that is loaded at start-up: a script in Scripts, such as Land2.txt, or a playground such as Playgrounds/construct.txt, which starts without the story", cxxopts::value<std::string>()->default_value(std::string(openblack::k_DefaultStartLevel)))
+		("testbed", "Start on the flat creature testbed, a plane with a lake, instead of a level.")
+		("gods-ring-map", "Start on the network map for 32 gods instead of a level, as the game server does with the same switch.")
 		("screenshot-frame", "Request a screenshot of the backbuffer at a certain frame number.", cxxopts::value<uint32_t>())
 		("screenshot-path", "Path of the request a screenshot of the backbuffer.", cxxopts::value<std::filesystem::path>()->default_value("screenshot.png"))
 		("frame-stats", "Log the average and 95th percentile frame time, the profiler stages and the memory in use every so many frames (0 for never), and each frame of 10 ms or more with its stages.", cxxopts::value<uint32_t>()->default_value("0"))
@@ -116,39 +133,40 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("no-first-frame-warm-up", "Do not draw the first frame of a land behind the loading screen. Then the first frames of the game make the renderer's pipelines and render targets.")
 		("unlock-bonus-creatures", "Debug: take the Creature Breeder's bonus creatures as unlocked, which the game only had once an unlock from outside it was installed: all, or some of leopard, horse, mandrill, gorilla and rhino joined by commas. None by default, as on a normal install.", cxxopts::value<std::string>())
 		("no-draw", "Tools: open the window but draw nothing on the graphics card, so that a long run that the inspector drives does not wait on a busy graphics card. Screenshots are black.")
-		("background", "Tools: keep the window out of the way of the desk: it never takes the focus, never comes to the front, never holds or moves the mouse, and it stays in a window (the display mode is ignored). Input from the inspector still works.")
-		("dynamic-tree-shadows", "Trees cast their shadows as they are drawn each frame, swaying with them, rather than baked into the land as the game does.")
-		("pre-intro", "Play the pre-intro film at start-up, as the game does on a first run.")
 		("skip-logos", "Leave out the logo pictures at start-up.")
 		("logo-effect", "For developers and tools: play the logo effect before the first game, as a plain start does. A developer's or a tool's run otherwise leaves it out.")
-		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("continue", "For developers and tools: start as a plain start does, a run of a developer too. The save on exit of the profile loads, with the menu over it, or a new game starts when there is none. A developer's or a tool's run otherwise starts a new game.")
 		("skip-opening", "For developers: start the new game with the start-of-game question answered, the story then going as it does for that answer: creature (straight to choosing a creature, the opening skipped), story (all of the first land's creature tutorial skipped too), old (keep the old creature; story when the profile has none), cow (debug: skip the creature choice, the Cow is the player's creature), normal; or ask, to be asked it as every new game is.", cxxopts::value<std::string>())
 		("play-video", "Play a full-screen video once the land is loaded: intro, fall (the falling spell, which needs the player's creature) or a path such as Data/logo.bik.", cxxopts::value<std::string>()->default_value(""))
+		("film-surface", "Debug: the 16-bit surface that each film picture goes through: 555 (the default, as the game on the display cards of today), 565 (as on cards with no 555) or none (the full colour of the decoder).", cxxopts::value<std::string>()->default_value(""))
 		("scenario", "Start on the testbed and run the testbed scenario of this id, such as benchmark.creatures_100.", cxxopts::value<std::string>())
 		("benchmark-warmup", "With --scenario, the frames a benchmark's crowd settles for once spawned, before it is measured.", cxxopts::value<uint32_t>()->default_value("120"))
 		("benchmark-frames", "With --scenario, the frames of a benchmark measured.", cxxopts::value<uint32_t>()->default_value("600"))
 		("scenario-hide-window", "With --scenario, keep the testbed's window of scenarios closed, so the view is clear.")
 		("benchmark-out", "With --scenario, where a benchmark writes its results (with .json and .csv after it); the game quits once they are written.", cxxopts::value<std::string>())
-		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
-		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
-		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("profile-folder", "For developers and tests: keep the players' profiles and their creatures in this folder rather than the Profiles folder in the working folder, as on a first start when it is empty. Without it, a developer's or a tool's run (a level, the testbed, a scenario, --skip-opening, --skip-logos, the inspector, a seed, a video, a number of frames or a screenshot asked for) plays as a profile of its own, kept apart, and never sees the new player's box.", cxxopts::value<std::string>())
 		("seed", "Start every random number the game draws from this seed and pin the date the game reads (1 January 2001), so that two runs of the same scenario with a fixed frame time and the same input go the same way.", cxxopts::value<uint32_t>())
 		("sim-fast", "Tools: the fast simulation mode. The game plays its frames one after the other as fast as the processor can and draws none of them (see --sim-draw-every). Each frame takes the fixed game time of --sim-frame-ms, 20 ms by default in this mode, so the turns are the same as at the normal speed.")
 		("sim-frame-ms", "Tools: each frame takes this fixed game time in milliseconds (1 to 1000) from the first frame. It can have a part of a millisecond, such as 16.7 for 60 frames a second. Without --sim-fast, each frame also waits until it took this time in real time, so the run goes at the normal speed.", cxxopts::value<double>())
 		("sim-draw-every", "Tools: with --sim-fast, draw one frame in this many (0, the default, for no frame).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-until-turn", "Tools: stop the game once it gets to this game turn.", cxxopts::value<uint32_t>())
+		("join-part-at", "Tests: at this turn the world of this computer draws one synced random number more, so that it parts from the server's world and resynchronises.", cxxopts::value<uint32_t>())
+		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
-	;
+		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
+		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
+		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
+		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
+		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
+		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>());
 #if defined(OPENBLACK_INSPECTOR)
-	options.add_options()
+	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
 		("sim-record-every", "Tools: with --sim-record, write a record each time this many game turns go by.", cxxopts::value<uint32_t>()->default_value("100"))
 		("sim-start-paused", "Tools: each land starts paused, before any of its frames, for a tool that steps the run through the inspector.")
-		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-hash-parts", "Tools: with --sim-record, also keep in each record the hash of the transforms of the entities of each component, to find what made two runs part.")
 		("sim-hash-fields", "Tools: as --sim-hash-parts, and the synced hash of each field of each component too. The records get large: use it with few records.")
+		("sim-record-input", "Tools: record the input that the game makes from the first frame of the first land on (also the input of the fight autopilot), and write it to this file as the game ends, as --sim-input reads it.", cxxopts::value<std::string>())
 		("sim-input", "Tools: the first land makes the recorded input of this file from its first frame on, as the inspector's input.replay. The file is a list of {frame, event}, as input.record answers it.", cxxopts::value<std::string>())
 		("sim-commands", "Tools: write the commands of each turn to this file, as JSON lines, for a dedicated server that does the same commands (openblack-server --commands).", cxxopts::value<std::string>())
 		("sim-limits", "Tools: with --sim-record, the JSON table of how long a plan or an activity can stay the same (tools/sim/stuck_limits.json).", cxxopts::value<std::string>())
@@ -177,10 +195,24 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				ownArguments.push_back(argument);
 			}
 		}
+		// A build without the developer tools ignores the developer options and their values. The game log tells which.
+		if constexpr (!openblack::developer_tools::k_Built)
+		{
+			const std::vector<std::string_view> texts(ownArguments.begin(), ownArguments.end());
+			auto filtered =
+			    openblack::developer_tools::FilterDeveloperOptions(texts, openblack::developer_tools::k_DeveloperOptions);
+			std::vector<char*> kept;
+			kept.reserve(filtered.kept.size());
+			std::ranges::transform(filtered.kept, std::back_inserter(kept),
+			                       [&ownArguments](size_t index) { return ownArguments[index]; });
+			ownArguments = std::move(kept);
+			args.ignoredDeveloperOptions = std::move(filtered.ignored);
+		}
 		auto result = options.parse(static_cast<int>(ownArguments.size()), ownArguments.data());
 		if (result["help"].as<bool>())
 		{
-			std::cout << options.help() << std::endl;
+			// The help of a build without the developer tools shows only the options of the player
+			std::cout << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
 			returnCode = EXIT_SUCCESS;
 			return false;
 		}
@@ -210,7 +242,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			else
 			{
 				throw cxxopts::exceptions::parsing("Unknown backend '" + name +
-				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Metal or Noop");
+				                                   "': use Vulkan (VK), Direct3D12 (D3D12, DX12), Direct3D11 (D3D11, DX11), "
+				                                   "OpenGL (GL), Metal, WebGPU (WGPU) or Noop");
 			}
 		}
 
@@ -300,6 +333,20 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.seed = result["seed"].as<uint32_t>();
 		}
 		args.networkGame = result.count("sim-network-game") != 0;
+		if (result.count("join") != 0)
+		{
+			args.networkJoin = openblack::ecs::systems::NetworkJoin {
+			    .url = result["join"].as<std::string>(),
+			    .ticket = result.count("join-ticket") != 0 ? result["join-ticket"].as<std::string>() : std::string(),
+			    .gamePassword = {},
+			    .name = {},
+			    .testAuthorities =
+			        result.count("join-test-ca") != 0 ? std::optional(result["join-test-ca"].as<std::string>()) : std::nullopt,
+			    .partAt =
+			        result.count("join-part-at") != 0 ? std::optional(result["join-part-at"].as<uint32_t>()) : std::nullopt,
+			    .partAgain = result.count("join-part-again") != 0,
+			};
+		}
 		if (result.count("sim-fast") != 0 || result.count("sim-frame-ms") != 0 || result.count("sim-until-turn") != 0)
 		{
 			openblack::sim_run::Request simulation {};
@@ -323,8 +370,39 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			{
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
-			// Only the builds with the inspector have this option
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			if (result.count("sim-checksums") != 0)
+			{
+				simulation.checksumsPath = std::filesystem::path(result["sim-checksums"].as<std::string>());
+				simulation.checksumParts = result.count("sim-checksum-fields") != 0 ? openblack::sim_run::HashDetail::Fields
+				                           : result.count("sim-checksum-parts") != 0
+				                               ? openblack::sim_run::HashDetail::Components
+				                               : openblack::sim_run::HashDetail::None;
+			}
+			if (result.count("sim-checksum-dump") != 0)
+			{
+				const auto text = result["sim-checksum-dump"].as<std::string>();
+				const auto colon = text.find(':');
+				if (colon == std::string::npos)
+				{
+					throw cxxopts::exceptions::parsing("--sim-checksum-dump is TURN:Component,Component");
+				}
+				std::vector<std::string> components;
+				for (size_t at = colon + 1; at <= text.size();)
+				{
+					const auto comma = std::min(text.find(',', at), text.size());
+					if (comma > at)
+					{
+						components.emplace_back(text.substr(at, comma - at));
+					}
+					at = comma + 1;
+				}
+				simulation.checksumDump = std::make_pair(static_cast<uint32_t>(std::stoul(text.substr(0, colon))), components);
+			}
+			if (result.count("sim-play-commands") != 0)
+			{
+				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
+			}
 			args.simulation = simulation;
 		}
 
@@ -353,10 +431,15 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		args.logLevels = logLevels;
 		args.startLevel = result["start-level"].as<std::string>();
 		args.startTestbed = result.count("testbed") != 0;
+		args.startGodsRingMap = result.count("gods-ring-map") != 0;
 		args.frameStatsInterval = result["frame-stats"].as<uint32_t>();
 		args.frameStatsViews = result.count("frame-stats-views") != 0;
 		args.warmUpFirstFrame = result.count("no-first-frame-warm-up") == 0;
 		args.lobbyOrigin = result["lobby"].as<std::string>();
+		if (result.count("lobby-test-ca") != 0)
+		{
+			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
+		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
@@ -372,6 +455,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.unlockedBonusCreatures = *unlocked;
 		}
 		args.playVideo = result["play-video"].as<std::string>();
+		args.filmSurface = result["film-surface"].as<std::string>();
 		args.preIntro = result.count("pre-intro") != 0;
 		args.skipLogos = result.count("skip-logos") != 0;
 		args.logoEffect = result.count("logo-effect") != 0;
@@ -422,6 +506,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                             : result["sim-hash-parts"].as<bool>() ? openblack::sim_run::HashDetail::Components
 			                                                                   : openblack::sim_run::HashDetail::None;
 			args.simulation->startPaused = result["sim-start-paused"].as<bool>();
+			if (result.count("sim-record-input") != 0)
+			{
+				args.simulation->recordInputPath = std::filesystem::path(result["sim-record-input"].as<std::string>());
+			}
 			if (result.count("sim-input") != 0)
 			{
 				args.simulation->inputPath = std::filesystem::path(result["sim-input"].as<std::string>());
@@ -474,7 +562,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	catch (cxxopts::exceptions::parsing& err)
 	{
 		std::cerr << err.what() << std::endl;
-		std::cerr << options.help() << std::endl;
+		std::cerr << (openblack::developer_tools::k_Built ? options.help() : options.help({""})) << std::endl;
 
 		returnCode = EXIT_FAILURE;
 		return false;

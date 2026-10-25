@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <utility>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::water_rings
 {
 
@@ -79,8 +81,8 @@ std::array<glm::vec3, 4> Corners(const Ring& ring)
 {
 	const float half = HalfWidth(ring);
 	// Its width lies along its angle, radians from +x towards +z, and its depth across that
-	const glm::vec2 wide = glm::vec2(std::cos(ring.angle), std::sin(ring.angle)) * half;
-	const glm::vec2 deep = glm::vec2(-std::sin(ring.angle), std::cos(ring.angle)) * (half * ring.aspect);
+	const glm::vec2 wide = glm::vec2(portable_math::Cos(ring.angle), portable_math::Sin(ring.angle)) * half;
+	const glm::vec2 deep = glm::vec2(-portable_math::Sin(ring.angle), portable_math::Cos(ring.angle)) * (half * ring.aspect);
 	const auto at = [&ring](glm::vec2 offset) {
 		return glm::vec3(ring.position.x + offset.x, ring.position.y, ring.position.z + offset.y);
 	};

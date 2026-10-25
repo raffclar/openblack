@@ -34,7 +34,9 @@ public:
 	virtual void Stop() = 0;
 	virtual void Play() = 0;
 	virtual void Pause() = 0;
-	virtual void Update(const std::chrono::microseconds& dt) = 0;
+	/// Once a frame. The camera glides by the camera's time of the frame (dt). A placed path moves on by the frame's game
+	/// time, which is zero while the game is paused: the camera then glides to where the path stopped and stays there.
+	virtual void Update(const std::chrono::microseconds& dt, std::chrono::milliseconds frameGameTime) = 0;
 	virtual bool IsPathing() = 0;
 	virtual bool IsPaused() = 0;
 	/// The camera follows a path placed in the world by a matrix, as a miracle's effect takes its caster's camera along:

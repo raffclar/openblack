@@ -56,6 +56,11 @@ public:
 	virtual void Slide(float upPixels, float screenHeight) = 0;
 	/// The hand lets go: the town's share is set to where it was left
 	virtual void LetGo() = 0;
+	/// At the turn: the hand took hold of a town's totem, which the player's creature and the living near it see
+	/// (player_commands::HandLock)
+	virtual void DoGrip(PlayerNames /*player*/, entt::entity /*totem*/) {}
+	/// At the turn: the town of the totem takes the share that the hand let go of it at (player_commands::TotemShare)
+	virtual void DoShare(PlayerNames /*player*/, entt::entity /*totem*/, float /*share*/) {}
 	/// The totem the hand holds, if any
 	[[nodiscard]] virtual std::optional<entt::entity> GetGripped() const = 0;
 	/// How the hand holds a totem: where it is, how far it tips, and how far it closes round the icon

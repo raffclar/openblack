@@ -51,6 +51,38 @@ std::vector<Action> EachCommand()
 	                .camera = {7.0f, 8.0f, 9.0f},
 	                .focus = {10.0f, 11.0f, 12.0f}},
 	    HandTwist {.object = Entity(13), .moved = {0.5f, 0.0f, -0.25f}},
+	    HandLock {.object = Entity(14)},
+	    HandUnlock {.object = Entity(15)},
+	    HandApply {.target = Entity(16)},
+	    TotemShare {.totem = Entity(17), .share = 0.75f},
+	    CreatureBruise {.creature = Entity(18),
+	                    .wound = creature_marks::Mark {.u = 1, .v = 2, .skin = 3, .age = 0, .type = 0, .column = 7}},
+	    PlayerLeft {},
+	    FightGround {.creature = Entity(19), .point = {-1.5f, 2.0f, 3.25f}, .replace = true},
+	    FightMove {.target = Entity(20), .kind = 6, .value = 0x01020304, .replace = false},
+	    FightCharge {.heldMs = 1200},
+	    CreatureReaction {.creature = Entity(21),
+	                      .animation = 0x0A0B0C0D,
+	                      .mirrored = true,
+	                      .pullsFace = true,
+	                      .face = 3,
+	                      .faceMs = 2000.0f,
+	                      .cue = 15,
+	                      .interruptsAfter = 0.25f},
+	    HandClick {.thing = Entity(22), .release = true, .hasPlace = true, .placeX = -5, .placeZ = 0x7FFFFFFF},
+	    SeedGesture {.kind = SeedGesture::Kind::PowerUp, .level = -1},
+	    HandPick {.object = Entity(23)},
+	    PlayerJoined {},
+	    MiracleRequest {.seed = SpellSeedType::Heal},
+	    MiracleRepeat {},
+	    HandCast {.object = Entity(24),
+	              .point = {1.0f, 2.0f, 3.0f},
+	              .size = 12.5f,
+	              .handPosition = {4.0f, 5.0f, 6.0f},
+	              .cameraForward = {0.0f, -0.6f, 0.8f},
+	              .handVelocity = {-7.0f, 0.0f, 8.0f},
+	              .spin = -0.5f},
+	    HandCastUnlock {.seed = Entity(25)},
 	};
 }
 
@@ -74,7 +106,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 11)
+	switch (bits(random) % 29)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -98,8 +130,80 @@ Action RandomAction(std::mt19937& random)
 		return LeashPostTap {.post = entity()};
 	case 9:
 		return HandReport {.collidePoint = vector(), .handPoint = vector(), .camera = vector(), .focus = vector()};
-	default:
+	case 10:
 		return HandTwist {.object = entity(), .moved = vector()};
+	case 11:
+		return HandLock {.object = entity()};
+	case 12:
+		return HandUnlock {.object = entity()};
+	case 13:
+		return HandApply {.target = entity()};
+	case 14:
+		return TotemShare {.totem = entity(), .share = number()};
+	case 15:
+		return FightGround {.creature = entity(), .point = vector(), .replace = bits(random) % 2 == 0};
+	case 16:
+		return FightMove {.target = entity(),
+		                  .kind = static_cast<uint8_t>(bits(random) % 7),
+		                  .value = bits(random),
+		                  .replace = bits(random) % 2 == 0};
+	case 17:
+		return FightCharge {.heldMs = bits(random)};
+	case 18:
+	{
+		const bool face = bits(random) % 2 == 0;
+		return CreatureReaction {.creature = entity(),
+		                         .animation = bits(random),
+		                         .mirrored = bits(random) % 2 == 0,
+		                         .pullsFace = face,
+		                         .face = face ? static_cast<uint8_t>(bits(random) % 12) : uint8_t {0},
+		                         .faceMs = face ? number() : 0.0f,
+		                         .cue = face ? static_cast<uint8_t>(bits(random) % 19) : uint8_t {0},
+		                         .interruptsAfter = number()};
+	}
+	case 22:
+		return HandPick {.object = entity()};
+	case 20:
+		return SeedGesture {.kind = static_cast<SeedGesture::Kind>(bits(random) % 3),
+		                    .level = static_cast<int8_t>(bits(random))};
+	case 19:
+	{
+		const bool release = bits(random) % 2 == 0;
+		const bool place = release && bits(random) % 2 == 0;
+		return HandClick {.thing = entity(),
+		                  .release = release,
+		                  .hasPlace = place,
+		                  .placeX = place ? static_cast<int32_t>(bits(random)) : 0,
+		                  .placeZ = place ? static_cast<int32_t>(bits(random)) : 0};
+	}
+	case 21:
+	{
+		const auto field = [&]() { return static_cast<uint8_t>(bits(random)); };
+		return CreatureBruise {
+		    .creature = entity(),
+		    .wound = bits(random) % 2 == 0
+		                 ? std::optional(creature_marks::Mark {
+		                       .u = field(), .v = field(), .skin = field(), .age = field(), .type = field(), .column = field()})
+		                 : std::nullopt};
+	}
+	case 23:
+		return PlayerJoined {};
+	case 24:
+		return MiracleRequest {.seed = static_cast<SpellSeedType>(bits(random) % 30)};
+	case 25:
+		return MiracleRepeat {};
+	case 26:
+		return HandCast {.object = entity(),
+		                 .point = vector(),
+		                 .size = number(),
+		                 .handPosition = vector(),
+		                 .cameraForward = vector(),
+		                 .handVelocity = vector(),
+		                 .spin = number()};
+	case 27:
+		return HandCastUnlock {.seed = entity()};
+	default:
+		return PlayerLeft {};
 	}
 }
 
@@ -159,13 +263,16 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5, 9, 5, 53, 5, 9, 18, 5, 49, 17};
+	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5,  9,  18, 5, 49, 17, 5, 5,  5, 9,
+	                                 12, 1, 18, 11, 5,  21, 15, 3,  5, 1,  2,  1, 61, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), i + 1) << i;
+		// The tags follow the order of the commands. The leave of the server has tag 17.
+		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i]) ? 17 : i + 1;
+		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
 
@@ -199,7 +306,7 @@ TEST(TurnCodec, EachFrameKindGoesToBytesAndBack)
 	for (size_t i = 0; i < all.size(); ++i)
 	{
 		turn.blocks.push_back(
-		    {.sender = static_cast<PlayerNames>(i * 3), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
+		    {.sender = static_cast<PlayerNames>((i * 2) % 31), .sequence = static_cast<uint16_t>(i), .actions = {all[i]}});
 	}
 	ExpectRoundTrip(turn);
 	ExpectRoundTrip(TurnBundle {.turn = 0, .blocks = {}});
@@ -332,6 +439,28 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto order = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {LeashOrder {.kind = LeashOrder::Kind::Untie}}});
 	order[10] = 4;
 	EXPECT_EQ(Decode(order).error, DecodeError::Value);
+
+	// A fight move of a kind that no move has, or a button flag that is not 0 or 1
+	auto move = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {FightMove {.target = Entity(1), .kind = 6}}});
+	move[14] = 7;
+	EXPECT_EQ(Decode(move).error, DecodeError::Value);
+	move[14] = 6;
+	move.back() = 2;
+	EXPECT_EQ(Decode(move).error, DecodeError::Value);
+	// A reaction with no face keeps the bytes of the face empty
+	auto reaction = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureReaction {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(reaction).error, DecodeError::None);
+	reaction[20] = 1;
+	EXPECT_EQ(Decode(reaction).error, DecodeError::Value);
+	// A press of the hand has no place
+	auto click = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {HandClick {.thing = Entity(1)}}});
+	EXPECT_EQ(Decode(click).error, DecodeError::None);
+	click[15] = 1;
+	EXPECT_EQ(Decode(click).error, DecodeError::Value);
+	// A seed gesture of no kind
+	auto gesture = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {SeedGesture {}}});
+	gesture[10] = 3;
+	EXPECT_EQ(Decode(gesture).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;
@@ -470,4 +599,64 @@ TEST(TurnCodec, ATurnOf32BusyPlayersFitsTheBudgetOfTheReport)
 	EXPECT_EQ(up.size() + k_HandReport, 129u);
 	EXPECT_EQ(Encode(TurnChecksum {.turn = 1, .checksum = 2}).size(), 14u);
 	EXPECT_EQ(Encode(Ping {.id = 1, .time = 2}).size(), 14u);
+}
+
+TEST(TurnCodec, AWorldPartGoesToBytesAndBack)
+{
+	ExpectRoundTrip(WorldPart {.turn = 7, .part = 1, .parts = 3, .bytes = {1, 2, 3, 250}});
+	ExpectRoundTrip(WorldPart {.turn = 7, .part = 0, .parts = 1, .bytes = {}});
+	const auto bytes = Encode(WorldPart {.turn = 0x01020304, .part = 2, .parts = 5, .bytes = {9}});
+	const std::vector<uint8_t> expected {k_Version, 6, 4, 3, 2, 1, 2, 0, 5, 0, 9};
+	EXPECT_EQ(bytes, expected);
+}
+
+TEST(TurnCodec, AWorldPartOutOfItsCountIsRefused)
+{
+	EXPECT_TRUE(Encode(WorldPart {.turn = 1, .part = 3, .parts = 3, .bytes = {}}).empty());
+	EXPECT_TRUE(
+	    Encode(WorldPart {.turn = 1, .part = 0, .parts = 1, .bytes = std::vector<uint8_t>(k_WorldPartBytes + 1)}).empty());
+	const std::vector<uint8_t> bad {k_Version, 6, 1, 0, 0, 0, 3, 0, 3, 0};
+	EXPECT_EQ(Decode(bad).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AWorldStateSplitsIntoPartsThatGoBackTogether)
+{
+	std::vector<uint8_t> state((k_WorldPartBytes * 2) + 17);
+	for (size_t i = 0; i < state.size(); ++i)
+	{
+		state[i] = static_cast<uint8_t>(i * 31);
+	}
+	const auto parts = SplitWorld(40, state);
+	ASSERT_EQ(parts.size(), 3u);
+	std::vector<uint8_t> joined;
+	for (size_t i = 0; i < parts.size(); ++i)
+	{
+		EXPECT_EQ(parts[i].turn, 40u);
+		EXPECT_EQ(parts[i].part, i);
+		EXPECT_EQ(parts[i].parts, 3u);
+		EXPECT_LE(parts[i].bytes.size(), k_WorldPartBytes);
+		EXPECT_FALSE(Encode(parts[i]).empty());
+		joined.insert(joined.end(), parts[i].bytes.begin(), parts[i].bytes.end());
+	}
+	EXPECT_EQ(joined, state);
+	// An empty state is one empty part
+	const auto none = SplitWorld(3, {});
+	ASSERT_EQ(none.size(), 1u);
+	EXPECT_TRUE(none[0].bytes.empty());
+}
+
+TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
+{
+	const auto bytes =
+	    Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {MiracleRequest {.seed = SpellSeedType::BeamExplosion}}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	const auto& block = std::get<CommandBlock>(*decoded.frame);
+	EXPECT_EQ(std::get<MiracleRequest>(block.actions.at(0)).seed, SpellSeedType::BeamExplosion);
+
+	// A seed number after the last seed of the game is refused
+	auto wrong = bytes;
+	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <map>
+#include <optional>
 #include <set>
 #include <unordered_map>
 #include <utility>
@@ -19,6 +20,7 @@
 
 #include <entt/core/fwd.hpp>
 #include <entt/entity/entity.hpp>
+#include <entt/entity/storage.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
@@ -80,7 +82,11 @@ private:
 	void Reset(size_t blockCount);
 
 	std::unordered_map<entt::id_type, const L3DMesh::Footprint*> _footprints;
-	std::unordered_map<entt::entity, Known> _known;
+	/// The known things by their entities. A look-up by an entity costs little, as the walk of the things does it for each
+	/// thing in each frame.
+	entt::storage<Known> _known;
+	/// The last model that FootprintOf found, as things of one model often come one after the other
+	std::optional<std::pair<entt::id_type, const L3DMesh::Footprint*>> _lastFootprint;
 	std::vector<LoosePrint> _rivers;
 	/// The prints of the things that show only as prints, the newest first
 	std::vector<LoosePrint> _groundPrints;

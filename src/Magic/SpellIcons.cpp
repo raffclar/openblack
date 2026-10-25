@@ -212,6 +212,39 @@ TapResult Tap(const IconCharge& icon, bool handReady, bool magicEnabled, bool on
 	return TapResult::Nothing;
 }
 
+bool MayStartRequestedCharge(const IconCharge& icon, bool magicEnabled, std::optional<float> siteChants)
+{
+	if (icon.charging || icon.seedHeld || !magicEnabled)
+	{
+		return false;
+	}
+	// The site gives what it has this turn; with nothing to give, only what the icon stored lets it start
+	if (siteChants.has_value() && *siteChants > 0.0f)
+	{
+		return true;
+	}
+	return icon.store != 0.0f;
+}
+
+bool ValidForRequest(const IconCharge& icon, bool functional, bool handReady, bool magicEnabled,
+                     std::optional<float> siteChants)
+{
+	return functional && (ReadyForHand(icon, handReady) || MayStartRequestedCharge(icon, magicEnabled, siteChants));
+}
+
+TapResult Request(const IconCharge& icon, bool handReady, bool magicEnabled, std::optional<float> siteChants)
+{
+	if (ReadyForHand(icon, handReady))
+	{
+		return TapResult::PutInHand;
+	}
+	if (MayStartRequestedCharge(icon, magicEnabled, siteChants))
+	{
+		return TapResult::StartedCharge;
+	}
+	return TapResult::Nothing;
+}
+
 uint32_t ClickPitch(size_t hand)
 {
 	return k_ClickPitches.at(std::min(hand, k_LastClickHand));

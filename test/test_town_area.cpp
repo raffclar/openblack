@@ -39,3 +39,21 @@ TEST(TownArea, ATownWithNothingInItHasAnEmptyBox)
 	EXPECT_EQ(fresh.min, glm::ivec2(0, 0));
 	EXPECT_FLOAT_EQ(town_area::Radius(fresh), 0.0f);
 }
+
+TEST(TownArea, AScriptGivesAGatheringPlaceAtItsMapPosition)
+{
+	// The place is kept at the map position of the text, so it is on the map grid
+	const auto place = map_coords::ScriptPlace(2208.89, 2978.04);
+	const auto gathering = town_area::GatheringPlaceFromScript(place);
+	ASSERT_TRUE(gathering.has_value());
+	EXPECT_EQ(gathering->x, map_coords::ToMetres(place.x));
+	EXPECT_EQ(gathering->y, map_coords::ToMetres(place.z));
+	EXPECT_EQ(map_coords::ToFixed(gathering->x), place.x);
+}
+
+TEST(TownArea, AScriptPlaceAtTheCornerOfTheMapIsNoGatheringPlace)
+{
+	// The town then finds its own gathering place when it first needs one
+	EXPECT_FALSE(town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(0.0, 0.0)).has_value());
+	EXPECT_TRUE(town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(0.0, 1.0)).has_value());
+}

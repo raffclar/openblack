@@ -648,6 +648,18 @@ void SimProvider::TurnEnded(uint32_t turn)
 		parts[name] = fmt::format("{:016x}", part);
 	}
 	Json value = {{"hash", fmt::format("{:016x}", synced.hash)}};
+	// A component with no registration is left out of the hash: tell of each name once, and show the names in the record
+	if (!synced.unregistered.empty())
+	{
+		value["unregistered"] = synced.unregistered;
+		if (const auto fresh = _unregisteredTold.Fresh(synced.unregistered); !fresh.empty())
+		{
+			if (const auto logger = spdlog::get("game"); logger != nullptr)
+			{
+				logger->error("{}", synced_state::UnregisteredLine(fresh));
+			}
+		}
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();

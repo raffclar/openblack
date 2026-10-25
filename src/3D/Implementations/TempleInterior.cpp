@@ -50,6 +50,7 @@
 #include "Camera/TemplePress.h"
 #include "Common/EventManager.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureCave.h"
 #include "ECS/Archetypes/GlowArchetype.h"
 #include "ECS/ChallengeRecords.h"
@@ -350,7 +351,7 @@ const std::vector<TemplePerson>& TempleInterior::GetPeople() const
 
 glm::mat4 TempleInterior::GetPlacement() const
 {
-	return glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
+	return glm::translate(glm::mat4(1.0f), _templePosition) * portable_math::EulerAngleY(_templeRotation.y);
 }
 
 void TempleInterior::SetInterface(gui::GameInterface* interface)
@@ -1070,7 +1071,7 @@ void TempleInterior::UpdateCaveTrophies(float seconds)
 	_magicScrollWritten = written;
 
 	const auto& points = meshes.Handle(creatureRoom)->GetExtraMetrics();
-	const auto temple = glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y);
+	const auto temple = glm::translate(glm::mat4(1.0f), _templePosition) * portable_math::EulerAngleY(_templeRotation.y);
 	// The belts follow how the creature fights as it is now
 	for (const auto& trophy : Choose(facts.creature->fightBalance, *_caveLearning))
 	{
@@ -1515,7 +1516,7 @@ std::optional<TempleCursorHit> TempleInterior::GetCursorHit() const
 		// The game picks along the ray through every room's mesh it draws, and from another room just the main room's
 		// doors
 		const auto toRoom =
-		    glm::inverse(glm::translate(glm::mat4(1.0f), _templePosition) * glm::eulerAngleY(_templeRotation.y));
+		    glm::inverse(glm::translate(glm::mat4(1.0f), _templePosition) * portable_math::EulerAngleY(_templeRotation.y));
 		const auto origin = glm::vec3(toRoom * glm::vec4(ray->origin, 1.0f));
 		const auto direction = glm::vec3(toRoom * glm::vec4(ray->focus - ray->origin, 0.0f));
 		auto& meshes = Locator::resources::value().GetMeshes();
@@ -1814,7 +1815,7 @@ void TempleInterior::Activate(TempleRoom room)
 	config.drawWater = false;
 
 	// Create temple entities
-	auto rotation = glm::eulerAngleY(_templeRotation.y);
+	auto rotation = portable_math::EulerAngleY(_templeRotation.y);
 	auto scale = glm::vec3(1.0f);
 
 	for (const auto& [roomType, assetName] : k_TempleInteriorParts)

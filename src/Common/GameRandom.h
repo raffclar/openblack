@@ -101,10 +101,17 @@ public:
 	/// How many numbers were drawn on the synced seed since the game started, for tools that compare two runs; 0 for a
 	/// source that does not count them
 	[[nodiscard]] virtual uint64_t GetSyncedDraws() const { return 0; }
+	/// Puts back the count of the synced draws, as a loaded world had it
+	virtual void SetSyncedDraws([[maybe_unused]] uint64_t draws) {}
 
 	[[nodiscard]] virtual GameRandomSeeds GetSeeds() const = 0;
 	/// Both are k_InitialSeed when the game starts and 0 from every map loaded, and saved games keep and restore them
 	virtual void SetSeeds(GameRandomSeeds seeds) = 0;
+
+	/// Puts the state back as it is when the program starts: both seeds k_InitialSeed, no particle stream, the C runtime
+	/// seed 1 and no synced draw counted. A network game that starts in a running program starts from this state, as the
+	/// game server does. A source that keeps no state does nothing.
+	virtual void Restart() {}
 
 	[[nodiscard]] virtual ParticleRandomStream GetParticleStream() const = 0;
 	virtual void SetParticleStream(ParticleRandomStream stream) = 0;

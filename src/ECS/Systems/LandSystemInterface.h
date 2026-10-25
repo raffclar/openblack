@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <chrono>
 #include <filesystem>
 #include <functional>
@@ -91,10 +93,19 @@ public:
 	/// Loads the network map for 32 gods on this computer alone, for tests: a round island with a citadel and a village in
 	/// each slot. The village comes from a land of the game for network play. Gives false when that land is not there.
 	virtual bool LoadGodsRingMap() = 0;
+	/// What the load of a saved land is for
+	enum class SavedLandUse : uint8_t
+	{
+		/// A saved game: the load starts a game. The players take their alignments from their profiles, and their
+		/// statistics note the alignments at the start.
+		SavedGame,
+		/// The world state of a game server: the world continues exactly as the server has it
+		WorldState,
+	};
 	/// Loads a saved game: the landscape of the saved land, then `restore` puts the saved entities in place of the land's
 	/// own. Gives whether the landscape loaded and `restore` gave true.
 	virtual bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-	                           const std::function<bool()>& restore) = 0;
+	                           const std::function<bool()>& restore, SavedLandUse use) = 0;
 	/// Loads the landscape that the map script of the land names
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
 
@@ -109,6 +120,9 @@ public:
 
 	/// How a new game on the first land starts: the start-of-game question, or its answer at once
 	virtual void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) = 0;
+	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
+	/// the player of this computer is the one human when the land loads.
+	virtual void SetHumansFromSession(bool fromSession) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

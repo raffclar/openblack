@@ -818,6 +818,9 @@ struct Command
 		/// The pointer moves onto the rope of the leash of the creature, tied to a thing, a quarter of the way from the
 		/// thing, as the mouse moves it
 		PointerOnRope,
+		/// The pointer moves onto the scenario's object (object) at a height (amount) over its place on the screen, as
+		/// the mouse moves it. Needs no creature
+		PointerOnObject,
 		/// The creature fizzes to a share (amount: 0 in sight, 1 out of sight) over some milliseconds (value), as a
 		/// script's fade does. It stays at that share.
 		SetFizz,
@@ -880,6 +883,8 @@ struct Command
 		/// The falling spell's film plays as a script's SET_AVI_SEQUENCE 2 starts it, with a copy of the player's first
 		/// creature over the film. Needs no creature of its own
 		PlayFallingSpellFilm,
+		/// The intro film plays full screen, as the game starts it at the start of a new game. Needs no creature
+		PlayIntroFilm,
 		/// The creature gets a glow on its left hand, its belly, its right hand and above its body, each of the power
 		/// that the value gives, as the creed powers give their glows
 		GiveHandGlows,
@@ -955,6 +960,14 @@ struct Command
 		/// The multiplayer front end opens over the temple's future room with the demonstration lobby, and goes to a
 		/// box or a page (value, by testbed_multiplayer::Stage). Needs no creature.
 		OpenMultiplayerBox,
+		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
+		/// put on the last of it. Needs no creature.
+		BuildWorshipSites,
+		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
+		/// takes the scenario's object (object). Then the player reports its hand at the point (point), so high above
+		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
+		/// creature.
+		OtherGodHand,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1197,6 +1210,8 @@ struct Scenario
 void AddVillageTotemScenarios(std::vector<Scenario>& all);
 /// The boxes of the multiplayer front end over the temple's future room, with the demonstration lobby
 void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
+/// The hands of the other gods of a network game, as this computer shows them, with no game server
+void AddOtherGodScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up

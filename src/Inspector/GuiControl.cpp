@@ -46,6 +46,10 @@ Json WindowJson(const WindowInfo& window)
 	{
 		json["selected"] = window.selected;
 	}
+	if (!window.lines.empty())
+	{
+		json["lines"] = window.lines;
+	}
 	return json;
 }
 
@@ -81,8 +85,9 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeGuiProvider(GuiTarg
 	                              "multiplayer, the Creature Cave): name, kind, open; the menu's page (or question), the "
 	                              "multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or "
 	                              "message: its text), "
-	                              "the controls of the game's dialogs that can be pressed by name, and the skip box's "
-	                              "answer picked",
+	                              "the controls of the game's dialogs that can be pressed by name, the skip box's "
+	                              "answer picked, and the multiplayer lines (the games of game_list, or the last 10 "
+	                              "lines of the room's chat)",
 	               .parameters = {},
 	               .kind = ResultKind::List,
 	               .needsNear = false},

@@ -81,10 +81,22 @@ std::optional<glm::vec3> creature_scars::BellyOf(entt::entity creature)
 
 void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 direction, uint8_t kind, uint8_t column)
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value() ||
-	    !Locator::creatureSkinSystem::has_value())
+	if (!Locator::creatureSkinSystem::has_value())
 	{
 		return;
+	}
+	if (const auto wound = WoundAlong(creature, from, direction, kind, column))
+	{
+		Locator::creatureSkinSystem::value().AddWound(creature, *wound);
+	}
+}
+
+std::optional<openblack::creature_marks::Mark> creature_scars::WoundAlong(entt::entity creature, glm::vec3 from,
+                                                                          glm::vec3 direction, uint8_t kind, uint8_t column)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return std::nullopt;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* mesh = registry.TryGet<const Mesh>(creature);
@@ -92,7 +104,7 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 	auto& meshes = Locator::resources::value().GetMeshes();
 	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
 	{
-		return;
+		return std::nullopt;
 	}
 	// The line meets the skin as the body is posed at the end of its newest game turn
 	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
@@ -109,12 +121,11 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 	const auto hit = posed_model::NearestSkinHit(registry, creature, model, placement, bones, from, unit);
 	if (!hit.has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto texel = creature_marks::scar::TexelAt(hit->uvs, hit->hit.s, hit->hit.t);
-	Locator::creatureSkinSystem::value().AddWound(
-	    creature,
-	    {.u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0, .type = kind, .column = column});
+	return creature_marks::Mark {
+	    .u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0, .type = kind, .column = column};
 }
 
 void creature_scars::BurnOnCatching(entt::entity creature)

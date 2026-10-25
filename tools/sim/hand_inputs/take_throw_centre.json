@@ -1,0 +1,12 @@
+[
+{"frame": 10, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 512]}},
+{"frame": 40, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 512]}},
+{"frame": 41, "event": {"kind": "button_down", "timing": "mouse", "button": 3}},
+{"frame": 101, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 470]}},
+{"frame": 121, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 420]}},
+{"frame": 141, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 380]}},
+{"frame": 142, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 300]}},
+{"frame": 143, "event": {"kind": "pointer", "timing": "mouse", "position": [640, 220]}},
+{"frame": 144, "event": {"kind": "button_up", "timing": "mouse", "button": 3}},
+{"frame": 200, "event": {"kind": "pointer", "timing": "mouse", "position": [600, 500]}}
+]

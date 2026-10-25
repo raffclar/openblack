@@ -13,6 +13,7 @@
 <body>
 <main id="chooser">
   <h1>openblack</h1>
+  <p class="build">Build <a class="build-link" target="_blank" rel="noopener">unknown</a></p>
   <p>openblack plays Black &amp; White in this browser tab. It needs the folder of your own install of Black &amp; White.</p>
   <p class="privacy">The game data stays on this computer. The page reads the files in this tab and sends nothing to a
     server. The browser can show a message such as "Upload files to this site". That message is the standard text of the
@@ -49,6 +50,11 @@
   <summary>Game log</summary>
   <pre id="log"></pre>
 </details>
+<!-- While the game plays, this small line in the top right corner names the build and opens the game log -->
+<aside id="build-badge" hidden>
+  <a class="build-link" target="_blank" rel="noopener">unknown</a>
+  <button id="log-toggle" type="button">Log</button>
+</aside>
 <script src="launcher.js"></script>
 </body>
 </html>

@@ -35,6 +35,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/BeingEatenRules.h"
 #include "ECS/ClipSoundPlayer.h"
@@ -1757,7 +1758,7 @@ void AnimalSystem::FallDying(entt::entity entity, const Animal& animal)
 	constexpr glm::vec3 k_DyingTumble {5.0f, 0.0f, 0.0f};
 	const auto step = Metres(animal.move.step);
 	const float speed = glm::length(step) * k_TurnsPerSecond;
-	const glm::vec3 forward(std::cos(animal.heading), 0.0f, std::sin(animal.heading));
+	const glm::vec3 forward(portable_math::Cos(animal.heading), 0.0f, portable_math::Sin(animal.heading));
 	Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = forward * speed, .spin = k_DyingTumble});
 }
 
@@ -2388,10 +2389,13 @@ void AnimalSystem::ShowTurnEnd()
 {
 	auto& registry = EntityRegistry();
 	registry.Each<const Animal, Transform>([&registry](entt::entity entity, const Animal& animal, Transform& transform) {
-		// What carries it, holds it or moves it in the physics places it
+		// What carries it, holds it or moves it in the physics places it. If nothing does, the turn sees it at the place of
+		// its last turn, upright and turned to its heading, as the game sees each thing by its own angle. Only the frames
+		// draw the tilt and the lean on the slope.
 		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			transform.position = animal.position;
+			transform.rotation = animals::Orientation(animal.heading, 0.0f);
 		}
 	});
 }
@@ -2432,7 +2436,7 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 				};
 				const float alongX = animals::SlopeLift(landAt(turned[0]), at.y);
 				const float alongZ = animals::SlopeLift(landAt(turned[2]), at.y);
-				transform.rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(glm::eulerAngleZ(bank));
+				transform.rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(portable_math::EulerAngleZ(bank));
 			}
 		}
 		auto* pose = registry.TryGet<AnimalPose>(entity);

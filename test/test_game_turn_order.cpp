@@ -193,7 +193,8 @@ TEST(GameTurnOrder, TheLateStepsOfTheTurnComeInTheGamesOrder)
 {
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Climates, Step::HeldThing));
-	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::Rewards));
+	EXPECT_TRUE(recorder.Before(Step::HeldThing, Step::PlayerSparkles));
+	EXPECT_TRUE(recorder.Before(Step::PlayerSparkles, Step::Rewards));
 	EXPECT_TRUE(recorder.Before(Step::Rewards, Step::Guidance));
 	EXPECT_TRUE(recorder.Before(Step::Guidance, Step::CameraChecks));
 	EXPECT_TRUE(recorder.Before(Step::CameraChecks, Step::BuildingPieces));
@@ -239,6 +240,15 @@ TEST(GameTurnOrder, TheTotemsTakeTheirTurnWithTheirTowns)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::Players, Step::VillageTotems));
 	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::PlayerAlignment));
+}
+
+TEST(GameTurnOrder, TheTeleportTravellersAreDroppedAfterTheTownsAndBeforeTheComputerPlayers)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::VillageTotems, Step::Teleports));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::ComputerPlayers));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Living));
+	EXPECT_TRUE(recorder.Before(Step::Teleports, Step::Reactions));
 }
 
 TEST(GameTurnOrder, TheCreaturesHelpPictureAndAlignmentArePartOfTheirOwnTurn)
