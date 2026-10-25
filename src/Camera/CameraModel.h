@@ -39,6 +39,9 @@ public:
 		glm::vec3 origin;
 		glm::vec3 focus;
 		std::chrono::microseconds duration;
+		/// The model asks for this place at each frame, and the camera sets off for it again at each step of the frame.
+		/// A flight sets off once.
+		bool eachStep {false};
 	};
 
 	struct FlightPath
@@ -80,6 +83,9 @@ public:
 
 	virtual std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) = 0;
 	virtual void HandleActions(std::chrono::microseconds dt) = 0;
+	/// Whether the model eases with no input of the player, so that it can step at each fixed step of the input (see
+	/// input_steps), none to a few a frame. A model that takes the input of the frame steps once a frame.
+	[[nodiscard]] virtual bool StepsWithTheInput() const { return false; }
 	/// Reads the keys of the camera after the camera moved in this frame. Their steps move the camera in the next frame.
 	virtual void HandleKeys(std::chrono::microseconds /*dt*/) {}
 	/// Flies to a place. The way goes by a point half way, which rises by the rise times the distance across

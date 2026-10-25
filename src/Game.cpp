@@ -612,6 +612,16 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	};
 }
 
+/// An ease of the hand takes the fixed steps of the input of this frame (see input_steps)
+template <typename Ease>
+void StepEase(Ease& ease)
+{
+	for (uint32_t i = 0; i < Locator::time::value().GetInputSteps().count; ++i)
+	{
+		ease.Update(input_steps::k_StepSeconds);
+	}
+}
+
 } // namespace
 
 const std::string k_WindowTitle = "openblack";
@@ -1317,6 +1327,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	};
 	ecs::systems::GestureSystemInterface::Frame frame {
 	    .seconds = deltaSeconds,
+	    .steps = Locator::time::value().GetInputSteps(),
 	    .cursor = static_cast<glm::vec2>(_mousePosition),
 	    // Not over a debug window, nor while a cut scene has the screen
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
@@ -2340,6 +2351,8 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 	case Step::FrameTime:
 		// The frame's game time: none while paused, quicker or slower with the game speed
 		Locator::time::value().UpdateFrame();
+		// The steps of a sixtieth of a second that the hand, the strokes, the throws and the camera take in this frame
+		Locator::time::value().StepInput(InputStepTime(frame.deltaTime));
 		break;
 	case Step::FilmClock:
 		// The clock of a full-screen video counts the frames that are due by the real clock
@@ -2671,7 +2684,8 @@ void Game::UpdateCamera()
 		{
 			scriptCamera->PassGameTime(Locator::time::value().GetFrameGameTime());
 		}
-		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()));
+		camera.Update(std::chrono::duration_cast<std::chrono::microseconds>(CameraStepTime()),
+		              Locator::time::value().GetInputSteps());
 	}
 	// The lens glides on the game's time, and holds while the player is in the temple, whose own lens it has
 	if (!(Locator::temple::has_value() && Locator::temple::value().Active()))
@@ -2979,9 +2993,8 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 					// In the temple, the hand goes where the cursor meets the room, turning to its surface
 					if (const auto hit = Locator::temple::value().GetCursorHit())
 					{
-						const auto seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count();
 						_handTempleNormal.SetDestination(hit->normal, k_HandTempleTurnTime);
-						_handTempleNormal.Update(seconds);
+						StepEase(_handTempleNormal);
 						const auto normal = _handTempleNormal.GetValue();
 						_cursorWorldPosition = hit->point;
 						intersectionTransform.position = hit->point;
@@ -3174,8 +3187,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 				else
 				{
 					OrientHand(handTransform, glm::mat3(glm::eulerAngleY(camera.GetRotation().y) * modelRotationCorrection),
-					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)),
-					           std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
+					           _handSurfaceUp.value_or(glm::vec3(0.0f, 1.0f, 0.0f)));
 				}
 				PlaceHand(handTransform, std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 				TraceHand("navigation", handTransform.position);
@@ -3207,8 +3219,9 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 						}
 						if (hands.GetCreature().has_value())
 						{
-							_handOnCreature = hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
-							                               static_cast<float>(screenSize.x), HandStepSeconds());
+							_handOnCreature =
+							    hands.Update(rayOrigin, rayDirection, static_cast<glm::vec2>(_mousePosition),
+							                 static_cast<float>(screenSize.x), Locator::time::value().GetInputSteps());
 						}
 						if (_handOnCreature.has_value())
 						{
@@ -3266,6 +3279,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 						        HandAnimation::SizeAtDistance(x87::Distance<x87::SumOrder::Zyx>(camera.GetOrigin(), land)),
 						    .seconds = std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count(),
 						    .gameMs = static_cast<uint32_t>(std::lround(gameTime.count())),
+						    .inputSteps = Locator::time::value().GetInputSteps(),
 						    .nowMs = machine_clock::Ticks(),
 						    .turn = Locator::time::value().GetTurn(),
 						});
@@ -5740,7 +5754,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			    glm::clamp(glm::max(roomDistance - k_HandTempleGap, 1.0f), k_HandTempleMinDistance, k_HandTempleMaxDistance);
 			const auto easeTime = _handHoverZoomer.GetDestination() <= target ? 0.4f : 0.2f;
 			_handHoverZoomer.SetDestination(target, easeTime);
-			_handHoverZoomer.Update(deltaSeconds);
+			StepEase(_handHoverZoomer);
 			// The hand's distance from the camera
 			_handDistance = _handHoverZoomer.GetValue();
 		}
@@ -5809,7 +5823,7 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 			}
 		}
 		_handHoldZoomer.SetDestination(glm::distance(eye, _handPosition), k_HandHoldTime);
-		_handHoldZoomer.Update(deltaSeconds);
+		StepEase(_handHoldZoomer);
 		const auto landDistance = _cursorWorldPosition.has_value() ? glm::distance(eye, *_cursorWorldPosition) : handReach;
 		_handDistance = glm::clamp(glm::min(_handHoldZoomer.GetValue(), landDistance), k_HandMinDistance, handReach);
 		_handHoverZoomer.Reset(_handDistance);
@@ -5876,7 +5890,11 @@ void Game::PlaceHand(ecs::components::Transform& handTransform, float deltaSecon
 		const bool pulling = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsPulling();
 		const bool watchesFight = dynamic_cast<const FightCameraModel*>(&camera.GetModel()) != nullptr;
 		const bool offers = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().OffersToCreature();
-		hand_feel::EaseHover(_handHoverZoomer, hover.target, deltaSeconds, pulling, watchesFight || offers);
+		// The hover eases at the fixed steps of the input
+		for (uint32_t i = 0; i < Locator::time::value().GetInputSteps().count; ++i)
+		{
+			hand_feel::EaseHover(_handHoverZoomer, hover.target, input_steps::k_StepSeconds, pulling, watchesFight || offers);
+		}
 		_handDistance = glm::clamp(glm::min(_handHoverZoomer.GetValue(), hover.limit), k_HandMinDistance, handReach);
 	}
 	// The hand is on the line of sight through the cursor at its distance, or on the fight's sparkle
@@ -6076,8 +6094,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	_interface->SetHandTricons(tricons);
 }
 
-void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-                      float deltaSeconds)
+void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp)
 {
 	using namespace hand_orientation;
 	const auto& camera = Locator::camera::value();
@@ -6171,7 +6188,7 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 			}
 			_handUp.SetDestination(hand_feel::UnitUp(up), k_UpEaseSeconds);
 		}
-		_handUp.Update(deltaSeconds);
+		StepEase(_handUp);
 	}
 	_handUpWasHeld = cameraUp;
 
@@ -6186,14 +6203,29 @@ void Game::OrientHand(ecs::components::Transform& handTransform, const glm::mat3
 	handTransform.rotation = glm::length(up) > 0.0f ? StandOnSlope(onLevelLand, _handHeading, up) : onLevelLand;
 }
 
+bool Game::ScriptHoldsCamera() const
+{
+	return Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
+	       Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
+}
+
 std::chrono::milliseconds Game::CameraStepTime() const
 {
 	const auto& time = Locator::time::value();
-	const bool scripted = Locator::cinematicDirectorSystem::has_value() &&
-	                      Locator::cinematicDirectorSystem::value().IsWideScreenOn() &&
-	                      Locator::cinematicDirectorSystem::value().GetWideScreenOwner() != 0;
 	const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), scripted, insideTemple);
+	return ecs::systems::CameraStep(time.GetFrameRealTime(), time.GetFrameGameTime(), ScriptHoldsCamera(), insideTemple);
+}
+
+std::chrono::microseconds Game::InputStepTime(std::chrono::microseconds frameTime) const
+{
+	// The steps of the input go by the time of this frame: its real time, or its game time while a script holds the
+	// widescreen, as the camera's step does
+	const bool insideTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	if (ScriptHoldsCamera() && !insideTemple)
+	{
+		return std::chrono::duration_cast<std::chrono::microseconds>(Locator::time::value().GetFrameGameTime());
+	}
+	return frameTime;
 }
 
 float Game::HandStepSeconds() const

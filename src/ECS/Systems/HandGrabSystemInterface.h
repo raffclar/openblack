@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "Common/InputSteps.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -49,6 +50,8 @@ public:
 		/// The frame's time: the clock's for the hand's fades, the game's for the spring
 		float seconds {0.0f};
 		uint32_t gameMs {0};
+		/// The steps of the player's input that the frame takes
+		input_steps::Steps inputSteps {input_steps::Steps::One()};
 		/// The clock now, and the game's turn
 		uint32_t nowMs {0};
 		uint32_t turn {0};

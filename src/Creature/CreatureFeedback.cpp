@@ -38,16 +38,6 @@ BodyPart creature_feedback::NearestPart(const glm::vec3& touch, std::span<const 
 	return static_cast<BodyPart>(best);
 }
 
-std::optional<float> creature_feedback::Pace(float& sinceStep, float frameMs)
-{
-	sinceStep += frameMs;
-	if (sinceStep < 1000.0f / k_StepsPerSecond)
-	{
-		return std::nullopt;
-	}
-	return std::exchange(sinceStep, 0.0f);
-}
-
 float creature_feedback::StrokeWaitMs(float sum)
 {
 	return (1.0f - sum) * k_StrokeWaitMs;

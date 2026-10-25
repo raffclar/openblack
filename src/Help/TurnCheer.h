@@ -21,7 +21,8 @@ namespace openblack::help::turn_cheer
 
 /// How fast the camera turns at full speed, in radians a second: anything faster counts as full speed
 constexpr float k_FullSpeed = 7.0f;
-/// How much of the way the camera's measured turning speed moves to this frame's speed, each frame
+/// How much of the way the camera's measured turning speed moves to the speed of the last step, at each step of a
+/// sixtieth of a second (the game did it once a frame at the 60 Hz screen refresh)
 constexpr float k_SpeedSmoothing = 0.4f;
 /// A cheer waits for more than this many game turns since the last
 constexpr uint32_t k_TurnsBetweenCheers = 20;
@@ -36,6 +37,17 @@ constexpr int32_t k_Cheers = 14;
 /// The camera's turning speed, in radians a second, after a frame that turned it by an angle (none when the player
 /// didn't turn it, which slows the measure down towards still)
 [[nodiscard]] float SmoothSpeed(float speed, float turned, float seconds);
+
+/// The turn of the camera and the time that the measure did not take in yet: the frames that take no step of the input
+struct SpeedSinceStep
+{
+	float turned {0.0f};
+	float seconds {0.0f};
+};
+/// The camera's turning speed after a frame of some seconds that turned it by an angle and takes some steps of the
+/// input. A frame with no step keeps its turn and time for the next step. Each step moves the measure to the speed since
+/// the last step.
+[[nodiscard]] float MeasureSpeed(float speed, SpeedSinceStep& since, float turned, float seconds, uint32_t steps);
 
 /// Whether the advisors are cheering, and the game turns of their last cheer and of their last best praise
 struct Cheering

@@ -19,6 +19,8 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Common/InputSteps.h"
+
 /// The hand's path as the game records it for its gestures. The cursor is sampled about 34 times a second whether or
 /// not a button is held, into a buffer of the last 80 points. As each point comes in, the path's corners are found: the
 /// point between the last corner and the newest where the path turns most, if it turns enough, merged into the corner
@@ -46,6 +48,11 @@ constexpr float k_SmallStretchPixels = 50.0f;
 constexpr int k_StretchPoints = 8;
 /// The least turn that makes a corner: three thirty-seconds of a half turn, about 17 degrees
 constexpr float k_CornerTurn = std::numbers::pi_v<float> * 3.0f / 32.0f;
+
+/// The parts of a frame at which the cursor is sampled, from the steps of the input that the frame takes. Each step adds
+/// its time to the time since the last sample. A step that takes it past the sample time takes a sample and starts the
+/// time again from nothing, so at 60 steps a second a sample comes at every second step.
+[[nodiscard]] std::vector<float> SamplePoints(float& sinceSample, const input_steps::Steps& steps);
 
 /// What a recorded point is to the path
 enum class KeyType : uint8_t

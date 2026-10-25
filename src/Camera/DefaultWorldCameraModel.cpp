@@ -45,6 +45,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "EngineConfig.h"
 #include "FightView.h"
 #include "Help/HelpProfile.h"
@@ -763,7 +764,7 @@ DefaultWorldCameraModel::ComputeUpdateReturnInfo(LimitsMoved moved, std::chrono:
 		const auto seconds =
 		    _selfTiltEase ? k_SelfTiltEaseSeconds : camera_limits::EaseSeconds(sinceFlight, moved.pushed, moved.focusMoved);
 		return {{GetTargetOrigin(), GetTargetFocus(),
-		         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(seconds))}};
+		         std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(seconds)), true}};
 	}
 	if (t > k_MinimalCameraAnimationDuration / 2)
 	{
@@ -1117,11 +1118,12 @@ void DefaultWorldCameraModel::HandleActions(std::chrono::microseconds dt)
 	}
 	SendHelpEvents(_helpEvents);
 	// The measure of how fast the player turns the camera, which the advisors' cheering of the turning lesson goes by,
-	// takes in this frame's turn, or slows towards still
+	// takes in this frame's turn, or slows towards still, at each step of the input
 	if (const auto seconds = std::chrono::duration<float>(dt).count(); seconds > 0.0f && Locator::cameraHelpSystem::has_value())
 	{
+		const auto steps = Locator::time::has_value() ? Locator::time::value().GetInputSteps().count : 1u;
 		auto& turnSpeed = Locator::cameraHelpSystem::value().Get().turnSpeed;
-		turnSpeed = help::turn_cheer::SmoothSpeed(turnSpeed, _turnedThisFrame.value_or(0.0f), seconds);
+		turnSpeed = help::turn_cheer::MeasureSpeed(turnSpeed, _turnSinceStep, _turnedThisFrame.value_or(0.0f), seconds, steps);
 	}
 	UpdateIconFrame(onFight);
 }

@@ -130,7 +130,6 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandOnCreature::sum>("sum")
 	    .Field<&components::HandOnCreature::clocks>("clocks")
 	    .Field<&components::HandOnCreature::lastPart>("lastPart")
-	    .Field<&components::HandOnCreature::sinceStepMs>("sinceStepMs")
 	    .Field<&components::HandOnCreature::lastCursor>("lastCursor")
 	    .Field<&components::HandOnCreature::lastPoint>("lastPoint")
 	    .Field<&components::HandOnCreature::wasOnBody>("wasOnBody")
@@ -145,7 +144,8 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandOnCreature::frameCursor>("frameCursor")
 	    .Field<&components::HandOnCreature::distance>("distance")
 	    .Field<&components::HandOnCreature::distanceStarted>("distanceStarted")
-	    .Field<&components::HandOnCreature::shownAt>("shownAt");
+	    .Field<&components::HandOnCreature::shownAt>("shownAt")
+	    .Field<&components::HandOnCreature::shownDistance>("shownDistance");
 	Reflect<components::HandLastFeedback>(context).Field<&components::HandLastFeedback::sum>("sum");
 	Reflect<components::HandStillness>(context)
 	    .Field<&components::HandStillness::stillTurns>("stillTurns")

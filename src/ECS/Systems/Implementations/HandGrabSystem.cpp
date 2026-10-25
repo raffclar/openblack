@@ -1506,10 +1506,10 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	grab->lowering = grab->hold.loweringMultiplier * size.height;
 	// While it holds something its twist is made ready again, for when it lets go
 	grab->releaseSpinMs = static_cast<int32_t>(hand_grab::k_ReleaseSpinDelayMs);
-	grab->lastTarget = frame.target;
+	const auto lastTarget = std::exchange(grab->lastTarget, frame.target);
 	auto target = offered + glm::vec3(0.0f, grab->rise, 0.0f);
 	// The game time spent holding is counted whether the spring is on or not, scooping too
-	grab->spring.Count(frame.gameMs, frame.seconds * 1000.0f);
+	grab->spring.Count(frame.gameMs);
 	if (grab->scoopSource != entt::null && Exists(grab->scoopSource))
 	{
 		// While the hand scoops, it stays where it started. Its height is the land, plus the height of the source, plus
@@ -1523,7 +1523,8 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	{
 		// The spring's own throw takes the place of a recorded one as soon as it moves the hand
 		grab->recordedThrow.reset();
-		grab->spring.Step(target);
+		// The hand went from its last place to this one in the frame, with its rise and the pull of the offer as now
+		grab->spring.Step(lastTarget + (target - frame.target), target, frame.inputSteps);
 		grab->lastHand = grab->spring.Position();
 		return grab->spring.Position();
 	}
