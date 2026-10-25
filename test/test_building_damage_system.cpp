@@ -78,12 +78,12 @@ std::vector<std::array<damage::Corner, 3>> Wall(int width, int height, float ste
 class MiddleRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override
 	{
 		++draws;
 		return n / 2;
 	}
-	float GameFloatRand(float x) override
+	float SyncedFloatRand(float x, DrawSite /*site*/) override
 	{
 		++draws;
 		return x / 2.0f;

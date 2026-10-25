@@ -92,6 +92,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -3952,6 +3955,16 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->traceDrawsPath.has_value())
+	{
+		if (!draw_trace::Start(Locator::gameRandom::value(), *_simulation->traceDrawsPath))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+			                    _simulation->traceDrawsPath->string());
+		}
+	}
+#endif
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);

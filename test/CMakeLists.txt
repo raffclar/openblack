@@ -1758,3 +1758,8 @@ target_link_libraries(test_hand_cast_commands PRIVATE edt psys)
 openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
 openblack_setup_and_add_test(test_script_start test_script_start.cpp)
 target_link_libraries(test_script_start PRIVATE ScriptLibrary)
+openblack_setup_and_add_test(test_draw_trace test_draw_trace.cpp)
+add_test(NAME test_draw_trace_compare
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
+)
