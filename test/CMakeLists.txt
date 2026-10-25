@@ -1781,3 +1781,9 @@ target_link_libraries(test_script_start PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_help_reports test_help_reports.cpp)
 openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
 openblack_setup_and_add_test(test_creature_sent_reactions test_creature_sent_reactions.cpp)
+openblack_setup_and_add_test(test_local_input_player test_local_input_player.cpp)
+openblack_setup_and_add_test(test_draw_trace test_draw_trace.cpp)
+add_test(NAME test_draw_trace_compare
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
+)

@@ -162,7 +162,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-fields", "Tools: as --sim-frame-guard, and the fields of the components too.")
 		("sim-frame-guard-systems", "Tools: as --sim-frame-guard, and the saved state of each system too. A system can keep state that the turns read outside the registry.")
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
-		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>());
+		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
+		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
@@ -412,6 +413,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			if (result.count("sim-play-commands") != 0)
 			{
 				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
+			}
+			if (result.count("sim-trace-draws") != 0)
+			{
+				simulation.traceDrawsPath = std::filesystem::path(result["sim-trace-draws"].as<std::string>());
 			}
 			args.simulation = simulation;
 		}

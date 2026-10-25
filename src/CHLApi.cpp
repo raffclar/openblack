@@ -57,6 +57,9 @@
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -916,6 +919,17 @@ void Pushb(bool value)
 
 void CHLApi::TaskStopped(uint32_t task)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace keeps the turn of each stop: a stop changes the waits of the tasks before it
+	if (auto* trace = Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace() : nullptr;
+	    trace != nullptr)
+	{
+		const auto& tasks = Locator::vm::value().GetTasks();
+		const auto found = tasks.find(task);
+		trace->TaskStopped(found == tasks.end() ? fmt::format("{}", task)
+		                                        : fmt::format("{} {} {}", task, found->second.filename, found->second.name));
+	}
+#endif
 	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
 	ReleaseDialogue(task);
 	auto& director = Locator::cinematicDirectorSystem::value();
