@@ -79,6 +79,7 @@
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1054,6 +1055,10 @@ void PrepareNetworkLand(uint32_t seed)
 	if (Locator::particleSystem::has_value())
 	{
 		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetFreshIdsAtNextReset();
 	}
 	if (Locator::gameRandom::has_value())
 	{

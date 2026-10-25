@@ -1959,3 +1959,20 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	EXPECT_EQ(animals.wentTo, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
 	Locator::animalSystem::reset();
 }
+
+TEST_F(Reactions, ANetworkLandStartsTheIdsOfTheReactionsAgain)
+{
+	const auto first = _reactions.Create(Miracle());
+	const auto second = _reactions.Create(Miracle());
+	EXPECT_NE(first, second);
+	// A plain new land keeps the count of the ids
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
+	// A network land starts them again, so that each computer gives the same ids
+	_reactions.SetFreshIdsAtNextReset();
+	_reactions.Reset();
+	EXPECT_EQ(_reactions.Create(Miracle()), first);
+	// Only the next reset does it
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
+}

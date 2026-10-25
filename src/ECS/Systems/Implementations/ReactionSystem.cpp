@@ -1936,6 +1936,10 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 void ReactionSystem::Reset()
 {
 	_reactions.clear();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;
