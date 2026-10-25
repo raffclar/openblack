@@ -74,6 +74,9 @@ public:
 	virtual void SetReady(bool ready) = 0;
 	/// The player leaves the network game
 	virtual void Leave() = 0;
+	/// The end box of a decided game opened: the game server stops the turns of the game. When the last turn came, the
+	/// clock of this computer stops, as a pause stops it.
+	virtual void StopGame() {}
 	/// The land, the seed and the start of the server's world, one time: for a join from the front end when the server
 	/// starts the game, and for a join from the command line when the server lets the player in. None before that.
 	[[nodiscard]] virtual std::optional<game_socket::Start> TakeStart() = 0;

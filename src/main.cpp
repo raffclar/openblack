@@ -154,6 +154,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
+		("sim-temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (for example 1:300, the player from 0). Each computer of a network game needs the same switch.", cxxopts::value<std::string>())
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
 		("sim-checksums", "Tools: write the checksum of the synced world at the end of each turn to this file, as JSON lines (- for the standard output, as the web build needs). Two builds that play the same land, seed and commands must write the same lines.", cxxopts::value<std::string>())
 		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
@@ -386,6 +387,11 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			if (result.count("sim-temple-loss") != 0)
+			{
+				simulation.settings.templeLoss =
+				    openblack::sim_run::ParseTempleLoss(result["sim-temple-loss"].as<std::string>());
+			}
 			if (result.count("sim-checksums") != 0)
 			{
 				simulation.checksumsPath = std::filesystem::path(result["sim-checksums"].as<std::string>());

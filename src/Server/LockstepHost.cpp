@@ -148,6 +148,13 @@ void LockstepHost::Text(ConnectionId connection, std::string_view text)
 		_sockets.Close(connection, server_close::k_Normal);
 		_peers.erase(connection);
 	}
+	else if (std::holds_alternative<game_socket::StopRequest>(*frame))
+	{
+		if (peer.joined)
+		{
+			StopTurns();
+		}
+	}
 	else if (const auto* reply = std::get_if<game_socket::StartReply>(&*frame))
 	{
 		StartReply(connection, peer, *reply);
@@ -284,6 +291,10 @@ void LockstepHost::Resume(ConnectionId connection, Peer& peer, const game_socket
 	}
 	Log(spdlog::level::info,
 	    fmt::format("The player of slot {} is back from turn {}; the server is at turn {}", seat, resume.turn, _turnsDone));
+	if (_stoppedAfter.has_value())
+	{
+		SendTo(connection, game_socket::GameStop {.turn = *_stoppedAfter});
+	}
 	if (wasAway)
 	{
 		Broadcast(game_socket::PlayerState {.slot = seat, .state = game_socket::PlayerState::State::Back});
@@ -594,6 +605,12 @@ void LockstepHost::StartGame()
 	_started = true;
 	auto start = _settings.start;
 	start.turn = _turnsDone;
+	// Every computer names the god of a slot by the name of its player
+	start.names.clear();
+	for (const auto& seat : _seats)
+	{
+		start.names.push_back(seat.state == SeatState::Taken ? seat.name : std::string());
+	}
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
 	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
@@ -634,17 +651,31 @@ bool LockstepHost::Paused() const
 	return _started && !AnyGodConnected();
 }
 
+void LockstepHost::StopTurns()
+{
+	// The first request stops the turns. The turns closed before it are the last turns of the game.
+	if (!_started || _stoppedAfter.has_value() || _turnsDone == 0)
+	{
+		return;
+	}
+	_stoppedAfter = _turnsDone - 1;
+	Log(spdlog::level::info, fmt::format("The game is decided: the turns of the game stop after turn {}", *_stoppedAfter));
+	Broadcast(game_socket::GameStop {.turn = *_stoppedAfter});
+}
+
 bool LockstepHost::GameOver() const
 {
-	return _started && _leaving.empty() && std::ranges::none_of(_seats, [](const Seat& seat) {
+	// After the turns stop, the defeat of a god that left comes at no turn
+	return _started && (_leaving.empty() || _stoppedAfter.has_value()) && std::ranges::none_of(_seats, [](const Seat& seat) {
 		       return seat.state == SeatState::Taken || seat.state == SeatState::Away;
 	       });
 }
 
 bool LockstepHost::HasTurn(uint32_t /*turn*/) const
 {
-	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more
-	return _started && (AnyGodConnected() || !_leaving.empty());
+	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more. No turn comes
+	// after the turns of the game stop.
+	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }
 
 std::vector<player_commands::Command> LockstepHost::TakeTurn(uint32_t turn)

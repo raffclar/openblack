@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -408,4 +409,24 @@ TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
 	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
+}
+
+// After the game is decided, the turn does only the input of the players, the turn count and the steps after the turn
+TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
+{
+	TurnRecorder recorder;
+	PlayTurn([&recorder](Step step) { recorder(step); }, true);
+	const std::vector<Step> expected {Step::DrawnPlaces,      Step::PlayerCommands, Step::HandStillness, Step::HandInterface,
+	                                  Step::ChimneySmoke,     Step::Clock,          Step::RealWeather,   Step::WalkerLookahead,
+	                                  Step::InfluenceTurnEnd, Step::SyncChecksum,   Step::RunRecord};
+	EXPECT_EQ(recorder.Steps(), expected);
+}
+
+// A step with no stage between two steps of the players' turns is part of the players' turns
+TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
+{
+	const auto index =
+	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
+	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
+	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
 }

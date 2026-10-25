@@ -30,6 +30,7 @@
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LivingListPlace.h"
+#include "ECS/Components/Temple.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Map.h"
 #include "ECS/RealWeatherLand.h"
@@ -388,6 +389,28 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 	}
 }
 
+namespace
+{
+/// Tests: the temple of the player starts its destruction, as when its heart loses the last of its life
+void StartTempleLoss(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::optional<entt::entity> temple;
+	registry.Each<const ecs::components::Temple>([&temple, player](entt::entity entity, const ecs::components::Temple& each) {
+		if (each.owner == player && !temple.has_value())
+		{
+			temple = entity;
+		}
+	});
+	if (temple.has_value())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Test: the temple of player {} starts its destruction at turn {}",
+		                   static_cast<int>(player), Locator::time::value().GetTurn());
+		Locator::templeDestructionSystem::value().Start(*temple);
+	}
+}
+} // namespace
+
 void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 {
 	using game_turn::Step;
@@ -490,6 +513,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		}
 		break;
 	case Step::Players:
+		// Tests: the temple of a player starts its destruction at a turn, on every computer with the same switch
+		if (const auto& loss = Locator::simulation::value().GetSettings().templeLoss;
+		    loss.has_value() && loss->turn == turn && Locator::templeDestructionSystem::has_value())
+		{
+			StartTempleLoss(static_cast<PlayerNames>(loss->player));
+		}
 		// The players take their turns, each its temple and then its towns
 		PlayPlayerTurns();
 		break;
@@ -921,7 +950,9 @@ void PlayTurn(TurnViewInterface& view)
 	                                                                       : nullptr,
 	                                      Locator::time::value().GetTurn() + 1);
 #endif
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); });
+	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
+	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
+	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
 }
 
 } // namespace openblack::simulation

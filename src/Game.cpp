@@ -210,6 +210,7 @@
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -307,6 +308,7 @@
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
+#include "Gui/StatisticsBoxRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -2244,6 +2246,18 @@ bool Game::Update() noexcept
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the game stops");
 		return false;
 	}
+	// A run of the tools stops after the last turn of a decided network game: no turn comes after it
+	if (Locator::simulation::value().GetSettings().untilTurn.has_value() && Locator::networkGame::has_value())
+	{
+		const auto* session = Locator::networkGame::value().Session();
+		const auto last = session != nullptr ? session->StoppedAfter() : std::nullopt;
+		if (last.has_value() && Locator::time::value().GetTurn() > *last)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
+			                   *last);
+			return false;
+		}
+	}
 	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame() &&
 	    !_outOfSyncAsked)
 	{
@@ -2418,6 +2432,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Online:
 		UpdateOnline();
+		FollowGameEnd();
 		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);
@@ -2477,6 +2492,87 @@ void Game::UpdateOnline()
 				}
 			}
 		}
+	}
+}
+
+void Game::FollowGameEnd()
+{
+	if (!_interface || !Locator::gameEndSystem::has_value())
+	{
+		return;
+	}
+	auto& gameEnd = Locator::gameEndSystem::value();
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	// The player's choice in the end box: Leave Game leaves the network game. A skirmish has no front end to go back to yet.
+	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
+	{
+		if (session != nullptr)
+		{
+			Locator::networkGame::value().Leave();
+			_leaveNetworkGame = true;
+		}
+		else
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
+		}
+	}
+	const auto events = gameEnd.TakeEventsToShow();
+	if (events.empty())
+	{
+		return;
+	}
+	// A looker-on of a network game has no god: the game names it player seven
+	const bool looksOn =
+	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
+	const auto local = looksOn ? PlayerNames::PLAYER_SEVEN : OwnPlayer();
+	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
+
+	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
+	// computer in another game
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	const auto nameOf = [session, local, &profile](PlayerNames god) {
+		std::optional<std::u16string> human;
+		if (session != nullptr && session->GetStart().has_value())
+		{
+			const auto& names = session->GetStart()->names;
+			if (static_cast<size_t>(god) < names.size())
+			{
+				human = gui::ToUtf16(names.at(static_cast<size_t>(god)));
+			}
+		}
+		else if (god == local && profile.has_value())
+		{
+			human = gui::ToUtf16(profile->name);
+		}
+		return end_game_box::GodName(god, human.has_value() ? std::optional<std::u16string_view>(*human) : std::nullopt);
+	};
+	if (opened.godOut.has_value())
+	{
+		_interface->ShowGodOut(nameOf(*opened.godOut));
+	}
+	if (!opened.endBox.has_value())
+	{
+		return;
+	}
+	const auto& texts = _interface->GetTexts();
+	const auto winner = gameEnd.LastGodIn();
+	const auto winnerName = winner.has_value() ? nameOf(*winner) : std::u16string();
+	const auto title = end_game_box::Title(opened.endBox->kind, end_game_box::LooksOn(local), winnerName,
+	                                       {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"),
+	                                        .lost = texts.Get("HELP_TEXT_DIALOG_ADDITION_152"),
+	                                        .won = texts.Get("HELP_TEXT_WIN_GAME_04"),
+	                                        .gameOver = texts.Get("HELP_TEXT_GAME_OVER"),
+	                                        .winnerFormat = u"%s - %s Won"});
+	// The band under the title has the colour of the player's god. A looker-on has no god among the four, and its
+	// band is not drawn (vanilla-bugs 471).
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
+	// The end box of a decided game asks the game server to stop the turns of the game
+	if (session != nullptr && end_game_box::StopsTheGame(*opened.endBox, _endGameBoxState))
+	{
+		Locator::networkGame::value().StopGame();
 	}
 }
 

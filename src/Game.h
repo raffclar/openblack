@@ -46,6 +46,7 @@
 #include "GameSession.h"
 #include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
+#include "Gui/EndGameBoxRules.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
@@ -343,6 +344,9 @@ public:
 	void UpdateFrameEffects();
 	/// The web client and the lobby client do their work of the frame
 	void UpdateOnline();
+	/// The end of a skirmish or a network game: the boxes that the turns of the frame open, and the player's choice in the
+	/// end box
+	void FollowGameEnd();
 	/// The numbers and the marks that rise over things
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
@@ -602,6 +606,8 @@ private:
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};
+	/// What the end boxes of this computer keep between turns
+	end_game_box::State _endGameBoxState;
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

@@ -118,6 +118,7 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -1088,6 +1089,21 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	if (_skirmishBefore.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		// The end of the skirmish goes too, so that the world turns again
+		auto& registry = Locator::entitiesRegistry::value();
+		registry.Context().skirmish = *_skirmishBefore;
+		registry.Context().gameEnd = {};
+		std::vector<entt::entity> standings;
+		registry.Each<const ecs::components::GameStanding>(
+		    [&standings](entt::entity entity, const ecs::components::GameStanding&) { standings.push_back(entity); });
+		for (const auto entity : standings)
+		{
+			registry.Remove<ecs::components::GameStanding>(entity);
+		}
+	}
+	_skirmishBefore.reset();
 	// The players that the scenario added go
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1276,6 +1292,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_landNumberBefore = landNumber;
 		}
 		landNumber = *environment.landNumber;
+	}
+	if (environment.skirmish && Locator::entitiesRegistry::has_value())
+	{
+		auto& skirmish = Locator::entitiesRegistry::value().Context().skirmish;
+		if (!_skirmishBefore.has_value())
+		{
+			_skirmishBefore = skirmish;
+		}
+		skirmish = true;
 	}
 	// The other players that the scenario puts in the game
 	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
