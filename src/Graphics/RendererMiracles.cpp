@@ -50,6 +50,7 @@
 #include "Graphics/ShaderManager.h"
 #include "Graphics/TexelDepth.h"
 #include "Graphics/Texture2D.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -84,7 +85,7 @@ constexpr uint64_t k_BlendedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST
 constexpr uint64_t k_AddedState = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 } // namespace
 
-void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const
+void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -124,10 +125,18 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 		const bool added = shown.seed == k_AddedSeed;
 		const auto mesh = meshes.Handle(seedMesh);
 		const auto at = shown.middle + glm::vec3(0.0f, seed.meshHeight * shown.scale, 0.0f);
+		// A model of several bones can move its parts out of its box, so the view test uses only a model of no bones. A
+		// draw out of the view puts no pixel on the screen.
+		const auto box = mesh->GetBoundingBox();
+		const bool testsView = seenBy != nullptr && !mesh->IsBoned();
 		for (const auto& draw : draws)
 		{
 			const auto model = glm::translate(glm::mat4(1.0f), at) * glm::eulerAngleY(shown.spin) *
 			                   glm::scale(glm::mat4(1.0f), seed.scale * shown.scale * draw.size * shape);
+			if (testsView && !view_frustum::SeesBox(*seenBy, model, box.minima, box.maxima))
+			{
+				continue;
+			}
 			// A model of several bones (the flocks' birds and wolves) has each placed by its rest matrix
 			std::vector<glm::mat4> bones;
 			if (mesh->IsBoned() && !mesh->GetBoneMatrices().empty())
@@ -379,6 +388,12 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 	const auto eye = desc.camera->GetOrigin();
 	const auto* objectProgram = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);
+	// The view of this pass, as the pass sets it. The function does not draw the seeds and the rings out of it.
+	const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+	                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+	const auto ringBox =
+	    haveRing ? std::optional(meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value())->GetBoundingBox())
+	             : std::nullopt;
 	// A warm-up draws the model of each kind of seed at no size, for a good and an evil player, as the first seeds of
 	// each kind draw them
 	if (_warmingUp)
@@ -403,14 +418,16 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
 		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
 		                            : 0.0f;
-		DrawSeedModel(desc, {.seed = shown.seed,
-		                     .middle = shown.middle,
-		                     .scale = 1.0f,
-		                     .spin = shown.spin,
-		                     .phialPhase = shown.phialPhase,
-		                     .phialFrame = shown.phialFrame,
-		                     .phialAlpha = std::numeric_limits<uint8_t>::max(),
-		                     .ownerAlignment = alignment});
+		DrawSeedModel(desc,
+		              {.seed = shown.seed,
+		               .middle = shown.middle,
+		               .scale = 1.0f,
+		               .spin = shown.spin,
+		               .phialPhase = shown.phialPhase,
+		               .phialFrame = shown.phialFrame,
+		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
+		               .ownerAlignment = alignment},
+		              &seenBy);
 		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
 		const int rings = magic::visuals::RingCount(shown.powerUp);
 		if (!haveRing || rings <= 0)
@@ -423,6 +440,10 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 		for (int i = 0; i < rings; ++i)
 		{
 			const auto model = magic::visuals::RingModel(i, shown.ringSpin, shown.middle, 1.0f, eye);
+			if (!ring->IsBoned() && !view_frustum::SeesBox(seenBy, model, ringBox->minima, ringBox->maxima))
+			{
+				continue;
+			}
 			L3DMeshSubmitDesc submitDesc = {};
 			submitDesc.viewId = translucent;
 			submitDesc.program = objectProgram;
