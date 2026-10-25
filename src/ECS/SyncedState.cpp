@@ -67,6 +67,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "RisingSoul", .field = "alpha", .marker = ""},
     {.component = "RisingSoul", .field = "bones", .marker = ""},
     {.component = "RisingSoul", .field = "shownOut", .marker = ""},
+    // The soul's clip, heaven or hell, comes from the random numbers that the frames draw too. The turns remove the soul
+    // by the longer clip.
+    {.component = "RisingSoul", .field = "clip", .marker = ""},
     // The frames pose a villager's bones only while it is in view
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
