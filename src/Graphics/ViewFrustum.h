@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <array>
+#include <limits>
 #include <optional>
 
 #include <glm/common.hpp>
@@ -65,6 +66,11 @@ struct Frustum
 /// A sprite is such a square. The turn that makes it face the camera does not change the distance.
 [[nodiscard]] float QuadRadius(const glm::mat3& turnAndSize) noexcept;
 
+/// The height of a land corner per unit of its altitude, in world units
+inline constexpr float k_AltitudeUnit = 0.67f;
+/// The highest height that the land can have, at the highest altitude of a corner
+inline constexpr float k_HighestLand = static_cast<float>(std::numeric_limits<uint8_t>::max()) * k_AltitudeUnit;
+
 /// The highest land height that the vertex shader can find under a model that goes with the land: under the box that
 /// the model matrix puts in the world, and under the model's origin. The shader finds a height from the four corners of
 /// its cell of 10 units. The function also reads the corners of one more cell on each side, because the shader rounds the
@@ -74,7 +80,6 @@ template <typename AltitudeAt>
 {
 	constexpr float k_CellSize = 10.0f;
 	constexpr int k_LastCorner = 511;
-	constexpr float k_AltitudeUnit = 0.67f;
 	// The place on the map of the origin and of each corner of the box
 	glm::vec2 low {model[3].x, model[3].z};
 	glm::vec2 high = low;

@@ -6645,18 +6645,28 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				const auto& model = renderCtx.instanceUniforms[instance].model;
 				const auto& box = mesh.GetBoundingBox();
-				if (!placers.morphWithTerrain)
+				const bool boxSeen = view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+				if (!placers.morphWithTerrain || boxSeen)
 				{
-					return view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+					return boxSeen;
 				}
-				// A model that goes with the land moves its points by no more than the highest land under its box
+				// A model that goes with the land moves its points along its up, by no more than the highest land under
+				// its box. The test reads the land only when the highest land that a cell can have puts the box in view.
+				const auto up = view_frustum::LandRiseSweep(model, 1.0f);
+				if (!up.has_value())
+				{
+					return true;
+				}
+				if (!view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * view_frustum::k_HighestLand))
+				{
+					return false;
+				}
 				const auto& land = Locator::terrainSystem::value();
 				const float highestRise =
 				    view_frustum::HighestLandUnder(model, box.minima, box.maxima, [&land](glm::ivec2 corner) {
 					    return land.GetCell(glm::u16vec2(corner)).altitude;
 				    });
-				const auto sweep = view_frustum::LandRiseSweep(model, highestRise);
-				return !sweep.has_value() || view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *sweep);
+				return view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *up * highestRise);
 			};
 			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
 			// draw of all the other models' instances starts at the first instance in view and stops after the last.
