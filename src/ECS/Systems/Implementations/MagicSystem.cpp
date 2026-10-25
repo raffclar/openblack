@@ -2413,7 +2413,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 	const auto& seedInfo = magic::GetSpellSeedInfo(Info(), seed.seedType);
 	if (!HeldSpellRunsInHand())
 	{
-		// The help counts a cast of a miracle with a power-up, as the hand sends it
+		// The help counts a cast of a miracle with a power-up, as the hand sends it. The count waits for the next report.
 		if (Locator::helpProfileSystem::has_value())
 		{
 			const auto last =
@@ -2425,7 +2425,7 @@ void MagicSystem::SendCast(magic::CastTarget target)
 			                                        .canPowerUp = seed.hasIcon};
 			if (gesture::CountsPoweredUpCast(facts, last.has_value() ? last->request.gesture : GestureType::None))
 			{
-				Locator::helpProfileSystem::value().Trigger(help::profile::k_GestureCastPoweredUp);
+				Locator::helpProfileSystem::value().Report(help::profile::k_GestureCastPoweredUp);
 			}
 		}
 		// The circle drawn is used up by the cast that it sizes
@@ -2791,7 +2791,7 @@ bool MagicSystem::PressFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+			Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 		}
 		return true;
 	}
@@ -2836,7 +2836,7 @@ void MagicSystem::ReleaseFireBall(uint32_t nowMs, uint32_t turn)
 	{
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_TapThing);
+			Locator::helpProfileSystem::value().Report(help::profile::k_TapThing);
 		}
 		// The hand sends the tap, which catches the ball at the turn
 		SendFireBallCommand(press.ball, false);

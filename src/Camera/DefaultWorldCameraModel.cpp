@@ -1248,7 +1248,7 @@ void DefaultWorldCameraModel::SendHelpEvents(camera_help::events::EventSet event
 		return;
 	}
 	auto& profile = Locator::helpProfileSystem::value();
-	events.ForEach([&profile](uint32_t event) { profile.Trigger(event); });
+	events.ForEach([&profile](uint32_t event) { profile.Report(event); });
 }
 
 DefaultWorldCameraModel::Mode DefaultWorldCameraModel::HandleDrag(bool held)

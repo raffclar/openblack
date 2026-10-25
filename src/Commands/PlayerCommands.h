@@ -335,11 +335,44 @@ struct HandCastUnlock
 	entt::entity seed {entt::null};
 };
 
+/// The report of what the player did that the help counts, since the last report: the help events of the input of the
+/// player, and what the world camera of the player shows. Only the computer of the player counts the report, at the
+/// turn. Thus the help counts the same things at the same turns at all frame rates.
+struct HelpReport
+{
+	/// One bit for each help event: bit n is event n (see help::profile)
+	uint64_t events {0};
+	/// A front-end box shows, for example the menu of the game. The help then counts nothing.
+	bool boxShows {false};
+	/// The world camera of the player shows the world. A script, the temple or a creature can have the camera.
+	bool cameraShowsWorld {false};
+	/// The line from the camera to the middle of the screen touches the land at this distance
+	bool landAtCentre {false};
+	float centreDistance {0.0f};
+	/// How steeply the camera looks down, in radians. Below zero, the camera looks up.
+	float pitch {0.0f};
+	/// The cursor is on a point of the world. Then the point of the report of the hand (HandReport) is under the cursor.
+	bool cursorOnPoint {false};
+
+	bool operator==(const HelpReport& other) const = default;
+};
+
+/// The Help key: the advisors tell the player about a thing, else about the ground at a point. The computer of the
+/// player finds the thing and the point as its hand shows them. Only that computer says the help, at the turn.
+struct HelpQuery
+{
+	/// The thing in the hand or under the hand, or none
+	entt::entity thing {entt::null};
+	/// The point on the ground under the hand, if the hand is over the ground
+	bool hasGround {false};
+	glm::vec3 ground {0.0f};
+};
+
 /// What a command does
 using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
                             FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock>;
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, HelpReport, HelpQuery>;
 
 /// A command and the player that sent it
 struct Command

@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -1766,7 +1767,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		if (const auto event = tips::OverNothingHelpEvent(camera, overFish);
 		    event.has_value() && Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(*event);
+			Locator::helpProfileSystem::value().Report(*event);
 		}
 		submitAll({tips::OverNothing(camera, overFish)});
 	};
@@ -1775,7 +1776,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 		const auto tip = Locator::leashSystem::value().ToolTip(OwnPlayer(), pointed);
 		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
+			Locator::helpProfileSystem::value().Report(help::profile::k_FocusCreatureTip);
 		}
 		return tip;
 	};
@@ -2028,10 +2029,10 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 		ecs::other_player_sparkles::AddAtCameras();
 		break;
 	case Step::HelpProfile:
-		// The help's count of what the player did moves on a turn
+		// The help's count of what the player did moves on a turn. It reads the view of the camera from the last report.
 		if (Locator::helpProfileSystem::has_value())
 		{
-			Locator::helpProfileSystem::value().ProcessTurn(FrontEndBoxShows(), HelpWorldCameraView());
+			Locator::helpProfileSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::Ambience:
@@ -2204,8 +2205,10 @@ bool Game::Update() noexcept
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
 	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
-		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world
-		    if (!_frameGuard || step == game_frame::Step::Turns ||
+		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world. The guard
+		    // also does not look at the debug windows. The timeline of the testbed runner acts in them by the game time of
+		    // the frame. It is a tool for the debug builds and is not part of the game.
+		    if (!_frameGuard || step == game_frame::Step::Turns || step == game_frame::Step::DebugGui ||
 		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
 			    if (_frameGuard)
@@ -2324,9 +2327,14 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		if (_simulation.has_value() && _simulation->playCommandsPath.has_value())
 		{
 			Locator::playerCommandSystem::value().Reset();
+			if (Locator::helpProfileSystem::has_value())
+			{
+				std::ignore = Locator::helpProfileSystem::value().MakeReport(false, std::nullopt, false);
+			}
 			break;
 		}
 		ReportHand();
+		ReportHelp();
 		Locator::playerCommandSystem::value().SendOpenBlock();
 		break;
 	case Step::FrameTime:
@@ -2712,7 +2720,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		const auto moves = Locator::gameActionSystem::value().TakeMouseMoves();
 		for (uint32_t i = 0; i < moves && Locator::helpProfileSystem::has_value(); ++i)
 		{
-			Locator::helpProfileSystem::value().Trigger(help::profile::k_MouseMoved);
+			Locator::helpProfileSystem::value().Report(help::profile::k_MouseMoved);
 		}
 	}
 	if (_interface)
@@ -2809,6 +2817,25 @@ void Game::ReportHand()
 	    .camera = cameraPoint,
 	    .focus = focus,
 	});
+}
+
+void Game::ReportHelp()
+{
+	// The report goes once a turn, after the turns of a frame that played one, and only when something in it changed
+	const auto turn = Locator::time::value().GetTurn();
+	if (_helpReportTurn == turn || !Locator::helpProfileSystem::has_value())
+	{
+		return;
+	}
+	_helpReportTurn = turn;
+	const bool cursorOnPoint =
+	    Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().point.has_value();
+	if (const auto report =
+	        Locator::helpProfileSystem::value().MakeReport(FrontEndBoxShows(), HelpWorldCameraView(), cursorOnPoint);
+	    report.has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(*report);
+	}
 }
 
 bool Game::PlayTurns()
@@ -5107,9 +5134,9 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		// The server names a land in the Scripts folder of the game, and never a path out of it
 		return false;
 	}
-	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
+	// The story's scripts run the first land, but not the testbed, the map for 32 gods, a playground or a network game
 	const bool startStory = !start.testbed && !start.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish, true);
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return false;

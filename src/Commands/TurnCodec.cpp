@@ -214,6 +214,18 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Float(command.spin);
 	               },
 	               [&out](const HandCastUnlock& command) { out.Entity(command.seed); },
+	               [&out](const HelpReport& command) {
+		               out.Number(command.events);
+		               out.Byte(static_cast<uint8_t>((command.boxShows ? 1u : 0u) | (command.cameraShowsWorld ? 2u : 0u) |
+		                                             (command.landAtCentre ? 4u : 0u) | (command.cursorOnPoint ? 8u : 0u)));
+		               out.Float(command.centreDistance);
+		               out.Float(command.pitch);
+	               },
+	               [&out](const HelpQuery& command) {
+		               out.Entity(command.thing);
+		               out.Byte(static_cast<uint8_t>(command.hasGround ? 1 : 0));
+		               out.Vector(command.ground);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -445,6 +457,38 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandCastUnlock:
 		action = HandCastUnlock {.seed = in.Entity()};
 		return DecodeError::None;
+	case CommandTag::HelpReport:
+	{
+		HelpReport report {};
+		report.events = in.Number<uint64_t>();
+		const auto flags = in.Byte();
+		if (flags > 15)
+		{
+			return DecodeError::Value;
+		}
+		report.boxShows = (flags & 1u) != 0;
+		report.cursorOnPoint = (flags & 8u) != 0;
+		report.cameraShowsWorld = (flags & 2u) != 0;
+		report.landAtCentre = (flags & 4u) != 0;
+		report.centreDistance = in.Float();
+		report.pitch = in.Float();
+		action = report;
+		return DecodeError::None;
+	}
+	case CommandTag::HelpQuery:
+	{
+		HelpQuery query {};
+		query.thing = in.Entity();
+		const auto hasGround = in.Byte();
+		if (hasGround > 1)
+		{
+			return DecodeError::Value;
+		}
+		query.hasGround = hasGround == 1;
+		query.ground = in.Vector();
+		action = query;
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -555,6 +599,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const MiracleRepeat& /*command*/) { return CommandTag::MiracleRepeat; },
 	                      [](const HandCast& /*command*/) { return CommandTag::HandCast; },
 	                      [](const HandCastUnlock& /*command*/) { return CommandTag::HandCastUnlock; },
+	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
+	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
 	                  },
 	                  action);
 }
@@ -592,6 +638,8 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
 	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
+	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1 + 4 + 4}; },
+	                                     [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
 	                                 },
 	                                 action);
 	return 1 + fields;

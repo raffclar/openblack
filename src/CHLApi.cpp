@@ -189,6 +189,7 @@
 #include "ECS/Systems/HandDemoSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
@@ -485,14 +486,15 @@ help::spirits::AdvisorSpiritController* ScriptAdvisors()
 }
 
 /// The advisor a script's spirit means, 1 the good one or 2 the evil one, by the local player's alignment for those
-/// that go by it
+/// that go by it. A random spirit comes from the random numbers of the help, which no frame draws.
 int32_t ScriptHelpSpirit(int32_t scriptSpirit)
 {
 	const auto alignment = Locator::alignmentSystem::has_value()
 	                           ? Locator::alignmentSystem::value().GetPlayerAlignment(ScriptPlayerName(0))
 	                           : 0.0f;
-	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment),
-	                                          []() { return Locator::gameRandom::value().LocalRand(100); });
+	return help::script_spirits::HelpSpiritOf(scriptSpirit, help::script_spirits::DiscreteAlignment(alignment), []() {
+		return Locator::helpMessageSystem::has_value() ? Locator::helpMessageSystem::value().HelpRand(100) : 0u;
+	});
 }
 
 /// The last of the advisors' animations a script can play

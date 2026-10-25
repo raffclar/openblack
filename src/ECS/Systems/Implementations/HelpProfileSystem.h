@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include "Commands/PlayerCommands.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "Help/HelpProfile.h"
 
@@ -23,7 +24,12 @@ class HelpProfileSystem final: public HelpProfileSystemInterface
 {
 public:
 	void Trigger(uint32_t event) override;
-	void ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera) override;
+	void Report(uint32_t event) override;
+	[[nodiscard]] std::optional<player_commands::HelpReport>
+	MakeReport(bool boxShows, const std::optional<help::profile::WorldCameraView>& worldCamera, bool cursorOnPoint) override;
+	void DoReport(const player_commands::HelpReport& report) override;
+	void ProcessTurn() override;
+	[[nodiscard]] const player_commands::HelpReport& GetLastReport() const override { return _lastReport; }
 	void LoadRecord(const ProfileFolderSystemInterface& folder, std::u16string_view player) override;
 	bool SaveRecord(ProfileFolderSystemInterface& folder, std::u16string_view player) const override;
 
@@ -32,6 +38,12 @@ public:
 
 private:
 	help::profile::HelpProfile _profile;
+	help::profile::ReportedEvents _reported;
+	/// The last report that this computer made
+	player_commands::HelpReport _lastMade {};
+	/// The last report, and the view of the world camera that it gives
+	player_commands::HelpReport _lastReport {};
+	std::optional<help::profile::WorldCameraView> _worldCamera;
 };
 
 } // namespace openblack::ecs::systems

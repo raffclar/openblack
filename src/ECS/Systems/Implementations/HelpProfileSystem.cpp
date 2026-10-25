@@ -40,15 +40,61 @@ void HelpProfileSystem::Trigger(uint32_t event)
 	}
 }
 
-void HelpProfileSystem::ProcessTurn(bool frontEndBoxShows, const std::optional<help::profile::WorldCameraView>& worldCamera)
+void HelpProfileSystem::Report(uint32_t event)
 {
-	if (frontEndBoxShows || InScriptCutScene())
+	_reported.Add(event);
+}
+
+std::optional<openblack::player_commands::HelpReport>
+HelpProfileSystem::MakeReport(bool boxShows, const std::optional<help::profile::WorldCameraView>& worldCamera,
+                              bool cursorOnPoint)
+{
+	player_commands::HelpReport report {
+	    .events = _reported.Take(),
+	    .boxShows = boxShows,
+	    .cameraShowsWorld = worldCamera.has_value(),
+	    .landAtCentre = worldCamera.has_value() && worldCamera->centreDistance.has_value(),
+	    .centreDistance = worldCamera.has_value() ? worldCamera->centreDistance.value_or(0.0f) : 0.0f,
+	    .pitch = worldCamera.has_value() ? worldCamera->pitch : 0.0f,
+	    .cursorOnPoint = cursorOnPoint,
+	};
+	// The events are new in each report. The other values stay until a report changes them.
+	auto unchanged = _lastMade;
+	unchanged.events = report.events;
+	if (report.events == 0 && report == unchanged)
+	{
+		return std::nullopt;
+	}
+	_lastMade = report;
+	return report;
+}
+
+void HelpProfileSystem::DoReport(const player_commands::HelpReport& report)
+{
+	for (const auto event : help::profile::EventsOf(report.events))
+	{
+		Trigger(event);
+	}
+	_lastReport = report;
+	_worldCamera.reset();
+	if (report.cameraShowsWorld)
+	{
+		_worldCamera = help::profile::WorldCameraView {
+		    .centreDistance = report.landAtCentre ? std::optional(report.centreDistance) : std::nullopt,
+		    .pitch = report.pitch,
+		};
+	}
+}
+
+void HelpProfileSystem::ProcessTurn()
+{
+	if (_lastReport.boxShows || InScriptCutScene())
 	{
 		return;
 	}
-	if (worldCamera.has_value())
+	if (_worldCamera.has_value())
 	{
-		for (const auto event : help::profile::CameraViewEvents(*worldCamera))
+		for (const auto event : help::profile::CameraViewEvents(*_worldCamera))
 		{
 			_profile.Trigger(event);
 		}
