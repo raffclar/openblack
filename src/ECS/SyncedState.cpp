@@ -59,6 +59,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "VillagerPose", .field = "bones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBones", .marker = ""},
     {.component = "VillagerPose", .field = "clipBlend", .marker = ""},
+    // The storm's swirl and the trail of a flock are effects of each computer. Each computer gives them its own
+    // numbers, which the turns use only to find the effect again.
+    {.component = "Spell", .field = "castEffect", .marker = ""},
+    {.component = "FlockSpell", .field = "castEffect", .marker = ""},
     // The mark over a learning creature rises from the head of its drawn pose, and only the draw reads it
     {.component = "LearningMarker", .field = "", .marker = ""},
     // The frames move the hair of a creature. Only the draw reads it.
