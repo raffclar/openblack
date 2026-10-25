@@ -13,8 +13,10 @@
 
 void openblack::hand_stillness::Step(ecs::components::HandStillness& stillness, const glm::vec3& position) noexcept
 {
-	stillness.drift += position - stillness.last;
+	const auto moved = position - stillness.last;
+	stillness.drift += moved;
 	stillness.last = position;
+	stillness.velocity += (moved * k_TurnsPerSecond - stillness.velocity) * k_VelocityFollow;
 	if (glm::length(stillness.drift) >= k_MoveDistance)
 	{
 		stillness.stillTurns = 0;

@@ -25,6 +25,8 @@ struct HandStillness
 	glm::vec3 drift {0.0f};
 	/// Where the hand was on the last turn
 	glm::vec3 last {0.0f};
+	/// The velocity of the hand in units a second: it follows the movement of each turn by a part each turn
+	glm::vec3 velocity {0.0f};
 };
 
 } // namespace openblack::ecs::components
