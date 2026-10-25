@@ -63,6 +63,9 @@ struct RegistryContext
 	/// A skirmish: a playground land played rather than the story's. Losing a temple doesn't end it. openblack plays no
 	/// online games, which would be the same.
 	bool skirmish {false};
+	/// The land of a network game waits for the humans of the network session. At the turn that they join, each slot with
+	/// no player gets a computer god.
+	bool slotsWaitForHumans {false};
 	/// Once a script or the hand has forced an action on a creature, a free creature always agrees to play, to be friends
 	/// or to be shown something when another creature asks it, until the land changes
 	bool partnersAlwaysAgree {false};

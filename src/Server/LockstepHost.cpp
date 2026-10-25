@@ -521,8 +521,9 @@ void LockstepHost::StartGame()
 	start.turn = _turnsDone;
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
-	// The first turn gives the gods of the other slots their hands, on every computer
-	for (size_t i = 1; i < _seats.size(); ++i)
+	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
+	// with no human fill
+	for (size_t i = 0; i < _seats.size(); ++i)
 	{
 		if (_seats[i].state == SeatState::Taken)
 		{
