@@ -5404,8 +5404,7 @@ game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
 	game_session::ExitSaveFacts facts {
 	    .end = end,
 	    .gameOver = context.gameOver,
-	    // openblack's games are all single player
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::value().IsNetworkGame(),
 	    .skirmish = context.skirmish,
 	    .godsPlayground = context.mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
 	    .previousProfile = std::nullopt,
