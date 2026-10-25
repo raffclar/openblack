@@ -1894,6 +1894,13 @@ void HandGrabSystem::ForceDrop()
 	LetGo(*grab, glm::vec3(0.0f), std::nullopt);
 }
 
+void HandGrabSystem::DoShakeOff(PlayerNames player)
+{
+	// The command acts with the hand of the player that sent it
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	ForceDrop();
+}
+
 bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 {
 	// The input and the frames of this computer act with its own hand
@@ -1924,6 +1931,18 @@ void HandGrabSystem::Reset()
 	}
 }
 
+std::optional<entt::entity> HandGrabSystem::GetHeldOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	return GetHeld();
+}
+
+bool HandGrabSystem::IsInInfluenceOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	return HandInInfluence();
+}
+
 std::optional<entt::entity> HandGrabSystem::GetHeld() const
 {
 	const auto* grab = Grab();
@@ -1946,6 +1965,15 @@ std::optional<entt::entity> HandGrabSystem::GetLockedOn() const
 
 bool HandGrabSystem::IsBusy() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	return grab != nullptr && grab->state != HandGrab::State::Empty;
+}
+
+bool HandGrabSystem::IsBusyOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
 	const auto* grab = Grab();
 	return grab != nullptr && grab->state != HandGrab::State::Empty;
 }

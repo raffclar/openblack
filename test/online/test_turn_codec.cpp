@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <bit>
 #include <limits>
 #include <random>
@@ -83,6 +84,8 @@ std::vector<Action> EachCommand()
 	              .handVelocity = {-7.0f, 0.0f, 8.0f},
 	              .spin = -0.5f},
 	    HandCastUnlock {.seed = Entity(25)},
+	    LeashPick {.type = LeashType::Good},
+	    HandShakeOff {},
 	};
 }
 
@@ -106,7 +109,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 29)
+	switch (bits(random) % 31)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -202,6 +205,10 @@ Action RandomAction(std::mt19937& random)
 		                 .spin = number()};
 	case 27:
 		return HandCastUnlock {.seed = entity()};
+	case 28:
+		return LeashPick {.type = std::array {LeashType::Evil, LeashType::Rope, LeashType::Good}.at(bits(random) % 3)};
+	case 29:
+		return HandShakeOff {};
 	default:
 		return PlayerLeft {};
 	}
@@ -263,8 +270,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5,  9,  18, 5, 49, 17, 5, 5,  5, 9,
-	                                 12, 1, 18, 11, 5,  21, 15, 3,  5, 1,  2,  1, 61, 5};
+	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
+	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -436,6 +443,12 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto key = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {LeashKey {.key = creature_leash::LeashKey::Leash}}});
 	key.back() = 3;
 	EXPECT_EQ(Decode(key).error, DecodeError::Value);
+	// A leash pick of a type that no creature wears
+	auto pick = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {LeashPick {.type = LeashType::Rope}}});
+	pick.back() = 0;
+	EXPECT_EQ(Decode(pick).error, DecodeError::Value);
+	pick.back() = 4;
+	EXPECT_EQ(Decode(pick).error, DecodeError::Value);
 	auto order = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {LeashOrder {.kind = LeashOrder::Kind::Untie}}});
 	order[10] = 4;
 	EXPECT_EQ(Decode(order).error, DecodeError::Value);

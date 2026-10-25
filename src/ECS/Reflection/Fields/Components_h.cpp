@@ -17,6 +17,7 @@
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGlow.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/HandLockedCreature.h"
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
@@ -110,6 +111,7 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::lastHand>("lastHand")
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
 	    .Field<&components::HandGrab::lastDropped>("lastDropped");
+	Reflect<components::HandHeldSeed>(context).Field<&components::HandHeldSeed::seed>("seed");
 	Reflect<components::HandLockedCreature>(context).Field<&components::HandLockedCreature::creature>("creature");
 	Reflect<components::HandMiracleFx>(context)
 	    .Field<&components::HandMiracleFx::bands>("bands")

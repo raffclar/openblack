@@ -603,7 +603,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
 	}
-	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+	const bool ownHand = !Locator::handSystem::has_value() || Locator::handSystem::value().GetOwnPlayer() == player;
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {
 		if (ownHand && Locator::helpProfileSystem::has_value())
@@ -659,7 +659,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
 	{
 		countTap();
-		return Locator::magicSystem::value().TapGlobe(object);
+		return Locator::magicSystem::value().TapGlobe(object, player);
 	}
 	// A reward chest is opened by its player's tap, until it is open
 	if (const auto* reward = Entities().TryGet<const Reward>(object); reward != nullptr && Locator::rewardSystem::has_value())

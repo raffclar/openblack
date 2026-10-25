@@ -444,7 +444,7 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 /// nothing yet.
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value())
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value())
 	{
 		return false;
 	}

@@ -372,6 +372,112 @@ def hold_creature(pid, near):
     print(f"hold: held creature {creature} at pixel {pixel}, clicked it and tapped the land")
 
 
+def items_of(answer):
+    return answer.get("items", []) if isinstance(answer, dict) else answer if isinstance(answer, list) else []
+
+
+def wait_for(test, seconds):
+    """The first true value of the test within the seconds, or None"""
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        value = test()
+        if value:
+            return value
+        time.sleep(0.5)
+    return None
+
+
+def pixel_on(pid, entity, heights=(0.5, 1.0, 2.0, 3.0, 5.0)):
+    """Looks at a thing from each side in turn and gives a pixel where the interface picks it, or None"""
+    for yaw in (0, 90, 180, 270):
+        inspector_call(pid, "camera.frame", {"params": {"id": entity, "yaw": yaw, "pitch": 40, "distance": 30}})
+        time.sleep(1.0)
+        found = inspector_call(pid, "ecs.entity", {"params": {"id": entity}})
+        at = found.get("position") if isinstance(found, dict) else None
+        if not isinstance(at, list):
+            return None
+        for height in heights:
+            moved = inspector_call(pid, "input.pointer", {"params": {"world": [at[0], at[1] + height, at[2]],
+                                                                     "timing": "immediate"}})
+            time.sleep(0.3)
+            pick = inspector_call(pid, "players.pick", {})
+            pointer = moved.get("pointer") if isinstance(moved, dict) else None
+            if isinstance(pick, dict) and pick.get("object") == entity and isinstance(pointer, list):
+                return [int(value) for value in pointer]
+    return None
+
+
+def slot_miracle(pid, player):
+    """The hand of a client in any god slot asks an icon of its own worship site for a miracle and casts it on the land,
+    then draws the leash gesture and a scribble that shakes the leash off. Every step goes through the inspector's input,
+    so the client sends its commands as a player would. Returns what each step did."""
+    done = {"miracle": slot_cast(pid, player)}
+    near = done["miracle"].get("near")
+
+    def leashes():
+        """Whether each creature near the god's worship site wears a leash, and which"""
+        if near is None:
+            return None
+        found = items_of(inspector_call(pid, "objects.find", {"params": {"kind": "Creature"}, "near": near,
+                                                            "radius": 2000, "limit": 4}))
+        result = {}
+        for creature in found:
+            leash = inspector_call(pid, "creatures.leash", {"params": {"id": creature["id"]}})
+            if isinstance(leash, dict):
+                result[creature["id"]] = {key: leash.get(key) for key in ("leashed", "worn", "picked", "tied")}
+        return result
+
+    done["leash_before"] = leashes()
+    # The leash gesture (the square spiral) puts the leash on the creature, and a scribble of the empty hand shakes it off
+    for name in ("square spiral", "scribble"):
+        drawn = inspector_call(pid, "input.gesture", {"params": {"name": name}})
+        time.sleep(3.0)
+        gestures = inspector_call(pid, "players.gestures", {})
+        done[f"gesture_{name}"] = {"drawn": drawn, "last": (gestures or {}).get("last_recognised")
+                                   if isinstance(gestures, dict) else gestures, "leash": leashes()}
+    print("slot miracle:", json.dumps(done)[:3000])
+    return done
+
+
+def slot_cast(pid, player):
+    """The tap on the icon with the most prayer power stored, and the cast of the miracle that comes into the hand"""
+    done = {}
+    icons = []
+    for town in items_of(inspector_call(pid, "town.list", {})):
+        if town.get("owner") != player:
+            continue
+        spells = inspector_call(pid, "town.spells", {"params": {"id": town.get("id")}})
+        icons += (spells or {}).get("site_icons", []) if isinstance(spells, dict) else []
+    icon = max(icons, key=lambda found: found.get("store", 0.0)) if icons else None
+    done["icons"] = icons
+    if icon is None:
+        return done
+    place = inspector_call(pid, "ecs.entity", {"params": {"id": icon["id"]}})
+    at = place.get("position") if isinstance(place, dict) else None
+    done["near"] = [at[0], at[2]] if isinstance(at, list) else None
+    pixel = pixel_on(pid, icon["id"])
+    done["icon_pixel"] = pixel
+    if pixel is None:
+        return done
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "click"}})
+    done["held_seed"] = wait_for(lambda: (inspector_call(pid, "magic.state", {}) or {}).get("held_seed"), 120)
+    if not done["held_seed"]:
+        return done
+    # The seed waits until it is ready, then the hand casts it on the land below the icon
+    time.sleep(6.0)
+    spells_before = (inspector_call(pid, "magic.state", {}) or {}).get("spells")
+    inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0], min(pixel[1] + 200, 1000)], "timing": "immediate"}})
+    time.sleep(0.5)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "press"}})
+    time.sleep(1.0)
+    inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
+    time.sleep(3.0)
+    state = inspector_call(pid, "magic.state", {}) or {}
+    done["cast"] = {"spells_before": spells_before, "spells_after": state.get("spells"), "held_after": state.get("held_seed"),
+                    "last_hand_result": state.get("last_hand_result")}
+    return done
+
+
 def shifted_input(path, folder, extra=0):
     """The recorded input with its frames moved after the start of the network game, and the extra frames"""
     with open(path, encoding="utf-8") as file:
@@ -424,6 +530,9 @@ def main():
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
                         "it for the leash and leads it with a tap on the land. Give it once for each client.")
     parser.add_argument("--hold-after", type=int, default=300, help="the turns before --hold-creature")
+    parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
+                        help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
+                             "through the inspector, once it compared --hold-after turns")
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
@@ -487,6 +596,7 @@ def main():
         if options.hash_fields:
             server_command.append("--record-fields")
     processes = []
+    miracle_done = None
     try:
         server = start(server_command, server_dir)
         processes.append(server)
@@ -523,7 +633,7 @@ def main():
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
-            if camera or index in holds:
+            if camera or index in holds or options.slot_miracle == index + 1:
                 command += ["--inspect-port", "0"]
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
@@ -570,6 +680,10 @@ def main():
                         print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
                         return 1
                     cameras_again.add(index)
+            slot = (options.slot_miracle or 0) - 1
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
+                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+                miracle_done = slot_miracle(clients[slot].pid, slot)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])
@@ -618,6 +732,8 @@ def main():
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
+    if options.slot_miracle:
+        summary["slot_miracle"] = miracle_done
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the"])
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(
