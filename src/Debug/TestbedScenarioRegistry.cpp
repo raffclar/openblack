@@ -1996,6 +1996,21 @@ void AddExplorersBoat(std::vector<Scenario>& all)
 	                .distance = 1.0f},
 	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
 	});
+	all.push_back({
+	    .id = "story.explorers_boat_deck_light",
+	    .name = "The deck of the explorers' boat in the light of the boat's place",
+	    .facet = Facet::Story,
+	    .description = "The same film as story.explorers_boat, framed on the lake that the boat crosses at sea. Each thing "
+	                   "on the deck takes the land's light of the place of the boat, and no colour of the land.",
+	    .expected = "About eighteen seconds in, the boat sails across the lake. The cows, the grain and the six people "
+	                "on its deck show the same light as the boat at its middle, also where they stand over the bank. "
+	                "No colour of the land under a part shows on it.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview,
+	                .include = {k_Dock - glm::vec2 {170.0f, 150.0f}, k_Dock - glm::vec2 {40.0f, 20.0f}},
+	                .distance = 1.0f},
+	    .commands = {{.kind = Kind::PlayBoatFilm, .delaySeconds = 1.0f, .point = k_Dock}},
+	});
 }
 
 void AddAppearance(std::vector<Scenario>& all)
