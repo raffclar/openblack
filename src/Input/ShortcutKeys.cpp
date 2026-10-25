@@ -278,7 +278,7 @@ void ShortcutKeys::StartAtTemple(PlayerNames player)
 	auto& camera = Locator::camera::value();
 	const auto& land = Locator::terrainSystem::value();
 	const glm::vec3 focus {temple->x, land.GetHeightAt(glm::vec2(temple->x, temple->z)), temple->z};
-	camera.SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
+	camera.Place(start_camera::OriginOver(focus), focus);
 	// Then it flies to the temple as a double tap of the temple key makes it fly
 	const zoom_to::Press press {.now = machine_clock::Ticks(),
 	                            .current = {.origin = camera.GetOrigin(), .focus = camera.GetFocus()},
