@@ -187,6 +187,9 @@ public:
 	void DoCatchFireBall(PlayerNames player, entt::entity ball) override;
 	bool DoApplySeed(PlayerNames player, entt::entity target) override;
 	void DoSeedGesture(PlayerNames player, const player_commands::SeedGesture& gesture) override;
+	void DoCast(PlayerNames player, const player_commands::HandCast& cast) override;
+	void DoCastUnlock(PlayerNames player, entt::entity seed) override;
+	void InterfaceTurn() override;
 	[[nodiscard]] std::optional<entt::entity> OrbUnderHand() const override;
 	bool PressAction() override;
 	void ReleaseAction() override;
@@ -315,6 +318,9 @@ private:
 
 	/// What the hand hands a miracle it casts: where it is, the camera, how it moves
 	[[nodiscard]] particles::ProcessInfo HandInfo() const;
+	/// What a miracle that follows the hand reads at the turn: the hand, the camera and the hand's velocity as the reports
+	/// of the player give them. Before the first report, the last values stay.
+	[[nodiscard]] particles::ProcessInfo TurnHandInfo(const particles::ProcessInfo& last) const;
 	/// The held seed's magic type and records
 	[[nodiscard]] MagicType HeldMagicType() const;
 	/// The object under the hand the held seed may be cast on: a creature for a creature spell
@@ -327,13 +333,25 @@ private:
 	void StoreHeldSeedIn(entt::entity dispenser);
 	/// Whether the held seed may be cast at the hand's point: on the map, by its cast rule, in the player's influence
 	[[nodiscard]] bool HandPointValid() const;
+	/// Whether the held seed may be cast at a point: in the player's influence, by its cast rule
+	[[nodiscard]] bool PointValidForHeld(glm::vec3 point) const;
 	/// A miracle held locked in the local hand that the hand moves outside its cast rule is let go, as the button would
-	void LetGoIfOutsideCastRule(const components::Spell& spell);
-	/// Carries out what the hand's casting state machine says
+	void LetGoIfOutsideCastRule();
+	/// Carries out what the hand's casting state machine says. The hand of this computer shows its part at once; the
+	/// casts and the let go of a locked miracle go as commands of the player, which a later turn does.
 	void Do(const magic::CastActions& actions);
-	/// The held seed's miracle cast at the hand's point, at the circle drawn, or on the object under the hand; or applied
-	/// again when it runs. The miracle, or none.
-	entt::entity CastHeldSeed(magic::CastTarget target);
+	/// The cast of the held seed as the hand of this computer finds it: on the thing under the hand, at the circle drawn
+	/// or at the hand's point. None when the hand may not cast there.
+	[[nodiscard]] std::optional<player_commands::HandCast> MakeCast(magic::CastTarget target);
+	/// The hand of this computer casts the held seed: the cast goes as a command of the player (DoCast)
+	void SendCast(magic::CastTarget target);
+	/// The let go of the miracle locked on in the hand goes as a command of the player (DoCastUnlock)
+	void SendCastUnlock();
+	/// Whether the miracle of the held seed runs from the hand, locked on
+	[[nodiscard]] bool HeldSpellRunsInHand() const;
+	/// At the turn: the held seed's miracle cast as the command gives it, or applied again when it runs. The miracle, or
+	/// none.
+	entt::entity CastHeldSeed(const player_commands::HandCast& cast);
 	/// What becomes of the seed once its miracle is cast: it stays, goes, or leaves the hand with its miracle
 	void AfterCast(entt::entity spell);
 	void FailCast();

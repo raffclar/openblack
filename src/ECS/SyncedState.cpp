@@ -134,6 +134,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
     // hand
     {.component = "Spell", .field = "effect", .marker = ""},
+    // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
+    // numbered it
+    {.component = "Temple", .field = "beamSource", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
