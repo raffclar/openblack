@@ -248,6 +248,10 @@ public:
 		}
 		transform.position = pose.origin;
 	}
+	// The pulled pose is drawn only: the fake keeps it apart from the Transform
+	void DrawPulledPose(entt::entity object, const Pose& pose) override { drawnPulls[object] = pose; }
+	void ForgetPulledPose(entt::entity object) override { drawnPulls.erase(object); }
+	std::map<entt::entity, Pose> drawnPulls;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity, const glm::mat3& axes) const override
 	{
 		glm::mat3 result = axes;
@@ -1139,14 +1143,40 @@ TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPu
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	const auto pulled = world->drawnPulls.at(tree);
+	ASSERT_TRUE(pulled.axes != world->PoseOf(tree).axes);
 	EXPECT_FALSE(Release().has_value());
-	// Alone, the thing keeps the lean and the stretch of the pull
+	for (int i = 0; i < 10; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// Alone, the frames keep the lean and the stretch of the pull. The world keeps the thing as it stood.
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	EXPECT_EQ(world->drawnPulls.at(tree).axes, pulled.axes);
+	EXPECT_EQ(world->drawnPulls.at(tree).origin, pulled.origin);
 	const auto& after = world->registry.Get<const Transform>(tree);
-	EXPECT_EQ(after.position, pulled.position);
-	EXPECT_EQ(after.rotation, pulled.rotation);
-	EXPECT_EQ(after.scale, pulled.scale);
+	EXPECT_EQ(after.position, before.position);
+	EXPECT_EQ(after.rotation, before.rotation);
+	EXPECT_EQ(after.scale, before.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, ANewPullOfATreeLetGoStartsFromItsPlaceInTheWorld)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	EXPECT_FALSE(Release().has_value());
+	Frame(10);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	// The press starts a new pull: the old lean goes until the hand has faded into its pull
+	EXPECT_TRUE(Press());
+	Frame(10);
+	EXPECT_FALSE(world->drawnPulls.contains(tree));
 }
 
 TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsAsBeforeThePull)
@@ -1160,10 +1190,11 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsA
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
 	EXPECT_FALSE(Release().has_value());
+	Frame(10);
 	// The other computers never saw the lean, so the thing stands as it stood before the pull
+	EXPECT_FALSE(world->drawnPulls.contains(tree));
 	const auto& after = world->registry.Get<const Transform>(tree);
 	EXPECT_EQ(after.position, before.position);
 	EXPECT_EQ(after.rotation, before.rotation);
@@ -1185,8 +1216,8 @@ TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNot
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto leaned = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(leaned.rotation != before.rotation || leaned.scale != before.scale);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	ASSERT_TRUE(world->drawnPulls.at(tree).axes != world->PoseOf(tree).axes);
 	ASSERT_TRUE(world->holes.empty());
 	// Light again, it comes free and leaves its hole where it stood before the pull
 	world->weights[tree] = 10.0f;

@@ -20,6 +20,12 @@
 namespace openblack::ecs
 {
 
+bool drawn_place::StandsAsPulled(const components::HandPulled& pulled, const components::Transform& transform)
+{
+	return pulled.standsAt == transform.position && pulled.standsRotation == transform.rotation &&
+	       pulled.standsScale == transform.scale;
+}
+
 components::Transform drawn_place::DrawnTransformOf(const Registry& registry, entt::entity entity,
                                                     const components::Transform& transform)
 {
@@ -37,7 +43,8 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	{
 		return {.position = carried->drawn->position, .rotation = carried->drawn->rotation, .scale = transform.scale};
 	}
-	if (const auto* pulled = registry.TryGet<const components::HandPulled>(entity); pulled != nullptr)
+	if (const auto* pulled = registry.TryGet<const components::HandPulled>(entity);
+	    pulled != nullptr && drawn_place::StandsAsPulled(*pulled, transform))
 	{
 		return {.position = pulled->position, .rotation = pulled->rotation, .scale = pulled->scale};
 	}

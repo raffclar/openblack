@@ -55,7 +55,10 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	Reflect<components::HandPulled>(context)
 	    .Field<&components::HandPulled::position>("position")
 	    .Field<&components::HandPulled::rotation>("rotation")
-	    .Field<&components::HandPulled::scale>("scale");
+	    .Field<&components::HandPulled::scale>("scale")
+	    .Field<&components::HandPulled::standsAt>("standsAt")
+	    .Field<&components::HandPulled::standsRotation>("standsRotation")
+	    .Field<&components::HandPulled::standsScale>("standsScale");
 	Reflect<components::HeldLight>(context)
 	    .Field<&components::HeldLight::takenAt>("takenAt")
 	    .Field<&components::HeldLight::drawn>("drawn")

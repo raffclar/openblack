@@ -1009,6 +1009,9 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 {
 	const auto object = grab.object;
+	// A new pull starts from the place, the turn and the size of the thing in the world, not from the lean of an
+	// earlier pull
+	_world->ForgetPulledPose(object);
 	const auto pose = _world->PoseOf(object);
 	hand_grab::Tug tug {.axes = pose.axes, .base = pose.origin};
 	// The pull works in the plane of the land under the thing, at the height the hand's drop below the camera reaches
@@ -1365,12 +1368,16 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
-	// A pull that ended leaves the thing drawn at its own place again
+	// In a game alone, a thing that the hand lets go of before it comes free stays drawn in the lean of the pull. In a
+	// network game, the other computers did not see the lean, so the thing stands again as before the pull.
 	const bool tugs = (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
 	                  grab->tug.has_value() && grab->object == _drawnPull;
 	if (_drawnPull != entt::null && !tugs)
 	{
-		_world->ForgetPulledPose(_drawnPull);
+		if (_world->IsNetworkGame())
+		{
+			_world->ForgetPulledPose(_drawnPull);
+		}
 		_drawnPull = entt::null;
 	}
 	// A pour lasts three quarters of a second of the game's time

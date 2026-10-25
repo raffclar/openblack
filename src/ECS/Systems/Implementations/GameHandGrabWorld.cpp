@@ -957,7 +957,15 @@ void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
 	{
 		return;
 	}
-	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	const auto& stands = registry.Get<const Transform>(object);
+	HandPulled pulled {
+	    .position = pose.origin,
+	    .rotation = glm::mat3(1.0f),
+	    .scale = glm::vec3(1.0f),
+	    .standsAt = stands.position,
+	    .standsRotation = stands.rotation,
+	    .standsScale = stands.scale,
+	};
 	for (glm::length_t column = 0; column < 3; ++column)
 	{
 		const float length = glm::length(pose.axes[column]);
