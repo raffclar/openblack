@@ -124,6 +124,7 @@
 #include "Online/GodsRingMap.h"
 #include "Profiler.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptStart.h"
 #include "Serializer/FotFile.h"
 #include "Temple/TempleHelp.h"
 #include "Windowing/WindowingInterface.h"
@@ -969,7 +970,7 @@ bool LandSystem::StartChallengeScripts(bool startStory)
 
 void LandSystem::StartStoryScripts()
 {
-	const bool started = Locator::vm::value().StartScript("LandControlAll", lhvm::ScriptType::All) != 0;
+	const bool started = Locator::vm::value().StartScript("LandControlAll", script::start::StartableScripts()) != 0;
 	// The question comes whether or not the story started
 	const bool asked = AskNewGameChoice();
 	// The story opens on a black screen: its first land comes up at noon, and its scripts set the dawn of the opening

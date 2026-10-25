@@ -101,10 +101,11 @@ struct NewGameStart
 }
 
 /// Whether the game's first land starts the story: its scripts and the start-of-game question. A playground is started
-/// as the playground menu starts one, with the scripts made ready but none of the story begun and nothing asked.
-[[nodiscard]] constexpr bool FirstLandStartsStory(bool playground) noexcept
+/// as the playground menu starts one, with the scripts made ready but none of the story begun and nothing asked. A
+/// network game also starts no story and asks nothing.
+[[nodiscard]] constexpr bool FirstLandStartsStory(bool playground, bool networkGame) noexcept
 {
-	return !playground;
+	return !playground && !networkGame;
 }
 
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)

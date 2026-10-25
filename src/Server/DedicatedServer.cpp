@@ -313,9 +313,11 @@ bool ServerWorld::StartLand()
 		}
 	}
 	Locator::playerProfileSystem::value().StartPlaying(static_cast<int64_t>(std::time(nullptr)));
-	// The story's scripts run the first land, but not the testbed or a playground
+	// The story's scripts run the first land, but not the testbed or a playground. The server's world is the world of a
+	// network game, which starts no story.
 	const bool startStory = !_settings.testbed && !_settings.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish,
+	                                                              Locator::time::value().IsNetworkGame());
 	if (!land.StartChallengeScripts(startStory))
 	{
 		return false;
