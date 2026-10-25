@@ -54,6 +54,7 @@ public:
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
+	[[nodiscard]] virtual std::function<void(const TurnChecksum&)> GetTurnListener() const = 0;
 };
 
 } // namespace openblack::ecs::systems

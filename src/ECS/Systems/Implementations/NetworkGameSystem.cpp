@@ -182,9 +182,15 @@ void NetworkGameSystem::Attach()
 	Locator::playerCommandSystem::value().SetSource(_session.get());
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
-	checksums.SetTurnListener([session = _session.get()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
-		session->LocalChecksum(turn.turn, turn.checksum);
-	});
+	// A tool's file of the checksums (--sim-checksums) keeps getting them, to find the part where a client parts
+	checksums.SetTurnListener(
+	    [session = _session.get(), tool = checksums.GetTurnListener()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    session->LocalChecksum(turn.turn, turn.checksum);
+		    if (tool)
+		    {
+			    tool(turn);
+		    }
+	    });
 }
 
 void NetworkGameSystem::SetReady(bool ready)
