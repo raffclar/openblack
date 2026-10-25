@@ -217,6 +217,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
 	}
 	Locator::mistSystem::value().Update(gameTime);
+	Locator::cloudSystem::value().AnimateStormClouds(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();

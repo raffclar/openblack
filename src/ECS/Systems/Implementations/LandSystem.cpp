@@ -493,7 +493,7 @@ void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 }
 
 bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
-                               const std::function<bool()>& restore)
+                               const std::function<bool()>& restore, SavedLandUse use)
 {
 	const InspectorLoading loading(landPath.filename().generic_string());
 	LoadTimer timer(fmt::format("saved land {}", landPath.stem().string()));
@@ -573,13 +573,17 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	}
 	RemakeModelsAfterLoad();
 	registry.SetDirty();
-	// Each load starts a game: the player is as good or evil as their profile keeps them, not as the save keeps them
-	if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+	// Each load of a saved game starts a game. The world of a game server continues as the server has it.
+	if (use == SavedLandUse::SavedGame)
 	{
-		SetPlayerAlignmentFromProfile();
+		// The player is as good or evil as their profile keeps them, not as the save keeps them
+		if (land_change::RulesFor(land_change::Kind::SavedGame).alignmentFromProfile)
+		{
+			SetPlayerAlignmentFromProfile();
+		}
+		// The players' statistics note the alignments they start the loaded game at, and the towns on the land
+		player_statistics::GameStarts(registry);
 	}
-	// The players' statistics note the alignments they start the loaded game at, and the towns on the land
-	player_statistics::GameStarts(registry);
 	// Each load starts a game: the square of the player of this computer takes the symbol of the profile played now. The
 	// save keeps no symbol.
 	View().MakeSymbolSheet();

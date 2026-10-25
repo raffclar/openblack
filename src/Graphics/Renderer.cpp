@@ -108,7 +108,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
-#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -128,6 +127,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -2903,25 +2903,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const ProgramUniform u_mistUniform {*program, "u_mist"};
 	const ProgramUniform u_mistColourUniform {*program, "u_mistColour"};
 
-	desc.entities.Each<const Mist, const ecs::components::Transform>([&](entt::entity entity, const Mist& mist,
-	                                                                     const ecs::components::Transform& transform) {
-		auto colour = mist.colour;
-		if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
-		{
-			if (!cloudsShown)
-			{
-				return;
-			}
-			// How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
-		}
-		// A storm's cloud takes the land's colour, darkened by the storm's shade, and is lit by its lightning
-		const auto* stormCloud = desc.entities.TryGet<ecs::components::StormCloud>(entity);
-		if (stormCloud != nullptr)
-		{
-			colour = (colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud->shade);
-		}
+	// A storm's cloud is lit by the lightning of its storm
+	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,
+	                          const ecs::systems::StormCloud* stormCloud) {
 		const auto alpha = static_cast<float>(colour >> 24u);
 		if (alpha <= 0.0f)
 		{
@@ -2931,9 +2915,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		glm::vec3 scale {mist.size};
 		if (mist.shrinksEdgeOn)
 		{
-			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, transform.position - origin);
+			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, position - origin);
 		}
-		const auto model = glm::translate(transform.position) * glm::mat4(facing) * glm::scale(scale);
+		const auto model = glm::translate(position) * glm::mat4(facing) * glm::scale(scale);
 		const auto frame = mists::FrameOffset(mists::Frame(mist.counter), mist.shrinksEdgeOn);
 		const glm::vec4 u_mist {frame, 0.0f, 0.0f};
 		const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
@@ -2972,11 +2956,35 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				// Both sides, blended over what is behind, tested against but not writing depth
 				bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 				// In its place among everything that blends, the farthest first
-				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
-				                zsort::Depth(transform.position, origin));
+				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), zsort::Depth(position, origin));
 			}
 		}
-	});
+	};
+
+	desc.entities.Each<const Mist, const ecs::components::Transform>(
+	    [&](entt::entity entity, const Mist& mist, const ecs::components::Transform& transform) {
+		    auto colour = mist.colour;
+		    if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
+		    {
+			    if (!cloudsShown)
+			    {
+				    return;
+			    }
+			    // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+			    const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+			    colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
+		    }
+		    drawMist(mist, transform.position, colour, nullptr);
+	    });
+	// A storm's cloud takes the land's colour, darkened by the storm's shade
+	if (Locator::cloudSystem::has_value())
+	{
+		for (const auto& stormCloud : Locator::cloudSystem::value().GetStormClouds())
+		{
+			const auto colour = (stormCloud.mist.colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud.shade);
+			drawMist(stormCloud.mist, stormCloud.position, colour, &stormCloud);
+		}
+	}
 }
 
 void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const

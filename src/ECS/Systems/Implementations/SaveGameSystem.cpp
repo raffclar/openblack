@@ -1336,10 +1336,11 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	{
 		Locator::vm::value().StopAllTasks();
 	}
-	const bool loaded =
-	    Locator::landSystem::value().LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world, kind]() {
-		    return ecs::world_save::LoadEntities(reflection, world, kind).has_value();
-	    });
+	const bool loaded = Locator::landSystem::value().LoadSavedLand(
+	    game.landscape, game.landscapeFile,
+	    [&reflection, &world, kind]() { return ecs::world_save::LoadEntities(reflection, world, kind).has_value(); },
+	    kind == ecs::world_save::LoadKind::WorldState ? LandSystemInterface::SavedLandUse::WorldState
+	                                                  : LandSystemInterface::SavedLandUse::SavedGame);
 	if (!loaded)
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The world of slot {} did not load", slot);

@@ -241,6 +241,12 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Footpath::Node::planned>("planned")
 	    .Field<&openblack::ecs::components::Footpath::Node::hidden>("hidden")
 	    .Field<&openblack::ecs::components::Footpath::Node::marker>("marker");
+	Reflect<openblack::ecs::components::FootpathFinder::Plan>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::FootpathFinder::Plan::obstacles>("obstacles")
+	    .Field<&openblack::ecs::components::FootpathFinder::Plan::search>("search")
+	    .Field<&openblack::ecs::components::FootpathFinder::Plan::start>("start")
+	    .Field<&openblack::ecs::components::FootpathFinder::Plan::goal>("goal")
+	    .Field<&openblack::ecs::components::FootpathFinder::Plan::live>("live");
 	Reflect<openblack::ecs::components::GuidanceHeard::SeenThing>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::thing>("thing")
 	    .Field<&openblack::ecs::components::GuidanceHeard::SeenThing::since>("since");
