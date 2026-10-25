@@ -37,6 +37,7 @@
 #include "Creature/CreatureHandRules.h"
 #include "Creature/CreatureLocomotion.h"
 #include "Creature/CreatureRig.h"
+#include "Creature/CreatureSentReactions.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureLocomotion.h"
@@ -514,8 +515,23 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 	// only asks whether the creature can take it now, for what the hand counts.
 	if (Locator::playerCommandSystem::has_value())
 	{
-		const bool takes = minds.CanForceAction(creature, animation, mirrored, interruptsAfter);
-		Locator::playerCommandSystem::value().Submit(player_commands::CreatureReaction {
+		auto& commands = Locator::playerCommandSystem::value();
+		// In a game alone, all commands wait in the queue until a turn does them. An empty queue has no reaction that waits.
+		if (!commands.HasSource() && commands.PendingCount() == 0)
+		{
+			_sentReactions.Clear();
+		}
+		// A reaction that the hand sent before plays from its start at its turn. It stops a new reaction, as a reaction
+		// that plays does.
+		const bool takes = creature_hand::TakesReaction(_sentReactions.Waiting(creature), interruptsAfter,
+		                                                minds.CanForceAction(creature, animation, mirrored, interruptsAfter));
+		// A refused reaction with no face does nothing in the world, so the hand does not send it
+		if (!takes && !face.has_value())
+		{
+			return false;
+		}
+		_sentReactions.Sent(creature, takes);
+		commands.Submit(player_commands::CreatureReaction {
 		    .creature = creature,
 		    .animation = static_cast<uint32_t>(animation),
 		    .mirrored = mirrored,
@@ -531,8 +547,13 @@ bool CreatureHandSystem::React(entt::entity creature, size_t animation, bool mir
 	return minds.ForceAction(creature, animation, mirrored, face, interruptsAfter);
 }
 
-void CreatureHandSystem::DoReaction(PlayerNames /*player*/, const player_commands::CreatureReaction& reaction)
+void CreatureHandSystem::DoReaction(PlayerNames player, const player_commands::CreatureReaction& reaction)
 {
+	// The turn does the reactions of this computer in the order that the hand sent them
+	if (Locator::playerCommandSystem::has_value() && Locator::playerCommandSystem::value().GetSender() == player)
+	{
+		_sentReactions.Done();
+	}
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(reaction.creature) || !registry.AllOf<Creature>(reaction.creature) ||
 	    !Locator::creatureMindSystem::has_value())
