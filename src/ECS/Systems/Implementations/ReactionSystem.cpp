@@ -1847,7 +1847,7 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 		const float belief = ignored ? 0.0f : creature.value_or(value(boredom, villager->town)) * share;
 		magic::town_belief::Add(impression->belief, source.player, belief);
 		impression->lastImpression = belief;
-		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX, _voice, _turn);
+		villager_reactions::ShowBelief(living, source.player, belief, info->alignmentForSFX);
 		// Whatever a villager is impressed by moves the player's alignment a little, by how much its town wants what it
 		// shows for those kinds that look to a desire
 		std::optional<float> desire;
@@ -1909,7 +1909,7 @@ void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float
 	magic::town_belief::Add(villager_reactions::ImpressionOf(town).belief, player, amount);
 	if (from != entt::null && registry.Valid(from) && registry.AllOf<Transform>(from))
 	{
-		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment, _voice, _turn);
+		villager_reactions::ShowObjectBelief(from, town, player, amount, alignment);
 	}
 }
 
@@ -1921,7 +1921,6 @@ void ReactionSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _turn);
 	reflection::Save(out, _joins);
 	reflection::Save(out, _landBalances);
-	reflection::Save(out, _voice);
 }
 
 bool ReactionSystem::LoadState(reflection::BinaryReader& in)
@@ -1932,7 +1931,6 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 	reflection::Load(in, _turn);
 	reflection::Load(in, _joins);
 	reflection::Load(in, _landBalances);
-	reflection::Load(in, _voice);
 	return !in.Failed();
 }
 
@@ -1946,7 +1944,6 @@ void ReactionSystem::Reset()
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;
-	_voice = {};
 	_landBalances = {1.0f, 1.0f, 1.0f};
 }
 
