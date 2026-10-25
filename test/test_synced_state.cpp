@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstring>
+
 #include <algorithm>
 #include <array>
 #include <string>
@@ -259,3 +261,31 @@ TEST(SyncedState, TheSnowThatAThingShowsDoesNotChangeTheHash)
 	registry.get<FakeBody>(tree).place = 4.0f;
 	EXPECT_NE(synced_state::HashOf(registry, context, parts).hash, before);
 }
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 2.0f, .drawnPlace = 5.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow);
+	registry.emplace<FakeGlow>(glow, FakeGlow {.shine = 0.5f});
+	WorkerPool pool(2);
+	ecs::reflection::WorldRows rows;
+	const auto hash = synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &rows);
+	// The rows do not change the hash
+	EXPECT_EQ(hash.hash, synced_state::HashOf(registry, context, k_Presentation).hash);
+	// The body keeps its place only: the drawn place and the marked glow are presentation parts
+	ASSERT_EQ(rows.rows.size(), 1u);
+	const auto& row = rows.rows.front();
+	EXPECT_EQ(row.entity, body);
+	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
+	ASSERT_EQ(row.size, sizeof(float));
+	float place = 0.0f;
+	std::memcpy(&place, rows.bytes.data() + row.offset, sizeof(place));
+	EXPECT_EQ(place, 2.0f);
+}
+#endif

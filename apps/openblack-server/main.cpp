@@ -69,6 +69,11 @@ int main(int argc, char* argv[])
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		("row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world of a client parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
+		("row-dump-turn", "Tools: with --row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
+		("row-dump-keep", "Tools: with --row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("64"))
+#endif
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
 		("tls-key", "The PEM file of the key of --tls-cert.", cxxopts::value<std::string>())
@@ -150,6 +155,17 @@ int main(int argc, char* argv[])
 			settings.recordPath = std::filesystem::path(result["record"].as<std::string>());
 			settings.recordFields = result.count("record-fields") != 0;
 		}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (result.count("row-dump") != 0)
+		{
+			settings.rowDumpPath = std::filesystem::path(result["row-dump"].as<std::string>());
+			settings.rowDump.keptTurns = result["row-dump-keep"].as<uint32_t>();
+			if (result.count("row-dump-turn") != 0)
+			{
+				settings.rowDump.atTurn = result["row-dump-turn"].as<uint32_t>();
+			}
+		}
+#endif
 		if (result.count("reload-at") != 0)
 		{
 			settings.reloadAt = result["reload-at"].as<uint32_t>();

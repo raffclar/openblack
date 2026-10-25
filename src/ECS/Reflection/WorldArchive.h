@@ -123,9 +123,31 @@ struct HashLeaveOut
 using RowVisitor = std::function<void(std::string_view component, entt::entity entity, std::string_view field,
                                       std::span<const uint8_t> bytes)>;
 
+/// Tools: the bytes that a hash took of each field of each row, to find the field that parts two computers. A build
+/// without the developer tools does not fill it.
+struct WorldRows
+{
+	struct Row
+	{
+		entt::entity entity {};
+		/// The index of the field in fields
+		uint32_t field {0};
+		/// The first byte of the value in bytes
+		uint32_t offset {0};
+		uint32_t size {0};
+	};
+	/// Each field as "component.field", in the order that the hash first took it. A component that saves as one value
+	/// has the field "*".
+	std::vector<std::string> fields;
+	/// Each field of each row, in the order of the hash: the components in the order of their names, the rows in the
+	/// order of the storage
+	std::vector<Row> rows;
+	std::vector<uint8_t> bytes;
+};
+
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
-                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr);
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the

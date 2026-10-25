@@ -18,6 +18,9 @@ if (OPENBLACK_DEVELOPER_TOOLS)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoDebugGui[.]cpp$")
 else ()
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/Gui[.]cpp$")
+  # The dump of the rows of the synced world is a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)

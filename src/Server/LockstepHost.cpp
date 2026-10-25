@@ -649,7 +649,13 @@ void LockstepHost::CompareClient(uint8_t seat, uint32_t turn, uint64_t checksum)
 	}
 	auto& compares = _seats[seat].compares;
 	++compares.compared;
-	if (own->second == checksum)
+	const bool differs = own->second != checksum;
+	if (differs && !compares.differs && _partListener)
+	{
+		_partListener(seat, turn);
+	}
+	compares.differs = differs;
+	if (!differs)
 	{
 		++compares.same;
 	}
