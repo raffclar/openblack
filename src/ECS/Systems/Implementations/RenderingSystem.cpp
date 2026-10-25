@@ -852,7 +852,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    added = glow->Packed();
 		    }
-		    // A blast's rubble fades by its alpha in its last second
+		    // The roots of a fallen dead tree fade by their alpha
 		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
 		    {
 			    look.z = -(1.0f - static_cast<float>(*mark->alpha) / 255.0f);

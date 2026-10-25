@@ -6182,6 +6182,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+	// The hand pulls a conifer out of the ground: the tree leaves a pile of roots in its hole, which fades away
+	all.push_back({
+	    .id = "hand.pull_tree_roots_hole",
+	    .name = "Tree pulled free leaves a hole of roots",
+	    .facet = Facet::Hand,
+	    .description =
+	        "A conifer stands at the middle of the screen. After a second the pointer goes onto its trunk, "
+	        "presses the Action button and moves up, so the hand pulls the tree. Two seconds later the button comes up.",
+	    .expected = "The tree leans to the hand, comes free and goes into the hand with a puff of dust. A pile of roots "
+	                "and earth stays in the hole where the tree stood, on the shape of the land. After 14 seconds of "
+	                "game time the pile fades, and one second later it is gone. Only this computer draws the pile. The "
+	                "inspector query magic.state shows it under roots_piles.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 5.0f, 10.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 10.0f}}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .object = 0, .amount = 6.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.0f, -0.25f}, .amount = 0.6f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -10710,7 +10730,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 178> k_Names {
+	constexpr std::array<std::string_view, 179> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10841,6 +10861,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand grips totem",
 	    "pointer on altar",
 	    "pointer on rope",
+	    "pointer on object",
 	    "set fizz",
 	    "check the profile folder",
 	    "give the player a picture of their own",
@@ -10898,7 +10919,7 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
 	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
-	       kind == Kind::PointerOnRope;
+	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject;
 }
 
 bool NeedOverrides::Empty() const
