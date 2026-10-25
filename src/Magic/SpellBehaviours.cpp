@@ -261,10 +261,10 @@ void spells::Prepare(SpellServicesInterface& services, Spell& spell)
 
 bool spells::Start(SpellServicesInterface& services, Spell& spell)
 {
-	// A storm's swirl plays where it was cast
+	// A storm's swirl plays where it was cast. It shows the storm only, so it uses the random numbers of this computer.
 	if (spell.spellClass == SpellClass::StormAndTornado)
 	{
-		services.StartCastEffect(spell, ParticleType::StormCast);
+		services.StartCastEffect(spell, ParticleType::StormCast, false);
 	}
 	if (IsFlock(spell.spellClass))
 	{
