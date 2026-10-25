@@ -68,6 +68,46 @@ TEST(NetworkLand, ALoadedLandIsTheLandOfItsName)
 	EXPECT_FALSE(IsLand("C:/black/Scripts/Playgrounds/construct.txt", "construct.txt"));
 }
 
+TEST(NetworkLand, ALandOfANetworkGameGoesByItsPathInTheOnlineMapsFolder)
+{
+	// The server may have the map by a relative or an absolute path, in any case
+	EXPECT_EQ(WireName("Online Maps/mpm_2p_1.map"), "Online Maps/mpm_2p_1.map");
+	EXPECT_EQ(WireName("C:/black/Online Maps/mpm_2p_1.map"), "Online Maps/mpm_2p_1.map");
+	EXPECT_EQ(WireName("/games/black/online maps/MPM_2P_1.MAP"), "Online Maps/MPM_2P_1.MAP");
+	// A map that is not in the folder goes by the name of its file, in the folder
+	EXPECT_EQ(WireName("E:/maps/mpm_2p_1.map"), "Online Maps/mpm_2p_1.map");
+	// A script land of the Scripts folder keeps its name
+	EXPECT_EQ(WireName("C:/black/Scripts/Playgrounds/TwoGods.txt"), "Playgrounds/TwoGods.txt");
+}
+
+TEST(NetworkLand, AClientFindsALandOfANetworkGameInItsOnlineMapsFolder)
+{
+	const std::filesystem::path scripts("C:/black/Scripts");
+	EXPECT_EQ(PathOf("Online Maps/mpm_2p_1.map", scripts), std::filesystem::path("Online Maps/mpm_2p_1.map"));
+	EXPECT_EQ(PathOf("online maps/mpm_2p_1.map", scripts), std::filesystem::path("Online Maps/mpm_2p_1.map"));
+	// A map file anywhere else, or a path out of the folder, is not a land
+	EXPECT_FALSE(PathOf("mpm_2p_1.map", scripts).has_value());
+	EXPECT_FALSE(PathOf("Playgrounds/mpm_2p_1.map", scripts).has_value());
+	EXPECT_FALSE(PathOf("Online Maps/../Scripts/x.map", scripts).has_value());
+	EXPECT_FALSE(PathOf("/Online Maps/mpm_2p_1.map", scripts).has_value());
+}
+
+TEST(NetworkLand, TheServerAndTheClientNameALandOfANetworkGameTheSame)
+{
+	const auto wire = WireName("C:/black/Online Maps/mpm_2p_1.map");
+	const std::filesystem::path scripts("C:/black/Scripts");
+	const auto path = PathOf(wire, scripts);
+	ASSERT_TRUE(path.has_value());
+	// What the client loads is the land of the name that the server sent
+	EXPECT_TRUE(IsLand(*path, wire));
+	EXPECT_TRUE(IsLand("D:/other/Online Maps/MPM_2P_1.map", wire));
+	EXPECT_FALSE(IsLand("D:/other/Online Maps/mpm_3p_1.map", wire));
+	EXPECT_FALSE(IsLand("C:/black/Scripts/Land1.txt", wire));
+	const Start start = ScriptStart(wire, 7, "");
+	const OwnWorld own {.land = *path, .testbed = false, .godsRingMap = false, .seed = 7, .opening = std::nullopt};
+	EXPECT_EQ(OwnValuesThatDiffer(own, start), "");
+}
+
 TEST(NetworkLand, TheLogNamesTheOwnValuesThatTheServerReplaces)
 {
 	const auto start = ScriptStart("Land1.txt", 7, "cow");

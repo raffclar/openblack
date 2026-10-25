@@ -148,14 +148,15 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
 	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
-		    // The land of the start is a file in the Scripts folder of the game on this computer
+		    // The land of the start is a file in the Scripts folder of the game on this computer, or a map file in its
+		    // "Online Maps" folder
 		    auto& fileSystem = Locator::filesystem::value();
-		    const auto path = fileSystem.GetPath<filesystem::Path::Scripts>() / std::filesystem::path(land);
-		    if (!fileSystem.Exists(path))
+		    const auto path = network_land::PathOf(land, fileSystem.GetPath<filesystem::Path::Scripts>());
+		    if (!path.has_value() || !fileSystem.Exists(*path))
 		    {
 			    return std::nullopt;
 		    }
-		    return fileSystem.ReadAll(path);
+		    return fileSystem.ReadAll(*path);
 	    },
 	    .readCreature = _readCreature,
 	});

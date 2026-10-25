@@ -325,6 +325,7 @@
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkLand.h"
 #include "Online/NetworkSession.h"
+#include "Online/OnlineMapLand.h"
 #include "Online/OpenPage.h"
 #include "Online/StartRules.h"
 #include "Online/WebSocketInterface.h"
@@ -3771,6 +3772,10 @@ bool Game::Initialize() noexcept
 	{
 		// With no land asked for, a new game starts on the land that the map script names
 		_startMap = *land;
+	}
+	else if (online_map_land::IsOnlineMap(_startMap.generic_string()))
+	{
+		// A land of a network game is in the game's folder, such as "Online Maps/mpm_2p_1.map"
 	}
 	else
 	{
