@@ -69,6 +69,7 @@ int main(int argc, char* argv[])
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
+		("test-commands", "Tests: the game server lets through the commands of the test tools, such as the fight cheat.")
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
 		("tls-cert", "The PEM file of the certificate chain of the game socket (wss). Without it, the socket speaks plain WebSocket on a loopback address only, behind a proxy that does the TLS.", cxxopts::value<std::string>())
 		("tls-key", "The PEM file of the key of --tls-cert.", cxxopts::value<std::string>())
@@ -188,6 +189,7 @@ int main(int argc, char* argv[])
 			}
 			network.godsToStart = result["gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
+			network.testCommands = result.count("test-commands") != 0;
 			if (result.count("lobby-api") != 0)
 			{
 				network.lobbyApi = result["lobby-api"].as<std::string>();

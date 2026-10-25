@@ -43,6 +43,9 @@ struct HostSettings
 	int64_t comeBackMicroseconds {5LL * 60 * 1'000'000};
 	/// The turns that the server keeps to send again to a player who comes back: 5 minutes of turns, and some more
 	uint32_t keptTurns {3200};
+	/// Tests: the commands of the test tools (player_commands::CreatureFightCheat) go into the turns. Without this, the
+	/// server leaves them out.
+	bool testCommands {false};
 };
 
 /// The game role of the server in a network game (authoritative lockstep, user decision MP-Q1). It lets in the players

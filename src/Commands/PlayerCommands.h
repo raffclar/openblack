@@ -348,11 +348,18 @@ struct HandShakeOff
 {
 };
 
+/// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
+/// game server with its test commands on lets this command through.
+struct CreatureFightCheat
+{
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, CreatureFightCheat>;
 
 /// A command and the player that sent it
 struct Command

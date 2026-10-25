@@ -3325,6 +3325,20 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    {"opponent_of_id", Id(fights.OpponentOf(*creature))},
 		});
 	});
+	auto cheat = Query("fight_cheat",
+	                   "Sends the fight cheat of the player of this computer as a command: at the turn, the player's "
+	                   "creature fights the nearest creature, or stops the duel that it is in. A game server takes the "
+	                   "command only with its test commands on",
+	                   {});
+	cheat.writes = true;
+	provider->Add(std::move(cheat), [](const QueryContext& /*context*/) {
+		if (Registry() == nullptr || !Locator::playerCommandSystem::has_value())
+		{
+			return QueryResult::Error("there are no fights without a land");
+		}
+		Locator::playerCommandSystem::value().Submit(player_commands::CreatureFightCheat {});
+		return QueryResult::Value({{"sent", true}});
+	});
 	auto move = Query("move",
 	                  "Sends a creature walking or running to a point by its own legs (turning and stepping off as it "
 	                  "does), or turning on the spot to face it",

@@ -56,6 +56,8 @@ struct NetworkSettings
 	uint32_t godsToStart {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
+	/// Tests: the server lets through the commands of the test tools (player_commands::CreatureFightCheat)
+	bool testCommands {false};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
 	/// every 5 seconds, so that the lobby lists the server and gives tickets for it.
 	std::string lobbyApi;
