@@ -185,6 +185,7 @@
 #include "Graphics/Sun.h"
 #include "Graphics/TreeBrightness.h"
 #include "Graphics/VertexBuffer.h"
+#include "Graphics/ViewFrustum.h"
 #include "Graphics/WarmUpViews.h"
 #include "Graphics/ZSort.h"
 #include "InfoConstants.h"
@@ -6630,19 +6631,59 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					                                          inSegment(segment, [&] { withoutHeld(first, count, draw); });
 				                                          });
 			};
-			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own
+			// The view of this pass, as the pass sets it. An instance out of it puts no pixel on the screen, so the pass
+			// does not draw it. A warm-up draws all instances, so that each draw makes its pipeline.
+			const auto seenBy = view_frustum::FromViewProjection(desc.camera->GetProjectionMatrix() *
+			                                                     desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+			const auto instanceSeen = [&](const L3DMesh& mesh, const RenderContext::InstancedDrawDesc& placers,
+			                              uint32_t instance) {
+				// The bones of a model can move its parts out of its box, and so can the offsets of its submeshes
+				if (_warmingUp || mesh.IsBoned() || placers.bonePalette || placers.perEntity ||
+				    !placers.subMeshOffsets.empty() || instance >= renderCtx.instanceUniforms.size())
+				{
+					return true;
+				}
+				const auto& model = renderCtx.instanceUniforms[instance].model;
+				const auto& box = mesh.GetBoundingBox();
+				if (!placers.morphWithTerrain)
+				{
+					return view_frustum::SeesBox(seenBy, model, box.minima, box.maxima);
+				}
+				// A model that goes with the land moves its points by no more than the highest land under its box
+				const auto& land = Locator::terrainSystem::value();
+				const float highestRise =
+				    view_frustum::HighestLandUnder(model, box.minima, box.maxima, [&land](glm::ivec2 corner) {
+					    return land.GetCell(glm::u16vec2(corner)).altitude;
+				    });
+				const auto sweep = view_frustum::LandRiseSweep(model, highestRise);
+				return !sweep.has_value() || view_frustum::SeesSweptBox(seenBy, model, box.minima, box.maxima, *sweep);
+			};
+			// A model whose parts differ by detail is drawn one instance at a time, each with the parts of its own. A
+			// draw of all the other models' instances starts at the first instance in view and stops after the last.
 			const auto drawPlaced = [&](entt::id_type meshId, const RenderContext::InstancedDrawDesc& placers,
-			                            bool useMaterialBlending, const EntityPose* pose = nullptr) {
+			                            bool useMaterialBlending) {
+				const auto& mesh = *meshManager.Handle(meshId);
 				inSegments(placers, [&](uint32_t first, uint32_t count) {
+					const auto seen = [&](uint32_t instance) { return instanceSeen(mesh, placers, instance); };
 					if (!placers.partsByLevel)
 					{
-						drawInstances(meshId, placers, useMaterialBlending, first, count, pose);
+						const auto instances = std::views::iota(first, first + count);
+						const auto start = std::ranges::find_if(instances, seen);
+						if (start == instances.end())
+						{
+							return;
+						}
+						const auto last = *std::ranges::find_if(instances | std::views::reverse, seen);
+						drawInstances(meshId, placers, useMaterialBlending, *start, last + 1 - *start);
 						return;
 					}
 					for (uint32_t instance = first; instance < first + count; ++instance)
 					{
-						submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
-						drawInstances(meshId, placers, useMaterialBlending, instance, 1, pose);
+						if (seen(instance))
+						{
+							submitDesc.detailLevel = renderCtx.instanceLevels.at(instance);
+							drawInstances(meshId, placers, useMaterialBlending, instance, 1);
+						}
 					}
 					submitDesc.detailLevel = 1;
 				});
@@ -7316,7 +7357,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					}
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7381,7 +7422,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				{
 					for (uint32_t instance = placers.offset; instance < placers.offset + placers.filled; ++instance)
 					{
-						if (mirroredWithHand(instance))
+						if (mirroredWithHand(instance) || !instanceSeen(*meshManager.Handle(meshId), placers, instance))
 						{
 							continue;
 						}
@@ -7780,67 +7821,76 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
-				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &registry, bookmarksShown,
-				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
-					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
-					    {
-						    return;
-					    }
-					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
-					    {
-						    return;
-					    }
-					    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
-					    // alone in its floor
-					    if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
-					    {
-						    const bool inMainRoom = templePart->room == TempleRoom::Main;
-						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-						    const bool inReflection = desc.viewId == RenderPass::Reflection;
-						    if ((inReflection ? !inMainRoom : !drawn) ||
-						        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
-						    {
-							    return;
-						    }
-					    }
-					    // A sprite whose texture the cache does not have is not drawn
-					    const auto found =
-					        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
-					    if (!found.has_value())
-					    {
-						    return;
-					    }
-					    const auto* texture = found->texture;
-					    const auto* alpha = found->alpha;
-					    glm::mat4 modelMatrix = glm::mat4(1.0f);
-					    modelMatrix = glm::translate(modelMatrix, transform.position);
-					    modelMatrix *= glm::mat4(transform.rotation);
-					    modelMatrix = glm::scale(modelMatrix, transform.scale);
+				// The view of this pass. A sprite out of it puts no pixel on the screen, so the pass does not draw it.
+				const auto seenBy = view_frustum::FromViewProjection(
+				    desc.camera->GetProjectionMatrix() * desc.camera->GetViewMatrix(Camera::Interpolation::Current));
+				registry.Each<const Sprite, const Transform>([this, &spriteShader, &desc, &textures, translucentViewId,
+				                                              cameraOrigin, &registry, bookmarksShown, leashMarkersShown,
+				                                              &seenBy](entt::entity entity, const Sprite& sprite,
+				                                                       const Transform& transform) {
+					if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
+					{
+						return;
+					}
+					if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
+					{
+						return;
+					}
+					// The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
+					// alone in its floor
+					if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
+					{
+						const bool inMainRoom = templePart->room == TempleRoom::Main;
+						const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
+						const bool inReflection = desc.viewId == RenderPass::Reflection;
+						if ((inReflection ? !inMainRoom : !drawn) ||
+						    !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
+						{
+							return;
+						}
+					}
+					// A sprite whose texture the cache does not have is not drawn
+					const auto found =
+					    sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+					if (!found.has_value())
+					{
+						return;
+					}
+					const auto* texture = found->texture;
+					const auto* alpha = found->alpha;
+					glm::mat4 modelMatrix = glm::mat4(1.0f);
+					modelMatrix = glm::translate(modelMatrix, transform.position);
+					modelMatrix *= glm::mat4(transform.rotation);
+					modelMatrix = glm::scale(modelMatrix, transform.scale);
+					if (!_warmingUp &&
+					    !view_frustum::SeesSphere(seenBy, transform.position,
+					                              view_frustum::QuadRadius(glm::mat3(modelMatrix)) + view_frustum::k_BoxMargin))
+					{
+						return;
+					}
 
-					    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
+					glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
-					    bgfx::setTransform(glm::value_ptr(modelMatrix));
-					    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
-					    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
-					                                    sprite.alpha.has_value() ? 1.0f : 0.0f, sprite.additive ? 1.0f : 0.0f,
-					                                    0.0f};
-					    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-					    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
-					    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
-					    // premultiplied by alpha when the tint is
-					    const auto tint =
-					        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
-					    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-					    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
+					bgfx::setTransform(glm::value_ptr(modelMatrix));
+					spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
+					const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f, sprite.alpha.has_value() ? 1.0f : 0.0f,
+					                                sprite.additive ? 1.0f : 0.0f, 0.0f};
+					spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
+					spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
+					// The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
+					// premultiplied by alpha when the tint is
+					const auto tint =
+					    sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
+					spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
+					spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
 
-					    _plane->GetVertexBuffer().Bind();
+					_plane->GetVertexBuffer().Bind();
 
-					    bgfx::setState(SpriteState(sprite.additive));
+					bgfx::setState(SpriteState(sprite.additive));
 
-					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-					                         zsort::Depth(transform.position, cameraOrigin));
-				    });
+					spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
+					                     zsort::Depth(transform.position, cameraOrigin));
+				});
 				DrawTempleLeashes(desc);
 			}
 		}
