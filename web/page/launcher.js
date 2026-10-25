@@ -12,8 +12,8 @@ const k_FolderKey = 'game-folder';
 const k_CopyFolder = 'game-copy';
 const k_CopyComplete = '.openblack-copy-complete';
 
-// The top folders of the install that the game reads. The page gives no other folder to the game. A network game plays
-// a land of the folder "Online Maps".
+// The top folders of the install that the game reads. The page gives no other folder to the game. "Online Maps" has
+// the lands of the network games and their list.
 const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins', 'online maps']);
 
 // The parts of an install that the game needs, without letter case. A name with a slash at the end is a folder.
@@ -421,6 +421,12 @@ async function start() {
   }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
+  // The page parameter "multiplayer" gives the game the -MULTIPLAYER switch, as the shortcut of the desktop game does:
+  // the multiplayer front end opens in place of the menu. Every build takes it, because the menu stays shut while the
+  // first land's opening has its cut scenes.
+  if (parameters.has('multiplayer') && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
+    gameArguments.push('-MULTIPLAYER');
+  }
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);

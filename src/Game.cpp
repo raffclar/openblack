@@ -47,10 +47,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-#if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
-#endif
-
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/DayNightClock.h"
@@ -5146,7 +5142,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 #endif
 	// The internet connection's name in the list is the lobby's host: in the browser, the host of the page
 #if defined(__EMSCRIPTEN__)
-	settings.internetName = gui::ToUtf16(emscripten_run_script_string("location.host"));
+	settings.internetName = gui::ToUtf16(web::PageHost());
 #else
 	const auto host = origin.find("://");
 	settings.internetName = gui::ToUtf16(host == std::string::npos ? origin : origin.substr(host + 3));

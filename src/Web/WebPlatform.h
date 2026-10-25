@@ -14,6 +14,7 @@
 #endif
 
 #include <functional>
+#include <string>
 #include <string_view>
 
 /// The parts of the web build that connect the game to the browser page
@@ -61,6 +62,9 @@ void WaitForRenderThreadStop();
 
 /// Show a message from the game on the page, under the game's picture
 void ShowPageMessage(std::string_view title, std::string_view text);
+
+/// The host of the page and its port, such as "bw.example.org" or "127.0.0.1:8443"
+[[nodiscard]] std::string PageHost();
 
 /// Put the user's install that the page gives at the path. Returns false when the page gave no install.
 [[nodiscard]] bool MountUserFolder(std::string_view path);
