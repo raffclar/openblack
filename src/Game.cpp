@@ -2202,6 +2202,10 @@ bool Game::Update() noexcept
 		    if (!_frameGuard || step == game_frame::Step::Turns ||
 		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
 		    {
+			    if (_frameGuard)
+			    {
+				    _frameGuard->Forget();
+			    }
 			    return PlayFrameStep(step, frame);
 		    }
 		    _frameGuard->Before();
@@ -2292,6 +2296,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
+		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
+		if (_scenarioStager && _scenarioRequest.has_value())
+		{
+			_scenarioStager();
+		}
 		const auto turn = Locator::time::value().GetTurn();
 		const bool played = PlayTurns();
 		// A turn makes the dust of the grips that the hand made before it

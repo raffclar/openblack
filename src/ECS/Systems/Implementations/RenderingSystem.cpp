@@ -50,7 +50,6 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Graveyard.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -83,6 +82,7 @@
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -303,8 +303,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.alphaTexturedAdditive = true;
 			count.first->second.shineColour = blended->shineColour;
 		}
-		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
-		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))
+		if (registry.AllOf<SeeThrough>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
@@ -354,6 +353,39 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		    prep(entity, mesh, true);
 	    },
 	    entt::exclude<Tree>);
+	// The marks on the land, which only the frames draw, are drawn as the things of their model are. Each one has room
+	// among those fading out too.
+	if (Locator::explosionSystem::has_value())
+	{
+		for (const auto& mark : Locator::explosionSystem::value().GroundMarks())
+		{
+			auto count = meshIds.insert(std::make_pair(mark.mesh, MeshInstances {.count = 0,
+			                                                                     .morphWithTerrain = mark.morphWithTerrain,
+			                                                                     .unlit = false,
+			                                                                     .perEntity = false,
+			                                                                     .translucent = false,
+			                                                                     .alphaTexturedAdditive = false,
+			                                                                     .shineColour = std::nullopt,
+			                                                                     .additiveShare = std::nullopt,
+			                                                                     .instanceAlpha = false,
+			                                                                     .villagers = true,
+			                                                                     .film = true,
+			                                                                     .environmentMapped = true,
+			                                                                     .changedMaterials = std::nullopt}));
+			count.first->second.count++;
+			count.first->second.villagers = false;
+			count.first->second.film = false;
+			count.first->second.environmentMapped = false;
+			// A mark that fades by its alpha is blended
+			if (mark.alpha.has_value())
+			{
+				count.first->second.translucent = true;
+				count.first->second.instanceAlpha = true;
+			}
+			++fadingCounts[mark.mesh];
+			instanceCount += 2;
+		}
+	}
 	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
 	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
 	registry.Each<const Tree, const ShownRoots>(
@@ -855,11 +887,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    {
 			    added = glow->Packed();
 		    }
-		    // A blast's rubble fades by its alpha in its last second
-		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
-		    {
-			    look.z = -(1.0f - static_cast<float>(*mark->alpha) / 255.0f);
-		    }
 		    // A see-through copy is blended by its own alpha
 		    if (const auto* seeThrough = registry.TryGet<const SeeThrough>(entity))
 		    {
@@ -1133,6 +1160,82 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    ++slots->second.filled;
 	    },
 	    SegmentPasses {.registry = registry, .placed = segmentPlaced, .last = lastSegment});
+
+	// The marks on the land, which only the frames draw. They are drawn in less detail the further off they are, and fade
+	// out, as the other things of the land do. A mark that fades by its own alpha is drawn whole until it has gone.
+	if (Locator::explosionSystem::has_value())
+	{
+		for (const auto& mark : Locator::explosionSystem::value().GroundMarks())
+		{
+			if (!fits)
+			{
+				break;
+			}
+			const auto modelMatrix = PlacedMatrix(mark.transform.position, mark.transform.rotation, mark.transform.scale);
+			auto* slotMap = &_instanceSlots;
+			std::optional<uint8_t> fade;
+			auto level = graphics::mesh_detail::Mesh::High;
+			bool gone = false;
+			if (camera != nullptr && openblack::ecs::object_detail::MarkBandedNow(mark.alpha))
+			{
+				if (const auto& box = MeshBox(mark.mesh); box.has_value())
+				{
+					const auto choice = ChooseDetail(
+					    *box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *camera, modelDetail);
+					if (!choice.mesh.has_value())
+					{
+						gone = true;
+					}
+					else
+					{
+						level = *choice.mesh;
+						if (choice.alpha.has_value())
+						{
+							slotMap = &_fadingSlots;
+							fade = choice.alpha;
+						}
+					}
+				}
+			}
+			const auto slots = slotMap->find(mark.mesh);
+			if (slots == slotMap->end() || slots->second.filled + slots->second.gone >= slots->second.count)
+			{
+				fits = false;
+				break;
+			}
+			// One too far off keeps a place at the back of its model's instances, not drawn
+			const uint32_t idx = gone ? slots->second.offset + slots->second.count - 1 - slots->second.gone
+			                          : slots->second.offset + slots->second.filled;
+			glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f, 0.0f};
+			if (gone)
+			{
+				look.z = 1.0f;
+			}
+			else if (mark.alpha.has_value())
+			{
+				look.z = -(1.0f - static_cast<float>(*mark.alpha) / 255.0f);
+			}
+			else if (fade.has_value())
+			{
+				look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+			}
+			_renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+			_renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+			if (drawBoundingBox)
+			{
+				_renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                           glm::mat4(0.0f)};
+			}
+			if (gone)
+			{
+				++slots->second.gone;
+			}
+			else
+			{
+				++slots->second.filled;
+			}
+		}
+	}
 
 	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
 	const auto rootsSlots = _instanceSlots.find(RootsMesh());

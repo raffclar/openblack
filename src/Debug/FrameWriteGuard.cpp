@@ -144,12 +144,14 @@ Sample Guard::Take() const
 
 void Guard::Before()
 {
-	_before = Take();
+	_before = _last.has_value() ? std::move(*_last) : Take();
+	_last.reset();
 }
 
 void Guard::After(std::string_view step, uint32_t turn)
 {
-	const auto after = Take();
+	_last = Take();
+	const auto& after = *_last;
 	// The hash of the whole state is the quick test: most steps change nothing
 	if (after.hash.hash == _before.hash.hash && after.syncedDraws == _before.syncedDraws)
 	{

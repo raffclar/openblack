@@ -21,7 +21,6 @@
 #include "ECS/Components/DeadTree.h"
 #include "ECS/Components/DestructionGhost.h"
 #include "ECS/Components/FallingRoots.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MorphWithTerrain.h"
 #include "ECS/Components/Transform.h"
@@ -77,7 +76,7 @@ glm::vec3 MeshHalfSize(MeshId mesh)
 
 /// A dead tree just fallen drops its roots: as it lies, a share of its model's half width in size, falling from where it
 /// lies to just above the land
-void DropRoots(ecs::Registry& registry, entt::entity deadTree)
+ExplosionSystemInterface::GroundMark DroppedRoots(const ecs::Registry& registry, entt::entity deadTree)
 {
 	namespace objects = physics::objects;
 	const auto& transform = registry.Get<const Transform>(deadTree);
@@ -86,56 +85,19 @@ void DropRoots(ecs::Registry& registry, entt::entity deadTree)
 	const float scale = transform.scale.x * objects::k_RootsScale * MeshHalfSize(treeMesh).x;
 	const auto rootsHalf = MeshHalfSize(MeshId::TreeRoots);
 	const float land = Locator::terrainSystem::value().GetHeightAt({transform.position.x, transform.position.z});
-	const auto roots = registry.Create();
-	registry.Assign<Transform>(roots, transform.position, transform.rotation, glm::vec3(scale));
-	registry.Assign<Mesh>(roots, resources::HashIdentifier(MeshId::TreeRoots), static_cast<int8_t>(0), static_cast<int8_t>(0));
-	registry.Assign<FallingRoots>(
-	    roots, FallingRoots {
-	               .seconds = 0.0f,
-	               .startHeight = transform.position.y,
-	               .restHeight = land + objects::k_RootsRestShare * std::max(rootsHalf.x, rootsHalf.z) * scale,
-	           });
-	// Drawn with its own fade once it begins to fade
-	registry.Assign<GroundMark>(roots);
-}
-
-/// The falling roots drop, settle, fade and go by the game's time
-void AdvanceRoots(ecs::Registry& registry, float seconds)
-{
-	namespace objects = physics::objects;
-	if (Locator::terrainSystem::has_value() && Locator::infoConstants::has_value() && Locator::resources::has_value())
-	{
-		std::vector<entt::entity> fallen;
-		registry.Each<const DropsRoots, const DeadTree, const Transform>(
-		    [&fallen](entt::entity entity, const DeadTree&, const Transform&) { fallen.push_back(entity); });
-		for (const auto deadTree : fallen)
-		{
-			registry.Remove<DropsRoots>(deadTree);
-			DropRoots(registry, deadTree);
-		}
-	}
-	std::vector<entt::entity> gone;
-	bool changed = false;
-	registry.Each<FallingRoots, Transform, GroundMark>(
-	    [&](entt::entity entity, FallingRoots& roots, Transform& transform, GroundMark& mark) {
-		    roots.seconds += seconds;
-		    if (objects::RootsGone(roots.seconds))
-		    {
-			    gone.push_back(entity);
-			    return;
-		    }
-		    transform.position.y = objects::RootsHeight(roots.startHeight, roots.restHeight, roots.seconds);
-		    mark.alpha = objects::RootsAlpha(roots.seconds);
-		    changed = true;
-	    });
-	for (const auto entity : gone)
-	{
-		registry.Destroy(entity);
-	}
-	if (changed || !gone.empty())
-	{
-		registry.SetDirty();
-	}
+	return {
+	    .mesh = resources::HashIdentifier(MeshId::TreeRoots),
+	    .transform = {.position = transform.position, .rotation = transform.rotation, .scale = glm::vec3(scale)},
+	    .millisecondsLeft = 0.0f,
+	    .alpha = std::nullopt,
+	    .morphWithTerrain = false,
+	    .falling =
+	        ExplosionSystemInterface::GroundMark::Falling {
+	            .seconds = 0.0f,
+	            .startHeight = transform.position.y,
+	            .restHeight = land + objects::k_RootsRestShare * std::max(rootsHalf.x, rootsHalf.z) * scale,
+	        },
+	};
 }
 } // namespace
 
@@ -154,15 +116,21 @@ bool ExplosionSystem::LoadState(reflection::BinaryReader& in)
 
 void ExplosionSystem::AddRubble(const glm::vec3& centre, float yaw, float scale)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = registry.Create();
-	registry.Assign<Transform>(entity, centre, glm::mat3(portable_math::EulerAngleY(yaw)), glm::vec3(scale));
-	registry.Assign<Mesh>(entity, resources::HashIdentifier(particles::blast::k_RubbleMesh), static_cast<int8_t>(0),
-	                      static_cast<int8_t>(0));
-	registry.Assign<GroundMark>(entity, GroundMark {.millisecondsLeft = particles::blast::k_RubbleMilliseconds});
-	// It lies over the land's shape
-	registry.Assign<MorphWithTerrain>(entity);
+	// It lies over the land's shape. Only the frames draw it, so the world does not change.
+	_marks.push_back({
+	    .mesh = resources::HashIdentifier(particles::blast::k_RubbleMesh),
+	    .transform = {.position = centre, .rotation = glm::mat3(portable_math::EulerAngleY(yaw)), .scale = glm::vec3(scale)},
+	    .millisecondsLeft = particles::blast::k_RubbleMilliseconds,
+	    .alpha = std::nullopt,
+	    .morphWithTerrain = true,
+	    .falling = std::nullopt,
+	});
 	_puffs.push_back(dust_puff::Make(centre, k_DustSize, LocalRandom));
+	// The draw lists make room for it
+	if (Locator::entitiesRegistry::has_value())
+	{
+		Locator::entitiesRegistry::value().SetDirty();
+	}
 }
 
 void ExplosionSystem::AddSmoke(const glm::vec3& centre, float size, dust_puff::Kind kind, std::optional<uint32_t> colour)
@@ -182,30 +150,49 @@ void ExplosionSystem::AddShake(const glm::vec3& position, float radius, float st
 
 void ExplosionSystem::Update(float milliseconds)
 {
+	const float seconds = milliseconds / 1000.0f;
 	if (Locator::entitiesRegistry::has_value())
 	{
 		auto& registry = Locator::entitiesRegistry::value();
-		std::vector<entt::entity> gone;
-		bool fading = false;
-		AdvanceRoots(registry, milliseconds / 1000.0f);
-		registry.Each<GroundMark>(
-		    [&](entt::entity entity, GroundMark& mark) {
-			    const auto aged = particles::blast::AgeHeap(mark.millisecondsLeft, mark.alpha, milliseconds);
-			    // Blending it changes how its model is drawn
-			    fading = fading || (aged.alpha.has_value() && !mark.alpha.has_value());
-			    mark.millisecondsLeft = aged.millisecondsLeft;
-			    mark.alpha = aged.alpha;
-			    if (aged.gone)
-			    {
-				    gone.push_back(entity);
-			    }
-		    },
-		    entt::exclude<FallingRoots>);
-		for (const auto entity : gone)
+		bool changed = false;
+		// A dead tree drops its roots the first time that a frame draws it. The mark of the dead tree is only drawn.
+		if (Locator::terrainSystem::has_value() && Locator::infoConstants::has_value() && Locator::resources::has_value())
 		{
-			registry.Destroy(entity);
+			std::vector<entt::entity> fallen;
+			registry.Each<const DropsRoots, const DeadTree, const Transform>(
+			    [&fallen](entt::entity entity, const DeadTree&, const Transform&) { fallen.push_back(entity); });
+			for (const auto deadTree : fallen)
+			{
+				registry.Remove<DropsRoots>(deadTree);
+				_marks.push_back(DroppedRoots(registry, deadTree));
+				changed = true;
+			}
 		}
-		if (fading)
+		const auto before = _marks.size();
+		std::erase_if(_marks, [&changed, milliseconds, seconds](GroundMark& mark) {
+			// The falling roots drop, settle, fade and go by the game's time
+			if (mark.falling.has_value())
+			{
+				namespace objects = physics::objects;
+				mark.falling->seconds += seconds;
+				if (objects::RootsGone(mark.falling->seconds))
+				{
+					return true;
+				}
+				mark.transform.position.y =
+				    objects::RootsHeight(mark.falling->startHeight, mark.falling->restHeight, mark.falling->seconds);
+				mark.alpha = objects::RootsAlpha(mark.falling->seconds);
+				changed = true;
+				return false;
+			}
+			const auto aged = particles::blast::AgeHeap(mark.millisecondsLeft, mark.alpha, milliseconds);
+			// Blending it changes how its model is drawn
+			changed = changed || (aged.alpha.has_value() && !mark.alpha.has_value());
+			mark.millisecondsLeft = aged.millisecondsLeft;
+			mark.alpha = aged.alpha;
+			return aged.gone;
+		});
+		if (changed || _marks.size() != before)
 		{
 			registry.SetDirty();
 		}
@@ -223,7 +210,6 @@ void ExplosionSystem::Update(float milliseconds)
 		ghost.shown = true;
 		return false;
 	});
-	const float seconds = milliseconds / 1000.0f;
 	std::erase_if(_puffs, [seconds](dust_puff::Puff& puff) { return !dust_puff::Advance(puff, seconds); });
 	// The shakes count down by the real time of the frame, also when the game pauses
 	const auto realMilliseconds = Locator::time::has_value() ? Locator::time::value().GetFrameRealTime().count() : 0;
@@ -289,11 +275,5 @@ void ExplosionSystem::Reset()
 	{
 		Locator::camera::value().SetShake(glm::vec3(0.0f), glm::vec3(0.0f));
 	}
-	if (Locator::entitiesRegistry::has_value())
-	{
-		auto& registry = Locator::entitiesRegistry::value();
-		std::vector<entt::entity> marks;
-		registry.Each<GroundMark>([&](entt::entity entity, GroundMark&) { marks.push_back(entity); });
-		registry.Destroy(marks.begin(), marks.end());
-	}
+	_marks.clear();
 }

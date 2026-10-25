@@ -64,8 +64,10 @@ public:
 	Guard(const Guard&) = delete;
 	Guard& operator=(const Guard&) = delete;
 
-	/// Takes the sample before a frame step
+	/// Takes the sample before a frame step. The sample after the last step serves when nothing ran between them.
 	void Before();
+	/// A step that the guard does not look at ran: the next step takes a new sample before it
+	void Forget() { _last.reset(); }
 	/// Takes the sample after the frame step and tells the parts that the step changed for the first time
 	void After(std::string_view step, uint32_t turn);
 
@@ -79,6 +81,7 @@ private:
 	bool _byField;
 	bool _systems;
 	Sample _before;
+	std::optional<Sample> _last;
 	std::set<std::pair<std::string, std::string>> _found;
 };
 
