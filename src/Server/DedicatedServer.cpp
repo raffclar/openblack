@@ -30,6 +30,9 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -253,6 +256,13 @@ bool ServerWorld::Initialize()
 	{
 		Locator::time::value().SetFixedFrameTime(*_simulation.frameTime);
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation.traceDrawsPath.has_value() && !draw_trace::Start(Locator::gameRandom::value(), *_simulation.traceDrawsPath))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+		                    _simulation.traceDrawsPath->string());
+	}
+#endif
 	// The run record of the tools starts with the inspector
 	if (_simulation.recordPath.has_value() && StartInspector(0))
 	{
@@ -627,6 +637,7 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
+	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
 	{
 		simulation.recordPath = settings.recordPath;
