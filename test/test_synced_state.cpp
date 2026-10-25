@@ -144,6 +144,15 @@ TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
 }
 
+TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
+{
+	// Only the player of this computer goes into the temple, and the temple makes its rooms for that player
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "TempleInteriorPart";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

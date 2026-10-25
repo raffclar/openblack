@@ -146,6 +146,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // draw and the script camera read.
     {.component = "*", .field = "", .marker = "IntroHand"},
     {.component = "*", .field = "", .marker = "BoatFilmPart"},
+    // The rooms of the temple, their lights and the mist of the creature cave are not a part of the land. The temple
+    // makes them for the player of this computer when the player goes into it, and removes them when the player leaves.
+    {.component = "*", .field = "", .marker = "TempleInteriorPart"},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.
