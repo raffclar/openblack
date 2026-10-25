@@ -46,6 +46,9 @@ struct NetworkJoin
 	std::optional<uint32_t> partAt;
 	/// Tests: the world parts again after each load of the server's world
 	bool partAgain {false};
+	/// Tests: the creature file that the player sends before the start, in place of the creature of the player's
+	/// profile
+	std::optional<std::string> testCreatureFile;
 };
 
 /// The network game of this computer: the session with the game server, which gives the turns of the world. A join
