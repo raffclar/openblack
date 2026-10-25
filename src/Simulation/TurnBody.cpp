@@ -517,11 +517,12 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::PlayerAlignment:
 		// Each player's waiting change moves its alignment. Then the camera takes the alignment of the player of most
-		// influence at its eye.
-		Locator::alignmentSystem::value().UpdatePlayersTurn(cameraPosition);
+		// influence where the player of this computer last reported its camera.
+		Locator::alignmentSystem::value().UpdatePlayersTurn();
 		break;
 	case Step::VillageTotems:
-		// A town totem that arrives at its share rings the village bell
+		// A town totem that arrives at its share rings the village bell. The totems ease by the clock of this computer, as
+		// the game does. The ease and the bell are only for the look and the sound, so the synced world does not read them.
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:

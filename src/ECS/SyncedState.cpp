@@ -139,6 +139,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The clouds of a storm gather and drift in the frames by the local random numbers, as the game draws them. The
     // rain and the storm's turns read the storm, not its clouds.
     {.component = "*", .field = "", .marker = "StormCloud"},
+    // The last flash of a storm lights the land and the clouds. A storm that strikes round the camera puts its flash near
+    // the camera of this computer, so each computer has its own flash. The turns read the timers, not the flash.
+    {.component = "Storm", .field = "flash", .marker = ""},
     // The sparkles of the moves that the player queued in a fight: only the computer of the player adds them, as the
     // game draws them. The turns read the queue, not its sparkles.
     {.component = "CreatureFighting", .field = "marks", .marker = ""},
