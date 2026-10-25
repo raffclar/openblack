@@ -156,7 +156,9 @@ std::optional<creature_interact::View> InteractViewOf(const ecs::Registry& regis
 	{
 		return std::nullopt;
 	}
-	const auto& transform = registry.Get<const Transform>(creature);
+	// The camera looks at the body where the frame draws it
+	const auto transform =
+	    DrawnTransform(registry.Get<const Transform>(creature), registry.TryGet<const CreatureAnimation>(creature));
 	const auto height = feedback::k_HeightAtSizeOne * ShownSize(registry.Get<const Creature>(creature));
 	return creature_interact::ViewOf(transform.position, height, HeadingOf(registry, creature, transform));
 }
@@ -194,7 +196,9 @@ std::optional<screen_pick::MeshHit> SkinAlong(entt::entity creature, const Trans
 	{
 		return std::nullopt;
 	}
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The drawn bones go with the place where the frame draws the body
+	const auto drawn = DrawnTransform(transform, registry.TryGet<const CreatureAnimation>(creature));
+	const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 	const auto hit =
 	    ecs::posed_model::NearestSkinHit(registry, creature, *meshes.Handle(mesh->id), placement, origin, direction);
 	return hit.has_value() ? std::optional(hit->hit) : std::nullopt;
@@ -647,18 +651,8 @@ std::optional<CreatureHandSystem::HandPose> CreatureHandSystem::Update(const glm
 	contact->frameCursor = cursorPixel;
 	const auto up = TurnHand(*contact, onBody, cursorMovedAcross, normal, transform.position, seconds);
 
-	// The creature looks at the hand, or at the camera with the hand near its middle. In a network game the turn sets
-	// the look from the reported hand.
-	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	if (!networkGame && parts.has_value() && Locator::camera::has_value())
-	{
-		const auto look = feedback::HeldLookPoint(position, middle, camera, rayDirection, height);
-		registry.Get<CreatureAnimation>(creatureEntity).lookAt = look;
-		if (auto* eyes = registry.TryGet<CreatureEyes>(creatureEntity))
-		{
-			eyes->lookAt = look;
-		}
-	}
+	// The creature looks at the hand, or at the camera with the hand near its middle. The turn sets the look from the
+	// hand that the player reported, in a game alone and in a network game.
 	return HandPose {.position = position, .onBody = onBody, .cycle = contact->cycle, .scale = handScale, .up = up};
 }
 

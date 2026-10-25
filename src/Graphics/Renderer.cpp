@@ -6869,7 +6869,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
-					DrawCreatureHair(desc, *hair, transform->position);
+					// The hair hangs from the body where the frame draws it
+					DrawCreatureHair(desc, *hair,
+					                 ecs::components::DrawnTransform(
+					                     *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+					                     .position);
 				}
 				// The glows on its body, where its pose put them
 				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);

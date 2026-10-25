@@ -23,6 +23,7 @@
 #include "ECS/Components/CreatureLeash.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureMind.h"
+#include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/GuidanceHeard.h"
@@ -105,6 +106,10 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::angle>("angle")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::clockwise>("clockwise")
 	    .Field<&openblack::ecs::components::ChimneySmoke::Puff::hidden>("hidden");
+	Reflect<openblack::ecs::components::CreatureAnimation::DrawnPlace>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::CreatureAnimation::DrawnPlace::position>("position")
+	    .Field<&openblack::ecs::components::CreatureAnimation::DrawnPlace::rotation>("rotation")
+	    .Field<&openblack::ecs::components::CreatureAnimation::DrawnPlace::slots>("slots");
 	Reflect<openblack::ecs::components::CreatureAnimation::PairBlend>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::from>("from")
 	    .Field<&openblack::ecs::components::CreatureAnimation::PairBlend::to>("to")
@@ -240,6 +245,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::components::HandMorph::Skin>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::HandMorph::Skin::id>("id")
 	    .Field<&openblack::ecs::components::HandMorph::Skin::texels>("texels");
+	Reflect<openblack::ecs::components::HeldByCreature::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::HeldByCreature::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::MapScriptGlobals>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::MapScriptGlobals::landNumber>("landNumber")
 	    .Field<&openblack::ecs::components::MapScriptGlobals::townInfluenceMultiplier>("townInfluenceMultiplier")

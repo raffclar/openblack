@@ -390,7 +390,8 @@ glm::vec3 ToWorld(entt::entity object, const fire::graphic::Anchor& anchor)
 		const auto* animation = registry.TryGet<const CreatureAnimation>(object);
 		if (transform != nullptr && animation != nullptr && *anchor.bone < animation->boneMatrices.size())
 		{
-			const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+			const auto drawn = DrawnTransform(*transform, animation);
+			const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 			return glm::vec3(creature::PosedBone(*anchor.bone, animation->boneMatrices, placement)[3]);
 		}
 	}

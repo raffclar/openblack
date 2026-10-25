@@ -75,17 +75,18 @@ void PlayCreaturePoses()
 	// The static that the eyes of all the creatures fizz through continues to slide as the draw starts
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	{
-		// The fight animations play, blows land and the fighters move as their animations carry them
+		// The fight's camera follows the fighters. The fights themselves move on only in the game turns.
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().Update(gameTime);
 	}
 	{
-		// The creatures are drawn moving between the last two turns
+		// The walking creatures are drawn between the places of their last two turns. The frame changes only their drawn
+		// places.
 		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
 		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
 	}
 	{
-		// The creatures breathe, act, pull faces and look about
+		// The bodies are drawn between the poses of their last two turns, and their eyes blink and look about
 		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
 		Locator::creatureAnimationSystem::value().Update(gameTime);
 	}
@@ -167,7 +168,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
 	}
 	{
-		// What the creatures hold is drawn in their hands as the frame poses them
+		// What the creatures hold is drawn in their drawn hands. The turns place it in the world.
 		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
 		Locator::creatureObjectActionSystem::value().UpdateHeld();
 	}

@@ -238,6 +238,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
     // the newest turn.
     {.component = "CreatureAnimation", .field = "boneMatrices", .marker = ""},
+    // Where the frame draws a walking creature between its last two turns. The turns go by its Transform and slots.
+    {.component = "CreatureAnimation", .field = "drawnPlace", .marker = ""},
+    // Where the frame draws the thing in a creature's hand. The turns go by its Transform.
+    {.component = "HeldByCreature", .field = "drawn", .marker = ""},
     // The creature's eyes, the sounds of its body and the prints of its feet
     {.component = "CreatureEyes", .field = "", .marker = ""},
     {.component = "CreatureAudio", .field = "", .marker = ""},

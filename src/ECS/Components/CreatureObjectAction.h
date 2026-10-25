@@ -16,6 +16,7 @@
 #include <string>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureObjectActions.h"
@@ -173,6 +174,14 @@ struct TossHandVelocity
 struct HeldByCreature
 {
 	entt::entity creature {entt::null};
+	/// Where the frame draws the thing in the creature's hand as the frame draws the body. Only the draw reads it.
+	struct Drawn
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: the thing is drawn where its Transform puts it
+	std::optional<Drawn> drawn;
 };
 
 } // namespace openblack::ecs::components

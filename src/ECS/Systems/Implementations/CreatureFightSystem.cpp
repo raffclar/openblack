@@ -1078,7 +1078,10 @@ bool ArenaOn(const ecs::Registry& registry, entt::entity creature)
 fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
-	return {.position = registry.Get<const Transform>(creature).position,
+	// The fight's camera looks at the fighters where the frame draws them
+	return {.position =
+	            DrawnTransform(registry.Get<const Transform>(creature), registry.TryGet<const CreatureAnimation>(creature))
+	                .position,
 	        .radius = locomotion != nullptr ? locomotion->radius : 5.0f,
 	        .height = HeightOf(ShownSize(registry.Get<const Creature>(creature)))};
 }

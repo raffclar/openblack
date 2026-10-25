@@ -85,7 +85,9 @@ void StepBodyHair(const resources::CreatureRigManager& rigs, CreatureType specie
 	// The hair takes the look of the alignment the body is drawn with
 	const auto alignment = morph.evilGood;
 	const auto scale = creature_hair::HairScale(size);
-	const auto model = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The hair grows from the body where the frame draws it
+	const auto drawn = DrawnTransform(transform, &animation);
+	const auto model = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 	StepHair(
 	    hair, rig.hairGroups.size(),
 	    [&](size_t g) {

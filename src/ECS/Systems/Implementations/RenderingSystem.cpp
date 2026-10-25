@@ -77,6 +77,7 @@
 #include "ECS/Components/Unlit.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
@@ -593,8 +594,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
 		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
-		    const auto standsAt = DrawnPosition(transform.position, villagerPose);
-		    const auto rotation = DrawnRotation(transform.rotation, villagerPose);
+		    // A walking creature is drawn between its last two turns, and what it holds in its drawn hand
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    const auto standsAt = DrawnPosition(drawnPlace.position, villagerPose);
+		    const auto rotation = DrawnRotation(drawnPlace.rotation, villagerPose);
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
@@ -1444,7 +1447,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    {
 			    return;
 		    }
-		    auto modelMatrix = PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // A tree in a creature's hand is drawn where the drawn hand is
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    auto modelMatrix = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
 		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
 		    // vertices out to the horizon

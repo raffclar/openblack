@@ -204,10 +204,12 @@ enum class CollarPose
 /// Where the leash meets the creature: its collar bone in a pose of the body, or high on its body when it has none
 glm::vec3 CollarPoint(const Registry& registry, entt::entity entity, CollarPose pose = CollarPose::Drawn)
 {
-	const auto& transform = registry.Get<const Transform>(entity);
+	const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
+	// The drawn collar is on the body where the frame draws it
+	const auto& turnTransform = registry.Get<const Transform>(entity);
+	const auto transform = pose == CollarPose::Drawn ? DrawnTransform(turnTransform, animation) : turnTransform;
 	const auto& creature = registry.Get<const Creature>(entity);
 	const auto fallback = transform.position + glm::vec3(0.0f, CreatureHeight(creature) * k_CollarHeightShare, 0.0f);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(entity);
 	const auto& rigs = Locator::resources::value().GetCreatureRigs();
 	const auto rigId = creature::GetRigId(creature.species);
 	if (animation == nullptr || animation->boneMatrices.empty() || !rigs.Contains(rigId))

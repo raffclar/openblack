@@ -20,6 +20,7 @@
 #include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
@@ -124,7 +125,9 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 		return false;
 	}
 	const auto& body = registry.Get<const components::Creature>(creature);
-	const auto& transform = registry.Get<const components::Transform>(creature);
+	// The camera follows the body where the frame draws it
+	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(creature),
+	                                                  registry.TryGet<const components::CreatureAnimation>(creature));
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
 	                                                   creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
@@ -258,7 +261,8 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& body = registry.Get<const components::Creature>(*_creature);
-	const auto& transform = registry.Get<const components::Transform>(*_creature);
+	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(*_creature),
+	                                                  registry.TryGet<const components::CreatureAnimation>(*_creature));
 	_model->SetTarget(transform.position, creature_mode::CreatureHeight(ShownSize(body)));
 
 	if (_held.seconds > 0.0f)

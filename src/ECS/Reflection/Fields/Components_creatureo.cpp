@@ -76,5 +76,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureo(entt::meta_
 	Reflect<components::PickUpReach>(context).Field<&components::PickUpReach::points>("points");
 	Reflect<components::StompReach>(context).Field<&components::StompReach::points>("points");
 	Reflect<components::TossHandVelocity>(context).Field<&components::TossHandVelocity::velocity>("velocity");
-	Reflect<components::HeldByCreature>(context).Field<&components::HeldByCreature::creature>("creature");
+	Reflect<components::HeldByCreature>(context)
+	    .Field<&components::HeldByCreature::creature>("creature")
+	    .Field<&components::HeldByCreature::drawn>("drawn");
 }

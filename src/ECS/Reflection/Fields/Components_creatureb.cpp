@@ -56,7 +56,8 @@ void openblack::ecs::reflection::RegisterFields_Components_creatureb(entt::meta_
 	    .Field<&components::CreatureAnimation::olderTurnPose>("olderTurnPose")
 	    .Field<&components::CreatureAnimation::newerTurnPose>("newerTurnPose")
 	    .Field<&components::CreatureAnimation::posedThisTurn>("posedThisTurn")
-	    .Field<&components::CreatureAnimation::lastTurnBones>("lastTurnBones");
+	    .Field<&components::CreatureAnimation::lastTurnBones>("lastTurnBones")
+	    .Field<&components::CreatureAnimation::drawnPlace>("drawnPlace");
 	Reflect<components::CreatureEyes>(context)
 	    .Field<&components::CreatureEyes::mode>("mode")
 	    .Field<&components::CreatureEyes::openness>("openness")
