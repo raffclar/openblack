@@ -309,6 +309,10 @@ void PlayCreatureTurnStep(game_turn::Step step, entt::entity creature)
 		// Its marks heal
 		Locator::creatureSkinSystem::value().CreatureTurn(creature);
 		break;
+	case Step::CreatureMorph:
+		// The shape that its body is drawn with follows its alignment, fatness and strength
+		Locator::creatureAnimationSystem::value().MorphTurn(creature);
+		break;
 	case Step::CreatureMotes:
 		Locator::creatureAnimationSystem::value().MotesTurn(creature);
 		break;
@@ -390,7 +394,9 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::animalSystem::value().ShowTurnEnd();
 		// The creatures that walk go back to where their last turn took them, with the clips of that turn's end, and what
 		// they hold goes back into their hands as their last turn posed them
-		Locator::creatureLocomotionSystem::value().Update(1.0f);
+		Locator::creatureLocomotionSystem::value().ShowTurnEnds();
+		// A creature that came into the world since the last turn gets its skeleton and its first pose before the turn
+		Locator::creatureAnimationSystem::value().ShapeBodies();
 		Locator::creatureObjectActionSystem::value().ShowHeldAtTurnEnd();
 		// What the god's hand holds goes to where the last report put the hand
 		if (Locator::handGrabSystem::has_value())
@@ -422,8 +428,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		{
 			Locator::magicSystem::value().InterfaceTurn();
 		}
-		// In a network game the held creature looks at the hand that its player reported
-		if (clock.IsNetworkGame() && Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
+		// The held creature looks at the hand that its player reported
+		if (Locator::creatureHandSystem::has_value() && Locator::handSystem::has_value())
 		{
 			Locator::creatureHandSystem::value().LookAtReportedHand();
 		}
@@ -574,6 +580,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::CreatureFights:
 	case Step::CreatureFizz:
 	case Step::CreatureHelp:
+	case Step::CreatureMorph:
 	case Step::CreatureMotes:
 	case Step::CreatureBlood:
 	case Step::CreatureSway:
@@ -844,6 +851,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::WalkerLookahead:
 		// Then one walker that came up against water, the land's edge or a fence tries its walk both ways round
 		Locator::pathfindingSystem::value().ProcessLookahead();
+		break;
+	case Step::CreatureShapes:
+		// A creature that has no skeleton or no pose yet gets them, so that the frames have a body to draw
+		Locator::creatureAnimationSystem::value().ShapeBodies();
 		break;
 	case Step::InfluenceTurnEnd:
 		Locator::influenceSystem::value().SetInGameTurn(false);

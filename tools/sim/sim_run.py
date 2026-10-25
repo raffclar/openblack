@@ -83,9 +83,11 @@ def default_exe(config):
 def game_arguments(options, record, log, until_turn, fast, driven):
     """The command line of the game for a run"""
     args = ["-g", options.game_path, "--skip-logos", "--seed", str(options.seed), "--inspect-port", "0",
-            "--inspect-lock-input", "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(until_turn),
-            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000",
-            "--background"]
+            "--inspect-lock-input", "--sim-until-turn", str(until_turn), "--sim-record", record,
+            "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000", "--background"]
+    # Without a frame time, each frame takes the real time that it took, as in a player's game
+    if options.frame_ms is not None:
+        args += ["--sim-frame-ms", str(options.frame_ms)]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
     if getattr(options, "still_hand", False):

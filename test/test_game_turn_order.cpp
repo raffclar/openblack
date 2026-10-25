@@ -294,6 +294,10 @@ TEST(GameTurnOrder, TheBodyOfACreatureFollowsItsFatnessAfterItsAction)
 	EXPECT_TRUE(recorder.Before(Step::CreatureFizz, Step::CreatureSkin));
 	EXPECT_TRUE(recorder.Before(Step::CreatureSkin, Step::CreatureMotes));
 	EXPECT_TRUE(recorder.Before(Step::CreatureMotes, Step::CreatureBlood));
+	// The shape that the body is drawn with follows what it became after the marks heal, before the motes, as the game's
+	// creature does in its turn
+	EXPECT_TRUE(recorder.Before(Step::CreatureSkin, Step::CreatureMorph));
+	EXPECT_TRUE(recorder.Before(Step::CreatureMorph, Step::CreatureMotes));
 	EXPECT_TRUE(recorder.Before(Step::CreatureBlood, Step::CreatureSway));
 	EXPECT_TRUE(recorder.Before(Step::CreatureSway, Step::CreatureFightMoves));
 	EXPECT_TRUE(recorder.Before(Step::CreatureFightMoves, Step::CreaturePoses));
@@ -358,4 +362,14 @@ TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::GlobalStatistics, Step::SyncChecksum));
 	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
+}
+
+// The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::DrawnPlaces, Step::CreaturesTurnStart));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::CreatureShapes));
+	EXPECT_TRUE(recorder.Before(Step::CreatureShapes, Step::SyncChecksum));
 }
