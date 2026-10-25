@@ -185,6 +185,31 @@ TEST(LiquidParticleSystem, DropsTakeNewFramesAfterTheyMoveOnWhenTheFrameDrawsThe
 	EXPECT_EQ(random.draws, 3u);
 }
 
+TEST(LiquidParticleSystem, EachOtherPlayerHasAPoolOfItsOwnWithItsOwnLimit)
+{
+	QueuedRandom random {.numbers = {5, 7}};
+	ecs::systems::LiquidParticleSystem pool(Sources(random, false));
+	pool.AddForPlayer(PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f), glm::vec3(0.0f), 10.0f, 0x80FF0000u, Kind::Mote);
+	pool.SetPlayerPoint(PlayerNames::PLAYER_TWO, glm::vec3(1.0f, 2.0f, 3.0f));
+	EXPECT_TRUE(pool.Particles().empty());
+	ASSERT_EQ(pool.PlayerParticles(PlayerNames::PLAYER_TWO).size(), 1u);
+	EXPECT_EQ(pool.PlayerParticles(PlayerNames::PLAYER_TWO)[0].variant, 5);
+	EXPECT_TRUE(pool.PlayerParticles(PlayerNames::PLAYER_THREE).empty());
+	// The shared pool full leaves room in the other pools
+	for (size_t i = 0; i < liquid_particles::k_MostParticles; ++i)
+	{
+		pool.Add(glm::vec3(0.0f), glm::vec3(0.0f), 1.0f, 0xFFFFFFFFu, Kind::Dust);
+	}
+	pool.AddForPlayer(PlayerNames::PLAYER_TWO, glm::vec3(0.0f), glm::vec3(0.0f), 10.0f, 0x80FF0000u, Kind::Mote);
+	EXPECT_EQ(pool.PlayerParticles(PlayerNames::PLAYER_TWO).size(), 2u);
+	// The other pools move on with the shared pool: a mote lives two seconds
+	pool.UpdateFrame(2.5f, false);
+	EXPECT_TRUE(pool.PlayerParticles(PlayerNames::PLAYER_TWO).empty());
+	pool.AddForPlayer(PlayerNames::PLAYER_TWO, glm::vec3(0.0f), glm::vec3(0.0f), 10.0f, 0x80FF0000u, Kind::Mote);
+	pool.Clear();
+	EXPECT_TRUE(pool.PlayerParticles(PlayerNames::PLAYER_TWO).empty());
+}
+
 TEST(LiquidParticles, AFramesMillisecondsAreTakenToSecondsAsTheGameTakesThem)
 {
 	// Times a thousandth in single precision, not divided by a thousand

@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <span>
+#include <tuple>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -247,22 +248,6 @@ TEST_F(ReportedHands, TheTurnCountsTheStillnessOfTheReportedHandNotOfTheDrawnHan
 	EXPECT_EQ(_hands.GetHandStillTurns(), 0u);
 }
 
-TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
-{
-	EXPECT_FALSE(_hands.GetReportedCamera().has_value());
-}
-
-TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
-{
-	auto report = ReportAt({20.0f, 1.0f, 30.0f});
-	report.focus = {25.0f, 0.0f, 35.0f};
-	_hands.Report(PlayerNames::PLAYER_ONE, report);
-	const auto camera = _hands.GetReportedCamera();
-	ASSERT_TRUE(camera.has_value());
-	EXPECT_EQ(camera->origin, glm::vec3(0.0f, 100.0f, 0.0f));
-	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
-}
-
 // In a network game the turn keeps the thing under the cursor from the last pick, whatever the reports of the hand do
 TEST_F(ReportedHands, TheWorldHasTheThingUnderTheCursorFromTheLastPick)
 {
@@ -402,4 +387,80 @@ TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
 	EXPECT_EQ(loaded.GetPlayerHands()[0], _hand);
 	EXPECT_EQ(loaded.GetHandsOf(PlayerNames::PLAYER_THREE), made);
 	EXPECT_FALSE(loaded.GetHandsOf(PlayerNames::PLAYER_TWO).has_value());
+}
+
+TEST_F(ReportedHands, TheWorldHasNoCameraBeforeTheFirstReport)
+{
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_ONE).has_value());
+}
+
+TEST_F(ReportedHands, TheWorldHasTheCameraWhereTheLastReportPutIt)
+{
+	auto report = ReportAt({20.0f, 1.0f, 30.0f});
+	report.focus = {25.0f, 0.0f, 35.0f};
+	_hands.Report(PlayerNames::PLAYER_ONE, report);
+	const auto camera = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
+	ASSERT_TRUE(camera.has_value());
+	EXPECT_EQ(camera->origin, glm::vec3(0.0f, 100.0f, 0.0f));
+	EXPECT_EQ(camera->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+}
+
+TEST_F(ReportedHands, EachPlayerHasTheCameraOfItsOwnReports)
+{
+	// A player with no hands has no camera
+	EXPECT_FALSE(_hands.GetReportedCamera(PlayerNames::PLAYER_TWO).has_value());
+	std::ignore = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	auto first = ReportAt({20.0f, 1.0f, 30.0f});
+	first.focus = {25.0f, 0.0f, 35.0f};
+	auto second = ReportAt({40.0f, 1.0f, 50.0f});
+	second.camera = {7.0f, 80.0f, 9.0f};
+	second.focus = {45.0f, 0.0f, 55.0f};
+	_hands.Report(PlayerNames::PLAYER_ONE, first);
+	_hands.Report(PlayerNames::PLAYER_TWO, second);
+	const auto one = _hands.GetReportedCamera(PlayerNames::PLAYER_ONE);
+	const auto two = _hands.GetReportedCamera(PlayerNames::PLAYER_TWO);
+	ASSERT_TRUE(one.has_value());
+	ASSERT_TRUE(two.has_value());
+	EXPECT_EQ(one->focus, glm::vec3(25.0f, 0.0f, 35.0f));
+	EXPECT_EQ(two->origin, glm::vec3(7.0f, 80.0f, 9.0f));
+	EXPECT_EQ(two->focus, glm::vec3(45.0f, 0.0f, 55.0f));
+}
+
+// The world holds the creature from the turn of the lock to the turn of its end, whatever the hand of the frames does
+TEST_F(ReportedHands, TheWorldHoldsACreatureFromTheLockToItsEnd)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_ONE});
+	ecs::systems::CreatureHandSystem creatures;
+	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_EQ(creatures.GetLockedCreature(), creature);
+	// The frames hold the hand to no creature
+	EXPECT_FALSE(creatures.GetCreature().has_value());
+	// The end of the lock of another thing leaves the hold
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, registry.Create());
+	EXPECT_EQ(creatures.GetLockedCreature(), creature);
+	creatures.DoUnlock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	Locator::handSystem::reset();
+}
+
+TEST_F(ReportedHands, TheWorldHoldsNoCreatureOfAnotherPlayer)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	Locator::handSystem::reset(&_hands, [](ecs::systems::HandSystemInterface* /*unowned*/) {});
+	const auto creature = registry.Create();
+	registry.Assign<ecs::components::Creature>(creature, ecs::components::Creature {.owner = PlayerNames::PLAYER_TWO});
+	// The refusal is written to the game's log
+	const auto log = spdlog::get("game") != nullptr ? nullptr : spdlog::null_logger_mt("game");
+	ecs::systems::CreatureHandSystem creatures;
+	creatures.DoLock(PlayerNames::PLAYER_ONE, creature);
+	EXPECT_FALSE(creatures.GetLockedCreature().has_value());
+	Locator::handSystem::reset();
+	if (log != nullptr)
+	{
+		spdlog::drop("game");
+	}
 }

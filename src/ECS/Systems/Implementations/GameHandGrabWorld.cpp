@@ -45,6 +45,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -724,7 +725,7 @@ bool GameHandGrabWorld::GiveTo(entt::entity creature, entt::entity held, bool le
 	{
 		return false;
 	}
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedPlayerCamera(HandPlayer());
 	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
 	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, glm::vec2(eye.x, eye.z));
 }
@@ -869,6 +870,37 @@ glm::vec3 GameHandGrabWorld::ReportedPlaceOf(entt::entity hand) const
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
 	return reported != nullptr ? reported->handPoint : glm::vec3(0.0f);
+}
+
+bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
+{
+	if (!IsNetworkGame() || !Locator::handSystem::has_value())
+	{
+		return false;
+	}
+	// The hands of the first player have no god's mark
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	const auto player = god != nullptr ? god->player : PlayerNames::PLAYER_ONE;
+	return player != Locator::handSystem::value().GetOwnPlayer();
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Hand();
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
+}
+
+glm::vec3 GameHandGrabWorld::AsMapPlace(glm::vec3 point) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return point;
+	}
+	const auto& island = Locator::terrainSystem::value();
+	return map_coords::ToWorld(island, map_coords::FromWorld(island, point));
 }
 
 std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const

@@ -34,12 +34,12 @@ public:
 	GetPlayerHandPositions() const noexcept override;
 	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> picked, bool holdPoint) override;
 	[[nodiscard]] std::optional<glm::vec3> GetDrawnHandPosition() const noexcept override;
-	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera() const noexcept override;
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
 	void SetOwnPlayer(PlayerNames player) override { _ownPlayer = player; }
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer; }
+	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ReportPick(PlayerNames player, entt::entity object) override;
 	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;

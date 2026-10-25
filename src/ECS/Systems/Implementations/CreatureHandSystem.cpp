@@ -673,7 +673,7 @@ void CreatureHandSystem::LookAtReportedHand()
 	}
 	const auto& handSystem = Locator::handSystem::value();
 	const auto hand = handSystem.GetPlayerHandPositions().at(static_cast<size_t>(HandSystemInterface::Side::Left));
-	const auto camera = handSystem.GetReportedCamera();
+	const auto camera = handSystem.GetReportedCamera(PlayerNames::PLAYER_ONE);
 	if (!hand.has_value() || !camera.has_value())
 	{
 		return;

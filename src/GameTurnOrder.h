@@ -193,6 +193,8 @@ enum class Step : uint8_t
 	ScriptHighlights,
 	Climates,
 	HeldThing,
+	/// The sparkles at the cameras of the other players of a network game
+	PlayerSparkles,
 	Rewards,
 	Guidance,
 	CameraChecks,
@@ -306,6 +308,7 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::ScriptHighlights, .stage = Stage::Highlights},
     {.step = Step::Climates, .stage = Stage::Climates},
     {.step = Step::HeldThing, .stage = Stage::Hand},
+    {.step = Step::PlayerSparkles, .stage = Stage::Hand},
     {.step = Step::Rewards, .stage = Stage::Rewards},
     {.step = Step::Guidance, .stage = Stage::Guidance},
     // The advisors cheer the player's turning of the camera

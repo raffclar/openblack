@@ -7,7 +7,7 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json and strokes.json beside this script. strokes.json
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json and twogods_scoop_throw.json beside this script. strokes.json
 plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes). The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
@@ -222,6 +222,32 @@ def strokes():
     return script.events
 
 
+def scoop_throw(pile):
+    """The pile at a pixel: the hand scoops from it, lets go of the button, then takes a hold over the land below and
+    throws the handful far"""
+    script = Script()
+    script.wait(10)
+    script.move(pile, 20)
+    script.wait(10)
+    # Scoop for 60 frames
+    script.press()
+    script.wait(60)
+    script.release()
+    script.wait(20)
+    # Over the land below the pile, press, drag and throw
+    script.move((300, 900), 30)
+    script.wait(10)
+    script.press()
+    script.wait(40)
+    script.move((300, 820), 20)
+    script.move((300, 560), 3)
+    script.release()
+    script.wait(60)
+    script.move((600, 600), 20)
+    script.wait(20)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -240,6 +266,7 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
+    write("twogods_scoop_throw", scoop_throw((712, 437)))
 
 
 if __name__ == "__main__":

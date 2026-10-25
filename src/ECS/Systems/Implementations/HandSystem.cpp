@@ -22,13 +22,16 @@
 #include "ECS/Components/HandMiracleFx.h"
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/HandStillness.h"
+#include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Hand/HandStillness.h"
+#include "Hand/OtherHeldDraw.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -166,6 +169,18 @@ void HandSystem::Report(PlayerNames player, const player_commands::HandReport& r
 	{
 		return;
 	}
+	// In a network game the frames of this computer move what the hand of another player holds from the place before
+	// the report to the reported place
+	if (Locator::time::has_value() && Locator::time::value().IsNetworkGame())
+	{
+		const auto* before = registry.TryGet<const ReportedHand>(hand);
+		auto* track = registry.TryGet<HeldDrawTrack>(hand);
+		if (track == nullptr)
+		{
+			track = &registry.Assign<HeldDrawTrack>(hand);
+		}
+		hand_grab::other_held::Reported(*track, before != nullptr ? before->handPoint : glm::vec3(0.0f));
+	}
 	auto& reported = ReportedOf(registry, hand);
 	reported.collidePoint = report.collidePoint;
 	reported.handPoint = report.handPoint;
@@ -193,10 +208,15 @@ entt::entity HandSystem::GetReportedPick() const noexcept
 	return reported != nullptr ? reported->pickedObject : entt::null;
 }
 
-std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera() const noexcept
+std::optional<HandSystemInterface::ReportedCamera> HandSystem::GetReportedCamera(PlayerNames player) const noexcept
 {
+	const auto hands = GetHandsOf(player);
+	if (!hands.has_value())
+	{
+		return std::nullopt;
+	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = _hands[static_cast<size_t>(Side::Left)];
+	const auto hand = (*hands)[static_cast<size_t>(Side::Left)];
 	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
 	// All the values are zero until the first report
 	if (reported == nullptr || (reported->camera == glm::vec3(0.0f) && reported->focus == glm::vec3(0.0f)))
