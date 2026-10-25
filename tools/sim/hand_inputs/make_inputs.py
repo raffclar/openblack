@@ -7,7 +7,7 @@ it: the game puts its camera there before the first frame of the land.
 
     python tools/sim/hand_inputs/make_inputs.py
 
-writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json, twogods_scoop_throw.json and casts.json beside this script. strokes.json
+writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json, twogods_totem.json, strokes.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json and casts.json beside this script. strokes.json
 plays on the testbed scenario hand.recorded_strokes (server_check.py --scenario hand.recorded_strokes), and casts.json on
 miracles.recorded_casts. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
@@ -145,6 +145,11 @@ LAND1_TURNED_CAMERA = {"yaw": 120, "pitch": 40, "distance": 90}
 
 # The camera of twogods.json: 35 m from the store of the player's first town, looking down at 40 degrees
 TWO_GODS_STORE_CAMERA = {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}
+
+
+# The camera of gods_ring_slot1_scoop_throw.json: 35 m from the store of slot 1 on the map for 32 gods, looking down at
+# 40 degrees; the food pot to the east of the store is at the pixel of the scoop
+GODS_RING_SLOT1_STORE_CAMERA = {"focus": [3028.14, 21.44, 827.47], "yaw": 4, "pitch": 40, "distance": 35}
 
 
 def two_gods():
@@ -305,6 +310,8 @@ def main():
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
     write("twogods_scoop_throw", scoop_throw((712, 437)))
+    # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
+    write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
     write("casts", casts())
 
 

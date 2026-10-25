@@ -41,7 +41,8 @@ public:
 	bool Stroke(entt::entity creature, creature_feedback::BodyPart part) override;
 	bool Slap(entt::entity creature, float heightShare, bool gentle, bool sweepsRight) override;
 	[[nodiscard]] std::optional<entt::entity> GetCreature() const override;
-	[[nodiscard]] std::optional<entt::entity> GetLockedCreature() const override;
+	[[nodiscard]] std::optional<entt::entity> GetLockedCreature(PlayerNames player) const override;
+	[[nodiscard]] bool IsLocked(entt::entity creature) const override;
 	void DoLock(PlayerNames player, entt::entity creature) override;
 	void DoUnlock(PlayerNames player, entt::entity creature) override;
 	void DoBruise(PlayerNames player, const player_commands::CreatureBruise& bruise) override;
@@ -54,6 +55,8 @@ public:
 	void LookAtReportedHand() override;
 
 private:
+	/// Whether the hand of the player may take hold of the creature
+	[[nodiscard]] static bool MayHoldFor(PlayerNames player, entt::entity creature);
 	/// Takes hold of a creature by a command, keeping the session if already held to it
 	components::HandOnCreature* HoldByCommand(entt::entity creature);
 	/// Taking hold of a creature with the button turns the camera onto it, and letting go gives the camera back

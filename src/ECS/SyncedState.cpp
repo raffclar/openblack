@@ -173,6 +173,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Transform", .field = "", .marker = "Hand"},
     // The frames of this computer move what the hand of another player holds toward the reported place of that hand
     {.component = "HeldDrawTrack", .field = "", .marker = ""},
+    // The frames move the rope of a worn leash; the world has the lengths of the leash in CreatureLeash
+    {.component = "CreatureLeashRope", .field = "", .marker = ""},
+    // The computers that draw make the sparkles of a leash order; the game server makes none
+    {.component = "LeashOrderSparkles", .field = "", .marker = ""},
     {.component = "HandGrab", .field = "handPoint", .marker = ""},
     // The press, the pull, the spring, the offer and the scoop of this computer's hand are its own input. The world
     // has what the hand holds from the turns: the InHand of the thing.
