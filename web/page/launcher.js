@@ -41,6 +41,14 @@ function parseVersion(text) {
   return { file: text, text: hash + dirty, short: hash.slice(0, k_ShortHash) + dirty, address: k_CommitAddress + hash };
 }
 
+// A build with the developer tools puts developer-tools.txt next to the page. Only then does the page take its
+// developer parameters: "args" (more arguments for the game) and "tool-file". The builds that players get do not have
+// the file, thus their page ignores these parameters.
+const k_DeveloperToolsFile = 'developer-tools.txt';
+const developerTools = fetch(k_DeveloperToolsFile, { cache: 'no-cache' })
+  .then((response) => response.ok)
+  .catch(() => false);
+
 const buildVersion = fetch(k_VersionFile, { cache: 'no-cache' })
   .then((response) => (response.ok ? response.text() : undefined))
   .catch(() => undefined)
@@ -404,9 +412,14 @@ async function start() {
     navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
   }
   const parameters = new URLSearchParams(location.search);
-  await addToolFiles(parameters);
+  const developer = await developerTools;
+  if (developer) {
+    await addToolFiles(parameters);
+  } else if (parameters.has('args') || parameters.has('tool-file')) {
+    log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
+  }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
-  const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
+  const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);

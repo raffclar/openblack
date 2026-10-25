@@ -150,12 +150,13 @@ protected:
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
-		    server::HostSettings {.start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0},
-		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
-		                          .godsToStart = gods,
-		                          .godSlots = 7,
-		                          .comeBackMicroseconds = comeBack,
-		                          .keptTurns = 3200});
+		    server::HostSettings {
+		        .start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow", .godsRingMap = false},
+		        .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		        .godsToStart = gods,
+		        .godSlots = 7,
+		        .comeBackMicroseconds = comeBack,
+		        .keptTurns = 3200});
 	}
 
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
@@ -201,6 +202,12 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Waiting);
 	ASSERT_TRUE(alice.session.GetJoined().has_value());
 	EXPECT_EQ(alice.session.GetJoined()->slot, 0);
+	// The reply to the join gives the land, the seed and the start of the server's world before the start
+	ASSERT_TRUE(alice.session.GetJoined()->start.has_value());
+	EXPECT_EQ(alice.session.GetJoined()->start->land, "Land1.txt");
+	EXPECT_EQ(alice.session.GetJoined()->start->seed, 1u);
+	EXPECT_EQ(alice.session.GetJoined()->start->opening, "cow");
+	EXPECT_FALSE(alice.session.GetStart().has_value());
 	EXPECT_FALSE(host->Started());
 	// No turn before the start
 	EXPECT_EQ(serverWorld.turns, 0u);

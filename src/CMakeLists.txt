@@ -12,6 +12,13 @@ if (NOT OPENBLACK_INSPECTOR)
        "/Inspector/|/InspectorSystem[.]h$"
   )
 endif ()
+# Without the developer tools, the game does not make the debug windows: a debug GUI that does nothing replaces them.
+# The windows, the editor and the editor system are then not in the program, because no part of the program uses them.
+if (OPENBLACK_DEVELOPER_TOOLS)
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoDebugGui[.]cpp$")
+else ()
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/Gui[.]cpp$")
+endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Web/")
@@ -604,6 +611,25 @@ else ()
               $<TARGET_FILE_DIR:openblack>
       COMMENT "Copy the web page of the game"
     )
+    # The page takes its developer parameters (args and tool-file) only when the file developer-tools.txt is next to
+    # it. The build without the developer tools removes the file.
+    if (OPENBLACK_DEVELOPER_TOOLS)
+      add_custom_command(
+        TARGET openblack
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E touch
+                $<TARGET_FILE_DIR:openblack>/developer-tools.txt
+        COMMENT "Let the web page take its developer parameters"
+      )
+    else ()
+      add_custom_command(
+        TARGET openblack
+        POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E rm -f
+                $<TARGET_FILE_DIR:openblack>/developer-tools.txt
+        COMMENT "Keep the developer parameters of the web page off"
+      )
+    endif ()
   elseif (APPLE)
     set(OPENBLACK_ICON_SOURCE_DIR ${CMAKE_SOURCE_DIR}/assets/resource/icon)
     set(OPENBLACK_ICON_BINARY_DIR ${CMAKE_BINARY_DIR}/assets/resource/icon)

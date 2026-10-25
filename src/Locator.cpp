@@ -651,7 +651,10 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 	Locator::gameActionSystem::emplace<GameActionMap>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	InitializeOnline(profiles);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+#endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
 
