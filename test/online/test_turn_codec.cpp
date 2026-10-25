@@ -94,6 +94,9 @@ std::vector<Action> EachCommand()
 	                .focus = {4.0f, 5.0f, 6.0f},
 	                .lens = 1.2f,
 	                .nearClip = 0.5f,
+	                .screenWidth = 1280,
+	                .screenHeight = 1024,
+	                .aspect = 1.25f,
 	                .inclusionDistance = 30.0f,
 	                .cameraOrders = 7,
 	                .cameraArrived = true,
@@ -232,6 +235,9 @@ Action RandomAction(std::mt19937& random)
 		                   .focus = vector(),
 		                   .lens = number(),
 		                   .nearClip = number(),
+		                   .screenWidth = static_cast<uint16_t>(bits(random)),
+		                   .screenHeight = static_cast<uint16_t>(bits(random)),
+		                   .aspect = number(),
 		                   .inclusionDistance = number(),
 		                   .cameraOrders = bits(random),
 		                   .cameraArrived = bits(random) % 2 == 0,
@@ -299,7 +305,7 @@ std::vector<Action> BusyCommands()
 TEST(TurnCodec, EachCommandHasItsSize)
 {
 	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5,  9,  12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 10, 18, 42};
+	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 10, 18, 50};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -720,6 +726,9 @@ TEST(TurnCodec, AViewReportKeepsItsFieldsAndRefusesUnknownFlags)
 	                         .focus = {-1.0f, 0.0f, 1.0f},
 	                         .lens = 1.2217305f,
 	                         .nearClip = 2.0f,
+	                         .screenWidth = 0x0A0B,
+	                         .screenHeight = 0x0C0D,
+	                         .aspect = 1.7777778f,
 	                         .inclusionDistance = 12.5f,
 	                         .cameraOrders = 0x01020304,
 	                         .cameraArrived = false,

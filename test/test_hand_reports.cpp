@@ -420,12 +420,18 @@ TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
 	                        .focus = {4.0f, 5.0f, 6.0f},
 	                        .lens = 1.2f,
 	                        .nearClip = 2.0f,
+	                        .screenWidth = 1920,
+	                        .screenHeight = 1080,
+	                        .aspect = 1.7777778f,
 	                        .inclusionDistance = 50.0f,
 	                        .cameraOrders = 3,
 	                        .cameraArrived = false,
 	                        .gripsLand = true,
 	                        .otherButton = false};
 	auto second = first;
+	second.screenWidth = 1280;
+	second.screenHeight = 1024;
+	second.aspect = 1.25f;
 	second.inclusionDistance = 0.0f;
 	second.cameraOrders = 4;
 	second.cameraArrived = true;
@@ -439,6 +445,8 @@ TEST_F(ReportedHands, TheWorldHasTheViewOfTheLastViewReport)
 	EXPECT_EQ(view->focus, second.focus);
 	EXPECT_EQ(view->lens, second.lens);
 	EXPECT_EQ(view->nearClip, second.nearClip);
+	EXPECT_EQ(view->screen, glm::ivec2(1280, 1024));
+	EXPECT_EQ(view->aspect, 1.25f);
 	EXPECT_EQ(view->inclusionDistance, 0.0f);
 	EXPECT_EQ(view->cameraOrders, 4u);
 	EXPECT_TRUE(view->cameraArrived);

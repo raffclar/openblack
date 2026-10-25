@@ -242,6 +242,9 @@ void HandSystem::ReportView(PlayerNames player, const player_commands::ViewRepor
 	reported.viewFocus = report.focus;
 	reported.viewLens = report.lens;
 	reported.viewNearClip = report.nearClip;
+	reported.viewScreenWidth = report.screenWidth;
+	reported.viewScreenHeight = report.screenHeight;
+	reported.viewAspect = report.aspect;
 	reported.inclusionDistance = report.inclusionDistance;
 	reported.cameraOrders = report.cameraOrders;
 	reported.cameraArrived = report.cameraArrived;
@@ -268,6 +271,8 @@ std::optional<HandSystemInterface::ReportedView> HandSystem::GetReportedView(Pla
 	    .focus = reported->viewFocus,
 	    .lens = reported->viewLens,
 	    .nearClip = reported->viewNearClip,
+	    .screen = glm::ivec2(reported->viewScreenWidth, reported->viewScreenHeight),
+	    .aspect = reported->viewAspect,
 	    .inclusionDistance = reported->inclusionDistance,
 	    .cameraOrders = reported->cameraOrders,
 	    .cameraArrived = reported->cameraArrived,

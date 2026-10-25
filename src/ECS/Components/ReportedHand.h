@@ -42,6 +42,10 @@ struct ReportedHand
 	/// The lens across a 4:3 screen, in radians, and the distance of the near plane
 	float viewLens {0.0f};
 	float viewNearClip {0.0f};
+	/// The size of the window of the player in pixels, and the shape of the camera's picture
+	uint16_t viewScreenWidth {0};
+	uint16_t viewScreenHeight {0};
+	float viewAspect {0.0f};
 	/// How far the camera is from the fence of the camera zones
 	float inclusionDistance {0.0f};
 	/// How many camera orders of the scripts the camera has got, and whether it has arrived where it goes

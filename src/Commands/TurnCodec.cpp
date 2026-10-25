@@ -231,6 +231,9 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.focus);
 		               out.Float(command.lens);
 		               out.Float(command.nearClip);
+		               out.Number(command.screenWidth);
+		               out.Number(command.screenHeight);
+		               out.Float(command.aspect);
 		               out.Float(command.inclusionDistance);
 		               out.Number(command.cameraOrders);
 		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
@@ -505,6 +508,9 @@ DecodeError ReadAction(Reader& in, Action& action)
 		report.focus = in.Vector();
 		report.lens = in.Float();
 		report.nearClip = in.Float();
+		report.screenWidth = in.Number<uint16_t>();
+		report.screenHeight = in.Number<uint16_t>();
+		report.aspect = in.Float();
 		report.inclusionDistance = in.Float();
 		report.cameraOrders = in.Number<uint32_t>();
 		const auto flags = in.Byte();
@@ -670,7 +676,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
 	                                     [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                                     [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
-	                                     [](const ViewReport& /*command*/) { return 2 * k_Vector + 4 + 4 + 4 + 4 + 1; },
+	                                     [](const ViewReport& /*command*/) { return 2 * k_Vector + 6 * 4 + 1; },
 	                                 },
 	                                 action);
 	return 1 + fields;

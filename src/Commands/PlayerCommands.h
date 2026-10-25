@@ -379,6 +379,12 @@ struct ViewReport
 	float lens {0.0f};
 	/// How far the near plane is ahead of the eye
 	float nearClip {0.0f};
+	/// The size of the window that the frame draws into, in pixels, and the shape of the camera's picture (width over
+	/// height). The screen tests of the scripts and the advisors' remarks use the window of the player who reports, so
+	/// that every computer and the game server get the same answer.
+	uint16_t screenWidth {0};
+	uint16_t screenHeight {0};
+	float aspect {0.0f};
 	/// How far the camera is from the fence of the camera zones, as the world camera finds it
 	float inclusionDistance {0.0f};
 	/// How many camera orders of the scripts the camera has got (ecs::RegistryContext::scriptCameraOrders)

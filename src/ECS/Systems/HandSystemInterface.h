@@ -16,6 +16,7 @@
 
 #include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
+#include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
@@ -76,6 +77,9 @@ public:
 		/// The lens across a 4:3 screen, in radians, and the distance of the near plane
 		float lens;
 		float nearClip;
+		/// The size of the window of the player in pixels, and the shape of the camera's picture (width over height)
+		glm::ivec2 screen;
+		float aspect;
 		/// How far the camera is from the fence of the camera zones
 		float inclusionDistance;
 		/// How many camera orders of the scripts the camera has got, and whether it has arrived where it goes
