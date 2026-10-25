@@ -29,6 +29,8 @@ both clients a camera that looks at the arena (--camera1, --camera2 and --camera
 when the camera looks at a fight, and the autopilot makes no double click, because a click on the land grips it. Once
 the god's creature duels, the script frames the camera on it from within the arena. Until the turns read the pose of
 the turn for wounds, give the clients the frame time of the server (--frame-ms 100).
+The summary gives the moves that each client queued and the lean that each creature learnt from them at each turn:
+learnt_same compares the leans of the clients, and both_learnt tells if the lean of each creature changed.
 
 With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
 of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
@@ -524,6 +526,23 @@ def slot_fight(pids, seconds):
         done["clients"][index]["queued"] = counts
         done["clients"][index]["moves"] = moves
     done["moves_same"] = len(pids) == 2 and done["clients"][0]["moves"] == done["clients"][1]["moves"]
+    # Each creature learns its lean from the moves of its god on every computer: the same lean at the same turns
+    for index, pid in enumerate(pids):
+        answer = inspector_answer(pid, "fights.transcript",
+                                  {"params": {"records": 3000, "kinds": "learning"}, "max_bytes": 4000000})
+        entries = answer.get("entries", []) if isinstance(answer, dict) else []
+        learnt = [[entry["turn"], entry["fields"].get("creature"), entry["fields"].get("move"),
+                   entry["fields"].get("before"), entry["fields"].get("after")] for entry in entries]
+        leans = {}
+        for _, creature, _, before, after in learnt:
+            lean = leans.setdefault(str(creature), {"first": before, "last": after, "count": 0})
+            lean["last"] = after
+            lean["count"] += 1
+        done["clients"][index]["leans"] = leans
+        done["clients"][index]["learnt"] = learnt
+    done["learnt_same"] = len(pids) == 2 and done["clients"][0]["learnt"] == done["clients"][1]["learnt"]
+    leans = done["clients"][0].get("leans", {})
+    done["both_learnt"] = len(leans) == 2 and all(lean["first"] != lean["last"] for lean in leans.values())
     return done
 
 
