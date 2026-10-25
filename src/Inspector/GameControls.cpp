@@ -30,6 +30,7 @@
 #include <LHVM.h>
 #include <SDL_keyboard.h>
 #include <bgfx/bgfx.h>
+#include <fmt/format.h>
 #include <glm/trigonometric.hpp>
 
 #include "3D/TempleInteriorInterface.h"
@@ -59,6 +60,7 @@
 #include "Graphics/RendererInterface.h"
 #include "Gui/GameInterface.h"
 #include "Gui/GameMenu.h"
+#include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/VillagerLabels.h"
 #include "Level.h"
 #include "Locator.h"
@@ -494,6 +496,25 @@ std::vector<WindowInfo> GameGui::Windows() const
 		for (const auto& control : DialogControls(boxes.GetNamedControls()))
 		{
 			multiplayer.buttons.push_back(control.name);
+		}
+		// The games of the game list, or the last lines of the room's chat, for a check of the push channel
+		constexpr size_t k_ShownChatLines = 10;
+		if (const auto* frontEnd = boxes.GetFrontEnd();
+		    frontEnd != nullptr && frontEnd->GetBox() == gui::multiplayer::Box::GameList)
+		{
+			for (const auto& server : frontEnd->GetGames())
+			{
+				multiplayer.lines.push_back(
+				    fmt::format("{} ({}/{}) {}", server.hostname, server.numplayers, server.maxplayers, server.gamemode));
+			}
+		}
+		else if (frontEnd != nullptr)
+		{
+			const auto& chat = frontEnd->GetChat();
+			for (size_t i = chat.size() > k_ShownChatLines ? chat.size() - k_ShownChatLines : 0; i < chat.size(); ++i)
+			{
+				multiplayer.lines.push_back(gui::ToUtf8(chat[i].text));
+			}
 		}
 		windows.push_back(std::move(multiplayer));
 	}

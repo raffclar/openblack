@@ -616,6 +616,15 @@ std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data)
 	});
 }
 
+std::optional<ServerBanned> ParseServerBanned(std::string_view data)
+{
+	return ParseWith<ServerBanned>(data, [](const Json& object, ServerBanned& out) {
+		const auto* server = Member(object, "server");
+		return server != nullptr && server->is_object() && ReadString(*server, "id", out.server) &&
+		       ReadString(*server, "name", out.name, false) && ReadString(object, "reason", out.reason, false);
+	});
+}
+
 std::optional<RankingPage> ParseRankingPage(std::string_view text)
 {
 	return ParseWith<RankingPage>(text, [](const Json& object, RankingPage& out) {

@@ -159,7 +159,7 @@ uint16_t GameRole::Port() const
 	return _parts->sockets.Port();
 }
 
-std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start)
+std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -253,6 +253,7 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	parts.host = std::make_unique<LockstepHost>(
 	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {.start = std::move(start),
+	                  .landChecksum = landChecksum,
 	                  .godsToStart = settings.godsToStart,
 	                  .godSlots = 7,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,

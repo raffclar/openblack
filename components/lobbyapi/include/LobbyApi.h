@@ -581,6 +581,17 @@ struct RoomClanChoice
 	std::optional<ClanRef> clan;
 };
 
+/// The data of "server.banned": a game server banned the account
+struct ServerBanned
+{
+	/// "server": "id"
+	std::string server;
+	/// "server": "name"
+	std::string name;
+	/// "reason"
+	std::string reason;
+};
+
 /// The data of "account.banned"
 struct Ban
 {

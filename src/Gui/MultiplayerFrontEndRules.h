@@ -92,8 +92,20 @@ enum class Message : uint8_t
 	/// "The channel host left the channel that you were in.", with OK: the game socket closed while the player was in
 	/// the room. OK goes back to the game list.
 	HostLeft,
-	/// "Waiting for start replies...", with Cancel: the player is ready, and the server waits for the other gods
-	WaitingForStart,
+	/// "Waiting for host to start transferring files...", with no button: the player has the land of the start, and the
+	/// server waits for the other players' replies
+	WaitingForTransfer,
+	/// "Sending/Receiving start data...", with no button: the creature files of the gods go to all players
+	SendingStartData,
+	/// "The host tried to start the game but you are still downloading the map.", with OK: the player does not have the
+	/// land of the start
+	StillDownloading,
+	/// "The game could not be started because other people are still downloading the map.", with OK: another player
+	/// does not have the land of the start
+	OthersDownloading,
+	/// "%s has kicked you from the game.", with OK, with the name of the room's server: the server removed the player
+	/// from the room. OK goes back to the game list.
+	KickedFromGame,
 };
 
 /// The buttons of a message box, as the game's message boxes have them
@@ -103,8 +115,6 @@ enum class MessageButtons : uint8_t
 	Ok,
 	/// Yes at the left, No at the right
 	YesNo,
-	/// One Cancel in the middle
-	Cancel,
 	/// No button: the box goes when the work is done
 	None,
 };

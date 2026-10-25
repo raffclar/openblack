@@ -27,6 +27,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack::ecs::systems;
@@ -59,9 +60,11 @@ int64_t Microseconds()
 
 } // namespace
 
-NetworkGameSystem::NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient)
+NetworkGameSystem::NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient,
+                                     ReadCreature readCreature)
     : _sockets(sockets)
     , _makeTestClient(std::move(makeTestClient))
+    , _readCreature(std::move(readCreature))
 {
 }
 
@@ -142,6 +145,17 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	    .ticket = std::move(join.ticket),
 	    .gamePassword = std::move(join.gamePassword),
 	    .name = std::move(join.name),
+	    .readLand = [](std::string_view land) -> std::optional<std::vector<uint8_t>> {
+		    // The land of the start is a file in the Scripts folder of the game on this computer
+		    auto& fileSystem = Locator::filesystem::value();
+		    const auto path = fileSystem.GetPath<filesystem::Path::Scripts>() / std::filesystem::path(land);
+		    if (!fileSystem.Exists(path))
+		    {
+			    return std::nullopt;
+		    }
+		    return fileSystem.ReadAll(path);
+	    },
+	    .readCreature = _readCreature,
 	});
 	// The land of the game loaded before the join, so the player is ready at once
 	if (join.landLoaded)

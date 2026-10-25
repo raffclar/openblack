@@ -14,6 +14,7 @@
 #include <functional>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -32,6 +33,8 @@ struct HostSettings
 {
 	/// The land and the seed that the clients start, which are the server's own
 	game_socket::Start start;
+	/// The checksum of the server's land file, which each player's land file must have before the start
+	uint64_t landChecksum {0};
 	/// The game starts when this many gods joined and are ready
 	uint32_t godsToStart {1};
 	/// The god slots of the room
@@ -117,6 +120,8 @@ public:
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
 	[[nodiscard]] bool Started() const { return _started; }
+	/// True from the query of the lands until the start of the game or a stop of the start
+	[[nodiscard]] bool Starting() const { return _startStep != StartStep::None; }
 	/// True when the game started and no god's player is connected
 	[[nodiscard]] bool Paused() const;
 	/// True when the game started and every god left or was defeated: no player can come back
@@ -144,6 +149,18 @@ private:
 	void Join(ConnectionId connection, Peer& peer, const game_socket::Join& join);
 	void Resume(ConnectionId connection, Peer& peer, const game_socket::Resume& resume);
 	void Refuse(ConnectionId connection, std::string_view reason);
+	void StartReply(ConnectionId connection, const Peer& peer, const game_socket::StartReply& reply);
+	void StartCreature(ConnectionId connection, const Peer& peer, const game_socket::StartCreature& creature);
+	/// The gods are ready: the server asks the gods if they have the land
+	void QueryLands();
+	/// Every god has the land: the gods send their creature files
+	void TransferCreatures();
+	/// The last creature file came: the world starts to turn
+	void StartGame();
+	/// The start stops before the game starts: the frame tells the players why
+	void StopStart(const game_socket::Frame& why);
+	/// The connections of the gods with a player
+	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);
 	void Broadcast(const game_socket::Frame& frame);
 	void BroadcastBinary(std::span<const uint8_t> bytes);
@@ -160,6 +177,17 @@ private:
 	std::vector<Seat> _seats;
 	std::map<ConnectionId, Peer> _peers;
 	bool _started {false};
+	enum class StartStep : uint8_t
+	{
+		None,
+		/// The server waits for the replies of the gods to its query of the land
+		Query,
+		/// The server waits for the creature files of the gods
+		Transfer,
+	};
+	StartStep _startStep {StartStep::None};
+	/// The connections whose reply or creature file the server waits for in the step of the start
+	std::set<ConnectionId> _awaited;
 	bool _pausedBefore {false};
 	uint32_t _turnsDone {0};
 	/// The blocks that came since the last turn

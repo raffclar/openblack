@@ -38,7 +38,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 14> boxes = {{
+	const std::array<BoxScenario, 17> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -91,8 +91,8 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
-	     "A white box says \"You are in the game. Wait for the start of the game.\" with Cancel, over the dimmed "
-	     "room. Cancel takes the tick from Ready."},
+	     "The Ready box shows a tick. No message box shows, and the conditions page stays as it is. A click on the tick "
+	     "takes the Ready away."},
 	    {"multiplayer.lan_list", "The multiplayer front end: the local network's games", Stage::LanGameList,
 	     "The front end looks for games on the demonstration's local network.",
 	     "The box \"Find a game on your Local Network.\" lists \"Office game (1/4)\" and \"Upstairs (0/32)\". It has no "
@@ -111,6 +111,18 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player picks \"Full game (2/2)\" and joins it. The lobby gives no god's ticket for the full room.",
 	     "No message shows. The game room of \"Full game\" opens, with Ivy and Jon as gods 1 and 2. The player is an "
 	     "observer, with no god."},
+	    {"multiplayer.start_transfer", "The multiplayer front end: the creature files of the start", Stage::StartTransfer,
+	     "The player joins Bob's game and ticks Ready. The server asks for the land, and then for the creature files.",
+	     "A white box says \"Sending/Receiving start data...\" with no button, over the dimmed room."},
+	    {"multiplayer.start_cancelled", "The multiplayer front end: a start that another player stops", Stage::StartCancelled,
+	     "The player joins Bob's game and ticks Ready. The server asks for the land, and another player does not have it.",
+	     "A white box says \"The game could not be started because other people are still downloading the map.\" with "
+	     "OK. OK closes the box, and the player stays ready."},
+	    {"multiplayer.kicked_from_game", "The multiplayer front end: a land file that is not the server's",
+	     Stage::KickedFromGame,
+	     "The player joins Bob's game and ticks Ready. The player's land file is not the server's, so the server removes the "
+	     "player from the room.",
+	     "A white box says \"Bob's game has kicked you from the game.\" with OK. OK goes back to the game list."},
 	}};
 	for (const auto& box : boxes)
 	{

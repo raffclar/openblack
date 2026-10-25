@@ -216,6 +216,7 @@ public:
 	void PlayAlone() override {}
 	[[nodiscard]] bool InGame() const override { return session.GetState() != online::NetworkSession::State::Ended; }
 	[[nodiscard]] const online::NetworkSession* Session() const override { return &session; }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override { return session.TakeStartEvent(); }
 
 	int64_t now {0};
 	online::NetworkSession session;
@@ -360,7 +361,6 @@ TEST(MultiplayerRules, LoginFailuresGiveTheGamesMessages)
 	EXPECT_TRUE(AsksAboutName(LobbyErrorKind::Refused));
 	EXPECT_FALSE(AsksAboutName(LobbyErrorKind::Timeout));
 	EXPECT_EQ(ButtonsOf(Message::NotRegistered), MessageButtons::YesNo);
-	EXPECT_EQ(ButtonsOf(Message::WaitingForStart), MessageButtons::Cancel);
 }
 
 TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
@@ -897,18 +897,19 @@ TEST_F(FrontEndTest, UseThisClan)
 	EXPECT_FALSE(frontEnd->GetUsedClan().has_value());
 }
 
-TEST_F(FrontEndTest, ReadyWaitsForTheStart)
+TEST_F(FrontEndTest, ReadyShowsNoBoxAndTheTickTakesItAway)
 {
 	ToRoom();
 	frontEnd->Next();
 	EXPECT_EQ(frontEnd->GetBox(), Box::Conditions);
 	frontEnd->SetReady(true);
 	EXPECT_TRUE(frontEnd->IsReady());
-	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForStart);
+	// The game shows no box while the player waits for the start
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	const auto& socket = sockets.sockets.at(sockets.order.back());
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":true,"type":"room.ready"})");
-	// Cancel takes the tick away
-	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Cancel);
+	// The tick of the Ready box takes the Ready away
+	frontEnd->SetReady(false);
 	EXPECT_FALSE(frontEnd->IsReady());
 	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
 	EXPECT_EQ(socket.sent.back().Text(), R"({"ready":false,"type":"room.ready"})");
@@ -1026,4 +1027,135 @@ TEST(MultiplayerRules, The32GodsHaveDistinctReadableChatColours)
 		const auto contrast = (Luminance(GodColourBits(god)) + 0.05) / 0.05;
 		EXPECT_GE(contrast, 4.5) << "god " << god;
 	}
+}
+
+namespace
+{
+
+/// The text of a frame from the server to the player's last socket
+void ServerSends(test_fakes::FakeWebSocketClient& sockets, const game_socket::Frame& frame)
+{
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(frame));
+}
+
+} // namespace
+
+TEST_F(FrontEndTest, TheStepsOfTheStartShowTheGamesBoxes)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::WaitingForTransfer);
+	EXPECT_EQ(ButtonsOf(Message::WaitingForTransfer), MessageButtons::None);
+	EXPECT_EQ(socket.sent.back().Text(), R"({"checksum":0,"have":true,"type":"start.reply"})");
+	ServerSends(sockets, game_socket::StartTransfer {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
+	EXPECT_EQ(ButtonsOf(Message::SendingStartData), MessageButtons::None);
+	// The player of the test has no creature: an empty file goes to the server
+	EXPECT_EQ(socket.sent.back().Text(), R"({"file":"","type":"start.creature"})");
+	ServerSends(sockets, game_socket::StartCreature {.slot = 1, .file = {}});
+	ServerSends(sockets, game_socket::Start {.land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}});
+	Step();
+	EXPECT_TRUE(frontEnd->IsStarted());
+	EXPECT_EQ(network.session.StartCreatures().size(), 1u);
+}
+
+TEST_F(FrontEndTest, AStartThatAnotherPlayerCannotMakeShowsTheGamesText)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	Step();
+	ServerSends(sockets, game_socket::StartCancel {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::OthersDownloading);
+	EXPECT_EQ(ButtonsOf(Message::OthersDownloading), MessageButtons::Ok);
+	// The player is still ready, and waits for the next start
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_TRUE(frontEnd->IsReady());
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+}
+
+TEST_F(FrontEndTest, APlayerWithoutTheLandIsToldAndIsNotReady)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	// The test's network game reads no land: the player does not have it
+	ServerSends(sockets, game_socket::StartQuery {.land = "Land1.txt", .testbed = false, .checksum = 9});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::StillDownloading);
+	EXPECT_FALSE(frontEnd->IsReady());
+	const auto& socket = sockets.sockets.at(sockets.order.back());
+	EXPECT_EQ(socket.sent.back().Text(), R"({"checksum":0,"have":false,"type":"start.reply"})");
+	// The stop of the start does not hide the player's own box
+	ServerSends(sockets, game_socket::StartCancel {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::StillDownloading);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(frontEnd->GetBox(), Box::Conditions);
+}
+
+TEST_F(FrontEndTest, APlayerWhoLeavesDuringTheStartTakesAwayItsBoxes)
+{
+	ToRoom();
+	frontEnd->Next();
+	frontEnd->SetReady(true);
+	ServerSends(sockets, game_socket::StartQuery {.land = {}, .testbed = true, .checksum = 0});
+	ServerSends(sockets, game_socket::StartTransfer {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
+	ServerSends(sockets, game_socket::StartStop {});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_TRUE(frontEnd->IsReady());
+}
+
+TEST_F(FrontEndTest, ARemovalFromTheRoomNamesTheServer)
+{
+	ToRoom();
+	ServerSends(sockets, game_socket::Refused {.reason = "kicked"});
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::KickedFromGame);
+	EXPECT_EQ(frontEnd->GetMessageName(), u"Bob's game");
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, ABanOfTheRoomsServerTakesThePlayerOutOfTheRoom)
+{
+	ToRoom();
+	// A ban of another server does nothing here
+	lobby.Event("server.banned", R"({"server":{"id":"w2","name":"Fun"},"reason":"spam"})");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	lobby.Event("server.banned", R"({"server":{"id":"w1","name":"Bob's game"},"reason":"spam"})");
+	EXPECT_EQ(frontEnd->GetMessage(), Message::KickedFromGame);
+	EXPECT_EQ(frontEnd->GetMessageName(), u"Bob's game");
+	EXPECT_EQ(network.leaves, 1);
+	frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Ok);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+}
+
+TEST_F(FrontEndTest, ThePickStaysOnItsGameWhenTheListChanges)
+{
+	ToGameList();
+	frontEnd->SelectGame(1);
+	// The first game goes from the list (servers.removed on the push channel)
+	lobby.known.erase(lobby.known.begin());
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetSelectedGame(), 0u);
+	// A new game comes before it
+	lobby.known.insert(lobby.known.begin(), Server("w3", "New", 0, 2));
+	frontEnd->Update();
+	EXPECT_EQ(frontEnd->GetSelectedGame(), 1u);
+	// The picked game goes
+	lobby.known.erase(lobby.known.begin() + 1);
+	frontEnd->Update();
+	EXPECT_FALSE(frontEnd->GetSelectedGame().has_value());
 }
