@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/vec3.hpp>
 
