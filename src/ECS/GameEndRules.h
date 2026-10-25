@@ -25,6 +25,7 @@
 //   gods are out, the worst first.
 // - A god among the first four players with no temple is out. Its creature goes from the land.
 // - For each god that is now out, the game counts the god out. When only one god is left, the game is decided.
+// - A god that the game finished with stops its computer mind. When the game is decided, every god finished.
 //
 // Only gods that a human or a computer mind plays take part. Players five to seven never lose by the temple rule.
 //
@@ -89,6 +90,8 @@ public:
 	virtual void RemoveCreature(PlayerNames player) = 0;
 	/// The statistics of the player count one more god defeated
 	virtual void CountGodDefeated(PlayerNames player) = 0;
+	/// The computer mind of the player stops, if the player has one
+	virtual void StopMind(PlayerNames player) = 0;
 };
 
 /// The kind of game

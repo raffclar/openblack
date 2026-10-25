@@ -23,6 +23,7 @@
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -118,6 +119,14 @@ public:
 		if (auto* statistics = _registry.TryGet<components::PlayerStatistics>(Entity(player)))
 		{
 			++statistics->godsDefeated;
+		}
+	}
+
+	void StopMind(PlayerNames player) override
+	{
+		if (IsComputer(player) && Locator::computerPlayerSystem::has_value())
+		{
+			Locator::computerPlayerSystem::value().SwitchOn(player, false);
 		}
 	}
 

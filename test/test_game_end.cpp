@@ -29,6 +29,7 @@ struct FakeGod
 	bool computer {false};
 	bool temple {true};
 	bool creature {true};
+	bool mind {false};
 	float influence {0.0f};
 	uint32_t godsDefeated {0};
 	GameStanding standing;
@@ -57,6 +58,7 @@ public:
 	[[nodiscard]] float InfluenceShare(PlayerNames player) const override { return gods.at(player).influence; }
 	void RemoveCreature(PlayerNames player) override { gods.at(player).creature = false; }
 	void CountGodDefeated(PlayerNames player) override { ++gods.at(player).godsDefeated; }
+	void StopMind(PlayerNames player) override { gods.at(player).mind = false; }
 };
 
 constexpr auto k_One = PlayerNames::PLAYER_ONE;
@@ -141,7 +143,7 @@ TEST(GameEnd, TheLastGodWithATempleDecidesTheGame)
 TEST(GameEnd, WithThreeGodsTheGameGoesOnAfterTheFirstIsOut)
 {
 	auto world = TwoHumans();
-	world.gods[k_Three] = {.computer = true};
+	world.gods[k_Three] = {.computer = true, .mind = true};
 	world.gods[k_Three].temple = false;
 	State state;
 	const auto events = ProcessTurn(world, k_Skirmish, state);
@@ -150,6 +152,8 @@ TEST(GameEnd, WithThreeGodsTheGameGoesOnAfterTheFirstIsOut)
 	EXPECT_FALSE(state.decided);
 	// A computer god has no place. In a skirmish the human gods count it defeated.
 	EXPECT_FALSE(world.gods[k_Three].standing.place.has_value());
+	// The god out stops thinking
+	EXPECT_FALSE(world.gods[k_Three].mind);
 	EXPECT_EQ(world.gods[k_One].godsDefeated, 1u);
 	EXPECT_EQ(world.gods[k_Two].godsDefeated, 1u);
 	// The god is counted one time only
@@ -194,6 +198,8 @@ TEST(GameEnd, AGodThatLeftIsCountedWithItsReason)
 TEST(GameEnd, AGodThatCompletesEveryConditionWins)
 {
 	auto world = TwoHumans();
+	world.gods[k_Three] = {.computer = true, .mind = true};
+	world.gods[k_Three].standing.conditions[0] = WinCondition {.current = 0, .target = 3, .completed = false};
 	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 3, .target = 3, .completed = true};
 	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 1, .target = 3, .completed = false};
 	State state;
@@ -206,7 +212,12 @@ TEST(GameEnd, AGodThatCompletesEveryConditionWins)
 	EXPECT_TRUE(state.decided);
 	EXPECT_FALSE(world.gods[k_One].standing.out);
 	EXPECT_TRUE(world.gods[k_Two].standing.out);
-	EXPECT_EQ(world.gods[k_Two].standing.place, 1);
+	// The decided game stops every computer mind
+	EXPECT_FALSE(world.gods[k_Three].mind);
+	// The worst god is out first. The computer god takes no place, but as every god but the winner is marked out, its
+	// count gives the winner a place at once. Then the human god takes the next place, and the winner the last.
+	EXPECT_EQ(world.gods[k_Two].standing.place, 2);
+	EXPECT_EQ(world.gods[k_One].standing.place, 3);
 }
 
 TEST(GameEnd, TheTimeLimitDecidesByTheShareAndThenTheInfluence)

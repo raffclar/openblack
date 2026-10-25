@@ -47,10 +47,11 @@ namespace
 std::optional<PlayerNames> Decide(World& world, State& state, const std::vector<PlayerNames>& gods, bool skirmish)
 {
 	state.decided = true;
-	// Every god finished its game
+	// Every god finished its game, and its computer mind stops
 	for (const auto god : gods)
 	{
 		world.Standing(god).finished = true;
+		world.StopMind(god);
 	}
 	// The gods that are still in, best first: each time the god with the largest share of those left. Of two gods with
 	// the same share, the god with the larger share of the influence is the better.
@@ -264,6 +265,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 			events.push_back({.kind = Event::Kind::GodOut, .god = god});
 		}
 		world.Standing(god).finished = true;
+		world.StopMind(god);
 	}
 	return events;
 }
