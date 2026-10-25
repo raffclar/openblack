@@ -178,6 +178,15 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		    return fileSystem.ReadAll(*path);
 	    },
 	    .readCreature = std::move(readCreature),
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	    .parts =
+	        [](uint32_t turn) {
+		        // The row dump of the tools writes the rows of the turn, when it started
+		        Locator::syncChecksumSystem::value().DumpPart(turn, "parts from the server", 0);
+	        },
+#else
+	    .parts = {},
+#endif
 	});
 	return true;
 }

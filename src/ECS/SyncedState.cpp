@@ -346,7 +346,7 @@ bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_vie
 }
 
 Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
-            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool)
+            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool, ecs::reflection::WorldRows* rows)
 {
 	// The hash does not include the presentation parts. A part that only some entities have uses the storage of its marker
 	// component. When the registry has no such storage, no entity has the marker, and the hash keeps the part.
@@ -363,7 +363,7 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 			leaveOut.push_back({.component = part.component, .field = part.field, .marker = marker});
 		}
 	}
-	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool);
+	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool, rows);
 	Hash result {.hash = k_HashOffset, .parts = {}};
 	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
 	result.parts.emplace_back("entities", hashes.entities);

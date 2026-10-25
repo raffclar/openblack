@@ -537,6 +537,10 @@ void NetworkSession::Compare(uint32_t turn)
 	{
 		_compares.firstDifferent = _compares.firstDifferent.value_or(turn);
 		Log(spdlog::level::warn, fmt::format("The world parts from the server's world at turn {}", turn));
+		if (_settings.parts)
+		{
+			_settings.parts(turn);
+		}
 		switch (_resync.Differ(turn))
 		{
 		case ResyncRule::Action::Rejoin:

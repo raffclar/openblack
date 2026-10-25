@@ -50,6 +50,8 @@ struct NetworkSessionSettings
 	/// Reads the creature file of the player, which goes to the other players before the start. Empty when the player
 	/// has no creature, and with no reader.
 	std::function<std::vector<uint8_t>()> readCreature;
+	/// Tools: gets each turn at which the world of this computer differs from the server's world
+	std::function<void(uint32_t turn)> parts;
 };
 
 /// A step of the start of the game that the front end shows to the player

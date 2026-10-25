@@ -16,6 +16,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -414,6 +415,23 @@ TEST_F(LockstepTest, AClientThatPartsTriesThreeRejoinsAndThenLeaves)
 	EXPECT_EQ(alice.session.GetCompares().firstDifferent, 21u);
 	ASSERT_TRUE(host->Seats()[0].compares.firstDifferent.has_value());
 	EXPECT_EQ(*host->Seats()[0].compares.firstDifferent, 21u);
+}
+
+TEST_F(LockstepTest, TheHostTellsTheFirstTurnOfEachPart)
+{
+	MakeHost(1);
+	std::vector<std::pair<uint8_t, uint32_t>> parts;
+	host->SetPartListener([&parts](uint8_t seat, uint32_t turn) { parts.emplace_back(seat, turn); });
+	Computer alice(network, now, "god:alice");
+	alice.world.partsAfter = 20;
+	for (int i = 0; i < 200 && alice.session.GetState() != NetworkSession::State::Ended; ++i)
+	{
+		Frame({&alice});
+	}
+	// The world stays parted for some turns after 21, but only the first turn of the part comes
+	ASSERT_FALSE(parts.empty());
+	EXPECT_EQ(parts.front(), std::make_pair(uint8_t {0}, 21u));
+	EXPECT_LT(parts.size(), host->Seats()[0].compares.compared - host->Seats()[0].compares.same);
 }
 
 TEST_F(LockstepTest, AClientThatPartsLoadsTheWorldOfTheServerAndStaysInStep)

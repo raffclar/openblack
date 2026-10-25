@@ -432,6 +432,7 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
+    # The food pile of the first god's store on TwoGods (net_check.py --input with --camera1 TWO_GODS_STORE_CAMERA)
     write("twogods_scoop_throw", scoop_throw((712, 437)))
     # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
     write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))

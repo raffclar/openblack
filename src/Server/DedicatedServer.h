@@ -109,6 +109,12 @@ struct ServerSettings
 	std::optional<std::filesystem::path> commandsPath;
 	/// Tools: at this turn the server takes its whole world as a world state and loads it again
 	std::optional<uint32_t> reloadAt;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: the file of the row dump (row_dump::RowDump). The server writes the rows of a turn at which the world of a
+	/// client parts from the server's world, and at the turn of the settings.
+	std::optional<std::filesystem::path> rowDumpPath;
+	row_dump::Settings rowDump;
+#endif
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.
 	std::optional<NetworkSettings> network;
