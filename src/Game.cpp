@@ -3850,7 +3850,8 @@ bool Game::Initialize() noexcept
 		                   _simulation->settings.fast, _simulation->frameTime.value_or(std::chrono::microseconds {0}).count(),
 		                   _simulation->settings.drawEvery, _simulation->settings.untilTurn.value_or(0));
 	}
-	if (_networkGame)
+	// A game that joins a server from the command line loads its land as a network game, as the server does
+	if (_networkGame || _networkJoin.has_value())
 	{
 		Locator::time::value().SetNetworkGame(true);
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The world plays as a network game");
@@ -4219,10 +4220,11 @@ Game::RunStart Game::StartRun() noexcept
 
 	// The story's scripts run the first land; on the testbed they would set its time of day and stop its clock. A
 	// playground starts as the playground menu starts one: the scripts are made ready, but no story begins and the
-	// start-of-game question isn't asked
+	// start-of-game question isn't asked. A network game starts no story either.
 	auto& lands = Locator::landSystem::value();
 	const bool startStory = !_startTestbed && start == game_session::Start::NewGame &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish,
+	                                                              Locator::time::value().IsNetworkGame());
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return RunStart::Failed;
@@ -5089,7 +5091,7 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	}
 	// The story's scripts run the first land, but not the testbed, the map for 32 gods or a playground
 	const bool startStory = !start.testbed && !start.godsRingMap &&
-	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish);
+	                        new_game_choice::FirstLandStartsStory(Locator::entitiesRegistry::value().Context().skirmish, true);
 	if (!lands.StartChallengeScripts(startStory))
 	{
 		return false;

@@ -45,6 +45,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -54,9 +55,6 @@ namespace
 {
 /// The game's templates in the resource caches
 constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
-
-/// The kinds of script that a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
@@ -783,7 +781,7 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		// Each square wave starts the script again. The script itself finds the phone box that it made before.
 		if (Locator::vm::has_value())
 		{
-			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), k_SinglePlayerScripts);
+			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), script::start::StartableScripts());
 		}
 		break;
 	case Purpose::OpenSelection:
