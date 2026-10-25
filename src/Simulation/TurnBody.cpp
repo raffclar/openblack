@@ -66,6 +66,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
+#include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -693,6 +694,15 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::vortexSystem::has_value())
 		{
 			Locator::vortexSystem::value().ProcessTurn();
+		}
+		break;
+	case Step::ScriptVoices:
+		// The scripts' clock moves on by the turn's time, and the clicks of the frames since the last turn reach the
+		// dialogue
+		if (Locator::helpTextSystem::has_value())
+		{
+			Locator::helpTextSystem::value().ProcessTurn(
+			    static_cast<uint32_t>(ecs::systems::TimeSystemInterface::k_TurnDuration.count()));
 		}
 		break;
 	case Step::Scripts:
