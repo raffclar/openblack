@@ -131,6 +131,15 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, TheHelpOfTheCreatureIsNotSynced)
+{
+	// Each computer tells only its own player about the creature, from the dialogue of that computer
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHelpMemory", "memory"));
+	// The mind of the creature is the same on every computer
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureMindState", "developmentPhase"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

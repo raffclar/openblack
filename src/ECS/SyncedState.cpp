@@ -264,6 +264,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandOnCreature", .field = "", .marker = ""},
     // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
     {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The help of the creature is for the player at this machine only. Each computer keeps it for the creature of its
+    // own player, from its own dialogue. Only the help reads it.
+    {.component = "CreatureHelpMemory", .field = "", .marker = ""},
     // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
     {.component = "VillageTotem", .field = "gripped", .marker = ""},
     {.component = "VillageTotem", .field = "held", .marker = ""},
