@@ -85,6 +85,11 @@ EM_JS(char*, openblack_page_version, (), {
 	const text = globalThis.openblackWeb && globalThis.openblackWeb.version;
 	return typeof text === 'string' ? stringToNewUTF8(text) : 0;
 });
+// The host of the page, with its port. The game thread reads its own location, which has the host of the page. The
+// game does not use emscripten_run_script for this, because the page's content security policy refuses eval.
+EM_JS(char*, openblack_page_host, (), {
+	return stringToNewUTF8(typeof location === 'object' && location ? location.host : '');
+});
 EM_JS_DEPS(openblack_web_platform, "$UTF8ToString,$stringToNewUTF8");
 // clang-format on
 
@@ -234,6 +239,12 @@ void WritePageVersion()
 }
 
 } // namespace
+
+std::string openblack::web::PageHost()
+{
+	const std::unique_ptr<char, decltype(&free)> host(openblack_page_host(), free);
+	return host ? std::string(host.get()) : std::string();
+}
 
 bool openblack::web::PrepareFileSystem()
 {
