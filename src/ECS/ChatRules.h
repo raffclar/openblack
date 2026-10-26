@@ -82,10 +82,11 @@ struct ListedPlayer
 namespace speech_bubble
 {
 
-/// The time to show that a line adds, and the least time to show after a line, in seconds
+/// The time to show that a line adds, and the least time to show after a line. A unit of the time to show lasts 5000
+/// milliseconds of game time (k_TimePerHundredth). The bubble fades out in its last unit.
 constexpr float k_LineTime = 3.0f;
 constexpr float k_LeastTime = 3.0f;
-/// The time to show of the bubble of the player's creature as the chat comes on the screen, in seconds
+/// The time to show of the bubble of the player's creature as the chat comes on the screen
 constexpr float k_ShowTime = 3.0f;
 /// What a hundredth of a game turn takes off the time to show
 constexpr float k_TimePerHundredth = 0.0002f;
