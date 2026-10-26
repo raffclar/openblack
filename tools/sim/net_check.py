@@ -678,6 +678,8 @@ def main():
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
                         help="the number of clients (a god slot each)")
+    parser.add_argument("--min-gods", type=int,
+                        help="the fewest gods that start the game (the server's --min-gods); the clients with none")
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
@@ -745,8 +747,12 @@ def main():
     server_command = [server_exe, "-g", options.game_path] + where + [
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log,
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
-        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
-        "--come-back-seconds", str(options.come_back_seconds)]
+        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--come-back-seconds", str(options.come_back_seconds)]
+    # The fewest gods that start the game: each client by default. The old name --gods also works on an older server.
+    if options.min_gods is not None:
+        server_command += ["--min-gods", str(options.min_gods)]
+    else:
+        server_command += ["--gods", str(options.clients)]
     if options.server_alignment is not None:
         options.server_profile = options.server_profile or os.path.join(out, "server_profile")
         write_kept_alignment(options.server_profile, options.server_alignment)
