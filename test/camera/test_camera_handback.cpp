@@ -212,6 +212,28 @@ TEST_P(GlideAfterHandback, TheCameraGlidesOnToWhereTheScriptSentIt)
 	          0.9999f);
 }
 
+TEST_P(GlideAfterHandback, AScriptThatPutsTheCameraAndGivesItBackAtOnceLeavesItThere)
+{
+	ScriptControlSystem control;
+	ASSERT_TRUE(control.StartCameraControl(_camera, {.task = 7, .templeScript = false, .insideTemple = false}, FlatLand));
+	auto* script = dynamic_cast<ScriptCameraModel*>(&_camera.GetModel());
+	ASSERT_NE(script, nullptr);
+	// The script puts the camera and gives it back before the camera's next frame
+	script->SetOrigin(k_SentOrigin);
+	script->SetFocus(k_SentFocus);
+	ASSERT_TRUE(control.EndCameraControl(_camera, 7));
+
+	// The camera is at the place at once, and stays there
+	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_SentOrigin), 0.01f);
+	for (int frame = 0; frame < 60; ++frame)
+	{
+		_camera.HandleActions(k_Frame);
+		_camera.Update(k_Frame);
+		_camera.HandleKeys(k_Frame);
+		EXPECT_LT(glm::distance(_camera.GetOrigin(), k_SentOrigin), 0.01f) << "frame " << frame;
+	}
+}
+
 INSTANTIATE_TEST_SUITE_P(StillPlayer, GlideAfterHandback, testing::Values(std::make_tuple(false, false)));
 
 namespace

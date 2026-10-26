@@ -589,6 +589,16 @@ glm::vec3 ScriptCameraModel::GetTargetFocus() const
 	return DestinationOf(_focus);
 }
 
+glm::vec3 ScriptCameraModel::GetOrigin() const
+{
+	return ValueOf(_origin);
+}
+
+glm::vec3 ScriptCameraModel::GetFocus() const
+{
+	return ValueOf(_focus);
+}
+
 glm::vec3 ScriptCameraModel::GetOriginSpeed() const
 {
 	return SpeedOf(_origin);

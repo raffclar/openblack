@@ -105,11 +105,13 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 	else if (const auto* script = GetScriptCamera(camera); script != nullptr)
 	{
 		// The player gets a camera of their own. The camera does not stop where the script left it: it glides on, from
-		// the speed that it has, to where the script sent it. The player's camera starts with the time of its first
-		// glide.
+		// the place and the speed that the script gave it, to where the script sent it. The player's camera starts with
+		// the time of its first glide.
 		const auto origin = script->GetTargetOrigin();
 		const auto focus = script->GetTargetFocus();
-		camera.GlideTo(origin, focus, script->GetOriginSpeed(), script->GetFocusSpeed(), camera_limits::k_FlightEaseSeconds);
+		camera.GlideTo({.from = script->GetOrigin(), .to = origin, .speed = script->GetOriginSpeed()},
+		               {.from = script->GetFocus(), .to = focus, .speed = script->GetFocusSpeed()},
+		               camera_limits::k_FlightEaseSeconds);
 		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(origin, focus));
 	}
 	// Inside the temple, the script's camera the player came in from gives way all the same
