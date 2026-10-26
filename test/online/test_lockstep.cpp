@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <initializer_list>
 #include <memory>
 #include <optional>
@@ -151,15 +152,15 @@ server::TicketCheck::Result CheckFakeTicket(std::string_view token)
 class LockstepTest: public ::testing::Test
 {
 protected:
-	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000)
+	void MakeHost(uint32_t gods, int64_t comeBack = 5LL * 60 * 1'000'000, uint8_t slots = 7)
 	{
 		host = std::make_unique<LockstepHost>(
 		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
 		    server::HostSettings {
 		        .start = {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow", .godsRingMap = false},
 		        .landChecksum = online::start_rules::LandChecksum(k_LandFile),
-		        .godsToStart = gods,
-		        .godSlots = 7,
+		        .minGods = gods,
+		        .godSlots = slots,
 		        .comeBackMicroseconds = comeBack,
 		        .keptTurns = 3200});
 	}
@@ -699,4 +700,77 @@ TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
 	EXPECT_EQ(again.session.GetJoined()->role, game_socket::Role::Observer);
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
 	EXPECT_EQ(again.world.hash, serverWorld.hash);
+}
+
+TEST(LockstepRoom, TheRoomStartsWhenEachGodInItIsReadyAndHasTheFewestGods)
+{
+	EXPECT_TRUE(server::RoomStarts(1, 1, 1));
+	EXPECT_TRUE(server::RoomStarts(2, 2, 1));
+	EXPECT_TRUE(server::RoomStarts(2, 2, 2));
+	// A god who is not ready holds the start
+	EXPECT_FALSE(server::RoomStarts(2, 1, 1));
+	// Too few gods
+	EXPECT_FALSE(server::RoomStarts(1, 1, 2));
+	// An empty room does not start, also with no fewest gods
+	EXPECT_FALSE(server::RoomStarts(0, 0, 0));
+	EXPECT_TRUE(server::RoomStarts(1, 1, 0));
+}
+
+TEST(LockstepRoom, TheRoomHasASlotForEachCitadelUpToTheLastCitadel)
+{
+	EXPECT_EQ(server::GodSlotsOfLand(std::array {true, true, false, false, false, false, false}), 2);
+	EXPECT_EQ(server::GodSlotsOfLand(std::array {true, true, true, true, false, false, false}), 4);
+	// A slot with no citadel before the last citadel stays a slot, so that each citadel can have a human
+	EXPECT_EQ(server::GodSlotsOfLand(std::array {true, false, true, false, false, false, false}), 3);
+	// A land with no citadel keeps the default slots
+	EXPECT_EQ(server::GodSlotsOfLand(std::array {false, false, false, false, false, false, false}), server::k_DefaultGodSlots);
+	EXPECT_EQ(server::GodSlotsOfLand({}), server::k_DefaultGodSlots);
+}
+
+TEST_F(LockstepTest, OneHumanStartsARoomOfTwoSlots)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice");
+	Frames({&alice}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(host->Seats().size(), 2u);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Open);
+}
+
+TEST_F(LockstepTest, TwoHumansPlayInARoomOfTwoSlotsThatStartsWithOne)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice");
+	alice.session.SetReady(false);
+	Frames({&alice}, 3);
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 6);
+	// Bob is ready, but Alice in the room is not: the start waits for her
+	EXPECT_FALSE(host->Started());
+	EXPECT_FALSE(host->Starting());
+	alice.session.SetReady(true);
+	Frames({&alice, &bob}, 6);
+	ASSERT_TRUE(host->Started());
+	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetState(), NetworkSession::State::Playing);
+	EXPECT_EQ(bob.session.GetJoined()->slot, 1);
+	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Taken);
+}
+
+TEST_F(LockstepTest, AThirdGodIsRefusedFromARoomOfTwoSlotsAndAnObserverIsLetIn)
+{
+	MakeHost(1, 5LL * 60 * 1'000'000, 2);
+	Computer alice(network, now, "god:alice");
+	alice.session.SetReady(false);
+	Computer bob(network, now, "god:bob");
+	Computer carol(network, now, "god:carol");
+	Computer watcher(network, now, "observer:dave");
+	Frames({&alice, &bob, &carol, &watcher}, 3);
+	EXPECT_EQ(carol.session.GetEnd(), NetworkSession::End::Refused);
+	EXPECT_EQ(carol.session.RefusedReason(), "full");
+	EXPECT_EQ(watcher.session.GetJoined()->role, game_socket::Role::Observer);
+	alice.session.SetReady(true);
+	Frames({&alice, &bob, &watcher}, 6);
+	EXPECT_TRUE(host->Started());
 }
