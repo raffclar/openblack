@@ -225,6 +225,16 @@ TEST(SyncedState, TheStonesOnAPlinthAreNotSynced)
 	}));
 }
 
+TEST(SyncedState, TheSeeThroughCopyOfATotemIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghostIcon"));
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "SeeThrough";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

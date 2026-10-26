@@ -167,6 +167,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ChallengePicture", .field = "small", .marker = ""},
     {.component = "ChallengePicture", .field = "waiting", .marker = ""},
     {.component = "ChallengePicture", .field = "taken", .marker = ""},
+    // The see-through copy of a town totem and of its icon. The frames make, move and remove it.
+    {.component = "*", .field = "", .marker = "SeeThrough"},
+    {.component = "VillageTotem", .field = "ghost", .marker = ""},
+    {.component = "VillageTotem", .field = "ghostIcon", .marker = ""},
     // The stones on a plinth. The frames make and place them as the land draws the plinth.
     {.component = "*", .field = "", .marker = "PlinthStone"},
     // The glows and the symbols of the disciples. The frames make, move and remove them.
