@@ -359,6 +359,23 @@ TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)
 	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
 }
 
+TEST_F(ReportedHands, AComputerWithNoPlayerOfItsOwnHasNoOwnPlayer)
+{
+	// A game on one computer: the first player is its own
+	EXPECT_TRUE(_hands.IsOwnPlayer(PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(_hands.IsOwnPlayer(PlayerNames::PLAYER_TWO));
+	// The game server and an observer: no god is their own, and the frames draw the first player's hands
+	_hands.ClearOwnPlayer();
+	EXPECT_FALSE(_hands.IsOwnPlayer(PlayerNames::PLAYER_ONE));
+	EXPECT_FALSE(_hands.IsOwnPlayer(PlayerNames::PLAYER_TWO));
+	EXPECT_EQ(_hands.GetOwnPlayer(), PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(_hands.GetOwnHands(), _hands.GetPlayerHands());
+	// A joined slot gives the computer its god
+	_hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	EXPECT_TRUE(_hands.IsOwnPlayer(PlayerNames::PLAYER_TWO));
+	EXPECT_FALSE(_hands.IsOwnPlayer(PlayerNames::PLAYER_ONE));
+}
+
 TEST_F(ReportedHands, AfterALoadTheHandsOfEachGodAreFoundByTheirPlayer)
 {
 	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_THREE);

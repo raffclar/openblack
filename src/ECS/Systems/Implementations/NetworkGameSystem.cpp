@@ -182,9 +182,15 @@ void NetworkGameSystem::Attach()
 	Locator::playerCommandSystem::value().SetSource(_session.get());
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
-	checksums.SetTurnListener([session = _session.get()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
-		session->LocalChecksum(turn.turn, turn.checksum);
-	});
+	// A tool's file of the checksums (--sim-checksums) keeps getting them, to find the part where a client parts
+	checksums.SetTurnListener(
+	    [session = _session.get(), tool = checksums.GetTurnListener()](const SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    session->LocalChecksum(turn.turn, turn.checksum);
+		    if (tool)
+		    {
+			    tool(turn);
+		    }
+	    });
 }
 
 void NetworkGameSystem::SetReady(bool ready)
@@ -259,12 +265,18 @@ void NetworkGameSystem::Update()
 		                   Locator::time::value().GetTurn());
 	}
 
-	// The god of this computer's slot: its pointer moves that god's hand
-	if (const auto& joined = _session->GetJoined();
-	    joined.has_value() && joined->slot.has_value() && Locator::handSystem::has_value() &&
-	    Locator::handSystem::value().GetOwnPlayer() != static_cast<PlayerNames>(*joined->slot))
+	// The god of this computer's slot: its pointer moves that god's hand. An observer has no god of its own.
+	if (const auto& joined = _session->GetJoined(); joined.has_value() && Locator::handSystem::has_value())
 	{
-		Locator::handSystem::value().SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+		auto& hands = Locator::handSystem::value();
+		if (!joined->slot.has_value())
+		{
+			hands.ClearOwnPlayer();
+		}
+		else if (!hands.IsOwnPlayer(static_cast<PlayerNames>(*joined->slot)))
+		{
+			hands.SetOwnPlayer(static_cast<PlayerNames>(*joined->slot));
+		}
 	}
 
 	// The world of a loaded state goes on as the server's turn of the state is here: the next frame does that turn
@@ -274,12 +286,6 @@ void NetworkGameSystem::Update()
 		clock.SetPaused(false);
 		clock.ResetTimerToTurn();
 		_resumeTurn.reset();
-	}
-
-	// After a resync the server's world comes: this computer's world loads it and goes on from its turn
-	if (auto world = _session->TakeWorld(); world.has_value())
-	{
-		LoadWorld(*world);
 	}
 
 	// A join from the command line: the server's reply to the join gives the land, the seed and the start of its world,
@@ -337,6 +343,15 @@ void NetworkGameSystem::Update()
 			{
 				Locator::time::value().SetPaused(false);
 			}
+		}
+	}
+	// After a resync, or after a join to a game that turns, the server's world comes. This computer's world loads it
+	// after the land of the start, and continues from the turn of the world.
+	if (_started && !_awaitingLand && !_pendingStart.has_value())
+	{
+		if (auto world = _session->TakeWorld(); world.has_value())
+		{
+			LoadWorld(*world);
 		}
 	}
 	if (_session->GetState() == online::NetworkSession::State::Ended && !_endLogged)
