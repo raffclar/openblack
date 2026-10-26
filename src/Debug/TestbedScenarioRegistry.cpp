@@ -5740,6 +5740,29 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
 	});
 
+	// The same throw with no latency of the reports, to compare with hand.throw_lead
+	all.push_back({
+	    .id = "hand.throw_no_lead",
+	    .name = "A throw with no lead",
+	    .facet = Facet::Hand,
+	    .description = "The reports of the player's hand have no latency. The hand holds the Action button on "
+	                   "a rock until it takes it, then makes ready to throw and throws it with an upward sweep of the "
+	                   "pointer.",
+	    .expected = "At the release the rock starts its flight from the hand. It flies on with no jump, as in a game alone "
+	                "with no latency.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-34.5f, 9.0f, 4.5f}, .look = {0.0f, 0.0f, 0.0f}},
+	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {0.0f, 0.0f}}},
+	    .commands = {{.kind = Kind::SetReportLatency, .delaySeconds = 0.0f, .value = 0},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.5f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerTo, .delaySeconds = 0.5f, .point = {0.45f, 0.85f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.3f, .point = {0.03f, -0.4f}, .amount = 0.5f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.5f, .value = 3}},
+	});
+
 	// The camera looks at a cuddly toy and a toy ball on flat land from 35 m. The hand takes each toy in turn.
 	all.push_back({
 	    .id = "hand.hold_toys",
