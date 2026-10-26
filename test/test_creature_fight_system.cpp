@@ -24,6 +24,7 @@
 
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
+#include "Common/InputSteps.h"
 #include "Creature/CreatureRoute.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureArena.h"
@@ -260,6 +261,8 @@ public:
 	[[nodiscard]] float GetTurnFraction() const override { return 0.0f; }
 	[[nodiscard]] std::chrono::milliseconds GetFrameGameTime() const override { return {}; }
 	[[nodiscard]] std::chrono::milliseconds GetFrameRealTime() const override { return {}; }
+	void StepInput(std::chrono::microseconds /*stepTime*/) override {}
+	[[nodiscard]] const input_steps::Steps& GetInputSteps() const override { return steps; }
 	void SetPaused(bool /*paused*/) override {}
 	[[nodiscard]] bool IsPaused() const override { return false; }
 	void SetPlayerPause(bool /*paused*/) override {}
@@ -275,6 +278,7 @@ public:
 	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
 
 	bool networkGame {false};
+	input_steps::Steps steps;
 };
 
 class CreatureFightSystemTest: public ::testing::Test
