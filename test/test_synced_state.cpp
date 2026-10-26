@@ -209,6 +209,14 @@ TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
 	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
 }
 
+TEST(SyncedState, TheMarksOfTheDisciplesAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "DiscipleMark";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

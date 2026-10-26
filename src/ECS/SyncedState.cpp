@@ -167,6 +167,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ChallengePicture", .field = "small", .marker = ""},
     {.component = "ChallengePicture", .field = "waiting", .marker = ""},
     {.component = "ChallengePicture", .field = "taken", .marker = ""},
+    // The glows and the symbols of the disciples. The frames make, move and remove them.
+    {.component = "*", .field = "", .marker = "DiscipleMark"},
     // The draw gives the light of the frame to a thing in the hand, and takes it away when the hand lets go
     {.component = "HeldLight", .field = "", .marker = ""},
     // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.
