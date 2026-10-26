@@ -982,6 +982,10 @@ struct Command
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
+		/// The skirmish box shows over the game with the lands of the playground folder, as after Start Skirmish Game
+		/// (value 0). Value 1 opens the main menu as it shows in a skirmish. Value 2 shows the box and picks its second land, as
+		/// a click on it does. Needs no creature.
+		SkirmishBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

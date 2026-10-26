@@ -50,6 +50,8 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
+#include "Gui/SkirmishBox.h"
+#include "Gui/SkirmishBoxRules.h"
 #include "Hand/HandFeel.h"
 #include "Hand/HandKnock.h"
 #include "Input/HandPointer.h"
@@ -435,6 +437,11 @@ public:
 	/// Starts the game as a plain start of the program does: the save on exit of the profile loads, and the menu shows
 	/// over it. With no save on exit, a new game starts. Returns whether the save loaded.
 	bool ContinueFromExitSave() noexcept;
+	/// The skirmish box shows over the game, with the lands of the playground folder, as after Start Skirmish Game.
+	/// Returns false when the game has no interface.
+	bool OpenSkirmishBoxOverGame();
+	/// The lands that the skirmish box shows now, in the order of its list
+	[[nodiscard]] const std::vector<gui::skirmish_box::Land>& GetSkirmishLands() const noexcept { return _skirmishLands; }
 	/// The logo effect of the first game of the program, in its own loop with its sound, until it ends, a key or a mouse
 	/// button. Then black frames while a mouse button is held.
 	void PlayLogoEffect();
@@ -553,6 +560,15 @@ private:
 	/// A first start: the new player's box asks for the player's name before the first land loads. False when the
 	/// window was closed meanwhile
 	bool AskForNewPlayer();
+	/// The -SKIRMISH switch: the skirmish box asks for the land before the first land loads. Gives the land picked, or
+	/// nothing when the player went back or closed the window.
+	std::optional<std::filesystem::path> AskForSkirmishLand();
+	/// The lands of the playground folder, in the order of the skirmish box's list
+	[[nodiscard]] static std::vector<gui::skirmish_box::Land> ReadSkirmishLands();
+	/// The answer of the skirmish box over the game: Start Game starts the skirmish, Back continues the story
+	void FollowSkirmishBox();
+	/// The menu shows the buttons of the game that plays: a network game, a skirmish or the story
+	void TellMenuTheGame();
 	/// The name of the profile played, for the files that the game keeps for its player. There is no name on a run of a
 	/// developer, which keeps no files for its player.
 	[[nodiscard]] std::optional<std::u16string> PlayerForProfileFiles() const;
@@ -632,6 +648,10 @@ private:
 	bool _testLeaveDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
+	/// The lands that the skirmish box shows, in the order of its list
+	std::vector<gui::skirmish_box::Land> _skirmishLands;
+	/// The answer of the skirmish box over the game, until the screen is black after the box
+	std::optional<gui::SkirmishBox::Answer> _skirmishAnswer;
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
 	/// Whether the testbed opens its window of scenarios
 	bool _testbedWindow {true};

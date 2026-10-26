@@ -79,6 +79,7 @@ constexpr std::string_view k_EndBox = "end_box";
 constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
 constexpr std::string_view k_Multiplayer = "multiplayer";
+constexpr std::string_view k_SkirmishBox = "skirmish_box";
 
 /// The names of the multiplayer front end's boxes, for gui.windows
 constexpr std::array<std::string_view, 6> k_MultiplayerBoxes = {"choose_connection", "find_games", "login",
@@ -497,6 +498,22 @@ std::vector<WindowInfo> GameGui::Windows() const
 			end.buttons.push_back(control.name);
 		}
 		windows.push_back(std::move(end));
+		// The skirmish box: its arrows and its lands, and the land picked
+		const auto& skirmish = game->GetInterface()->GetSkirmishBox();
+		WindowInfo skirmishInfo {.name = std::string(k_SkirmishBox), .kind = "game", .open = skirmish.IsActive()};
+		for (const auto& control : DialogControls(skirmish.GetNamedControls()))
+		{
+			skirmishInfo.buttons.push_back(control.name);
+		}
+		for (const auto& item : skirmish.GetList().GetItems())
+		{
+			skirmishInfo.lines.push_back(gui::ToUtf8(item.text));
+		}
+		if (const auto picked = skirmish.GetSelection(); picked.has_value() && *picked < skirmish.GetList().GetItems().size())
+		{
+			skirmishInfo.selected = gui::ToUtf8(skirmish.GetList().GetItems().at(*picked).text);
+		}
+		windows.push_back(std::move(skirmishInfo));
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
 		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
@@ -745,6 +762,21 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
 			return "the end box: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
+	}
+	if (lower == k_SkirmishBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetSkirmishBox().IsActive())
+		{
+			return "the skirmish box isn't open: Start Skirmish Game of the menu opens it";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetSkirmishBox().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the skirmish box: " + *why + "; gui.windows lists them";
 		}
 		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}

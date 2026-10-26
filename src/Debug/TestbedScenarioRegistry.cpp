@@ -3863,6 +3863,45 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.skirmish_box",
+	    .name = "The skirmish box",
+	    .facet = Facet::Interface,
+	    .description = "After a second the skirmish box shows over the game, as Start Skirmish Game of the menu shows it. "
+	                   "Click a land of the list, then Start Game to start a skirmish on it, or Back to continue the story.",
+	    .expected = "The screen goes black, then the front end's swirls come up with a box of 780 by 580. \"Choose a map for "
+	                "skirmish game.\" is across its top on a light grey band. The list holds each .txt file of the "
+	                "playground folder in the order of the folder: construct, Death Comes To Those That Wait, Firestorm, "
+	                "\"Defeat three gods to control this realm.\", Island Wars, \"Defeat two gods to control this realm.\" "
+	                "and \"Defeat another god to control this realm.\". Back is at the bottom left. Start Game shows at "
+	                "the bottom right only after a click on a land.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.skirmish_box_picked",
+	    .name = "The skirmish box with a land picked",
+	    .facet = Facet::Interface,
+	    .description = "After a second the skirmish box shows over the game with its second land picked, as after a click "
+	                   "on it.",
+	    .expected = "Death Comes To Those That Wait is on a grey bar, and Start Game shows at the bottom right of the box "
+	                "with its arrow. Start Game starts a skirmish on that land.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 2}},
+	});
+
+	all.push_back({
+	    .id = "interface.skirmish_menu",
+	    .name = "The main menu of a skirmish",
+	    .facet = Facet::Interface,
+	    .description = "After a second the main menu opens as it shows in a skirmish.",
+	    .expected = "The main menu has four buttons: Continue Game, Leave Skirmish Game, Options and Quit Black & White, "
+	                "80 high and 100 apart from the top at 150, with no Join Online Game.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 1}},
+	});
+
+	all.push_back({
 	    .id = "interface.pause_text",
 	    .name = "The words of the pause",
 	    .facet = Facet::Interface,
@@ -10705,7 +10744,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
 	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       IsPointerCommand(kind);
+	       kind == Kind::SkirmishBox || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10733,7 +10772,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 182> k_Names {
+	constexpr std::array<std::string_view, 183> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10916,6 +10955,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press Join Online Game of the page",
 	    "end box",
 	    "bring a creature into a network game",
+	    "skirmish box",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

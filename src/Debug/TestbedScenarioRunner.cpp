@@ -2909,6 +2909,31 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::SkirmishBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 1)
+		{
+			game->GetInterface()->GetMenu().SetSkirmish(true);
+			game->GetInterface()->OpenMenu();
+			Log(fmt::format("{:.1f}s: {}: the main menu of a skirmish opens", _seconds, Name(command.kind)));
+			return;
+		}
+		// The box holds the game, so that the scenario's clock stops while it is up
+		const bool opened = game->OpenSkirmishBoxOverGame();
+		if (opened && command.value == 2)
+		{
+			game->GetInterface()->GetSkirmishBox().Select(1);
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+		                opened ? fmt::format("the box shows {} lands", game->GetSkirmishLands().size()) : "failed"));
+		return;
+	}
 	if (command.kind == Kind::EndBox)
 	{
 		auto* game = Game::Instance();
@@ -3626,6 +3651,7 @@ void Runner::Give(const Command& command)
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
 	case Kind::EndBox:
+	case Kind::SkirmishBox:
 	case Kind::OtherGodHand:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
