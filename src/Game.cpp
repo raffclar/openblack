@@ -4020,6 +4020,22 @@ void Game::StartSimulationLogs()
 			                    _simulation->checksumsPath->string());
 		}
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->rowDumpPath.has_value())
+	{
+		// The rows come from the checksum of each turn, so the checksum is on also in a single player game
+		auto& checksums = Locator::syncChecksumSystem::value();
+		if (checksums.StartRowDump(*_simulation->rowDumpPath, _simulation->rowDump))
+		{
+			checksums.SetEnabled(true);
+		}
+		else
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}",
+			                    _simulation->rowDumpPath->string());
+		}
+	}
+#endif
 	if (_simulation->playCommandsPath.has_value())
 	{
 		auto turns = command_log::ReadFile(*_simulation->playCommandsPath);
