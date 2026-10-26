@@ -38,6 +38,8 @@ constexpr std::string_view k_StartCancel = "start.cancel";
 constexpr std::string_view k_StartStop = "start.stop";
 constexpr std::string_view k_StartTransfer = "start.transfer";
 constexpr std::string_view k_StartCreature = "start.creature";
+constexpr std::string_view k_StopRequest = "game.stop_request";
+constexpr std::string_view k_GameStop = "game.stop";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -144,6 +146,21 @@ bool ReadStart(const Json& object, Start& start)
 	}
 	start.seed = static_cast<uint32_t>(seed);
 	start.turn = static_cast<uint32_t>(turn);
+	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
+	{
+		if (!names->is_array() || names->size() > k_MostSlots)
+		{
+			return false;
+		}
+		for (const auto& name : *names)
+		{
+			if (!name.is_string())
+			{
+				return false;
+			}
+			start.names.push_back(name.get<std::string>());
+		}
+	}
 	return true;
 }
 
@@ -161,6 +178,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.godsRingMap)
 	{
 		object["gods_ring_map"] = true;
+	}
+	if (!start.names.empty())
+	{
+		object["names"] = start.names;
 	}
 }
 
@@ -348,6 +369,19 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		}
 		return creature;
 	}
+	if (type == k_StopRequest)
+	{
+		return StopRequest {};
+	}
+	if (type == k_GameStop)
+	{
+		uint64_t turn = 0;
+		if (!ReadUnsigned(object, "turn", k_MostTurn, turn))
+		{
+			return std::nullopt;
+		}
+		return GameStop {.turn = static_cast<uint32_t>(turn)};
+	}
 	return std::nullopt;
 }
 
@@ -465,6 +499,14 @@ std::string ToJson(const Frame& frame)
 		    else if constexpr (std::is_same_v<Kind, StartTransfer>)
 		    {
 			    object = Json {{"type", k_StartTransfer}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StopRequest>)
+		    {
+			    object = Json {{"type", k_StopRequest}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, GameStop>)
+		    {
+			    object = Json {{"type", k_GameStop}, {"turn", value.turn}};
 		    }
 		    else
 		    {

@@ -11,6 +11,7 @@
 
 #include "GameEndSystem.h"
 
+#include <algorithm>
 #include <array>
 
 #include <spdlog/spdlog.h>
@@ -179,6 +180,7 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 		    }
 	    });
 	_events = game_end::ProcessTurn(world, facts, context.gameEnd);
+	_eventsToShow.insert(_eventsToShow.end(), _events.begin(), _events.end());
 	if (const auto logger = spdlog::get("game"))
 	{
 		for (const auto& event : _events)
@@ -194,6 +196,24 @@ void GameEndSystem::ProcessTurn(uint32_t turn)
 bool GameEndSystem::IsDecided() const
 {
 	return Locator::entitiesRegistry::value().Context().gameEnd.decided;
+}
+
+std::optional<PlayerNames> GameEndSystem::LastGodIn() const
+{
+	// The view reads the standings and adds none: a god with no standing yet is still in
+	const GameEndWorld world;
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto gods = world.ActiveGods();
+	std::vector<PlayerNames> in;
+	registry.Each<const components::Player>([&gods, &registry, &in](entt::entity entity, const components::Player& player) {
+		const auto* standing = registry.TryGet<const GameStanding>(entity);
+		if (game_end::CanLose(player.name) && std::ranges::find(gods, player.name) != gods.end() &&
+		    (standing == nullptr || !standing->out))
+		{
+			in.push_back(player.name);
+		}
+	});
+	return in.size() == 1 ? std::optional(in.front()) : std::nullopt;
 }
 
 } // namespace openblack::ecs::systems

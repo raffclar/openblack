@@ -81,6 +81,8 @@ public:
 	void Tell(std::u16string message);
 	/// Asks for a name, the name's box holding the text given
 	void AskName(std::u16string_view name);
+	/// Takes a message with an OK away at once, with no answer, as when another box opens over the game
+	void WithdrawMessage();
 	/// A box is up and takes the input
 	[[nodiscard]] bool IsActive() const noexcept { return _question.has_value() || _nameActive; }
 	/// The question being asked or the message shown, empty while there is none

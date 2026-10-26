@@ -128,6 +128,10 @@ public:
 	void SetReady(bool ready);
 	/// The player leaves the game. The server defeats the god.
 	void Leave();
+	/// The end box of a decided game opened: the client asks the server to stop the turns of the game, one time
+	void StopGame();
+	/// The last turn of the game, after the server stopped the turns. None before.
+	[[nodiscard]] std::optional<uint32_t> StoppedAfter() const { return _stoppedAfter; }
 	/// Once a frame, after the poll of the sockets: the attempts to come back and the pings
 	void Update();
 
@@ -236,6 +240,9 @@ private:
 	std::optional<uint32_t> _worldTurn;
 	std::vector<std::vector<uint8_t>> _worldParts;
 	std::optional<WorldState> _world;
+	/// The client asked the server to stop the turns of the game
+	bool _stopAsked {false};
+	std::optional<uint32_t> _stoppedAfter;
 };
 
 [[nodiscard]] std::string_view StateName(NetworkSession::State state) noexcept;
