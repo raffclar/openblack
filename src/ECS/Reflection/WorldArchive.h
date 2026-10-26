@@ -129,10 +129,33 @@ using RowVisitor = std::function<void(std::string_view component, entt::entity e
 /// The names of the components that have an entity but no registration, in order. A save and the hash of the world leave
 /// these out, so the game must have none.
 [[nodiscard]] std::vector<std::string> UnregisteredStorages(const entt::registry& registry, const entt::meta_ctx& context);
+/// Tools: the bytes that a hash took of each field of each row, to find the field that parts two computers. A build
+/// without the developer tools does not fill it.
+struct WorldRows
+{
+	struct Row
+	{
+		entt::entity entity {};
+		/// The index of the field in fields
+		uint32_t field {0};
+		/// The first byte of the value in bytes
+		uint32_t offset {0};
+		uint32_t size {0};
+		/// The hash leaves the field out: a part that only shows the world on one computer
+		bool presentation {false};
+	};
+	/// Each field as "component.field", in the order that the hash first took it. A component that saves as one value
+	/// has the field "*".
+	std::vector<std::string> fields;
+	/// Each field of each row, in the order of the hash: the components in the order of their names, the rows in the
+	/// order of the storage. The fields that the hash leaves out come before the kept fields of their component.
+	std::vector<Row> rows;
+	std::vector<uint8_t> bytes;
+};
 
 [[nodiscard]] WorldHashes HashWorld(const entt::registry& registry, const entt::meta_ctx& context,
                                     std::span<const HashLeaveOut> leaveOut = {}, bool byField = false,
-                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr);
+                                    const RowVisitor& visit = {}, WorkerPool* pool = nullptr, WorldRows* rows = nullptr);
 
 /// The entities and the components of a registry as the game's thread took them, for a writer on another thread to
 /// encode while the game goes on. Each component that can be copied safely is copied; the game's thread encodes the
