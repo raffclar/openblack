@@ -668,6 +668,9 @@ def main():
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
+    parser.add_argument("--client-arg", action="append", default=[],
+                        help="CLIENT:ARGUMENT: one more argument for the client (from 1), such as 2:--frame-stats=600; "
+                             "give the option more times for more arguments")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
     parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
@@ -814,6 +817,7 @@ def main():
                 command += ["--join-creature", os.path.abspath(creatures[index])]
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
+            command += [value.split(":", 1)[1] for value in options.client_arg if int(value.split(":", 1)[0]) == index + 1]
             clients.append(start(command, client_dir))
             processes.append(clients[-1])
             # The server gives the god slots in join order: client N must join before client N + 1 starts,
