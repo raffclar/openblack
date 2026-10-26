@@ -20,24 +20,6 @@ float SmoothSpeed(float speed, float turned, float seconds)
 	return speed + (frameSpeed - speed) * k_SpeedSmoothing;
 }
 
-float MeasureSpeed(float speed, SpeedSinceStep& since, float turned, float seconds, uint32_t steps)
-{
-	since.turned += turned;
-	since.seconds += seconds;
-	if (steps == 0 || !(since.seconds > 0.0f))
-	{
-		return speed;
-	}
-	const float turnedPerStep = since.turned / static_cast<float>(steps);
-	const float secondsPerStep = since.seconds / static_cast<float>(steps);
-	since = {};
-	for (uint32_t i = 0; i < steps; ++i)
-	{
-		speed = SmoothSpeed(speed, turnedPerStep, secondsPerStep);
-	}
-	return speed;
-}
-
 void Start(Cheering& cheering)
 {
 	cheering = {.on = true, .lastCheerTurn = 0, .lastBestPraiseTurn = 0};
