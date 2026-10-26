@@ -596,6 +596,17 @@ Camera& Camera::SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, c
 	return *this;
 }
 
+Camera& Camera::GlideTo(const glm::vec3& origin, const glm::vec3& focus, const glm::vec3& originSpeed,
+                        const glm::vec3& focusSpeed, float seconds)
+{
+	using namespace std::chrono_literals;
+	const auto m1 = glm::zero<glm::vec3>();
+	SetOriginInterpolator(GetOrigin(), origin, originSpeed * seconds, m1);
+	SetFocusInterpolator(GetFocus(), focus, focusSpeed * seconds, m1);
+	SetInterpolatorDuration(std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(seconds)));
+	return SetInterpolatorTime(0us);
+}
+
 Camera& Camera::SetInterpolatorDuration(std::chrono::microseconds duration)
 {
 	_interpolatorDuration = duration;

@@ -23,6 +23,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/TempleInteriorInterface.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraLimits.h"
 #include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
@@ -101,10 +102,15 @@ void ScriptControlSystem::ReleaseCamera(Camera& camera)
 		// The camera of a dance comes back and holds the view where the script left it
 		camera.SetModel(std::move(_danceCamera));
 	}
-	else if (GetScriptCamera(camera) != nullptr)
+	else if (const auto* script = GetScriptCamera(camera); script != nullptr)
 	{
-		// The player gets a camera of their own, starting from where the script left it and looking the same way
-		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(camera.GetOrigin(), camera.GetFocus()));
+		// The player gets a camera of their own. The camera does not stop where the script left it: it glides on, from
+		// the speed that it has, to where the script sent it. The player's camera starts with the time of its first
+		// glide.
+		const auto origin = script->GetTargetOrigin();
+		const auto focus = script->GetTargetFocus();
+		camera.GlideTo(origin, focus, script->GetOriginSpeed(), script->GetFocusSpeed(), camera_limits::k_FlightEaseSeconds);
+		camera.SetModel(std::make_unique<DefaultWorldCameraModel>(origin, focus));
 	}
 	// Inside the temple, the script's camera the player came in from gives way all the same
 	else if (!Locator::temple::has_value() || !Locator::temple::value().Active() ||

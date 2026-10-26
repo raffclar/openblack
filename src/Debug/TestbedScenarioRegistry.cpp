@@ -1628,6 +1628,33 @@ void AddBreederOffers(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 12.0f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+
+	// The end of a cinema, as the films of the creature trainer end: the script sends the camera up and away, and gives
+	// the camera back before it arrives
+	const auto move = [](std::string_view native, glm::vec2 point, float height, float seconds, float delay) {
+		return Command {
+		    .kind = Kind::CallNative,
+		    .delaySeconds = delay,
+		    .script = native,
+		    .scriptArguments = {{.kind = Argument::Kind::Position, .point = point, .height = height}, {.number = seconds}}};
+	};
+	all.push_back({
+	    .id = "story.cinema_end_glide",
+	    .name = "The camera at the end of a cinema",
+	    .facet = Facet::Story,
+	    .description = "A script takes the camera. It sends the camera up over 2 seconds, looking north. After 1.2 "
+	                   "seconds it sends the camera north over 3 seconds and gives the camera back at once.",
+	    .expected = "The camera rises and turns to look north. It does not stop when the script gives it back. It "
+	                "continues smoothly to the last place that the script chose and stops there about 1.5 seconds "
+	                "later.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 8.0f, -40.0f}, .look = {0.0f, 4.0f, 0.0f}},
+	    .commands = {{.kind = Kind::CallNative, .delaySeconds = 1.0f, .script = "START_CAMERA_CONTROL"},
+	                 move("MOVE_CAMERA_POSITION", {0.0f, -40.0f}, 45.0f, 2.0f, 0.5f),
+	                 move("MOVE_CAMERA_FOCUS", {0.0f, 60.0f}, 0.0f, 2.0f, 0.0f),
+	                 move("MOVE_CAMERA_POSITION", {5.0f, -20.0f}, 45.0f, 3.0f, 1.2f),
+	                 {.kind = Kind::CallNative, .delaySeconds = 0.0f, .script = "END_CAMERA_CONTROL"}},
+	});
 }
 
 /// The computer gods' creatures of the third and fifth lands: the game's own scripts load each from its mind file for

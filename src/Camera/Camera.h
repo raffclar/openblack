@@ -84,6 +84,10 @@ public:
 
 	Camera& SetOriginInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
 	Camera& SetFocusInterpolator(const glm::vec3& p0, const glm::vec3& p1, const glm::vec3& m0, const glm::vec3& m1);
+	/// The eye and the focus glide from where they are to these points over a number of seconds. They start at the given
+	/// speeds and arrive still.
+	Camera& GlideTo(const glm::vec3& origin, const glm::vec3& focus, const glm::vec3& originSpeed, const glm::vec3& focusSpeed,
+	                float seconds);
 
 	/// The eye's and the focus's movements each run on their own clock: they are set off together, but holding the eye
 	/// inside the world's ball sets the eye off again alone. These give the eye's clock, which the camera models time by.
