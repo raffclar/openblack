@@ -464,6 +464,9 @@ public:
 	[[nodiscard]] const std::optional<std::filesystem::path>& GetScreenshotRoot() const noexcept { return _screenshotRoot; }
 	/// The game's own interface (its menu), once it is made
 	[[nodiscard]] gui::GameInterface* GetInterface() noexcept { return _interface.get(); }
+	/// For the testbed: the ping line shows this round trip in microseconds, as --show-ping does in a network game.
+	/// None gives the line back to the network game.
+	void SetDemoRoundTrip(std::optional<uint64_t> microseconds) noexcept { _demoRoundTrip = microseconds; }
 	/// The multiplayer front end with the game's own services: the lobby client, the game socket and the search of
 	/// the local network
 	[[nodiscard]] std::unique_ptr<gui::MultiplayerFrontEnd> MakeMultiplayerFrontEnd();
@@ -604,6 +607,7 @@ private:
 	bool _joinedFromCommandLine {false};
 	/// A join from the command line waits for the server's land: the land of the start of the game only stands in for it
 	bool _networkLandPending {false};
+	std::optional<uint64_t> _demoRoundTrip;
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};

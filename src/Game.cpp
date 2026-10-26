@@ -302,6 +302,7 @@
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
 #include "Gui/WorldToolTips.h"
@@ -2729,6 +2730,15 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->SetFightPanel(creature_fight_hud::PanelAllowed(inTemple, scriptHasCamera)
 		                              ? Locator::creatureFightSystem::value().GetPanel()
 		                              : std::nullopt);
+		// The player's own ping, with --show-ping in a network game (deviation 143)
+		std::optional<uint64_t> roundTrip = _demoRoundTrip;
+		if (!roundTrip.has_value() && Locator::config::value().showPing && Locator::networkGame::has_value() &&
+		    Locator::networkGame::value().InGame())
+		{
+			const auto* session = Locator::networkGame::value().Session();
+			roundTrip = session != nullptr ? session->RoundTrip() : std::nullopt;
+		}
+		_interface->SetPingLine(gui::ping_display::Text(roundTrip));
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());

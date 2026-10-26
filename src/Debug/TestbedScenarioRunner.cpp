@@ -680,6 +680,16 @@ std::string OpenTattooMenu()
 	                                                   : "failed: the editor did not open";
 }
 
+/// The made-up round trip of the ping line in microseconds: 40 ms, then 8 ms more each second to 64 ms, then 40 ms
+/// again
+[[nodiscard]] uint64_t DemoRoundTrip(float seconds)
+{
+	constexpr uint64_t k_First = 40'000;
+	constexpr uint64_t k_Step = 8'000;
+	constexpr uint64_t k_Steps = 4;
+	return k_First + (k_Step * (static_cast<uint64_t>(seconds) % k_Steps));
+}
+
 /// The tattoo editor works as in a network game, or as in a game alone
 std::string TattooEditorAsNetworkGame(bool asNetworkGame)
 {
@@ -1088,6 +1098,12 @@ void Runner::Stop()
 		return;
 	}
 	_running = false;
+	// The ping line belongs to the network game again
+	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	{
+		Game::Instance()->SetDemoRoundTrip(std::nullopt);
+	}
+	_demoPingSince.reset();
 	// The debug option's bonus creatures are as they were
 	if (_unlockedBefore.has_value() && Locator::config::has_value())
 	{
@@ -2856,6 +2872,17 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenTattooMenu()));
 		return;
 	}
+	if (command.kind == Kind::ShowDemoPing)
+	{
+		_demoPingSince = command.value != 0 ? std::optional(_seconds) : std::nullopt;
+		if (!_demoPingSince.has_value() && Game::Instance() != nullptr)
+		{
+			Game::Instance()->SetDemoRoundTrip(std::nullopt);
+		}
+		UpdateDemoPing();
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), _demoPingSince.has_value() ? "shown" : "gone"));
+		return;
+	}
 	if (command.kind == Kind::TattooEditorAsNetworkGame)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), TattooEditorAsNetworkGame(command.value != 0)));
@@ -3591,6 +3618,7 @@ void Runner::Give(const Command& command)
 	case Kind::OwnTattooPicture:
 	case Kind::OpenTattooMenu:
 	case Kind::TattooEditorAsNetworkGame:
+	case Kind::ShowDemoPing:
 	case Kind::OpenControlsBox:
 	case Kind::OpenMenuPage:
 	case Kind::PressMenuKey:
@@ -3987,6 +4015,14 @@ void Runner::UpdateCamera()
 	}
 }
 
+void Runner::UpdateDemoPing() const
+{
+	if (_demoPingSince.has_value() && Game::Instance() != nullptr)
+	{
+		Game::Instance()->SetDemoRoundTrip(DemoRoundTrip(_seconds - *_demoPingSince));
+	}
+}
+
 void Runner::Update(float seconds)
 {
 	if (_scenario == nullptr)
@@ -4024,6 +4060,7 @@ void Runner::Update(float seconds)
 	FinishTakingFireBall();
 	ApplyStates();
 	UpdatePointer(seconds);
+	UpdateDemoPing();
 	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
 		const bool toHand =
 		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;

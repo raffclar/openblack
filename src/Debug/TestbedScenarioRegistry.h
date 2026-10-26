@@ -973,6 +973,10 @@ struct Command
 		JoinOnline,
 		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
 		TattooEditorAsNetworkGame,
+		/// The ping line in the top left corner shows a made-up round trip, as --show-ping does in a network game
+		/// (value 1), or goes (value 0). The round trip is 40 ms and grows by 8 ms each second to 64 ms, then starts
+		/// again. Needs no creature.
+		ShowDemoPing,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -255,6 +255,8 @@ public:
 	void SetCreaturePanel(std::optional<creature_panel::Values> values) { _creaturePanel = values; }
 	/// The fight's panel shown this frame, or none: each fighter's name over its health and stamina
 	void SetFightPanel(std::optional<creature_fight_hud::Values> values) { _fightPanel = std::move(values); }
+	/// The text of the player's own ping in the top left corner this frame, or none (deviation 143)
+	void SetPingLine(std::optional<std::u16string> text) { _pingLine = std::move(text); }
 	/// A number floating up from a point of the world, where it is on the screen this frame
 	struct FloatingNumber
 	{
@@ -349,6 +351,8 @@ private:
 	void DrawCreaturePanel(glm::u16vec2 resolution);
 	/// The fight's panel, at the top left of the screen
 	void DrawFightPanel(glm::u16vec2 resolution);
+	/// The player's own ping in the top left corner of the screen
+	void DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars);
 	/// A bar of the creature's panels in screen pixels: its framed box, its fill from its left (or its middle, with a line
 	/// there) brightening towards where it ends, and shadows inside its frame
 	void DrawStatBar(const creature_panel::Rect& bar, float fill, glm::u8vec3 colour, bool fromMiddle);
@@ -471,6 +475,7 @@ private:
 	std::optional<glm::vec2> _handOnScreen;
 	std::optional<creature_panel::Values> _creaturePanel;
 	std::optional<creature_fight_hud::Values> _fightPanel;
+	std::optional<std::u16string> _pingLine;
 	std::vector<FloatingNumber> _floatingNumbers;
 	std::vector<LearningText> _learningTexts;
 	std::optional<HandTricons> _handTricons;

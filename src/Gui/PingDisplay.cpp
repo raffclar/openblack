@@ -14,6 +14,7 @@
 #include <limits>
 
 #include "MultiplayerFrontEndRules.h"
+#include "ScreenFit.h"
 
 using namespace openblack::gui;
 
@@ -46,4 +47,9 @@ std::u16string ping_display::AfterOwnName(std::u16string line, const std::option
 		line += *ping;
 	}
 	return line;
+}
+
+glm::vec2 ping_display::Origin(glm::u16vec2 resolution) noexcept
+{
+	return -FrontEndSpace(resolution.x, resolution.y).offset;
 }

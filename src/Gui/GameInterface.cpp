@@ -54,6 +54,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
@@ -1185,6 +1186,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_canvas.SetOrigin(custom_music_controls::Origin(resolution));
 		_musicControls->Draw(_painter);
 		_canvas.SetOrigin(glm::vec2(0.0f));
+		DrawPingLine(resolution, menuOpen, cinemaBars.in);
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)
 		{
@@ -1994,6 +1996,33 @@ void GameInterface::DrawStatBar(const creature_panel::Rect& bar, float fill, glm
 	const glm::vec2 bottomRight {bar.max.x - inset, bar.max.y - inset};
 	quad(top, {bottomRight.x, top.y + inset}, {black, black, clear, clear});
 	quad(top, {top.x + inset, bottomRight.y}, {black, clear, clear, black});
+}
+
+void GameInterface::DrawPingLine(glm::u16vec2 resolution, bool menuOpen, bool cinemaBars)
+{
+	const bool shows = ping_display::LineShows({
+	    .hasText = _pingLine.has_value(),
+	    .menuOpen = menuOpen,
+	    .inTemple = Locator::temple::has_value() && Locator::temple::value().Active(),
+	    .videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying(),
+	    .cinemaBars = cinemaBars,
+	    .fightPanel = _fightPanel.has_value(),
+	    .creaturePanelNearTop = _creaturePanel.has_value() && !_creaturePanel->reward.has_value(),
+	});
+	if (!shows)
+	{
+		return;
+	}
+	_canvas.SetOrigin(ping_display::Origin(resolution));
+	_painter.SetAlpha(ping_display::k_Alpha);
+	const auto corner = ping_display::TextCorner();
+	const auto width = DialogPainter::k_Size.x - corner.x;
+	_painter.DrawText(corner + ping_display::k_ShadowOffset, width, DialogPainter::Justify::Left, *_pingLine,
+	                  ping_display::k_TextSize, DialogPainter::k_ShadowColour);
+	_painter.DrawText(corner, width, DialogPainter::Justify::Left, *_pingLine, ping_display::k_TextSize,
+	                  DialogPainter::k_FocusColour);
+	_painter.SetAlpha(1.0f);
+	_canvas.SetOrigin(glm::vec2(0.0f));
 }
 
 void GameInterface::DrawFightPanel(glm::u16vec2 resolution)

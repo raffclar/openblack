@@ -219,6 +219,10 @@ private:
 	const Scenario* _scenario {nullptr};
 	bool _running {false};
 	float _seconds {0.0f};
+	/// When the made-up ping of the ping line started, in the scenario's seconds; none while it does not show
+	std::optional<float> _demoPingSince;
+	/// Gives the made-up ping to the game while it shows
+	void UpdateDemoPing() const;
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;

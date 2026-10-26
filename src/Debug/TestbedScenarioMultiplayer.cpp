@@ -191,4 +191,16 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .object = 0,
 	                  .radius = 5.0f}},
 	});
+	// The player's own ping in the top left corner, as --show-ping shows it in a network game (deviation 143)
+	all.push_back({
+	    .id = "multiplayer.ping_line",
+	    .name = "The player's own ping on the game screen",
+	    .facet = Facet::Multiplayer,
+	    .description = "After a second, the game screen shows a made-up ping, as --show-ping does in a network game. The "
+	                   "round trip starts at 40 ms and grows by 8 ms each second to 64 ms, then starts again.",
+	    .expected = "A small white line \"ping 40\" with a black shadow shows in the top left corner of the screen. Each "
+	                "second the number changes: 48, 56, 64, then 40 again. The menu (Escape) hides the line.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ShowDemoPing, .delaySeconds = 1.0f, .value = 1}},
+	});
 }
