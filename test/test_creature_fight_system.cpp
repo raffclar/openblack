@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
 #include <chrono>
 #include <functional>
 #include <map>
@@ -39,6 +41,7 @@
 #include "ECS/Systems/GuidanceSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
@@ -237,6 +240,43 @@ public:
 	PlayerNames own {PlayerNames::PLAYER_ONE};
 };
 
+/// A clock that only tells if the game is a network game
+class FakeTime final: public ecs::systems::TimeSystemInterface
+{
+public:
+	void Start() override {}
+	void Update() override {}
+	void StartDraw() override {}
+	[[nodiscard]] std::chrono::milliseconds GetElapsedTime() const override { return {}; }
+	void StartGameClock(bool /*paused*/) override {}
+	void RestartTurns() override {}
+	void ResetTimerToTurn() override {}
+	void ResumeAtTurn(uint32_t /*turn*/, int32_t /*remainderMs*/) override {}
+	[[nodiscard]] int32_t GetTurnRemainderMs() const override { return 0; }
+	[[nodiscard]] bool IsTurnDue() override { return false; }
+	void StartTurn() override {}
+	void UpdateFrame() override {}
+	[[nodiscard]] uint32_t GetTurn() const override { return 0; }
+	[[nodiscard]] float GetTurnFraction() const override { return 0.0f; }
+	[[nodiscard]] std::chrono::milliseconds GetFrameGameTime() const override { return {}; }
+	[[nodiscard]] std::chrono::milliseconds GetFrameRealTime() const override { return {}; }
+	void SetPaused(bool /*paused*/) override {}
+	[[nodiscard]] bool IsPaused() const override { return false; }
+	void SetPlayerPause(bool /*paused*/) override {}
+	void SetHeld(bool /*held*/) override {}
+	[[nodiscard]] bool IsHeld() const override { return false; }
+	void SetNetworkGame(bool value) override { networkGame = value; }
+	[[nodiscard]] bool IsNetworkGame() const override { return networkGame; }
+	void SetSpeed(float /*speed*/) override {}
+	[[nodiscard]] float GetSpeed() const override { return 1.0f; }
+	[[nodiscard]] uint32_t GetTicks() const override { return 0; }
+	[[nodiscard]] int64_t GetUnixTime() const override { return 0; }
+	void RestartClock(std::optional<int64_t> /*unixTime*/) override {}
+	[[nodiscard]] std::optional<int64_t> GetPinnedDate() const override { return std::nullopt; }
+
+	bool networkGame {false};
+};
+
 class CreatureFightSystemTest: public ::testing::Test
 {
 protected:
@@ -264,6 +304,7 @@ protected:
 	{
 		fights.Reset();
 		Locator::handSystem::reset();
+		Locator::time::reset();
 		Locator::camera::reset();
 		Locator::entitiesRegistry::reset();
 	}
@@ -820,6 +861,35 @@ TEST_F(CreatureFightSystemTest, EachHumanGodDirectsTheirOwnCreatureInANetworkGam
 	ASSERT_EQ(fights.StartFight(first, second), ecs::systems::CreatureFightSystemInterface::StartResult::Started);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(first).fighter.control, fight::Control::Player);
 	EXPECT_EQ(registry.Get<const CreatureFighting>(second).fighter.control, fight::Control::Player);
+}
+
+TEST_F(CreatureFightSystemTest, ABlockTeachesTheFirstPlayerAloneAndEachHumanGodInANetworkGame)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& hands = static_cast<FakeHands&>(Locator::handSystem::emplace<FakeHands>());
+	hands.hands[PlayerNames::PLAYER_ONE] = {registry.Create(), registry.Create()};
+	hands.hands[PlayerNames::PLAYER_TWO] = {registry.Create(), registry.Create()};
+	auto& time = static_cast<FakeTime&>(Locator::time::emplace<FakeTime>());
+	// Both creatures stand in their stance near the middle of the arena, where they take moves from the queue
+	for (const auto creature : {first, second})
+	{
+		registry.Assign<CreatureFightRecord>(creature);
+		registry.Get<CreatureFighting>(creature).fighter.state = fight::State::Stance;
+	}
+	registry.Get<Transform>(first).position = {-1.0f, 0.0f, 0.0f};
+	registry.Get<Transform>(second).position = {1.0f, 0.0f, 0.0f};
+	const auto tendencyOf = [&](entt::entity creature) { return registry.Get<const CreatureFightRecord>(creature).tendency; };
+	// A game alone: the block of the second player does not teach its creature, the block of the first player does
+	fights.DoMove(PlayerNames::PLAYER_TWO, first, fight::BlockMove(), false);
+	EXPECT_EQ(tendencyOf(second), 0.0f);
+	fights.DoMove(PlayerNames::PLAYER_ONE, second, fight::BlockMove(), false);
+	EXPECT_EQ(tendencyOf(first), fight::LearnTendency(0.0f, fight::Move::Kind::Block));
+	// A network game: the block of the second player teaches its creature, also on the computer of the first player
+	time.networkGame = true;
+	registry.Get<CreatureFighting>(second).fighter = {};
+	registry.Get<CreatureFighting>(second).fighter.state = fight::State::Stance;
+	fights.DoMove(PlayerNames::PLAYER_TWO, first, fight::BlockMove(), false);
+	EXPECT_EQ(tendencyOf(second), fight::LearnTendency(0.0f, fight::Move::Kind::Block));
 }
 
 TEST_F(CreatureFightSystemTest, AGodWithNoHandsLeavesItsCreatureToTheComputer)
