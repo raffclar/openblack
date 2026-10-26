@@ -131,6 +131,9 @@ public:
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
+	/// The map script of a land of a network game runs now. While it runs, its lines do not switch a computer mind on or
+	/// off: the slots with no human get their computer gods after the script.
+	[[nodiscard]] virtual bool RunsNetworkMapScript() const = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

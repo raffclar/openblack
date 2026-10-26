@@ -129,6 +129,11 @@ bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
 	return !human && !computer && citadel;
 }
 
+bool LandScriptSwitchesMind(bool networkMapScript)
+{
+	return !networkMapScript;
+}
+
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)
 {
 	for (const auto god : gods)
