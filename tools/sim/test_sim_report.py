@@ -196,5 +196,28 @@ class UnregisteredTests(unittest.TestCase):
         self.assertEqual(sim_report.unregistered_line({"Beta", "Alpha"}), "unregistered component storage: Alpha, Beta")
 
 
+
+class HandDeeds(unittest.TestCase):
+    LINES = [
+        "[game] [info] Hand deed: the hand of player 0 scoops from thing 140",
+        "[game] [info] Hand deed: the hand of player 0 throws thing 900",
+        "[game] [info] Hand deed: the hand of player 1 takes thing 77",
+        "[game] [info] Hand deed: the hand of player 0 throws thing 901",
+        "[game] [info] Network game: 100 turns compared with the server, 100 the same",
+    ]
+
+    def test_counts_each_deed_of_each_player(self):
+        self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
+                         {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
+
+    def test_a_missing_file_tells_of_no_deed(self):
+        self.assertEqual(sim_report.hand_deeds_in_file(os.path.join(os.path.dirname(__file__), "no-such.log")), {})
+
+    def test_missing_deeds_are_those_done_fewer_times_than_expected(self):
+        deeds = {"scoops": 1, "throws": 2}
+        self.assertEqual(sim_report.missing_deeds(deeds, {"scoops": 1, "throws": 1}), {})
+        self.assertEqual(sim_report.missing_deeds(deeds, {"takes": 1, "throws": 3}), {"takes": [0, 1], "throws": [2, 3]})
+
+
 if __name__ == "__main__":
     unittest.main()

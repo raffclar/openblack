@@ -79,6 +79,49 @@ def unregistered_line(names):
     return UNREGISTERED_WORDS + ", ".join(sorted(names))
 
 
+# The log line of each thing that a turn does with the hand of a player, and the short name of each deed
+HAND_DEED = re.compile(r"Hand deed: the hand of player (\d+) (.+?) thing (\d+)")
+HAND_DEED_NAMES = {"takes": "takes", "scoops from": "scoops", "throws": "throws", "puts down": "puts_down",
+                   "pours": "pours", "uses what it holds on": "uses"}
+
+
+def hand_deeds_in_text(lines):
+    """The count of each deed of the hand of each player that the log lines tell of, as {player: {deed: count}}"""
+    deeds = {}
+    for line in lines:
+        match = HAND_DEED.search(line)
+        if match is None:
+            continue
+        name = HAND_DEED_NAMES.get(match.group(2), match.group(2))
+        counts = deeds.setdefault(int(match.group(1)), {})
+        counts[name] = counts.get(name, 0) + 1
+    return deeds
+
+
+def hand_deeds_in_file(path):
+    """As hand_deeds_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return hand_deeds_in_text(file)
+    except OSError:
+        return {}
+
+
+def expected_deeds(path):
+    """The deeds that a recorded input expects of its hand, as {deed: least count}: the "expect" of an input file in the
+    object form. A list of events expects none."""
+    if not path:
+        return {}
+    with open(path, encoding="utf-8") as file:
+        value = json.load(file)
+    return dict(value.get("expect", {})) if isinstance(value, dict) else {}
+
+
+def missing_deeds(deeds, expected):
+    """The expected deeds that the hand did fewer times than expected, as {deed: [count, least count]}"""
+    return {name: [deeds.get(name, 0), least] for name, least in expected.items() if deeds.get(name, 0) < least}
+
+
 def read_records(lines):
     """The start line, the records and the end line of a run record, from its lines. A line that is not JSON (as the
     last line of a run that stopped as it wrote) is left out."""

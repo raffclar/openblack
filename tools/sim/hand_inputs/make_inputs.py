@@ -3,7 +3,8 @@
 The input is a list of {frame, event} as the inspector's input.record answers it. The frames count from the frame
 that input.replay starts at, with frames of 20 ms. The pixels are of a 1280 by 1024 window and of the camera of the
 first frame of the land. An input can also be an object with that list as "events" and a "camera" as camera.set takes
-it: the game puts its camera there before the first frame of the land.
+it: the game puts its camera there before the first frame of the land, in place of the start view and its flight. The
+object can also have an "expect", the least count of each deed of the hand that server_check.py and net_check.py check.
 
     python tools/sim/hand_inputs/make_inputs.py
 
@@ -414,14 +415,18 @@ def store_hand(piles, cycles):
     return script.events
 
 
-def write(name, events, camera=None):
+def write(name, events, camera=None, expect=None):
+    """Writes an input: a list of events, or an object with the camera and the deeds that the hand must do (the least
+    count of each, which server_check.py and net_check.py check) when it has either"""
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
     with open(os.path.join(HERE, name + ".json"), "w", encoding="utf-8", newline="\n") as file:
-        if camera is None:
+        if camera is None and expect is None:
             file.write("[\n" + lines + "\n]\n")
         else:
-            file.write('{"camera": ' + json.dumps(camera) + ',\n"events": [\n' + lines + "\n]}\n")
+            head = ([f'"camera": {json.dumps(camera)}'] if camera is not None else []) + (
+                [f'"expect": {json.dumps(expect)}'] if expect is not None else [])
+            file.write("{" + ", ".join(head) + ',\n"events": [\n' + lines + "\n]}\n")
     print(name, len(events), "events,", events[-1]["frame"] + 1, "frames")
 
 
@@ -429,22 +434,24 @@ def main():
     write("land1", land1())
     write("land1_camera", land1(), LAND1_TURNED_CAMERA)
     write("testbed", testbed())
-    write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
+    write("twogods", two_gods(), TWO_GODS_STORE_CAMERA, {"scoops": 1, "uses": 1})
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
-    # The food pile of the first god's store on TwoGods (net_check.py --input with --camera1 TWO_GODS_STORE_CAMERA)
-    write("twogods_scoop_throw", scoop_throw((712, 437)))
-    # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
-    write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
+    # The food pile of the first god's store on TwoGods (net_check.py --input, server_check.py --land
+    # Playgrounds/TwoGods.txt --input)
+    write("twogods_scoop_throw", scoop_throw((712, 437)), TWO_GODS_STORE_CAMERA, {"scoops": 1, "throws": 1})
+    # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --input2)
+    write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)), GODS_RING_SLOT1_STORE_CAMERA,
+          {"scoops": 1, "throws": 1})
     write("casts", casts())
     # The second god's conifer on TwoGods (net_check.py --input2 with --camera2 TWO_GODS_SLOT1_TREE_CAMERA)
     write("twogods_slot1_tree_press", two_gods_slot1_tree_press())
     # Any land, every god slot (net_check.py --input ... --input4 on the online maps)
     write("busy_hand", busy_hand(18))
-    # Each god slot's own store on the online maps (net_check.py --inputN with --cameraN of store_camera)
+    # Each god slot's own store on the online maps (net_check.py --inputN), from the camera of store_camera
     for land, stores in ONLINE_MAP_STORES.items():
-        for slot, (_, piles) in enumerate(stores):
-            write(f"{land}_slot{slot}_store", store_hand(piles, 30))
+        for slot, (store, piles) in enumerate(stores):
+            write(f"{land}_slot{slot}_store", store_hand(piles, 30), store_camera(store), {"scoops": 1, "throws": 1})
 
 
 if __name__ == "__main__":

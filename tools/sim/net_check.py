@@ -15,6 +15,13 @@ lockstep). At the end it compares the checksum of each turn on the server and on
         --input2 tools/sim/hand_inputs/twogods_slot1_tree_press.json --camera-again-after 700
         --camera2 '{"focus":[2928.87,88.44,2620.91],"yaw":0,"pitch":20,"distance":25}'
 
+A client's --cameraN goes into its input: the client puts its camera there as its land starts, in place of the start view
+and its flight to the temple, so the pixels of the input fall on the things that the input was made for. An input file
+can have its own "camera" and an "expect" (the least count of each deed of the hand, {"scoops": 1, "throws": 1}). The
+summary gives the deeds of the hand of each god slot that the server did (hand_deeds: takes, scoops, throws, puts_down,
+pours, uses). The run fails when a client counts other deeds than the server, or when the hand of a slot did fewer deeds
+than its input expects.
+
 With --hold-creature the hand of that client holds its god's creature through the inspector once the client compared
 --hold-after turns: the camera looks at the creature, the pointer goes to a point of its body that the interface picks,
 the hand holds and strokes it, lets go, clicks it for the leash and leads it with a tap on the land. The creature walks,
@@ -607,8 +614,10 @@ def leave_room(game_exe, options, url, key, kid, certs, out, server_log):
     return True
 
 
-def shifted_input(path, folder, extra=0):
-    """The recorded input with its frames moved after the start of the network game, and the extra frames"""
+def shifted_input(path, folder, extra=0, camera=None):
+    """The recorded input with its frames moved after the start of the network game, and the extra frames. A camera (JSON
+    as camera_set takes it) goes into the input, in place of a camera of the file: the client puts its camera there as
+    its land starts, in place of the start view and its flight to the temple."""
     with open(path, encoding="utf-8") as file:
         value = json.load(file)
     events = value.get("events", []) if isinstance(value, dict) else value
@@ -617,7 +626,9 @@ def shifted_input(path, folder, extra=0):
     if isinstance(value, dict):
         value["events"] = events
     else:
-        value = events
+        value = {"events": events}
+    if camera:
+        value["camera"] = json.loads(camera)
     out = os.path.join(folder, "input.json")
     with open(out, "w", encoding="utf-8") as file:
         json.dump(value, file)
@@ -810,8 +821,8 @@ def main():
                 command.append("--sim-hash-parts")
             client_input = client_inputs[index]
             if client_input:
-                command += ["--sim-input",
-                            shifted_input(client_input, client_dir, options.input2_delay_frames * index)]
+                command += ["--sim-input", shifted_input(client_input, client_dir, options.input2_delay_frames * index,
+                                                         client_cameras[index])]
             else:
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
@@ -839,10 +850,11 @@ def main():
             if any("in slot" in line for line in joins) and not any(line.endswith(f"in slot {index}") for line in joins):
                 print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
                 return 1
-        # Each client looks where its input plays, once its network game started
+        # Each client with a camera and no input looks there once its network game started. A client with an input put
+        # its camera as its land started, from the input.
         for index, client in enumerate(clients):
             camera = client_cameras[index]
-            if camera:
+            if camera and not client_inputs[index]:
                 log = os.path.join(client_dirs[index], "client.log")
                 if wait_for_line(log, "Joined the game server", client) and not set_camera(client.pid, camera):
                     print(f"the camera of client {index + 1} was not set; see {client_dirs[index]}")
@@ -946,6 +958,25 @@ def main():
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
+    # What the turns did with the hand of each god slot, as the server counts it; each client must count the same. A
+    # client's input that expects deeds of its hand (its "expect") fails the run when the hand of its slot did fewer:
+    # the checksums are then the same only because the hand did nothing.
+    server_deeds = sim_report.hand_deeds_in_file(server_log)
+    summary["hand_deeds"] = {str(slot): counts for slot, counts in sorted(server_deeds.items())}
+    summary["missing_deeds"] = {}
+    for index, client_dir in enumerate(client_dirs):
+        missing = sim_report.missing_deeds(server_deeds.get(index, {}), sim_report.expected_deeds(client_inputs[index]))
+        if missing:
+            summary["missing_deeds"][str(index)] = missing
+            print(f"the hand of slot {index} did not do what its input expects: {missing}")
+            all_same = False
+        client_deeds = sim_report.hand_deeds_in_file(os.path.join(client_dir, "client.log"))
+        summary["clients"][index]["hand_deeds_same"] = client_deeds == server_deeds
+        steady = (stopped_after is None and options.stop_second_after is None and leaver is None
+                  and options.part_second_at is None)
+        if client_deeds != server_deeds and steady:
+            print(f"client {index + 1} counts other deeds of the hands than the server: {client_deeds}")
+            all_same = False
     if options.slot_miracle:
         summary["slot_miracle"] = miracle_done
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
