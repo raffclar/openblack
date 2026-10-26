@@ -82,6 +82,8 @@ struct Start
 	std::string opening;
 	/// The network map for 32 gods in place of a land ("gods_ring_map", optional)
 	bool godsRingMap {false};
+	/// The names of the players of the gods, by god slot ("names", optional). A slot with no player has an empty name.
+	std::vector<std::string> names;
 };
 
 /// Server to client: "room.joined". The server accepted the ticket.
@@ -184,8 +186,20 @@ struct StartCreature
 	std::vector<uint8_t> file;
 };
 
+/// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns
+/// of the game, if they did not stop before.
+struct StopRequest
+{
+};
+
+/// Server to client: "game.stop". The server stopped the turns of the game. No turn comes after this turn.
+struct GameStop
+{
+	uint32_t turn {0};
+};
+
 using Frame = std::variant<Join, Resume, Ready, Leave, Joined, Refused, Start, Resumed, PlayerState, StartQuery, StartReply,
-                           StartCancel, StartStop, StartTransfer, StartCreature>;
+                           StartCancel, StartStop, StartTransfer, StartCreature, StopRequest, GameStop>;
 
 [[nodiscard]] std::string ToJson(const Frame& frame);
 [[nodiscard]] std::optional<Frame> Parse(std::string_view text);

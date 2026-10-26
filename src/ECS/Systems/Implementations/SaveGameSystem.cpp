@@ -1665,6 +1665,12 @@ bool GameOver()
 	return Locator::entitiesRegistry::value().Context().gameOver;
 }
 
+/// A network game never saves: not by itself, not by the quick keys and not as the player leaves it
+bool NetworkGame()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 /// The name of a save that the game does by itself into the slot
 std::u16string InstantName(uint32_t slot)
 {
@@ -1696,10 +1702,10 @@ bool SaveGameSystem::InstantSave(uint32_t slot)
 bool SaveGameSystem::SaveOnExit(bool quitting)
 {
 	const auto& context = Locator::entitiesRegistry::value().Context();
-	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, or a game that is over
+	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, a network game, or a game that is over
 	const auto* lands = Locator::landSystem::has_value() ? &Locator::landSystem::value() : nullptr;
 	if (lands == nullptr || lands->GetLandPath().empty() || lands->GetLandPath() == ecs::systems::k_TestbedLandPath ||
-	    context.gameOver || context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
+	    context.gameOver || context.skirmish || NetworkGame() || LandNumber() == gamesave::k_PlaygroundLand)
 	{
 		return false;
 	}
@@ -1766,6 +1772,7 @@ void SaveGameSystem::EndTurn()
 	    .gameOver = GameOver(),
 	    .scriptCutScene = ScriptCutScene(),
 	    .paused = Locator::time::has_value() && Locator::time::value().IsPaused(),
+	    .networkGame = NetworkGame(),
 	    .land = LandNumber(),
 	    .turn = TurnNow(),
 	    .lastAutosaveTurn = _lastAutosaveTurn,
@@ -1793,7 +1800,7 @@ void SaveGameSystem::EndTurn()
 bool SaveGameSystem::QuickSave()
 {
 	const auto turn = TurnNow();
-	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene()))
+	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}
@@ -1803,7 +1810,7 @@ bool SaveGameSystem::QuickSave()
 
 bool SaveGameSystem::QuickLoad()
 {
-	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene()))
+	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}

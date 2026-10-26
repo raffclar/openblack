@@ -40,6 +40,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
 #include "Common/StringUtils.h"
@@ -208,6 +209,8 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 
 	PrepareNewLand(change);
+	// The script of the land gives the start place of the camera again, if it gives one
+	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 
@@ -282,6 +285,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
 	View().MakeSymbolSheet();
+	// A game that starts here can start with the camera at the player's temple
+	if (start_camera::StartsAtTemple(
+	        {.change = change, .networkGame = Locator::time::value().IsNetworkGame(), .scriptPlace = _startCameraPlace}))
+	{
+		View().StartCameraAtTemple();
+	}
 	View().ShowLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -472,6 +481,11 @@ bool LandSystem::LoadGodsRingMap()
 	Locator::camera::value()
 	    .SetOrigin({eye.x, land.GetHeightAt(eye) + gods_ring_map::k_StartCameraHeight, eye.y})
 	    .SetFocus({focus.x, land.GetHeightAt(focus), focus.y});
+	// A network game on the map starts with the camera at the player's temple, as on every land of a network game
+	if (Locator::time::value().IsNetworkGame())
+	{
+		View().StartCameraAtTemple();
+	}
 	View().EndLoadingScreen();
 	StartNewLand(land_change::Kind::Testbed);
 	return true;

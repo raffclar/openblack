@@ -215,6 +215,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},
+    // The same for the glow and the beams of a temple that the enemy destroys, and the sound loops of its destruction,
+    // which only a computer with audio plays. The turns read them only to stop the sounds and to show the glow and the
+    // beams.
+    {.component = "Temple", .field = "destructionGlow", .marker = ""},
+    {.component = "Temple", .field = "destructionBeamSource", .marker = ""},
+    {.component = "Temple", .field = "destructionLoops", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},

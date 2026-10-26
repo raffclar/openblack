@@ -120,6 +120,7 @@ class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
 class HeartbeatSystemInterface;
+class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
 class AnimalSystemInterface;
@@ -319,6 +320,7 @@ struct Locator
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
+	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;

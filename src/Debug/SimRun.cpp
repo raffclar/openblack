@@ -9,9 +9,11 @@
 
 #include "SimRun.h"
 
+#include <charconv>
 #include <cmath>
 
 #include <algorithm>
+#include <system_error>
 
 namespace openblack::sim_run
 {
@@ -84,6 +86,28 @@ float Timings::TurnAverageMs() const
 float Timings::FrameAverageMs() const
 {
 	return frames == 0 ? 0.0f : frameTotalMs / static_cast<float>(frames);
+}
+
+std::optional<TempleLoss> ParseTempleLoss(std::string_view text)
+{
+	const auto colon = text.find(':');
+	if (colon == std::string_view::npos)
+	{
+		return std::nullopt;
+	}
+	unsigned player = 0;
+	uint32_t turn = 0;
+	const auto playerText = text.substr(0, colon);
+	const auto turnText = text.substr(colon + 1);
+	const auto [playerEnd, playerError] = std::from_chars(playerText.data(), playerText.data() + playerText.size(), player);
+	const auto [turnEnd, turnError] = std::from_chars(turnText.data(), turnText.data() + turnText.size(), turn);
+	constexpr unsigned k_LastPlayer = 6;
+	if (playerError != std::errc() || turnError != std::errc() || playerEnd != playerText.data() + playerText.size() ||
+	    turnEnd != turnText.data() + turnText.size() || player > k_LastPlayer)
+	{
+		return std::nullopt;
+	}
+	return TempleLoss {.player = static_cast<uint8_t>(player), .turn = turn};
 }
 
 } // namespace openblack::sim_run

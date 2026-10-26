@@ -1795,3 +1795,7 @@ openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
 add_test(NAME test_row_dump_compare
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
 )
+openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
+openblack_setup_and_add_test(test_game_end test_game_end.cpp)
+openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
+openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)

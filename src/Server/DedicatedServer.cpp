@@ -657,6 +657,7 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.paceToWallClock = !settings.fast;
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
+	simulation.settings.templeLoss = settings.templeLoss;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
 	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())

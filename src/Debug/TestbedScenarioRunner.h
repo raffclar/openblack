@@ -229,6 +229,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// Whether the game was a skirmish before a scenario made it one
+	std::optional<bool> _skirmishBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Turns since the hand went over a fireball to take hold of it, none while it isn't
