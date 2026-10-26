@@ -37,10 +37,16 @@ vcpkg_download_distfile(
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the Vulkan renderer:
+# - vulkan-one-pipeline-cache: the renderer reads the application's kept pipeline cache one time, when it starts, and
+#   makes all pipelines in that one cache. It gives the cache back one time, when it stops. Before, each new pipeline
+#   read all of the kept cache, gave all of it back and merged it, which took 10 to 30 ms for each pipeline with a
+#   cache of 30 MB and stopped the frame.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
   PATCHES
+    vulkan-one-pipeline-cache.patch
     webgpu-emscripten-renderer-on.patch
     webgpu-canvas-texture-each-frame.patch
     webgpu-yield-in-read-loops.patch

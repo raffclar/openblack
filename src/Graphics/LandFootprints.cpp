@@ -19,6 +19,7 @@
 #include <glm/common.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/BlockTexture.h"
 #include "3D/LandBlock.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
@@ -391,9 +392,18 @@ void LandFootprints::Update()
 	{
 		Reset(blockCount);
 	}
-	for (const auto block : repainted)
+	for (const auto& [block, cells] : repainted)
 	{
-		_ownTexels.erase(block);
+		// The block's own texture that is kept takes the cells painted again. It is then as a new paint of the whole block,
+		// because each texel comes only from its own cell.
+		if (const auto own = _ownTexels.find(block); own != _ownTexels.end() && !own->second.empty() && cells.has_value())
+		{
+			block_texture::PutCellTexels(cells->texels, cells->first, cells->count, own->second);
+		}
+		else
+		{
+			_ownTexels.erase(block);
+		}
 		_dirty.insert(block);
 	}
 	FindChangedThings();
