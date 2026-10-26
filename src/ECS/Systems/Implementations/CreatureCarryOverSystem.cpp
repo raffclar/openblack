@@ -11,6 +11,8 @@
 
 #include "CreatureCarryOverSystem.h"
 
+#include <algorithm>
+#include <array>
 #include <chrono>
 #include <system_error>
 #include <utility>
@@ -29,8 +31,10 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureFileSave.h"
 #include "ECS/Components/CreatureNeeds.h"
+#include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/CreatureSpells.h"
 #include "ECS/CreatureBodyFile.h"
+#include "ECS/CreatureTattooChange.h"
 #include "ECS/Registry.h"
 #include "ECS/SaveFileWriter.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
@@ -142,6 +146,15 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The player's creature {} has no mind yet to keep for the next land",
 		                   entt::to_integral(creature));
 		return;
+	}
+	// The file keeps the tattoos that this computer shows. In a network game, a change from the tattoo editor stays on
+	// this computer, and the creature takes it into the next game.
+	if (const auto* tattoos = registry.TryGet<const CreatureTattoos>(creature))
+	{
+		std::array<uint32_t, creature_tattoo::k_SlotCount> words {};
+		std::ranges::transform(ecs::creature_tattoo_change::ShownSlots(*tattoos), words.begin(), creature_tattoo::ToWord);
+		file->tattooHeader = words;
+		file->tattoo = ecs::creature_tattoo_change::ShownPictures(*tattoos);
 	}
 	// Its physique is saved beside its mind: its body as it is now, but for the alignment, as no spell made it
 	const auto now = ecs::creature_body_file::Capture(registry, creature);
