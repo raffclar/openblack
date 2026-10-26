@@ -184,22 +184,23 @@ private:
 	};
 
 public:
+	/// The times use the steady clock. In a web browser, the system clock moves in steps of one millisecond.
 	struct Scope
 	{
 		uint8_t level;
-		std::chrono::system_clock::time_point start;
-		std::chrono::system_clock::time_point end;
+		std::chrono::steady_clock::time_point start;
+		std::chrono::steady_clock::time_point end;
 		bool finalized = false;
 		/// The time spent in the stage over the whole frame, and how often it ran: a stage may run more than once a
 		/// frame, as in a game turn and again for the frame, where start and end only hold the last run
-		std::chrono::system_clock::duration total {};
+		std::chrono::steady_clock::duration total {};
 		uint16_t calls = 0;
 	};
 
 	struct Entry
 	{
-		std::chrono::system_clock::time_point frameStart;
-		std::chrono::system_clock::time_point frameEnd;
+		std::chrono::steady_clock::time_point frameStart;
+		std::chrono::steady_clock::time_point frameEnd;
 		std::array<Scope, static_cast<uint8_t>(Stage::_count)> stages;
 	};
 

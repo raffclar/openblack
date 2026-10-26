@@ -13,6 +13,7 @@
 
 #include <array>
 #include <map>
+#include <optional>
 #include <string>
 
 #include "Common/FrameStats.h"
@@ -31,9 +32,22 @@ public:
 	/// pipelinesMade: how many pipelines the renderer made before the first frame
 	FrameStatsLog(uint32_t interval, bool views, uint32_t pipelinesMade);
 
+	/// How long one frame took
+	struct FrameTime
+	{
+		/// The time from the end of the last frame to the end of this frame. In a web browser, this time includes the
+		/// wait for the display frame of the browser.
+		float milliseconds {0.0f};
+		/// The time that the game thread did the work of this frame, without a wait for the display frame or for the
+		/// pace of a simulation run
+		float workMilliseconds {0.0f};
+		/// The frame played one or more game turns
+		bool playedTurn {false};
+	};
+
 	/// After each frame, with how long the frame took, the profiler that timed its stages and how many pipelines the
 	/// renderer made since it started
-	void Frame(float milliseconds, const openblack::Profiler& profiler, uint32_t pipelinesMade);
+	void Frame(FrameTime time, const openblack::Profiler& profiler, uint32_t pipelinesMade);
 
 	/// The log shows each frame that takes this time or more, with its stages
 	static constexpr float k_SpikeMilliseconds = 10.0f;
@@ -45,6 +59,8 @@ private:
 	bool _views;
 	frame_stats::Window _frames;
 	frame_stats::Window _gpu;
+	frame_stats::Window _work;
+	frame_stats::Window _turnWork;
 	std::array<double, static_cast<size_t>(openblack::Profiler::Stage::_count)> _stageTotals {};
 	std::array<double, static_cast<size_t>(openblack::Profiler::Stage::_count)> _stageMax {};
 	std::map<std::string, double> _viewTotals;
@@ -57,7 +73,7 @@ private:
 	uint32_t _lastPipelinesMade {0};
 	uint32_t _pipelinesSinceReport {0};
 	/// The time that the game's thread was on a processor, at the end of the last frame
-	double _lastCpuMilliseconds {0.0};
+	std::optional<double> _lastCpuMilliseconds;
 };
 
 } // namespace openblack::debug

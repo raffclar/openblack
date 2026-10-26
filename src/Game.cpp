@@ -4362,6 +4362,9 @@ void Game::BeforeFirstFrame(bool continued)
 
 bool Game::RunFrame() noexcept
 {
+	// The work of the frame starts here. In a web browser, the wait for the display frame is before this point.
+	const auto workStart = std::chrono::steady_clock::now();
+	const auto turnBefore = Locator::time::has_value() ? std::optional(Locator::time::value().GetTurn()) : std::nullopt;
 	if (!Update())
 	{
 		return false;
@@ -4497,6 +4500,7 @@ bool Game::RunFrame() noexcept
 			_startupTimer.reset();
 		}
 
+		const auto workEnd = std::chrono::steady_clock::now();
 		// A simulation run at the normal speed waits until the frame took its fixed game time in real time too
 		auto& simulation = Locator::simulation::value();
 		if (const auto wait = sim_run::PaceWait(
@@ -4519,8 +4523,10 @@ bool Game::RunFrame() noexcept
 		}
 		if (frameStats.has_value())
 		{
-			frameStats->Frame(std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(), profiler,
-			                  Locator::rendererInterface::value().GetPipelinesMade());
+			frameStats->Frame({.milliseconds = std::chrono::duration<float, std::milli>(frameEnd - frameStart).count(),
+			                   .workMilliseconds = std::chrono::duration<float, std::milli>(workEnd - workStart).count(),
+			                   .playedTurn = Locator::time::has_value() && turnBefore != Locator::time::value().GetTurn()},
+			                  profiler, Locator::rendererInterface::value().GetPipelinesMade());
 		}
 		frameStart = frameEnd;
 		// A close of the window ends the game here, at the end of the frame, but not during a script's cut scene

@@ -364,7 +364,7 @@ std::vector<benchmark::StageInfo> BenchmarkStages()
 	return stages;
 }
 
-double Milliseconds(std::chrono::system_clock::duration duration)
+double Milliseconds(std::chrono::steady_clock::duration duration)
 {
 	return std::chrono::duration<double, std::milli>(duration).count();
 }
