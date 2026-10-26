@@ -68,6 +68,7 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_start.reset();
 	_startEvents.clear();
 	_startCreatures.clear();
+	_startAlignments.clear();
 	_turns.clear();
 	_playout.Reset();
 	_turnsDone = 0;
@@ -277,6 +278,7 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 	else if (std::holds_alternative<game_socket::StartTransfer>(frame))
 	{
 		_startCreatures.clear();
+		_startAlignments.clear();
 		// An observer has no god, so it has no creature to send
 		if (_joined.has_value() && _joined->role == game_socket::Role::God)
 		{
@@ -286,8 +288,12 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 				Log(spdlog::level::warn, fmt::format("The creature file of {} bytes is too large to send", file.size()));
 				file.clear();
 			}
-			Log(spdlog::level::info, fmt::format("This computer sends a creature file of {} bytes", file.size()));
-			_stream->SendText(game_socket::ToJson(game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file)}));
+			// The god starts the game at the alignment of the player's profile
+			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
+			Log(spdlog::level::info,
+			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}", file.size(), alignment));
+			_stream->SendText(game_socket::ToJson(
+			    game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file), .alignment = alignment}));
 		}
 		_startEvents.push_back(StartEvent::Transfer);
 	}
@@ -296,18 +302,21 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 		if (creature->slot.has_value())
 		{
 			_startCreatures[*creature->slot] = creature->file;
+			_startAlignments[*creature->slot] = creature->alignment;
 		}
 	}
 	else if (std::holds_alternative<game_socket::StartCancel>(frame))
 	{
 		Log(spdlog::level::info, "A player does not have the land: the start stops");
 		_startCreatures.clear();
+		_startAlignments.clear();
 		_startEvents.push_back(StartEvent::Cancelled);
 	}
 	else if (std::holds_alternative<game_socket::StartStop>(frame))
 	{
 		Log(spdlog::level::info, "A player left during the start: the start stops");
 		_startCreatures.clear();
+		_startAlignments.clear();
 		_startEvents.push_back(StartEvent::Stopped);
 	}
 }
@@ -316,6 +325,12 @@ std::span<const uint8_t> NetworkSession::StartCreatureFile(PlayerNames god) cons
 {
 	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
 	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
+
+std::optional<float> NetworkSession::StartAlignment(PlayerNames god) const
+{
+	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
 }
 
 std::optional<PlayerNames> NetworkSession::OwnGod() const
