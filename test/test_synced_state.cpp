@@ -217,6 +217,14 @@ TEST(SyncedState, TheMarksOfTheDisciplesAreNotSynced)
 	}));
 }
 
+TEST(SyncedState, TheStonesOnAPlinthAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "PlinthStone";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
