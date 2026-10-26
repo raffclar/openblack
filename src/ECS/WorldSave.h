@@ -88,8 +88,10 @@ enum class LoadKind : uint8_t
 	WorldState,
 };
 
-/// The saved state of each system that a save keeps, by the name of the system
-[[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection);
+/// The saved state of each system that a save keeps, by the name of the system. With valueEnds, each section also keeps
+/// where each value ends, for tools.
+[[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection,
+                                                                        bool valueEnds = false);
 
 /// Puts back the entities, their components and the context of the registry. The registry must have no live entity.
 /// Returns nothing when the blocks do not read.

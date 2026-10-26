@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <glm/geometric.hpp>
+#include <spdlog/spdlog.h>
 
 #include "ECS/AltarSacrifice.h"
 #include "ECS/Components/Animal.h"
@@ -1579,8 +1580,12 @@ glm::vec3 HandGrabSystem::UpdateOffer(HandGrab& grab, const Frame& frame)
 	}
 	if (creature_giving::CallsOff(hand, *takePoint, _world->CreatureSizeOf(grab.givenTo)))
 	{
-		_world->CallOffGiving(grab.givenTo);
-		ForgetOffer(grab);
+		// The turn calls off the gift on every computer. Until then the hand sends the call off one time only.
+		if (grab.callingOff != grab.givenTo)
+		{
+			grab.callingOff = grab.givenTo;
+			_world->SendCommand(player_commands::GiveCallOff {.creature = grab.givenTo});
+		}
 		return frame.target;
 	}
 	const auto taking = _world->TakingOf(grab.givenTo);
@@ -1631,6 +1636,27 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	}
 	grab->offeredTo = creature;
 	grab->givenTo = creature;
+	grab->callingOff = entt::null;
+}
+
+void HandGrabSystem::DoGiveCallOff(PlayerNames player, entt::entity creature)
+{
+	// The command acts with the hand of its player
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	if (Exists(creature))
+	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "The hand of player {} calls off the gift to creature {}", static_cast<int>(player),
+			                    entt::to_integral(creature));
+		}
+		_world->CallOffGiving(creature);
+	}
+	// The hand of the player forgets the gift, whatever it gives now
+	if (auto* grab = Grab(); grab != nullptr)
+	{
+		ForgetOffer(*grab);
+	}
 }
 
 void HandGrabSystem::InterfaceTurn(uint32_t nowMs, uint32_t turn)
@@ -1670,6 +1696,7 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 {
 	grab.offeredTo = entt::null;
 	grab.givenTo = entt::null;
+	grab.callingOff = entt::null;
 	grab.offer = {};
 }
 

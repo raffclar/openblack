@@ -96,6 +96,12 @@ std::vector<Action> EachCommand()
 	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
 	    CreatureFightCheat {},
 	    TempleLeashOff {},
+	    GiveCallOff {.creature = Entity(27)},
+	    CreatureTattoo {.creature = Entity(28),
+	                    .slots = {creature_tattoo::Slot {.design = 3, .site = 1, .colour = {10, 20, 30}}},
+	                    .hasPictures = true,
+	                    .pictures = {1, 2, 3}},
+	    LeashLength {.length = 12.5f},
 	};
 }
 
@@ -119,7 +125,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 36)
+	switch (bits(random) % 39)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -234,6 +240,30 @@ Action RandomAction(std::mt19937& random)
 		return CreatureFightCheat {};
 	case 34:
 		return TempleLeashOff {};
+	case 35:
+		return GiveCallOff {.creature = entity()};
+	case 36:
+	{
+		CreatureTattoo tattoo {.creature = entity()};
+		for (auto& slot : tattoo.slots)
+		{
+			slot = {.design = static_cast<uint8_t>(bits(random) % 16),
+			        .site = static_cast<uint8_t>(bits(random) % 16),
+			        .colour = glm::u8vec3(bits(random) % 256, bits(random) % 256, bits(random) % 256)};
+		}
+		tattoo.hasPictures = bits(random) % 2 == 0;
+		if (tattoo.hasPictures)
+		{
+			tattoo.pictures.resize(bits(random) % 64);
+			for (auto& byte : tattoo.pictures)
+			{
+				byte = static_cast<uint8_t>(bits(random));
+			}
+		}
+		return tattoo;
+	}
+	case 37:
+		return LeashLength {.length = number()};
 	default:
 		return PlayerLeft {};
 	}
@@ -295,19 +325,24 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 9, 18, 5, 49, 17, 5, 5, 5,  9,  12, 1, 18,
-	                                 11, 5, 21, 15, 3,  5, 1, 2,  1, 61, 5,  2, 1, 13, 10, 18, 1, 1};
+	const std::vector<size_t> sizes {2,  5,  9, 5, 53, 5, 9, 18, 5, 49, 17, 5,  5,  5,  9, 12, 1, 18, 11, 5,
+	                                 21, 15, 3, 5, 1,  2, 1, 61, 5, 2,  1,  13, 10, 18, 1, 1,  5, 51, 5};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
 	{
 		EXPECT_EQ(SizeOf(commands[i]), sizes[i]) << i;
-		// The tags follow the order of the commands. The leave of the server has tag 17, the fight cheat tag 35, and the
-		// leash that comes off at the temple tag 37.
-		const size_t tag = std::holds_alternative<PlayerLeft>(commands[i])           ? 17
-		                   : std::holds_alternative<CreatureFightCheat>(commands[i]) ? 35
-		                   : std::holds_alternative<TempleLeashOff>(commands[i])     ? 37
-		                                                                             : i + 1;
+		// The tags follow the order of the commands. The leave of the server has tag 17. Tag 36 belongs to a command of
+		// another branch, so the commands after the fight cheat have tags one higher.
+		size_t tag = i + 1;
+		if (std::holds_alternative<PlayerLeft>(commands[i]))
+		{
+			tag = 17;
+		}
+		else if (tag > 35)
+		{
+			tag += 1;
+		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
 }
@@ -503,6 +538,23 @@ TEST(TurnCodec, TheDecoderRefusesABadFrame)
 	auto gesture = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {SeedGesture {}}});
 	gesture[10] = 3;
 	EXPECT_EQ(Decode(gesture).error, DecodeError::Value);
+	// A tattoo of a design that is not one of the sixteen, a pictures flag that is not 0 or 1, pictures with no flag, or
+	// a block of pictures larger than eight pictures
+	auto tattoo = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {CreatureTattoo {.creature = Entity(1)}}});
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::None);
+	tattoo[14] = 16;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[14] = 0;
+	tattoo[54] = 2;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 0;
+	tattoo[55] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
+	tattoo[54] = 1;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Truncated);
+	tattoo[55] = 0x29;
+	tattoo[56] = 0x40;
+	EXPECT_EQ(Decode(tattoo).error, DecodeError::Value);
 
 	auto turn = Encode(TurnBundle {.turn = 1, .blocks = {{.sender = PlayerNames::NEUTRAL, .sequence = 0, .actions = {}}}});
 	turn[8] = 32;

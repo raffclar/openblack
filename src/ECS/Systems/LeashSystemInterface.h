@@ -185,6 +185,9 @@ public:
 	/// The world does an order of a player to their creature on the leash, at the start of a turn: an order on a thing,
 	/// an order at a place, a tie of the leash to a thing, or an untie
 	virtual void DoOrder(PlayerNames /*player*/, const player_commands::LeashOrder& /*order*/) {}
+	/// At the turn: the hand of the player let go of the rope of the tied leash, which becomes this long
+	/// (player_commands::LeashLength)
+	virtual void DoLeashLength(PlayerNames /*player*/, float /*length*/) {}
 };
 
 } // namespace openblack::ecs::systems

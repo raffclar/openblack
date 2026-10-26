@@ -32,6 +32,7 @@
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
@@ -392,6 +393,27 @@ void Run(const Command& command, uint32_t turn)
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))
 			    {
 				    openblack::Locator::leashSystem::value().TapPost(action.post);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GiveCallOff>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoGiveCallOff(command.player, action.creature);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, CreatureTattoo>)
+		    {
+			    if (openblack::Locator::creatureSkinSystem::has_value() && registry.Valid(action.creature))
+			    {
+				    openblack::Locator::creatureSkinSystem::value().DoTattoo(command.player, action);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashLength>)
+		    {
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().DoLeashLength(command.player, action.length);
 			    }
 		    }
 	    },

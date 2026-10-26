@@ -770,6 +770,13 @@ float GameHandGrabWorld::CreatureSizeOf(entt::entity creature) const
 
 void GameHandGrabWorld::CallOffGiving(entt::entity creature)
 {
+	// A creature that took the thing from the hand already keeps it and goes on
+	if (Locator::creatureMindSystem::has_value() && Locator::creatureObjectActionSystem::has_value() &&
+	    Locator::creatureMindSystem::value().IsTakingFromHand(creature) &&
+	    Locator::creatureObjectActionSystem::value().GetHeld(creature).has_value())
+	{
+		return;
+	}
 	// It gives up taking as a failure, and its hand closes on nothing if it was already reaching
 	if (Locator::creatureObjectActionSystem::has_value() &&
 	    Locator::creatureObjectActionSystem::value().GetTakingFromHand(creature).has_value())

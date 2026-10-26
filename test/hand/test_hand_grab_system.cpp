@@ -607,6 +607,10 @@ protected:
 			    {
 				    system->DoClick(player, command, commandTurn);
 			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::GiveCallOff>)
+			    {
+				    system->DoGiveCallOff(player, command.creature);
+			    }
 		    },
 		    action);
 	}
@@ -2181,6 +2185,33 @@ TEST_F(HandGrabSystemGiving, MovingTheHandFifteenSizesFromTheReachingCreatureCal
 	EXPECT_TRUE(world->calledOff.empty());
 	Frame(16, {40.0f, 0.0f, 0.0f});
 	Frame(16, {40.0f, 0.0f, 0.0f});
+	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
+	EXPECT_FALSE(system->GetOfferedCreature().has_value());
+}
+
+TEST_F(HandGrabSystemGiving, TheTurnCallsOffTheGiftThatTheHandSentOneTime)
+{
+	HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	Press();
+	Frame(230);
+	world->underCursor.reset();
+	world->takePoint = glm::vec3(0.0f, 0.0f, 0.0f);
+	deferCommands = true;
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	Frame(16, {40.0f, 0.0f, 0.0f});
+	// The frames send the call off one time, and do not call off the creature or forget the gift
+	const auto callOffs = std::ranges::count_if(waiting, [](const player_commands::Action& action) {
+		return std::holds_alternative<player_commands::GiveCallOff>(action);
+	});
+	EXPECT_EQ(callOffs, 1);
+	EXPECT_TRUE(world->calledOff.empty());
+	EXPECT_TRUE(system->GetOfferedCreature().has_value());
+	// The turn calls it off
+	RunWaiting();
 	EXPECT_EQ(world->calledOff, std::vector<entt::entity> {creature});
 	EXPECT_FALSE(system->GetOfferedCreature().has_value());
 }

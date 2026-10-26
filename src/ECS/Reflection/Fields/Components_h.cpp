@@ -110,6 +110,7 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::offeredTo>("offeredTo")
 	    .Field<&components::HandGrab::offer>("offer")
 	    .Field<&components::HandGrab::givenTo>("givenTo")
+	    .Field<&components::HandGrab::callingOff>("callingOff")
 	    .Field<&components::HandGrab::offerTurn>("offerTurn")
 	    .Field<&components::HandGrab::lastHand>("lastHand")
 	    .Field<&components::HandGrab::lastPickedUp>("lastPickedUp")
