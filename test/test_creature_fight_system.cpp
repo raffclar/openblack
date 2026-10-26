@@ -758,6 +758,7 @@ public:
 	void RemarkIfNow(guidance::Kind kind) override { asked.push_back(kind); }
 	void TownAttacked(entt::entity, PlayerNames, bool) override {}
 	void TownAttackCry(entt::entity, const guidance::TownAttackVoice&) override {}
+	void BeliefVoice(glm::vec3, float, GuidanceAlignment) override {}
 	void BuildingBroken(entt::entity, std::optional<PlayerNames>, float) override {}
 	void AlignmentTurn(float) override {}
 	void SayOneOff(guidance::OneOff) override {}

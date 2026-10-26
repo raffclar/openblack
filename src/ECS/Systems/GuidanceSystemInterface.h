@@ -15,6 +15,7 @@
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "ECS/Systems/SavedStateInterface.h"
 #include "Enums.h"
@@ -67,6 +68,10 @@ public:
 	/// Harm done to a town: sometimes its people cry out at the town, in a voice that tells what harmed it. The town must
 	/// have people, and the guidance kind of the cry must wait no longer.
 	virtual void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) = 0;
+	/// A town gained belief in the player at this computer, and another player leads its belief: sometimes its people
+	/// call out in awe at the place. The share is the belief of the town in the player against its most belief (see
+	/// guidance::BeliefVoiceShare). A voice that is not good or evil is good or evil at random.
+	virtual void BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment) = 0;
 	/// A building broken by a blow of a player's (none for a blow of nobody's), with this share of its model left
 	virtual void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) = 0;
 	/// Each turn, before the player's alignment moves: this turn's change to it, times how fast it moves

@@ -35,6 +35,7 @@ public:
 	void RemarkIfNow(guidance::Kind kind) override;
 	void TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature) override;
 	void TownAttackCry(entt::entity town, const guidance::TownAttackVoice& voice) override;
+	void BeliefVoice(glm::vec3 at, float share, GuidanceAlignment alignment) override;
 	void BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining) override;
 	void AlignmentTurn(float change) override;
 	void SayOneOff(guidance::OneOff oneOff) override;
