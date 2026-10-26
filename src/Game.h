@@ -347,6 +347,23 @@ public:
 	/// The end of a skirmish or a network game: the boxes that the turns of the frame open, and the player's choice in the
 	/// end box
 	void FollowGameEnd();
+	/// The player asks to leave the network game: the end box asks the question to leave
+	void AskToLeaveNetworkGame();
+	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
+	void ExitOnlineGame();
+	/// The player leaves the network game. The game server makes the god of the player a leaver. A join from the command
+	/// line and a run of the tools stop the game; a join from the front end goes back to the multiplayer front end.
+	void LeaveNetworkGame();
+	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
+	void LeaveAsAPlayerDoes();
+	/// The god of this computer for the end of the game: player seven for a looker-on of a network game
+	[[nodiscard]] PlayerNames LocalGodForGameEnd() const;
+	/// After the player left a network game: the start land loads as a plain start does, and the multiplayer front end
+	/// opens in place of the menu
+	void StartAfterNetworkGame();
+	/// Opens the multiplayer front end in place of the menu. When it cannot open, the start-of-game question that waited
+	/// for it shows.
+	bool OpenFrontEndInPlaceOfMenu();
 	/// The numbers and the marks that rise over things
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
@@ -611,6 +628,8 @@ private:
 	bool _leaveNetworkGame {false};
 	/// What the end boxes of this computer keep between turns
 	end_game_box::State _endGameBoxState;
+	/// Tests: the player left the network game at the turn that the command line gives
+	bool _testLeaveDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};

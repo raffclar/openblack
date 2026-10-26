@@ -82,6 +82,9 @@ public:
 	virtual void BeginPlay() = 0;
 	/// After the session ended: the world of this computer turns alone from now on, with no server
 	virtual void PlayAlone() = 0;
+	/// After the player left: the session goes, and the next land that loads is a game of this computer alone, not a
+	/// network game
+	virtual void EndNetworkGame() {}
 	/// Once a frame: moves the session on
 	virtual void Update() = 0;
 	/// True from the join until the session ends
