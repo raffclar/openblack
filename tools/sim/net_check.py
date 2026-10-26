@@ -26,6 +26,14 @@ of its call), and the summary shows the first draw where each client is not the 
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
+The live server keeps its profile from game to game and waits in its room. These options do the same before the game:
+--server-alignment gives the server's profile an alignment from an earlier game (--server-profile names a profile
+folder), --room-wait keeps the server alone in its room, and --leave-room-first lets one more client join the room and
+leave it with no start. In each case every client must stay in step with the server from the first turn:
+
+    python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 300 --hash-fields
+        --server-alignment 0.0025 --leave-room-first
+
 The game reads its vanilla switches anywhere in its command line, as the original game did, so a path with "-multiplayer"
 or "/multiplayer" in it opens the multiplayer front end (the -MULTIPLAYER switch). The script copies the programs into
 its output folder and refuses an output folder with such a name.
@@ -554,6 +562,45 @@ def slot_cast(pid, player):
     return done
 
 
+def write_kept_alignment(folder, alignment):
+    """Writes the list of profiles of a server whose profile kept an alignment from an earlier game. The world of each
+    game must start the same with any value."""
+    os.makedirs(folder, exist_ok=True)
+    lines = ["current\tPlayer", "profile\tPlayer\tC4fcabbcd.erc\t0\tPlayer", f"alignment\tPlayer\t{alignment!r}"]
+    with open(os.path.join(folder, "Profiles.txt"), "w", encoding="utf-8", newline="\n") as file:
+        file.write("\n".join(lines) + "\n")
+
+
+def leave_room(game_exe, options, url, key, kid, certs, out, server_log):
+    """A client joins the room of the server as a god and leaves it before the start, as a player who closes the page
+    in the room does. The server must then start the next game from the same world as a server that had no visitor."""
+    leaver_dir = os.path.join(out, "leaver")
+    os.makedirs(leaver_dir, exist_ok=True)
+    log = os.path.join(leaver_dir, "client.log")
+    if os.path.exists(log):
+        os.remove(log)
+    ticket = make_ticket(key, kid, 99, "Leaver", "god", 600)
+    command = [game_exe, "-g", options.game_path, "--skip-logos", "--sim-still-hand", "-n", "4000000000",
+               "--background", "-l", log, "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+    leaver = start(command, leaver_dir)
+    try:
+        if not wait_for_line(log, "Joined the game server", leaver):
+            print(f"the client that leaves the room did not join; see {leaver_dir}")
+            return False
+        # The client loads the land of the server in the room, as the page does
+        wait_for_line(log, "the player is ready for the start", leaver, limit=120)
+    finally:
+        stop(leaver)
+    end = time.monotonic() + 60
+    while not lines_with(server_log, ["left the room"]):
+        if time.monotonic() > end:
+            print(f"the server did not see the leave of the room; see {server_log}")
+            return False
+        time.sleep(0.5)
+    time.sleep(options.leave_room_wait)
+    return True
+
+
 def shifted_input(path, folder, extra=0):
     """The recorded input with its frames moved after the start of the network game, and the extra frames"""
     with open(path, encoding="utf-8") as file:
@@ -635,6 +682,20 @@ def main():
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
+    parser.add_argument("--server-profile",
+                        help="the profile folder of the server (--profile-folder), as the live server keeps its profile "
+                             "from game to game; with none, the server keeps no profile")
+    parser.add_argument("--server-alignment", type=float,
+                        help="the server's profile keeps this alignment from an earlier game, as the profile of the live "
+                             "server does (a new profile folder in the output folder, unless --server-profile names one)")
+    parser.add_argument("--room-wait", type=float, default=0.0,
+                        help="the seconds that the server waits in its room with nobody, before any client joins, as "
+                             "a live server waits for its players")
+    parser.add_argument("--leave-room-first", action="store_true",
+                        help="before the clients of the game join, another client joins the room and leaves it with no "
+                             "start; the game that follows must stay in step with the server from its first turn")
+    parser.add_argument("--leave-room-wait", type=float, default=5.0,
+                        help="the seconds that the server waits in its room after the leave of --leave-room-first")
     options = parser.parse_args()
     if options.frame_ms != 0 and not 1.0 <= options.frame_ms <= 1000.0:
         # The game does not start with another frame time, and the run would only say that the first client did not join
@@ -677,6 +738,11 @@ def main():
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
         "--come-back-seconds", str(options.come_back_seconds)]
+    if options.server_alignment is not None:
+        options.server_profile = options.server_profile or os.path.join(out, "server_profile")
+        write_kept_alignment(options.server_profile, options.server_alignment)
+    if options.server_profile:
+        server_command.append(f"--profile-folder={os.path.abspath(options.server_profile)}")
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
     if options.trace_draws:
@@ -701,6 +767,10 @@ def main():
             print(f"the server did not listen; see {server_log}")
             return 1
         url = f"wss://127.0.0.1:{port}/game/{SERVER_ID}"
+        if options.room_wait > 0:
+            time.sleep(options.room_wait)
+        if options.leave_room_first and not leave_room(game_exe, options, url, key, kid, certs, out, server_log):
+            return 1
         clients = []
         for index, client_dir in enumerate(client_dirs):
             os.makedirs(client_dir, exist_ok=True)
