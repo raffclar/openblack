@@ -92,6 +92,22 @@ void ScriptMusicSystem::SaveState(reflection::BinaryWriter& out) const
 	reflection::Save(out, _music.IsStarted());
 	reflection::Save(out, _music.GetLyrics().line);
 	reflection::Save(out, _music.GetLyrics().word);
+	// The clock of the channel, so that the piece continues from its place after a load
+	const auto channel = _music.GetChannelState();
+	reflection::Save(out, channel.has_value());
+	if (!channel.has_value())
+	{
+		return;
+	}
+	reflection::Save(out, channel->type);
+	reflection::Save(out, channel->loops);
+	reflection::Save(out, static_cast<int64_t>(channel->time.count()));
+	reflection::Save(out, channel->ticks);
+	reflection::Save(out, channel->checked.chunk);
+	reflection::Save(out, channel->checked.frame);
+	reflection::Save(out, channel->current);
+	reflection::Save(out, channel->fadeTicks.has_value());
+	reflection::Save(out, channel->fadeTicks.value_or(0));
 }
 
 bool ScriptMusicSystem::LoadState(reflection::BinaryReader& in)
@@ -108,5 +124,36 @@ bool ScriptMusicSystem::LoadState(reflection::BinaryReader& in)
 		return false;
 	}
 	_music.Restore(type, started, lyrics);
+	// A save from before the channel was kept has no clock: the piece then gives no sound and does not end
+	if (in.Remaining() == 0)
+	{
+		return true;
+	}
+	bool hasChannel = false;
+	reflection::Load(in, hasChannel);
+	if (!hasChannel)
+	{
+		return !in.Failed();
+	}
+	audio::ScriptMusic::ChannelState channel;
+	int64_t time = 0;
+	bool fades = false;
+	uint32_t fadeTicks = 0;
+	reflection::Load(in, channel.type);
+	reflection::Load(in, channel.loops);
+	reflection::Load(in, time);
+	reflection::Load(in, channel.ticks);
+	reflection::Load(in, channel.checked.chunk);
+	reflection::Load(in, channel.checked.frame);
+	reflection::Load(in, channel.current);
+	reflection::Load(in, fades);
+	reflection::Load(in, fadeTicks);
+	if (in.Failed())
+	{
+		return false;
+	}
+	channel.time = std::chrono::microseconds(time);
+	channel.fadeTicks = fades ? std::optional(fadeTicks) : std::nullopt;
+	_music.RestoreChannel(channel, [this](audio::MusicType music) { return Timing(music); });
 	return true;
 }

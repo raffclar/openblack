@@ -158,9 +158,27 @@ public:
 	/// of the channel in microseconds (-1 without a channel)
 	[[nodiscard]] std::array<int64_t, 5> SyncedValues() const;
 
-	/// A saved game continues with the scripts' piece, whether it played and the lyrics. A piece that played before the
-	/// save gives no sound and does not end, because the save keeps no channel.
+	/// The clock of the channel that plays the scripts' piece, as a saved game keeps it
+	struct ChannelState
+	{
+		MusicType type {MusicType::None};
+		/// Times to play the bank again after the first, -1 for ever
+		int32_t loops {0};
+		std::chrono::microseconds time {0};
+		uint64_t ticks {0};
+		MusicCuePosition checked;
+		bool current {true};
+		std::optional<uint32_t> fadeTicks;
+	};
+
+	/// A saved game continues with the scripts' piece, whether it played and the lyrics. Without a channel, a piece that
+	/// played before the save gives no sound and does not end.
 	void Restore(MusicType type, bool started, MusicLyrics lyrics);
+	/// A saved game continues the channel of the scripts' piece from the place of its clock. A channel whose bank cannot
+	/// play does not come back.
+	void RestoreChannel(const ChannelState& state, const TimingFor& timingFor);
+	/// The clock of the channel, none when no channel plays
+	[[nodiscard]] std::optional<ChannelState> GetChannelState() const;
 
 private:
 	struct Channel

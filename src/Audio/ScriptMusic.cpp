@@ -263,3 +263,40 @@ void ScriptMusic::Restore(MusicType type, bool started, MusicLyrics lyrics)
 	_lyrics = lyrics;
 	_channel.reset();
 }
+
+void ScriptMusic::RestoreChannel(const ChannelState& state, const TimingFor& timingFor)
+{
+	auto timing = timingFor ? timingFor(state.type) : nullptr;
+	if (!timing || timing->chunkFrames.empty() || timing->sampleRate == 0)
+	{
+		_channel.reset();
+		return;
+	}
+	_channel = Channel {
+	    .type = state.type,
+	    .timing = std::move(timing),
+	    .loops = state.loops,
+	    .time = state.time,
+	    .ticks = state.ticks,
+	    .checked = state.checked,
+	    .current = state.current,
+	    .fadeTicks = state.fadeTicks,
+	};
+}
+
+std::optional<ScriptMusic::ChannelState> ScriptMusic::GetChannelState() const
+{
+	if (!_channel.has_value())
+	{
+		return std::nullopt;
+	}
+	return ChannelState {
+	    .type = _channel->type,
+	    .loops = _channel->loops,
+	    .time = _channel->time,
+	    .ticks = _channel->ticks,
+	    .checked = _channel->checked,
+	    .current = _channel->current,
+	    .fadeTicks = _channel->fadeTicks,
+	};
+}

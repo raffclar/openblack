@@ -255,6 +255,36 @@ TEST(ScriptMusicClock, APieceThatPlayedBeforeALoadGivesNoSoundAndNeverEnds)
 	EXPECT_EQ(music.GetPlace(), (MusicPiecePosition {.chunk = 1, .frame = 0}));
 }
 
+TEST(ScriptMusicClock, AChannelThatComesBackFromALoadGivesTheSameCuesAndEnd)
+{
+	// A piece that plays without a stop, and the same piece saved and loaded at 500 ms
+	ScriptMusic whole;
+	const auto timing = Always(MakeTiming(k_Cues));
+	whole.Start(k_Verse);
+	TurnsUntil(whole, timing, 500ms);
+	ASSERT_TRUE(whole.GetChannelState().has_value());
+	ScriptMusic loaded;
+	loaded.Restore(whole.GetType(), whole.IsStarted(), whole.GetLyrics());
+	loaded.RestoreChannel(*whole.GetChannelState(), timing);
+	for (int i = 0; i < 12; ++i)
+	{
+		whole.Turn(100ms, timing);
+		loaded.Turn(100ms, timing);
+		EXPECT_EQ(loaded.SyncedValues(), whole.SyncedValues());
+	}
+	EXPECT_EQ(loaded.GetLyrics().line, whole.GetLyrics().line);
+	EXPECT_TRUE(loaded.IsOver(k_Verse));
+}
+
+TEST(ScriptMusicClock, AChannelWhoseBankCannotPlayDoesNotComeBack)
+{
+	ScriptMusic music;
+	music.Restore(k_Verse, true, {.line = 1, .word = 1});
+	music.RestoreChannel({.type = k_Verse, .time = 500ms, .ticks = 4}, [](MusicType) { return nullptr; });
+	EXPECT_FALSE(music.GetChannelState().has_value());
+	EXPECT_FALSE(music.IsOver(k_Verse));
+}
+
 TEST(ScriptMusicClock, ThePlaceInTheChunksCountsTheRealChunkLengths)
 {
 	const std::vector<uint32_t> chunks {100, 50};
