@@ -104,6 +104,8 @@ struct ClassInputs
 	bool partOfStoragePit {false};
 	/// A script holds it where it is: it never becomes a physics object, and a model's body never moves
 	bool immovable {false};
+	/// A scaffold that stands in its place of a workshop's yard: it never becomes a physics object
+	bool scaffoldInYard {false};
 };
 
 /// The kind of an object, from its components and its table row

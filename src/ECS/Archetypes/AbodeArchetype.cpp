@@ -31,6 +31,7 @@
 #include "ECS/Components/StoragePit.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Creches.h"
 #include "ECS/DrinkingWater.h"
 #include "ECS/Graveyards.h"
@@ -171,6 +172,10 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
 	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
+	if (info.abodeType == AbodeType::Workshop)
+	{
+		registry.Assign<Workshop>(entity);
+	}
 	// Under construction until all of it is built: it doesn't work until then
 	if (built < 1.0f)
 	{

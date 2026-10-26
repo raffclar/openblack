@@ -281,11 +281,11 @@ struct CreatureSetup
 
 /// Something put on the land for the creatures: an object, a tree, a feature such as a pillar of rock, a villager, a pot
 /// or pile of food or wood, a building or field of the scenario's town, which is made with the first of them, or an
-/// animal, or a fish farm (which joins the nearest town)
+/// animal, a fish farm (which joins the nearest town), or a scaffold of no workshop and no town
 struct ObjectSetup
 {
 	std::variant<MobileObjectInfo, TreeInfo, FeatureInfo, VillagerInfo, PotInfo, AbodeInfo, FieldTypeInfo, AnimalInfo,
-	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo>
+	             MobileStaticInfo, AnimatedStaticInfo, FishFarmInfo, FlowersInfo, ScaffoldInfo>
 	    type;
 	glm::vec2 offset {0.0f};
 	float scale {1.0f};

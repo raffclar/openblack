@@ -48,6 +48,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/SpellIcon.h"
@@ -273,6 +274,11 @@ const GObjectInfo* world_objects::InfoOf(entt::entity object)
 	if (registry.AllOf<Ball>(object))
 	{
 		return &info.ball;
+	}
+	// A scaffold has the one row of the scaffolds
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return &info.scaffold;
 	}
 	return nullptr;
 }

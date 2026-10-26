@@ -54,6 +54,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -72,6 +73,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownDesireSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TemporaryStoreRules.h"
@@ -961,6 +963,11 @@ void TownSystem::ProcessTownBuildings(entt::entity townEntity)
 		if (const auto* data = registry.TryGet<const Abode>(abode); data == nullptr || data->type == AbodeNumber::FootballPitch)
 		{
 			continue;
+		}
+		// A workshop makes its scaffolds before it ages as any other building does
+		if (registry.AllOf<Workshop>(abode) && Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().ProcessWorkshop(abode);
 		}
 		NeglectAbode(townEntity, abode);
 		// The loss of life can remove the building

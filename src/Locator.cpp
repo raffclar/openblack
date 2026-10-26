@@ -111,6 +111,7 @@
 #include "ECS/Systems/Implementations/ScriptHighlightSystem.h"
 #include "ECS/Systems/Implementations/SyncChecksumSystem.h"
 #include "ECS/Systems/Implementations/TipBubbleSystem.h"
+#include "ECS/Systems/Implementations/WorkshopSystem.h"
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
@@ -323,6 +324,7 @@ using openblack::ecs::systems::VortexSystem;
 using openblack::ecs::systems::WalkPathSystem;
 using openblack::ecs::systems::WaterRingSystem;
 using openblack::ecs::systems::WeatherSystem;
+using openblack::ecs::systems::WorkshopSystem;
 using openblack::ecs::systems::WorshipSiteSystem;
 using openblack::graphics::RendererInterface;
 using openblack::input::GameActionMap;
@@ -556,6 +558,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::gameEndSystem::emplace<GameEndSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
+	Locator::workshopSystem::emplace<WorkshopSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
 	Locator::snowSystem::emplace<SnowSystem>();
 	Locator::snowfallSystem::emplace<SnowfallSystem>();
@@ -856,6 +859,7 @@ void openblack::ShutDownServices()
 	Locator::snowSystem::reset();
 	Locator::fieldSystem::reset();
 	Locator::fishFarmSystem::reset();
+	Locator::workshopSystem::reset();
 	Locator::animalSystem::reset();
 	Locator::soundTagSystem::reset();
 	Locator::villageTotemSystem::reset();

@@ -10486,6 +10486,50 @@ void AddStoreScenarios(std::vector<Scenario>& all)
 	});
 }
 
+void AddWorkshopScenarios(std::vector<Scenario>& all)
+{
+	constexpr glm::vec2 k_Workshop {-30.0f, 30.0f};
+	all.push_back({
+	    .id = "objects.workshop_makes_scaffolds",
+	    .name = "A workshop makes scaffolds from its wood",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 10000 wood, the wood of "
+	                   "four scaffolds.",
+	    .expected = "The workshop uses the wood of one scaffold and its work sound starts. When the time to make a "
+	                "scaffold is over, a small scaffold appears in the first free place of the yard, a horn sounds and "
+	                "the work sound stops. The workshop makes scaffolds until it has three in its yard. The hand can "
+	                "take a scaffold from the yard, and the workshop then makes one more.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .storedWood = 10000}},
+	});
+
+	// The first place of the Celtic workshop's yard is 7.8 m in front of the workshop
+	constexpr glm::vec2 k_FirstPlace = k_Workshop + glm::vec2 {0.0f, 7.8f};
+	all.push_back({
+	    .id = "objects.scaffold_snaps_into_yard",
+	    .name = "A scaffold put down near a workshop's yard goes into its place",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop with no wood, and a loose "
+	                   "scaffold that no workshop counts. After one second the scaffold is lifted and let go one metre "
+	                   "from the first place of the yard, as the hand puts one down.",
+	    .expected = "The scaffold comes to rest and moves into the first place of the yard, turned as the place is "
+	                "turned. No puff shows. The workshop now counts the scaffold as its own (the inspector shows it), "
+	                "and the physics does not move the scaffold while it stands there.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .storedWood = 0},
+	                {.type = ScaffoldInfo::Normal, .offset = k_Workshop + glm::vec2 {10.0f, 10.0f}, .scale = 0.7f}},
+	    .throws = {{.object = 2,
+	                .from = k_FirstPlace + glm::vec2 {0.7f, 0.7f},
+	                .height = 1.0f,
+	                .velocity = {0.0f, -1.0f, 0.0f},
+	                .delaySeconds = 1.0f}},
+	});
+}
+
 std::vector<Scenario> Build()
 {
 	std::vector<Scenario> all;
@@ -10558,6 +10602,7 @@ std::vector<Scenario> Build()
 	AddVillagerSizeAndReachScenarios(all);
 	AddSwayAndFrightScenarios(all);
 	AddStoreScenarios(all);
+	AddWorkshopScenarios(all);
 	AddGodsRingMapScenarios(all);
 	return all;
 }

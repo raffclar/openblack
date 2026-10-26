@@ -36,6 +36,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/StreetLantern.h"
 #include "ECS/Components/TeleportStone.h"
@@ -188,6 +189,11 @@ GrabKind HandGrabSystem::KindOf(entt::entity object) const
 	if (registry.AnyOf<StreetLantern, TeleportStone>(object))
 	{
 		return GrabKind::None;
+	}
+	// The hand holds a scaffold as any loose thing
+	if (registry.AllOf<Scaffold>(object))
+	{
+		return GrabKind::MobileObject;
 	}
 	if (const auto* pot = registry.TryGet<const Pot>(object))
 	{
@@ -1265,6 +1271,10 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 	if (registry.AllOf<OneOffSpellSeed>(object))
 	{
 		_world->GlobeIntoHand(object, player);
+	}
+	if (registry.AllOf<Scaffold>(object))
+	{
+		_world->ScaffoldIntoHand(object, player);
 	}
 	if (registry.AllOf<Pot>(object))
 	{

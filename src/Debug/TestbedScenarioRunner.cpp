@@ -230,6 +230,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
@@ -1521,6 +1522,12 @@ void Runner::PlaceObjects(const Scenario& scenario, glm::vec2 middle)
 			    else if constexpr (std::is_same_v<T, FlowersInfo>)
 			    {
 				    return ecs::archetypes::FlowersArchetype::Create(position, type, yaw, object.scale);
+			    }
+			    else if constexpr (std::is_same_v<T, ScaffoldInfo>)
+			    {
+				    return Locator::workshopSystem::has_value() ? Locator::workshopSystem::value().CreateScaffold(
+				                                                      position, entt::null, entt::null, yaw, object.scale)
+				                                                : entt::null;
 			    }
 			    else
 			    {

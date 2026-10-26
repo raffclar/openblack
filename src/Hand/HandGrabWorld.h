@@ -208,6 +208,8 @@ public:
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
 	/// A one-shot miracle's globe goes into the hand: the player has now had its miracle within reach
 	virtual void GlobeIntoHand(entt::entity /*globe*/, PlayerNames /*player*/) {}
+	/// A scaffold goes into the hand: its workshop keeps its place in the yard free for it
+	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full

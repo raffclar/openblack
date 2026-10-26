@@ -13,6 +13,7 @@
 #include <span>
 #include <string_view>
 
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptAnimation.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -45,6 +46,14 @@ void RegisterFields_Components_s(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& context)
 {
+	Reflect<components::Scaffold>(context)
+	    .Field<&components::Scaffold::town>("town")
+	    .Field<&components::Scaffold::workshop>("workshop")
+	    .Field<&components::Scaffold::place>("place")
+	    .Field<&components::Scaffold::putDownTurn>("putDownTurn")
+	    .Field<&components::Scaffold::scriptBuilding>("scriptBuilding")
+	    .Field<&components::Scaffold::gentle>("gentle")
+	    .Field<&components::Scaffold::handPlayer>("handPlayer");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
 	    .Field<&components::ScriptAnimation::playsLeft>("playsLeft");

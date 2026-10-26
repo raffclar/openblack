@@ -122,6 +122,7 @@ class HeartbeatSystemInterface;
 class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
+class WorkshopSystemInterface;
 class AnimalSystemInterface;
 class SnowSystemInterface;
 class SnowfallSystemInterface;
@@ -320,6 +321,7 @@ struct Locator
 	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
+	using workshopSystem = entt::locator<ecs::systems::WorkshopSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
 	using snowSystem = entt::locator<ecs::systems::SnowSystemInterface>;
 	using snowfallSystem = entt::locator<ecs::systems::SnowfallSystemInterface>;

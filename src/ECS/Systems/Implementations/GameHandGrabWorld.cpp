@@ -109,6 +109,7 @@
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -595,6 +596,14 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	const auto type =
 	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(*info, component->seedType), component->powerUp);
 	player_miracles::MarkMagicTypeEverEnabled(data->miracles, type);
+}
+
+void GameHandGrabWorld::ScaffoldIntoHand(entt::entity scaffold, PlayerNames player)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().TakenByHand(scaffold, player);
+	}
 }
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)

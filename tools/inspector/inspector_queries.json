@@ -1347,6 +1347,12 @@
   "query": "living.fish_farms"
  },
  {
+  "description": "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+  "kind": "list",
+  "parameters": [],
+  "query": "living.workshops"
+ },
+ {
   "description": "The scenery the scripts open and close (gates, the gate stone plinth, the piper's cave, the phone box): its open word, place in its clip and resting place, whether it is in the land's draw list and was on screen, its gate stones' value and the circles a creature's route goes round",
   "kind": "list",
   "parameters": [],

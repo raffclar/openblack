@@ -105,6 +105,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
@@ -227,6 +228,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "EditProviders.h"
 #include "Editor/EditorSelection.h"
 #include "EngineConfig.h"
@@ -391,6 +393,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"forestSystem", "living.forests"},
     LocatorCoverage {"fireflySystem", "living.fireflies"},
     LocatorCoverage {"fishFarmSystem", "living.fish_farms"},
+    LocatorCoverage {"workshopSystem", "living.workshops"},
     LocatorCoverage {"animatedStaticSystem", "living.animated_statics"},
     LocatorCoverage {"objectDrawListSystem", "view.draw_list"},
     LocatorCoverage {"appleBarrelSystem", "living.apple_barrel"},
@@ -1544,6 +1547,38 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			                  item["fish_left"] = farms.FishLeft(entity);
 			                  item["fishermen"] = farm.fishermen.size();
 			                  item["shoal"] = farm.shoal.has_value() ? Point(farm.shoal->centre) : Json(nullptr);
+			                  items.push_back(std::move(item));
+		                  });
+		                  return items;
+	                  }));
+	provider->Add(Query("workshops",
+	                    "The workshops: their room for scaffolds, the turns left on a scaffold, and the scaffolds they count",
+	                    {}, ResultKind::List),
+	              Serve<Locator::workshopSystem>(
+	                  "the workshops", [](const ecs::systems::WorkshopSystemInterface& workshops, const QueryContext& /*c*/) {
+		                  Json items = Json::array();
+		                  const auto* registry = Registry();
+		                  if (registry == nullptr)
+		                  {
+			                  return items;
+		                  }
+		                  registry->Each<const Workshop>([&](entt::entity entity, const Workshop& workshop) {
+			                  auto item = Listed(*registry, entity);
+			                  item["room"] = workshops.RoomOf(entity);
+			                  item["making_turns"] = workshop.makingTurns;
+			                  item["counted"] = workshop.counted;
+			                  Json places = Json::array();
+			                  for (const auto place : workshop.places)
+			                  {
+				                  places.push_back(static_cast<int>(place));
+			                  }
+			                  item["places"] = std::move(places);
+			                  Json scaffolds = Json::array();
+			                  for (const auto scaffold : workshop.scaffolds)
+			                  {
+				                  scaffolds.push_back(ToId(scaffold));
+			                  }
+			                  item["scaffolds"] = std::move(scaffolds);
 			                  items.push_back(std::move(item));
 		                  });
 		                  return items;
