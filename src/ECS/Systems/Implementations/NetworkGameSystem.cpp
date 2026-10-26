@@ -152,6 +152,15 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 	}
 
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Joining the game server at {}", join.url);
+	auto readCreature = _readCreature;
+	if (join.testCreatureFile.has_value())
+	{
+		// A test sends the creature file that it names, in place of the creature of the player's profile
+		readCreature = [path = *join.testCreatureFile]() {
+			auto& fileSystem = Locator::filesystem::value();
+			return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+		};
+	}
 	_session->Join(online::NetworkSessionSettings {
 	    .request = {.url = join.url, .headers = {}, .subprotocols = {}},
 	    .ticket = std::move(join.ticket),
@@ -168,7 +177,7 @@ bool NetworkGameSystem::Join(NetworkJoin join)
 		    }
 		    return fileSystem.ReadAll(*path);
 	    },
-	    .readCreature = _readCreature,
+	    .readCreature = std::move(readCreature),
 	});
 	return true;
 }

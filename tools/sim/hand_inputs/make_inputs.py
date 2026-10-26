@@ -189,10 +189,9 @@ def two_gods_totem():
     script.wait(20)
     script.press()
     script.wait(10)
-    # Down the screen: the share stays 0. A slide up (the pointer above the hand, which the game puts the pointer back on
-    # each frame) gives a share above 0, but then the frames make the totem's ghost as entities of the world, which the
-    # server does not make (tracker row)
-    script.move((640, 700), 40)
+    # Up the screen (the pointer above the hand, which the game puts the pointer back on each frame): a share above 0.
+    # The frames show the totem's see-through second totem, which the turn made with the totem on every computer.
+    script.move((640, 300), 40)
     script.wait(10)
     script.release()
     script.wait(30)

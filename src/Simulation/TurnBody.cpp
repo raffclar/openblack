@@ -553,7 +553,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::alignmentSystem::value().UpdatePlayersTurn(cameraPosition);
 		break;
 	case Step::VillageTotems:
-		// A town totem that arrives at its share rings the village bell
+		// A town totem goes with its town centre, and a totem that arrives at its share rings the village bell
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:
