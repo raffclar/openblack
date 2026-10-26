@@ -97,8 +97,8 @@ struct ServerSettings
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock
 	bool fast {false};
-	/// The folder of the server's own profile. It is never a folder of a player. With none, the server plays as the
-	/// profile of a tool's run, in the Profiles folder of its working folder.
+	/// A folder for the server's profile. The server does not use it: it plays as a profile in memory and writes no
+	/// profile, no saved game and no player data. The server only says in its log that it did not use the folder.
 	std::optional<std::filesystem::path> profileFolder;
 	/// Tools: the server writes the run record of each turn to this file, as the game's --sim-record does, with the hash
 	/// of each component. It starts the inspector on a free port of 127.0.0.1.
