@@ -43,7 +43,7 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The game's time now, as the recordings count it
+/// The game's time now, as the recordings count it: the time into the turn, which the frames play by
 uint32_t GameTime()
 {
 	if (!Locator::time::has_value())
@@ -52,6 +52,12 @@ uint32_t GameTime()
 	}
 	const auto& time = Locator::time::value();
 	return hand_demo::GameHundredths(time.GetTurn(), time.GetTurnFraction());
+}
+
+/// The time of the turn, as the recordings count it: the turns and the scripts see only this
+uint32_t TurnTime()
+{
+	return Locator::time::has_value() ? hand_demo::GameHundredths(Locator::time::value().GetTurn(), 0.0f) : 0;
 }
 
 /// A demonstration's file, read once
@@ -248,8 +254,10 @@ void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrig
 			});
 			actions.SetPlayerMouseBlocked(true);
 		}
+		// The demonstration starts at the time of the turn, and the frames play on from there
 		std::vector<hand_demo::Played> played;
-		_playback = std::make_unique<hand_demo::Playback>(_file->records, GameTime(), played);
+		_playback = std::make_unique<hand_demo::SplitPlayback>(_file->records, TurnTime(), pauseOnTrigger, played);
+		_replaying = true;
 		Apply(played);
 	}
 	// The script's start clears the mark, the first record's too
@@ -262,24 +270,60 @@ bool HandDemoSystem::IsPlaying(uint32_t task) const
 	return _playback != nullptr && (task == 0 || task == _task);
 }
 
+bool HandDemoSystem::IsReplaying() const
+{
+	return _playback != nullptr && _replaying;
+}
+
 bool HandDemoSystem::TakeTrigger()
 {
-	return std::exchange(_triggerReached, false);
+	const bool reached = std::exchange(_triggerReached, false);
+	if (reached && _playback)
+	{
+		_playback->MarkRead();
+	}
+	return reached;
+}
+
+void HandDemoSystem::ProcessTurn()
+{
+	// The scripts see the demonstration play by the time of the turns alone. It ends when the turns have played its last
+	// record, also for the frames.
+	if (_playback && !_playback->AdvanceTurn(TurnTime(), _triggerReached))
+	{
+		Stop();
+	}
 }
 
 void HandDemoSystem::Update()
 {
-	if (!_playback)
+	if (!_playback || !_replaying)
 	{
 		return;
 	}
 	NormalSpeed();
 	std::vector<hand_demo::Played> played;
-	const bool goesOn = _playback->Advance(GameTime(), _pauseOnTrigger, _triggerReached, played);
+	const bool goesOn = _playback->AdvanceFrame(GameTime(), played);
 	Apply(played);
 	if (!goesOn)
 	{
-		Stop();
+		EndReplay();
+	}
+}
+
+void HandDemoSystem::EndReplay()
+{
+	// The player's mouse has the hand again, and the hand shows the camera's own hints
+	_replaying = false;
+	_camera.reset();
+	_hints = 0;
+	_hintAngle = 0.0f;
+	_held = {};
+	if (Locator::gameActionSystem::has_value())
+	{
+		auto& actions = Locator::gameActionSystem::value();
+		actions.SetScriptedPointer(std::nullopt);
+		actions.SetPlayerMouseBlocked(false);
 	}
 }
 
@@ -353,21 +397,15 @@ void HandDemoSystem::Stop()
 	{
 		return;
 	}
+	if (_replaying)
+	{
+		EndReplay();
+	}
 	_playback.reset();
 	_file.reset();
-	_camera.reset();
-	_hints = 0;
-	_hintAngle = 0.0f;
-	_held = {};
 	_pauseOnTrigger = false;
 	_task = 0;
-	// The player's mouse has the hand again; in a script's cut scene the interface is put away again
-	if (Locator::gameActionSystem::has_value())
-	{
-		auto& actions = Locator::gameActionSystem::value();
-		actions.SetScriptedPointer(std::nullopt);
-		actions.SetPlayerMouseBlocked(false);
-	}
+	// In a script's cut scene the interface is put away again
 	if (Locator::cinematicDirectorSystem::has_value())
 	{
 		auto& director = Locator::cinematicDirectorSystem::value();
@@ -407,10 +445,13 @@ std::optional<HandDemoSystemInterface::Status> HandDemoSystem::GetStatus() const
 	return Status {
 	    .name = _name,
 	    .task = _task,
-	    .record = _playback->Next(),
+	    .record = _playback->TurnNext(),
 	    .records = _file->records.size(),
 	    .pauseOnTrigger = _pauseOnTrigger,
 	    .triggerReached = _triggerReached,
 	    .holding = _pauseOnTrigger && _triggerReached,
+	    .replaying = _replaying,
+	    .replayRecord = _playback->FrameNext(),
+	    .replayHolding = _playback->FrameHeld(),
 	};
 }

@@ -15,7 +15,6 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/MapCoords.h"
-#include "Camera/Camera.h"
 #include "Camera/CameraLens.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Transform.h"
@@ -24,7 +23,6 @@
 #include "Graphics/MeshDetail.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
-#include "Windowing/WindowingInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -46,17 +44,14 @@ screen_pick::View ecs::thing_on_screen::ViewOf(const ViewInputs& inputs)
 
 std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView(PlayerNames player)
 {
-	if (!Locator::camera::has_value() || !Locator::windowing::has_value() || !Locator::handSystem::has_value())
+	if (!Locator::handSystem::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto size = Locator::windowing::value().GetSize();
-	if (size.x <= 0 || size.y <= 0)
-	{
-		return std::nullopt;
-	}
+	// The window of the player who reported the view, on every computer and on the game server. A player with no window
+	// sees nothing on the screen.
 	const auto reported = Locator::handSystem::value().GetReportedView(player);
-	if (!reported.has_value())
+	if (!reported.has_value() || reported->screen.x <= 0 || reported->screen.y <= 0)
 	{
 		return std::nullopt;
 	}
@@ -65,8 +60,8 @@ std::optional<screen_pick::View> ecs::thing_on_screen::ScreenView(PlayerNames pl
 	    .focus = reported->focus,
 	    .lens = reported->lens,
 	    .nearClip = reported->nearClip,
-	    .aspect = Locator::camera::value().GetAspect(),
-	    .resolution = glm::vec2(size),
+	    .aspect = reported->aspect,
+	    .resolution = glm::vec2(reported->screen),
 	});
 }
 

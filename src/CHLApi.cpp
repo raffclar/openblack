@@ -7566,9 +7566,13 @@ void CreatureInDevScript() // 282 CREATURE_IN_DEV_SCRIPT
 
 void StoreCameraDetails() // 283 STORE_CAMERA_DETAILS
 {
-	// The script keeps where the camera is and where it looks, whatever has the camera
-	const auto& camera = Locator::camera::value();
-	Locator::scriptControlSystem::value().StoreCameraDetails({.origin = camera.GetOrigin(), .focus = camera.GetFocus()});
+	// The script keeps where the camera is and where it looks as the frame draws it, whatever has the camera. It reads
+	// the camera from the last view report, as the other camera reads of the scripts do.
+	const auto view = ScriptView();
+	Locator::scriptControlSystem::value().StoreCameraDetails({
+	    .origin = view.has_value() ? view->eye : glm::vec3(0.0f),
+	    .focus = view.has_value() ? view->focus : glm::vec3(0.0f),
+	});
 }
 
 void RestoreCameraDetails() // 284 RESTORE_CAMERA_DETAILS

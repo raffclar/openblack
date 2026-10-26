@@ -42,7 +42,7 @@ struct ViewInputs
 [[nodiscard]] screen_pick::View ViewOf(const ViewInputs& inputs);
 
 /// The view things are looked for in: the view of the player as its last view report tells it (the turns read only
-/// this), with the window's size of this computer. None before the first view report or without a window.
+/// this), with the window of that player. None before the first view report or when the player has no window.
 [[nodiscard]] std::optional<screen_pick::View> ScreenView(PlayerNames player);
 
 /// Whether a thing shows on the screen: a thing with a model by its model's bounding sphere, anything else by the point

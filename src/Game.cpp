@@ -17,6 +17,7 @@
 #include <array>
 #include <chrono>
 #include <filesystem>
+#include <limits>
 #include <memory>
 #include <optional>
 #include <span>
@@ -2998,15 +2999,22 @@ void Game::ReportHand()
 
 void Game::ReportView()
 {
-	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, its arrival, the
-	// distance from the fence of the camera zones, and the grip of the hand on the land
+	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, the window it draws
+	// into, its arrival, the distance from the fence of the camera zones, and the grip of the hand on the land
 	auto& camera = Locator::camera::value();
 	const auto pose = camera.DrawnPose(Camera::Interpolation::Current);
+	const auto window = Locator::windowing::has_value() ? Locator::windowing::value().GetSize() : glm::ivec2(0);
+	const auto pixels = [](int size) {
+		return static_cast<uint16_t>(std::clamp(size, 0, static_cast<int>(std::numeric_limits<uint16_t>::max())));
+	};
 	player_commands::ViewReport report {
 	    .eye = pose.eye,
 	    .focus = pose.focus,
 	    .lens = camera.GetLens(),
 	    .nearClip = camera.GetNearClip(),
+	    .screenWidth = pixels(window.x),
+	    .screenHeight = pixels(window.y),
+	    .aspect = camera.GetAspect(),
 	    .inclusionDistance =
 	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
 	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
@@ -6448,7 +6456,7 @@ void Game::UpdateHandNavigation(const ecs::components::Transform& handTransform)
 	using namespace hand_navigation_pose;
 	auto cues = Locator::camera::value().GetModel().GetHandCues();
 	// A hand demonstration shows the camera hints its recording had
-	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0))
+	if (Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying())
 	{
 		cues.tricons = Locator::handDemoSystem::value().GetHints();
 	}
@@ -6484,7 +6492,7 @@ void Game::UpdateHandTricons(bool handDrawn, float seconds, hand_blend::HandMode
 	// Shown from the world camera, or from a tutorial demonstration's recording in any camera, out of the temple
 	const auto& camera = Locator::camera::value();
 	const auto cues = camera.GetModel().GetHandCues();
-	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsPlaying(0);
+	const bool demonstration = Locator::handDemoSystem::has_value() && Locator::handDemoSystem::value().IsReplaying();
 	if (!handDrawn || (!demonstration && !cues.icons.has_value()) || !Locator::windowing::has_value() ||
 	    (Locator::temple::has_value() && Locator::temple::value().Active()))
 	{

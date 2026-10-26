@@ -2013,7 +2013,7 @@
   "query": "help.bubble"
  },
  {
-  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record it is at, whether it holds at a mark, and the camera and hints it has",
+  "description": "The tutorial's hand demonstration playing: its name, the script task that started it, the record the turns are at, whether it holds at a mark, the record the frames are at, and the camera and hints it has",
   "kind": "object",
   "parameters": [],
   "query": "help.hand_demo"

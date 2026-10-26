@@ -180,6 +180,14 @@ TEST(GameTurnOrder, TheScriptsSeeTheWorldAfterTheMiraclesParticlesAndPhysics)
 	EXPECT_TRUE(recorder.Before(Step::Scripts, Step::ScriptFade));
 }
 
+TEST(GameTurnOrder, TheScriptsSeeTheHandDemonstrationAtTheTimeOfTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::Clock, Step::HandDemo));
+	EXPECT_TRUE(recorder.Before(Step::HandDemo, Step::Scripts));
+	EXPECT_TRUE(recorder.Before(Step::IntroLift, Step::Scripts));
+}
+
 TEST(GameTurnOrder, TheHelpComesAfterTheScriptsAndBeforeTheTimeOfDay)
 {
 	const auto recorder = PlayOneTurn();

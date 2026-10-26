@@ -183,6 +183,10 @@ enum class Step : uint8_t
 	Fireflies,
 	Physics,
 	Vortices,
+	/// The tutorial's hand demonstration plays on for the scripts by the time of the turn
+	HandDemo,
+	/// The opening's light and the clip of the hand that lifts the boy move on for the scripts by the time of the turn
+	IntroLift,
 	/// The scripts' clock of their spoken lines and texts, and the player's clicks on the dialogue
 	ScriptVoices,
 	Scripts,
@@ -306,6 +310,11 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::Fireflies, .stage = Stage::Fireflies},
     {.step = Step::Physics, .stage = Stage::Physics},
     {.step = Step::Vortices, .stage = Stage::ParticleEnd},
+    // The scripts see the hand demonstration play by the time of the turn alone. The game plays it in its frames, so
+    // the step has no stage of the game's turn.
+    {.step = Step::HandDemo, .stage = std::nullopt},
+    // The same for the light of the opening and the hand that lifts the boy, which the game also moves in its frames
+    {.step = Step::IntroLift, .stage = std::nullopt},
     // The scripts' clock moves on, and the dialogue takes the player's clicks, just before the scripts look at the world
     {.step = Step::ScriptVoices, .stage = Stage::Scripts},
     {.step = Step::Scripts, .stage = Stage::Scripts},
