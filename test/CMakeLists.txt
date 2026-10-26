@@ -1791,3 +1791,4 @@ openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
 add_test(NAME test_row_dump_compare
          COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
 )
+openblack_setup_and_add_test(test_join_online_entry test_join_online_entry.cpp)
