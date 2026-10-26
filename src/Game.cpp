@@ -808,6 +808,11 @@ Game::~Game() noexcept
 		Locator::landSystem::value().SetView(nullptr);
 	}
 	ShutDownServices();
+	// A later caller of Instance must not get this game once it is gone
+	if (sInstance == this)
+	{
+		sInstance = nullptr;
+	}
 	SDL_Quit(); // todo: move to GameWindow
 	spdlog::shutdown();
 }

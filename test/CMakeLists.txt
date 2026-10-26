@@ -6,6 +6,27 @@ include(CTest)
 add_executable(openblack_tests test_runner_main.cpp)
 target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
 set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
+
+# The test program resets each service of the locator after each test suite. A suite then never sees what an earlier
+# suite left. The list comes from the declarations in the locator, so a new service is in it with no change here.
+file(STRINGS ${CMAKE_SOURCE_DIR}/src/Locator.h openblack_locator_lines
+     REGEX "^[^u]*using [A-Za-z0-9_]+ = entt::locator<"
+)
+set(openblack_locator_resets "")
+foreach (line IN LISTS openblack_locator_lines)
+  string(REGEX REPLACE "^[^u]*using ([A-Za-z0-9_]+) = .*$" "\\1" service "${line}")
+  string(APPEND openblack_locator_resets "Locator::${service}::reset();\n")
+endforeach ()
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/locator_resets.inc
+     "${openblack_locator_resets}"
+)
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                            ${CMAKE_SOURCE_DIR}/src/Locator.h
+)
+target_include_directories(
+  openblack_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+)
 # Its Debug link only references the objects' debug information, which is quicker (the game keeps full debug information)
 if (MSVC)
   target_link_options(
