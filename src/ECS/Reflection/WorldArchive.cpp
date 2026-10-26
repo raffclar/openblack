@@ -335,19 +335,19 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 		}
 		result.kept = true;
 		// Each row clears the writer, and its memory stays for the next row
-		out.Bytes().clear();
+		out.Clear();
 		out.WriteRaw(row);
 		const void* value = component.storage->value(row);
 		if (codec != nullptr)
 		{
 			if (keepsField(0, row))
 			{
-				const auto start = out.Bytes().size();
+				const auto start = out.Size();
 				codec->save(value, out);
-				mixField(0, std::span(out.Bytes()).subspan(start));
+				mixField(0, out.Written(start));
 				if (visit)
 				{
-					visit(component.name, row, k_WholeComponent, std::span(out.Bytes()).subspan(start));
+					visit(component.name, row, k_WholeComponent, out.Written(start));
 				}
 			}
 		}
@@ -360,7 +360,7 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 				{
 					continue;
 				}
-				const auto start = out.Bytes().size();
+				const auto start = out.Size();
 				if (field.info->saveFrom != nullptr)
 				{
 					field.info->saveFrom(value, out);
@@ -370,14 +370,14 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 					auto instance = component.type.from_void(value);
 					field.info->save(field.data.get(instance), out);
 				}
-				mixField(index, std::span(out.Bytes()).subspan(start));
+				mixField(index, out.Written(start));
 				if (visit)
 				{
-					visit(component.name, row, field.info->name, std::span(out.Bytes()).subspan(start));
+					visit(component.name, row, field.info->name, out.Written(start));
 				}
 			}
 		}
-		MixBytes(result.hash, out.Bytes());
+		MixBytes(result.hash, out.Written());
 	}
 	return result;
 }

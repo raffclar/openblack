@@ -79,6 +79,16 @@ struct UnsavedValue
 	auto operator<=>(const UnsavedValue&) const = default;
 };
 
+class BinaryWriter;
+
+/// How a writer writes a value of a registered type with no reflection on the way: the codec of the whole type, or the
+/// writer of each field in the order of the fields. A writer finds it the first time that it writes a value of the type.
+struct SavePlan
+{
+	void (*codec)(const void* value, BinaryWriter& out) {nullptr};
+	std::vector<void (*)(const void* owner, BinaryWriter& out)> fields;
+};
+
 class BinaryWriter
 {
 public:
@@ -88,26 +98,53 @@ public:
 	}
 
 	[[nodiscard]] const entt::meta_ctx& Context() const { return *_context; }
-	[[nodiscard]] std::vector<uint8_t>& Bytes() { return _bytes; }
-	[[nodiscard]] const std::vector<uint8_t>& Bytes() const { return _bytes; }
+	/// The bytes written. The writer keeps no room past them while the caller holds the list, and writes after the
+	/// end of the list as the caller left it.
+	[[nodiscard]] std::vector<uint8_t>& Bytes()
+	{
+		Settle();
+		return _bytes;
+	}
+	[[nodiscard]] const std::vector<uint8_t>& Bytes() const
+	{
+		Settle();
+		return _bytes;
+	}
+	/// The count of the bytes written
+	[[nodiscard]] size_t Size() const { return _open ? _size : _bytes.size(); }
+	/// The bytes written from a place to the end, with no change to the room that the writer keeps
+	[[nodiscard]] std::span<const uint8_t> Written(size_t from = 0) const
+	{
+		return std::span<const uint8_t>(_bytes.data(), Size()).subspan(from);
+	}
+	/// Removes all the bytes and keeps their memory as room for the next ones
+	void Clear()
+	{
+		_size = 0;
+		_open = true;
+	}
 
-	void Write(std::span<const uint8_t> bytes) { _bytes.insert(_bytes.end(), bytes.begin(), bytes.end()); }
+	void Write(std::span<const uint8_t> bytes)
+	{
+		if (!bytes.empty())
+		{
+			std::memcpy(Grow(bytes.size()), bytes.data(), bytes.size());
+		}
+	}
 
 	template <typename Type>
 	    requires std::is_trivially_copyable_v<Type>
 	void WriteRaw(const Type& value)
 	{
-		const auto at = _bytes.size();
-		_bytes.resize(at + sizeof(Type));
 		if constexpr (std::is_class_v<Type>)
 		{
 			// A value with fields has zero in its gaps, so that the same value always gives the same bytes
 			const auto image = PlainImage(value);
-			std::memcpy(_bytes.data() + at, image.bytes.data(), sizeof(Type));
+			std::memcpy(Grow(sizeof(Type)), image.bytes.data(), sizeof(Type));
 		}
 		else
 		{
-			std::memcpy(_bytes.data() + at, &value, sizeof(Type));
+			std::memcpy(Grow(sizeof(Type)), &value, sizeof(Type));
 		}
 	}
 
@@ -117,13 +154,13 @@ public:
 	/// Puts a length of 32 bits that a later call to EndLength fills. Returns where the length is.
 	[[nodiscard]] size_t BeginLength()
 	{
-		const auto at = _bytes.size();
+		const auto at = Size();
 		WriteRaw(uint32_t {0});
 		return at;
 	}
 	void EndLength(size_t at)
 	{
-		const auto length = static_cast<uint32_t>(_bytes.size() - at - sizeof(uint32_t));
+		const auto length = static_cast<uint32_t>(Size() - at - sizeof(uint32_t));
 		std::memcpy(_bytes.data() + at, &length, sizeof(length));
 	}
 
@@ -144,14 +181,78 @@ public:
 	}
 	[[nodiscard]] const std::set<UnsavedValue>& Unsaved() const { return _unsaved; }
 
+	/// The plan of a type by the hash of its type, none before the writer kept one
+	[[nodiscard]] const SavePlan* FindPlan(entt::id_type type) const
+	{
+		const auto found = _plans.find(type);
+		return found != _plans.end() ? &found->second : nullptr;
+	}
+	void KeepPlan(entt::id_type type, SavePlan plan) { _plans.insert_or_assign(type, std::move(plan)); }
+	/// Writes a value by the plan of its type. Returns false, with nothing written, when the writer has no plan of it.
+	bool SaveByPlan(entt::id_type type, const void* value)
+	{
+		const auto* plan = FindPlan(type);
+		if (plan == nullptr)
+		{
+			return false;
+		}
+		if (plan->codec != nullptr)
+		{
+			plan->codec(value, *this);
+			return true;
+		}
+		for (const auto saveFrom : plan->fields)
+		{
+			saveFrom(value, *this);
+		}
+		return true;
+	}
+
 private:
+	/// The most room that the writer adds past the bytes in one step, when the list has that much memory already. The
+	/// room is filled with zeros one time, not for each value.
+	static constexpr size_t k_MostRoom = 512;
+
+	/// The place for the next count of bytes, at the end of the bytes written
+	[[nodiscard]] uint8_t* Grow(size_t count)
+	{
+		if (!_open)
+		{
+			_size = _bytes.size();
+			_open = true;
+		}
+		const auto needed = _size + count;
+		if (_bytes.size() < needed)
+		{
+			_bytes.resize(std::max(needed, std::min(_bytes.capacity(), _size + k_MostRoom)));
+		}
+		auto* place = _bytes.data() + _size;
+		_size = needed;
+		return place;
+	}
+	/// Removes the room past the bytes written, so that the list holds only them
+	void Settle() const
+	{
+		if (_open)
+		{
+			_bytes.resize(_size);
+			_open = false;
+		}
+	}
+
 	const entt::meta_ctx* _context;
-	std::vector<uint8_t> _bytes;
+	/// The bytes written, and while the writer is open, room for more past them
+	mutable std::vector<uint8_t> _bytes;
+	/// While the writer is open: the count of the bytes written, which the list holds with room after them
+	mutable size_t _size {0};
+	mutable bool _open {false};
 	std::string_view _owner;
 	std::string_view _field;
 	std::set<UnsavedValue> _unsaved;
 	/// The places and types in the list, by their names that the caller keeps, so that each one costs little again
 	std::set<std::tuple<std::string_view, std::string_view, std::string_view>> _seen;
+	/// The plans of the registered types that this writer wrote, by the hashes of their types
+	std::unordered_map<entt::id_type, SavePlan> _plans;
 };
 
 class BinaryReader
@@ -263,6 +364,14 @@ void LoadBytes(Type& value, BinaryReader& in)
 namespace detail
 {
 
+/// A fixed list or a vector of the values of an enumeration
+template <typename>
+inline constexpr bool k_IsEnumList = false;
+template <typename Type, size_t Size>
+inline constexpr bool k_IsEnumList<std::array<Type, Size>> = std::is_enum_v<Type>;
+template <typename Type, typename Allocator>
+inline constexpr bool k_IsEnumList<std::vector<Type, Allocator>> = std::is_enum_v<Type>;
+
 template <typename Variant, size_t Index = 0>
 void LoadAlternative(BinaryReader& in, Variant& value, size_t index)
 {
@@ -364,6 +473,13 @@ void Save(BinaryWriter& out, const Type& value)
 		out.WriteSize(value.size());
 		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
 	}
+	else if constexpr (detail::k_IsEnumList<Type>)
+	{
+		// Each value of an enumeration goes as its bytes in memory, so the list is the same bytes in one block. A load
+		// reads each value again, so that an entity goes through the map of the entities.
+		out.WriteSize(value.size());
+		out.Write({reinterpret_cast<const uint8_t*>(value.data()), value.size() * sizeof(typename Type::value_type)});
+	}
 	else if constexpr (detail::k_IsStdArray<Type>)
 	{
 		out.WriteSize(value.size());
@@ -449,7 +565,11 @@ void Save(BinaryWriter& out, const Type& value)
 	}
 	else if constexpr (std::is_class_v<Type>)
 	{
-		SaveRegistered(out, entt::meta_any {out.Context(), std::in_place_type<const Type&>, value});
+		// The writer writes a type that it wrote before by its plan, with no reflection on the way
+		if (!out.SaveByPlan(entt::type_hash<Type>::value(), std::addressof(value)))
+		{
+			SaveRegistered(out, entt::meta_any {out.Context(), std::in_place_type<const Type&>, value});
+		}
 	}
 	else
 	{
