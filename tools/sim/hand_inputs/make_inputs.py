@@ -299,14 +299,16 @@ TWO_GODS_SLOT1_TREE_CAMERA = {"focus": [2928.87, 88.44, 2620.91], "yaw": 0, "pit
 
 
 def two_gods_slot1_tree_press():
-    """A conifer of the second god's town: a short press on it, let go after the pull started but before the conifer
-    comes free, so that it stays leaning (in single player)"""
+    """A conifer of the second god's town: a short press on it. The pull starts on the frame after the hand has faded
+    into its pull pose (0.13 s, 7 frames of 20 ms). The hand is then far from its grip on the trunk, thus the conifer comes
+    free on the first frame of the pull, and the hand takes it, also when the button comes up in that frame. The hand of
+    the first god cannot take it (out of that god's influence): the press is then a click and the conifer does not
+    lean."""
     script = Script()
     script.wait(10)
     script.move((640, 325), 10)
     script.wait(20)
-    # The pull starts after the hand has faded into its pull pose, and a conifer comes free a few frames later: a
-    # release 8 frames after the press lets go of it in between, leaning
+    # Let go 8 frames after the press: on the first frame of the pull
     script.press()
     script.wait(7)
     script.release()
@@ -352,10 +354,14 @@ def busy_hand(cycles):
 # degrees (net_check.py --cameraN), and from there the pixels of the store's piles that have food or wood in the first
 # turns: the food pile first, then the wood pile. Each pixel is the middle of the pixels at which the hand picks that pile
 # (the inspector's pick, in steps of 10 pixels, at turns 50 to 820 of a seed 1 game). A pixel from the pile's place on the
-# land can fall on the pit's wall, and an empty pile does not let the hand scoop.
+# land can fall on the pit's wall, and an empty pile does not let the hand scoop. A third list, when there is one, has the
+# pixels of things near the store that the hand of that god can take: the middle of the pixels at which the inspector's
+# pick says that the Action button takes the thing (steps of 10 pixels, turns 680 to 1160 of a seed 1 network game).
+# The pit, its piles and the town's desire flags are not things that the hand takes: with no third list the take of each
+# cycle picks one of these or the land, and takes nothing.
 ONLINE_MAP_STORES = {
-    "mpm_2p_1": [((2199.33, 2406.03), [(780, 480), (550, 420)]),
-                 ((2922.59, 2653.02), [(780, 480), (470, 400)])],
+    "mpm_2p_1": [((2199.33, 2406.03), [(780, 480), (550, 420)], [(1240, 190), (20, 630)]),
+                 ((2922.59, 2653.02), [(780, 480), (470, 400)], [(130, 60), (50, 60)])],
     "mpm_3p_1": [((2571.61, 2196.73), [(520, 520), (710, 620)]),
                  ((2217.39, 2671.21), [(750, 440), (460, 410)]),
                  ((2806.55, 2811.45), [(780, 480), (540, 400)])],
@@ -371,10 +377,11 @@ def store_camera(store):
     return {"focus": [store[0], store[1]], "yaw": 30, "pitch": 40, "distance": 35}
 
 
-def store_hand(piles, cycles):
+def store_hand(piles, cycles, takes=None):
     """A god's own store, from store_camera: in each cycle the hand scoops from a pile and throws the handful far, takes
     what is at a point near the store and throws it, taps a point and moves about. It does not drag the land, so the
-    camera stays at the store."""
+    camera stays at the store. With takes, the point of the take is one of those pixels, and the throw goes towards the
+    middle of the screen, so that the pointer stays on the screen."""
     points = [(640, 600), (560, 640), (720, 560), (600, 520), (700, 680), (520, 560), (760, 620), (640, 700)]
     script = Script()
     script.wait(10)
@@ -398,11 +405,20 @@ def store_hand(piles, cycles):
         script.release()
         script.wait(60)
         # Take what is at a point near the store and throw it
+        if takes:
+            take = takes[cycle % len(takes)]
         script.move(take, 30)
         script.press()
         script.wait(60)
-        script.move((take[0], take[1] - 80), 30)
-        script.move((take[0] - 120, take[1] - 200), 4)
+        if takes:
+            towards = (640 - take[0], 600 - take[1])
+            length = math.hypot(towards[0], towards[1])
+            step = (towards[0] / length, towards[1] / length)
+            script.move((round(take[0] + step[0] * 80), round(take[1] + step[1] * 80)), 30)
+            script.move((round(take[0] + step[0] * 280), round(take[1] + step[1] * 280)), 4)
+        else:
+            script.move((take[0], take[1] - 80), 30)
+            script.move((take[0] - 120, take[1] - 200), 4)
         script.release()
         script.wait(40)
         script.move(tap, 30)
@@ -445,13 +461,15 @@ def main():
           {"scoops": 1, "throws": 1})
     write("casts", casts())
     # The second god's conifer on TwoGods (net_check.py --input2 with --camera2 TWO_GODS_SLOT1_TREE_CAMERA)
-    write("twogods_slot1_tree_press", two_gods_slot1_tree_press())
+    write("twogods_slot1_tree_press", two_gods_slot1_tree_press(), TWO_GODS_SLOT1_TREE_CAMERA, {"takes": 1})
     # Any land, every god slot (net_check.py --input ... --input4 on the online maps)
     write("busy_hand", busy_hand(18))
     # Each god slot's own store on the online maps (net_check.py --inputN), from the camera of store_camera
     for land, stores in ONLINE_MAP_STORES.items():
-        for slot, (store, piles) in enumerate(stores):
-            write(f"{land}_slot{slot}_store", store_hand(piles, 30), store_camera(store), {"scoops": 1, "throws": 1})
+        for slot, (store, piles, *takes) in enumerate(stores):
+            take_pixels = takes[0] if takes else None
+            expect = {"scoops": 1, "throws": 1} | ({"takes": 1} if take_pixels else {})
+            write(f"{land}_slot{slot}_store", store_hand(piles, 30, take_pixels), store_camera(store), expect)
 
 
 if __name__ == "__main__":
