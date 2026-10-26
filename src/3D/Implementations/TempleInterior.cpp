@@ -473,11 +473,11 @@ void TempleInterior::ListSavedGames()
 
 temple::save_game_room::View TempleInterior::SaveGameRoomView() const
 {
-	// openblack has no network game: the player is never in one
+	// A network game never saves
 	return {.closeUp = _cameraModel != nullptr && _cameraModel->GetSubMeshZoom() == 1.0f,
 	        .pictureLookedAt = _saveGameRoom != nullptr && _saveGameRoom->IsPictureLookedAt(),
 	        .keptInRoom = _lock.GetRoom().has_value(),
-	        .multiplayer = false};
+	        .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame()};
 }
 
 void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t slot)
@@ -946,7 +946,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	        (inChallengeRoom && _challengeRoom->IsPictureLookedAt()) || (inSaveGameRoom && _saveGameRoom->IsPictureLookedAt()),
 	    .savedGames = savedGames,
 	    .savedGameHighDetail = inSaveGameRoom ? _saveGameRoom->GetHighDetailSlot() : std::nullopt,
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	std::u16string savedGameName;
 	UpdateTempleToolTip(_toolTip, input, &savedGameName);
