@@ -15,7 +15,10 @@
 #include <array>
 
 #include <entt/entity/entity.hpp>
+#include <glm/mat4x4.hpp>
+#include <glm/vec3.hpp>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Workshop.h"
 
 namespace openblack::ecs
@@ -34,6 +37,22 @@ inline constexpr std::array<size_t, 3> k_PlacePoints {6, 7, 8};
 inline constexpr size_t k_WoodPilePoint = 4;
 /// A scaffold that comes to rest nearer than this to a place of the yard goes into the yard, in metres
 inline constexpr float k_SnapReach = 2.0f;
+
+/// The place on the land of a special point of a building's model, and how the point is turned there
+struct SpecialPlace
+{
+	/// The x and z of the point, at no altitude: the point stands on the land
+	map_coords::MapCoords coords;
+	/// The angles about x, y and z
+	glm::vec3 angles {0.0f};
+};
+
+/// The matrix of a building: the game's turn of its angles with its scale in it, and its place
+[[nodiscard]] glm::mat4 BuildingMatrix(const glm::vec3& angles, bool canLean, float scale, const glm::vec3& position);
+
+/// The place on the land of a special point of a building's model. The point's matrix moves through the building's
+/// matrix. The angles come from the moved matrix, as the game finds the angles of a matrix.
+[[nodiscard]] SpecialPlace SpecialPlaceOf(const glm::mat4& point, const glm::mat4& building);
 
 /// The scale of a scaffold that is worth a number of scaffolds
 [[nodiscard]] float ScaleOfValue(uint32_t value);

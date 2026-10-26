@@ -1820,3 +1820,11 @@ openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
 openblack_setup_and_add_test(test_start_alignment test_start_alignment.cpp)
 openblack_setup_and_add_test(test_workshop_rules test_workshop_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_yard oracle/test_oracle_workshop_yard.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_yard
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

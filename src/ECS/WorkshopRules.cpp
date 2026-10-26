@@ -12,6 +12,8 @@
 #include <algorithm>
 
 #include "3D/MapCoords.h"
+#include "Common/X87Angle.h"
+#include "Common/X87Matrix.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Registry.h"
 
@@ -28,6 +30,22 @@ constexpr float k_ValueScaleOffset = 0.5f;
 constexpr float k_ValuePerScale = 5.0f;
 constexpr float k_ValueRounding = 0.5f;
 } // namespace
+
+glm::mat4 workshop::BuildingMatrix(const glm::vec3& angles, bool canLean, float scale, const glm::vec3& position)
+{
+	glm::mat4 building {canLean ? x87::GameTurnMatrixScaled(angles.x, angles.y, angles.z, scale)
+	                            : x87::GameUprightTurnScaled(angles.y, scale)};
+	building[3] = glm::vec4(position, 1.0f);
+	return building;
+}
+
+workshop::SpecialPlace workshop::SpecialPlaceOf(const glm::mat4& point, const glm::mat4& building)
+{
+	// The point's matrix moves through the building's matrix in the order of the 3D engine
+	const auto world = x87::Product(point, building);
+	return {.coords = map_coords::FromMetres(glm::vec2(world[3].x, world[3].z)),
+	        .angles = x87::GameTurnMatrixAngles(glm::mat3(world))};
+}
 
 float workshop::ScaleOfValue(uint32_t value)
 {

@@ -88,15 +88,7 @@ map_coords::MapCoords CoordsOf(glm::vec3 position)
 	return map_coords::FromMetres(glm::vec2(position.x, position.z));
 }
 
-/// The place of a special point of a building's model on the land, and how the point is turned there
-struct SpecialPlace
-{
-	map_coords::MapCoords coords;
-	/// The angles about x, y and z
-	glm::vec3 angles {0.0f};
-};
-
-std::optional<SpecialPlace> SpecialPlaceOf(entt::entity building, size_t point)
+std::optional<workshop::SpecialPlace> SpecialPlaceOf(entt::entity building, size_t point)
 {
 	const auto& registry = Entities();
 	const auto* transform = registry.TryGet<const Transform>(building);
@@ -115,10 +107,9 @@ std::optional<SpecialPlace> SpecialPlaceOf(entt::entity building, size_t point)
 	{
 		return std::nullopt;
 	}
-	const auto& local = points.at(point);
-	const glm::vec3 place = transform->position + (transform->rotation * (glm::vec3(local[3]) * transform->scale));
-	const auto turned = transform->rotation * glm::mat3(local);
-	return SpecialPlace {.coords = CoordsOf(place), .angles = x87::GameTurnMatrixAngles(turned)};
+	return workshop::SpecialPlaceOf(points.at(point), workshop::BuildingMatrix(ecs::placed_turn::AnglesOf(registry, building),
+	                                                                           ecs::placed_turn::CanLean(registry, building),
+	                                                                           transform->scale.x, transform->position));
 }
 
 /// The town's workshops in the town's order, the newest first

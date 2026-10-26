@@ -10494,7 +10494,7 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .name = "A workshop makes scaffolds from its wood",
 	    .facet = Facet::Objects,
 	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 10000 wood, the wood of "
-	                   "four scaffolds.",
+	                   "four scaffolds. The yard of the workshop faces the camera.",
 	    .expected = "The workshop uses the wood of one scaffold and its work sound starts. When the time to make a "
 	                "scaffold is over, a small scaffold appears in the first free place of the yard, a horn sounds and "
 	                "the work sound stops. The workshop makes scaffolds until it has three in its yard. The hand can "
@@ -10502,16 +10502,18 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {15.0f}, k_Workshop + glm::vec2 {15.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
-	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .storedWood = 10000}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 10000}},
 	});
 
-	// The first place of the Celtic workshop's yard is 7.8 m in front of the workshop
-	constexpr glm::vec2 k_FirstPlace = k_Workshop + glm::vec2 {0.0f, 7.8f};
+	// The scenario turns the workshop so that its yard faces the camera. The first place of the Celtic workshop's yard is
+	// 7.8 m in front of the workshop.
+	constexpr glm::vec2 k_FirstPlace = k_Workshop + glm::vec2 {0.0f, -7.8f};
 	all.push_back({
 	    .id = "objects.scaffold_snaps_into_yard",
 	    .name = "A scaffold put down near a workshop's yard goes into its place",
 	    .facet = Facet::Objects,
-	    .description = "A Celtic town of the player's with a village centre and a workshop with no wood, and a loose "
+	    .description = "A Celtic town of the player's with a village centre and a workshop with no wood, its yard towards the "
+	                   "camera, and a loose "
 	                   "scaffold that no workshop counts. After one second the scaffold is lifted and let go one metre "
 	                   "from the first place of the yard, as the hand puts one down.",
 	    .expected = "The scaffold comes to rest and moves into the first place of the yard, turned as the place is "
@@ -10520,10 +10522,10 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
-	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .storedWood = 0},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 180.0f, .storedWood = 0},
 	                {.type = ScaffoldInfo::Normal, .offset = k_Workshop + glm::vec2 {10.0f, 10.0f}, .scale = 0.7f}},
 	    .throws = {{.object = 2,
-	                .from = k_FirstPlace + glm::vec2 {0.7f, 0.7f},
+	                .from = k_FirstPlace + glm::vec2 {0.7f, -0.7f},
 	                .height = 1.0f,
 	                .velocity = {0.0f, -1.0f, 0.0f},
 	                .delaySeconds = 1.0f}},

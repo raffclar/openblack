@@ -31,6 +31,7 @@
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
@@ -74,6 +75,15 @@ public:
 		registry.Assign<OneOffSpellSeed>(globe, OneOffSpellSeed {.seedType = SpellSeedType::Food, .position = position});
 		sizes[globe] = {.radius = 1.0f, .height = 2.0f};
 		return globe;
+	}
+
+	entt::entity AddScaffold(glm::vec3 position)
+	{
+		const auto scaffold = registry.Create();
+		registry.Assign<Transform>(scaffold, position, glm::mat3(1.0f), glm::vec3(0.7f));
+		registry.Assign<Scaffold>(scaffold);
+		sizes[scaffold] = {.radius = 2.0f, .height = 3.0f};
+		return scaffold;
 	}
 
 	entt::entity AddTree(glm::vec3 position, float weight)
@@ -162,6 +172,7 @@ public:
 	void HeatHeld(entt::entity object) override { heated.push_back(object); }
 	void ArtefactTaken(entt::entity object, PlayerNames) override { artefactsTaken.push_back(object); }
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override { globesTaken.emplace_back(globe, player); }
+	void ScaffoldIntoHand(entt::entity scaffold, PlayerNames player) override { scaffoldsTaken.emplace_back(scaffold, player); }
 	void PlaySample(uint32_t sample, glm::vec3) override { samples.push_back(sample); }
 	bool TapThing(entt::entity object, glm::vec3, PlayerNames) override
 	{
@@ -473,6 +484,7 @@ public:
 	int pathsForgotten {0};
 	std::vector<entt::entity> artefactsTaken;
 	std::vector<std::pair<entt::entity, PlayerNames>> globesTaken;
+	std::vector<std::pair<entt::entity, PlayerNames>> scaffoldsTaken;
 	std::vector<uint32_t> samples;
 	std::vector<entt::entity> tapped;
 	std::vector<entt::entity> villagersInHand;
@@ -763,6 +775,37 @@ TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAGlobeFromTheSide)
 	ASSERT_TRUE(pose.has_value());
 	EXPECT_EQ(pose->hold, HoldType::Side);
 	EXPECT_FLOAT_EQ(world->registry.Get<HandGrab>(world->hand).lowering, 0.7f * 2.0f);
+}
+
+TEST_F(HandGrabSystemWithWorld, AHeldPressCarriesAScaffoldFromTheSideAndItsWorkshopIsTold)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	EXPECT_EQ(*system->GetHeld(), scaffold);
+	EXPECT_TRUE(world->tapped.empty());
+	// The hand tells the workshop one time, so that the workshop keeps the scaffold's place in its yard
+	ASSERT_EQ(world->scaffoldsTaken.size(), 1u);
+	EXPECT_EQ(world->scaffoldsTaken.front().first, scaffold);
+	const auto pose = system->GetHeldPose();
+	ASSERT_TRUE(pose.has_value());
+	EXPECT_EQ(pose->hold, HoldType::Side);
+}
+
+TEST_F(HandGrabSystemWithWorld, AShortPressOnAScaffoldTakesNothing)
+{
+	const auto scaffold = world->AddScaffold({0.0f, 0.0f, 0.0f});
+	world->underCursor = scaffold;
+	EXPECT_TRUE(Press());
+	Frame(50);
+	Release();
+	EXPECT_FALSE(system->GetHeld().has_value());
+	EXPECT_TRUE(world->scaffoldsTaken.empty());
 }
 
 TEST_F(HandGrabSystemWithWorld, WithTheLeashHeldAShortPressIsAnOrderInsteadOfATap)
