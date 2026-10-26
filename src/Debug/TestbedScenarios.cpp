@@ -200,6 +200,9 @@ void TestbedScenarios::RunRequested() noexcept
 	});
 	_focus = 0;
 	_runner.Start(*scenario);
+	// Give the commands and throws that are due at the start before the first turn of the scenario. The server does
+	// this too, thus the two worlds stay the same.
+	_runner.Update(0.0f);
 }
 
 void TestbedScenarios::Draw() noexcept
