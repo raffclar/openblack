@@ -11029,6 +11029,8 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		}
 	}
 	const auto creatures = scenario.creatures.size();
+	// The commands can also name the creatures of the filled slots: one for each temple at most
+	const auto others = creatures + (scenario.fillEmptySlots ? scenario.temples.size() : 0);
 	const auto& framing = scenario.framing;
 	if ((framing.shot == Shot::Follow || framing.shot == Shot::Head) && framing.creature >= creatures)
 	{
@@ -11161,7 +11163,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 		}
 		if ((command.kind == Kind::Follow || command.kind == Kind::StartFight || command.kind == Kind::TieLeashToCreature ||
 		     command.kind == Kind::MakeFriends) &&
-		    (command.value >= creatures || command.value == command.creature))
+		    (command.value >= others || command.value == command.creature))
 		{
 			problems.push_back(fmt::format("{}: acts on no other creature", what));
 		}

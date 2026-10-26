@@ -67,6 +67,26 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.computer_slot_creature_name_in_fight",
+	    .name = "The fight panel with the name of the creature of a computer god in an empty slot",
+	    .facet = Facet::Multiplayer,
+	    .description =
+	        "The player's tiger stands to the west at size 0.3. A temple of player two stands to the north, and no human or "
+	        "computer plays player two. The empty slot of player two gets a computer god and a creature, as at the start "
+	        "of a network game. After 1 second the tiger starts a fight with that creature. When the arena is there, 7 "
+	        "seconds after that, the camera flies to the fight.",
+	    .expected = "The camera shows the fight, and the fight panel is in the top-left corner of the screen. The first "
+	                "row has the name of the tiger and its bars. The second row has the name of the other creature, which "
+	                "is the name of its species, for example \"Tortoise\" or \"Polar bear\", and its bars.",
+	    .environment = {.dispenserGrid = false},
+	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 60.0f}, .size = 0.3f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Command::Kind::StartFight, .creature = 0, .delaySeconds = 1.0f, .value = 1},
+	                 {.kind = Command::Kind::FightView, .creature = 0, .delaySeconds = 7.0f}},
+	    .fillEmptySlots = true,
+	});
+
+	all.push_back({
 	    .id = "multiplayer.land_anti_influence_ring",
 	    .name = "An anti-influence ring that a land's script makes",
 	    .facet = Facet::Multiplayer,

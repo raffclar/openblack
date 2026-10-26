@@ -233,6 +233,8 @@ private:
 	Timeline _timeline;
 	glm::vec2 _middle {0.0f};
 	std::vector<entt::entity> _creatures;
+	/// The creatures that the scenario's filled slots got, in the order of their ids
+	std::vector<entt::entity> _slotCreatures;
 	std::vector<entt::entity> _objects;
 	/// The globes that the scenario puts down on their own, in the order of its list
 	std::vector<entt::entity> _globes;

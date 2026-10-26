@@ -25,6 +25,7 @@
 #include <system_error>
 #include <tuple>
 #include <type_traits>
+#include <utility>
 #include <variant>
 #include <vector>
 
@@ -851,6 +852,7 @@ void Runner::Start(const Scenario& scenario)
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
 	_creatures.clear();
+	_slotCreatures.clear();
 	_objects.clear();
 	_globes.clear();
 	_temples.clear();
@@ -963,6 +965,16 @@ void Runner::Start(const Scenario& scenario)
 	{
 		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
 		Locator::computerPlayerSystem::value().FillEmptySlots(computer_player::k_SlotGods, k_Humans);
+		// The commands can name the creatures of the filled slots after the creatures of the scenario
+		std::vector<entt::entity> filled;
+		Locator::entitiesRegistry::value().Each<const Creature>([this, &filled](entt::entity entity, const Creature&) {
+			if (std::ranges::find(_creatures, entity) == _creatures.end())
+			{
+				filled.push_back(entity);
+			}
+		});
+		std::ranges::sort(filled);
+		_slotCreatures = std::move(filled);
 	}
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
@@ -1735,11 +1747,13 @@ void Runner::PointAtBody(entt::entity creature) const
 
 std::optional<entt::entity> Runner::CreatureAt(size_t index) const
 {
-	if (index >= _creatures.size() || !Locator::entitiesRegistry::has_value())
+	// After the creatures of the scenario come the creatures of the filled slots
+	const auto total = _creatures.size() + _slotCreatures.size();
+	if (index >= total || !Locator::entitiesRegistry::has_value())
 	{
 		return std::nullopt;
 	}
-	const auto entity = _creatures[index];
+	const auto entity = index < _creatures.size() ? _creatures[index] : _slotCreatures[index - _creatures.size()];
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(entity) || !registry.AllOf<Creature>(entity))
 	{
