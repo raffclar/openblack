@@ -175,6 +175,8 @@ struct Arguments
 	std::optional<std::string> lobbyTestAuthorities;
 	/// The real-world weather changes the weather of a single-player game (on by default)
 	bool useInternetWeather {true};
+	/// A network game shows the player's own ping (off by default)
+	bool showPing {false};
 	bool dynamicTreeShadows {false};
 	/// Tools: open the window but draw nothing on the graphics card (the no-renderer backend), so that a long run driven
 	/// through the inspector does not wait on a busy graphics card

@@ -179,5 +179,8 @@ struct EngineConfig
 	/// The real-world weather of the player's place changes the weather of a single-player game. It is on unless the
 	/// player turns it off.
 	bool useInternetWeather {true};
+	/// A network game shows the round trip of this computer's game socket (deviation 143). It is off unless the player
+	/// turns it on.
+	bool showPing {false};
 };
 } // namespace openblack

@@ -200,6 +200,23 @@ struct Seat
 /// The places of the room's players: the gods are numbered in the order of the list, the observers are 0
 [[nodiscard]] std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players);
 
+/// The texts of the lines of the room's player list
+struct RosterTexts
+{
+	/// "God %d"
+	std::u16string_view god;
+	/// "Observers"
+	std::u16string_view observers;
+	/// " (CURRENT)"
+	std::u16string_view current;
+};
+
+/// A line of the room's player list: "God 3: name" for a god, or "Observers: name". The line of the player's own place
+/// has " (CURRENT)" after the name. When the ping display is on, the ping comes last on the own line only.
+/// @param ping The text of the player's own ping, none when the display is off or has no number yet
+[[nodiscard]] std::u16string RosterLine(const Seat& seat, std::u16string_view name, bool own, const RosterTexts& texts,
+                                        const std::optional<std::u16string>& ping);
+
 /// The most gods in a game, each with a chat colour of its own
 inline constexpr int32_t k_MostGods = 32;
 /// The colour of a god's lines in the chat, as 32-bit 0xAARRGGBB: the observers (and any number that is not a god's)

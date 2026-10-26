@@ -114,6 +114,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("new-game", "Start a new game on the first land, as the game's own new game option does, rather than continue from the save on exit.")
 		("lobby", "The https:// origin of the lobby for the online services. The web build uses the origin of the page for any value.", cxxopts::value<std::string>()->default_value("https://bw.zanidrak.com"))
 		("internet-weather", "The real-world weather of the place of the player's lobby account changes the weather of a single-player game, as the original game's internet weather did. It is on by default (--internet-weather=false turns it off). The game asks one time as a game starts and never waits; with no answer in 10 seconds, or no login, the land keeps its own weather.", cxxopts::value<bool>()->default_value("true")->implicit_value("true"))
+		("show-ping", "Show the round trip of this computer's game socket in milliseconds in a network game, as \"ping 48\": after the player's own name in the room's player list. The original game shows no ping, so it is off by default.")
 		("crash-dialogs", "Show the system's and C runtime's crash dialogs (Abort/Retry/Ignore) instead of writing a crash report to crashes/ and exiting.")
 		("join", "Join the game server at this wss:// address once the land loaded. The world then turns only with the turns of the server. Needs --join-ticket.", cxxopts::value<std::string>())
 		("join-ticket", "The lobby's join ticket for --join.", cxxopts::value<std::string>())
@@ -456,6 +457,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.lobbyTestAuthorities = result["lobby-test-ca"].as<std::string>();
 		}
 		args.useInternetWeather = result["internet-weather"].as<bool>();
+		args.showPing = result.count("show-ping") != 0;
 		args.dynamicTreeShadows = result.count("dynamic-tree-shadows") != 0;
 		args.noDraw = result.count("no-draw") != 0;
 		args.background = result.count("background") != 0;

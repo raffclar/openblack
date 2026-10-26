@@ -38,7 +38,7 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 {
 	using Kind = Command::Kind;
 	using Stage = testbed_multiplayer::Stage;
-	const std::array<BoxScenario, 17> boxes = {{
+	const std::array<BoxScenario, 18> boxes = {{
 	    {"multiplayer.choose_connection", "The multiplayer front end: choose a connection", Stage::ChooseConnection,
 	     "The multiplayer front end opens with the demonstration lobby. The player goes straight into the temple's "
 	     "future room.",
@@ -123,6 +123,11 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player joins Bob's game and ticks Ready. The player's land file is not the server's, so the server removes the "
 	     "player from the room.",
 	     "A white box says \"Bob's game has kicked you from the game.\" with OK. OK goes back to the game list."},
+	    {"multiplayer.room_ping", "The multiplayer front end: the player's own ping in the game room", Stage::RoomPing,
+	     "The player joins Bob's game with the ping display on, as the --show-ping switch does. The game socket of the "
+	     "demonstration answers each ping after 48 ms.",
+	     "The game room's player list shows \"God 2: Alice (CURRENT) ping 48\" in Alice's god colour, in the same letters "
+	     "as the other lines. The lines of Bob and Eve show no ping. The number shows after the first second in the room."},
 	}};
 	for (const auto& box : boxes)
 	{

@@ -19,16 +19,19 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <variant>
 #include <vector>
 
 #include <LobbyApiJson.h>
 #include <gtest/gtest.h>
 
+#include "Commands/TurnCodec.h"
 #include "ECS/PlayerColour.h"
 #include "ECS/Systems/LobbyClientSystemInterface.h"
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/PingDisplay.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
@@ -258,6 +261,8 @@ struct FrontEndTest: public ::testing::Test
 	FakeLan lan;
 	std::vector<std::string> opened;
 	std::unique_ptr<MultiplayerFrontEnd> frontEnd;
+	/// The ping display of the room, as --show-ping turns it on
+	bool showPing {false};
 
 	void Make(bool withLan = false)
 	{
@@ -278,6 +283,7 @@ struct FrontEndTest: public ::testing::Test
 		    .browser = false,
 		    .localMaps = std::string(k_LocalMaps),
 		    .conditionTemplate = std::string(k_Conditions),
+		    .showPing = showPing,
 		};
 		frontEnd = std::make_unique<MultiplayerFrontEnd>(std::move(services), std::move(settings));
 	}
@@ -1204,4 +1210,38 @@ TEST_F(FrontEndTest, ThePickStaysOnItsGameWhenTheListChanges)
 	lobby.known.erase(lobby.known.begin() + 1);
 	frontEnd->Update();
 	EXPECT_FALSE(frontEnd->GetSelectedGame().has_value());
+}
+
+TEST_F(FrontEndTest, ThePingDisplayIsOffByDefault)
+{
+	ToRoom();
+	EXPECT_FALSE(frontEnd->ShowsPing());
+}
+
+TEST_F(FrontEndTest, TheRoomGivesTheRoundTripOfTheOwnGameSocket)
+{
+	showPing = true;
+	ToRoom();
+	EXPECT_TRUE(frontEnd->ShowsPing());
+	EXPECT_FALSE(frontEnd->GetRoundTrip().has_value());
+	const auto socket = sockets.order.back();
+	sockets.TakeSent(socket);
+	// The session pings the server one second after the join
+	network.now = 1'000'000;
+	Step();
+	std::optional<turn_codec::Ping> ping;
+	for (const auto& sent : sockets.TakeSent(socket))
+	{
+		const auto decoded = sent.text ? turn_codec::DecodeResult {} : turn_codec::Decode(sent.bytes);
+		if (decoded.frame.has_value() && std::holds_alternative<turn_codec::Ping>(*decoded.frame))
+		{
+			ping = std::get<turn_codec::Ping>(*decoded.frame);
+		}
+	}
+	ASSERT_TRUE(ping.has_value());
+	network.now += 48'000;
+	sockets.ServerBinary(socket, turn_codec::Encode(turn_codec::Pong {.id = ping->id, .time = ping->time}));
+	Step();
+	EXPECT_EQ(frontEnd->GetRoundTrip(), 48'000u);
+	EXPECT_EQ(ping_display::Text(frontEnd->GetRoundTrip()), u"ping 48");
 }
