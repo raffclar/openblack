@@ -14,6 +14,7 @@
 
 #include <SDL_keycode.h>
 
+#include "Common/X87.h"
 #include "Controls.h"
 #include "DialogKeyRules.h"
 
@@ -24,6 +25,8 @@ namespace
 /// The text starts at the big size and gets smaller while it is this high or more
 constexpr int k_TextWidth = 400;
 constexpr float k_TextTallest = 125.0f;
+/// The opacities are whole steps of 1/255
+constexpr float k_Steps = 255.0f;
 
 dialog_keys::Key KeyOf(int key)
 {
@@ -67,9 +70,25 @@ void SetupMessage::Answer()
 	}
 }
 
+int SetupMessage::BehindSteps(float boxAlpha, float messageAlpha) noexcept
+{
+	const auto steps = x87::Mul(x87::Sub(boxAlpha, x87::Mul(messageAlpha, k_Dims)), k_Steps);
+	return std::clamp(static_cast<int>(steps), 0, 255);
+}
+
+int SetupMessage::MessageSteps(float messageAlpha) noexcept
+{
+	return std::clamp(static_cast<int>(x87::Mul(messageAlpha, k_Steps)), 0, 255);
+}
+
 float SetupMessage::BehindAlpha(float boxAlpha) const
 {
-	return std::clamp(boxAlpha - (_fade.GetValue() * k_Dims), 0.0f, 1.0f);
+	return static_cast<float>(BehindSteps(boxAlpha, _fade.GetValue())) / k_Steps;
+}
+
+float SetupMessage::MessageAlpha() const
+{
+	return static_cast<float>(MessageSteps(_fade.GetValue())) / k_Steps;
 }
 
 void SetupMessage::MouseMove(glm::ivec2 point)
@@ -133,7 +152,7 @@ void SetupMessage::Draw(const DialogPainter& painter, bool active) const
 		--size;
 	} while (painter.GetTextHeight(k_TextWidth, _text->text, size) >= k_TextTallest && size > DialogPainter::k_SmallTextSize);
 	_text->size = size;
-	const auto alpha = std::clamp(_fade.GetValue(), 0.0f, 1.0f);
+	const auto alpha = MessageAlpha();
 	painter.SetAlpha(alpha);
 	painter.DrawBackground(k_Box, glm::vec3(1.0f), true, DialogPainter::All);
 	painter.SetAlpha(alpha);

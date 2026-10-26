@@ -327,12 +327,14 @@ void AddCaveTattooNetworkWarning(std::vector<Scenario>& all)
 	    .name = "The warning of the tattoo editor in a network game",
 	    .facet = Facet::CreatureMode,
 	    .description = "The tattoo editor works as in a network game. The player clicks the tiger in the Creature Cave, "
-	                   "drags the heart onto its chest and presses OK. The player then presses the OK of the warning, "
-	                   "and presses OK of the editor again.",
-	    .expected = "After the first OK, a white box comes up in front over half a second: \"The changes you have made "
-	                "to your Creature's tattoos will be visible to others when you leave the Temple.\" with an OK "
-	                "button below the text. The editor behind it dims to a quarter. The OK of the box removes it, and "
-	                "the editor is back at once. The second OK closes the editor, and the camera zooms back out.",
+	                   "drags the heart onto its chest and presses OK. The player then holds the OK of the warning "
+	                   "down for one second, releases it, and presses OK of the editor again.",
+	    .expected = "After the first OK, a grey box with white edges comes up in front over half a second: \"The "
+	                "changes you have made to your Creature's tattoos will be visible to others when you leave the "
+	                "Temple.\" with an OK button below the text. The editor behind it dims to a quarter. While the "
+	                "button is down on the OK of the box, its label is orange and moves 2 down and 2 to the right. "
+	                "The OK of the box removes it, and the editor is back at once. The second OK closes the editor, "
+	                "and the camera zooms back out.",
 	    .framing = {.shot = Shot::Overview},
 	    .creatures = {Player({0.0f, 40.0f}, "yours")},
 	    .commands = {{.kind = Kind::TattooEditorAsNetworkGame, .delaySeconds = 0.5f, .value = 1},
@@ -353,7 +355,7 @@ void AddCaveTattooNetworkWarning(std::vector<Scenario>& all)
 	                 release(0.2f),
 	                 at(800.0f, 531.0f, 3.0f),
 	                 press(0.2f),
-	                 release(0.2f),
+	                 release(1.0f),
 	                 at(455.0f, 780.0f, 2.0f),
 	                 press(0.2f),
 	                 release(0.2f),

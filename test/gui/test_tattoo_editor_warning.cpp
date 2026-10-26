@@ -16,6 +16,7 @@
 #include <vector>
 
 #include <ECS/Systems/TattooEditorSystemInterface.h>
+#include <Gui/DialogPainter.h>
 #include <Gui/SetupMessage.h>
 #include <Gui/TattooEditorDialog.h>
 #include <Gui/TextDatabase.h>
@@ -202,11 +203,35 @@ TEST(SetupMessage, TheBoxBehindDimsToAQuarterOverHalfASecondAndComesBackAtOnce)
 	EXPECT_GT(message.BehindAlpha(1.0f), 0.25f);
 	EXPECT_LT(message.BehindAlpha(1.0f), 1.0f);
 	message.Update(0.5f);
-	EXPECT_FLOAT_EQ(message.BehindAlpha(1.0f), 0.25f);
+	// A quarter of 255 is 63.75, and the game cuts the fraction off
+	EXPECT_FLOAT_EQ(message.BehindAlpha(1.0f), 63.0f / 255.0f);
+	EXPECT_FLOAT_EQ(message.MessageAlpha(), 1.0f);
 	// A key other than Return or Escape does not answer
 	EXPECT_FALSE(message.KeyDown(SDLK_a));
 	EXPECT_TRUE(message.KeyDown(SDLK_KP_ENTER));
 	EXPECT_FALSE(message.IsShown());
 	EXPECT_EQ(answers, 1);
 	EXPECT_FLOAT_EQ(message.BehindAlpha(1.0f), 1.0f);
+}
+
+TEST(SetupMessage, TheOpacitiesAreWholeStepsCutDown)
+{
+	EXPECT_EQ(SetupMessage::BehindSteps(1.0f, 0.0f), 255);
+	EXPECT_EQ(SetupMessage::BehindSteps(1.0f, 1.0f), 63);
+	EXPECT_EQ(SetupMessage::BehindSteps(1.0f, 0.5f), 159);
+	EXPECT_EQ(SetupMessage::BehindSteps(0.5f, 1.0f), 0);
+	EXPECT_EQ(SetupMessage::BehindSteps(0.0f, 1.0f), 0);
+	EXPECT_EQ(SetupMessage::BehindSteps(1.5f, 0.0f), 255);
+	EXPECT_EQ(SetupMessage::MessageSteps(0.0f), 0);
+	EXPECT_EQ(SetupMessage::MessageSteps(0.999f), 254);
+	EXPECT_EQ(SetupMessage::MessageSteps(1.0f), 255);
+}
+
+TEST(DialogPainter, TheEdgeLinesAreTheEdgeColourTimesTheBoxColourIn256ths)
+{
+	constexpr auto white = glm::u8vec3(255);
+	EXPECT_EQ(DialogPainter::EdgeLineColour(white, white), glm::u8vec3(254));
+	EXPECT_EQ(DialogPainter::EdgeLineColour({255, 128, 0}, white), glm::u8vec3(254, 127, 0));
+	EXPECT_EQ(DialogPainter::EdgeLineColour({0, 0, 0}, white), glm::u8vec3(0));
+	EXPECT_EQ(DialogPainter::EdgeLineColour(white, {128, 64, 1}), glm::u8vec3(127, 63, 0));
 }
