@@ -1802,5 +1802,4 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)
 openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
-openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
 openblack_setup_and_add_test(test_physics_hit_bounds test_physics_hit_bounds.cpp)
