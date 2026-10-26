@@ -5405,12 +5405,10 @@ void SetTimerTime() // 145 SET_TIMER_TIME
 	}
 	if (registry.AllOf<ecs::components::SpellDispenser>(object))
 	{
-		// The turns from its bubble being taken to its next, counted as a timer's are; none leaves it as it was, and a
-		// time before now is so many turns it never makes another
-		const auto turns = script::timers::TurnsFor(seconds);
-		if (turns != 0)
+		// The turns from the time that the hand takes its bubble to its next bubble
+		if (const auto turns = script::timers::DispenserTurns(seconds); turns.has_value())
 		{
-			Locator::magicSystem::value().SetDispenserTurns(object, static_cast<uint32_t>(turns));
+			Locator::magicSystem::value().SetDispenserTurns(object, *turns);
 		}
 		return;
 	}
