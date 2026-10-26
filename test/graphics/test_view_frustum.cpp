@@ -71,3 +71,32 @@ TEST(ViewFrustum, TheSeaReflectsWhatIsAboveIt)
 	// Behind the camera, and so is its reflection
 	EXPECT_FALSE(view_frustum::SeesSphereOrReflection(camera, {0.0f, 20.0f, -30.0f}, 1.0f));
 }
+
+TEST(ViewFrustum, ABoxIsSeenUnlessAllItsCornersAreOutsideOneSide)
+{
+	const auto camera = Camera(false);
+	const glm::vec3 minima {-1.0f, -1.0f, -1.0f};
+	const glm::vec3 maxima {1.0f, 1.0f, 1.0f};
+	EXPECT_TRUE(view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {0.0f, 10.0f, 50.0f}), minima, maxima));
+	EXPECT_FALSE(view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {0.0f, 10.0f, -50.0f}), minima, maxima));
+	EXPECT_FALSE(view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {70.0f, 10.0f, 50.0f}), minima, maxima));
+	// A box round the camera has corners outside each side, but no side has all of them outside
+	EXPECT_TRUE(view_frustum::SeesBox(camera, glm::scale(glm::mat4(1.0f), glm::vec3(100.0f)), minima, maxima));
+}
+
+TEST(ViewFrustum, ABoxGoesThroughItsModelAndKeepsAMargin)
+{
+	const auto camera = Camera(false);
+	const glm::vec3 minima {0.0f, 0.0f, 0.0f};
+	const glm::vec3 maxima {1.0f, 1.0f, 1.0f};
+	// Out to the right of the side at 45 degrees, then scaled until it crosses the side
+	const auto at = glm::translate(glm::mat4(1.0f), {60.0f, 10.0f, 50.0f});
+	EXPECT_FALSE(view_frustum::SeesBox(camera, at, minima, maxima));
+	EXPECT_TRUE(view_frustum::SeesBox(camera, at * glm::scale(glm::mat4(1.0f), glm::vec3(-20.0f, 1.0f, 1.0f)), minima, maxima));
+	// A corner less than the margin outside the side counts as in view
+	const float justOut = 0.5f * view_frustum::k_BoxMargin * glm::sqrt(2.0f);
+	EXPECT_TRUE(
+	    view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {51.0f + justOut, 10.0f, 50.0f}), minima, maxima));
+	EXPECT_FALSE(view_frustum::SeesBox(camera, glm::translate(glm::mat4(1.0f), {51.0f + (3.0f * justOut), 10.0f, 50.0f}),
+	                                   minima, maxima));
+}

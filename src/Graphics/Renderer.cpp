@@ -3093,6 +3093,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
+	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
+	vertices.reserve(ground_blobs::k_Indices.size() *
+	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -3138,7 +3143,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
-	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	for (const auto& [entity, meshId, model] : animalDraws)
 	{
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
 		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
