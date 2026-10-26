@@ -3679,7 +3679,6 @@ void AddAudio(std::vector<Scenario>& all)
 	    .expected = "The verse plays for about 40 seconds. The words of each of the twelve lines show at the start of "
 	                "that line of the song, and the glow under the words moves from word to word with the song. The "
 	                "audio log gives each line cue.",
-	    .environment = {.playerAlignment = 1.0f},
 	    .framing = {.shot = Shot::Testbed},
 	    .commands = {{.kind = Kind::StartScriptMusic, .delaySeconds = 0.0f, .value = k_FirstVerseMusic},
 	                 {.kind = Kind::RunScript, .delaySeconds = 0.0f, .script = "TheMissionariesVerseOneText"}},
