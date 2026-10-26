@@ -186,4 +186,25 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .object = 0,
 	                  .radius = 5.0f}},
 	});
+	// Another god's hand holds a miracle seed whose model shows in the hand, and that god's camera stands above it
+	all.push_back({
+	    .id = "multiplayer.other_god_seed",
+	    .name = "Another god's held miracle",
+	    .facet = Facet::Multiplayer,
+	    .description = "The testbed acts as a network game in which the second player is another god. After a second, the "
+	                   "second player's hand holds a miracle seed, and the second player reports the hand 5 m above the "
+	                   "land to the west and the camera 30 m above that hand. This computer does not draw the hand of the "
+	                   "other god, or the effect of the seed in that hand.",
+	    .expected = "After a short time, the model of the miracle shows 5 m above the land to the west, with no hand about it "
+	                "and no effect round it. High above it, sparkles in the second player's colour come out one after "
+	                "another and fall down slowly.",
+	    .environment = {.clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-10.0f, 22.0f, -40.0f}, .look = {-20.0f, 20.0f, 0.0f}},
+	    .commands = {{.kind = Kind::OtherGodHand,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .point = {-20.0f, 0.0f},
+	                  .heldSeed = SpellSeedType::Food,
+	                  .radius = 5.0f}},
+	});
 }
