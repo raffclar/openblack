@@ -52,12 +52,16 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	    .id = "multiplayer.computer_slot_creature_name",
 	    .name = "The name of the creature of a computer god in an empty slot",
 	    .facet = Facet::Multiplayer,
-	    .description = "A temple of player two stands to the north, and no human or computer plays player two. As at the "
-	                   "start of a network game, the empty slot of player two gets a computer god and a creature.",
+	    .description =
+	        "The player's tiger stands to the west at size 0.3. A temple of player two stands to the north, and no human or "
+	        "computer plays player two. As at the start of a network game, the empty slot of player two gets a "
+	        "computer god and a creature.",
 	    .expected = "A fully grown creature of a random species stands at the creature home of the temple of player two. "
 	                "Its name is the name of its species, for example \"Tiger\" or \"Polar bear\", not a line of help "
-	                "text. The game.entity query shows the name, and a fight with the creature shows it above its bar.",
+	                "text. The game.entity query shows the name. Start a fight between the tiger and the creature: the fight "
+	                "view shows the name of each creature beside its bar.",
 	    .environment = {.dispenserGrid = false},
+	    .creatures = {{.label = "the player's", .species = CreatureType::Tiger, .offset = {-25.0f, 60.0f}, .size = 0.3f}},
 	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
 	    .fillEmptySlots = true,
 	});

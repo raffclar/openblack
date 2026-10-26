@@ -955,15 +955,15 @@ void Runner::Start(const Scenario& scenario)
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
 	}
-	// A network game fills its empty slots right after the land script
+	PlaceBirds(scenario, _middle);
+	PlaceCreatures(scenario, _middle);
+	PlaceDispensers(scenario);
+	// A network game fills its empty slots after the land script. The temples of the scenario must stand first.
 	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
 	{
 		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
 		Locator::computerPlayerSystem::value().FillEmptySlots(computer_player::k_SlotGods, k_Humans);
 	}
-	PlaceBirds(scenario, _middle);
-	PlaceCreatures(scenario, _middle);
-	PlaceDispensers(scenario);
 	// With the scenario's things laid out on the land, each town of a player with a temple is given its worship site, as
 	// a land's are once it is laid out
 	if (Locator::worshipSiteSystem::has_value())
