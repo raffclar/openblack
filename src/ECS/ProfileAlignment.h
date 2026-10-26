@@ -28,6 +28,21 @@ constexpr uint32_t k_TurnsBetweenKeeps = 600;
 	return static_cast<float>(std::clamp(kept, -1.0, 1.0));
 }
 
+/// Whether a new game starts the player at the alignment of the profile of this computer. Only a game for one player
+/// does. In a network game each god starts at the alignment that its player sent with the start data, so that each
+/// computer starts the same world. A game server has no player and no start data of its own.
+[[nodiscard]] constexpr bool StartsFromOwnProfile(bool networkGame)
+{
+	return !networkGame;
+}
+
+/// Whether the game keeps the player's alignment with the profile of this computer. A network game does not change
+/// the profile's alignment.
+[[nodiscard]] constexpr bool KeptInOwnProfile(bool networkGame)
+{
+	return !networkGame;
+}
+
 /// Whether the player's alignment is due to be kept with their profile at this game turn, it having last been kept at
 /// another. The turns count again from nothing on each new land while the turn it was last kept at stays, so the first
 /// frame of a new land always keeps it.
