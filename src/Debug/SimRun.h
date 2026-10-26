@@ -19,6 +19,10 @@
 #include <utility>
 #include <vector>
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Debug/RowDump.h"
+#endif
+
 /// The fast simulation mode for long tool runs, such as a creature's whole life. Each frame takes a fixed game time, so a
 /// frame plays the same turns at any speed. In fast mode the game plays its frames one after the other as fast as the
 /// processor can, and it draws none of them or only a few. Without the mode the game runs as usual.
@@ -93,6 +97,11 @@ struct Request
 	uint32_t frameGuardFrom {0};
 	/// The frame write guard also looks at the saved state of each system, which is outside the registry
 	bool frameGuardSystems {false};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: the file of the row dump (row_dump::RowDump), and what it keeps and writes
+	std::optional<std::filesystem::path> rowDumpPath;
+	row_dump::Settings rowDump;
+#endif
 
 	static constexpr uint32_t k_DefaultRecordEvery = 100;
 };

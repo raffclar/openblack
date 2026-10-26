@@ -164,6 +164,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	options.add_options("Developer")
+		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
+		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
+		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"));
+#endif
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
 		("sim-record", "Tools: write the run record to this file, as JSON lines: the player's creature, the counts, the times and the problems that the stability checks find. Starts the inspector on a free port when --inspect-port is not given.", cxxopts::value<std::string>())
@@ -410,6 +416,17 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			                            ? openblack::sim_run::HashDetail::Components
 			                            : openblack::sim_run::HashDetail::None;
 			simulation.frameGuardFrom = result["sim-frame-guard-from"].as<uint32_t>();
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+			if (result.count("sim-row-dump") != 0)
+			{
+				simulation.rowDumpPath = std::filesystem::path(result["sim-row-dump"].as<std::string>());
+				simulation.rowDump.keptTurns = result["sim-row-dump-keep"].as<uint32_t>();
+				if (result.count("sim-row-dump-turn") != 0)
+				{
+					simulation.rowDump.atTurn = result["sim-row-dump-turn"].as<uint32_t>();
+				}
+			}
+#endif
 			if (result.count("sim-play-commands") != 0)
 			{
 				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());
