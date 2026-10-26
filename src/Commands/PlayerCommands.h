@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureTattoo.h"
 #include "Creature/LeashKeys.h"
 #include "Enums.h"
 
@@ -387,12 +388,39 @@ struct HelpQuery
 	glm::vec3 ground {0.0f};
 };
 
+/// The hand moved too far from the creature that reaches for the thing that the hand gave it. The creature gives up the
+/// take, unless it already has the thing, and the hand of the player forgets the gift.
+struct GiveCallOff
+{
+	entt::entity creature {entt::null};
+};
+
+/// The tattoo editor changed the tattoos of a creature: its slots, and the block of the player's own pictures when the
+/// editor made the block again. The turn puts them on the creature on every computer.
+struct CreatureTattoo
+{
+	entt::entity creature {entt::null};
+	creature_tattoo::Slots slots {};
+	/// When set, the block of pictures changes too (see creature_tattoo::PicturesBlock)
+	bool hasPictures {false};
+	std::vector<uint8_t> pictures;
+
+	bool operator==(const CreatureTattoo& other) const = default;
+};
+
+/// The hand let go of the rope of the leash of the player's creature, which the leash ties to a thing. The leash becomes
+/// this long, and its slack length a share of it.
+struct LeashLength
+{
+	float length {0.0f};
+};
+
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, HelpReport, HelpQuery>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, GiveCallOff, CreatureTattoo, LeashLength>;
 
 /// A command and the player that sent it
 struct Command

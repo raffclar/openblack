@@ -1781,15 +1781,41 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	const auto tiedPoint = Locator::terrainSystem::has_value()
 	                           ? map_coords::ToWorld(Locator::terrainSystem::value(), tiedAt)
 	                           : glm::vec3(map_coords::ToMetres(tiedAt.x), 0.0f, map_coords::ToMetres(tiedAt.z));
-	const auto lengths = leash_snap::LengthsOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
-	// TODO(multiplayer): the frame changes the lengths of the leash here; a network game needs a command for it
-	worn->slackLength = lengths.slack;
-	worn->maxLength = lengths.max;
+	const auto length = leash_snap::LengthOnLettingGo(*hand, tiedPoint, object_measures::TwoDRadius(registry, tied));
+	// The turn sets the lengths of the leash on every computer, before the order to the place under the hand
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(player_commands::LeashLength {.length = length});
+	}
+	else
+	{
+		DoLeashLength(player, length);
+	}
 	// And the creature goes to the place under the hand
 	if (place.has_value())
 	{
 		OrderAt(player, *place);
 	}
+}
+
+void LeashSystem::DoLeashLength(PlayerNames player, float length)
+{
+	// The leash of the player's creature that the player holds, tied to a thing that still exists
+	const auto creature = PlayersCreature(player);
+	if (!creature.has_value())
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* leashes = registry.TryGet<CreatureLeash>(*creature);
+	if (leashes == nullptr || !leashes->worn.has_value() || leashes->worn->holder != player ||
+	    !leashes->worn->tiedTo.has_value() || !registry.Valid(*leashes->worn->tiedTo))
+	{
+		return;
+	}
+	const auto lengths = leash_snap::LengthsOf(length);
+	leashes->worn->slackLength = lengths.slack;
+	leashes->worn->maxLength = lengths.max;
 }
 
 void LeashSystem::HandleInput(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, bool actionTaken)

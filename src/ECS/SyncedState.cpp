@@ -114,6 +114,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ResourcePile", .field = "shownAmount", .marker = ""},
     {.component = "ResourcePile", .field = "risen", .marker = ""},
     {.component = "LeashPost", .field = "look", .marker = ""},
+    // The frames draw a leash at its temple, or in the hand that carries the picked leash. The turns go by
+    // LeashPost::point, and no turn reads the Transform of a leash (it has no place in the map).
+    {.component = "Transform", .field = "position", .marker = "LeashPost"},
     {.component = "Transform", .field = "rotation", .marker = "LeashPost"},
     // The frames find whether a post hangs its leash, for the hand's picks and tooltips, and show it at its size
     {.component = "LeashPost", .field = "hung", .marker = ""},
@@ -267,6 +270,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "offeredTo", .marker = ""},
     {.component = "HandGrab", .field = "offer", .marker = ""},
     {.component = "HandGrab", .field = "givenTo", .marker = ""},
+    {.component = "HandGrab", .field = "callingOff", .marker = ""},
     {.component = "HandGrab", .field = "offerTurn", .marker = ""},
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend
@@ -290,6 +294,11 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The creature's bones as the frame draws them, between the poses of its last two turns. The turns read the pose of
     // the newest turn.
     {.component = "CreatureAnimation", .field = "boneMatrices", .marker = ""},
+    // The blended animations of a creature are a store of blends made the first time that something asks for them: a
+    // turn, or a frame that finds where the creature's hand takes a gift. A blend comes only from the species and the
+    // drawn body, which only a turn changes, and a change of the body empties the store. Thus a turn reads the same
+    // blend whoever made it, and only which blends the store keeps can differ.
+    {.component = "CreatureAnimation", .field = "animations", .marker = ""},
     // Where the frame draws a walking creature between its last two turns. The turns go by its Transform and slots.
     {.component = "CreatureAnimation", .field = "drawnPlace", .marker = ""},
     // Where the frame draws the thing in a creature's hand. The turns go by its Transform.
@@ -300,6 +309,13 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "CreatureDrawnFeet", .field = "", .marker = ""},
     // The creature's skins as the frames paint them for the renderer
     {.component = "CreatureSkin", .field = "", .marker = ""},
+    // The skin paints the tattoos that the tattoo editor shows, and the masks of the player, in the frames. The turns put
+    // the slots and the block of pictures on the creature (player_commands::CreatureTattoo) and read only those.
+    {.component = "CreatureTattoos", .field = "shown", .marker = ""},
+    {.component = "CreatureTattoos", .field = "picturesShown", .marker = ""},
+    {.component = "CreatureTattoos", .field = "shownPictures", .marker = ""},
+    {.component = "CreatureTattoos", .field = "revision", .marker = ""},
+    {.component = "TattooMasks", .field = "", .marker = ""},
     // Whether an object's sound is on: the frames turn the street lanterns' sounds on at dusk, and only the sounds read it
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.

@@ -16,11 +16,13 @@
 #include <utility>
 #include <vector>
 
+#include "Commands/PlayerCommands.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -28,7 +30,8 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The skins of the creatures in the registry, painted by the skin system
+/// The skins of the creatures in the registry, painted by the skin system. The changes of the editor go to the creature
+/// as commands of the player, which the turn puts on the creature on every computer. Until then the skin shows them.
 class RegistrySkin final: public TattooEditorSystem::Skin
 {
 public:
@@ -39,23 +42,64 @@ public:
 			return std::nullopt;
 		}
 		const auto* tattoos = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureTattoos>(creature);
-		return tattoos != nullptr ? std::optional(tattoos->slots) : std::nullopt;
+		if (tattoos == nullptr)
+		{
+			return std::nullopt;
+		}
+		// A change that waits for its turn is what the editor starts from
+		return tattoos->shown.value_or(tattoos->slots);
 	}
 
 	void Write(entt::entity creature, const creature_tattoo::Slots& slots) override
 	{
-		if (Locator::creatureSkinSystem::has_value())
+		player_commands::CreatureTattoo command {.creature = creature, .slots = slots};
+		if (_pictures.has_value() && _pictures->first == creature)
 		{
-			Locator::creatureSkinSystem::value().SetTattoos(creature, slots);
+			command.hasPictures = true;
+			command.pictures = std::move(_pictures->second);
 		}
+		_pictures.reset();
+		if (!Locator::entitiesRegistry::has_value())
+		{
+			return;
+		}
+		auto* tattoos = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureTattoos>(creature);
+		if (tattoos == nullptr)
+		{
+			return;
+		}
+		if (!Locator::playerCommandSystem::has_value())
+		{
+			// With no commands, the creature gets the tattoos at once
+			tattoos->slots = command.slots;
+			if (command.hasPictures)
+			{
+				tattoos->pictures = std::move(command.pictures);
+			}
+			return;
+		}
+		// The skin shows the change until the turn puts it on the creature
+		tattoos->shown = command.slots;
+		if (command.hasPictures)
+		{
+			tattoos->picturesShown = true;
+			tattoos->shownPictures = command.pictures;
+		}
+		Locator::playerCommandSystem::value().Submit(std::move(command));
 	}
 
 	void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) override
 	{
-		if (Locator::creatureSkinSystem::has_value())
+		// The block goes with the next change of the slots. The masks that are made before then use it.
+		if (Locator::entitiesRegistry::has_value() && Locator::playerCommandSystem::has_value())
 		{
-			Locator::creatureSkinSystem::value().SetTattooPictures(creature, std::move(pictures));
+			if (auto* tattoos = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureTattoos>(creature))
+			{
+				tattoos->picturesShown = true;
+				tattoos->shownPictures = pictures;
+			}
 		}
+		_pictures.emplace(creature, std::move(pictures));
 	}
 
 	void Show(entt::entity shown, std::optional<creature_tattoo::Slots> slots) override
@@ -96,6 +140,10 @@ public:
 		const auto* of = Locator::entitiesRegistry::value().TryGet<const ecs::components::CreatureCopy>(*copy);
 		return of != nullptr && of->creature == creature ? copy : std::nullopt;
 	}
+
+private:
+	/// The block of pictures that waits for the next change of the slots of the creature
+	std::optional<std::pair<entt::entity, std::vector<uint8_t>>> _pictures;
 };
 } // namespace
 
@@ -250,10 +298,10 @@ void TattooEditorSystem::Cancel()
 {
 	if (IsOpen() && _creature.has_value())
 	{
-		// The creature gets back its tattoos, but no skin is painted and the masks stay as they are
-		_skin->Write(*_creature, _session.opened);
-		// The game does not make the block of pictures again here (vanilla-bugs 379), and openblack fixes this
+		// The creature gets back its tattoos, but no skin is painted and the masks stay as they are. The game does not
+		// make the block of pictures again here (vanilla-bugs 379), and openblack fixes this.
 		_skin->WritePictures(*_creature, creature_tattoo::PicturesBlock(_session.opened, _pictures));
+		_skin->Write(*_creature, _session.opened);
 	}
 	Close();
 }

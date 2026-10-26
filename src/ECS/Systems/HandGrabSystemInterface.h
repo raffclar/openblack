@@ -113,6 +113,8 @@ public:
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
 	/// The hand gives the thing that it holds to a creature
 	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// At the turn: the hand of the player called off the gift to the creature (player_commands::GiveCallOff)
+	virtual void DoGiveCallOff(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
 	/// Whether the hand still held it to give.
 	virtual bool HandOver(entt::entity /*object*/) { return false; }

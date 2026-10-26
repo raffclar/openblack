@@ -184,6 +184,8 @@ struct HandGrab
 	entt::entity offeredTo {entt::null};
 	creature_giving::Offer offer;
 	entt::entity givenTo {entt::null};
+	/// The creature that the hand called off the gift to, until the turn does the call off
+	entt::entity callingOff {entt::null};
 	Zoomer offerTurn {0.0f};
 	/// Where the hand was drawn last frame
 	std::optional<glm::vec3> lastHand;

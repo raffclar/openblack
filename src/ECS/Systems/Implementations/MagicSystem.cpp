@@ -1679,6 +1679,8 @@ void MagicSystem::ProcessTurn()
 			Delete(entity);
 		}
 	}
+	// A seed out of the hand shows over its miracle or not, as the miracles are after their turn
+	ShowSeedsWithSpellsTurn();
 	// The pour lifting and tipping the hand steps once the miracles have had their turn
 	magic::StepPour(_pour, k_TurnSeconds);
 }

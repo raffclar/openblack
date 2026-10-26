@@ -91,6 +91,17 @@ TEST(LeashSnap, LettingGoSetsTheLeashsLength)
 	EXPECT_NEAR(near.slack, 3.0f, k_Tolerance);
 }
 
+TEST(LeashSnap, TheTurnSetsTheLengthsFromTheLengthThatTheHandSent)
+{
+	// The frame sends the length, and the turn makes the same lengths from it
+	const auto length = LengthOnLettingGo({30.0f, 0.0f, 40.0f}, {0.0f, 0.0f, 0.0f}, 3.0f);
+	EXPECT_NEAR(length, 50.0f, k_Tolerance);
+	const auto lengths = LengthsOf(length);
+	const auto direct = LengthsOnLettingGo({30.0f, 0.0f, 40.0f}, {0.0f, 0.0f, 0.0f}, 3.0f);
+	EXPECT_EQ(lengths.max, direct.max);
+	EXPECT_EQ(lengths.slack, direct.slack);
+}
+
 TEST(LeashSnap, TheHeldRopesLengthsAndThePinch)
 {
 	const auto collar = CollarRopeLengths({.slack = 150.0f, .max = 300.0f});

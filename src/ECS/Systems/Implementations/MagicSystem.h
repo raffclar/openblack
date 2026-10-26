@@ -387,7 +387,10 @@ private:
 	/// The held seed as the hand shows it, after it came to the hand, became ready or was powered up: how the hand holds
 	/// it, its model once it is ready (for the seeds that show one), and its in-hand effect drawn once it is ready
 	void ShowHeldSeed();
-	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp)
+	/// The seeds bound to their miracles shown over them, or hidden (MagicSeedWithSpell.cpp). Each turn: whether each
+	/// seed out of the hand shows over its miracle.
+	void ShowSeedsWithSpellsTurn();
+	/// Each frame: places the seeds out of the hand that show over their miracles
 	void ShowSeedsWithSpells();
 	/// What decides whether a seed bound to its miracle is shown over it
 	[[nodiscard]] magic::SeedWithSpell SeedWithSpellOf(const components::SpellSeed& seed, const components::Spell& spell) const;

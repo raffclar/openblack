@@ -94,6 +94,9 @@ enum class CommandTag : uint8_t
 	GripDust = 32,
 	HelpReport = 33,
 	HelpQuery = 34,
+	GiveCallOff = 38,
+	CreatureTattoo = 39,
+	LeashLength = 40,
 };
 
 /// The sizes of the parts of the frames, in bytes
