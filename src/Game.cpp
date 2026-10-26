@@ -2528,7 +2528,7 @@ void Game::FollowGameEnd()
 	// A looker-on of a network game has no god: the game names it player seven
 	const bool looksOn =
 	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
-	const auto local = looksOn ? PlayerNames::PLAYER_SEVEN : OwnPlayer();
+	const auto local = looksOn ? PlayerNames::PLAYER_SEVEN : LocalInputPlayer();
 	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
 
 	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
