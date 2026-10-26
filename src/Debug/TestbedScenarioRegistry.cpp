@@ -3668,6 +3668,23 @@ void AddAudio(std::vector<Scenario>& all)
 	                 {.kind = Kind::RunText, .delaySeconds = 5.05f, .value = 1240}},
 	});
 
+	// The Land 1 script that shows the words of the first sung verse, each at its line of the music
+	all.push_back({
+	    .id = "story.missionaries_verse",
+	    .name = "The words of the missionaries' first sung verse at the lines of the music",
+	    .facet = Facet::Story,
+	    .description = "At the start, the missionaries' first sung verse starts and the Land 1 script that shows its "
+	                   "twelve lines runs, as the explorers' scroll starts them. The script waits for each line of the "
+	                   "music, or for 10 seconds, and then shows the words of that line.",
+	    .expected = "The verse plays for about 40 seconds. The words of each of the twelve lines show at the start of "
+	                "that line of the song, and the glow under the words moves from word to word with the song. The "
+	                "audio log gives each line cue.",
+	    .environment = {.playerAlignment = 1.0f},
+	    .framing = {.shot = Shot::Testbed},
+	    .commands = {{.kind = Kind::StartScriptMusic, .delaySeconds = 0.0f, .value = k_FirstVerseMusic},
+	                 {.kind = Kind::RunScript, .delaySeconds = 0.0f, .script = "TheMissionariesVerseOneText"}},
+	});
+
 	all.push_back({
 	    .id = "audio.temple_music",
 	    .name = "The temple's music following the player's alignment",
