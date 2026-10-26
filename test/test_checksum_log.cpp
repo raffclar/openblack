@@ -48,3 +48,18 @@ TEST(ChecksumLog, ReadLineRefusesOtherLines)
 	EXPECT_FALSE(checksum_log::ReadLine(R"({"turn":1,"checksum":"12"})").has_value());
 	EXPECT_FALSE(checksum_log::ReadLine(R"({"turn":x,"checksum":"0000000000000002"})").has_value());
 }
+
+TEST(ChecksumLog, LineHasNoUnregisteredListWhenThereAreNone)
+{
+	EXPECT_EQ(checksum_log::LineOf(1, 2, {}, {}), R"({"turn":1,"checksum":"0000000000000002"})");
+}
+
+TEST(ChecksumLog, LineNamesTheUnregisteredComponents)
+{
+	EXPECT_EQ(checksum_log::LineOf(1, 2, {}, {"Alpha", "Beta"}),
+	          R"({"turn":1,"checksum":"0000000000000002","unregistered":["Alpha","Beta"]})");
+	// A tool that only reads the turn and the checksum still reads the line
+	const auto turn = checksum_log::ReadLine(checksum_log::LineOf(1, 2, {}, {"Alpha"}));
+	ASSERT_TRUE(turn.has_value());
+	EXPECT_EQ(turn->checksum, 2u);
+}

@@ -19,6 +19,7 @@
 #include <variant>
 #include <vector>
 
+#include "3D/GripLandscapeEffect.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -155,6 +156,10 @@ void Run(const Command& command, uint32_t turn)
 			    {
 				    openblack::Locator::magicSystem::value().DoCastUnlock(command.player, action.seed);
 			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, GripDust>)
+		    {
+			    openblack::GripLandscapeEffect::Spawn(action.point);
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
@@ -344,6 +349,25 @@ void Run(const Command& command, uint32_t turn)
 			    if (icons.ValidForRequest(command.player, seed))
 			    {
 				    icons.RequestSeed(command.player, seed);
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, LeashPick>)
+		    {
+			    // The creature of the player changes to the leash that the picker chose, if it knows that leash
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    auto& leashes = openblack::Locator::leashSystem::value();
+				    if (const auto creature = leashes.PlayersCreature(command.player); creature.has_value())
+				    {
+					    leashes.ChangeType(*creature, action.type);
+				    }
+			    }
+		    }
+		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
+		    {
+			    if (openblack::Locator::handGrabSystem::has_value())
+			    {
+				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)

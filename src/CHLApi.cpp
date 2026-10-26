@@ -57,6 +57,9 @@
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -619,7 +622,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	// The hand takes the miracle only when it is ready for an object
 	const bool holdsSomething =
 	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
-	    Locator::magicSystem::value().IsHandBusy();
+	    Locator::magicSystem::value().IsHandBusyOf(player);
 	const bool holdsCreature =
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(player).has_value();
 	if (!hand_grab::ReadyForObject(holdsSomething, holdsCreature))
@@ -916,6 +919,17 @@ void Pushb(bool value)
 
 void CHLApi::TaskStopped(uint32_t task)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace keeps the turn of each stop: a stop changes the waits of the tasks before it
+	if (auto* trace = Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace() : nullptr;
+	    trace != nullptr)
+	{
+		const auto& tasks = Locator::vm::value().GetTasks();
+		const auto found = tasks.find(task);
+		trace->TaskStopped(found == tasks.end() ? fmt::format("{}", task)
+		                                        : fmt::format("{} {} {}", task, found->second.filename, found->second.name));
+	}
+#endif
 	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
 	ReleaseDialogue(task);
 	auto& director = Locator::cinematicDirectorSystem::value();
@@ -6187,7 +6201,8 @@ void GetObjectHeld199() // 199 GET_OBJECT_HELD
 	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
 	if (!held.has_value() && Locator::magicSystem::has_value())
 	{
-		held = Locator::magicSystem::value().GetHeldSeed();
+		held = Locator::magicSystem::value().GetHeldSeedOf(
+		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE);
 	}
 	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
 	{

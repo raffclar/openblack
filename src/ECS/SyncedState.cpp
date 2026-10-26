@@ -132,6 +132,16 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The rise that the totem last showed, by which the hand's tooltip of its share comes
     {.component = "VillageTotem", .field = "lastShownRise", .marker = ""},
     {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
+    // The frames move the fish of a shoal near the camera of each computer, and a grip of the sea scares them only on the
+    // computer of the hand. The turns read only the shoal's centre, which the land gives, and its fullness, which comes
+    // from the fish of the farm.
+    {.component = "FishFarm", .field = "shoal", .marker = ""},
+    {.component = "FishFarm", .field = "shownAlpha", .marker = ""},
+    // The frames grow, spread and turn the sprites of a grip's puff of dust. Each computer puts the sprites with its own
+    // numbers. The turns make and remove the puff by its centre and its turns.
+    {.component = "GripLandscapeParticle", .field = "offset", .marker = ""},
+    {.component = "GripLandscapeParticle", .field = "age", .marker = ""},
+    {.component = "GripLandscapeParticle", .field = "frame", .marker = ""},
     // The pictures that face the camera, the glows and sparks of the scripts' highlights, and the highlights' spin
     {.component = "Sprite", .field = "", .marker = ""},
     {.component = "Transform", .field = "", .marker = "Sprite"},
@@ -339,7 +349,31 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 		result.parts.emplace_back(name, part);
 	}
 	result.parts.insert(result.parts.end(), hashes.fields.begin(), hashes.fields.end());
+	result.unregistered = hashes.unregistered;
 	return result;
+}
+
+std::string UnregisteredLine(std::span<const std::string> names)
+{
+	std::string line(k_UnregisteredWords);
+	for (const auto& name : names)
+	{
+		line += (line.size() == k_UnregisteredWords.size() ? "" : ", ") + name;
+	}
+	return line;
+}
+
+std::vector<std::string> UnregisteredReporter::Fresh(std::span<const std::string> names)
+{
+	std::vector<std::string> fresh;
+	for (const auto& name : names)
+	{
+		if (_seen.insert(name).second)
+		{
+			fresh.push_back(name);
+		}
+	}
+	return fresh;
 }
 
 uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws)

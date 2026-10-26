@@ -58,9 +58,12 @@ public:
 	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
+	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
+	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
@@ -76,6 +79,7 @@ public:
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;
+	[[nodiscard]] bool IsBusyOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;

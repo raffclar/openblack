@@ -93,6 +93,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -320,6 +323,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/LocalPlayer.h"
 #include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -515,10 +519,10 @@ std::optional<entt::entity> ScriptCameraCreature()
 	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
 }
 
-/// The player whose hand this computer moves: the first player, unless a network game gave this computer another god
-PlayerNames OwnPlayer()
+/// The player that the mouse, the keys and the gestures of this computer act for
+PlayerNames LocalInputPlayer()
 {
-	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
 }
 
 /// Whether the hand is within the local player's influence, as what it offers and does asks it: at the point picked,
@@ -532,7 +536,7 @@ bool HandInInfluence()
 		return Locator::handGrabSystem::value().IsInInfluence();
 	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
-	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(OwnPlayer(), *point);
+	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(LocalInputPlayer(), *point);
 }
 
 /// Whether the hand points at the water where the fish of a fish farm show, with the hand in the local player's
@@ -620,6 +624,13 @@ void StepEase(Ease& ease)
 	{
 		ease.Update(input_steps::k_StepSeconds);
 	}
+}
+
+/// The player of this computer is in the temple. In a network game the world's turns go on there, and their audio
+/// plays the temple's sounds.
+bool PlayerInTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
 }
 
 } // namespace
@@ -815,7 +826,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	ecs::components::InterfaceLimits interfaceLimits {};
 	if (Locator::playerSystem::has_value())
 	{
-		const auto player = Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE);
+		const auto player = Locator::playerSystem::value().GetPlayer(LocalInputPlayer());
 		const auto& registry = Locator::entitiesRegistry::value();
 		if (const auto* limits =
 		        registry.Valid(player) ? registry.TryGet<const ecs::components::InterfaceLimits>(player) : nullptr;
@@ -858,10 +869,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		// Letting go of the rope of the tied leash: the leash's length becomes how far the hand is from what it is tied to,
 		// and the creature goes to the place under the hand
-		if (Locator::leashSystem::value().RopeHand(OwnPlayer()) == leash_snap::Hand::Holding &&
+		if (Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding &&
 		    Locator::pickingSystem::has_value())
 		{
-			Locator::leashSystem::value().LetGoOfRope(OwnPlayer(), Locator::pickingSystem::value().GetPick().point);
+			Locator::leashSystem::value().LetGoOfRope(LocalInputPlayer(), Locator::pickingSystem::value().GetPick().point);
 		}
 		magic.ReleaseAction();
 		// Let go quickly on a fireball, it is tapped
@@ -889,8 +900,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			glm::vec3 rayDirection;
 			Locator::camera::value().DeprojectScreenToWorld(
 			    cursor / static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))), rayOrigin, rayDirection);
-			_actionPressTaken =
-			    Locator::leashSystem::value().PressAction(OwnPlayer(), rayOrigin, rayDirection, cursor, machine_clock::Ticks());
+			_actionPressTaken = Locator::leashSystem::value().PressAction(LocalInputPlayer(), rayOrigin, rayDirection, cursor,
+			                                                              machine_clock::Ticks());
 		}
 		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
 		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
@@ -901,7 +912,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		}
 		// With an empty hand over the rope of the tied leash, the hand takes hold of the rope
 		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
-		    Locator::leashSystem::value().PressRope(OwnPlayer()))
+		    Locator::leashSystem::value().PressRope(LocalInputPlayer()))
 		{
 			_actionPressTaken = true;
 		}
@@ -938,7 +949,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				_actionPressTaken = true;
 			}
 			const auto& leashes = Locator::leashSystem::value();
-			const auto own = leashes.PlayersCreature(OwnPlayer());
+			const auto own = leashes.PlayersCreature(LocalInputPlayer());
 			const auto under = creatureHand.CreatureUnderCursor();
 			const bool tying =
 			    under.has_value() && own.has_value() &&
@@ -965,8 +976,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			auto& totems = Locator::villageTotemSystem::value();
 			if (picked.has_value())
 			{
-				if (const auto totem = totems.TotemOf(*picked);
-				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				if (const auto totem = totems.TotemOf(*picked); totem.has_value() && totems.Grip(*totem, LocalInputPlayer()))
 				{
 					_actionPressTaken = true;
 					_totemPointer = _mousePosition;
@@ -1067,11 +1077,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			auto& gestures = Locator::gestureSystem::value();
 			if (event.key.keysym.scancode == SDL_SCANCODE_M)
 			{
-				gestures.OpenSelectionByKey(PlayerNames::PLAYER_ONE);
+				gestures.OpenSelectionByKey(LocalInputPlayer());
 			}
 			else
 			{
-				gestures.RepeatMiracleByKey(PlayerNames::PLAYER_ONE);
+				gestures.RepeatMiracleByKey(LocalInputPlayer());
 			}
 			break;
 		}
@@ -1333,7 +1343,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
 	                 Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	    .actionHeld = Locator::gameActionSystem::value().Get(input::BindableActionMap::ACTION),
-	    .player = PlayerNames::PLAYER_ONE,
+	    .player = LocalInputPlayer(),
 	    .view = {.screenSize = size,
 	             .cameraRight = camera.GetRight(),
 	             .cameraEye = camera.GetOrigin(),
@@ -1443,9 +1453,9 @@ void Game::ResolveScreenShapes()
 	if (Locator::leashSystem::has_value())
 	{
 		shapes.rope = Locator::leashSystem::value().RopeUnderCursor(
-		    OwnPlayer(), {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
-		                  .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
-		                  .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
+		    LocalInputPlayer(), {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
+		                         .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
+		                         .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
 	}
 	auto& picking = Locator::pickingSystem::value();
 	picking.ResolveScreenShapes(shapes);
@@ -1456,7 +1466,7 @@ void Game::ResolveScreenShapes()
 	}
 	if (Locator::leashSystem::has_value())
 	{
-		Locator::leashSystem::value().SetRopeHovered(OwnPlayer(), pick.rope);
+		Locator::leashSystem::value().SetRopeHovered(LocalInputPlayer(), pick.rope);
 	}
 }
 
@@ -1731,7 +1741,7 @@ void Game::ProcessHandToolTipTurn()
 	}
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
-	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
+	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(LocalInputPlayer())
 	                         : std::nullopt;
 	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
 	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
@@ -1784,7 +1794,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	};
 	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
 	const auto leashTip = [pointed]() {
-		const auto tip = Locator::leashSystem::value().ToolTip(OwnPlayer(), pointed);
+		const auto tip = Locator::leashSystem::value().ToolTip(LocalInputPlayer(), pointed);
 		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
 		{
 			Locator::helpProfileSystem::value().Report(help::profile::k_FocusCreatureTip);
@@ -2067,13 +2077,13 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 			        },
 			    .paused = false,
 			    .turn = clock.GetTurn(),
-			    .inCitadel = false,
+			    .inCitadel = PlayerInTemple(),
 			    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 			});
 		}
 		break;
 	case Step::Music:
-		ProcessMusicTurn(cameraPosition, false);
+		ProcessMusicTurn(cameraPosition, PlayerInTemple());
 		break;
 	default:
 		// The world does the other steps (see simulation::PlayTurnStep)
@@ -2321,17 +2331,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		{
 			_scenarioStager();
 		}
-		const auto turn = Locator::time::value().GetTurn();
-		const bool played = PlayTurns();
-		// A turn makes the dust of the grips that the hand made before it
-		if (Locator::time::value().GetTurn() != turn)
-		{
-			for (const auto& dust : std::exchange(_gripDust, {}))
-			{
-				GripLandscapeEffect::Spawn(dust);
-			}
-		}
-		return played;
+		return PlayTurns();
 	}
 	case Step::SendCommands:
 		// A tool's run that plays the commands of a file does no command of its own player
@@ -3051,7 +3051,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 					// Over the help's text bubble or the leash's rope, the hand stands straight up; over the bubble it
 					// eases to the bubble's distance. While the hand holds the rope, the rope counts as under the cursor.
 					const bool rope =
-					    pick.rope || Locator::leashSystem::value().RopeHand(OwnPlayer()) == leash_snap::Hand::Holding;
+					    pick.rope || Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding;
 					_handStandsStraight = !pick.object.has_value() && (pick.textBubble || rope);
 					_handBubbleDistance =
 					    !pick.object.has_value() && pick.textBubble && !rope ? std::optional(pick.distance) : std::nullopt;
@@ -3421,7 +3421,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			                   : _handCameraState          ? HandState::Camera
 			                                               : HandState::Normal;
 			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
-			const auto ropeHand = Locator::leashSystem::value().RopeHand(OwnPlayer());
+			const auto ropeHand = Locator::leashSystem::value().RopeHand(LocalInputPlayer());
 			const auto cycle = hand_cycle::Choose({
 			    .pose = _handPose,
 			    .cameraState = _handCameraState,
@@ -4021,6 +4021,16 @@ void Game::StartSimulationLogs()
 		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
 		                                                         _simulation->frameGuardSystems);
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->traceDrawsPath.has_value())
+	{
+		if (!draw_trace::Start(Locator::gameRandom::value(), *_simulation->traceDrawsPath))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+			                    _simulation->traceDrawsPath->string());
+		}
+	}
+#endif
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
@@ -4036,7 +4046,7 @@ void Game::StartSimulationLogs()
 			}
 			checksums.SetTurnListener(
 			    [log = _checksumLog.get()](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-				    log->Write(turn.turn, turn.checksum, turn.parts);
+				    log->Write(turn.turn, turn.checksum, turn.parts, turn.unregistered);
 				    if (!turn.dump.empty())
 				    {
 					    log->WriteDump(turn.turn, turn.dump);
@@ -6356,10 +6366,13 @@ void Game::PlayHandGrabSound()
 	}
 	if (feedback == hand_grab::GripFeedback::Dust)
 	{
-		// The next turn makes a puff of dust where the hand grips the land. The sound plays at once.
-		_gripDust.emplace_back(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z);
-		// One of G_HandGrabLand_01 to _06, centred on the listener
-		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
+		// The next turn makes a puff of dust where the hand grips the land, on each computer of a network game. The sound
+		// plays at once, only on this computer.
+		Locator::playerCommandSystem::value().Submit(player_commands::GripDust {
+		    .point = {position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z}});
+		// One of G_HandGrabLand_01 to _06, centred on the listener. The number comes from this computer's own seed, so
+		// that the synced numbers of the world do not change.
+		const auto sample = 4 + Locator::gameRandom::value().LocalRand(6);
 		const auto id = fmt::format("InGame.sad/{}", sample);
 		// The grip is a sound of its own to the voice rules
 		audio::StartGameSoundEffect(entt::hashed_string(id.c_str()), {.voiceOwner = audio::VoiceOwner::OwnSound});

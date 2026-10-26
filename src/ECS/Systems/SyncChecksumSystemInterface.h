@@ -35,6 +35,8 @@ public:
 		/// Tools: at the turn of a dump, each field of each row of the dumped components as "component entity field
 		/// bytes", the bytes in hexadecimal
 		std::vector<std::string> dump;
+		/// The components that have an entity but no registration, so the checksum leaves them out. A correct game has none.
+		std::vector<std::string> unregistered;
 	};
 
 	virtual ~SyncChecksumSystemInterface() = default;
@@ -54,6 +56,7 @@ public:
 	/// A function that gets the checksum of each turn as the system makes it, as the dedicated server logs it. An empty
 	/// function removes it.
 	virtual void SetTurnListener(std::function<void(const TurnChecksum&)> listener) = 0;
+	[[nodiscard]] virtual std::function<void(const TurnChecksum&)> GetTurnListener() const = 0;
 };
 
 } // namespace openblack::ecs::systems

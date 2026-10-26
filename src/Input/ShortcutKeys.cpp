@@ -41,19 +41,21 @@
 #include "Gui/VillagerLabels.h"
 #include "Help/HelpProfile.h"
 #include "Help/HelpQuery.h"
+#include "LocalPlayer.h"
 #include "Locator.h"
 
 namespace openblack::input
 {
 namespace
 {
-/// Where the player's temple stands, if they have one
+/// Where the temple of the player at this computer stands, if they have one
 [[nodiscard]] std::optional<glm::vec3> PlayerTemplePosition()
 {
 	std::optional<glm::vec3> position;
+	const auto player = LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
 	Locator::entitiesRegistry::value().Each<const ecs::components::Temple, const ecs::components::Transform>(
-	    [&position](const ecs::components::Temple& temple, const ecs::components::Transform& transform) {
-		    if (temple.owner == PlayerNames::PLAYER_ONE)
+	    [&position, player](const ecs::components::Temple& temple, const ecs::components::Transform& transform) {
+		    if (temple.owner == player)
 		    {
 			    position = transform.position;
 		    }
