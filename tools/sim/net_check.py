@@ -611,6 +611,9 @@ def main():
                         help="client:x,z (client 1 or 2): once the client compared --hold-after turns, its hand holds "
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
                         "it for the leash and leads it with a tap on the land. Give it once for each client.")
+    parser.add_argument("--creature", action="append", default=[],
+                        help="CLIENT:FILE, the creature file that the client sends before the start, in place of the "
+                             "creature of its profile (clients from 1; repeat for each client)")
     parser.add_argument("--hold-after", type=int, default=300, help="the turns before --hold-creature")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
@@ -736,6 +739,9 @@ def main():
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
             if camera or index in holds or options.slot_miracle == index + 1:
                 command += ["--inspect-port", "0"]
+            creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
+            if index in creatures:
+                command += ["--join-creature", os.path.abspath(creatures[index])]
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
             clients.append(start(command, client_dir))

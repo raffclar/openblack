@@ -11,6 +11,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <initializer_list>
 #include <memory>
 #include <optional>
 #include <string>
@@ -473,6 +474,22 @@ TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)
 	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::HasLand);
 	EXPECT_EQ(alice.session.TakeStartEvent(), online::StartEvent::Transfer);
 	EXPECT_FALSE(alice.session.TakeStartEvent().has_value());
+
+	// The server keeps the files for its own world, so each world has the same creature files for the turns
+	for (const player_commands::TurnCommandSourceInterface* source :
+	     std::initializer_list<const player_commands::TurnCommandSourceInterface*> {host.get(), &alice.session, &bob.session,
+	                                                                                &watcher.session})
+	{
+		const auto first = source->StartCreatureFile(PlayerNames::PLAYER_ONE);
+		EXPECT_EQ(std::vector<uint8_t>(first.begin(), first.end()), (std::vector<uint8_t> {'A', 'L'}));
+		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::PLAYER_TWO).empty());
+		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::PLAYER_THREE).empty());
+	}
+	// Each client knows the god that it plays; the server and an observer play none
+	EXPECT_EQ(alice.session.OwnGod(), PlayerNames::PLAYER_ONE);
+	EXPECT_EQ(bob.session.OwnGod(), PlayerNames::PLAYER_TWO);
+	EXPECT_FALSE(watcher.session.OwnGod().has_value());
+	EXPECT_FALSE(host->OwnGod().has_value());
 }
 
 TEST_F(LockstepTest, AGodWithoutTheLandStopsTheStartAndIsNotReady)
