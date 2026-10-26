@@ -1081,7 +1081,7 @@ TEST_F(FrontEndTest, TheStepsOfTheStartShowTheGamesBoxes)
 	EXPECT_EQ(frontEnd->GetMessage(), Message::SendingStartData);
 	EXPECT_EQ(ButtonsOf(Message::SendingStartData), MessageButtons::None);
 	// The player of the test has no creature: an empty file goes to the server
-	EXPECT_EQ(socket.sent.back().Text(), R"({"file":"","type":"start.creature"})");
+	EXPECT_EQ(socket.sent.back().Text(), R"({"alignment":0.0,"file":"","type":"start.creature"})");
 	ServerSends(sockets, game_socket::StartCreature {.slot = 1, .file = {}});
 	ServerSends(sockets, game_socket::Start {.land = {}, .testbed = true, .seed = 3, .turn = 0, .opening = {}});
 	Step();

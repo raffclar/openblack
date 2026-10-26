@@ -125,6 +125,7 @@ public:
 	/// The creature file that the god of the slot sent before the start. The world of the server makes the same
 	/// creatures as the worlds of the clients from these files.
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
+	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The checksum of the server's world after a turn. It goes to every client.
 	void TurnChecksum(uint32_t turn, uint64_t checksum);
 
@@ -208,6 +209,8 @@ private:
 	/// The creature files that the gods sent in the start, by god slot. The server sends each file to all the players and
 	/// keeps it only in memory, for its own world.
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
+	/// The alignments that the gods sent with their creature files, by god slot
+	std::map<uint8_t, float> _startAlignments;
 	bool _pausedBefore {false};
 	uint32_t _turnsDone {0};
 	/// The last turn of the game, once the turns stopped

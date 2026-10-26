@@ -576,6 +576,7 @@ void LockstepHost::TransferCreatures()
 	_startStep = StartStep::Transfer;
 	_awaited = GodConnections();
 	_startCreatures.clear();
+	_startAlignments.clear();
 	Log(spdlog::level::info, "Every god has the land: the gods send their creatures");
 	Broadcast(game_socket::StartTransfer {});
 }
@@ -587,11 +588,13 @@ void LockstepHost::StartCreature(ConnectionId connection, const Peer& peer, cons
 		return;
 	}
 	_awaited.erase(connection);
-	// Each player gets the creature file of each god at once. The server keeps the file in memory for its own world.
-	Log(spdlog::level::info,
-	    fmt::format("The god of slot {} sends a creature file of {} bytes", *peer.seat, creature.file.size()));
+	// Each player gets the creature file and the alignment of each god at once. The server keeps them in memory for its own
+	// world.
+	Log(spdlog::level::info, fmt::format("The god of slot {} sends a creature file of {} bytes and the alignment {}",
+	                                     *peer.seat, creature.file.size(), creature.alignment));
 	_startCreatures[*peer.seat] = creature.file;
-	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file});
+	_startAlignments[*peer.seat] = creature.alignment;
+	Broadcast(game_socket::StartCreature {.slot = *peer.seat, .file = creature.file, .alignment = creature.alignment});
 	if (_awaited.empty())
 	{
 		StartGame();
@@ -630,6 +633,7 @@ void LockstepHost::StopStart(const game_socket::Frame& why)
 	_startStep = StartStep::None;
 	_awaited.clear();
 	_startCreatures.clear();
+	_startAlignments.clear();
 	Broadcast(why);
 }
 
@@ -639,6 +643,12 @@ std::span<const uint8_t> LockstepHost::StartCreatureFile(PlayerNames god) const
 {
 	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
 	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
+
+std::optional<float> LockstepHost::StartAlignment(PlayerNames god) const
+{
+	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
 }
 
 bool LockstepHost::AnyGodConnected() const

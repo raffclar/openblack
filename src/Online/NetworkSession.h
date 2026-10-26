@@ -50,6 +50,9 @@ struct NetworkSessionSettings
 	/// Reads the creature file of the player, which goes to the other players before the start. Empty when the player
 	/// has no creature, and with no reader.
 	std::function<std::vector<uint8_t>()> readCreature;
+	/// Reads the alignment of the player's profile, which goes to the other players with the creature file. With no
+	/// reader, the player sends an alignment of 0.
+	std::function<float()> readAlignment;
 	/// Tools: gets each turn at which the world of this computer differs from the server's world
 	std::function<void(uint32_t turn)> parts;
 };
@@ -143,6 +146,7 @@ public:
 	[[nodiscard]] bool HasTurn(uint32_t turn) const override;
 	[[nodiscard]] std::vector<player_commands::Command> TakeTurn(uint32_t turn) override;
 	[[nodiscard]] std::span<const uint8_t> StartCreatureFile(PlayerNames god) const override;
+	[[nodiscard]] std::optional<float> StartAlignment(PlayerNames god) const override;
 	/// The god of the slot that the server gave to this computer. None for an observer.
 	[[nodiscard]] std::optional<PlayerNames> OwnGod() const override;
 
@@ -216,6 +220,7 @@ private:
 	std::optional<game_socket::Start> _start;
 	std::vector<StartEvent> _startEvents;
 	std::map<uint8_t, std::vector<uint8_t>> _startCreatures;
+	std::map<uint8_t, float> _startAlignments;
 	std::string _refusedReason;
 
 	std::map<uint32_t, turn_codec::TurnBundle> _turns;

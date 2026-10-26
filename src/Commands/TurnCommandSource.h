@@ -41,6 +41,9 @@ public:
 	/// The creature file that the player of the god sent to all the players before the start. It is empty when the
 	/// player has no creature. The server and each client have the same files, so each world makes the same creatures.
 	[[nodiscard]] virtual std::span<const uint8_t> StartCreatureFile(PlayerNames /*god*/) const { return {}; }
+	/// The alignment that the player of the god sent to all the players with its creature file before the start. None
+	/// when the god has no player that sent its start, as a slot that the computer fills.
+	[[nodiscard]] virtual std::optional<float> StartAlignment(PlayerNames /*god*/) const { return std::nullopt; }
 	/// The god that the player of this computer plays. The server plays no god.
 	[[nodiscard]] virtual std::optional<PlayerNames> OwnGod() const { return std::nullopt; }
 };
