@@ -439,24 +439,18 @@ void Body::TouchGround(const Ground& ground)
 	}
 }
 
-std::span<const face_search::FaceBlock> Body::FaceBlocks() const
+const face_search::FaceSet& Body::FaceBlocks() const
 {
 	if (_faceBlocksStale)
 	{
-		_faceBlocks.resize(face_search::BlocksFor(_faces.size()));
-		// An empty place in the last block keeps a zero normal, so it never faces a line
-		if (!_faceBlocks.empty())
-		{
-			_faceBlocks.back() = {};
-		}
+		_faceBlocks.Reset(_faces.size());
 		for (size_t i = 0; i < _faces.size(); ++i)
 		{
 			const auto& face = _faces[i];
-			face_search::Store(_faceBlocks, i,
-			                   {.normal = face.worldNormal,
-			                    .a = _points[face.indices[0]].world,
-			                    .b = _points[face.indices[1]].world,
-			                    .c = _points[face.indices[2]].world});
+			_faceBlocks.Store(i, {.normal = face.worldNormal,
+			                      .a = _points[face.indices[0]].world,
+			                      .b = _points[face.indices[1]].world,
+			                      .c = _points[face.indices[2]].world});
 		}
 		_faceBlocksStale = false;
 	}

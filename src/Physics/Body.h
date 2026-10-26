@@ -277,8 +277,9 @@ private:
 	[[nodiscard]] std::optional<glm::vec3> AnyFaceBehind(glm::vec3 point, glm::vec3 direction) const;
 	/// The skeleton part a line meets first
 	[[nodiscard]] std::optional<RayHit> SkeletonHit(glm::vec3 point, glm::vec3 direction) const;
-	/// The faces in the world, in blocks for the search. The body makes the blocks again after its points or faces move.
-	[[nodiscard]] std::span<const face_search::FaceBlock> FaceBlocks() const;
+	/// The faces in the world, in blocks with a box each for the search. The body makes them again after its points or
+	/// faces move.
+	[[nodiscard]] const face_search::FaceSet& FaceBlocks() const;
 
 	float _scale {1.0f};
 	glm::mat3 _axes {1.0f};
@@ -306,7 +307,7 @@ private:
 	std::vector<Face> _faces;
 	std::vector<Ellipsoid> _bones;
 	/// A copy of the faces in the world for the search. It is not part of the body's state.
-	mutable std::vector<face_search::FaceBlock> _faceBlocks;
+	mutable face_search::FaceSet _faceBlocks;
 	/// The points or the faces moved since the last copy
 	mutable bool _faceBlocksStale {true};
 
