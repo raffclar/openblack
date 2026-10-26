@@ -39,6 +39,8 @@
 #include "Common/UserData.h"
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
+#include "ECS/Components/Temple.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
 #include "ECS/StatisticsRules.h"
@@ -575,7 +577,24 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
 	};
-	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
+	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
+	// other lands of the tools and the testbed keep the default slots.
+	uint8_t godSlots = k_DefaultGodSlots;
+	if (scriptLand && online_map_land::IsOnlineMap(settings.land))
+	{
+		std::array<bool, computer_player::k_SlotGods.size()> citadels {};
+		Locator::entitiesRegistry::value().Each<const ecs::components::Temple>([&citadels](const auto& temple) {
+			const auto slot = std::ranges::find(computer_player::k_SlotGods, temple.owner);
+			if (slot != computer_player::k_SlotGods.end())
+			{
+				citadels.at(static_cast<size_t>(slot - computer_player::k_SlotGods.begin())) = true;
+			}
+		});
+		godSlots = GodSlotsOfLand(citadels);
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The room has {} god slots and starts with {} gods at least", godSlots,
+	                   settings.network->minGods);
+	if (const auto error = network->Start(*settings.network, start, landChecksum, godSlots); error.has_value())
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The game role cannot start: {}", *error);
 		network.reset();
