@@ -347,6 +347,14 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handGrabSystem::value().DoShakeOff(command.player);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, TempleLeashOff>)
+		    {
+			    // The player went into their temple: the turn checks again that the player holds the leash
+			    if (openblack::Locator::leashSystem::has_value())
+			    {
+				    openblack::Locator::leashSystem::value().TakeOffAtTemple(command.player);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPostTap>)
 		    {
 			    if (openblack::Locator::leashSystem::has_value() && registry.Valid(action.post))

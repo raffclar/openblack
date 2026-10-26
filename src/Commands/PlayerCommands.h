@@ -356,12 +356,17 @@ struct GripDust
 	glm::vec3 point {0.0f};
 };
 
+/// The player goes into their temple. When the player holds the leash of their creature, the leash comes off.
+struct TempleLeashOff
+{
+};
+
 /// What a command does
 using Action =
     std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
                  HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust>;
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, TempleLeashOff>;
 
 /// A command and the player that sent it
 struct Command

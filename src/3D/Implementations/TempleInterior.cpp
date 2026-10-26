@@ -67,11 +67,14 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystemTemple.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
@@ -1789,6 +1792,17 @@ void TempleInterior::Activate(TempleRoom room)
 	if (!IsRoomAvailable(room))
 	{
 		return;
+	}
+	// The player of this computer goes into the temple with the leash of their creature held: a command takes the leash
+	// off in a later game turn, on every computer
+	if (Locator::leashSystem::has_value() && Locator::playerCommandSystem::has_value())
+	{
+		const auto player =
+		    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+		if (Locator::leashSystem::value().ComesOffAtTemple(player))
+		{
+			Locator::playerCommandSystem::value().Submit(player_commands::TempleLeashOff {});
+		}
 	}
 	// The help of the world stops. The temple keeps the dialogue of a script until the player leaves.
 	{

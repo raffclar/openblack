@@ -210,7 +210,8 @@ struct RenderContext
 	std::vector<EntityDraw> entityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
-	/// its instance and lit from a light of its own
+	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the
+	/// temple's rooms.
 	struct CreatureCopyDraw
 	{
 		entt::entity creature;

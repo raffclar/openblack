@@ -77,6 +77,8 @@ public:
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;
+	[[nodiscard]] bool ComesOffAtTemple(PlayerNames player) const override;
+	bool TakeOffAtTemple(PlayerNames player) override;
 
 private:
 	/// Puts the leash on for the player, unless the rules refuse it, which is logged and remembered

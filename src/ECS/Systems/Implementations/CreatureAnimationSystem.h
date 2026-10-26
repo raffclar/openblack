@@ -43,7 +43,7 @@ public:
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;
-	void PoseCopy(entt::entity copy, float milliseconds) override;
+	void PoseCopy(Registry& copies, entt::entity copy, float milliseconds) override;
 	[[nodiscard]] std::optional<glm::vec3> BoneInAnimation(entt::entity creature, size_t animation, float timeMs, uint32_t bone,
 	                                                       bool mirrored) override;
 	[[nodiscard]] std::optional<glm::vec3> MiddleOfBonesInAnimation(entt::entity creature, size_t animation, float timeMs,

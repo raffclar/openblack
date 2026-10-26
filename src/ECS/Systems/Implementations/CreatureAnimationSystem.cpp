@@ -1190,18 +1190,18 @@ void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
 	}
 }
 
-void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
+void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, float milliseconds)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* self = registry.TryGet<const CreatureCopy>(copy);
-	if (self == nullptr || !registry.Valid(self->creature))
+	const auto& land = Locator::entitiesRegistry::value();
+	const auto* self = copies.Valid(copy) ? copies.TryGet<const CreatureCopy>(copy) : nullptr;
+	if (self == nullptr || !land.Valid(self->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(self->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(self->creature);
-	auto* animation = registry.TryGet<CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
+	const auto* creature = land.TryGet<const Creature>(self->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(self->creature);
+	auto* animation = copies.TryGet<CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
 	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
 	{
 		return;
@@ -1252,12 +1252,12 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	}
 
 	// Its eyes are the creature's, looking where the copy's head looks
-	auto* eyes = registry.TryGet<CreatureEyes>(copy);
+	auto* eyes = copies.TryGet<CreatureEyes>(copy);
 	if (eyes == nullptr)
 	{
 		return;
 	}
-	if (const auto* own = registry.TryGet<const CreatureEyes>(self->creature))
+	if (const auto* own = land.TryGet<const CreatureEyes>(self->creature))
 	{
 		eyes->mode = own->mode;
 		eyes->openness = own->openness;
