@@ -74,6 +74,7 @@ std::optional<CameraModel::CameraInterpolationUpdateInfo> CreatureCameraModel::U
 	    .origin = origin,
 	    .focus = _focus,
 	    .duration = std::chrono::duration_cast<std::chrono::microseconds>(std::chrono::duration<float>(ease)),
+	    .eachStep = true,
 	};
 }
 

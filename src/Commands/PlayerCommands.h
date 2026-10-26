@@ -356,6 +356,37 @@ struct GripDust
 	glm::vec3 point {0.0f};
 };
 
+/// The report of what the player did that the help counts, since the last report: the help events of the input of the
+/// player, and what the world camera of the player shows. Only the computer of the player counts the report, at the
+/// turn. Thus the help counts the same things at the same turns at all frame rates.
+struct HelpReport
+{
+	/// One bit for each help event: bit n is event n (see help::profile)
+	uint64_t events {0};
+	/// A front-end box shows, for example the menu of the game. The help then counts nothing.
+	bool boxShows {false};
+	/// The cursor is on a point of the world. Then the point of the report of the hand (HandReport) is under the cursor.
+	bool cursorOnPoint {false};
+	/// The events of the view of the world camera, which the help counts each turn until the next report (see
+	/// help::profile::CameraViewEvents). None when a script, the temple or a creature has the camera.
+	bool cameraSeesLand {false};
+	bool cameraNearAndSteep {false};
+	bool cameraSeesSky {false};
+
+	bool operator==(const HelpReport& other) const = default;
+};
+
+/// The Help key: the advisors tell the player about a thing, else about the ground at a point. The computer of the
+/// player finds the thing and the point as its hand shows them. Only that computer says the help, at the turn.
+struct HelpQuery
+{
+	/// The thing in the hand or under the hand, or none
+	entt::entity thing {entt::null};
+	/// The point on the ground under the hand, if the hand is over the ground
+	bool hasGround {false};
+	glm::vec3 ground {0.0f};
+};
+
 /// Tools: the creature of the player starts a fight with the nearest creature, or a fight that it is in stops. Only a
 /// game server with its test commands on lets this command through.
 struct CreatureFightCheat
@@ -372,7 +403,7 @@ using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, Hand
                             LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
                             FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
                             PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
-                            GripDust, CreatureFightCheat, TempleLeashOff>;
+                            GripDust, HelpReport, HelpQuery, CreatureFightCheat, TempleLeashOff>;
 
 /// A command and the player that sent it
 struct Command

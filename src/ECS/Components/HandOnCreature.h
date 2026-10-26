@@ -31,9 +31,8 @@ struct HandOnCreature
 	creature_feedback::StrokeClocks clocks;
 	/// The part last stroked, forgotten when the hand comes off the body
 	std::optional<creature_feedback::BodyPart> lastPart;
-	/// Strokes and slaps are weighed in steps (see creature_feedback::Pace): the time towards the next, and where the
-	/// cursor was and whether the hand was on the body at the last
-	float sinceStepMs {0.0f};
+	/// Strokes and slaps are weighed at the fixed steps of the input (see input_steps): where the cursor was and whether
+	/// the hand was on the body at the last step
 	glm::vec2 lastCursor {0.0f};
 	/// Held by a command, the hand stays at this place
 	std::optional<glm::vec3> lastPoint;
@@ -60,8 +59,10 @@ struct HandOnCreature
 	/// The distance of the hand from the camera along the line of sight, which starts when the hand takes hold
 	Zoomer distance {0.0f};
 	bool distanceStarted {false};
-	/// The place where the hand showed at the last frame, which gives the height of a slap
+	/// The place where the hand showed at the last step, which gives the height of a slap, and its distance from the
+	/// camera, at which the hand shows until the next step
 	std::optional<glm::vec3> shownAt;
+	std::optional<float> shownDistance;
 };
 
 /// On the player's hand once it has let go of a creature: the sum of strokes and slaps it let go with, which the

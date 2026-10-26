@@ -256,7 +256,8 @@ public:
 		}
 		transform.position = pose.origin;
 	}
-	// As the game's world: the frames draw the pulled pose apart from the world's Transform
+	// As the game's world: the frames draw the pulled pose apart from the world's Transform. The fake also keeps the
+	// drawn pose by entity.
 	void DrawPulledPose(entt::entity object, const Pose& pose) override
 	{
 		HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
@@ -267,6 +268,7 @@ public:
 			pulled.scale[column] = length;
 		}
 		registry.AssignOrReplace<HandPulled>(object, pulled);
+		drawnPulls[object] = pose;
 	}
 	void ForgetPulledPose(entt::entity object) override
 	{
@@ -274,7 +276,9 @@ public:
 		{
 			registry.Remove<HandPulled>(object);
 		}
+		drawnPulls.erase(object);
 	}
+	std::map<entt::entity, Pose> drawnPulls;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity, const glm::mat3& axes) const override
 	{
 		glm::mat3 result = axes;
@@ -997,6 +1001,7 @@ TEST_F(HandGrabSystemWithWorld, APressTheHandCantTakeClicksTheThing)
 	world->underCursor = rock;
 	// Even out of the influence, where it isn't tapped
 	world->influence = false;
+	commandTurn = now / 100;
 	EXPECT_FALSE(Press());
 	const auto* clicked = world->registry.TryGet<const HandClicked>(world->hand);
 	ASSERT_NE(clicked, nullptr);
@@ -1035,11 +1040,13 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(7);
+	commandTurn = 7;
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1047,13 +1054,12 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.placeTurn, 8u);
 }
 
-TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+TEST_F(HandGrabSystemWithWorld, TheTurnWritesTheClicks)
 {
-	world->networkGame = true;
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
 	commandTurn = 12;
-	system->ClickThing(rock, 7);
+	system->ClickThing(rock);
 	ASSERT_EQ(world->sent.size(), 1u);
 	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
 	// The click has the number of the turn that wrote it, not of the frame that sent it
@@ -1063,7 +1069,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor.reset();
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
 	commandTurn = 13;
-	system->ClickReleased(8);
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
@@ -1073,7 +1079,7 @@ TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
 	world->underCursor = gone;
 	waiting.clear();
 	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
-	system->ClickReleased(9);
+	system->ClickReleased();
 	world->registry.Destroy(gone);
 	RunWaiting();
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
@@ -1086,12 +1092,13 @@ TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
 	world->underCursor = chest;
 	world->looseLeash = true;
 	Frame(10, {}, {20.0f, 0.0f, 30.0f});
-	system->ClickReleased(8);
+	commandTurn = 8;
+	system->ClickReleased();
 	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
 	EXPECT_TRUE(clicked.thing == entt::null);
 	EXPECT_EQ(clicked.placeTurn, 8u);
 	world->looseLeash = false;
-	system->ClickReleased(9);
+	system->ClickReleased();
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, chest);
 }
 
@@ -1099,11 +1106,16 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 {
 	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
 	world->underCursor = rock;
-	system->ClickReleased(now / 100);
-	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more
+	commandTurn = now / 100;
+	system->ClickReleased();
+	// 149 turns of 100 ms is under 15 seconds; 150 is just over, as a thousandth in single precision is a little more.
+	// The turn forgets the clicks, not the frames.
 	Frame(14900);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	system->InterfaceTurn(now, now / 100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
 }
 
@@ -1190,11 +1202,58 @@ TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeIsDrawnLeaningAndKeep
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	// The frames draw the lean and the stretch; the world keeps the tree as it stood
-	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
-	ASSERT_NE(pulled, nullptr);
-	EXPECT_TRUE(pulled->rotation != before.rotation || pulled->scale != before.scale);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	const auto pulled = world->drawnPulls.at(tree);
+	ASSERT_TRUE(pulled.axes != world->PoseOf(tree).axes);
 	EXPECT_FALSE(Release().has_value());
+	for (int i = 0; i < 10; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// Alone, the frames keep the lean and the stretch of the pull. The world keeps the thing as it stood.
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	EXPECT_EQ(world->drawnPulls.at(tree).axes, pulled.axes);
+	EXPECT_EQ(world->drawnPulls.at(tree).origin, pulled.origin);
+	const auto& after = world->registry.Get<const Transform>(tree);
+	EXPECT_EQ(after.position, before.position);
+	EXPECT_EQ(after.rotation, before.rotation);
+	EXPECT_EQ(after.scale, before.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, ANewPullOfATreeLetGoStartsFromItsPlaceInTheWorld)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	EXPECT_FALSE(Release().has_value());
+	Frame(10);
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	// The press starts a new pull: the old lean goes until the hand has faded into its pull
+	EXPECT_TRUE(Press());
+	Frame(10);
+	EXPECT_FALSE(world->drawnPulls.contains(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsAsBeforeThePull)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	const auto before = world->registry.Get<const Transform>(tree);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	ASSERT_TRUE(world->drawnPulls.contains(tree));
+	EXPECT_FALSE(Release().has_value());
+	Frame(10);
+	// The other computers never saw the lean, so the thing stands as it stood before the pull
+	EXPECT_FALSE(world->drawnPulls.contains(tree));
 	const auto& after = world->registry.Get<const Transform>(tree);
 	EXPECT_EQ(after.position, before.position);
 	EXPECT_EQ(after.rotation, before.rotation);
@@ -2363,8 +2422,14 @@ TEST_F(HandGrabSystemWithWorld, ATapWaitsForTheTurnThatDoesItsCommand)
 	Frame(50);
 	Release();
 	EXPECT_TRUE(world->tapped.empty());
-	ASSERT_EQ(world->sent.size(), 1u);
-	EXPECT_TRUE(std::holds_alternative<player_commands::HandTap>(world->sent.front()));
+	// The tap and the click of the thing under the hand go to the turn
+	ASSERT_EQ(world->sent.size(), 2u);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandTap>(action); }),
+	          1);
+	EXPECT_EQ(std::ranges::count_if(
+	              world->sent, [](const auto& action) { return std::holds_alternative<player_commands::HandClick>(action); }),
+	          1);
 	RunWaiting();
 	ASSERT_EQ(world->tapped.size(), 1u);
 	EXPECT_EQ(world->tapped.front(), rock);

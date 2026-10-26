@@ -87,6 +87,13 @@ std::vector<Action> EachCommand()
 	    LeashPick {.type = LeashType::Good},
 	    HandShakeOff {},
 	    GripDust {.point = {2000.5f, 104.25f, -2363.0f}},
+	    HelpReport {.events = 0x0102030405060708,
+	                .boxShows = false,
+	                .cursorOnPoint = true,
+	                .cameraSeesLand = true,
+	                .cameraNearAndSteep = true,
+	                .cameraSeesSky = false},
+	    HelpQuery {.thing = Entity(26), .hasGround = true, .ground = {1.0f, 2.0f, 3.0f}},
 	    CreatureFightCheat {},
 	    TempleLeashOff {},
 	};
@@ -112,7 +119,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 34)
+	switch (bits(random) % 36)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -215,8 +222,17 @@ Action RandomAction(std::mt19937& random)
 	case 30:
 		return GripDust {.point = vector()};
 	case 31:
-		return CreatureFightCheat {};
+		return HelpReport {.events = (uint64_t {bits(random)} << 32) | bits(random),
+		                   .boxShows = bits(random) % 2 == 0,
+		                   .cursorOnPoint = bits(random) % 2 == 0,
+		                   .cameraSeesLand = bits(random) % 2 == 0,
+		                   .cameraNearAndSteep = bits(random) % 2 == 0,
+		                   .cameraSeesSky = bits(random) % 2 == 0};
 	case 32:
+		return HelpQuery {.thing = entity(), .hasGround = bits(random) % 2 == 0, .ground = vector()};
+	case 33:
+		return CreatureFightCheat {};
+	case 34:
 		return TempleLeashOff {};
 	default:
 		return PlayerLeft {};
@@ -279,8 +295,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2,  5,  9, 5,  53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9,  12, 1,
-	                                 18, 11, 5, 21, 15, 3, 5, 1,  2, 1,  61, 5, 2, 1, 13, 1,  1};
+	const std::vector<size_t> sizes {2,  5, 9,  5,  53, 5, 9, 18, 5, 49, 17, 5, 5, 5,  9,  12, 1, 18,
+	                                 11, 5, 21, 15, 3,  5, 1, 2,  1, 61, 5,  2, 1, 13, 10, 18, 1, 1};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -684,5 +700,21 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	// A seed number after the last seed of the game is refused
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
+	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AHelpReportKeepsItsEventsAndRefusesUnknownFlags)
+{
+	const HelpReport report {.events = uint64_t {1} << 48, .boxShows = true, .cameraSeesSky = true};
+	const auto bytes = Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {report}});
+	const auto decoded = Decode(bytes);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	ASSERT_TRUE(decoded.frame.has_value());
+	EXPECT_EQ(std::get<HelpReport>(std::get<CommandBlock>(*decoded.frame).actions.at(0)), report);
+
+	// The byte of the flags comes last, after the tag and the eight bytes of the events. A flag after the fifth is
+	// refused.
+	auto wrong = bytes;
+	wrong.back() = 32;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
 }

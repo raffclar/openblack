@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "Common/InputSteps.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -49,6 +50,8 @@ public:
 		/// The frame's time: the clock's for the hand's fades, the game's for the spring
 		float seconds {0.0f};
 		uint32_t gameMs {0};
+		/// The steps of the player's input that the frame takes
+		input_steps::Steps inputSteps {input_steps::Steps::One()};
 		/// The clock now, and the game's turn
 		uint32_t nowMs {0};
 		uint32_t turn {0};
@@ -62,10 +65,10 @@ public:
 	virtual std::optional<entt::entity> Release(uint32_t nowMs, uint32_t turn) = 0;
 	/// The Action button is let go while the hand did nothing with the press: the thing under the hand is clicked, or
 	/// else the place on the land under it, for the scripts to ask about (see hand_click)
-	virtual void ClickReleased(uint32_t turn) = 0;
+	virtual void ClickReleased() = 0;
 	/// A press of the Action button on a thing the hand won't pick up, which something else takes (a creature the hand
 	/// holds to): the thing is clicked
-	virtual void ClickThing(entt::entity thing, uint32_t turn) = 0;
+	virtual void ClickThing(entt::entity thing) = 0;
 	/// Each frame: the hand takes what it waited for, its spring drags it, and the twist of a throw is given. The hand's
 	/// position, risen for what it holds, or dragged by its spring.
 	virtual glm::vec3 UpdateFrame(const Frame& frame) = 0;

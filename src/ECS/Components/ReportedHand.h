@@ -28,8 +28,8 @@ struct ReportedHand
 	glm::vec3 camera {0.0f};
 	/// The point that the camera looks at
 	glm::vec3 focus {0.0f};
-	/// In a network game, the thing under the cursor as the last pick that a turn did tells it
-	/// (player_commands::HandPick). None in a single game, and none until the first pick.
+	/// The thing under the cursor as the last pick that a turn did tells it (player_commands::HandPick). None until the
+	/// first pick.
 	entt::entity pickedObject {entt::null};
 };
 

@@ -370,6 +370,9 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
+	/// world camera, when they changed
+	void ReportHelp();
 	/// The things in view are made ready for the draw of this frame
 	void UpdateEntitiesFrame(std::chrono::microseconds deltaTime);
 	/// The keys of the camera, after the camera moved. They move the camera in the next frame.
@@ -721,9 +724,11 @@ private:
 	/// The values are as in player_commands::HandReport: the collide point, the hand, the camera and its focus
 	std::array<glm::vec3, 4> _lastHandReport {};
 	entt::entity _reportedHand {entt::null};
-	/// The thing under the cursor that the last player_commands::HandPick sent, in a network game
+	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The turn of the last report of the help that this computer sent
+	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it
 	std::optional<glm::vec3> _cursorLand;
 	/// Where the hand rests on or before the thing under the cursor, which it hovers at rather than over the land
@@ -750,11 +755,15 @@ private:
 	uint32_t _handInWaterSample {0};
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
+	/// Whether a script holds the widescreen for a cut scene, when the camera and the hand keep to the game's time
+	[[nodiscard]] bool ScriptHoldsCamera() const;
+	/// The time that the steps of the input go by in this frame (see input_steps), from the real time of the frame
+	[[nodiscard]] std::chrono::microseconds InputStepTime(std::chrono::microseconds frameTime) const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
@@ -763,9 +772,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
-	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-	                float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
+	/// eases at the fixed steps of the input.
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none

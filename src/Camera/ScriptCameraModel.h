@@ -344,6 +344,7 @@ public:
 	void Restore(const Saved& saved, const Lookups& lookups);
 
 	std::optional<CameraInterpolationUpdateInfo> Update(std::chrono::microseconds dt, const Camera& camera) override;
+	[[nodiscard]] bool StepsWithTheInput() const override { return true; }
 	void HandleActions(std::chrono::microseconds dt) override;
 	void SetFlight(glm::vec3 origin, glm::vec3 focus, float rise) override;
 	/// While a script has the camera, no other camera can take over

@@ -59,12 +59,12 @@ constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
 
-/// The help counts an event, if the help is there
+/// The help counts an event of the player's input at the turn of its next report, if the help is there
 void Help(uint32_t event)
 {
 	if (Locator::helpProfileSystem::has_value())
 	{
-		Locator::helpProfileSystem::value().Trigger(event);
+		Locator::helpProfileSystem::value().Report(event);
 	}
 }
 
@@ -352,6 +352,8 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 void GestureSystem::Update(const Frame& frame)
 {
 	LoadTemplates();
+	const auto lastCursor = _lastCursor.value_or(frame.cursor);
+	_lastCursor = frame.cursor;
 	if (frame.view.screenSize.x > 0.0f && frame.view.screenSize.y > 0.0f)
 	{
 		_screenAspect = frame.view.screenSize.x / frame.view.screenSize.y;
@@ -405,15 +407,18 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 
-	// Sampled at the game's pace, not the frame's
-	_sinceSample += frame.seconds;
-	if (_sinceSample < gesture::k_SampleSeconds)
+	// Sampled at the steps of the input, not at the frames. A sample between two frames takes the cursor at its place
+	// between them.
+	for (const auto part : gesture::SamplePoints(_sinceSample, frame.steps))
 	{
-		return;
+		SampleCursor(input_steps::Between(lastCursor, frame.cursor, part), frame, context);
 	}
-	_sinceSample = 0.0f;
+}
+
+void GestureSystem::SampleCursor(glm::vec2 cursor, const Frame& frame, const gesture::HandContext& context)
+{
 	const auto toReference = frame.view.screenSize.y > 0.0f ? gesture::k_ReferenceHeight / frame.view.screenSize.y : 1.0f;
-	glm::vec2 point = frame.cursor * toReference;
+	glm::vec2 point = cursor * toReference;
 	if (!_drawing.empty())
 	{
 		point = _drawing.front();

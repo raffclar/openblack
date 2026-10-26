@@ -316,7 +316,7 @@ def inspector_call(pid, query, request):
         return None
 
 
-def hold_creature(pid, near):
+def hold_creature(pid, near, slaps=0):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
     pixel where the interface picks the creature."""
@@ -368,6 +368,16 @@ def hold_creature(pid, near):
     for dx, dy in ((10, 0), (0, 10), (-10, 0), (0, -10), (0, 0)):
         inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0] + dx, pixel[1] + dy]}})
         time.sleep(0.3)
+    # With slaps, the hand strokes the body for some seconds, then each slap is a fast sweep across the middle of the
+    # screen. Two slaps come close together, so one slap comes while the reaction to the other waits for its turn.
+    if slaps > 0:
+        for step in range(12):
+            inspector_call(pid, "input.pointer", {"params": {"screen": [pixel[0], pixel[1] + (20 if step % 2 else -20)]}})
+            time.sleep(0.3)
+        for index in range(slaps):
+            side = 400 if index % 2 == 0 else -400
+            inspector_call(pid, "input.pointer", {"params": {"screen": [640 + side, pixel[1]], "timing": "immediate"}})
+            time.sleep(0.05 if index % 2 == 0 else 1.2)
     inspector_call(pid, "input.button", {"params": {"button": "right", "action": "release"}})
     # The camera flies back to where it was before the hold
     time.sleep(8.0)
@@ -717,6 +727,9 @@ def main():
                              "creature fights the nearest creature); then both clients fight with the fight autopilot "
                              "and draw the star of the special move for this many seconds. The server takes test "
                              "commands. Needs a land where both gods have a creature near each other.")
+    parser.add_argument("--hold-slaps", type=int, default=0,
+                        help="with --hold-creature, the hand also strokes the creature for some seconds and slaps it "
+                             "this many times before it lets go")
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
@@ -881,7 +894,7 @@ def main():
                 if index not in held and clients[index].poll() is None and lines_with(
                         os.path.join(client_dirs[index], "client.log"),
                         [f"Network game: {options.hold_after} turns compared"]):
-                    hold_creature(clients[index].pid, near)
+                    hold_creature(clients[index].pid, near, options.hold_slaps)
                     held.add(index)
             if (options.slot_fight and fight_done is None and len(clients) == 2
                     and all(client.poll() is None for client in clients) and lines_with(
