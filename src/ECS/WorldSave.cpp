@@ -526,12 +526,7 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 			// The maps that the game works out from the land are made again when they are next needed
 			loaded.landAvoid.reset();
 			// The creatures' map of the land comes from the land and its towns at the start of the land, and the towns
-			// changed after. A world state keeps the map of the computer that sent it, so that the creatures find the
-			// same places on every computer.
-			if (kind == LoadKind::SavedGame)
-			{
-				loaded.explorationMap.reset();
-			}
+			// changed after. The load keeps the saved map, so that the creatures find the same places as before the save.
 			registry.Context() = std::move(loaded);
 		}
 		else

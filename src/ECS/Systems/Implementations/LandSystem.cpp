@@ -603,13 +603,9 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// save keeps no symbol.
 	View().MakeSymbolSheet();
 	View().ShowLoadingFrame();
-	// The creatures' map of the land that a world state brings stays: the start of the land makes the map from the towns
-	// of now, but the computer that sent the world made it from the towns at the start
-	decltype(registry.Context().explorationMap) exploration;
-	if (use == SavedLandUse::WorldState)
-	{
-		exploration = std::move(registry.Context().explorationMap);
-	}
+	// The creatures' map of the land that the saved world brings stays: the start of the land makes the map from the towns
+	// of now, but the saved world made it from the towns at the start. A save with no map gets the map of now.
+	auto exploration = std::move(registry.Context().explorationMap);
 	StartNewLand(land_change::Kind::SavedGame);
 	if (exploration.has_value())
 	{
