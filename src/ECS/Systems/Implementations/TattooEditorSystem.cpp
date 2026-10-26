@@ -20,10 +20,12 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureSkin.h"
+#include "ECS/CreatureTattooChange.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
 
 using namespace openblack;
@@ -31,8 +33,9 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The skins of the creatures in the registry, painted by the skin system. The changes of the editor go to the creature
-/// as commands of the player, which the turn puts on the creature on every computer. Until then the skin shows them.
+/// The skins of the creatures in the registry, painted by the skin system. In a game alone, the changes of the editor go
+/// to the creature as commands of the player, which the turn puts on the creature. Until then the skin shows them. In a
+/// network game, the changes stay on this computer (see creature_tattoo_change::Apply).
 class RegistrySkin final: public TattooEditorSystem::Skin
 {
 public:
@@ -47,8 +50,9 @@ public:
 		{
 			return std::nullopt;
 		}
-		// A change that waits for its turn is what the editor starts from
-		return tattoos->shown.value_or(tattoos->slots);
+		// The editor starts from the tattoos that this computer shows: a change that waits for its turn, or a change that
+		// stays on this computer
+		return ecs::creature_tattoo_change::ShownSlots(*tattoos);
 	}
 
 	void Write(entt::entity creature, const creature_tattoo::Slots& slots) override
@@ -69,29 +73,21 @@ public:
 		{
 			return;
 		}
-		if (!Locator::playerCommandSystem::has_value())
+		ecs::creature_tattoo_change::Submit submit;
+		if (Locator::playerCommandSystem::has_value())
 		{
-			// With no commands, the creature gets the tattoos at once
-			tattoos->slots = command.slots;
-			if (command.hasPictures)
-			{
-				tattoos->pictures = std::move(command.pictures);
-			}
-			return;
+			submit = [](player_commands::CreatureTattoo change) {
+				Locator::playerCommandSystem::value().Submit(std::move(change));
+			};
 		}
-		// The skin shows the change until the turn puts it on the creature
-		tattoos->shown = command.slots;
-		if (command.hasPictures)
-		{
-			tattoos->picturesShown = true;
-			tattoos->shownPictures = command.pictures;
-		}
-		Locator::playerCommandSystem::value().Submit(std::move(command));
+		const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+		ecs::creature_tattoo_change::Apply(*tattoos, std::move(command), networkGame, submit);
 	}
 
 	void WritePictures(entt::entity creature, std::vector<uint8_t> pictures) override
 	{
-		// The block goes with the next change of the slots. The masks that are made before then use it.
+		// The block goes with the next change of the slots. The masks that the game makes before then use it. In a network
+		// game, the block stays on this computer.
 		if (Locator::entitiesRegistry::has_value() && Locator::playerCommandSystem::has_value())
 		{
 			if (auto* tattoos = Locator::entitiesRegistry::value().TryGet<ecs::components::CreatureTattoos>(creature))

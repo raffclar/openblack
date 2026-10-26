@@ -1801,3 +1801,6 @@ openblack_setup_and_add_test(test_help_reports test_help_reports.cpp)
 openblack_setup_and_add_test(test_creature_sent_reactions test_creature_sent_reactions.cpp)
 openblack_setup_and_add_test(test_input_steps test_input_steps.cpp)
 openblack_setup_and_add_test(test_camera_input_steps camera/test_camera_input_steps.cpp)
+openblack_setup_and_add_test(
+  test_creature_tattoo_change test_creature_tattoo_change.cpp
+)
