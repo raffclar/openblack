@@ -216,6 +216,21 @@ struct ServerList
 	std::vector<ServerEntry> servers;
 };
 
+/// A ban of an account from one game server
+struct ServerBan
+{
+	/// "account"
+	AccountRef account;
+	/// "reason"
+	std::string reason;
+};
+
+/// GET /api/v1/servers/{id}/bans: {"bans": [...]}, the bans of the server that did not end, over mutual TLS
+struct ServerBanList
+{
+	std::vector<ServerBan> bans;
+};
+
 /// The roles of a join ticket
 constexpr std::string_view k_GodRole = "god";
 constexpr std::string_view k_ObserverRole = "observer";

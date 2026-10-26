@@ -373,6 +373,7 @@ TEST(MultiplayerRules, JoinFailuresGiveTheGamesMessages)
 	EXPECT_EQ(TicketFailureMessage(LobbyErrorKind::Refused, "email_required"), Message::EmailRequired);
 	EXPECT_EQ(JoinFailureMessage("already", LobbyKind::Internet), Message::AlreadyInRoom);
 	EXPECT_EQ(JoinFailureMessage("started", LobbyKind::Internet), Message::ConnectionFailed);
+	EXPECT_EQ(JoinFailureMessage("kicked", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Internet), Message::ConnectionFailed);
 	EXPECT_EQ(JoinFailureMessage("", LobbyKind::Lan), Message::CouldNotConnect);
 	EXPECT_EQ(ButtonsOf(Message::IncorrectPassword), MessageButtons::Ok);
@@ -810,6 +811,24 @@ TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
 	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "already"}));
 	Step();
 	EXPECT_EQ(frontEnd->GetMessage(), Message::AlreadyInRoom);
+	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
+	EXPECT_FALSE(frontEnd->IsBusy());
+}
+
+TEST_F(FrontEndTest, AJoinThatTheServerRefusesForABanShowsConnectionFailed)
+{
+	// The game server refuses the join of a banned god with a kick. The player was not in the room, so the game shows
+	// the failed join, as the channel of a host refuses a banned player.
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	FakeLobby::Give(lobby.ticket, lobby_api::JoinTicket {
+	                                  .url = "wss://lobby.test/game/w1", .ticket = "v4.public.t", .expires = 0, .role = "god"});
+	sockets.Accept(sockets.order.back());
+	Step();
+	sockets.ServerText(sockets.order.back(), game_socket::ToJson(game_socket::Refused {.reason = "kicked"}));
+	Step();
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
 	EXPECT_FALSE(frontEnd->IsBusy());
 }

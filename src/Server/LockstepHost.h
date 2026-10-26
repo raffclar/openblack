@@ -112,6 +112,10 @@ public:
 	/// Tools: gets the god slot and the turn each time that the world of a client starts to differ from the server's world
 	using PartListener = std::function<void(uint8_t seat, uint32_t turn)>;
 	void SetPartListener(PartListener listener) { _partListener = std::move(listener); }
+	/// The account ids that the lobby banned from the server. Before the start, a banned god leaves the room at once with
+	/// "kicked", and the room refuses the join of a banned god. After the start, a ban changes nothing (deviation 146).
+	void SetBans(std::set<int64_t> accounts);
+	[[nodiscard]] const std::set<int64_t>& Bans() const { return _bans; }
 
 	/// The commands of the server itself: it has no player
 	void Send(const player_commands::Action& action) override;
@@ -214,6 +218,8 @@ private:
 	uint32_t _refusedBlocks {0};
 	WorldState _worldState;
 	PartListener _partListener;
+	/// The account ids that the lobby banned from the server
+	std::set<int64_t> _bans;
 };
 
 } // namespace openblack::server
