@@ -17,6 +17,8 @@
 #include <optional>
 #include <string_view>
 
+#include <glm/vec2.hpp>
+
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
 #include "Simulation/TurnBody.h"
@@ -51,6 +53,9 @@ public:
 	virtual void StartLandAudio() = 0;
 	/// The testbed is ready for play
 	virtual void TestbedLoaded() = 0;
+	/// A game starts on the land: the camera starts at the temple of the player and flies to it, as the temple key
+	/// makes it fly. Without a temple of the player, the camera stays where it is.
+	virtual void StartCameraAtTemple() = 0;
 	/// Pauses the game and asks the start-of-game question. Gives false when the view cannot ask it.
 	virtual bool AskStartQuestion(bool hasCreature) = 0;
 	/// The challenge file of the scripts. None for the file in its usual folder.
@@ -69,6 +74,7 @@ public:
 	void MakeSymbolSheet() override {}
 	void StartLandAudio() override {}
 	void TestbedLoaded() override {}
+	void StartCameraAtTemple() override {}
 	bool AskStartQuestion(bool /*hasCreature*/) override { return false; }
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override { return std::nullopt; }
 };
@@ -108,6 +114,8 @@ public:
 	                           const std::function<bool()>& restore, SavedLandUse use) = 0;
 	/// Loads the landscape that the map script of the land names
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
+	/// The map script of the land gives the start place of the camera, in map units
+	virtual void SetStartCameraPlace(glm::ivec2 place) = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;

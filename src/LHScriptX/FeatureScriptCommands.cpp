@@ -26,6 +26,8 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
+#include "Camera/ZoomToPlaces.h"
 #include "Common/StringUtils.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -846,12 +848,10 @@ void FeatureScriptCommands::CreateArea([[maybe_unused]] glm::vec3 position, floa
 
 void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 {
-	static constexpr auto k_DefaultCameraOriginOffset = 120.0f;
-	static constexpr auto k_DefaultCameraOriginOffsetAngles = glm::radians(glm::vec2(12.8571f, 157.51f));
-
 	auto& camera = Locator::camera::value();
-	const auto offset = k_DefaultCameraOriginOffset * glm::euclidean(k_DefaultCameraOriginOffsetAngles);
-	camera.SetFocus(focus).SetOrigin(focus + offset);
+	camera.SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
+	// The land keeps the place, because a game that starts at the origin of the map starts at the player's temple
+	Locator::landSystem::value().SetStartCameraPlace({zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
 }
 
 void FeatureScriptCommands::FlyByFile([[maybe_unused]] const std::string& path)

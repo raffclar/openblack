@@ -1,0 +1,147 @@
+/******************************************************************************
+ * Copyright (c) 2018-2026 openblack developers
+ *
+ * For a complete list of all authors, please refer to contributors.md
+ * Interested in contributing? Visit https://github.com/openblack/openblack
+ *
+ * openblack is licensed under the GNU General Public License version 3.
+ *******************************************************************************/
+
+#pragma once
+
+#include <cstdint>
+
+#include <optional>
+#include <vector>
+
+#include "ECS/Components/GameStanding.h"
+#include "Enums.h"
+
+// The end of a skirmish or a network game. Each turn, after the players' turns:
+//
+// - In a network game with winning conditions, each god gets its share of the conditions that it completed. A god that
+//   completed all of them decides the game. The time limit of a network game also decides it.
+// - When the game is decided, the god with the largest share wins. The share of the influence breaks a tie. The other
+//   gods are out, the worst first.
+// - A god among the first four players with no temple is out. Its creature goes from the land.
+// - For each god that is now out, the game counts the god out. When only one god is left, the game is decided.
+// - A god that the game finished with stops its computer mind. When the game is decided, every god finished.
+//
+// Only gods that a human or a computer mind plays take part. Players five to seven never lose by the temple rule.
+//
+// Pure, tested with a fake world.
+
+namespace openblack::game_end
+{
+
+/// The winning conditions of a network game, by their number
+enum class Condition : uint8_t
+{
+	VillagersKilled,
+	VillagersKilledByCreature,
+	VillagersBorn,
+	HousesBuilt,
+	WondersBuilt,
+	FoodInStores,
+	WoodInStores,
+	TownsTakenOver,
+	PrayerPowerGenerated,
+	BuildingsSmashedByPlayer,
+	BuildingsSmashedByCreature,
+	BeliefInWorld,
+	NewTownsBuilt,
+	VillagersConverted,
+	TreesGrown,
+
+	_Count
+};
+static_assert(static_cast<size_t>(Condition::_Count) == ecs::components::GameStanding::k_ConditionCount);
+
+/// A condition goes up by an amount. It is completed when it reaches its target.
+void Add(ecs::components::WinCondition& condition, int32_t amount);
+/// A condition takes a value. It is completed when the value reaches its target. A completed condition stays completed.
+void Set(ecs::components::WinCondition& condition, int32_t value);
+
+/// The share of each condition of a game of a number of conditions: none for a game with no conditions
+[[nodiscard]] float ShareOfEachCondition(size_t count);
+/// The share of the conditions that a god completed, and whether the god completed all of them. A god with no
+/// conditions completed all of them.
+struct ConditionsDone
+{
+	float share;
+	bool all;
+};
+[[nodiscard]] ConditionsDone ShareOfConditions(const ecs::components::GameStanding& standing, float shareOfEach);
+
+/// The world that the end of the game looks at and changes
+class World
+{
+public:
+	virtual ~World() = default;
+	/// The players that a human or a computer mind plays, in the order of the players, without the neutral player
+	[[nodiscard]] virtual std::vector<PlayerNames> ActiveGods() const = 0;
+	/// A human plays the player
+	[[nodiscard]] virtual bool IsHuman(PlayerNames player) const = 0;
+	[[nodiscard]] virtual bool HasTemple(PlayerNames player) const = 0;
+	[[nodiscard]] virtual ecs::components::GameStanding& Standing(PlayerNames player) = 0;
+	/// The share of all the influence of the land that the player has
+	[[nodiscard]] virtual float InfluenceShare(PlayerNames player) const = 0;
+	/// The creature of the player goes from the land, if the player has one
+	virtual void RemoveCreature(PlayerNames player) = 0;
+	/// The statistics of the player count one more god defeated
+	virtual void CountGodDefeated(PlayerNames player) = 0;
+	/// The computer mind of the player stops, if the player has one
+	virtual void StopMind(PlayerNames player) = 0;
+};
+
+/// The kind of game
+struct Facts
+{
+	bool networkGame {false};
+	bool skirmish {false};
+	/// The turn now, and the turn of the time limit of a network game. None for a game with no time limit.
+	uint32_t turn {0};
+	std::optional<uint32_t> timeLimitTurn;
+	/// The number of the winning conditions of the network game
+	size_t conditionCount {0};
+};
+
+/// What the end of the game keeps between turns
+struct State
+{
+	/// The game is decided
+	bool decided {false};
+	/// The last place that a god took
+	int32_t lastPlace {0};
+};
+
+/// What happened in the turn, which the players see
+struct Event
+{
+	enum class Kind : uint8_t
+	{
+		/// The god is out and the game goes on
+		GodOut,
+		/// The god is out and the game is decided
+		GodOutAndDecided,
+		/// The game is decided by its winning conditions or its time limit, and this god won
+		Won,
+	};
+	Kind kind;
+	PlayerNames god;
+};
+
+/// Whether a player takes part in the end of the game: only the first four players win or lose
+[[nodiscard]] constexpr bool CanLose(PlayerNames player)
+{
+	return static_cast<uint8_t>(player) < 4;
+}
+
+/// A god is out: a human god gets its place. Every other human god that is not out counts one more god defeated, when
+/// the god is human or the game is a skirmish.
+void CountOut(World& world, State& state, PlayerNames god, ecs::components::OutReason reason, bool skirmish);
+
+/// The end of the game for one turn
+[[nodiscard]] std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state);
+
+} // namespace openblack::game_end
