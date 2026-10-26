@@ -82,6 +82,9 @@ public:
 	[[nodiscard]] virtual chat::speech_bubble::Bubble* GetBubble(entt::entity creature) = 0;
 	[[nodiscard]] virtual const std::map<entt::entity, chat::speech_bubble::Bubble>& GetBubbles() const = 0;
 
+	/// The bubble of the creature shows for a time again, as the chat comes on the screen
+	virtual void ShowBubble(entt::entity creature) = 0;
+
 	[[nodiscard]] virtual std::span<const Received> GetReceived() const = 0;
 
 	/// As a new land opens: the bubbles go

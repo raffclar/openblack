@@ -3762,6 +3762,12 @@ bool Game::Initialize() noexcept
 			{
 				return;
 			}
+			// The line of the chat takes the keyboard while it has the focus, Escape and Return too
+			if (_interface && _interface->ChatWantsKeys() && Locator::windowing::has_value() &&
+			    _interface->ProcessEvent(event, static_cast<glm::u16vec2>(Locator::windowing::value().GetSize())))
+			{
+				return;
+			}
 			// Inside the temple, Escape goes back to its main room and out, as the temple's keys do
 			if (event.type == SDL_KEYDOWN && event.key.keysym.sym == SDLK_ESCAPE && event.key.repeat == 0 &&
 			    Locator::temple::has_value() && Locator::temple::value().Active())

@@ -105,6 +105,9 @@ TEST(ChatRules, TheColourAndFontOfTheBubble)
 {
 	EXPECT_EQ(speech_bubble::LineColour(std::nullopt), 0xFFFFFFFFu);
 	EXPECT_EQ(speech_bubble::LineColour(0xFFFF0000u), 0xFFFF8080u);
+	// The box has half of the colour of the god, or half of the default sky blue
+	EXPECT_EQ(speech_bubble::BoxColour(std::nullopt), 0xFF1D5E76u);
+	EXPECT_EQ(speech_bubble::BoxColour(0xFFFF4646u), 0xFF7F2323u);
 	EXPECT_EQ(speech_bubble::FontOf(0.5f), speech_bubble::Font::Good);
 	EXPECT_EQ(speech_bubble::FontOf(0.333f), speech_bubble::Font::Neutral);
 	EXPECT_EQ(speech_bubble::FontOf(-0.5f), speech_bubble::Font::Evil);

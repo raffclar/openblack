@@ -68,6 +68,7 @@ public:
 	[[nodiscard]] chat::speech_bubble::Bubble* GetBubble(entt::entity creature) override;
 	[[nodiscard]] const std::map<entt::entity, chat::speech_bubble::Bubble>& GetBubbles() const override { return _bubbles; }
 
+	void ShowBubble(entt::entity creature) override;
 	[[nodiscard]] std::span<const Received> GetReceived() const override { return _received; }
 
 	void Reset() override;

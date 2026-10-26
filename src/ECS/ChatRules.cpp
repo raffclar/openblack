@@ -157,6 +157,12 @@ uint32_t speech_bubble::LineColour(std::optional<uint32_t> godColour) noexcept
 	return (*godColour >> 1u) | 0xFF808080u;
 }
 
+uint32_t speech_bubble::BoxColour(std::optional<uint32_t> godColour) noexcept
+{
+	constexpr uint32_t k_DefaultColour = 0xFF3BBDEDu;
+	return ((godColour.value_or(k_DefaultColour) >> 1u) & 0x7F7F7Fu) | 0xFF000000u;
+}
+
 speech_bubble::Font speech_bubble::FontOf(float alignment) noexcept
 {
 	if (alignment > k_GoodFontAlignment)

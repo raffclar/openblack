@@ -3947,6 +3947,45 @@ void AddAudio(std::vector<Scenario>& all)
 	                  .action = "Bob has sent you an e-mail about the harvest"}},
 	});
 
+	// The chat of a network game: the speech bubbles over the creatures, the incoming lines and the open chat
+	all.push_back({
+	    .id = "interface.chat_lines",
+	    .name = "Chat lines and speech bubbles",
+	    .facet = Facet::Interface,
+	    .description = "Bob, the god of the second tiger, says a line in the chat. Then Alice, the god of this computer, "
+	                   "says a line. Then the chat opens with a line in it, and its list of players shows Bob.",
+	    .expected = "A bubble with the line comes over each tiger. The bubble over Bob's tiger has his line in his green, "
+	                "on a box of half of his colour. The bubble of Alice's tiger shows her line without her name. The "
+	                "lines of Bob come into the incoming messages. The speech button at the top right becomes the line "
+	                "of the chat, the quick chat and the send buttons, and the list of players under them. The bubbles "
+	                "fade after some seconds.",
+	    .environment = {.players = {PlayerNames::PLAYER_TWO}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 40.0f, -60.0f}, .look = {0.0f, 10.0f, 0.0f}},
+	    .creatures = {{.label = "Alice's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {-12.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_ONE,
+	                   .size = 0.5f,
+	                   .pauseMind = true},
+	                  {.label = "Bob's tiger",
+	                   .species = CreatureType::Tiger,
+	                   .offset = {12.0f, 0.0f},
+	                   .owner = PlayerNames::PLAYER_TWO,
+	                   .size = 0.5f,
+	                   .pauseMind = true}},
+	    .commands = {{.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello from the other island"},
+	                 {.kind = Kind::Chat,
+	                  .player = PlayerNames::PLAYER_ONE,
+	                  .delaySeconds = 1.5f,
+	                  .value = k_ChatSays,
+	                  .action = "Hello Bob"},
+	                 {.kind = Kind::Chat, .delaySeconds = 1.5f, .value = k_ChatTypes, .action = "Shall we trade"}},
+	});
+
 	all.push_back({
 	    .id = "interface.controls_rebind",
 	    .name = "The Controls page asks for a new key",
@@ -10774,7 +10813,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::OtherGodHand || kind == Kind::AddIncomingMessage || IsPointerCommand(kind);
+	       kind == Kind::OtherGodHand || kind == Kind::AddIncomingMessage || kind == Kind::Chat || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10802,7 +10841,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 180> k_Names {
+	constexpr std::array<std::string_view, 181> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10983,6 +11022,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "build the worship sites",
 	    "show another god's hand",
 	    "add an incoming message",
+	    "chat",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

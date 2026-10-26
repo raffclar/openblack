@@ -23,6 +23,12 @@ so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the poi
 With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
 of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
 
+With --chat TURNS:CLIENT:TEXT a client says a line in the chat once it compared that many turns (a multiple of 100,
+as the client writes the count each 100 turns): the inspector
+presses the speech button of its chat, types the line and presses Return. At the end every client must have the line
+in its log, from the god of that client, and the checksums must still agree: a line of the chat goes with the turns
+but changes nothing that the checksum has.
+
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
 
@@ -303,6 +309,36 @@ def inspector_call(pid, query, request):
         return None
 
 
+def say_in_chat(pid, text):
+    """A client says a line in the chat as the player does: a click on the speech button at the top right corner, the
+    line typed and Return. The inspector takes only the input of the player while a network game is live."""
+    frame = inspector_call(pid, "engine.frame", {}) or {}
+    width = (frame.get("window") or [1280, 1024])[0]
+    inspector_call(pid, "input.pointer", {"params": {"screen": [width - 8, 8]}})
+    time.sleep(0.5)
+    clicked = inspector_call(pid, "input.button", {"params": {"button": "left", "action": "click"}})
+    time.sleep(1.0)
+    inspector_call(pid, "input.text", {"params": {"text": text}})
+    time.sleep(0.5)
+    inspector_call(pid, "input.key", {"params": {"key": "Return"}})
+    print(f"chat: client with pid {pid} says {text!r} (click: {clicked})")
+
+
+def chat_lines(log_path):
+    """The lines of the chat that came to a client, as (turn, god, text)"""
+    found = []
+    pattern = re.compile(r'Chat: turn (\d+) god (\d+) says "(.*)" to ')
+    try:
+        with open(log_path, encoding="utf-8", errors="replace") as log:
+            for line in log:
+                match = pattern.search(line)
+                if match:
+                    found.append((int(match.group(1)), int(match.group(2)), match.group(3)))
+    except OSError:
+        pass
+    return found
+
+
 def hold_creature(pid, near):
     """The hand of a client holds the creature nearest a point, strokes it and lets go; then a click puts the leash on
     and a tap on the land leads the creature there. The camera looks at the creature first, and the pointer goes to a
@@ -530,6 +566,8 @@ def main():
                         "the creature nearest this point of the land through the inspector, strokes it, lets go, clicks "
                         "it for the leash and leads it with a tap on the land. Give it once for each client.")
     parser.add_argument("--hold-after", type=int, default=300, help="the turns before --hold-creature")
+    parser.add_argument("--chat", action="append", default=[],
+                        help="TURNS:CLIENT:TEXT, the client (from 1) says the line in the chat after that many turns")
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
@@ -633,7 +671,8 @@ def main():
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
-            if camera or index in holds or options.slot_miracle == index + 1:
+            chatting = any(value.split(":", 2)[1] == str(index + 1) for value in options.chat)
+            if camera or index in holds or options.slot_miracle == index + 1 or chatting:
                 command += ["--inspect-port", "0"]
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
@@ -660,10 +699,18 @@ def main():
         stopped_second = False
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
+        chats = [(int(turns), int(client) - 1, text) for turns, client, text in
+                 (value.split(":", 2) for value in options.chat)]
+        said = set()
         cameras_again = set()
         while time.monotonic() - started < RUN_LIMIT_SECONDS:
             if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
                 break
+            for number, (turns, index, text) in enumerate(chats):
+                if (number not in said and 0 <= index < len(clients) and clients[index].poll() is None and lines_with(
+                        os.path.join(client_dirs[index], "client.log"), [f"Network game: {turns} turns compared"])):
+                    say_in_chat(clients[index].pid, text)
+                    said.add(number)
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and lines_with(
                         os.path.join(client_dirs[index], "client.log"),
@@ -743,6 +790,18 @@ def main():
     if unregistered:
         all_same = False
         print(sim_report.unregistered_line(unregistered))
+    # Each line of the chat came to every client, from the god of the client that said it
+    if options.chat:
+        summary["chat"] = []
+        for turns, client, text in (value.split(":", 2) for value in options.chat):
+            got = []
+            for index, client_dir in enumerate(client_dirs):
+                lines = chat_lines(os.path.join(client_dir, "client.log"))
+                got.append(any(god == int(client) - 1 and line == text for _, god, line in lines))
+            summary["chat"].append({"client": int(client), "text": text, "came_to": got})
+            if not all(got):
+                print(f"the chat line {text!r} of client {client} did not come to every client: {got}")
+                all_same = False
     summary["same"] = all_same
     with open(os.path.join(out, "net_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)

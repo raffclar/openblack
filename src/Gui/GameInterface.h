@@ -23,6 +23,7 @@
 #include <glm/vec2.hpp>
 
 #include "Canvas.h"
+#include "ChatControls.h"
 #include "Creature/CreatureFightHud.h"
 #include "Creature/CreatureStatusPanel.h"
 #include "Creature/CreatureTattoo.h"
@@ -133,6 +134,14 @@ public:
 	[[nodiscard]] const CustomMusicControls& GetMusicControls() const noexcept { return *_musicControls; }
 	/// The incoming message at the bottom left of the screen
 	[[nodiscard]] const IncomingMessageStrip& GetIncomingMessages() const noexcept { return *_incomingMessages; }
+	/// The chat of a network game at the top right of the screen
+	[[nodiscard]] ChatControls& GetChatControls() noexcept { return *_chatControls; }
+	[[nodiscard]] const ChatControls& GetChatControls() const noexcept { return *_chatControls; }
+	/// The keys go to the line of the chat
+	[[nodiscard]] bool ChatWantsKeys() const;
+	/// The window's point on the chat's layout, and back
+	[[nodiscard]] glm::ivec2 ToChatControls(glm::ivec2 screen, glm::u16vec2 resolution);
+	[[nodiscard]] glm::ivec2 FromChatControls(glm::ivec2 layout, glm::u16vec2 resolution);
 	/// The window's point on the incoming message's layout, and back
 	[[nodiscard]] glm::ivec2 ToIncomingMessages(glm::ivec2 screen, glm::u16vec2 resolution);
 	[[nodiscard]] glm::ivec2 FromIncomingMessages(glm::ivec2 layout, glm::u16vec2 resolution);
@@ -345,6 +354,10 @@ private:
 	bool ProcessIncomingMessagesEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	/// Shows the incoming message as the custom music controls show, and steps the list of messages
 	void UpdateIncomingMessages(bool dialogOpen, glm::u16vec2 resolution);
+	/// The chat takes the mouse over its controls, and the keys while its line has them; true when it took the event
+	bool ProcessChatEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// Shows the chat as the game lets it show, and sends what the player sent in it
+	void UpdateChat(bool dialogOpen, glm::u16vec2 resolution);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// What a key or a letter chose in the menu: the game takes it, and Continue closes the menu
@@ -384,12 +397,17 @@ private:
 	void DrawVillagerLabels(glm::u16vec2 resolution);
 	/// The tip bubble over the "did you know" sign tapped last, with the pointer over it keeping it up
 	void DrawTipBubble(glm::u16vec2 resolution, glm::ivec2 mouse);
+	/// The bubbles of the chat over the creatures, with the pointer over a bubble keeping it up
+	void DrawChatBubbles(glm::u16vec2 resolution, glm::ivec2 mouse);
 	/// A run of the bubble's words' width as the bubble measures it
 	[[nodiscard]] float BubbleTextWidth(std::u16string_view text, float size) const;
 	/// A line of the bubble's words in a colour, fading from its top to its bottom
 	void DrawBubbleLine(const help::tip_bubble::Line& line, glm::vec3 colour);
 	/// The same, on another canvas
 	void DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour);
+	/// The same, in another font
+	void DrawBubbleLine(Canvas& canvas, const help::tip_bubble::Line& line, glm::vec3 colour, const GameFont& font,
+	                    const graphics::Texture2D* texture);
 	/// The picture of the control that does a tip's action: its mouse buttons or its key cap
 	void DrawBubbleControl(const help::tip_bubble::ControlIcon& icon, std::span<const input::KeyBinding> bindings,
 	                       float pixelScale);
@@ -459,6 +477,9 @@ private:
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;
 	std::unique_ptr<IncomingMessageStrip> _incomingMessages;
+	std::unique_ptr<ChatControls> _chatControls;
+	/// The chat started the text input of the window
+	bool _chatTextInput {false};
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;

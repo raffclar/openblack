@@ -550,6 +550,11 @@ constexpr size_t k_StopCustomMusic = std::numeric_limits<size_t>::max();
 /// The values of an AddIncomingMessage command that give a chat line and an e-mail
 constexpr size_t k_IncomingChat = 100;
 constexpr size_t k_IncomingMail = 101;
+/// The values of a Chat command: a god says a line, or the chat of this computer opens with a line in it
+constexpr size_t k_ChatSays = 0;
+constexpr size_t k_ChatTypes = 1;
+/// The names that a Chat command gives the first gods
+constexpr std::array<std::u16string_view, 4> k_ChatNames {u"Alice", u"Bob", u"Carol", u"Dave"};
 
 struct Command
 {
@@ -977,6 +982,10 @@ struct Command
 		/// the real weather gives them. k_IncomingChat gives a chat line and k_IncomingMail an e-mail, with the action as
 		/// their text. Needs no creature.
 		AddIncomingMessage,
+		/// The chat of a network game, with the names that the testbed gives the gods (k_ChatNames). With value
+		/// k_ChatSays, the god (player) says the action to all of the players. With value k_ChatTypes, the chat of this
+		/// computer opens and the action is in its line. Needs no creature.
+		Chat,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -85,12 +85,16 @@ namespace speech_bubble
 /// The time to show that a line adds, and the least time to show after a line, in seconds
 constexpr float k_LineTime = 3.0f;
 constexpr float k_LeastTime = 3.0f;
+/// The time to show of the bubble of the player's creature as the chat comes on the screen, in seconds
+constexpr float k_ShowTime = 3.0f;
 /// What a hundredth of a game turn takes off the time to show
 constexpr float k_TimePerHundredth = 0.0002f;
 /// The sizes at the near depth: width, height and line height, in pixels of the default screen
 constexpr float k_NearWidth = 250.0f;
 constexpr float k_NearHeight = 100.0f;
 constexpr float k_NearLineHeight = 19.0f;
+/// The margin at the near depth: a fifth of half of the width
+constexpr float k_NearMargin = k_NearWidth * 0.5f * 0.2f;
 /// Past these alignments the bubble writes in the font of good, or of evil
 constexpr float k_GoodFontAlignment = 0.333f;
 constexpr float k_EvilFontAlignment = -0.333f;
@@ -110,6 +114,8 @@ struct Bubble
 	float displayTime {0.0f};
 	/// The scroll, in lines from the bottom
 	float scroll {0.0f};
+	/// How tall the lines were when the bubble was last drawn, for the scroll
+	float contentHeight {0.0f};
 };
 
 /// A creature says a line. The creature of the sender gets the time of a line before the least time is applied; each
@@ -121,6 +127,9 @@ void Update(Bubble& bubble, float gameMilliseconds) noexcept;
 /// The colour of a line, as 0xAARRGGBB: half of the colour of the sender's god, made light. A god with no colour gives
 /// white.
 [[nodiscard]] uint32_t LineColour(std::optional<uint32_t> godColour) noexcept;
+/// The colour of the box, as 0xAARRGGBB: half of the colour of the creature's god, opaque. With no god colour, the box
+/// has half of the default sky blue.
+[[nodiscard]] uint32_t BoxColour(std::optional<uint32_t> godColour) noexcept;
 
 /// The font of the bubble
 enum class Font : uint8_t

@@ -1660,6 +1660,12 @@
   "query": "view.incoming_messages"
  },
  {
+  "description": "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the players that get them, text or taunt, shown in the incoming messages), the speech bubbles over the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, the typed line, the list of players and who gets a line)",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.chat"
+ },
+ {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",
   "kind": "object",
   "parameters": [],

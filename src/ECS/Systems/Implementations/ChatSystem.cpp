@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <utility>
 
+#include <spdlog/spdlog.h>
+
 #include "Commands/TurnCodec.h"
 #include "Gui/TextDatabase.h"
 
@@ -128,6 +130,13 @@ void ChatSystem::Arrive(PlayerNames sender, std::span<const PlayerNames> recipie
 			}
 		}
 	}
+	// The game's log has each line that comes in, for the checks of a network game
+	if (const auto logger = spdlog::get("game"); logger != nullptr)
+	{
+		SPDLOG_LOGGER_INFO(logger, "Chat: turn {} god {} says \"{}\" to {} players, shown here: {}",
+		                   _services.turn ? _services.turn() : 0, static_cast<int>(sender), gui::ToUtf8(text),
+		                   recipients.empty() ? std::string("all") : std::to_string(recipients.size()), shown);
+	}
 	_received.push_back({.sender = sender,
 	                     .recipients = {recipients.begin(), recipients.end()},
 	                     .text = std::u16string(text),
@@ -173,6 +182,11 @@ speech_bubble::Bubble* ChatSystem::GetBubble(entt::entity creature)
 {
 	const auto found = _bubbles.find(creature);
 	return found != _bubbles.end() ? &found->second : nullptr;
+}
+
+void ChatSystem::ShowBubble(entt::entity creature)
+{
+	_bubbles[creature].displayTime = speech_bubble::k_ShowTime;
 }
 
 void ChatSystem::Reset()

@@ -122,6 +122,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -398,6 +399,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"miracleFxSystem", "magic.state"},
     LocatorCoverage {"pauseTextSystem", "view.pause_text"},
     LocatorCoverage {"incomingMessageSystem", "view.incoming_messages"},
+    LocatorCoverage {"chatSystem", "view.chat"},
     LocatorCoverage {"fireSystem", "magic.fires"},
     LocatorCoverage {"explosionSystem", "magic.state"},
     LocatorCoverage {"floatingNumberSystem", "magic.state"},
@@ -2598,6 +2600,74 @@ std::unique_ptr<ProviderInterface> ViewProvider()
 		    }
 		    return QueryResult::Value(std::move(result));
 	    });
+	provider->Add(Query("chat",
+	                    "The chat of a network game: the names of the gods, the lines that came in (turn, sender, the "
+	                    "players that get them, text or taunt, shown in the incoming messages), the speech bubbles over "
+	                    "the creatures (lines, time to show, scroll), and the chat controls (shown, open, quick chat, "
+	                    "the typed line, the list of players and who gets a line)"),
+	              [](const QueryContext& /*c*/) {
+		              Json result = {{"names", Json::object()}, {"received", Json::array()}, {"bubbles", Json::array()}};
+		              if (!Locator::chatSystem::has_value())
+		              {
+			              return QueryResult::Value(std::move(result));
+		              }
+		              auto& chat = Locator::chatSystem::value();
+		              for (const auto& [slot, name] : chat.GetNames())
+		              {
+			              result["names"][std::to_string(static_cast<int>(slot))] = gui::ToUtf8(name);
+		              }
+		              for (const auto& line : chat.GetReceived())
+		              {
+			              Json recipients = Json::array();
+			              for (const auto player : line.recipients)
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["received"].push_back({{"turn", line.turn},
+			                                            {"sender", static_cast<int>(line.sender)},
+			                                            {"recipients", std::move(recipients)},
+			                                            {"text", gui::ToUtf8(line.text)},
+			                                            {"taunt", line.taunt.has_value() ? Json(*line.taunt) : Json(nullptr)},
+			                                            {"shown", line.shown}});
+		              }
+		              for (const auto& [creature, bubble] : chat.GetBubbles())
+		              {
+			              Json lines = Json::array();
+			              for (const auto& line : bubble.lines)
+			              {
+				              lines.push_back({{"text", gui::ToUtf8(line.text)}, {"sender", static_cast<int>(line.sender)}});
+			              }
+			              result["bubbles"].push_back({{"creature", entt::to_integral(creature)},
+			                                           {"lines", std::move(lines)},
+			                                           {"display_time", bubble.displayTime},
+			                                           {"scroll", bubble.scroll}});
+		              }
+		              if (auto* game = Game::Instance(); game != nullptr && game->GetInterface() != nullptr)
+		              {
+			              const auto& controls = game->GetInterface()->GetChatControls();
+			              Json players = Json::array();
+			              for (const auto& person : controls.GetPeople().players)
+			              {
+				              players.push_back({{"slot", static_cast<int>(person.slot)},
+				                                 {"name", gui::ToUtf8(person.name)},
+				                                 {"selected", person.selected}});
+			              }
+			              Json recipients = Json::array();
+			              for (const auto player : controls.Recipients())
+			              {
+				              recipients.push_back(static_cast<int>(player));
+			              }
+			              result["controls"] = {{"shown", controls.IsActive()},
+			                                    {"open", controls.IsOpen()},
+			                                    {"quick_chat", controls.IsQuickChatOpen()},
+			                                    {"line", gui::ToUtf8(controls.GetLine())},
+			                                    {"expanded", controls.GetPeople().expanded},
+			                                    {"messages_on", controls.GetPeople().messagesOn},
+			                                    {"players", std::move(players)},
+			                                    {"recipients", std::move(recipients)}};
+		              }
+		              return QueryResult::Value(std::move(result));
+	              });
 	provider->Add(Query("video", "The video playing: its frame, frame count and rate, its fade, the falling spell, its "
 	                             "creature and its effects, whether films are on, and the 16-bit surface of the films"),
 	              [](const QueryContext& /*c*/) {

@@ -161,6 +161,7 @@
 #include "ECS/Systems/BoatLaunchSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
@@ -732,6 +733,57 @@ std::string AddIncomingMessage(size_t value, std::string_view text)
 	}
 	return fmt::format("{} messages in the list, the top one \"{}\"", messages.GetQueue().Count(),
 	                   gui::ToUtf8(messages.GetQueue().ShownText()));
+}
+
+/// The chat of a network game: a god says a line, or the chat of this computer opens with a line in it
+std::string Chat(PlayerNames player, size_t value, std::string_view text)
+{
+	auto* game = Game::Instance();
+	if (!Locator::chatSystem::has_value() || game == nullptr || game->GetInterface() == nullptr)
+	{
+		return "failed: no chat";
+	}
+	auto& chat = Locator::chatSystem::value();
+	// The god of this computer and the god that speaks have the names of the testbed
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	auto names = chat.GetNames();
+	for (const auto god : {own, player})
+	{
+		if (static_cast<size_t>(god) < k_ChatNames.size())
+		{
+			names.try_emplace(god, k_ChatNames.at(static_cast<size_t>(god)));
+		}
+	}
+	chat.SetNames(names);
+	const auto line = gui::ToUtf16(text);
+	if (value == k_ChatTypes)
+	{
+		auto& controls = game->GetInterface()->GetChatControls();
+		controls.Open();
+		controls.TextInput(line);
+		return fmt::format("the chat opens with \"{}\"", text);
+	}
+	if (value != k_ChatSays)
+	{
+		return fmt::format("failed: no chat for the value {}", value);
+	}
+	// The line of this computer goes through the turns, and the line of another god comes in as the turns give it
+	if (player == own)
+	{
+		// The line goes to the other named gods
+		std::vector<PlayerNames> others;
+		for (const auto& [god, name] : names)
+		{
+			if (god != own)
+			{
+				others.push_back(god);
+			}
+		}
+		chat.SendLine(line, others);
+		return fmt::format("this computer says \"{}\"", text);
+	}
+	chat.Receive(player, player_commands::ChatSpeech {.recipients = {}, .text = line});
+	return fmt::format("god {} says \"{}\"", static_cast<int>(player), text);
 }
 
 /// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
@@ -2876,6 +2928,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::Chat)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), Chat(command.player, command.value, command.action)));
+		return;
+	}
 	if (command.kind == Kind::AddIncomingMessage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), AddIncomingMessage(command.value, command.action)));
@@ -3578,6 +3635,7 @@ void Runner::Give(const Command& command)
 	case Kind::OpenMultiplayerBox:
 	case Kind::OtherGodHand:
 	case Kind::AddIncomingMessage:
+	case Kind::Chat:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
