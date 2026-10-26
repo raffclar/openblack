@@ -14,6 +14,7 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string_view>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -103,10 +104,15 @@ public:
 	virtual void Teach(entt::entity creature, MagicType miracle) = 0;
 	virtual uint32_t GameRand(uint32_t range) = 0;
 	virtual float GameFloatRand(float most) = 0;
+	/// The weight of the need of the mind with this name, as a land script sets it. Tools only: the AI soak sets the
+	/// weights of its computer gods.
+	virtual void SetPersonality(PlayerNames player, std::string_view need, float weight) = 0;
 };
 
-/// The start of a computer mind on the land, in the order of the game
-void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state);
+/// The start of a computer mind on the land, in the order of the game. With an AI seed (tools only), the mind gets the
+/// personality weights of that seed before anything else. This draws no number from the game's random streams.
+void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& state,
+           std::optional<uint32_t> aiSeed = std::nullopt);
 
 /// The number of species that the start of a network game chooses from for the creature of a slot with no player, by
 /// the species number from 0

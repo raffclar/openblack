@@ -486,6 +486,22 @@ void LockstepHost::CloseSeat(uint8_t seat)
 void LockstepHost::Update()
 {
 	const auto now = _clock();
+	if (AllComputerGods())
+	{
+		// A room with no human god starts at once. The observers join the running game and get its world.
+		if (!_started)
+		{
+			StartGame();
+		}
+		const auto observers = Observers();
+		_observerSeen = _observerSeen || observers > 0;
+		if (!_observersJoined && observers >= _settings.godsToStart)
+		{
+			_observersJoined = true;
+			Log(spdlog::level::info, fmt::format("{} observers joined: the world of computer gods turns", observers));
+		}
+		return;
+	}
 	if (!_started)
 	{
 		const auto ready =
@@ -658,7 +674,7 @@ bool LockstepHost::AnyGodConnected() const
 
 bool LockstepHost::Paused() const
 {
-	return _started && !AnyGodConnected();
+	return _started && !AllComputerGods() && !AnyGodConnected();
 }
 
 void LockstepHost::StopTurns()
@@ -675,6 +691,11 @@ void LockstepHost::StopTurns()
 
 bool LockstepHost::GameOver() const
 {
+	if (AllComputerGods())
+	{
+		// A room with no human god is over when the observers that joined all left
+		return _started && _observerSeen && Observers() == 0;
+	}
 	// After the turns stop, the defeat of a god that left comes at no turn
 	return _started && (_leaving.empty() || _stoppedAfter.has_value()) && std::ranges::none_of(_seats, [](const Seat& seat) {
 		       return seat.state == SeatState::Taken || seat.state == SeatState::Away;
@@ -685,6 +706,10 @@ bool LockstepHost::HasTurn(uint32_t /*turn*/) const
 {
 	// The defeat of a god that left still comes at a turn, so a world with a god leaving turns once more. No turn comes
 	// after the turns of the game stop.
+	if (AllComputerGods())
+	{
+		return _started && _observersJoined && !_stoppedAfter.has_value();
+	}
 	return _started && !_stoppedAfter.has_value() && (AnyGodConnected() || !_leaving.empty());
 }
 

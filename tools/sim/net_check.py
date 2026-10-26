@@ -47,6 +47,17 @@ of its own player's profile, on the server and on every client:
     python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 300 --hash-fields
         --alignment 1:-0.5 --alignment 2:0.7
 
+The AI soak (developer builds only): with --all-computer-gods the room has no human god. The server gives every god with a
+citadel a computer god, starts at once, and turns the world when the --observers clients joined; every client is an
+observer, and the clients and the server must stay in step. --ai-seed gives the computer gods the personality of that
+seed. --observers N adds N desktop observers to the gods (up to 4), --web-client adds one more observer in headless
+Chrome (through web/scripts/cdp-run.mjs, with the web build of this tree), --until-end plays until the game is decided
+(at most --turns, up to 18000). The summary has an "ai" block: the computer gods of the game and, for each god, the
+needs that it chose, the deeds of its hand and the miracles that it cast, as the server's log tells. tools/sim/ai_soak.py
+runs many such games.
+
+    python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --all-computer-gods --observers 2 --turns 2000 --ai-seed 1
+
 The game reads its vanilla switches anywhere in its command line, as the original game did, so a path with "-multiplayer"
 or "/multiplayer" in it opens the multiplayer front end (the -MULTIPLAYER switch). The script copies the programs into
 its output folder and refuses an output folder with such a name.
@@ -63,6 +74,7 @@ import json
 import os
 import re
 import shutil
+import socket
 import subprocess
 import sys
 import time
@@ -91,6 +103,14 @@ SERVER_ID = "net-check-1"
 # started
 INPUT_OFFSET_FRAMES = 2500
 RUN_LIMIT_SECONDS = 900
+# The most turns of a game: the time limit of a game is 30 minutes of 10 turns a second
+MOST_TURNS = 18000
+# The run of a long game: a turn takes 100 ms on the server and the clients follow, with the time to load
+SECONDS_PER_TURN = 0.1
+LOAD_SECONDS = 600
+DEFAULT_CHROME = os.environ.get("OB_CHROME", "C:/Program Files/Google/Chrome/Application/chrome.exe")
+DEFAULT_NODE = os.environ.get("OB_NODE", "node")
+ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", ".."))
 
 
 def worktree_root():
@@ -635,6 +655,99 @@ def shifted_input(path, folder, extra=0, camera=None):
     return out
 
 
+def max_turn_ms(record):
+    """The longest turn of a client in milliseconds, from the turn times in its run record (none without a time)"""
+    longest = None
+    if not os.path.exists(record):
+        return longest
+    with open(record, encoding="utf-8") as file:
+        for line in file:
+            try:
+                value = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(value, dict):
+                continue
+            for key in ("turn_ms_max", "turn_ms"):
+                if isinstance(value.get(key), (int, float)):
+                    longest = value[key] if longest is None else max(longest, value[key])
+    return longest
+
+
+def run_limit_seconds(turns):
+    """The time that a run may take: the turns at the pace of the server, the load of the land, and the clients' catch up"""
+    return max(RUN_LIMIT_SECONDS, int(turns * SECONDS_PER_TURN * 1.5) + LOAD_SECONDS)
+
+
+def web_page_of(options):
+    """The folder of the web page of this tree"""
+    return options.web_page or os.path.join(DEFAULT_BUILDS, os.path.basename(worktree_root()) + "-web", "bin", "Release")
+
+
+def spki_hash(pem_path):
+    """The base64 SHA-256 of the public key of a certificate, as Chrome's --ignore-certificate-errors-spki-list takes it"""
+    with open(pem_path, "rb") as file:
+        cert = x509.load_pem_x509_certificate(file.read())
+    der = cert.public_key().public_bytes(serialization.Encoding.DER, serialization.PublicFormat.SubjectPublicKeyInfo)
+    return base64.b64encode(hashlib.sha256(der).digest()).decode("ascii")
+
+
+def free_port():
+    """A free TCP port of 127.0.0.1"""
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return probe.getsockname()[1]
+
+
+def start_web_client(options, out, join_url, ticket, certs, turns, processes):
+    """One observer in headless Chrome: a server for the web page of this tree on 127.0.0.1, and cdp-run.mjs, which starts
+    the Chrome with its own profile folder in the output folder. The page joins the game server with the ticket and
+    writes the checksum of each turn (--sim-checksums -) to a file. Returns the folder of the run and the cdp-run process."""
+    folder = os.path.join(out, "web")
+    os.makedirs(folder, exist_ok=True)
+    checksums = os.path.join(folder, "checksums.jsonl")
+    if os.path.exists(checksums):
+        os.remove(checksums)
+    port = free_port()
+    page = web_page_of(options)
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    # The page may connect to the test game server of this run, and to nothing else but itself
+    server = subprocess.Popen([sys.executable, os.path.join(ROOT, "web", "scripts", "serve.py"), page, str(port),
+                               "--connect", join_url.split("/game/")[0]],
+                              stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, creationflags=flags)
+    processes.append(server)
+    time.sleep(1.0)
+    arguments = ["--skip-logos", "--sim-frame-ms", str(options.frame_ms or 20.0), "--sim-until-turn", str(turns),
+                 "--sim-still-hand", "--sim-checksums", "-", "--join", join_url, "--join-ticket", ticket]
+    query = "autoplay&args=" + "%20".join(arguments)
+    url = f"http://127.0.0.1:{port}/index.html?{query}"
+    seconds = run_limit_seconds(turns)
+    command = [DEFAULT_NODE, os.path.join(ROOT, "web", "scripts", "cdp-run.mjs"), options.chrome, url, str(seconds), folder,
+               "--game-folder", options.game_path, "--checksums", checksums, "--checksum-turns", str(turns),
+               "--trust-spki", spki_hash(certs["server.pem"])]
+    log = open(os.path.join(folder, "cdp-run.log"), "w", encoding="utf-8")
+    process = subprocess.Popen(command, cwd=folder, stdout=log, stderr=subprocess.STDOUT, creationflags=flags)
+    processes.append(process)
+    return folder, process
+
+
+def web_checksums(folder):
+    """The checksum of each turn that the web client wrote, by the turn"""
+    turns = {}
+    path = os.path.join(folder, "checksums.jsonl")
+    if not os.path.exists(path):
+        return turns
+    with open(path, encoding="utf-8") as file:
+        for line in file:
+            try:
+                value = json.loads(line)
+            except ValueError:
+                continue
+            if isinstance(value, dict) and "turn" in value and "checksum" in value:
+                turns[int(value["turn"])] = str(value["checksum"])
+    return turns
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
@@ -685,10 +798,31 @@ def main():
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
+    parser.add_argument("--part-second-again", action="store_true",
+                        help="with --part-second-at, the world parts again after each load of the server's world, so that "
+                             "the part stays (tests of the AI soak: the runner must find it)")
+    parser.add_argument("--frame-guard", action="store_true",
+                        help="each client logs the frame steps that change the synced world (--sim-frame-guard)")
     parser.add_argument("--stop-second-after", type=float, help="stop the second client after this many seconds")
     parser.add_argument("--come-back-seconds", type=int, default=10)
-    parser.add_argument("--clients", type=int, choices=(1, 2, 3, 4), default=2,
-                        help="the number of clients (a god slot each)")
+    parser.add_argument("--clients", type=int, choices=(0, 1, 2, 3, 4), default=2,
+                        help="the number of clients that play a god (a god slot each)")
+    parser.add_argument("--observers", type=int, choices=(0, 1, 2, 3, 4), default=0,
+                        help="the number of desktop clients that join as observers (they watch and compare the "
+                             "checksum of each turn)")
+    parser.add_argument("--web-client", action="store_true",
+                        help="one more observer: the web build in headless Chrome (cdp-run.mjs). Needs the web build of "
+                             "this tree (--web-page, tools/build/ob-web build)")
+    parser.add_argument("--web-page", help="the folder of the web page (the web build's bin/Release)")
+    parser.add_argument("--chrome", default=os.environ.get("OB_CHROME", "C:/Program Files/Google/Chrome/Application/chrome.exe"))
+    parser.add_argument("--all-computer-gods", action="store_true",
+                        help="the AI soak: the room has no human god, every god with a citadel is a computer god; all the "
+                             "clients are observers (--observers, --web-client)")
+    parser.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods")
+    parser.add_argument("--until-end", action="store_true",
+                        help="play until the game is decided, at most --turns turns (up to 18000)")
+    parser.add_argument("--expect-ai-action", action="store_true",
+                        help="the run fails when no computer god chose a need, did a deed of the hand or cast a miracle")
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
@@ -721,8 +855,20 @@ def main():
         # The game does not start with another frame time, and the run would only say that the first client did not join
         parser.error("--frame-ms takes 0 (the real frame time of the clients) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
-    client_inputs = [options.input, options.input2, options.input3, options.input4]
-    client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
+    if options.all_computer_gods:
+        options.clients = 0
+    if not 1 <= options.turns <= MOST_TURNS:
+        parser.error(f"--turns takes 1 to {MOST_TURNS} (the time limit of a game is 30 minutes)")
+    waited_observers = options.observers + (1 if options.web_client else 0)
+    if options.all_computer_gods and waited_observers == 0:
+        parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
+    if not options.all_computer_gods and options.clients == 0:
+        parser.error("a room with no human god needs --all-computer-gods")
+    if options.web_client and not os.path.isfile(os.path.join(web_page_of(options), "openblack.wasm")):
+        parser.error(f"--web-client needs the web build: no openblack.wasm in {web_page_of(options)}")
+    desktop_clients = options.clients + options.observers
+    client_inputs = ([options.input, options.input2, options.input3, options.input4] + [None] * 8)[:max(desktop_clients, 4)]
+    client_cameras = ([options.camera1, options.camera2, options.camera3, options.camera4] + [None] * 8)[:max(desktop_clients, 4)]
     if (any(client_cameras) or options.hold_creature) and not os.path.isfile(INSPECTOR_ADAPTER):
         # A copy of tools/sim alone cannot move the cameras: the inputs would play at the start camera
         parser.error(f"--cameraN and --hold-creature need the inspector adapter {os.path.normpath(INSPECTOR_ADAPTER)}")
@@ -744,7 +890,8 @@ def main():
 
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
-    client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
+    client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(desktop_clients)]
+    web_dir = os.path.join(out, "web")
     leaver, leave_turn = (int(part) for part in options.leave.split(":")) if options.leave else (None, None)
     server_trace = os.path.join(server_dir, "draws.tsv")
     for path in [server_log, server_trace, os.path.join(server_dir, "rows.txt")] + [os.path.join(d, n) for d in client_dirs
@@ -756,8 +903,13 @@ def main():
     server_command = [server_exe, "-g", options.game_path] + where + [
         "--seed", str(options.seed), "-n", str(options.turns + 3000), "-l", server_log,
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
-        "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
+        "--server-id", SERVER_ID, "--ticket-keys", keys_file,
+        "--gods", str(waited_observers if options.all_computer_gods else options.clients),
         "--come-back-seconds", str(options.come_back_seconds)]
+    if options.all_computer_gods:
+        server_command.append("--all-computer-gods")
+    if options.ai_seed is not None:
+        server_command += ["--ai-seed", str(options.ai_seed)]
     if options.server_alignment is not None:
         options.server_profile = options.server_profile or os.path.join(out, "server_profile")
         write_kept_alignment(options.server_profile, options.server_alignment)
@@ -794,8 +946,14 @@ def main():
         clients = []
         for index, client_dir in enumerate(client_dirs):
             os.makedirs(client_dir, exist_ok=True)
+            is_observer = index >= options.clients
+            if is_observer and not options.all_computer_gods and not wait_for_line(server_log, "The network game starts",
+                                                                                   server):
+                print(f"the game did not start, so observer {index + 1} cannot join it; see {server_dir}")
+                return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
-            ticket = make_ticket(key, kid, 100 + index, f"Player{index + 1}", "god", 600)
+            ticket = make_ticket(key, kid, 100 + index, f"{'Observer' if is_observer else 'Player'}{index + 1}",
+                                 "observer" if is_observer else "god", 600)
             # No land, seed or start option: the client takes them from the server. A frame time of 0 lets
             # the client run at its real frame rate, as a player's game does
             frame_time = ["--sim-frame-ms", str(options.frame_ms)] if options.frame_ms > 0 else []
@@ -839,6 +997,10 @@ def main():
                 command.append(f"--profile-folder={os.path.abspath(profile)}")
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
+                if options.part_second_again:
+                    command.append("--join-part-again")
+            if options.frame_guard:
+                command.append("--sim-frame-guard")
             clients.append(start(command, client_dir))
             processes.append(clients[-1])
             # The server gives the god slots in join order: client N must join before client N + 1 starts,
@@ -847,9 +1009,15 @@ def main():
                 print(f"client {index + 1} did not join; see {client_dir}")
                 return 1
             joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
-            if any("in slot" in line for line in joins) and not any(line.endswith(f"in slot {index}") for line in joins):
+            if (not is_observer and any("in slot" in line for line in joins)
+                    and not any(line.endswith(f"in slot {index}") for line in joins)):
                 print(f"client {index + 1} did not get god slot {index}; see {client_dir}")
                 return 1
+        web_process = None
+        web_folder = None
+        if options.web_client:
+            ticket = make_ticket(key, kid, 200, "WebObserver", "observer", 600)
+            web_folder, web_process = start_web_client(options, out, url, ticket, certs, options.turns, processes)
         # Each client with a camera and no input looks there once its network game started. A client with an input put
         # its camera as its land started, from the input.
         for index, client in enumerate(clients):
@@ -864,8 +1032,9 @@ def main():
         holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
         held = {index for index in holds if index >= len(clients)}
         cameras_again = set()
-        while time.monotonic() - started < RUN_LIMIT_SECONDS:
-            if all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1])):
+        while time.monotonic() - started < run_limit_seconds(options.turns):
+            if (all(client.poll() is not None for client in clients if not (stopped_second and client is clients[-1]))
+                    and (web_process is None or web_process.poll() is not None)):
                 break
             for index, near in holds.items():
                 if index not in held and clients[index].poll() is None and lines_with(
@@ -924,6 +1093,10 @@ def main():
             back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
             different = [turn for turn in different if turn > back_at]
         expected = options.turns - 1 if not (index == 1 and options.stop_second_after) else 1
+        is_observer = index >= options.clients
+        if is_observer and client_turns:
+            # An observer that joined a running game compares the turns from the turn of its world
+            expected -= min(client_turns)
         client_stop = lines_with(os.path.join(client_dir, "client.log"), ["The turns of the network game stopped after turn"])
         client_stopped_after = (int(re.search(r"after turn (\d+)", client_stop[-1]).group(1)) if client_stop else None)
         left = index == leaver
@@ -948,6 +1121,7 @@ def main():
                 print(line)
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
+            "observer": is_observer, "max_turn_ms": max_turn_ms(os.path.join(client_dir, "record.jsonl")),
             "stopped_after": client_stopped_after,
             "end_box": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
@@ -963,6 +1137,29 @@ def main():
     # the checksums are then the same only because the hand did nothing.
     server_deeds = sim_report.hand_deeds_in_file(server_log)
     summary["hand_deeds"] = {str(slot): counts for slot, counts in sorted(server_deeds.items())}
+    summary["until_end"] = options.until_end
+    summary["ended"] = stopped_after is not None
+    summary["all_computer_gods"] = options.all_computer_gods
+    summary["ai_seed"] = options.ai_seed
+    summary["observers"] = options.observers
+    # What the computer gods did, as the server's log tells. Each client's log must tell the same gods.
+    ai = sim_report.ai_actions_in_file(server_log)
+    summary["ai"] = ai
+    if options.all_computer_gods and not ai["gods"]:
+        print("the room has no human god, but the server made no computer god")
+        all_same = False
+    if options.expect_ai_action and not ai["acted"]:
+        print("no computer god chose a need, did a deed of the hand or cast a miracle")
+        all_same = False
+    if web_folder is not None:
+        server_checks = {turn: text for turn, text in server_turns.items()}
+        web = web_checksums(web_folder)
+        compared = [turn for turn in sorted(web) if turn in server_checks]
+        different = [turn for turn in compared if web[turn].lower() != server_checks[turn].lower()]
+        web_same = not different and len(compared) >= max(1, (options.turns - 1 - min(web, default=0)) // 2)
+        all_same = all_same and web_same
+        summary["clients"].append({"client": "web", "turns": len(web), "compared": len(compared),
+                                   "different": different[:20], "same": web_same})
     summary["missing_deeds"] = {}
     for index, client_dir in enumerate(client_dirs):
         missing = sim_report.missing_deeds(server_deeds.get(index, {}), sim_report.expected_deeds(client_inputs[index]))
@@ -972,6 +1169,9 @@ def main():
             all_same = False
         client_deeds = sim_report.hand_deeds_in_file(os.path.join(client_dir, "client.log"))
         summary["clients"][index]["hand_deeds_same"] = client_deeds == server_deeds
+        if index >= options.clients and min(record_checksums(os.path.join(client_dir, "record.jsonl")), default=0) > 1:
+            # An observer that joined a running game did not see the deeds of the turns before its world
+            continue
         steady = (stopped_after is None and options.stop_second_after is None and leaver is None
                   and options.part_second_at is None)
         if client_deeds != server_deeds and steady:

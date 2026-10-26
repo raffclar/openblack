@@ -168,6 +168,19 @@ bool ReadStart(const Json& object, Start& start)
 	}
 	start.seed = static_cast<uint32_t>(seed);
 	start.turn = static_cast<uint32_t>(turn);
+	if (!ReadBool(object, "all_computer_gods", start.allComputerGods, false))
+	{
+		return false;
+	}
+	if (const auto* aiSeed = Member(object, "ai_seed"); aiSeed != nullptr && !aiSeed->is_null())
+	{
+		uint64_t value = 0;
+		if (!ReadUnsigned(object, "ai_seed", k_MostNumber, value))
+		{
+			return false;
+		}
+		start.aiSeed = static_cast<uint32_t>(value);
+	}
 	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
 	{
 		if (!names->is_array() || names->size() > k_MostSlots)
@@ -186,7 +199,8 @@ bool ReadStart(const Json& object, Start& start)
 	return true;
 }
 
-/// Writes the members of a start. The frame leaves out an empty opening and a false map for 32 gods.
+/// Writes the members of a start. The frame leaves out an empty opening, a false map for 32 gods and the tool members that are
+/// not set.
 void WriteStart(const Start& start, Json& object)
 {
 	object["land"] = start.land;
@@ -200,6 +214,14 @@ void WriteStart(const Start& start, Json& object)
 	if (start.godsRingMap)
 	{
 		object["gods_ring_map"] = true;
+	}
+	if (start.allComputerGods)
+	{
+		object["all_computer_gods"] = true;
+	}
+	if (start.aiSeed.has_value())
+	{
+		object["ai_seed"] = *start.aiSeed;
 	}
 	if (!start.names.empty())
 	{

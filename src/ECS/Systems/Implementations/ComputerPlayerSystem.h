@@ -9,7 +9,10 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
+#include <optional>
 
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -36,12 +39,14 @@ public:
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;
 	void HumansJoined(std::span<const PlayerNames> humans) override;
+	void SetAiSeed(std::optional<uint32_t> seed) override { _aiSeed = seed; }
 
 private:
 	/// The computer mind of the player, made with the player when the land has none
 	components::ComputerPlayer& MindOf(PlayerNames player);
 
 	std::unique_ptr<computer_player::World> _world;
+	std::optional<uint32_t> _aiSeed;
 };
 
 } // namespace openblack::ecs::systems

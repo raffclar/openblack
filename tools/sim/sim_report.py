@@ -122,6 +122,58 @@ def missing_deeds(deeds, expected):
     return {name: [deeds.get(name, 0), least] for name, least in expected.items() if deeds.get(name, 0) < least}
 
 
+# What the log says of the computer gods (the AI soak). The server and the clients write these lines:
+#   Made creature <id> of species <n> for the computer god <god> at <x>, <z>   (the start of a computer god)
+#   The computer god <god> starts with the personality of AI seed <seed>
+#   Computer god <god> chooses need <name>                                     (a need that the mind chose)
+#   Computer god <god> casts <miracle>                                         (a miracle that the god cast)
+# and the "Hand deed" lines of the hand of the god. A god number counts from 0, as the hand deeds do.
+COMPUTER_GOD_START = re.compile(r"for the computer god (\d+)|The computer god (\d+) starts with the personality")
+COMPUTER_GOD_NEED = re.compile(r"Computer god (\d+) chooses need (\S+)")
+COMPUTER_GOD_CAST = re.compile(r"Computer god (\d+) casts (\S+)")
+
+
+def ai_actions_in_text(lines):
+    """What the computer gods did, as the log lines tell: {"gods": [god numbers], "per_god": {god: {"needs": {name:
+    count}, "hand": {deed: count}, "casts": {miracle: count}}}, "acted": whether any god did anything}"""
+    lines = list(lines)
+    gods = set()
+    per_god = {}
+
+    def entry(god):
+        return per_god.setdefault(god, {"needs": {}, "hand": {}, "casts": {}})
+
+    for line in lines:
+        match = COMPUTER_GOD_START.search(line)
+        if match is not None:
+            gods.add(int(match.group(1) or match.group(2)))
+        match = COMPUTER_GOD_NEED.search(line)
+        if match is not None:
+            needs = entry(int(match.group(1)))["needs"]
+            needs[match.group(2)] = needs.get(match.group(2), 0) + 1
+        match = COMPUTER_GOD_CAST.search(line)
+        if match is not None:
+            casts = entry(int(match.group(1)))["casts"]
+            casts[match.group(2)] = casts.get(match.group(2), 0) + 1
+    # The hand deeds of the computer gods only: a human god's hand is not the mind's
+    for god, deeds in hand_deeds_in_text(lines).items():
+        if god in gods:
+            entry(god)["hand"] = deeds
+    for god in gods:
+        entry(god)
+    acted = any(item["needs"] or item["hand"] or item["casts"] for item in per_god.values())
+    return {"gods": sorted(gods), "per_god": {str(god): per_god[god] for god in sorted(per_god)}, "acted": acted}
+
+
+def ai_actions_in_file(path):
+    """As ai_actions_in_text, for a log file; a missing file tells of none"""
+    try:
+        with open(path, encoding="utf-8", errors="replace") as file:
+            return ai_actions_in_text(file)
+    except OSError:
+        return ai_actions_in_text([])
+
+
 def read_records(lines):
     """The start line, the records and the end line of a run record, from its lines. A line that is not JSON (as the
     last line of a run that stopped as it wrote) is left out."""

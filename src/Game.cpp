@@ -4012,6 +4012,11 @@ bool Game::Initialize() noexcept
 	if (_simulation.has_value())
 	{
 		Locator::simulation::value().SetSettings(_simulation->settings);
+		if (const auto refusal = simulation::ApplySoakTools(_simulation->soak); refusal.has_value())
+		{
+			SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The simulation run cannot start: {}", *refusal);
+			return false;
+		}
 		if (_simulation->frameTime.has_value())
 		{
 			Locator::time::value().SetFixedFrameTime(*_simulation->frameTime);
@@ -5502,6 +5507,13 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 	clock.SetNetworkGame(true);
 	// The land starts from the state that the game server started it from
 	simulation::PrepareNetworkLand(start.seed);
+	// The modes of the AI soak come from the server, as the seed does. A build for players refuses them.
+	if (const auto refusal = simulation::ApplySoakTools({.allComputerGods = start.allComputerGods, .aiSeed = start.aiSeed});
+	    refusal.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
+		return false;
+	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
 	_startTestbed = start.testbed;
 	_startGodsRingMap = start.godsRingMap;

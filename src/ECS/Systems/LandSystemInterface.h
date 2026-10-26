@@ -131,6 +131,9 @@ public:
 	/// The humans of a land of a network game come from the network session at the start of the game. Without a session,
 	/// the player of this computer is the one human when the land loads.
 	virtual void SetHumansFromSession(bool fromSession) = 0;
+	/// Tools only (the AI soak): every god with a citadel is a computer god when the land loads, also the god of this
+	/// computer. The slots fill then, and no human joins.
+	virtual void SetAllComputerGods(bool allComputer) = 0;
 	/// Starts the scripts of the challenge: the script machine reads the challenge file, and the story starts if asked.
 	/// Gives false when the challenge file is not there.
 	virtual bool StartChallengeScripts(bool startStory) = 0;

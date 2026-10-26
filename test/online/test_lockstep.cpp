@@ -164,6 +164,22 @@ protected:
 		        .keptTurns = 3200});
 	}
 
+	/// A room with no human god (tools): the game starts at once, and the world turns when this many observers joined
+	void MakeAllComputerHost(uint32_t observers)
+	{
+		game_socket::Start start {.land = "Land1.txt", .testbed = false, .seed = 1, .turn = 0, .opening = "cow"};
+		start.allComputerGods = true;
+		start.aiSeed = 3u;
+		host = std::make_unique<LockstepHost>(
+		    network, CheckFakeTicket, [this] { return now; }, [this] { return "secret-" + std::to_string(++secrets); },
+		    server::HostSettings {.start = std::move(start),
+		                          .landChecksum = online::start_rules::LandChecksum(k_LandFile),
+		                          .godsToStart = observers,
+		                          .godSlots = 7,
+		                          .comeBackMicroseconds = 5LL * 60 * 1'000'000,
+		                          .keptTurns = 3200});
+	}
+
 	/// One frame of the server and of each computer: 100 ms of time, and a turn when the world turns
 	void Frame(std::vector<Computer*> computers)
 	{
@@ -699,4 +715,64 @@ TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
 	EXPECT_EQ(again.session.GetJoined()->role, game_socket::Role::Observer);
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
 	EXPECT_EQ(again.world.hash, serverWorld.hash);
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodStartsAtOnceAndTurnsWhenTheObserversJoined)
+{
+	MakeAllComputerHost(2);
+	GiveWorldState();
+	Frames({}, 3);
+	EXPECT_TRUE(host->Started());
+	EXPECT_FALSE(host->Paused());
+	EXPECT_FALSE(host->GameOver());
+	// No observer yet: the world waits
+	EXPECT_FALSE(host->HasTurn(serverWorld.turns));
+	EXPECT_EQ(serverWorld.turns, 0u);
+
+	Computer first(network, now, "observer:one");
+	Frames({&first}, 20);
+	ASSERT_TRUE(first.session.GetJoined().has_value());
+	EXPECT_EQ(first.session.GetJoined()->role, game_socket::Role::Observer);
+	// The start that the observer gets names the tool modes
+	ASSERT_TRUE(first.session.GetJoined()->start.has_value());
+	EXPECT_TRUE(first.session.GetJoined()->start->allComputerGods);
+	EXPECT_EQ(first.session.GetJoined()->start->aiSeed, std::optional<uint32_t>(3u));
+	EXPECT_EQ(serverWorld.turns, 0u);
+
+	Computer second(network, now, "observer:two");
+	Frames({&first, &second}, 40);
+	EXPECT_EQ(host->Observers(), 2u);
+	EXPECT_GT(serverWorld.turns, 0u);
+	for (const auto* observer : {&first, &second})
+	{
+		EXPECT_EQ(observer->world.turns, serverWorld.turns);
+		EXPECT_EQ(observer->world.hash, serverWorld.hash);
+		EXPECT_EQ(observer->session.GetCompares().compared, observer->session.GetCompares().same);
+	}
+	EXPECT_EQ(std::ranges::count(host->Seats(), LockstepHost::SeatState::Taken, &LockstepHost::Seat::state), 0);
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodAndNoObserverToWaitForTurnsAtOnce)
+{
+	MakeAllComputerHost(0);
+	GiveWorldState();
+	Frames({}, 10);
+	EXPECT_GT(serverWorld.turns, 0u);
+	// With no observer seen yet the room is not over
+	EXPECT_FALSE(host->GameOver());
+}
+
+TEST_F(LockstepTest, ARoomWithNoHumanGodIsOverWhenTheObserversThatJoinedAllLeft)
+{
+	MakeAllComputerHost(1);
+	GiveWorldState();
+	auto watcher = std::make_unique<Computer>(network, now, "observer:one");
+	Frames({watcher.get()}, 20);
+	ASSERT_EQ(host->Observers(), 1u);
+	EXPECT_FALSE(host->GameOver());
+	network.Cut(watcher->sockets->Ids().back());
+	watcher.reset();
+	Frames({}, 5);
+	EXPECT_EQ(host->Observers(), 0u);
+	EXPECT_TRUE(host->GameOver());
 }

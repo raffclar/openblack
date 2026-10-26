@@ -49,6 +49,7 @@ public:
 
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
+	void SetAllComputerGods(bool allComputer) override { _allComputerGods = allComputer; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
 
@@ -90,6 +91,7 @@ private:
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};
+	bool _allComputerGods {false};
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time

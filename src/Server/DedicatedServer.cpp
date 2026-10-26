@@ -315,6 +315,11 @@ bool ServerWorld::StartLand()
 	}
 	// The land starts from the state that every client of the network game starts it from
 	simulation::PrepareNetworkLand(_settings.seed);
+	if (const auto refusal = simulation::ApplySoakTools(_settings.soak); refusal.has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {}", *refusal);
+		return false;
+	}
 	if (_settings.godsRingMap)
 	{
 		if (!land.LoadGodsRingMap())
@@ -574,6 +579,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
+	    .allComputerGods = settings.soak.allComputerGods,
+	    .aiSeed = settings.soak.aiSeed,
 	};
 	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
 	{
