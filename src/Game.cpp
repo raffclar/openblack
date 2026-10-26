@@ -52,7 +52,6 @@
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/DayNightClock.h"
 #include "3D/FlatLand.h"
-#include "3D/GripLandscapeEffect.h"
 #include "3D/HandAnimation.h"
 #include "3D/HandCycleChoice.h"
 #include "3D/HandMorph.h"
@@ -2380,10 +2379,6 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		return UpdateDebugGui();
 	case Step::Interface:
 		UpdateInterfaceFrame(frame.deltaTime);
-		break;
-	case Step::GripEffect:
-		// The dust moves on by the game time of the frame, and stands still while the game is paused
-		GripLandscapeEffect::Update(std::chrono::duration<float>(Locator::time::value().GetFrameGameTime()).count());
 		break;
 	case Step::Turns:
 	{

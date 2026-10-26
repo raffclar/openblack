@@ -11,8 +11,11 @@
 
 #include <array>
 #include <map>
+#include <memory>
 #include <optional>
 #include <span>
+#include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 #include <vector>
@@ -21,17 +24,16 @@
 
 #include "Commands/PlayerCommands.h"
 #include "Commands/TurnCommandSource.h"
-#include "ECS/Components/GripLandscapeParticle.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "Locator.h"
 
 #define LOCATOR_IMPLEMENTATIONS
-#include "Common/RandomNumberManagerTesting.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 
 using namespace openblack;
@@ -44,6 +46,68 @@ entt::entity Entity(uint32_t value)
 {
 	return static_cast<entt::entity>(value);
 }
+
+/// The particle effects for the test: it keeps the spot visuals that the turns start
+class FakeParticles final: public ecs::systems::ParticleSystemInterface
+{
+public:
+	struct SpotVisual
+	{
+		SpotVisualType type;
+		glm::vec3 position;
+		std::optional<int> turns;
+		entt::entity owner;
+		float magnitude;
+	};
+	std::vector<SpotVisual> spotVisuals;
+
+	EffectId Start(std::string_view /*file*/, glm::vec3 /*origin*/, float /*magnitude*/, bool /*synced*/) override
+	{
+		return k_NoEffect;
+	}
+	EffectId Start(ParticleType /*type*/, glm::vec3 /*origin*/, float /*magnitude*/, bool /*synced*/) override
+	{
+		return k_NoEffect;
+	}
+	EffectId StartForSpell(ParticleType /*type*/, glm::vec3 /*origin*/, glm::vec3 /*direction*/, float /*magnitude*/,
+	                       particles::SpellSink& /*sink*/, bool /*synced*/) override
+	{
+		return k_NoEffect;
+	}
+	bool ProcessForSpell(EffectId /*id*/, const particles::ProcessInfo& /*info*/, float /*seconds*/) override { return false; }
+	EffectId StartSpotVisual(SpotVisualType type, glm::vec3 position, std::optional<int> turns, entt::entity owner,
+	                         float magnitude) override
+	{
+		spotVisuals.push_back({.type = type, .position = position, .turns = turns, .owner = owner, .magnitude = magnitude});
+		return static_cast<EffectId>(spotVisuals.size());
+	}
+	void SetOrigin(EffectId /*id*/, glm::vec3 /*origin*/) override {}
+	void SetPlayer(EffectId /*id*/, int /*player*/) override {}
+	void SetDrawPath(EffectId /*id*/, particles::draw::DrawPath /*path*/) override {}
+	void SetDrawOffset(EffectId /*id*/, glm::vec3 /*offset*/) override {}
+	void SetInTemple(EffectId /*id*/) override {}
+	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 /*point*/, float /*margin*/) const override
+	{
+		return nullptr;
+	}
+	[[nodiscard]] size_t GetSoundCount() const override { return 0; }
+	void AddTarget(EffectId /*id*/, entt::entity /*target*/) override {}
+	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> /*trail*/) override {}
+	void UpdateFrame(float /*gameSeconds*/, const HandFrame& /*hand*/) override {}
+	void CloseDown(EffectId /*id*/) override {}
+	void Delete(EffectId /*id*/) override {}
+	[[nodiscard]] bool IsRunning(EffectId /*id*/) const override { return false; }
+	[[nodiscard]] particles::Effect* Find(EffectId /*id*/) override { return nullptr; }
+	void ProcessTurn() override {}
+	void Reset() override {}
+	void SetFreshIdsAtNextReset() override {}
+	void CollectDrawFrame(float /*turnFraction*/, particles::draw::Frame& /*frame*/, bool /*inTemple*/) const override {}
+	[[nodiscard]] DrawStats GetDrawStats() const override { return {}; }
+	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override { return {}; }
+	[[nodiscard]] std::vector<std::string> GetFileNames() const override { return {}; }
+	void SetPaused(bool /*paused*/) override {}
+	[[nodiscard]] bool IsPaused() const override { return false; }
+};
 
 /// A game server for the test: it keeps what the computer sent, and gives the turns that the test puts in
 class FakeSource final: public TurnCommandSourceInterface
@@ -244,26 +308,25 @@ TEST_F(NetworkCommands, TheLeaveOfTheServerDefeatsTheGodOfThePlayerAtTheTurn)
 
 TEST_F(NetworkCommands, TheGripOfAnotherComputerMakesItsDustAtTheTurnOfTheServer)
 {
-	Locator::rng::emplace<RandomNumberManagerTesting>();
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& particles = static_cast<FakeParticles&>(Locator::particleSystem::emplace<FakeParticles>());
 	_commands.SetSource(&_source);
 	// The own grip goes to the server, and makes no dust before the server's turn
 	_commands.Submit(GripDust {.point = {10.0f, 2.0f, 30.0f}});
 	ASSERT_EQ(_source.sent.size(), 1u);
 	EXPECT_EQ(std::get<GripDust>(_source.sent[0]).point, glm::vec3(10.0f, 2.0f, 30.0f));
-	EXPECT_EQ(registry.Size<ecs::components::GripLandscapeParticle>(), 0u);
+	EXPECT_TRUE(particles.spotVisuals.empty());
 	_source.turns[3] = {{.player = PlayerNames::PLAYER_TWO, .action = GripDust {.point = {100.0f, 5.0f, 200.0f}}}};
 	_commands.RunSent(3);
-	size_t sprites = 0;
-	registry.Each<const ecs::components::GripLandscapeParticle>(
-	    [&sprites](const ecs::components::GripLandscapeParticle& particle) {
-		    ++sprites;
-		    EXPECT_EQ(particle.centre.x, 100.0f);
-		    EXPECT_EQ(particle.centre.z, 200.0f);
-	    });
-	EXPECT_EQ(sprites, 8u);
+	// The turn makes the spot visual of a grip of the land, for its own life, at the full size, with no owner
+	ASSERT_EQ(particles.spotVisuals.size(), 1u);
+	const auto& dust = particles.spotVisuals.front();
+	EXPECT_EQ(dust.type, SpotVisualType::GripLandscape);
+	EXPECT_EQ(dust.position, glm::vec3(100.0f, 5.0f, 200.0f));
+	EXPECT_FALSE(dust.turns.has_value());
+	EXPECT_EQ(dust.owner, entt::entity {entt::null});
+	EXPECT_EQ(dust.magnitude, 1.0f);
 	_commands.SetSource(nullptr);
-	Locator::rng::reset();
+	Locator::particleSystem::reset();
 }
 
 TEST_F(NetworkCommands, TheJoinOfTheServerGivesTheGodOfThePlayerItsHandsAtTheTurn)
