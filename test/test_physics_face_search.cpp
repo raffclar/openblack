@@ -10,16 +10,11 @@
 // The search for the face behind a point. The search with four lanes, the search one face at a time and a copy of the
 // first search that the physics used must give the same face and the same bits of the hit for many random cases.
 
-#include <cmath>
 #include <cstdint>
 #include <cstring>
 
-#include <algorithm>
-#include <array>
 #include <optional>
 #include <random>
-#include <span>
-#include <utility>
 #include <vector>
 
 #include <glm/geometric.hpp>
@@ -98,7 +93,7 @@ void ExpectSame(const std::optional<Hit>& expected, const std::optional<Hit>& ac
 }
 
 /// A closed box of twelve faces about the origin, its normals out, turned and moved as a body is
-std::vector<WorldFace> ClosedBox(std::mt19937& random)
+std::vector<WorldFace> Box(std::mt19937& random)
 {
 	std::uniform_real_distribution<float> size(0.2f, 3.0f);
 	std::uniform_real_distribution<float> spread(-50.0f, 50.0f);
@@ -149,7 +144,7 @@ TEST(PhysicsFaceSearch, BoxesGiveTheSameHitsAsTheFirstSearch)
 	int hits = 0;
 	for (int box = 0; box < 400; ++box)
 	{
-		const auto faces = ClosedBox(random);
+		const auto faces = Box(random);
 		const auto blocks = Blocks(faces);
 		const auto centre = (faces[0].a + faces[2].c) * 0.5f;
 		for (int sample = 0; sample < 200; ++sample)
@@ -212,245 +207,6 @@ TEST(PhysicsFaceSearch, OnATieTheFirstFaceWins)
 
 TEST(PhysicsFaceSearch, NoFacesGiveNoHit)
 {
-	EXPECT_FALSE(NearestBehind(std::span<const FaceBlock> {}, glm::vec3(0.0f), glm::vec3(1.0f)).has_value());
+	EXPECT_FALSE(NearestBehind({}, glm::vec3(0.0f), glm::vec3(1.0f)).has_value());
 	EXPECT_FALSE(NearestBehindOneByOne({}, glm::vec3(0.0f), glm::vec3(1.0f)).has_value());
-}
-
-namespace
-{
-
-FaceSet Set(const std::vector<WorldFace>& faces)
-{
-	FaceSet set;
-	set.Reset(faces.size());
-	for (std::size_t i = 0; i < faces.size(); ++i)
-	{
-		set.Store(i, faces[i]);
-	}
-	return set;
-}
-
-/// Whether a point is in a box that is wider by a margin
-bool InBox(const openblack::physics::face_search::Box& box, glm::vec3 point, float margin)
-{
-	return box.min.x - margin <= point.x && point.x <= box.max.x + margin && box.min.y - margin <= point.y &&
-	       point.y <= box.max.y + margin && box.min.z - margin <= point.z && point.z <= box.max.z + margin;
-}
-
-float LargestPart(glm::vec3 v)
-{
-	return std::max({std::abs(v.x), std::abs(v.y), std::abs(v.z)});
-}
-
-/// A triangle of a random shape: some are thin, some are very thin, some have a normal that is a little wrong
-WorldFace RandomFace(std::mt19937& random, glm::vec3 centre, float size)
-{
-	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-	std::uniform_int_distribution<int> kind(0, 5);
-	WorldFace face;
-	face.a = centre + glm::vec3(unit(random), unit(random), unit(random)) * size;
-	face.b = centre + glm::vec3(unit(random), unit(random), unit(random)) * size;
-	switch (kind(random))
-	{
-	case 0:
-		// Nearly on the line through the first two corners
-		face.c = glm::mix(face.a, face.b, unit(random)) + glm::vec3(unit(random), unit(random), unit(random)) * size * 1e-3f;
-		break;
-	case 1:
-		// On the line, or a very small distance from it
-		face.c = glm::mix(face.a, face.b, unit(random)) + glm::vec3(unit(random), unit(random), unit(random)) * size * 1e-6f;
-		break;
-	case 2:
-		// Two corners nearly at the same place
-		face.c = face.a + glm::vec3(unit(random), unit(random), unit(random)) * size * 1e-4f;
-		break;
-	default:
-		face.c = centre + glm::vec3(unit(random), unit(random), unit(random)) * size;
-		break;
-	}
-	glm::vec3 normal = glm::cross(face.b - face.a, face.c - face.a);
-	const float length = glm::length(normal);
-	normal = length > 0.0f ? normal / length : glm::vec3(0.0f);
-	if (kind(random) == 0)
-	{
-		// A turned normal, as a body gives after its axes go a little out of square
-		normal = glm::normalize(normal + glm::vec3(unit(random), unit(random), unit(random)) * 0.01f);
-	}
-	face.normal = normal;
-	return face;
-}
-
-/// A line that meets a face at a corner or on an edge, a very small distance in or out
-std::pair<glm::vec3, glm::vec3> LineToEdge(std::mt19937& random, const WorldFace& face, float size)
-{
-	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-	std::uniform_real_distribution<float> along(0.0f, 1.0f);
-	std::uniform_int_distribution<int> edge(0, 3);
-	glm::vec3 target;
-	switch (edge(random))
-	{
-	case 0:
-		target = glm::mix(face.a, face.b, along(random));
-		break;
-	case 1:
-		target = glm::mix(face.b, face.c, along(random));
-		break;
-	case 2:
-		target = glm::mix(face.c, face.a, along(random));
-		break;
-	default:
-		target = face.a;
-		break;
-	}
-	target += glm::vec3(unit(random), unit(random), unit(random)) * size * 1e-6f;
-	const glm::vec3 direction = glm::vec3(unit(random), unit(random), unit(random)) * size * 2.0f;
-	// The point is in front of the target, so the search looks back to it
-	return {target + direction * along(random), direction};
-}
-
-} // namespace
-
-TEST(PhysicsFaceSearch, BoxCullGivesTheSameHitsOnBoxes)
-{
-	std::mt19937 random(4321u);
-	std::uniform_real_distribution<float> offset(-1.0f, 1.0f);
-	std::uniform_real_distribution<float> reach(0.0f, 3.0f);
-	int hits = 0;
-	for (int box = 0; box < 400; ++box)
-	{
-		const auto faces = ClosedBox(random);
-		const auto blocks = Blocks(faces);
-		const auto set = Set(faces);
-		const auto centre = (faces[0].a + faces[2].c) * 0.5f;
-		for (int sample = 0; sample < 200; ++sample)
-		{
-			const glm::vec3 point = centre + glm::vec3(offset(random), offset(random), offset(random)) * reach(random);
-			const glm::vec3 direction = glm::vec3(offset(random), offset(random), offset(random)) * reach(random);
-			const auto expected = NearestBehind(blocks, point, direction);
-			hits += expected.has_value() ? 1 : 0;
-			ExpectSame(expected, NearestBehind(set, point, direction));
-		}
-	}
-	EXPECT_GT(hits, 10000);
-}
-
-TEST(PhysicsFaceSearch, BoxCullGivesTheSameHitsOnThinFacesAndEdges)
-{
-	std::mt19937 random(2468u);
-	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-	std::uniform_int_distribution<int> count(1, 40);
-	// Small and large faces, near the origin and as far as the land goes
-	constexpr std::array<float, 4> k_Sizes {0.01f, 0.3f, 2.0f, 40.0f};
-	constexpr std::array<float, 3> k_Places {0.0f, 900.0f, 5000.0f};
-	int hits = 0;
-	for (int round = 0; round < 6000; ++round)
-	{
-		const float size = k_Sizes.at(static_cast<std::size_t>(round) % k_Sizes.size());
-		const float place = k_Places.at(static_cast<std::size_t>(round / 4) % k_Places.size());
-		const glm::vec3 centre = glm::vec3(unit(random), unit(random), unit(random)) * place;
-		std::vector<WorldFace> faces(static_cast<std::size_t>(count(random)));
-		for (auto& face : faces)
-		{
-			face = RandomFace(random, centre, size);
-		}
-		const auto blocks = Blocks(faces);
-		const auto set = Set(faces);
-		for (int sample = 0; sample < 40; ++sample)
-		{
-			const auto& face = faces[static_cast<std::size_t>(sample) % faces.size()];
-			const auto [point, direction] = LineToEdge(random, face, size);
-			const auto expected = NearestBehind(blocks, point, direction);
-			hits += expected.has_value() ? 1 : 0;
-			ExpectSame(expected, NearestBehind(set, point, direction));
-			ExpectSame(expected, NearestBehindOneByOne(blocks, point, direction));
-		}
-	}
-	EXPECT_GT(hits, 50000);
-}
-
-TEST(PhysicsFaceSearch, EachHitIsInTheBoxOfItsFace)
-{
-	std::mt19937 random(13579u);
-	std::uniform_real_distribution<float> unit(-1.0f, 1.0f);
-	int hits = 0;
-	for (int round = 0; round < 200000; ++round)
-	{
-		const float size = round % 2 == 0 ? 0.05f : 5.0f;
-		const glm::vec3 centre = glm::vec3(unit(random), unit(random), unit(random)) * 3000.0f;
-		const std::vector<WorldFace> faces {RandomFace(random, centre, size)};
-		const auto [point, direction] = LineToEdge(random, faces[0], size);
-		const auto hit = NearestBehind(Blocks(faces), point, direction);
-		if (!hit.has_value())
-		{
-			continue;
-		}
-		const auto box = ReachOf(faces[0]);
-		hits += std::isfinite(box.min.x) ? 1 : 0;
-		// The search widens the box of the line by this much
-		const float lineMargin = (LargestPart(point) + LargestPart(direction)) * 0x1p-17f;
-		EXPECT_TRUE(InBox(box, hit->point, lineMargin));
-	}
-	// Most hits are on faces with a finite box
-	EXPECT_GT(hits, 15000);
-}
-
-TEST(PhysicsFaceSearch, AGoodFaceGetsATightBox)
-{
-	const WorldFace face {
-	    .normal = {0.0f, 0.0f, -1.0f}, .a = {1000.0f, 1.0f, 0.0f}, .b = {1000.0f, 3.0f, 0.0f}, .c = {1002.0f, 2.0f, 0.0f}};
-	const auto box = ReachOf(face);
-	EXPECT_LT(1000.0f - box.min.x, 0.01f);
-	EXPECT_LT(box.max.y - 3.0f, 0.01f);
-	EXPECT_LT(box.max.z, 0.01f);
-	EXPECT_GE(1000.0f, box.min.x);
-	EXPECT_GE(box.max.x, 1002.0f);
-}
-
-TEST(PhysicsFaceSearch, AThinOrBadFaceGetsNoFiniteBox)
-{
-	// The corners are on one line
-	const WorldFace line {
-	    .normal = {0.0f, 0.0f, 1.0f}, .a = {0.0f, 0.0f, 0.0f}, .b = {1.0f, 0.0f, 0.0f}, .c = {2.0f, 0.0f, 0.0f}};
-	EXPECT_TRUE(std::isinf(ReachOf(line).min.x));
-	// The normal points against the order of the corners
-	const WorldFace back {
-	    .normal = {0.0f, 0.0f, -1.0f}, .a = {0.0f, 0.0f, 0.0f}, .b = {1.0f, 0.0f, 0.0f}, .c = {0.0f, 1.0f, 0.0f}};
-	EXPECT_TRUE(std::isinf(ReachOf(back).min.x));
-	// A zero normal never faces a line, so its box is empty
-	const WorldFace none {
-	    .normal = {0.0f, 0.0f, 0.0f}, .a = {0.0f, 0.0f, 0.0f}, .b = {1.0f, 0.0f, 0.0f}, .c = {0.0f, 1.0f, 0.0f}};
-	EXPECT_GT(ReachOf(none).min.x, ReachOf(none).max.x);
-}
-
-TEST(PhysicsFaceSearch, BoxCullKeepsTheFirstFaceOnATie)
-{
-	const WorldFace face {
-	    .normal = {0.0f, 0.0f, -1.0f}, .a = {-1.0f, -1.0f, 0.0f}, .b = {-1.0f, 1.0f, 0.0f}, .c = {1.0f, 0.0f, 0.0f}};
-	// Far faces before and between the copies, so the cull drops whole blocks between them
-	WorldFace far = face;
-	far.a.x += 100.0f;
-	far.b.x += 100.0f;
-	far.c.x += 100.0f;
-	std::vector<WorldFace> faces(20, far);
-	faces[9] = face;
-	faces[17] = face;
-	const glm::vec3 point(0.0f, 0.0f, 0.5f);
-	const glm::vec3 direction(0.0f, 0.0f, 1.0f);
-	const auto hit = NearestBehind(Set(faces), point, direction);
-	ASSERT_TRUE(hit.has_value());
-	EXPECT_EQ(hit->face, 9u);
-	ExpectSame(NearestBehind(Blocks(faces), point, direction), hit);
-}
-
-TEST(PhysicsFaceSearch, BoxCullSearchesAllWithoutABox)
-{
-	const WorldFace face {
-	    .normal = {0.0f, 0.0f, -1.0f}, .a = {-1.0f, -1.0f, 0.0f}, .b = {-1.0f, 1.0f, 0.0f}, .c = {1.0f, 0.0f, 0.0f}};
-	const std::vector<WorldFace> faces(5, face);
-	const auto set = Set(faces);
-	// A direction too large for a box of the line
-	const glm::vec3 point(0.0f, 0.0f, 0.5f);
-	const glm::vec3 direction(0.0f, 0.0f, 0x1p41f);
-	ExpectSame(NearestBehind(Blocks(faces), point, direction), NearestBehind(set, point, direction));
-	EXPECT_FALSE(NearestBehind(FaceSet {}, point, glm::vec3(0.0f, 0.0f, 1.0f)).has_value());
 }

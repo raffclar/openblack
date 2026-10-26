@@ -1780,3 +1780,4 @@ add_test(NAME test_draw_trace_compare
 openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
 target_link_libraries(test_hand_held_seeds PRIVATE edt psys)
 openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
+openblack_setup_and_add_test(test_physics_hit_bounds test_physics_hit_bounds.cpp)
