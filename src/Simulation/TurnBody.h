@@ -19,6 +19,15 @@
 namespace openblack::simulation
 {
 
+/// The turns in which the tools of a developer change the world
+enum class ToolTurn : uint8_t
+{
+	/// The start of a turn of the world
+	World,
+	/// The start of a turn of the temple, while the player is in the temple and the world is paused
+	Temple,
+};
+
 /// The parts of a game turn that belong to the view of one player: the sounds, the music, the tooltips of the hand and
 /// the help that watches the screen. The game's client does them. A server has no view, and does nothing in them.
 class TurnViewInterface
@@ -35,6 +44,10 @@ public:
 	/// The audio of a turn of the temple, while the player is in the temple and the world is paused. A view with no
 	/// audio does nothing.
 	virtual void PlayTempleAudioTurn() {}
+
+	/// The tools of a developer that change the world, as the testbed's scenarios do, at the start of a turn. They act
+	/// only in the turns, so that the world is the same at each frame rate. A view with no tools does nothing.
+	virtual void PlayToolTurn(ToolTurn /*turn*/) {}
 };
 
 /// A view that does nothing, for a world with no player in front of it. It gives the statistics a fixed frame rate.

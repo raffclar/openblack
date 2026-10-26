@@ -9684,7 +9684,7 @@ void AddCrowd(std::vector<Scenario>& all, Crowd::Kind kind, size_t count, std::s
 	    // The crowd is spread over the middle, where the miracle dispensers would stand
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Testbed},
-	    .crowd = Crowd {.kind = kind, .count = count, .seed = k_BenchmarkSeed, .perFrame = creatures ? 100u : 250u},
+	    .crowd = Crowd {.kind = kind, .count = count, .seed = k_BenchmarkSeed, .perTurn = creatures ? 100u : 250u},
 	});
 }
 
@@ -10984,7 +10984,7 @@ std::vector<std::string> testbed_scenarios::Problems(const Scenario& scenario)
 	{
 		problems.emplace_back("alignment or cursor out of range");
 	}
-	if (scenario.crowd.has_value() && (scenario.crowd->count == 0 || scenario.crowd->perFrame == 0))
+	if (scenario.crowd.has_value() && (scenario.crowd->count == 0 || scenario.crowd->perTurn == 0))
 	{
 		problems.emplace_back("a crowd of no one, or spawned none a frame");
 	}

@@ -39,8 +39,8 @@ struct Crowd
 	size_t count {0};
 	/// The seed of the layout's random choices, so that every run lays it out the same
 	uint32_t seed {1};
-	/// How many members are spawned each frame, so that spawning them doesn't make one frame take seconds
-	size_t perFrame {100};
+	/// How many members are spawned each turn, so that spawning them does not make one frame take seconds
+	size_t perTurn {100};
 };
 
 /// A small random number generator that gives the same numbers from the same seed on every platform and build, which

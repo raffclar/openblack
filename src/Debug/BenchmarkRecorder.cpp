@@ -170,8 +170,8 @@ std::string benchmark::ToJson(const RunInfo& run, const Results& results, std::s
 	json += fmt::format("  \"scenario\": {},\n  \"name\": {},\n  \"build\": {},\n", Quoted(run.scenarioId),
 	                    Quoted(run.scenarioName), Quoted(run.build));
 	json += fmt::format("  \"resolution\": [{}, {}],\n", run.width, run.height);
-	json += fmt::format("  \"crowd\": {},\n  \"spawnMs\": {:.3f},\n  \"spawnFrames\": {},\n  \"warmUpFrames\": {},\n",
-	                    run.crowd, run.spawnMs, run.spawnFrames, run.warmUpFrames);
+	json += fmt::format("  \"crowd\": {},\n  \"spawnMs\": {:.3f},\n  \"spawnTurns\": {},\n  \"warmUpFrames\": {},\n", run.crowd,
+	                    run.spawnMs, run.spawnTurns, run.warmUpFrames);
 	json += "  \"entities\": {";
 	for (size_t i = 0; i < run.entityCounts.size(); ++i)
 	{

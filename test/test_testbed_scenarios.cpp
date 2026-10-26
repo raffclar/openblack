@@ -735,7 +735,7 @@ TEST(TestbedScenarios, BenchmarksMeasureCrowdsOfEachSize)
 		EXPECT_EQ(scenario->facet, Facet::Benchmark);
 		ASSERT_TRUE(scenario->crowd.has_value()) << id;
 		EXPECT_EQ(scenario->crowd->count, count);
-		EXPECT_GT(scenario->crowd->perFrame, 0u);
+		EXPECT_GT(scenario->crowd->perTurn, 0u);
 		EXPECT_EQ(scenario->crowd->kind, std::string_view(id).find("creatures") != std::string_view::npos
 		                                     ? Crowd::Kind::Creatures
 		                                     : Crowd::Kind::Villagers);
@@ -771,11 +771,11 @@ TEST(TestbedScenarios, CrowdsAreChecked)
 	Scenario scenario {.id = "benchmark.bad", .name = "Bad", .description = "-", .expected = "-"};
 	scenario.environment.dispenserGrid = false;
 	EXPECT_FALSE(Problems(scenario).empty());
-	scenario.crowd = Crowd {.count = 10, .perFrame = 5};
+	scenario.crowd = Crowd {.count = 10, .perTurn = 5};
 	EXPECT_TRUE(Problems(scenario).empty());
-	scenario.crowd->perFrame = 0;
+	scenario.crowd->perTurn = 0;
 	EXPECT_FALSE(Problems(scenario).empty());
-	scenario.crowd = Crowd {.count = 0, .perFrame = 5};
+	scenario.crowd = Crowd {.count = 0, .perTurn = 5};
 	EXPECT_FALSE(Problems(scenario).empty());
 }
 

@@ -1110,6 +1110,7 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	{
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			view.PlayToolTurn(simulation::ToolTurn::Temple);
 			// The scripts' clock moves on by the temple's turn, and the dialogue takes the player's clicks
 			if (Locator::helpTextSystem::has_value())
 			{

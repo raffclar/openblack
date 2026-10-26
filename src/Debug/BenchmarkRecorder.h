@@ -97,10 +97,10 @@ struct RunInfo
 	std::string build;
 	uint32_t width {0};
 	uint32_t height {0};
-	/// The members of its crowd, and how long spawning them took over how many frames
+	/// The members of its crowd, and how long spawning them took over how many turns
 	size_t crowd {0};
 	double spawnMs {0.0};
-	uint32_t spawnFrames {0};
+	uint32_t spawnTurns {0};
 	uint32_t warmUpFrames {0};
 	/// How many entities there were of each kind, by name
 	std::vector<std::pair<std::string, size_t>> entityCounts;

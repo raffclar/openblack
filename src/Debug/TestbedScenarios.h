@@ -15,6 +15,8 @@
 
 #include <entt/entity/fwd.hpp>
 
+#include "Simulation/TurnBody.h"
+#include "TestbedScenarioClock.h"
 #include "TestbedScenarioRegistry.h"
 #include "TestbedScenarioRunner.h"
 #include "Window.h"
@@ -51,12 +53,19 @@ private:
 	void DrawBenchmark() noexcept;
 	/// Runs the scenario the command line asked for, once
 	void RunRequested() noexcept;
+	/// The scenario moves on at the start of a turn of the world or of the temple
+	void PlayTurn(simulation::ToolTurn turn) noexcept;
+	/// In the turns step of a frame: while the menu holds the paused game, the scenario moves on by the frame's time
+	void PlayPausedMenuFrame() noexcept;
+	/// Whether the game's menu, or the menu's tattoo editor over it, is open
+	[[nodiscard]] static bool MenuOpen() noexcept;
 	void DrawTime() noexcept;
 	void DrawCamera() noexcept;
 	void DrawCreatures() noexcept;
 
 	CreatureSpawner& _spawner;
 	testbed_scenarios::Runner _runner;
+	testbed_scenarios::ScenarioClock _clock;
 	/// The facet the list is narrowed to, or every facet
 	std::optional<testbed_scenarios::Facet> _facet;
 	size_t _picked {0};
@@ -64,7 +73,7 @@ private:
 	size_t _focus {0};
 	/// Where the last benchmark's results were written
 	std::string _savedTo;
-	/// Whether the game lays out the scenarios that are asked for through this window
+	/// Whether the game lays out the scenarios that are asked for through this window, and moves them on in its turns
 	bool _stagerSet {false};
 };
 

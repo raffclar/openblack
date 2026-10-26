@@ -912,6 +912,8 @@ void PlayTurn(TurnViewInterface& view)
 	                                                                       : nullptr,
 	                                      Locator::time::value().GetTurn() + 1);
 #endif
+	// The tools act first, as the commands of the turn do, so that the turn's steps see what they changed
+	view.PlayToolTurn(ToolTurn::World);
 	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); });
 }
 

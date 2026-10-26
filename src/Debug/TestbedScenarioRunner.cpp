@@ -845,7 +845,7 @@ void Runner::Start(const Scenario& scenario)
 	_scenario = &scenario;
 	_running = true;
 	_seconds = 0.0f;
-	_fireBallTakeFrames.reset();
+	_fireBallTakeTurns.reset();
 	_nextMiracleLog = 0.0f;
 	_timeline = {};
 	_creatures.clear();
@@ -2556,19 +2556,19 @@ std::string Runner::HandTakeFireBall()
 	                                                                                       .rayDirection = {0.0f, -1.0f, 0.0f},
 	                                                                                       .cameraForward = {0.0f, -1.0f, 0.0f},
 	                                                                                       .overWorld = true});
-	// The hand takes its place over the next frames, then taps or presses
-	_fireBallTakeFrames = 0;
+	// The hand takes its place in the frames before the next turn, then taps or presses
+	_fireBallTakeTurns = 0;
 	return fmt::format("the hand goes over it at ({:.1f}, {:.1f}, {:.1f})", target->x, target->y, target->z);
 }
 
 void Runner::FinishTakingFireBall()
 {
-	constexpr int k_FramesToReach = 2;
-	if (!_fireBallTakeFrames.has_value() || ++*_fireBallTakeFrames < k_FramesToReach || !Locator::magicSystem::has_value())
+	constexpr int k_TurnsToReach = 1;
+	if (!_fireBallTakeTurns.has_value() || ++*_fireBallTakeTurns < k_TurnsToReach || !Locator::magicSystem::has_value())
 	{
 		return;
 	}
-	_fireBallTakeFrames.reset();
+	_fireBallTakeTurns.reset();
 	auto& magic = Locator::magicSystem::value();
 	std::string result;
 	if (magic.IsHandBusy())
@@ -3974,7 +3974,7 @@ void Runner::UpdateCamera()
 	}
 }
 
-void Runner::Update(float seconds)
+void Runner::UpdateFrame(float seconds)
 {
 	if (_scenario == nullptr)
 	{
@@ -3982,6 +3982,16 @@ void Runner::Update(float seconds)
 	}
 	UpdateCamera();
 	if (!_running)
+	{
+		return;
+	}
+	Measure();
+	UpdatePointer(seconds);
+}
+
+void Runner::PlayTurn(float seconds)
+{
+	if (_scenario == nullptr || !_running)
 	{
 		return;
 	}
@@ -3998,7 +4008,6 @@ void Runner::Update(float seconds)
 	}
 	_seconds += seconds;
 	LogMiracles();
-	Measure();
 	SpawnCrowd();
 	UpdateParticles(seconds);
 	UpdateVortices();
@@ -4010,7 +4019,6 @@ void Runner::Update(float seconds)
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();
-	UpdatePointer(seconds);
 	const auto due = Advance(_timeline, _scenario->commands, _scenario->repeatFrom, seconds, [this](const Command& command) {
 		const bool toHand =
 		    command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed;
@@ -5145,18 +5153,18 @@ void Runner::SpawnCrowd()
 		return;
 	}
 	const auto start = std::chrono::steady_clock::now();
-	const auto batch = std::min(_scenario->crowd->perFrame, _crowdProgress.total - _crowdNext);
+	const auto batch = std::min(_scenario->crowd->perTurn, _crowdProgress.total - _crowdNext);
 	for (size_t i = 0; i < batch; ++i)
 	{
 		SpawnCrowdMember(_crowdNext++);
 	}
 	_crowdProgress.spawned = _crowdNext;
 	_crowdProgress.spawnMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
-	++_crowdProgress.spawnFrames;
+	++_crowdProgress.spawnTurns;
 	if (_crowdProgress.Done())
 	{
-		Log(fmt::format("Spawned {} in {:.0f} ms over {} frames", _crowdProgress.total, _crowdProgress.spawnMs,
-		                _crowdProgress.spawnFrames));
+		Log(fmt::format("Spawned {} in {:.0f} ms over {} turns", _crowdProgress.total, _crowdProgress.spawnMs,
+		                _crowdProgress.spawnTurns));
 	}
 }
 
@@ -5299,7 +5307,7 @@ std::optional<std::filesystem::path> Runner::SaveResults(std::optional<std::file
 	    .build = std::string(k_Build),
 	    .crowd = _crowdProgress.total,
 	    .spawnMs = _crowdProgress.spawnMs,
-	    .spawnFrames = _crowdProgress.spawnFrames,
+	    .spawnTurns = _crowdProgress.spawnTurns,
 	    .warmUpFrames = _benchmark.warmUpFrames,
 	    .entityCounts = EntityCounts(),
 	};

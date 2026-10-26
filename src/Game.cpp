@@ -2321,8 +2321,9 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
-		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
-		if (_scenarioStager && _scenarioRequest.has_value())
+		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is. A scenario that works the
+		// menu of the paused game moves on here, because no turn plays then.
+		if (_scenarioStager)
 		{
 			_scenarioStager();
 		}

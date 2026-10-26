@@ -261,7 +261,7 @@ struct CreatureSetup
 	std::optional<uint32_t> phase;
 	NeedOverrides needs;
 	std::vector<DesireOverride> desires;
-	/// The needs and desires are set again every frame, so they stay as given however time goes
+	/// The needs and desires are set again every turn, so they stay as given however time goes
 	bool hold {false};
 	/// The mind leaves the body alone, to be posed by the commands
 	bool pauseMind {false};
@@ -910,7 +910,7 @@ struct Command
 		/// it as the game stops a walk.
 		StopAtOnce,
 		/// The creature turns to face the point (from the middle of the map) as the game's turn stages tell it to. While it
-		/// walks to its stop, the turn does not start, and the command asks again each frame until the turn starts.
+		/// walks to its stop, the turn does not start, and the command asks again each turn until the turn starts.
 		TurnToFaceWhenStill,
 		/// A script releases the scenario's object (object) into the game, as RELEASE_FROM_SCRIPT does. A villager
 		/// that the script controls then decides what to do, and reacts again. Needs no creature.
@@ -1187,7 +1187,7 @@ struct Scenario
 	std::optional<ecs::creature_attitude::Attitude> townFeelingAboutCreatures;
 	/// A testbed set-up step: the scenario's town belongs to this player from the start, rather than to the player
 	std::optional<PlayerNames> townOwner;
-	/// A crowd spawned a batch a frame, after the creatures and objects above; the runner measures the frames once it
+	/// A crowd spawned a batch a turn, after the creatures and objects above; the runner measures the frames once it
 	/// is all there
 	std::optional<Crowd> crowd;
 	/// Every miracle's position and the land's height under it are logged this often, in seconds

@@ -130,35 +130,73 @@ TestbedScenarios::~TestbedScenarios()
 	if (auto* game = Game::Instance(); game != nullptr && _stagerSet)
 	{
 		game->SetScenarioStager({});
+		game->SetScenarioTurns({});
 	}
 }
 
 void TestbedScenarios::UpdateAlways() noexcept
 {
-	// The game lays out a scenario asked for as its turns step starts. The frame does not change the world.
+	// The game lays out a scenario asked for as its turns step starts, and the scenario moves on in the turns. The frame
+	// does not change the world.
 	if (auto* game = Game::Instance(); game != nullptr && !_stagerSet)
 	{
-		game->SetScenarioStager([this]() { RunRequested(); });
+		game->SetScenarioStager([this]() {
+			RunRequested();
+			PlayPausedMenuFrame();
+		});
+		game->SetScenarioTurns([this](simulation::ToolTurn turn) { PlayTurn(turn); });
 		_stagerSet = true;
 	}
-	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
-	// game is stepped, so that their timers keep in line with the game's turns
-	// The game's time stops while the player is in the temple. Scenarios that go into the temple continue on the frame's
-	// real time there, and while the game's menu, or the menu's tattoo editor over it, is open over the paused game.
+	// The camera and the mouse move by the game's time: not while it is paused, and faster as the game is. The game's
+	// time stops while the player is in the temple: there they move by the frame's real time unless the game is paused,
+	// and they do so too while the menu is open over the paused game.
 	float seconds = 0.0f;
 	if (Locator::time::has_value())
 	{
 		const auto& time = Locator::time::value();
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
-		const bool tattooMenu = Locator::tattooMenuSystem::has_value() && Locator::tattooMenuSystem::value().IsOpen();
-		auto* game = Game::Instance();
-		const bool menu = game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen();
-		seconds = std::chrono::duration<float>(inTemple || tattooMenu || menu
-		                                           ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
-		                                           : time.GetFrameGameTime())
+		const bool realTime = MenuOpen() || (inTemple && !time.IsPaused());
+		seconds = std::chrono::duration<float>(realTime ? time.GetFixedFrameTime().value_or(time.GetFrameRealTime())
+		                                                : time.GetFrameGameTime())
 		              .count();
 	}
-	_runner.Update(seconds);
+	_runner.UpdateFrame(seconds);
+}
+
+bool TestbedScenarios::MenuOpen() noexcept
+{
+	const bool tattooMenu = Locator::tattooMenuSystem::has_value() && Locator::tattooMenuSystem::value().IsOpen();
+	auto* game = Game::Instance();
+	return tattooMenu || (game != nullptr && game->GetInterface() != nullptr && game->GetInterface()->GetMenu().IsOpen());
+}
+
+void TestbedScenarios::PlayTurn(simulation::ToolTurn turn) noexcept
+{
+	using testbed_scenarios::ScenarioClock;
+	// A turn of the temple does not move the scenario on while a tool pauses the game
+	if (turn == simulation::ToolTurn::Temple &&
+	    (!Locator::time::has_value() || !ScenarioClock::TempleTurnMoves(Locator::time::value().IsPaused())))
+	{
+		return;
+	}
+	_runner.PlayTurn(ScenarioClock::k_StepSeconds);
+}
+
+void TestbedScenarios::PlayPausedMenuFrame() noexcept
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	// No turn plays while the menu holds the game paused, so the frames move the scenario on in steps of a turn
+	const auto& time = Locator::time::value();
+	const auto frame =
+	    std::chrono::duration_cast<std::chrono::microseconds>(time.GetFixedFrameTime().value_or(time.GetFrameRealTime()));
+	const auto steps = _clock.StepsOfFrame(frame, time.IsPaused() && MenuOpen());
+	for (uint32_t i = 0; i < steps; ++i)
+	{
+		_runner.PlayTurn(testbed_scenarios::ScenarioClock::k_StepSeconds);
+	}
 }
 
 void TestbedScenarios::RunRequested() noexcept
@@ -347,7 +385,7 @@ void TestbedScenarios::DrawBenchmark() noexcept
 		                   fmt::format("Spawning {} of {}", progress->spawned, progress->total).c_str());
 		return;
 	}
-	ImGui::Text("Spawned %zu in %.0f ms over %u frames", progress->total, progress->spawnMs, progress->spawnFrames);
+	ImGui::Text("Spawned %zu in %.0f ms over %u turns", progress->total, progress->spawnMs, progress->spawnTurns);
 	ImGui::SetItemTooltip("The time spent creating the crowd's entities, apart from the rest of those frames");
 	if (const auto warmUp = _runner.GetWarmUpLeft(); warmUp > 0)
 	{

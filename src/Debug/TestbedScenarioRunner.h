@@ -38,9 +38,9 @@ struct CrowdProgress
 {
 	size_t spawned {0};
 	size_t total {0};
-	/// The time spent spawning, apart from the rest of the frames it took
+	/// The time spent spawning, apart from the rest of the turns it took
 	double spawnMs {0.0};
-	uint32_t spawnFrames {0};
+	uint32_t spawnTurns {0};
 
 	[[nodiscard]] bool Done() const { return spawned >= total; }
 };
@@ -60,6 +60,9 @@ struct BenchmarkSettings
 /// Plays a scenario on the testbed: loads the testbed afresh, which clears away everything on it, sets the time of
 /// day, the weather and the creatures' body time, puts down the objects and creatures as the scenario has them, frames
 /// the camera, then gives the commands in turn as their time comes. Everything goes through the game's systems.
+///
+/// What changes the world moves on only in the turns (PlayTurn), so that a scenario plays the same at each frame rate.
+/// The frames (UpdateFrame) move only the camera, the mouse and the measures of a benchmark.
 class Runner
 {
 public:
@@ -68,8 +71,12 @@ public:
 	/// Stops giving commands and puts back the settings the scenario changed: the body time, fainting, the footprints'
 	/// smileys, the clock and whether anger starts fights. What is on the land stays, to look at or carry on with by hand.
 	void Stop();
-	/// Once a frame
-	void Update(float seconds);
+	/// At the start of each turn: the scenario moves on by the turn's time. Its timeline, its casts, its throws, its walks,
+	/// its crowd and the states that it holds go on here, because they change the world.
+	void PlayTurn(float seconds);
+	/// Once a frame, by the frame's time: the camera keeps to its shot, the mouse moves along a sweep and a press that
+	/// waits for the mouse to settle is made, and a benchmark measures the frame
+	void UpdateFrame(float seconds);
 
 	[[nodiscard]] bool IsRunning() const { return _running; }
 	/// The scenario running, or last run
@@ -145,7 +152,7 @@ private:
 	/// The crossing file a vortex out of the last land would have left, written for a vortex into this one to read
 	void WriteCrossingFile(std::span<const std::string_view> lines);
 	void UpdateRewards();
-	/// The needs and desires go on once the body and mind have started, and every frame for those that hold them
+	/// The needs and desires go on once the body and mind have started, and every turn for those that hold them
 	void ApplyStates();
 	void Give(const Command& command);
 	/// The commands on things, of the player's hand and of the leashes; each returns what came of it
@@ -224,8 +231,8 @@ private:
 	std::optional<int32_t> _landNumberBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
-	/// Frames since the hand went over a fireball to take hold of it, none while it isn't
-	std::optional<int> _fireBallTakeFrames;
+	/// Turns since the hand went over a fireball to take hold of it, none while it isn't
+	std::optional<int> _fireBallTakeTurns;
 	/// The fireball the hand goes over to tap
 	entt::entity _fireBallTaken {entt::null};
 	/// When the miracles' positions are next logged, for a scenario that logs them

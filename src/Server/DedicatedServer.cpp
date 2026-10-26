@@ -37,6 +37,7 @@
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/UserData.h"
+#include "Debug/TestbedScenarioClock.h"
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -156,6 +157,14 @@ public:
 
 	void PlayViewStep(game_turn::Step /*step*/, glm::vec3 /*cameraPosition*/) override {}
 	[[nodiscard]] int32_t FrameRate() const override { return _frameRate.Rate(); }
+	/// The testbed's scenario moves on at the start of each turn, as the game's does. The server has no temple.
+	void PlayToolTurn(simulation::ToolTurn turn) override
+	{
+		if (_scenarioRunner != nullptr && turn == simulation::ToolTurn::World)
+		{
+			_scenarioRunner->PlayTurn(testbed_scenarios::ScenarioClock::k_StepSeconds);
+		}
+	}
 
 private:
 	ServerSettings _settings;
@@ -404,15 +413,15 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
-	// The scenario starts in the first frame and gives its commands in the frames before the turns, at the time of the
-	// game's debug windows
+	// The scenario starts in the first frame, before the turns, and gives its commands at the start of each turn, as
+	// the game's does
 	if (_scenarioRunner != nullptr)
 	{
 		if (_scenario != nullptr)
 		{
 			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
 		}
-		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+		_scenarioRunner->UpdateFrame(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&

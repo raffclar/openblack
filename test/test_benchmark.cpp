@@ -259,7 +259,7 @@ TEST(BenchmarkRecorder, WritesJsonAndCsv)
 	    .height = 1440,
 	    .crowd = 100,
 	    .spawnMs = 12.5,
-	    .spawnFrames = 2,
+	    .spawnTurns = 2,
 	    .warmUpFrames = 10,
 	    .entityCounts = {{"creatures", 100}},
 	};
