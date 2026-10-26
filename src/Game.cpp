@@ -85,6 +85,7 @@
 #include "Camera/FightCameraModel.h"
 #include "Camera/NearClipping.h"
 #include "Camera/ScriptCameraModel.h"
+#include "Commands/PlayerCommands.h"
 #include "Common/BufferedLogSink.h"
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
@@ -170,6 +171,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -2955,7 +2957,9 @@ void Game::ReportHand()
 		_reportedHand = hand;
 		_lastHandReport = {};
 		_lastHandPick = entt::null;
+		_lastViewReport.reset();
 	}
+	ReportView();
 	// The thing under the cursor goes too, when it changes, so that the turn counts the same time that the hand stays
 	// over the creature at each frame rate and on every computer
 	if (Locator::pickingSystem::has_value())
@@ -2990,6 +2994,43 @@ void Game::ReportHand()
 	    .camera = cameraPoint,
 	    .focus = focus,
 	});
+}
+
+void Game::ReportView()
+{
+	// What the scripts and the advisors' remarks read of the view: the camera as the frame draws it, its arrival, the
+	// distance from the fence of the camera zones, and the grip of the hand on the land
+	auto& camera = Locator::camera::value();
+	const auto pose = camera.DrawnPose(Camera::Interpolation::Current);
+	player_commands::ViewReport report {
+	    .eye = pose.eye,
+	    .focus = pose.focus,
+	    .lens = camera.GetLens(),
+	    .nearClip = camera.GetNearClip(),
+	    .inclusionDistance =
+	        Locator::cameraZoneSystem::has_value() ? Locator::cameraZoneSystem::value().GetInclusionDistance() : 0.0f,
+	    .cameraOrders = Locator::entitiesRegistry::value().Context().scriptCameraOrders,
+	    .cameraArrived = false,
+	    .gripsLand = camera.GetModel().GetHandCues().dragging,
+	    .otherButton = Locator::gameActionSystem::has_value() &&
+	                   Locator::gameActionSystem::value().Get(input::UnbindableActionMap::TWO_BUTTON_CLICK),
+	};
+	if (const auto* script = Locator::scriptControlSystem::value().GetScriptCamera(camera); script != nullptr)
+	{
+		report.cameraArrived = script->Arrived();
+	}
+	else
+	{
+		report.cameraArrived =
+		    script_camera::PlayerCameraArrived(camera.GetOrigin(), camera.GetOrigin(Camera::Interpolation::Target),
+		                                       camera.GetFocus(), camera.GetFocus(Camera::Interpolation::Target));
+	}
+	if (_lastViewReport != nullptr && *_lastViewReport == report)
+	{
+		return;
+	}
+	_lastViewReport = std::make_unique<player_commands::ViewReport>(report);
+	Locator::playerCommandSystem::value().Submit(report);
 }
 
 void Game::ReportHelp()

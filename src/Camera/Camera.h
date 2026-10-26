@@ -143,6 +143,9 @@ public:
 	bool ProjectWorldToScreen(glm::vec3 worldPosition, glm::vec4 viewport, glm::vec3& outScreenPosition,
 	                          Interpolation interpolation = Camera::Interpolation::Current) const;
 
+	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
+	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
+
 	/// One step of the camera, as long as the frame
 	void Update(std::chrono::microseconds dt);
 	/// A frame goes by. The model and the camera take the fixed steps of the player's input that the frame takes, none
@@ -262,8 +265,6 @@ protected:
 	std::optional<View> _drawnView;
 	/// The kept view, or the view now when there is no kept view
 	[[nodiscard]] View GetDrawnView() const;
-	/// The eye and the focus of the view, with the shake. The view now also has the limits of the drawn eye.
-	[[nodiscard]] camera_drawn::Pose DrawnPose(Interpolation interpolation) const;
 	[[nodiscard]] glm::mat4 GetProjectionMatrix(Projection projection, Interpolation interpolation) const;
 	float _keyboardMoveSpeed = k_KeyboardMoveSpeedDefault;
 };

@@ -233,6 +233,16 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Vector(command.ground);
 	               },
 	               [](const CreatureFightCheat& /*command*/) {},
+	               [&out](const ViewReport& command) {
+		               out.Vector(command.eye);
+		               out.Vector(command.focus);
+		               out.Float(command.lens);
+		               out.Float(command.nearClip);
+		               out.Float(command.inclusionDistance);
+		               out.Number(command.cameraOrders);
+		               out.Byte(static_cast<uint8_t>((command.cameraArrived ? 1u : 0u) | (command.gripsLand ? 2u : 0u) |
+		                                             (command.otherButton ? 4u : 0u)));
+	               },
 	               [](const TempleLeashOff& /*command*/) {},
 	               [&out](const GiveCallOff& command) { out.Entity(command.creature); },
 	               [&out](const CreatureTattoo& command) {
@@ -539,6 +549,26 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::CreatureFightCheat:
 		action = CreatureFightCheat {};
 		return DecodeError::None;
+	case CommandTag::ViewReport:
+	{
+		ViewReport report {};
+		report.eye = in.Vector();
+		report.focus = in.Vector();
+		report.lens = in.Float();
+		report.nearClip = in.Float();
+		report.inclusionDistance = in.Float();
+		report.cameraOrders = in.Number<uint32_t>();
+		const auto flags = in.Byte();
+		if (flags > 7)
+		{
+			return DecodeError::Value;
+		}
+		report.cameraArrived = (flags & 1u) != 0;
+		report.gripsLand = (flags & 2u) != 0;
+		report.otherButton = (flags & 4u) != 0;
+		action = report;
+		return DecodeError::None;
+	}
 	case CommandTag::TempleLeashOff:
 		action = TempleLeashOff {};
 		return DecodeError::None;
@@ -703,6 +733,7 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const HelpReport& /*command*/) { return CommandTag::HelpReport; },
 	                      [](const HelpQuery& /*command*/) { return CommandTag::HelpQuery; },
 	                      [](const CreatureFightCheat& /*command*/) { return CommandTag::CreatureFightCheat; },
+	                      [](const ViewReport& /*command*/) { return CommandTag::ViewReport; },
 	                      [](const TempleLeashOff& /*command*/) { return CommandTag::TempleLeashOff; },
 	                      [](const GiveCallOff& /*command*/) { return CommandTag::GiveCallOff; },
 	                      [](const CreatureTattoo& /*command*/) { return CommandTag::CreatureTattoo; },
@@ -751,6 +782,7 @@ size_t SizeOf(const Action& action) noexcept
 	                   [](const HelpReport& /*command*/) { return size_t {8 + 1}; },
 	                   [](const HelpQuery& /*command*/) { return k_Entity + 1 + k_Vector; },
 	                   [](const CreatureFightCheat& /*command*/) { return size_t {0}; },
+	                   [](const ViewReport& /*command*/) { return 2 * k_Vector + 4 + 4 + 4 + 4 + 1; },
 	                   [](const TempleLeashOff& /*command*/) { return size_t {0}; },
 	                   [](const GiveCallOff& /*command*/) { return k_Entity; },
 	                   [](const CreatureTattoo& command) {

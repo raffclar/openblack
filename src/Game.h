@@ -116,6 +116,10 @@ namespace frame_write_guard
 {
 class Guard;
 }
+namespace player_commands
+{
+struct ViewReport;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -372,6 +376,8 @@ public:
 	void UpdateHandFrame(std::chrono::microseconds deltaTime);
 	/// Once a turn, before the block of commands goes: reports where the hand and the camera are, when they changed
 	void ReportHand();
+	/// With the report of the hand: reports the view that the scripts and the advisors' remarks read, when it changed
+	void ReportView();
 	/// Once a turn, before the block of commands goes: reports the help events of the player's input and the view of the
 	/// world camera, when they changed
 	void ReportHelp();
@@ -729,6 +735,8 @@ private:
 	/// The thing under the cursor that the last player_commands::HandPick sent
 	entt::entity _lastHandPick {entt::null};
 	std::optional<uint32_t> _handReportTurn;
+	/// The last report of the view that this computer sent (player_commands::ViewReport), none before the first
+	std::unique_ptr<player_commands::ViewReport> _lastViewReport;
 	/// The turn of the last report of the help that this computer sent
 	std::optional<uint32_t> _helpReportTurn;
 	/// The land or sea under the cursor, whatever thing is in front of it

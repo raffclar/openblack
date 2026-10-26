@@ -284,6 +284,13 @@ void Run(const Command& command, uint32_t turn)
 				    openblack::Locator::handSystem::value().Report(command.player, action);
 			    }
 		    }
+		    else if constexpr (std::is_same_v<Kind, ViewReport>)
+		    {
+			    if (openblack::Locator::handSystem::has_value())
+			    {
+				    openblack::Locator::handSystem::value().ReportView(command.player, action);
+			    }
+		    }
 		    else if constexpr (std::is_same_v<Kind, HelpReport>)
 		    {
 			    // Only the computer of the player counts what the player did

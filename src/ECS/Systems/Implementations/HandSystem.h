@@ -45,6 +45,8 @@ public:
 	[[nodiscard]] std::optional<ReportedCamera> GetReportedCamera(PlayerNames player) const noexcept override;
 	void Report(PlayerNames player, const player_commands::HandReport& report) override;
 	void ReportPick(PlayerNames player, entt::entity object) override;
+	void ReportView(PlayerNames player, const player_commands::ViewReport& report) override;
+	[[nodiscard]] std::optional<ReportedView> GetReportedView(PlayerNames player) const noexcept override;
 	[[nodiscard]] entt::entity GetReportedPick() const noexcept override;
 	void ProcessTurn() override;
 	[[nodiscard]] uint32_t GetHandStillTurns() const noexcept override;
