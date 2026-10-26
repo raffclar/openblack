@@ -9,6 +9,7 @@
 
 #pragma once
 
+#include <condition_variable>
 #include <cstdint>
 
 #include <atomic>
@@ -76,6 +77,8 @@ public:
 private:
 	/// The helper answering while the game loads: until told to stop
 	void AnswerWhileLoading();
+	/// Tells the helper to stop and waits for it
+	void StopLoadingHelper();
 	/// A scenario asked for while the game loads is kept and loaded once the load is done, rather than refused: a tool
 	/// asking for one straight after launching the game would otherwise get the empty testbed it was starting with
 	[[nodiscard]] std::optional<inspector::QueryResult> QueueWhileLoading(const inspector::Request& request);
@@ -110,6 +113,9 @@ private:
 	std::optional<std::string> _queuedScenario;
 	std::mutex _loadingMutex;
 	std::atomic<bool> _stopLoadingHelper {false};
+	/// Wakes the helper when it must stop, so that the end of a load does not wait for its next answer
+	std::mutex _stopMutex;
+	std::condition_variable _stopSignal;
 	std::thread _loadingHelper;
 	/// The recorded input that the next land makes from its first frame on
 	std::optional<inspector::Json> _replayOnLoad;

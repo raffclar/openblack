@@ -13,6 +13,8 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
+#include <vector>
 
 using namespace openblack;
 using namespace openblack::creature_exploration;
@@ -81,6 +83,10 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 {
 	RegionMap map;
 	map._regions.resize(k_RegionCount);
+	// Each cell is read one time: the second walk over the regions reads the cells that the first walk kept, in the same
+	// order
+	std::vector<std::optional<CellLand>> cells;
+	cells.reserve(static_cast<size_t>(k_RegionCount) * k_CellsPerRegion * k_CellsPerRegion);
 	// The height of each region first, as a hill needs the heights of all the regions
 	for (int32_t rx = 0; rx < k_RegionsPerSide; ++rx)
 	{
@@ -89,7 +95,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 			auto& region = map._regions.at(IndexOf({rx, rz}));
 			bool first = true;
 			EachCell({rx, rz}, [&](glm::ivec2 cell) {
-				const auto land = cellAt(cell);
+				const auto& land = cells.emplace_back(cellAt(cell));
 				// A cell that is not on a land block has no height
 				const float height = land.has_value() ? land->height : 0.0f;
 				if (first || region.highest <= height)
@@ -103,6 +109,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 			map._highest = std::max(map._highest, region.highest);
 		}
 	}
+	size_t kept = 0;
 	for (int32_t rx = 0; rx < k_RegionsPerSide; ++rx)
 	{
 		for (int32_t rz = 0; rz < k_RegionsPerSide; ++rz)
@@ -111,7 +118,7 @@ RegionMap RegionMap::Make(const CellAt& cellAt, const TownAt& townAt)
 			bool town = false;
 			bool land = false;
 			EachCell({rx, rz}, [&](glm::ivec2 cell) {
-				const auto here = cellAt(cell);
+				const auto& here = cells[kept++];
 				const bool sea = !here.has_value() || here->water;
 				if (sea && !region.firstSea.has_value())
 				{

@@ -243,11 +243,7 @@ InspectorSystem::InspectorSystem(std::unique_ptr<inspector::Server> server)
 
 InspectorSystem::~InspectorSystem()
 {
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	WriteRecordedInput();
 }
 
@@ -301,11 +297,7 @@ void InspectorSystem::EndLoading()
 	{
 		return;
 	}
-	_stopLoadingHelper = true;
-	if (_loadingHelper.joinable())
-	{
-		_loadingHelper.join();
-	}
+	StopLoadingHelper();
 	// A scenario asked for meanwhile is loaded next: the game goes on answering as loading until it is laid out
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
@@ -360,7 +352,21 @@ void InspectorSystem::AnswerWhileLoading()
 			return _inspector.HandleWhileLoading(
 			    line, loading, [this](const inspector::Request& request) { return QueueWhileLoading(request); });
 		});
-		std::this_thread::sleep_for(k_Interval);
+		std::unique_lock lock(_stopMutex);
+		_stopSignal.wait_for(lock, k_Interval, [this] { return _stopLoadingHelper.load(); });
+	}
+}
+
+void InspectorSystem::StopLoadingHelper()
+{
+	{
+		const std::scoped_lock lock(_stopMutex);
+		_stopLoadingHelper = true;
+	}
+	_stopSignal.notify_all();
+	if (_loadingHelper.joinable())
+	{
+		_loadingHelper.join();
 	}
 }
 
