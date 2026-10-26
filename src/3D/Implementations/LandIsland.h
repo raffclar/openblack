@@ -53,6 +53,7 @@ public:
 	[[nodiscard]] const lnd::LNDCell* FindCell(const glm::u16vec2& coordinates) const override;
 	void SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude) override;
 	void CommitAltitudeChanges() override;
+	size_t RestoreBuiltAltitudes() override;
 
 	// Debug
 	void DumpTextures() const override;
@@ -90,6 +91,11 @@ private:
 	std::vector<ChangedArea> _changedCells;
 	/// The map's corners that changed height since the height map last caught up
 	ChangedArea _changedCorners;
+	/// Of each block, the altitude of each of its 17 by 17 cells when the land was built
+	std::vector<std::vector<uint8_t>> _builtAltitudes;
+	/// Sets the altitude of a cell of a block, [x * 17 + z], and notes the cells that its drawing must make again.
+	/// Returns true when the altitude changed.
+	bool SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude);
 
 	// Renderer, Dynamics
 public:

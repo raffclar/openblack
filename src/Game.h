@@ -529,6 +529,7 @@ private:
 	bool RenderLoadingFrame(bool drawNow = false, const std::function<void()>& drawUnder = nullptr);
 	/// The loading is over: its tip goes before the first frame of the game
 	void EndLoadingScreen() override;
+	void EndLoadWithoutScreen() override;
 	/// Waits behind the loading screen until the loading threads have loaded all the prefetched resources. Then it does
 	/// the work of the first frame that the game can do before, and draws one more loading frame.
 	void FinishLoadingBehindScreen();

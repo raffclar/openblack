@@ -35,6 +35,7 @@
 #include "3D/LandBlock.h"
 #include "3D/LandData.h"
 #include "3D/LandNormal.h"
+#include "3D/LandReuse.h"
 #include "3D/MapCoords.h"
 #include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
@@ -315,6 +316,13 @@ void LandIsland::Build(const LandData& data)
 	_blockVertices = std::make_unique<VertexBuffer>("LandBlocks", vertexMemory, decl, true);
 	_changedCells.assign(_landBlocks.size(), {});
 	_changedCorners = {};
+	// The altitudes of the land as it is built, which a load of a world state of this land puts back
+	_builtAltitudes.clear();
+	std::ranges::transform(_landBlocks, std::back_inserter(_builtAltitudes), [](const LandBlock& block) {
+		std::vector<uint8_t> altitudes;
+		std::ranges::transform(block.GetLndBlock()->cells, std::back_inserter(altitudes), &lnd::LNDCell::altitude);
+		return altitudes;
+	});
 	for (size_t i = 0; i < _landBlocks.size(); ++i)
 	{
 		_landBlocks[i].SetVertices(*_blockVertices, static_cast<uint32_t>(i * LandBlock::k_VertexCount));
@@ -428,15 +436,7 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		{
 			return;
 		}
-		if (!_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude))
-		{
-			return;
-		}
-		changedAny = true;
-		auto& cells = _changedCells.at(blockIndex - 1u);
-		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
-		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
-		cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
+		changedAny = SetBlockCellAltitude(blockIndex - 1u, x, z, altitude) || changedAny;
 	};
 	const int blockX = coordinates.x >> 4;
 	const int blockZ = coordinates.y >> 4;
@@ -459,6 +459,44 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 	{
 		_changedCorners.Add(glm::ivec2(coordinates));
 	}
+}
+
+bool LandIsland::SetBlockCellAltitude(size_t block, int x, int z, uint8_t altitude)
+{
+	if (!_landBlocks.at(block).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude))
+	{
+		return false;
+	}
+	auto& cells = _changedCells.at(block);
+	constexpr int k_LastCell = block_texture::k_BlockCells - 1;
+	cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
+	cells.Add(glm::clamp(glm::ivec2(x, z), 0, k_LastCell));
+	return true;
+}
+
+size_t LandIsland::RestoreBuiltAltitudes()
+{
+	// Each copy of a corner is in the cells of its own block, so each block puts back its own cells. The corners on the
+	// edges of a block go back in each block that keeps a copy.
+	size_t restored = 0;
+	for (size_t block = 0; block < _landBlocks.size(); ++block)
+	{
+		const auto& built = _builtAltitudes.at(block);
+		const auto& cells = _landBlocks[block].GetLndBlock()->cells;
+		const auto corner = _landBlocks[block].GetBlockPosition() * static_cast<int>(k_CellCount);
+		for (const auto index : land_reuse::ChangedCells(cells, built))
+		{
+			const int x = index / 17;
+			const int z = index % 17;
+			if (SetBlockCellAltitude(block, x, z, built[index]))
+			{
+				_changedCorners.Add(corner + glm::ivec2(x, z));
+				++restored;
+			}
+		}
+	}
+	CommitAltitudeChanges();
+	return restored;
 }
 
 void LandIsland::CommitAltitudeChanges()

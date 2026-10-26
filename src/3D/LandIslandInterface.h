@@ -61,6 +61,9 @@ public:
 	/// The land's drawing catches up with the altitudes set since the last time: the shapes of the blocks that changed,
 	/// the height map, and the blocks' textures, whose ground follows the height
 	virtual void CommitAltitudeChanges() {}
+	/// Puts each cell corner back to the altitude that it had when the land was built. Only the blocks that change are
+	/// made again, as for CommitAltitudeChanges. Returns the count of the block cells that changed.
+	virtual size_t RestoreBuiltAltitudes() { return 0; }
 
 	// Debug
 	virtual void DumpTextures() const = 0;
