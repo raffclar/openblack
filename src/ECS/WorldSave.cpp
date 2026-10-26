@@ -67,6 +67,7 @@
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreaturePhysiologySystemInterface.h"
+#include "ECS/Systems/DanceSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -515,7 +516,13 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 		{
 			// The maps that the game works out from the land are made again when they are next needed
 			loaded.landAvoid.reset();
-			loaded.explorationMap.reset();
+			// The creatures' map of the land comes from the land and its towns at the start of the land, and the towns
+			// changed after. A world state keeps the map of the computer that sent it, so that the creatures find the
+			// same places on every computer.
+			if (kind == LoadKind::SavedGame)
+			{
+				loaded.explorationMap.reset();
+			}
 			registry.Context() = std::move(loaded);
 		}
 		else
@@ -558,6 +565,11 @@ std::optional<reflection::WorldLoadReport> world_save::LoadEntities(const entt::
 	else
 	{
 		ForgetEmitters(registry);
+	}
+	// The world keeps no dance file: each dance takes its file again
+	if (Locator::danceSystem::has_value())
+	{
+		Locator::danceSystem::value().FindFilesAgain();
 	}
 	SPDLOG_LOGGER_INFO(Log(), "Loaded the saved world: {} entities with {} components", result->report.entities,
 	                   result->report.components);
