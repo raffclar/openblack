@@ -978,6 +978,10 @@ struct Command
 		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
 		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
 		EndBox,
+		/// The god of the player (player) brings a creature as it does at the start of a network game. The mind file
+		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
+		/// The creature comes at the creature home of the god's temple. Needs no creature.
+		BringCreature,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -1063,6 +1067,8 @@ struct Command
 	std::string_view title;
 	/// A script run, its arguments, and the globals set before it runs
 	std::string_view script;
+	/// The name of a mind file in the creature mind folder of the game
+	std::string_view mindFile;
 	std::vector<ScriptArgument> scriptArguments;
 	std::vector<std::pair<std::string_view, ScriptArgument>> scriptGlobals;
 };

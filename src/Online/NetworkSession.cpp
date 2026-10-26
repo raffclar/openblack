@@ -312,6 +312,21 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 	}
 }
 
+std::span<const uint8_t> NetworkSession::StartCreatureFile(PlayerNames god) const
+{
+	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
+
+std::optional<PlayerNames> NetworkSession::OwnGod() const
+{
+	if (!_joined.has_value() || _joined->role != game_socket::Role::God || !_joined->slot.has_value())
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*_joined->slot);
+}
+
 std::optional<StartEvent> NetworkSession::TakeStartEvent()
 {
 	if (_startEvents.empty())
