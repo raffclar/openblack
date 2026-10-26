@@ -19,6 +19,7 @@
 #include <entt/meta/fwd.hpp>
 
 #include "Common/WorkerPool.h"
+#include "ECS/SyncedState.h"
 #include "ECS/Systems/SyncChecksumSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -49,6 +50,7 @@ public:
 	}
 	[[nodiscard]] std::optional<TurnChecksum> GetLast() const override { return _last; }
 	void SetTurnListener(std::function<void(const TurnChecksum&)> listener) override { _listener = std::move(listener); }
+	[[nodiscard]] std::function<void(const TurnChecksum&)> GetTurnListener() const override { return _listener; }
 
 private:
 	/// The names of the saved components, by which the checksum reads the world
@@ -61,6 +63,8 @@ private:
 	std::optional<uint32_t> _dumpTurn;
 	std::vector<std::string> _dumpComponents;
 	std::optional<TurnChecksum> _last;
+	/// The unregistered components that the log already told of
+	synced_state::UnregisteredReporter _reported;
 	std::function<void(const TurnChecksum&)> _listener;
 };
 

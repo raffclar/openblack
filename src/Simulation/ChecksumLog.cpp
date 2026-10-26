@@ -24,7 +24,8 @@ constexpr std::string_view k_ChecksumKey = "\"checksum\":\"";
 constexpr size_t k_ChecksumDigits = 16;
 } // namespace
 
-std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts)
+std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts,
+                   const std::vector<std::string>& unregistered)
 {
 	auto line = fmt::format("{{{}{},{}{:016x}\"", k_TurnKey, turn, k_ChecksumKey, checksum);
 	if (!parts.empty())
@@ -35,6 +36,15 @@ std::string LineOf(uint32_t turn, uint64_t checksum, const std::vector<std::pair
 			line += fmt::format("{}\"{}\":\"{:016x}\"", i == 0 ? "" : ",", parts[i].first, parts[i].second);
 		}
 		line += "}";
+	}
+	if (!unregistered.empty())
+	{
+		line += ",\"unregistered\":[";
+		for (size_t i = 0; i < unregistered.size(); ++i)
+		{
+			line += fmt::format("{}\"{}\"", i == 0 ? "" : ",", unregistered[i]);
+		}
+		line += "]";
 	}
 	line += "}";
 	return line;
@@ -73,9 +83,10 @@ Writer::Writer(const std::filesystem::path& path)
 	}
 }
 
-void Writer::Write(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts)
+void Writer::Write(uint32_t turn, uint64_t checksum, const std::vector<std::pair<std::string, uint64_t>>& parts,
+                   const std::vector<std::string>& unregistered)
 {
-	WriteLine(LineOf(turn, checksum, parts));
+	WriteLine(LineOf(turn, checksum, parts, unregistered));
 }
 
 void Writer::WriteDump(uint32_t turn, const std::vector<std::string>& rows)

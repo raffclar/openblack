@@ -414,6 +414,14 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const entt::registry& registry,
+                                                                          const entt::meta_ctx& context)
+{
+	std::vector<std::string> unregistered;
+	static_cast<void>(RegisteredStorages(registry, context, unregistered));
+	return unregistered;
+}
+
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
                                                                               std::span<const HashLeaveOut> leaveOut,
@@ -434,8 +442,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		hashes.entities = k_HashOffset;
 		MixBytes(hashes.entities, out.Bytes());
 	}
-	std::vector<std::string> unregistered;
-	const auto components = RegisteredStorages(registry, context, unregistered);
+	const auto components = RegisteredStorages(registry, context, hashes.unregistered);
 	std::vector<ComponentHash> results(components.size());
 	// The hash of a component does not use the other components, so the threads of the pool can share them. The
 	// visitor of the tools must get the rows in order, so then this thread does all of them.

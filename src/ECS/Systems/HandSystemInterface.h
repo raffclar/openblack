@@ -80,7 +80,13 @@ public:
 	/// The player whose hand this computer moves with its pointer: the first player, unless a network game gave this
 	/// computer another god. Only the frames and the input of this computer read it.
 	virtual void SetOwnPlayer([[maybe_unused]] PlayerNames player) {}
+	/// The game server and an observer have no player of their own: no tap or turn takes them into a state that only
+	/// the player at a computer has, for example the temple
+	virtual void ClearOwnPlayer() {}
+	/// The own player, or the first player for the frames of a computer with no player of its own
 	[[nodiscard]] virtual PlayerNames GetOwnPlayer() const noexcept { return PlayerNames::PLAYER_ONE; }
+	/// True only for the player of this computer. Always false on a computer with no player of its own.
+	[[nodiscard]] virtual bool IsOwnPlayer(PlayerNames player) const noexcept { return player == GetOwnPlayer(); }
 	/// The hands that this computer moves and draws: the hands of its own player, or the first player's while that
 	/// player has none yet
 	[[nodiscard]] virtual std::array<entt::entity, static_cast<size_t>(Side::_Count)> GetOwnHands() const noexcept

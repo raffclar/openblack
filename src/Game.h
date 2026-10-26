@@ -736,10 +736,6 @@ private:
 	std::optional<entt::entity> _creatureUnderHand;
 	/// Grabbing the sea plays G_HandInWater_01 to _10 in turn
 	uint32_t _handInWaterSample {0};
-	/// Where the hand gripped the land since the last turn. The grip plays its sound at once, and the next turn makes its
-	/// puff of dust. Thus a grip while the game is paused makes its dust when the game continues.
-	std::vector<glm::vec3> _gripDust;
-
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
 	/// What the hand steps by this frame, in seconds

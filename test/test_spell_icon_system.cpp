@@ -65,7 +65,7 @@ public:
 	}
 	void UpdateHand(const HandFrame&, float) override {}
 	bool TapFireBall(entt::entity) override { return false; }
-	bool TapGlobe(entt::entity) override { return false; }
+	bool TapGlobe(entt::entity, PlayerNames) override { return false; }
 	bool PressFireBall(uint32_t, uint32_t) override { return false; }
 	void HoldFireBall(uint32_t, uint32_t) override {}
 	void ReleaseFireBall(uint32_t, uint32_t) override {}
@@ -73,9 +73,14 @@ public:
 	bool PressAction() override { return false; }
 	void ReleaseAction() override {}
 	[[nodiscard]] bool IsHandBusy() const override { return false; }
+	[[nodiscard]] bool IsHandBusyOf(PlayerNames player) const override { return GetHeldSeedOf(player).has_value(); }
 	[[nodiscard]] magic::PourPose GetHandPour(float) const override { return {}; }
 	[[nodiscard]] HandCastState GetHandCastState() const override { return {}; }
 	[[nodiscard]] std::optional<entt::entity> GetHeldSeed() const override { return held; }
+	[[nodiscard]] std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const override
+	{
+		return player == heldBy ? held : std::nullopt;
+	}
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override { poweredUp.emplace_back(seed, powerUp); }
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
 	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
@@ -94,6 +99,8 @@ public:
 
 	std::vector<entt::entity> deleted;
 	std::optional<entt::entity> held;
+	/// The player whose hand holds the seed
+	PlayerNames heldBy {PlayerNames::PLAYER_ONE};
 	std::vector<std::pair<entt::entity, int>> poweredUp;
 };
 
@@ -238,7 +245,25 @@ TEST_F(SpellIconSystemTest, ASeedHeldByTheHandOfAnotherPlayerDoesNotCount)
 	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = PlayerNames::PLAYER_TWO});
 	Icon(site, SpellSeedType::Heal, seed);
 	_magic->held = seed;
+	_magic->heldBy = PlayerNames::PLAYER_TWO;
 
 	EXPECT_FALSE(_system.ChargesAt(site).at(0).seedHeld);
+}
+
+// In a network game the hand of each player holds its own seed: the seed in the hand of the second player counts at the
+// site of the second player
+TEST_F(SpellIconSystemTest, ASeedInTheHandOfTheSecondPlayerCountsAtTheSiteOfThatPlayer)
+{
+	auto& registry = Entities();
+	const auto site = registry.Create();
+	registry.Assign<SiteIcons>(site);
+	registry.Assign<WorshipSite>(site, WorshipSite {.player = PlayerNames::PLAYER_TWO});
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = PlayerNames::PLAYER_TWO});
+	Icon(site, SpellSeedType::Heal, seed);
+	_magic->held = seed;
+	_magic->heldBy = PlayerNames::PLAYER_TWO;
+
+	EXPECT_TRUE(_system.ChargesAt(site).at(0).seedHeld);
 }
 } // namespace

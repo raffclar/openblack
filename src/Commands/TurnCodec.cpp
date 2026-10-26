@@ -214,6 +214,9 @@ void WriteAction(Writer& out, const Action& action)
 		               out.Float(command.spin);
 	               },
 	               [&out](const HandCastUnlock& command) { out.Entity(command.seed); },
+	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
+	               [](const HandShakeOff& /*command*/) {},
+	               [&out](const GripDust& command) { out.Vector(command.point); },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -445,6 +448,27 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandCastUnlock:
 		action = HandCastUnlock {.seed = in.Entity()};
 		return DecodeError::None;
+	case CommandTag::LeashPick:
+	{
+		// Only a leash that a creature can wear
+		const auto type = static_cast<LeashType>(in.Byte());
+		if (in.Bad())
+		{
+			return DecodeError::Truncated;
+		}
+		if (type != LeashType::Evil && type != LeashType::Rope && type != LeashType::Good)
+		{
+			return DecodeError::Value;
+		}
+		action = LeashPick {.type = type};
+		return DecodeError::None;
+	}
+	case CommandTag::HandShakeOff:
+		action = HandShakeOff {};
+		return DecodeError::None;
+	case CommandTag::GripDust:
+		action = GripDust {.point = in.Vector()};
+		return DecodeError::None;
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -555,6 +579,9 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const MiracleRepeat& /*command*/) { return CommandTag::MiracleRepeat; },
 	                      [](const HandCast& /*command*/) { return CommandTag::HandCast; },
 	                      [](const HandCastUnlock& /*command*/) { return CommandTag::HandCastUnlock; },
+	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
+	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
+	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
 	                  },
 	                  action);
 }
@@ -592,6 +619,9 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
 	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
 	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
+	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
+	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
+	                                     [](const GripDust& /*command*/) { return k_Vector; },
 	                                 },
 	                                 action);
 	return 1 + fields;

@@ -75,6 +75,8 @@ struct Request
 	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines
 	std::optional<std::filesystem::path> recordPath;
+	/// The file to write the draw trace to: each draw on the synced seed, with its turn and the place of its call
+	std::optional<std::filesystem::path> traceDrawsPath;
 	/// Write a record each time this many turns go by
 	uint32_t recordEvery {k_DefaultRecordEvery};
 	/// The table of the longest time that a plan or an activity can stay the same, as JSON

@@ -609,6 +609,19 @@ if (Python3_Interpreter_FOUND)
       ${Python3_EXECUTABLE}
       ${CMAKE_SOURCE_DIR}/tools/inspector/generate_component_fields.py --check
   )
+  # Every type that the game assigns to an entity has a registration with the reflection: a component without one is left
+  # out of the sync checksum and the saves, so the list of unregistered components must stay empty
+  add_test(
+    NAME test_registered_components
+    COMMAND ${Python3_EXECUTABLE}
+            ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py
+  )
+  add_test(
+    NAME test_registered_components_script
+    COMMAND
+      ${Python3_EXECUTABLE}
+      ${CMAKE_SOURCE_DIR}/tools/inspector/check_registered_components.py --test
+  )
 endif ()
 # The tests talking over loopback sockets with threads of their own take turns, so that on a machine busy with a
 # parallel ctest they don't also crowd each other
@@ -1763,3 +1776,11 @@ openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_script_start test_script_start.cpp)
 target_link_libraries(test_script_start PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
+openblack_setup_and_add_test(test_local_input_player test_local_input_player.cpp)
+openblack_setup_and_add_test(test_draw_trace test_draw_trace.cpp)
+add_test(NAME test_draw_trace_compare
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_draw_trace.py
+)
+openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
+target_link_libraries(test_hand_held_seeds PRIVATE edt psys)

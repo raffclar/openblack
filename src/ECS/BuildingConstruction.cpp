@@ -75,7 +75,7 @@ bool PlaysFinishedMusic(const FinishedTemple& temple)
 
 bool SavesOnFinish(const FinishedTemple& temple)
 {
-	return temple.localPlayers && !temple.scriptCutScene && !temple.skirmish;
+	return temple.localPlayers && !temple.scriptCutScene && !temple.skirmish && !temple.networkGame;
 }
 
 } // namespace openblack::building_construction

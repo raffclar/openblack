@@ -17,11 +17,15 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
+#include "3D/GripLandscapeEffect.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/GameRandom.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/MachineClock.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -690,6 +694,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
 		Locator::particleSystem::value().ProcessTurn();
+		// The puffs of dust of the hand's grips count down too
+		GripLandscapeEffect::ProcessTurn();
 		break;
 	}
 	case Step::Tornadoes:
@@ -903,6 +909,13 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 
 void PlayTurn(TurnViewInterface& view)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace gives each synced draw of the turn the number of the turn. The turn count moves on at the start of
+	// the turn, so the number is the same as the number of the turn's checksum and record.
+	const draw_trace::TurnScope traceTurn(Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace()
+	                                                                       : nullptr,
+	                                      Locator::time::value().GetTurn() + 1);
+#endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
 	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
