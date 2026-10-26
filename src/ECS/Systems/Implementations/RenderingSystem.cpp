@@ -138,16 +138,28 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 	           : mesh.id;
 }
 
+/// Where the camera is and the way that it looks. The frame finds them one time, not one time for each thing.
+struct ViewPoint
+{
+	glm::vec3 eye;
+	glm::vec3 forward;
+
+	[[nodiscard]] static ViewPoint Of(const openblack::Camera& camera)
+	{
+		return {.eye = camera.GetOrigin(), .forward = camera.GetForward()};
+	}
+};
+
 /// How a thing is drawn this frame by how deep into the view the middle of `box` is, drawn by `model`: the box of its
 /// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far.
 template <typename Disappears>
 openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlignedBoundingBox& box, float importance,
                                                       const glm::mat4& model, float scale, Disappears&& disappears,
-                                                      const openblack::Camera& camera, float modelDetail)
+                                                      const ViewPoint& camera, float modelDetail)
 {
 	namespace mesh_detail = openblack::graphics::mesh_detail;
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
+	const float depth = mesh_detail::ViewDepth(centre, camera.eye, camera.forward);
 	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
 	const auto choice = mesh_detail::Choose(depth, reach, true);
 	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
@@ -584,6 +596,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_fadingThings.clear();
 	_goneThings.clear();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 
 	const auto& vegetation = Locator::vegetation::value();
@@ -616,7 +629,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	uint32_t lastSegment = 0;
 	EachBySegment<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
-	     drawBoundingBox, camera, modelDetail, drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     drawBoundingBox, camera, &view, modelDetail,
+	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    const auto segment = fizzOrder.SegmentOf(entity);
 		    lastSegment = std::max(lastSegment, segment);
 		    if (segment != segmentPlaced)
@@ -683,7 +697,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    return;
 			    }
 			    gone = true;
-			    _goneThings.insert(entity);
+			    _goneThings.push(entity);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
 		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
@@ -706,7 +720,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				        [&registry, entity] {
 					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
 				        },
-				        *camera, modelDetail);
+				        *view, modelDetail);
 				    if (noteKept)
 				    {
 					    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox,
@@ -718,7 +732,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    if (detail == nullptr)
 					    {
 						    gone = true;
-						    _goneThings.insert(entity);
+						    _goneThings.push(entity);
 					    }
 					    else if (!registry.AllOf<Villager>(entity))
 					    {
@@ -1085,8 +1099,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    {
 						    const auto box = meshes.Handle(heldId)->GetBoundingBox();
 						    const auto centre = glm::vec3(held * glm::vec4(box.Center(), 1.0f));
-						    const float depth =
-						        graphics::mesh_detail::ViewDepth(centre, camera->GetOrigin(), camera->GetForward());
+						    const float depth = graphics::mesh_detail::ViewDepth(centre, view->eye, view->forward);
 						    const float reach = graphics::mesh_detail::Reach(
 						        0.0f, graphics::mesh_detail::ScaledRadius(box.Size(), glm::length(glm::vec3(held[0]))),
 						        modelDetail);
@@ -1533,6 +1546,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& vegetation = Locator::vegetation::value();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	using Group = PlacedTree::Group;
@@ -1593,7 +1607,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    {
 			    const auto choice = ChooseDetail(
 			        *box, 0.0f, modelMatrix, transform.scale.x,
-			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
+			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *view, modelDetail);
 			    if (noteKept)
 			    {
 				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
