@@ -1800,7 +1800,7 @@ openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
 # Two random draws in one expression can come in a different order on each compiler, so this check stops them.
 if (Python3_Interpreter_FOUND)
   add_test(
-    NAME test_draw_order
+    NAME test_random_draw_order
     COMMAND
       ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_draw_order.py
       --root ${CMAKE_SOURCE_DIR}
