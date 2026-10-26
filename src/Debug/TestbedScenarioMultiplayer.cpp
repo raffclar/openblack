@@ -86,8 +86,9 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",
-	     "The page lists the 15 winning conditions of Bombardment. \"Condition Value:\" and \"Time Limit "
-	     "(Hours:Minutes):\" show, and \"View Chat\" at the right. The Ready box is at the bottom left."},
+	     "The list of the winning conditions is empty, because the game has no conditions. \"Time Limit "
+	     "(Hours:Minutes):\" shows with 0:30, and \"View Chat\" is at the right. \"Condition Value:\" does not show. The "
+	     "Ready box is at the bottom left."},
 	    {"multiplayer.waiting_for_start", "The multiplayer front end: joined and waiting for the start", Stage::WaitingForStart,
 	     "The player joins Bob's game, goes to the conditions and ticks Ready. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",

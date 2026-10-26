@@ -150,8 +150,9 @@ private:
 	List* _playerInfo {nullptr};
 	List* _conditions {nullptr};
 	StaticText* _selectMap {nullptr};
-	StaticText* _conditionValue {nullptr};
+	StaticText* _timeLabel {nullptr};
 	StaticText* _timeLimit {nullptr};
+	Button* _viewChat {nullptr};
 	CheckBox* _ready {nullptr};
 	size_t _chatLines {0};
 	std::optional<size_t> _shownTab;

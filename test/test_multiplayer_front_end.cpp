@@ -390,6 +390,23 @@ TEST(MultiplayerRules, FormatTextFillsTheCodesInOrder)
 	EXPECT_EQ(FormatText(u"%s and %s", std::span<const TextArgument>(arguments).first(1)), u"Alice and %s");
 	EXPECT_EQ(TimeLimitText(90), u"1:30");
 	EXPECT_EQ(TimeLimitText(5), u"0:05");
+	EXPECT_EQ(TimeLimitText(k_DefaultTimeLimitMinutes), u"0:30");
+}
+
+TEST(MultiplayerRules, TheConditionsPageOfAPlayerWhoIsNotTheHost)
+{
+	// With a land: the list of the game's conditions, the time limit and View Chat
+	constexpr auto withLand = ConditionsPageOf(true);
+	EXPECT_FALSE(withLand.selectMap);
+	EXPECT_TRUE(withLand.conditions);
+	EXPECT_TRUE(withLand.timeLimit);
+	EXPECT_TRUE(withLand.viewChat);
+	// With no land: only "Please select a map first."
+	constexpr auto noLand = ConditionsPageOf(false);
+	EXPECT_TRUE(noLand.selectMap);
+	EXPECT_FALSE(noLand.conditions);
+	EXPECT_FALSE(noLand.timeLimit);
+	EXPECT_FALSE(noLand.viewChat);
 }
 
 TEST(MultiplayerRules, GameLinesShowTheStatesOfAGame)
@@ -714,6 +731,8 @@ TEST_F(FrontEndTest, JoinTakesATicketThenOpensTheGameSocket)
 	EXPECT_EQ(frontEnd->GetOwnSeat()->god, 2);
 	EXPECT_EQ(frontEnd->GetServerLand(), 0u);
 	ASSERT_TRUE(frontEnd->GetConditions().has_value());
+	// The game server sends no time limit, so the game's default of 30 minutes shows
+	EXPECT_EQ(frontEnd->GetTimeLimit(), k_DefaultTimeLimitMinutes);
 	// Back leaves the room and its channel, and the server gets the leave
 	frontEnd->Back();
 	EXPECT_EQ(frontEnd->GetBox(), Box::GameList);
