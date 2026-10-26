@@ -197,6 +197,7 @@
 #include "ECS/Systems/Implementations/VillagerDance.h"
 #include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/InspectorLoading.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
@@ -705,6 +706,32 @@ std::string OpenControlsBox(size_t row)
 		}
 	}
 	return menu.IsCapturing() ? fmt::format("the box asks for the new input of row {}", row) : "failed: no box";
+}
+
+/// A message comes into the list of incoming messages: the message of the real weather with a picture, a chat line or an
+/// e-mail
+std::string AddIncomingMessage(size_t value, std::string_view text)
+{
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		return "failed: no list of incoming messages";
+	}
+	auto& messages = Locator::incomingMessageSystem::value();
+	if (value == k_IncomingChat || value == k_IncomingMail)
+	{
+		const auto kind = value == k_IncomingChat ? incoming_messages::Kind::Chat : incoming_messages::Kind::Mail;
+		messages.Add(kind, gui::ToUtf16(text), 0);
+	}
+	else if (value < incoming_messages::k_WeatherPictures)
+	{
+		messages.AddWeather(gui::ToUtf16(text), static_cast<uint8_t>(value));
+	}
+	else
+	{
+		return fmt::format("failed: no message for the value {}", value);
+	}
+	return fmt::format("{} messages in the list, the top one \"{}\"", messages.GetQueue().Count(),
+	                   gui::ToUtf8(messages.GetQueue().ShownText()));
 }
 
 /// The multiplayer front end opens over the temple's future room with the demonstration lobby, on its way to a stage
@@ -2849,6 +2876,11 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::AddIncomingMessage)
+	{
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), AddIncomingMessage(command.value, command.action)));
+		return;
+	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
@@ -3545,6 +3577,7 @@ void Runner::Give(const Command& command)
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
 	case Kind::OtherGodHand:
+	case Kind::AddIncomingMessage:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

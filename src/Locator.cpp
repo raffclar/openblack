@@ -17,6 +17,7 @@
 #include <exception>
 #include <memory>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -121,6 +122,7 @@
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
+#include "ECS/Systems/Implementations/IncomingMessageSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
 #include "ECS/Systems/Implementations/LivingActionSystem.h"
@@ -265,6 +267,7 @@ using openblack::ecs::systems::HelpProfileSystem;
 using openblack::ecs::systems::HelpSpeechSystem;
 using openblack::ecs::systems::HelpTextSystem;
 using openblack::ecs::systems::HighDetailSystem;
+using openblack::ecs::systems::IncomingMessageSystem;
 using openblack::ecs::systems::InfluenceSystem;
 using openblack::ecs::systems::IntroSystem;
 using openblack::ecs::systems::LandShadeSystem;
@@ -491,27 +494,47 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    online::MakeTokenStore(Locator::filesystem::value(), profiles.folder),
 	    []() { return std::chrono::system_clock::now(); });
 	const bool internetWeather = Locator::config::has_value() && Locator::config::value().useInternetWeather;
+	const auto readScript = [](std::string_view file) -> std::optional<std::vector<uint8_t>> {
+		auto& files = Locator::filesystem::value();
+		const auto path = files.GetPath<filesystem::Path::Scripts>() / file;
+		try
+		{
+			if (!files.Exists(path))
+			{
+				return std::nullopt;
+			}
+			return files.ReadAll(path);
+		}
+		catch (const std::exception& error)
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read {}: {}", file, error.what());
+			return std::nullopt;
+		}
+	};
 	Locator::realWeatherSystem::emplace<RealWeatherSystem>(
-	    internetWeather, Locator::lobbyClient::value(),
-	    []() -> std::optional<std::vector<uint8_t>> {
-		    auto& files = Locator::filesystem::value();
-		    const auto path = files.GetPath<filesystem::Path::Scripts>() / "weatherinfo.lhw";
-		    try
+	    internetWeather, Locator::lobbyClient::value(), [readScript]() { return readScript("weatherinfo.lhw"); },
+	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
+	    []() { return std::chrono::steady_clock::now(); }, [readScript]() { return readScript("country.lhw"); },
+	    // The days of weather go to the folder of the current profile. A developer's run keeps no files for its player.
+	    [developer = profiles.developer](std::span<const uint8_t> bytes) {
+		    if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
 		    {
-			    if (!files.Exists(path))
-			    {
-				    return std::nullopt;
-			    }
-			    return files.ReadAll(path);
+			    return;
 		    }
-		    catch (const std::exception& error)
+		    const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		    if (profile.has_value() &&
+		        !Locator::profileFolderSystem::value().WritePlayerFile(gui::ToUtf16(profile->name), "weather.dat", bytes))
 		    {
-			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not read the weather presets: {}", error.what());
-			    return std::nullopt;
+			    SPDLOG_LOGGER_WARN(spdlog::get("game"), "Could not write the days of the real weather");
 		    }
 	    },
-	    []() { return LocalDate(Locator::time::has_value() ? Locator::time::value().GetUnixTime() : std::time(nullptr)); },
-	    []() { return std::chrono::steady_clock::now(); });
+	    // The message of the real weather goes into the list of incoming messages
+	    [](std::string_view place, uint8_t picture) {
+		    if (Locator::incomingMessageSystem::has_value())
+		    {
+			    Locator::incomingMessageSystem::value().AddWeather(gui::ToUtf16(place), picture);
+		    }
+	    });
 }
 
 } // namespace
@@ -633,6 +656,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::magicSystem::emplace<MagicSystem>();
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
+	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
@@ -862,6 +886,7 @@ void openblack::ShutDownServices()
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
+	Locator::incomingMessageSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();

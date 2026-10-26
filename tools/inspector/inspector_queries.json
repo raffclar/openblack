@@ -1123,7 +1123,7 @@
   "query": "land.storm_clouds"
  },
  {
-  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm and the background weather",
+  "description": "The real-world weather: the weather that the lobby gave, whether it changes the land, its storm, the place of its message and the background weather",
   "kind": "object",
   "parameters": [],
   "query": "land.real_weather"
@@ -1652,6 +1652,12 @@
   "kind": "object",
   "parameters": [],
   "query": "view.pause_text"
+ },
+ {
+  "description": "The incoming messages at the bottom left of the screen: the list in order (kind, text, weather picture, the real time it started to show), the real time now, and whether the button shows with its look",
+  "kind": "object",
+  "parameters": [],
+  "query": "view.incoming_messages"
  },
  {
   "description": "The video playing: its frame, frame count and rate, its fade, the falling spell, its creature and its effects, whether films are on, and the 16-bit surface of the films",

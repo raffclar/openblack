@@ -547,6 +547,10 @@ struct ScriptArgument
 /// The value of a command that plays custom music that stops the music
 constexpr size_t k_StopCustomMusic = std::numeric_limits<size_t>::max();
 
+/// The values of an AddIncomingMessage command that give a chat line and an e-mail
+constexpr size_t k_IncomingChat = 100;
+constexpr size_t k_IncomingMail = 101;
+
 struct Command
 {
 	enum class Kind : uint8_t
@@ -968,6 +972,11 @@ struct Command
 		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
 		/// creature.
 		OtherGodHand,
+		/// A message comes into the list of incoming messages at the bottom left of the screen. A value below
+		/// k_IncomingChat is the message of the real weather with that weather picture, and the action is its place, as
+		/// the real weather gives them. k_IncomingChat gives a chat line and k_IncomingMail an e-mail, with the action as
+		/// their text. Needs no creature.
+		AddIncomingMessage,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -30,6 +30,8 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
+#include "Camera/CameraDrag.h"
+#include "Camera/DefaultWorldCameraModel.h"
 #include "Camera/ScriptCameraModel.h"
 #include "Common/FixedFormat.h"
 #include "Common/GameRandom.h"
@@ -37,9 +39,12 @@
 #include "Creature/CreatureSkin.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
+#include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
+#include "ECS/Systems/CreatureModeSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/IncomingMessageSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
@@ -53,6 +58,7 @@
 #include "Gui/CinemaBars.h"
 #include "Gui/CinemaHides.h"
 #include "Gui/GlyphTexture.h"
+#include "Gui/IncomingMessageStripRules.h"
 #include "Gui/SavingBox.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/ScriptTexts.h"
@@ -383,6 +389,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
+    , _incomingMessages(std::make_unique<IncomingMessageStrip>())
     , _toolTips(ReadToolTipsInfo())
 {
 	_painter.SetPictures(_symbols.get(), _mice.get());
@@ -839,6 +846,133 @@ void GameInterface::UpdateMusicControls(bool dialogOpen)
 	_musicControls->Update(player, emotion, machine_clock::Ticks());
 }
 
+glm::ivec2 GameInterface::ToIncomingMessages(glm::ivec2 screen, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToDialog(screen - glm::ivec2(incoming_message_strip::Origin(resolution)));
+}
+
+glm::ivec2 GameInterface::FromIncomingMessages(glm::ivec2 layout, glm::u16vec2 resolution)
+{
+	_painter.Begin(resolution);
+	return _painter.ToScreenPoint(layout) + glm::ivec2(incoming_message_strip::Origin(resolution));
+}
+
+bool GameInterface::ProcessIncomingMessagesEvent(const SDL_Event& event, glm::u16vec2 resolution)
+{
+	const auto mouseButtonDown = (SDL_GetMouseState(nullptr, nullptr) & (SDL_BUTTON_LMASK | SDL_BUTTON_RMASK)) != 0;
+	const auto isLeftOrRight = [](uint8_t button) { return button == SDL_BUTTON_LEFT || button == SDL_BUTTON_RIGHT; };
+	switch (event.type)
+	{
+	// The game also sees the pointer move
+	case SDL_MOUSEMOTION:
+		_incomingMessages->MouseMove(ToIncomingMessages({event.motion.x, event.motion.y}, resolution));
+		return false;
+	case SDL_MOUSEBUTTONDOWN:
+		// The button takes a press over it only when no other mouse button is down
+		if (!isLeftOrRight(event.button.button) || !_incomingMessages->WantsMouse(false))
+		{
+			return false;
+		}
+		_incomingMessages->MouseDown(ToIncomingMessages({event.button.x, event.button.y}, resolution),
+		                             event.button.button == SDL_BUTTON_RIGHT);
+		return true;
+	case SDL_MOUSEBUTTONUP:
+	{
+		if (!isLeftOrRight(event.button.button) || !_incomingMessages->WantsMouse(mouseButtonDown))
+		{
+			return false;
+		}
+		// The button clicks as it acts
+		const auto click = _incomingMessages->MouseUp(ToIncomingMessages({event.button.x, event.button.y}, resolution));
+		if (click.has_value())
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+			ClickIncomingMessage(click->rightButton);
+		}
+		return true;
+	}
+	default:
+		return false;
+	}
+}
+
+void GameInterface::ClickIncomingMessage(bool rightButton)
+{
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		return;
+	}
+	auto& messages = Locator::incomingMessageSystem::value();
+	const auto* top = messages.GetQueue().Top();
+	if (top == nullptr)
+	{
+		return;
+	}
+	incoming_messages::ClickFacts facts {.kind = top->kind, .rightButton = rightButton};
+	if (Locator::camera::has_value())
+	{
+		facts.playersCamera = dynamic_cast<const DefaultWorldCameraModel*>(&Locator::camera::value().GetModel()) != nullptr;
+	}
+	if (Locator::cameraHelpSystem::has_value())
+	{
+		const auto& help = Locator::cameraHelpSystem::value().Get();
+		facts.cameraMoves = (help.features & camera_drag::feature::k_Strafe) != 0;
+		facts.cameraKeys = help.cameraKeys;
+		facts.placeKeys = help.placeKeys;
+	}
+	std::optional<entt::entity> creature;
+	if (Locator::creatureModeSystem::has_value())
+	{
+		creature = Locator::creatureModeSystem::value().PlayersCreature();
+	}
+	facts.hasCreature = creature.has_value();
+	// The camera starts at the creature's viewing distance, however near it is
+	if (incoming_messages::FollowsCreature(facts))
+	{
+		Locator::creatureModeSystem::value().Enter(*creature, creature_follow::StartDistance::Viewing);
+	}
+	messages.Dismiss();
+}
+
+void GameInterface::UpdateIncomingMessages(bool dialogOpen, glm::u16vec2 resolution)
+{
+	const auto layoutWidth = incoming_message_strip::LayoutWidth(resolution);
+	if (!Locator::incomingMessageSystem::has_value())
+	{
+		_incomingMessages->Update(std::nullopt, std::nullopt, layoutWidth);
+		return;
+	}
+	// The message shows where the custom music controls can show: both are parts of one box of the game
+	const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
+	const bool videoPlays = Locator::videoSystem::has_value() && Locator::videoSystem::value().IsPlaying();
+	const bool wideScreen =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	const bool creatureHeld =
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	const bool shown = custom_music_controls::Shows({.inTemple = inTemple,
+	                                                 .videoPlays = videoPlays,
+	                                                 .wideScreen = wideScreen,
+	                                                 .creatureHeld = creatureHeld,
+	                                                 .dialogOpen = dialogOpen});
+	auto& messages = Locator::incomingMessageSystem::value();
+	const auto& queue = messages.GetQueue();
+	// The button takes the look of the top message before the message can go. The line of text takes the next message
+	// at once, or keeps its text when no message is left.
+	std::optional<incoming_messages::ButtonLook> look;
+	if (const auto* top = queue.Top(); shown && top != nullptr)
+	{
+		look = incoming_messages::LookAt(*top, messages.GetMilliseconds());
+	}
+	messages.Update(look.has_value());
+	std::optional<std::u16string_view> text;
+	if (!queue.Empty())
+	{
+		text = queue.ShownText();
+	}
+	_incomingMessages->Update(look, text, layoutWidth);
+}
+
 void GameInterface::SetSymbolPictures(const creature_tattoo::Pictures& pictures)
 {
 	if (auto symbols = LoadSymbols(pictures))
@@ -889,6 +1023,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	if (!_menu->IsOpen())
 	{
 		if (_musicControls->IsActive() && ProcessMusicControlsEvent(event, resolution))
+		{
+			return true;
+		}
+		if (_incomingMessages->IsActive() && ProcessIncomingMessagesEvent(event, resolution))
 		{
 			return true;
 		}
@@ -1111,6 +1249,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive();
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
+	UpdateIncomingMessages(menuOpen || _boxOverGameFade.has_value(), resolution);
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
 	const cinema_hides::Bars cinemaBars {.in = cinema.IsWideScreenOn(), .heldByScript = cinema.GetWideScreenOwner() != 0};
@@ -1181,6 +1320,9 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		// The custom music controls go against the top right of the screen
 		_canvas.SetOrigin(custom_music_controls::Origin(resolution));
 		_musicControls->Draw(_painter);
+		// The incoming message goes against the bottom left of the screen
+		_canvas.SetOrigin(incoming_message_strip::Origin(resolution));
+		_incomingMessages->Draw(_painter, _gatheringText.get());
 		_canvas.SetOrigin(glm::vec2(0.0f));
 		_storyHistoryBox->Draw(_painter);
 		if (_resyncShown)

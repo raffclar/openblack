@@ -32,6 +32,7 @@
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
+#include "IncomingMessageStrip.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
 #include "MultiplayerBoxes.h"
@@ -130,6 +131,14 @@ public:
 	/// The controls of the custom music player at the top right of the screen
 	[[nodiscard]] CustomMusicControls& GetMusicControls() noexcept { return *_musicControls; }
 	[[nodiscard]] const CustomMusicControls& GetMusicControls() const noexcept { return *_musicControls; }
+	/// The incoming message at the bottom left of the screen
+	[[nodiscard]] const IncomingMessageStrip& GetIncomingMessages() const noexcept { return *_incomingMessages; }
+	/// The window's point on the incoming message's layout, and back
+	[[nodiscard]] glm::ivec2 ToIncomingMessages(glm::ivec2 screen, glm::u16vec2 resolution);
+	[[nodiscard]] glm::ivec2 FromIncomingMessages(glm::ivec2 layout, glm::u16vec2 resolution);
+	/// What a click on the button of the incoming message does: the camera can follow the player's creature, and the
+	/// message goes
+	void ClickIncomingMessage(bool rightButton);
 	/// The window's point on the custom music controls' layout
 	[[nodiscard]] glm::ivec2 ToMusicControls(glm::ivec2 screen, glm::u16vec2 resolution);
 	/// The custom music controls' point on the window
@@ -332,6 +341,10 @@ private:
 	bool ProcessMusicControlsEvent(const SDL_Event& event, glm::u16vec2 resolution);
 	/// Shows the custom music controls when nothing that they must not show over is on the screen
 	void UpdateMusicControls(bool dialogOpen);
+	/// The incoming message's button takes the mouse only over the button; true when it took the event
+	bool ProcessIncomingMessagesEvent(const SDL_Event& event, glm::u16vec2 resolution);
+	/// Shows the incoming message as the custom music controls show, and steps the list of messages
+	void UpdateIncomingMessages(bool dialogOpen, glm::u16vec2 resolution);
 	/// While the tattoo editor is open its dialog takes the mouse and keyboard
 	bool ProcessTattooEditorEvent(const SDL_Event& event);
 	/// What a key or a letter chose in the menu: the game takes it, and Continue closes the menu
@@ -445,6 +458,7 @@ private:
 	std::unique_ptr<MultiplayerBoxes> _multiplayerBoxes;
 	std::u16string _toolTipName;
 	std::unique_ptr<CustomMusicControls> _musicControls;
+	std::unique_ptr<IncomingMessageStrip> _incomingMessages;
 	/// The front end's backdrop: its texture, repeating, its swirls and the two layers' texture coordinates
 	std::unique_ptr<graphics::Texture2D> _backdrop;
 	std::optional<menu_backdrop::Swirls> _backdropSwirls;

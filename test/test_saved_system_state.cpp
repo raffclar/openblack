@@ -177,6 +177,20 @@ TEST(SavedSystemState, TheWeathersSwitchesComeBack)
 	EXPECT_FALSE(loaded.IsStormCreationEnabled());
 }
 
+TEST(SavedSystemState, ALoadedGameHasCalmBackgroundWeather)
+{
+	WeatherSystem saved;
+	saved.SetBackgroundWeather({.temperature = 11, .rain = 40, .overcast = 60});
+	WeatherSystem loaded;
+	loaded.SetBackgroundWeather({.temperature = 5, .snow = 20});
+	LoadInto(loaded, StateOf(saved));
+	const auto background = loaded.GetBackgroundWeather();
+	EXPECT_EQ(background.temperature, 0);
+	EXPECT_EQ(background.rain, 0);
+	EXPECT_EQ(background.snow, 0);
+	EXPECT_EQ(background.overcast, 0);
+}
+
 TEST(SavedSystemState, AFireListWithNoFireComesBack)
 {
 	FireSystem saved;
