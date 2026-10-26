@@ -170,6 +170,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of a miracle's particle effect: each computer numbers its effects, and makes more of them for its own
     // hand
     {.component = "Spell", .field = "effect", .marker = ""},
+    // The numbers of other effects that the turns make, as the particles of this computer numbered them. The frames make
+    // effects of their own, such as the hand's gesture trails, which take numbers too. The turns use a number only to
+    // find their effect on this computer.
+    {.component = "SpellDispenser", .field = "effect", .marker = ""},
+    {.component = "TownArtefact", .field = "effect", .marker = ""},
+    {.component = "MagicShield", .field = "effect", .marker = ""},
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},

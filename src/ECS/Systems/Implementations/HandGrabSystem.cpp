@@ -15,6 +15,7 @@
 #include <utility>
 
 #include <glm/geometric.hpp>
+#include <spdlog/spdlog.h>
 
 #include "ECS/AltarSacrifice.h"
 #include "ECS/Components/Animal.h"
@@ -1653,6 +1654,11 @@ void HandGrabSystem::DoGiveCallOff(PlayerNames player, entt::entity creature)
 	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
 	if (Exists(creature))
 	{
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_DEBUG(logger, "The hand of player {} calls off the gift to creature {}", static_cast<int>(player),
+			                    entt::to_integral(creature));
+		}
 		_world->CallOffGiving(creature);
 	}
 	// The hand of the player forgets the gift, whatever it gives now
