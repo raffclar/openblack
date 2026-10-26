@@ -968,6 +968,8 @@ struct Command
 		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
 		/// creature.
 		OtherGodHand,
+		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
+		TattooEditorAsNetworkGame,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
