@@ -11,6 +11,7 @@
 
 #include <algorithm>
 
+#include "ConditionsBox.h"
 #include "GameFont.h"
 #include "TextDatabase.h"
 
@@ -24,6 +25,7 @@ constexpr float k_FadeOutSeconds = 0.2f;
 
 // The tabs: Game Over, Multiplayer, Statistics and four empty tabs, labelled in small text
 constexpr size_t k_TabCount = 7;
+constexpr size_t k_MultiplayerTab = 1;
 constexpr size_t k_StatisticsTab = 2;
 constexpr int k_TabTextSize = DialogPainter::k_SmallTextSize;
 
@@ -43,7 +45,7 @@ EndGameBox::EndGameBox(const TextDatabase& texts, const GameFont& font)
 {
 	std::vector<Dialog::Tab> tabs {
 	    {.label = std::u16string(texts.Get("HELP_TEXT_GAME_OVER")), .onSelect = {}},
-	    {.label = std::u16string(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB")), .onSelect = {}},
+	    {.label = std::u16string(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB")), .onSelect = [this] { OpenConditions(); }},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenStatistics(); }},
 	};
 	tabs.resize(k_TabCount);
@@ -83,8 +85,10 @@ EndGameBox::EndGameBox(const TextDatabase& texts, const GameFont& font)
 		Close();
 	};
 
-	// The Game Statistics box comes back to the end box by its first tab and by Back
-	_statistics = std::make_unique<StatisticsBox>(texts, font, [this] { BackFromStatistics(); });
+	// The Game Statistics box and the box of the winning conditions come back to the end box by their first tab and by
+	// Back
+	_statistics = std::make_unique<StatisticsBox>(texts, font, [this] { BackFromTab(); });
+	_conditions = std::make_unique<ConditionsBox>(texts, font, [this] { BackFromTab(); });
 }
 
 EndGameBox::~EndGameBox() = default;
@@ -98,12 +102,17 @@ void EndGameBox::Open(Contents contents)
 	_watchButton->visible = _contents.box.kind == end_game_box::Kind::Lost && _contents.box.watch;
 	_leaveButton->visible = true;
 	_showsStatistics = false;
+	_showsConditions = false;
 	_dialog->SelectTab(0);
 	_dialog->Reset();
 	if (!_open)
 	{
 		_open = true;
 		_fade.SetDestination(1.0f, k_FadeInSeconds);
+	}
+	if (_onShown)
+	{
+		_onShown(_contents);
 	}
 }
 
@@ -126,17 +135,53 @@ void EndGameBox::OpenStatistics()
 	_showsStatistics = true;
 }
 
-void EndGameBox::BackFromStatistics()
+bool EndGameBox::OpenTab(size_t tab)
+{
+	if (!_open)
+	{
+		return false;
+	}
+	switch (tab)
+	{
+	case k_MultiplayerTab:
+		OpenConditions();
+		return true;
+	case k_StatisticsTab:
+		OpenStatistics();
+		return true;
+	default:
+		return false;
+	}
+}
+
+void EndGameBox::OpenConditions()
+{
+	auto figures = _conditionsSource ? _conditionsSource() : conditions_box::Figures {};
+	_dialog->SelectTab(k_MultiplayerTab);
+	_conditions->Open(std::move(figures), true);
+	_showsConditions = true;
+}
+
+void EndGameBox::BackFromTab()
 {
 	// The end box shows again as it opened, on its Game Over tab
 	_showsStatistics = false;
+	_showsConditions = false;
 	_dialog->SelectTab(0);
 	_dialog->Reset();
+	if (_onShown)
+	{
+		_onShown(_contents);
+	}
 }
 
 Dialog& EndGameBox::CurrentDialog() const
 {
-	return _showsStatistics ? _statistics->GetDialog() : *_dialog;
+	if (_showsStatistics)
+	{
+		return _statistics->GetDialog();
+	}
+	return _showsConditions ? _conditions->GetDialog() : *_dialog;
 }
 
 void EndGameBox::Update(float deltaSeconds)

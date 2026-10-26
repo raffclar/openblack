@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <tuple>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -31,6 +32,7 @@ struct FakeGod
 	bool creature {true};
 	bool mind {false};
 	float influence {0.0f};
+	float power {0.0f};
 	uint32_t godsDefeated {0};
 	GameStanding standing;
 };
@@ -56,6 +58,7 @@ public:
 	[[nodiscard]] bool HasTemple(PlayerNames player) const override { return gods.at(player).temple; }
 	[[nodiscard]] GameStanding& Standing(PlayerNames player) override { return gods.at(player).standing; }
 	[[nodiscard]] float InfluenceShare(PlayerNames player) const override { return gods.at(player).influence; }
+	[[nodiscard]] float InfluencePower(PlayerNames player) const override { return gods.at(player).power; }
 	void RemoveCreature(PlayerNames player) override { gods.at(player).creature = false; }
 	void CountGodDefeated(PlayerNames player) override { ++gods.at(player).godsDefeated; }
 	void StopMind(PlayerNames player) override { gods.at(player).mind = false; }
@@ -265,4 +268,55 @@ TEST(GameEnd, AGameDecidedAfterAGodWasOutRanksTheGodsStillIn)
 	EXPECT_EQ(events[0].god, k_One);
 	EXPECT_EQ(world.gods[k_Two].standing.place, 2);
 	EXPECT_EQ(world.gods[k_One].standing.place, 3);
+}
+
+// Each tenth turn of a game with no conditions, each god keeps its share of the influence of the gods
+TEST(GameEnd, TheScoreHistoryKeepsTheShareOfTheInfluenceEachTenTurns)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].power = 300.0f;
+	world.gods[k_Two].power = 100.0f;
+	State state;
+	std::ignore = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 11}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 0);
+	std::ignore = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 20}, state);
+	const auto& one = world.gods[k_One].standing;
+	EXPECT_EQ(one.scoreHistoryIndex, 1);
+	EXPECT_EQ(one.scoreHistory[0], 0.0f);
+	EXPECT_EQ(one.scoreHistory[1], 0.75f);
+	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.25f);
+	// The value that came last is not shown
+	EXPECT_EQ(ShownScores(one).size(), 1u);
+	EXPECT_EQ(ShownScores(one)[0], 0.0f);
+}
+
+// With conditions, each god keeps its share of the conditions, and no share of the influence while each god has a temple
+TEST(GameEnd, TheScoreHistoryKeepsTheShareOfTheConditions)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].power = 300.0f;
+	world.gods[k_One].standing.conditions[0] = WinCondition {.current = 1, .target = 4, .completed = false};
+	world.gods[k_Two].standing.conditions[0] = WinCondition {.current = 3, .target = 4, .completed = false};
+	State state;
+	std::ignore = ProcessTurn(world, {.networkGame = true, .skirmish = false, .turn = 30, .conditionCount = 1}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistory[1], 0.25f);
+	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.75f);
+}
+
+// A full history drops its oldest value for each new one
+TEST(GameEnd, AFullScoreHistoryDropsItsOldestValue)
+{
+	GameStanding standing;
+	for (int i = 1; i <= 499; ++i)
+	{
+		AddScore(standing, static_cast<float>(i));
+	}
+	EXPECT_EQ(standing.scoreHistoryIndex, 499);
+	EXPECT_EQ(standing.scoreHistory[0], 0.0f);
+	AddScore(standing, 500.0f);
+	EXPECT_EQ(standing.scoreHistoryIndex, 499);
+	EXPECT_EQ(standing.scoreHistory[0], 1.0f);
+	EXPECT_EQ(standing.scoreHistory[499], 500.0f);
+	EXPECT_EQ(ShownScores(standing).size(), 499u);
 }

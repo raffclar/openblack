@@ -542,13 +542,15 @@ Json GameInput::State() const
 			}
 		}
 		// A town's totem under the cursor is not taken into the hand: the Action button takes hold of it to slide it.
-		// Whether the first player's hand would take hold of it.
+		// Whether the hand of the god of this computer would take hold of it.
 		if (pick.object.has_value() && Locator::villageTotemSystem::has_value())
 		{
 			const auto& totems = Locator::villageTotemSystem::value();
 			if (const auto totem = totems.TotemOf(*pick.object); totem.has_value())
 			{
-				const auto why = totems.WhyNotGrip(*totem, PlayerNames::PLAYER_ONE);
+				const auto own =
+				    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+				const auto why = totems.WhyNotGrip(*totem, own);
 				state["pick"]["totem"] = {{"id", entt::to_integral(*totem)}, {"grips", why.empty()}, {"button", "right"}};
 				if (!why.empty())
 				{

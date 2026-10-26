@@ -36,6 +36,14 @@ public:
 	[[nodiscard]] virtual std::vector<game_end::Event> TakeEventsToShow() = 0;
 	/// The one god among the first four players that is still in, when every other god is out
 	[[nodiscard]] virtual std::optional<PlayerNames> LastGodIn() const = 0;
+	/// Where each god stands, for the gods that a human or a computer mind plays, in the order of the players. A god with
+	/// no standing yet has an empty one.
+	struct GodStanding
+	{
+		PlayerNames god;
+		ecs::components::GameStanding standing;
+	};
+	[[nodiscard]] virtual std::vector<GodStanding> Standings() const = 0;
 };
 
 } // namespace openblack::ecs::systems

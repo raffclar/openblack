@@ -46,6 +46,7 @@ public:
 	bool Join(NetworkJoin join) override;
 	void SetReady(bool ready) override;
 	void PlayAlone() override;
+	void EndNetworkGame() override;
 	void Leave() override;
 	void StopGame() override;
 	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override;

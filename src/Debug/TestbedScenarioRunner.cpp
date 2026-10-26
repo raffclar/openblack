@@ -2093,7 +2093,12 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		std::ignore = hands.MakeHandsOf(command.player);
 		// The hand takes the thing before the first report, which asks the influence at no point
 		std::string held = "the hand holds nothing";
-		if (const auto object = ObjectAt(command.object); object.has_value() && Locator::handGrabSystem::has_value())
+		if (command.heldSeed.has_value() && Locator::magicSystem::has_value())
+		{
+			const auto seed = Locator::magicSystem::value().GiveSeedToHand(command.player, *command.heldSeed, 0, 1.0f);
+			held = seed != entt::null ? "the hand holds the seed" : "the hand can't hold the seed";
+		}
+		else if (const auto object = ObjectAt(command.object); object.has_value() && Locator::handGrabSystem::has_value())
 		{
 			held = Locator::handGrabSystem::value().TakeIntoHandOf(command.player, *object) ? "the hand holds the thing"
 			                                                                                : "the hand can't take the thing";
@@ -2889,6 +2894,32 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::EndBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 3)
+		{
+			game->GetInterface()->GetMenu().SetNetworkGame(true);
+			game->GetInterface()->OpenMenu();
+			Log(fmt::format("{:.1f}s: {}: the main menu of a network game opens", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 0)
+		{
+			game->AskToLeaveNetworkGame();
+			Log(fmt::format("{:.1f}s: {}: the question to leave opens", _seconds, Name(command.kind)));
+			return;
+		}
+		const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(command.value);
+		Log(fmt::format("{:.1f}s: {}: tab {} {}", _seconds, Name(command.kind), command.value,
+		                opened ? "opens its box" : "does not open"));
+		return;
+	}
 	if (command.kind == Kind::OpenMenuPage)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMenuPage(command.value, command.ctrl)));
@@ -3579,6 +3610,7 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
+	case Kind::EndBox:
 	case Kind::OtherGodHand:
 	case Kind::JoinOnline:
 	case Kind::HandGripTotem:

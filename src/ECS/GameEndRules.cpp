@@ -157,6 +157,28 @@ ConditionsDone ShareOfConditions(const GameStanding& standing, float shareOfEach
 	return done;
 }
 
+void AddScore(GameStanding& standing, float score)
+{
+	auto& history = standing.scoreHistory;
+	constexpr auto k_Last = static_cast<int32_t>(GameStanding::k_ScoreHistoryCount) - 1;
+	if (standing.scoreHistoryIndex >= k_Last)
+	{
+		std::shift_left(history.begin(), history.end(), 1);
+		standing.scoreHistoryIndex = k_Last;
+	}
+	else
+	{
+		++standing.scoreHistoryIndex;
+	}
+	history.at(static_cast<size_t>(standing.scoreHistoryIndex)) = score;
+}
+
+std::span<const float> ShownScores(const GameStanding& standing)
+{
+	const auto count = std::clamp<int32_t>(standing.scoreHistoryIndex, 0, GameStanding::k_ScoreHistoryCount);
+	return std::span<const float>(standing.scoreHistory).first(static_cast<size_t>(count));
+}
+
 void CountOut(World& world, State& state, PlayerNames god, OutReason reason, bool skirmish)
 {
 	const auto gods = world.ActiveGods();
@@ -199,6 +221,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	}
 	const auto gods = world.ActiveGods();
 	const bool timeUp = facts.timeLimitTurn.has_value() && *facts.timeLimitTurn == facts.turn && !facts.skirmish;
+	const bool scoreTurn = facts.turn % k_ScoreTurns == 0;
 	bool templesLost = true;
 	if (facts.conditionCount != 0 || timeUp)
 	{
@@ -222,6 +245,10 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 			{
 				state.decided = true;
 			}
+			if (scoreTurn)
+			{
+				AddScore(standing, standing.share);
+			}
 		}
 		if (state.decided || timeUp)
 		{
@@ -234,6 +261,19 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 		if (!templesLost)
 		{
 			return events;
+		}
+	}
+	// Each tenth turn, each god keeps its share of the influence of all the gods in its score history
+	if (scoreTurn)
+	{
+		float total = 0.0f;
+		for (const auto god : gods)
+		{
+			total = x87::Add(total, world.InfluencePower(god));
+		}
+		for (const auto god : gods)
+		{
+			AddScore(world.Standing(god), x87::Div(world.InfluencePower(god), total));
 		}
 	}
 	// A god among the first four players with no temple is out, and its creature goes from the land

@@ -18,6 +18,7 @@
 
 #include <SDL_keycode.h>
 
+#include "ConditionsBox.h"
 #include "GameFont.h"
 #include "Input/KeyRebinding.h"
 #include "StatisticsBox.h"
@@ -43,6 +44,10 @@ constexpr int k_ButtonWidth = 440;
 constexpr int k_ButtonHeight = 70;
 constexpr int k_FirstButtonTop = 145;
 constexpr int k_ButtonSpacing = 80;
+// In a skirmish or a network game the main menu's buttons are bigger and further apart
+constexpr int k_FewerButtonsHeight = 80;
+constexpr int k_FewerButtonsTop = 150;
+constexpr int k_FewerButtonsSpacing = 100;
 
 // The options' pages: Back at the bottom left, 40 pixel arrows
 constexpr glm::ivec2 k_BackPosition {30, 530};
@@ -220,6 +225,8 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _settings(std::move(settings))
     , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
     , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
+    , _exitOnlineLabel(texts.Get("HELP_TEXT_FRONT_END_03"))
+    , _multiplayerTab(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB"))
 {
 	const auto read = [&texts](auto& labels, const auto& names) {
 		for (size_t i = 0; i < labels.size(); ++i)
@@ -247,8 +254,10 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
 	BuildPlayers(texts);
 	BuildAdvanced(texts);
 	BuildControls(texts);
-	// The Game Statistics box's first tab and its Back arrow return to the main menu
+	// The Game Statistics box's first tab and its Back arrow return to the main menu, as do those of the box of the
+	// winning conditions
 	_statistics = std::make_unique<StatisticsBox>(texts, font, [this] { ShowPage(Page::Main); });
+	_conditions = std::make_unique<ConditionsBox>(texts, font, [this] { ShowPage(Page::Main); });
 }
 
 GameMenu::~GameMenu() = default;
@@ -281,10 +290,12 @@ std::vector<Dialog::NamedControl> GameMenu::GetNamedControls() const
 
 void GameMenu::BuildMain(const TextDatabase& texts)
 {
-	// The main menu's tabs: the third, Multiplayer, only has a label in a multiplayer game
+	// The main menu's tabs: the third, Multiplayer, only has a label in a network game (SetNetworkGame). A tab with no
+	// label takes no click.
 	std::vector<Dialog::Tab> tabs {
 	    {.label = std::u16string(texts.Get("HELP_TEXT_DIALOG_ADDITION_88")), .onSelect = {}},
 	    {.label = std::u16string(texts.Get("HELP_TEXT_PAUSE_STATS_151")), .onSelect = [this] { OpenStatistics(); }},
+	    {.label = {}, .onSelect = [this] { OpenConditions(); }},
 	};
 	auto& page = *(_pages[static_cast<size_t>(Page::Main)] = std::make_unique<Dialog>(std::move(tabs), 0));
 
@@ -295,19 +306,20 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	}
 	page.Add<StaticText>(DialogRect {.min = {50, 65}, .max = {750, 155}}, _welcome, Layout::Wrapped);
 
-	// "Leave Skirmish Game" (HELP_TEXT_DIALOG_ADDITION_170) during a skirmish and "Exit Online Game."
-	// (HELP_TEXT_FRONT_END_03) during a multiplayer game
+	// "Leave Skirmish Game" (HELP_TEXT_DIALOG_ADDITION_170) during a skirmish. "Exit Online Game."
+	// (HELP_TEXT_FRONT_END_03) during a network game (SetNetworkGame).
 	const std::array<std::pair<const char*, std::function<void()>>, k_ButtonCount> buttons = {{
 	    {"HELP_TEXT_DIALOG_CONTINUEGAME", [this] { Settle(Action::Continue); }},
 	    {"HELP_TEXT_DIALOG_ADDITION_169", [this] { Settle(Action::StartSkirmish); }},
-	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(Action::JoinOnline); }},
+	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline); }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
 	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},
 	}};
 	for (size_t i = 0; i < k_ButtonCount; ++i)
 	{
 		_buttonLabels.at(i) = texts.Get(buttons.at(i).first);
-		page.Add<Button>(GetButtonRect(i), _buttonLabels.at(i)).onClick = buttons.at(i).second;
+		_mainButtons.at(i) = &page.Add<Button>(GetButtonRect(i), _buttonLabels.at(i));
+		_mainButtons.at(i)->onClick = buttons.at(i).second;
 	}
 }
 
@@ -378,7 +390,15 @@ void GameMenu::BuildOptions(const TextDatabase& texts)
 	// Inside the temple there is no Quit arrow: the player leaves the options by Back or the World Room tab
 	_optionsQuit = &page.Add<BigButton>(_font, glm::ivec2(730, 530), k_BackSize,
 	                                    std::u16string(texts.Get("HELP_TEXT_DIALOG_QUIT")), LabelSide::Left, Look::RightArrow);
-	_optionsQuit->onClick = [this] { Ask(_quitGameQuestion, Action::Quit); };
+	// In a network game the arrow asks to leave the game, with the end box's question
+	_optionsQuit->onClick = [this] {
+		if (_networkGame)
+		{
+			Settle(Action::AskToLeave);
+			return;
+		}
+		Ask(_quitGameQuestion, Action::Quit);
+	};
 }
 
 void GameMenu::BuildPlayers(const TextDatabase& texts)
@@ -997,7 +1017,43 @@ void GameMenu::Settle(Action action)
 
 Dialog& GameMenu::CurrentDialog() const
 {
-	return _page == Page::Statistics ? _statistics->GetDialog() : *_pages.at(static_cast<size_t>(_page));
+	if (_page == Page::Statistics)
+	{
+		return _statistics->GetDialog();
+	}
+	return _page == Page::Conditions ? _conditions->GetDialog() : *_pages.at(static_cast<size_t>(_page));
+}
+
+void GameMenu::OpenConditions()
+{
+	if (!_networkGame)
+	{
+		return;
+	}
+	_conditions->Open(_conditionsSource ? _conditionsSource() : conditions_box::Figures {}, false);
+	ShowPage(Page::Conditions);
+}
+
+void GameMenu::SetNetworkGame(bool networkGame)
+{
+	_networkGame = networkGame;
+	auto& page = *_pages.at(static_cast<size_t>(Page::Main));
+	page.SetTabLabel(2, networkGame ? _multiplayerTab : std::u16string());
+	_mainButtons.at(2)->label = networkGame ? _exitOnlineLabel : _buttonLabels.at(2);
+	// Start Skirmish Game does not show in a network game. The buttons that show are placed from the top, each a step
+	// lower; in a network game they are bigger and further apart.
+	_mainButtons.at(1)->visible = !networkGame;
+	const auto height = networkGame ? k_FewerButtonsHeight : k_ButtonHeight;
+	const auto spacing = networkGame ? k_FewerButtonsSpacing : k_ButtonSpacing;
+	auto top = networkGame ? k_FewerButtonsTop : k_FirstButtonTop;
+	for (auto* button : _mainButtons)
+	{
+		button->rect = {.min = {k_ButtonLeft, top}, .max = {k_ButtonLeft + k_ButtonWidth, top + height}};
+		if (button->visible)
+		{
+			top += spacing;
+		}
+	}
 }
 
 void GameMenu::OpenStatistics()
