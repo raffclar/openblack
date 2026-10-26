@@ -50,6 +50,7 @@ vcpkg_extract_source_archive(
     webgpu-min-max-blend-factors.patch
     webgpu-occlusion-one-map.patch
     webgpu-one-submit-per-frame.patch
+    webgpu-pipeline-by-content.patch
     essl-no-inline.patch
 )
 
