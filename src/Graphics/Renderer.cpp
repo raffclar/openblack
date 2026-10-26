@@ -1406,7 +1406,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				bindings.diffuse = UINT16_MAX;
 				if (subMeshTexture != nullptr)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *subMeshTexture);
+					setSampler(MeshUniform::Diffuse, 0, *subMeshTexture);
 					bindings.diffuse = toBgfx(*subMeshTexture).idx;
 				}
 				else if (desc.skinTexture != nullptr && prim.skinID != 0xFFFFFFFF)
@@ -1418,7 +1418,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				{
 					const auto diffuse =
 					    desc.useMaterialAddressing && !material_stages::TextureRepeats(prim.materialFlags, false)
-					        ? program->FindUniform("s_diffuse")
+					        ? uniforms[static_cast<size_t>(MeshUniform::Diffuse)]
 					        : std::nullopt;
 					if (diffuse.has_value())
 					{
@@ -1432,7 +1432,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else if (!desc.isSky && _whiteTexture)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *_whiteTexture);
+					setSampler(MeshUniform::Diffuse, 0, *_whiteTexture);
 					bindings.diffuse = toBgfx(*_whiteTexture).idx;
 				}
 			}
@@ -1476,17 +1476,17 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
 				if (before)
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosityBefore());
-					program->SetTextureSampler("s_landColour", 8, *_before.colour);
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosityBefore());
+					setSampler(MeshUniform::LandColour, 8, *_before.colour);
 				}
 				else
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-					program->SetTextureSampler("s_landColour", 8, GetLandColour());
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosity());
+					setSampler(MeshUniform::LandColour, 8, GetLandColour());
 				}
-				program->SetTextureSampler(
-				    "s_landLight", 7,
-				    desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight : GetLandLightTexture());
+				setSampler(MeshUniform::LandLightTexture, 7,
+				           desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight
+				                                                                        : GetLandLightTexture());
 				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
 			if (has(MeshUniform::Haze))
@@ -6330,19 +6330,24 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 			};
 			if (!blocks.empty())
 			{
-				// The land's pass keeps the order the blocks come in, so they come the nearest first
-				std::vector<size_t> order(blocks.size());
-				std::iota(order.begin(), order.end(), size_t {0});
-				std::ranges::stable_sort(order, {}, [&](size_t index) { return blockDepth(blocks[index]); });
-				setTerrainUniforms();
 				// Only the blocks in view of the scene's own camera are drawn, also when they are mirrored
 				const bool culled = desc.viewId == RenderPass::Main || desc.viewId == RenderPass::Reflection;
-				for (const auto index : order)
+				// The land's pass keeps the order the blocks come in, so they come the nearest first. Each block's depth is
+				// found one time, and only the blocks that are drawn are put in order.
+				std::vector<std::pair<decltype(blockDepth(blocks.front())), size_t>> order;
+				order.reserve(blocks.size());
+				for (size_t index = 0; index < blocks.size(); ++index)
 				{
 					if (!culled || index >= _landDetail.inView.size() || _landDetail.inView[index])
 					{
-						submitBlock(index);
+						order.emplace_back(blockDepth(blocks[index]), index);
 					}
+				}
+				std::ranges::stable_sort(order, {}, [](const auto& entry) { return entry.first; });
+				setTerrainUniforms();
+				for (const auto& entry : order)
+				{
+					submitBlock(entry.second);
 				}
 			}
 			_shaderManager->DiscardBindings();

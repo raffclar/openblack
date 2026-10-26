@@ -96,6 +96,8 @@ private:
 	ProgramHandle _program;
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
+	/// The uniform of each sampler, at the same index
+	std::vector<UniformHandle> _samplerUniforms;
 	SamplerDefaults& _samplerDefaults;
 	DescriptorSetTally* _tally;
 	DrawWindow* _window;

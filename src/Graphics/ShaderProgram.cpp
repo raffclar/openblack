@@ -63,6 +63,12 @@ ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader,
 	}
 	// A sampler the backend's build of the shader doesn't have can't be bound, nor needs to be
 	std::erase_if(_samplers, [this](const shader_samplers::Sampler& sampler) { return !_uniforms.Contains(sampler.name); });
+	// Each draw binds the defaults by handle, so the names are looked up here one time
+	_samplerUniforms.reserve(_samplers.size());
+	for (const auto& sampler : _samplers)
+	{
+		_samplerUniforms.push_back(*_uniforms.Find(sampler.name));
+	}
 	for ([[maybe_unused]] const auto& sampler : _samplers)
 	{
 		SPDLOG_LOGGER_DEBUG(spdlog::get("graphics"), "{} Shader samples {} at stage {} (kind {})", name, sampler.name,
@@ -133,13 +139,14 @@ void ShaderProgram::SetUniformValue(UniformHandle uniform, const void* value) co
 
 void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags) const
 {
-	for (const auto& sampler : _samplers)
+	for (size_t index = 0; index < _samplers.size(); ++index)
 	{
+		const auto& sampler = _samplers[index];
 		if (!_samplerDefaults.IsSet(sampler.stage))
 		{
 			const auto texture = _samplerDefaults.Texture(shader_samplers::DefaultTextureFor(sampler.dimension));
 			// Kept for the next draw as well when this one keeps its bindings
-			Bind(sampler.stage, *_uniforms.Find(sampler.name), texture);
+			Bind(sampler.stage, _samplerUniforms[index], texture);
 		}
 	}
 	const bool dropsBindings = (discardFlags & BGFX_DISCARD_BINDINGS) != 0;
