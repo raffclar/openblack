@@ -547,9 +547,9 @@ def main():
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
     options = parser.parse_args()
-    if not 1.0 <= options.frame_ms <= 1000.0:
+    if options.frame_ms != 0 and not 1.0 <= options.frame_ms <= 1000.0:
         # The game does not start with another frame time, and the run would only say that the first client did not join
-        parser.error("--frame-ms takes 1 to 1000 milliseconds, as the game's --sim-frame-ms")
+        parser.error("--frame-ms takes 0 (the real frame time of the clients) or 1 to 1000 milliseconds, as the game's --sim-frame-ms")
     options.hash_parts = options.hash_parts or options.hash_fields
     client_inputs = [options.input, options.input2, options.input3, options.input4]
     client_cameras = [options.camera1, options.camera2, options.camera3, options.camera4]
