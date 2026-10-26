@@ -974,6 +974,10 @@ struct Command
 		/// A press of the Join Online Game button of the browser page: the game opens the multiplayer front end at the
 		/// next frame that it may open in, also while a cut scene has the cinema bars in. Needs no creature.
 		JoinOnline,
+		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
+		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
+		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
+		EndBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
