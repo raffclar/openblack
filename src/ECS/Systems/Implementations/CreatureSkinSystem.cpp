@@ -243,20 +243,32 @@ void CreatureSkinSystem::Update()
 		    PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
 		                   MasksOf(registry, creature.owner), marks, art);
 	    });
-	// A copy with a skin of its own, as the Creature Cave's copy has, is painted at its own times
-	registry.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
-	    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
-		    const auto* creature = registry.TryGet<const Creature>(copy.creature);
-		    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
-		    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
-		    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
-		    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
-		    {
-			    return;
-		    }
-		    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
-		                   MasksOf(registry, creature->owner), *marks, art);
-	    });
+	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
+	// creature room is a thing of the temple's rooms.
+	const auto paintCopies = [&](Registry& copies) {
+		copies.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
+		    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
+			    if (!registry.Valid(copy.creature))
+			    {
+				    return;
+			    }
+			    const auto* creature = registry.TryGet<const Creature>(copy.creature);
+			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
+			    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
+			    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
+			    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
+			    {
+				    return;
+			    }
+			    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body),
+			                   tattoos.revision, MasksOf(registry, creature->owner), *marks, art);
+		    });
+	};
+	paintCopies(registry);
+	if (Locator::temple::has_value())
+	{
+		paintCopies(Locator::temple::value().GetRooms());
+	}
 }
 
 void CreatureSkinSystem::ProcessTurn()

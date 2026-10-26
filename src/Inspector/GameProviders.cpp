@@ -3075,9 +3075,12 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			                                {"creature_shown", cave.IsCreatureShown()},
 			                                {"copy", Id(cave.GetCaveCreature())}};
 			              // The copy of the creature by the cave's fire, and what it is doing
-			              const auto& registry = Locator::entitiesRegistry::value();
-			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              const auto copy = cave.GetCaveCreature();
+			              if (copy.has_value() && Locator::temple::has_value() &&
+			                  Locator::temple::value().GetRooms().Valid(*copy))
 			              {
+				              // The copy is a thing of the temple's rooms
+				              const auto& registry = Locator::temple::value().GetRooms();
 				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
 				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
 				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
