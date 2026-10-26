@@ -2112,6 +2112,20 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::BringCreature:
+	{
+		if (!Locator::filesystem::has_value())
+		{
+			return "no files";
+		}
+		// The game's own mind file takes the place of the file that the god's player sends before the start
+		auto& fileSystem = Locator::filesystem::value();
+		const auto path = fileSystem.GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+		const auto bytes = fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+		const auto brought = ecs::creature_from_file::Bring(command.player, bytes);
+		return brought.creature.has_value() ? fmt::format("creature {}", entt::to_integral(*brought.creature))
+		                                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal));
+	}
 	case Kind::RemoveTeleportStone:
 	{
 		if (!Locator::teleportSystem::has_value())
@@ -2835,7 +2849,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
 	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand)
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::BringCreature)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3613,6 +3628,7 @@ void Runner::Give(const Command& command)
 	case Kind::EndBox:
 	case Kind::OtherGodHand:
 	case Kind::JoinOnline:
+	case Kind::BringCreature:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
