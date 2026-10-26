@@ -563,6 +563,23 @@ TEST(TestbedScenarios, TimelineGivesCommandsAsTheirDelaysPass)
 	EXPECT_TRUE(Advance(timeline, commands, std::nullopt, 10.0f, k_AlwaysFree).empty());
 }
 
+TEST(TestbedScenarios, TheStepsOfTheTurnsReachADelayAtItsTurn)
+{
+	// The turns move the timeline on by a tenth of a second each. A delay of 7 seconds is due at the 70th turn, although
+	// the steps add up with a small error.
+	for (const float delay : {0.3f, 0.7f, 2.0f, 5.0f, 7.0f, 11.1f})
+	{
+		const std::vector<Command> commands {Wait(0, delay, false)};
+		Timeline timeline;
+		const auto turns = static_cast<int>(std::lround(delay * 10.0f));
+		for (int turn = 1; turn < turns; ++turn)
+		{
+			EXPECT_TRUE(Advance(timeline, commands, std::nullopt, 0.1f, k_AlwaysFree).empty()) << delay << " " << turn;
+		}
+		EXPECT_EQ(Advance(timeline, commands, std::nullopt, 0.1f, k_AlwaysFree), (std::vector<size_t> {0})) << delay;
+	}
+}
+
 TEST(TestbedScenarios, TimelineWaitsForTheCreatureToBeFree)
 {
 	const std::vector<Command> commands {Wait(0, 0.0f, false), Wait(1, 1.0f, true)};

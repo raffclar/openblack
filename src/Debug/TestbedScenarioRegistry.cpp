@@ -65,6 +65,9 @@ constexpr float k_MaxOffset = 2400.0f;
 constexpr float k_MaxOrderOffset = 2.0f * k_MaxOffset;
 /// A command that waits for its creature to be free first gives the last command this long to get it going
 constexpr float k_SettleSeconds = 0.5f;
+/// The turns move a timeline on in steps of a tenth of a second, and these steps add up with a small error. A delay that
+/// the steps reach to less than this is due.
+constexpr float k_DueTolerance = 0.0001f;
 /// The last stage of growing up, and how many skills, miracles and deeds to copy the game's tables have
 constexpr size_t k_LastPhase = 13;
 constexpr size_t k_Skills = 6;
@@ -11337,7 +11340,7 @@ std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<con
 		const auto& command = commands[timeline.next];
 		if (command.waitUntilFree && !timeline.freed)
 		{
-			if (timeline.sinceGiven < k_SettleSeconds || !isFree(command))
+			if (timeline.sinceGiven + k_DueTolerance < k_SettleSeconds || !isFree(command))
 			{
 				// Its delay counts from when the creature is free
 				timeline.seconds = 0.0f;
@@ -11345,7 +11348,7 @@ std::vector<size_t> testbed_scenarios::Advance(Timeline& timeline, std::span<con
 			}
 			timeline.freed = true;
 		}
-		if (timeline.seconds < command.delaySeconds)
+		if (timeline.seconds + k_DueTolerance < command.delaySeconds)
 		{
 			break;
 		}

@@ -4006,7 +4006,8 @@ void Runner::PlayTurn(float seconds)
 		Log("Its creatures are gone");
 		return;
 	}
-	_seconds += seconds;
+	// The time keeps to whole milliseconds, so that the steps of a turn add up to the times that the scenario gives
+	_seconds = std::round((_seconds + seconds) * 1000.0f) / 1000.0f;
 	LogMiracles();
 	SpawnCrowd();
 	UpdateParticles(seconds);
