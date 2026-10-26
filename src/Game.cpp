@@ -4688,7 +4688,7 @@ void Game::MakeSymbolSheet()
 
 void Game::StartCameraAtTemple()
 {
-	_shortcutKeys.StartAtTemple(OwnPlayer());
+	_shortcutKeys.StartAtTemple(LocalInputPlayer());
 }
 
 void Game::TestbedLoaded()
