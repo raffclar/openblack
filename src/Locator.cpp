@@ -120,6 +120,7 @@
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -253,6 +254,7 @@ using openblack::ecs::systems::FixedOutlineSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
+using openblack::ecs::systems::GameEndSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::GuidanceSystem;
@@ -443,8 +445,24 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	// The browser cannot send headers in the handshake
 	constexpr auto k_PushAuth = online::PushAuth::Subprotocol;
 #else
-	Locator::httpClient::emplace<online::CurlHttpClient>();
-	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	// Tests on this computer only: a lobby on a loopback address with a certificate of a test authority
+	const auto testAuthorities = Locator::config::has_value() ? Locator::config::value().lobbyTestAuthorities : std::nullopt;
+	const bool loopbackLobby = Locator::config::has_value() && Locator::config::value().lobbyOrigin.has_value() &&
+	                           online::http_policy::IsLoopbackAddress(*Locator::config::value().lobbyOrigin);
+	if (testAuthorities.has_value() && loopbackLobby)
+	{
+		Locator::httpClient::emplace<online::CurlHttpClient>(std::nullopt, std::filesystem::path(*testAuthorities));
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>(*testAuthorities);
+	}
+	else
+	{
+		if (testAuthorities.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a lobby on a loopback address");
+		}
+		Locator::httpClient::emplace<online::CurlHttpClient>();
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	}
 	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
 	Locator::networkGame::emplace<NetworkGameSystem>(
@@ -456,6 +474,18 @@ void InitializeOnline(const player_profiles::Store& profiles)
 #else
 		    return std::make_unique<online::CurlWebSocketClient>(authorities);
 #endif
+	    },
+	    [creatureMinds = profiles.creatureMinds]() -> std::vector<uint8_t> {
+		    // The creature of the player's profile goes to the other players before a network game starts
+		    const auto file =
+		        Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().CreatureFile() : std::nullopt;
+		    if (!file.has_value() || !creatureMinds.has_value())
+		    {
+			    return {};
+		    }
+		    auto& fileSystem = Locator::filesystem::value();
+		    const auto path = *creatureMinds / *file;
+		    return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
 	    });
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),
@@ -523,6 +553,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
+	Locator::gameEndSystem::emplace<GameEndSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -623,7 +654,10 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 	Locator::gameActionSystem::emplace<GameActionMap>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	InitializeOnline(profiles);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+#endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
 
@@ -828,6 +862,7 @@ void openblack::ShutDownServices()
 	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
+	Locator::gameEndSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();

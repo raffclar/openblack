@@ -12,6 +12,8 @@
 #include "VillagerAfterDeath.h"
 
 #include <algorithm>
+#include <chrono>
+#include <optional>
 #include <vector>
 
 #include <PackFile.h>
@@ -353,21 +355,25 @@ void villager_after_death::MoveSouls(uint32_t elapsedMs)
 	}
 	const auto& animations = Locator::resources::value().GetAnimations();
 	const auto& meshes = Locator::resources::value().GetMeshes();
-	std::vector<entt::entity> gone;
-	registry.Each<RisingSoul>([&](entt::entity soul, RisingSoul& rising) {
-		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(rising.clip));
-		if (!animations.Contains(clipId) || !meshes.Contains(rising.mesh))
+	registry.Each<RisingSoul>([&](RisingSoul& rising) {
+		if (rising.shownOut)
 		{
-			gone.push_back(soul);
+			return;
+		}
+		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(rising.clip));
+		const bool drawable = animations.Contains(clipId) && meshes.Contains(rising.mesh);
+		if (drawable)
+		{
+			rising.timeMs += elapsedMs;
+		}
+		if (!drawable || villager_death::SoulGone(rising.timeMs, animations.Handle(clipId)->GetPlayTime()))
+		{
+			// It is not drawn again. The turns remove it.
+			rising.shownOut = true;
+			rising.bones.clear();
 			return;
 		}
 		const auto clip = animations.Handle(clipId);
-		rising.timeMs += elapsedMs;
-		if (villager_death::SoulGone(rising.timeMs, clip->GetPlayTime()))
-		{
-			gone.push_back(soul);
-			return;
-		}
 		rising.alpha = villager_death::SoulAlphaAt(rising.timeMs, clip->GetPlayTime());
 		const auto model = meshes.Handle(rising.mesh);
 		const auto& frames = clip->GetFrames();
@@ -382,6 +388,27 @@ void villager_after_death::MoveSouls(uint32_t elapsedMs)
 		}
 		rising.bones.resize(parents.size());
 		animals::PoseBetween(frames[span.from].bones, frames[span.to].bones, span.t, parents, rising.bones);
+	});
+}
+
+void villager_after_death::AgeSouls()
+{
+	auto& registry = Entities();
+	constexpr auto k_TurnMs =
+	    static_cast<uint32_t>(std::chrono::milliseconds(systems::TimeSystemInterface::k_TurnDuration).count());
+	// The turns go by the longer of the two clips of a soul. The pick of the clip draws from the random numbers that the
+	// frames draw too, so only the draw reads the clip.
+	const auto heavenMs = villager_clips::ClipMilliseconds(AnimId::PDead1GotoHeaven);
+	const auto hellMs = villager_clips::ClipMilliseconds(AnimId::PDead1GotoHell);
+	const auto clipMs = heavenMs.has_value() && hellMs.has_value() ? std::optional(std::max(*heavenMs, *hellMs)) : std::nullopt;
+	std::vector<entt::entity> gone;
+	registry.Each<RisingSoul>([&gone, clipMs](entt::entity soul, RisingSoul& rising) {
+		++rising.turns;
+		// With no clip a soul goes at once
+		if (!clipMs.has_value() || villager_death::SoulRemoved(rising.turns, k_TurnMs, static_cast<uint32_t>(*clipMs)))
+		{
+			gone.push_back(soul);
+		}
 	});
 	for (const auto soul : gone)
 	{

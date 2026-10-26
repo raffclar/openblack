@@ -9,10 +9,12 @@
 
 #include <limits>
 #include <type_traits>
+#include <utility>
 
 #include <nlohmann/json.hpp>
 
 #include "GameSocket.h"
+#include "JoinTicket.h"
 
 namespace openblack::game_socket
 {
@@ -30,6 +32,14 @@ constexpr std::string_view k_Refused = "room.refused";
 constexpr std::string_view k_Start = "game.start";
 constexpr std::string_view k_Resumed = "room.resumed";
 constexpr std::string_view k_PlayerState = "player.state";
+constexpr std::string_view k_StartQuery = "start.query";
+constexpr std::string_view k_StartReply = "start.reply";
+constexpr std::string_view k_StartCancel = "start.cancel";
+constexpr std::string_view k_StartStop = "start.stop";
+constexpr std::string_view k_StartTransfer = "start.transfer";
+constexpr std::string_view k_StartCreature = "start.creature";
+constexpr std::string_view k_StopRequest = "game.stop_request";
+constexpr std::string_view k_GameStop = "game.stop";
 
 /// The most god slots that a frame can name
 constexpr uint64_t k_MostSlots = 32;
@@ -96,6 +106,28 @@ bool ReadBool(const Json& object, std::string_view key, bool& out, bool required
 	return true;
 }
 
+/// Reads an alignment, a number from -1 to 1 that the frame holds as a float. A frame with no alignment gives 0.
+bool ReadAlignment(const Json& object, std::string_view key, float& out)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		out = 0.0f;
+		return true;
+	}
+	if (!member->is_number())
+	{
+		return false;
+	}
+	const auto value = member->get<double>();
+	if (!(value >= -1.0 && value <= 1.0))
+	{
+		return false;
+	}
+	out = static_cast<float>(value);
+	return true;
+}
+
 constexpr std::string_view StateName(PlayerState::State state) noexcept
 {
 	switch (state)
@@ -122,13 +154,67 @@ std::optional<PlayerState::State> StateFrom(std::string_view name) noexcept
 	return std::nullopt;
 }
 
+/// Reads the members of a start: the land, the seed and the start of the server's world
+bool ReadStart(const Json& object, Start& start)
+{
+	constexpr auto k_MostNumber = std::numeric_limits<uint32_t>::max();
+	uint64_t seed = 0;
+	uint64_t turn = 0;
+	if (!ReadString(object, "land", start.land, false) || !ReadBool(object, "testbed", start.testbed, false) ||
+	    !ReadUnsigned(object, "seed", k_MostNumber, seed) || !ReadUnsigned(object, "turn", k_MostNumber, turn, false) ||
+	    !ReadString(object, "opening", start.opening, false) || !ReadBool(object, "gods_ring_map", start.godsRingMap, false))
+	{
+		return false;
+	}
+	start.seed = static_cast<uint32_t>(seed);
+	start.turn = static_cast<uint32_t>(turn);
+	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
+	{
+		if (!names->is_array() || names->size() > k_MostSlots)
+		{
+			return false;
+		}
+		for (const auto& name : *names)
+		{
+			if (!name.is_string())
+			{
+				return false;
+			}
+			start.names.push_back(name.get<std::string>());
+		}
+	}
+	return true;
+}
+
+/// Writes the members of a start. The frame leaves out an empty opening and a false map for 32 gods.
+void WriteStart(const Start& start, Json& object)
+{
+	object["land"] = start.land;
+	object["testbed"] = start.testbed;
+	object["seed"] = start.seed;
+	object["turn"] = start.turn;
+	if (!start.opening.empty())
+	{
+		object["opening"] = start.opening;
+	}
+	if (start.godsRingMap)
+	{
+		object["gods_ring_map"] = true;
+	}
+	if (!start.names.empty())
+	{
+		object["names"] = start.names;
+	}
+}
+
 std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 {
 	constexpr auto k_MostTurn = std::numeric_limits<uint32_t>::max();
 	if (type == k_Join)
 	{
 		Join join;
-		if (!ReadString(object, "ticket", join.ticket, false) || !ReadString(object, "game_password", join.gamePassword, false))
+		if (!ReadString(object, "ticket", join.ticket, false) ||
+		    !ReadString(object, "game_password", join.gamePassword, false) || !ReadString(object, "name", join.name, false))
 		{
 			return std::nullopt;
 		}
@@ -189,6 +275,15 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 		{
 			return std::nullopt;
 		}
+		if (const auto* startMember = Member(object, "start"); startMember != nullptr && !startMember->is_null())
+		{
+			Start start;
+			if (!startMember->is_object() || !ReadStart(*startMember, start))
+			{
+				return std::nullopt;
+			}
+			joined.start = std::move(start);
+		}
 		return joined;
 	}
 	if (type == k_Refused)
@@ -203,15 +298,10 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 	if (type == k_Start)
 	{
 		Start start;
-		uint64_t seed = 0;
-		uint64_t turn = 0;
-		if (!ReadString(object, "land", start.land, false) || !ReadBool(object, "testbed", start.testbed, false) ||
-		    !ReadUnsigned(object, "seed", k_MostTurn, seed) || !ReadUnsigned(object, "turn", k_MostTurn, turn, false))
+		if (!ReadStart(object, start))
 		{
 			return std::nullopt;
 		}
-		start.seed = static_cast<uint32_t>(seed);
-		start.turn = static_cast<uint32_t>(turn);
 		return start;
 	}
 	if (type == k_Resumed)
@@ -238,6 +328,85 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			return std::nullopt;
 		}
 		return PlayerState {.slot = static_cast<uint8_t>(slot), .state = *known};
+	}
+	if (type == k_StartQuery)
+	{
+		StartQuery query;
+		if (!ReadString(object, "land", query.land, false) || !ReadBool(object, "testbed", query.testbed, false) ||
+		    !ReadUnsigned(object, "checksum", std::numeric_limits<uint64_t>::max(), query.checksum))
+		{
+			return std::nullopt;
+		}
+		return query;
+	}
+	if (type == k_StartReply)
+	{
+		StartReply reply;
+		if (!ReadBool(object, "have", reply.have) ||
+		    !ReadUnsigned(object, "checksum", std::numeric_limits<uint64_t>::max(), reply.checksum, false))
+		{
+			return std::nullopt;
+		}
+		return reply;
+	}
+	if (type == k_StartCancel)
+	{
+		return StartCancel {};
+	}
+	if (type == k_StartStop)
+	{
+		return StartStop {};
+	}
+	if (type == k_StartTransfer)
+	{
+		return StartTransfer {};
+	}
+	if (type == k_StartCreature)
+	{
+		StartCreature creature;
+		std::string file;
+		if (!ReadString(object, "file", file, false))
+		{
+			return std::nullopt;
+		}
+		// Base64 holds 3 bytes in 4 characters: a longer text is a file that is too large
+		if (file.size() > (k_MostCreatureFileBytes + 2) / 3 * 4)
+		{
+			return std::nullopt;
+		}
+		auto bytes = join_ticket::DecodeBase64Url(file);
+		if (!bytes.has_value() || bytes->size() > k_MostCreatureFileBytes)
+		{
+			return std::nullopt;
+		}
+		creature.file = std::move(*bytes);
+		if (const auto* slotMember = Member(object, "slot"); slotMember != nullptr && !slotMember->is_null())
+		{
+			uint64_t slot = 0;
+			if (!ReadUnsigned(object, "slot", k_MostSlots - 1, slot))
+			{
+				return std::nullopt;
+			}
+			creature.slot = static_cast<uint8_t>(slot);
+		}
+		if (!ReadAlignment(object, "alignment", creature.alignment))
+		{
+			return std::nullopt;
+		}
+		return creature;
+	}
+	if (type == k_StopRequest)
+	{
+		return StopRequest {};
+	}
+	if (type == k_GameStop)
+	{
+		uint64_t turn = 0;
+		if (!ReadUnsigned(object, "turn", k_MostTurn, turn))
+		{
+			return std::nullopt;
+		}
+		return GameStop {.turn = static_cast<uint32_t>(turn)};
 	}
 	return std::nullopt;
 }
@@ -279,6 +448,10 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["game_password"] = value.gamePassword;
 			    }
+			    if (!value.name.empty())
+			    {
+				    object["name"] = value.name;
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resume>)
 		    {
@@ -304,6 +477,12 @@ std::string ToJson(const Frame& frame)
 			    {
 				    object["name"] = value.name;
 			    }
+			    if (value.start.has_value())
+			    {
+				    Json start = Json::object();
+				    WriteStart(*value.start, start);
+				    object["start"] = std::move(start);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, Refused>)
 		    {
@@ -311,11 +490,8 @@ std::string ToJson(const Frame& frame)
 		    }
 		    else if constexpr (std::is_same_v<Kind, Start>)
 		    {
-			    object = Json {{"type", k_Start},
-			                   {"land", value.land},
-			                   {"testbed", value.testbed},
-			                   {"seed", value.seed},
-			                   {"turn", value.turn}};
+			    object = Json {{"type", k_Start}};
+			    WriteStart(value, object);
 		    }
 		    else if constexpr (std::is_same_v<Kind, Resumed>)
 		    {
@@ -325,9 +501,49 @@ std::string ToJson(const Frame& frame)
 				    object["world"] = true;
 			    }
 		    }
-		    else
+		    else if constexpr (std::is_same_v<Kind, PlayerState>)
 		    {
 			    object = Json {{"type", k_PlayerState}, {"slot", value.slot}, {"state", StateName(value.state)}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartQuery>)
+		    {
+			    object = Json {
+			        {"type", k_StartQuery}, {"land", value.land}, {"testbed", value.testbed}, {"checksum", value.checksum}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartReply>)
+		    {
+			    object = Json {{"type", k_StartReply}, {"have", value.have}, {"checksum", value.checksum}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartCancel>)
+		    {
+			    object = Json {{"type", k_StartCancel}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartStop>)
+		    {
+			    object = Json {{"type", k_StartStop}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StartTransfer>)
+		    {
+			    object = Json {{"type", k_StartTransfer}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, StopRequest>)
+		    {
+			    object = Json {{"type", k_StopRequest}};
+		    }
+		    else if constexpr (std::is_same_v<Kind, GameStop>)
+		    {
+			    object = Json {{"type", k_GameStop}, {"turn", value.turn}};
+		    }
+		    else
+		    {
+			    // The alignment goes as the double of the float, which reads back to the same float
+			    object = Json {{"type", k_StartCreature},
+			                   {"file", join_ticket::EncodeBase64Url(value.file)},
+			                   {"alignment", static_cast<double>(value.alignment)}};
+			    if (value.slot.has_value())
+			    {
+				    object["slot"] = *value.slot;
+			    }
 		    }
 		    return Dump(object);
 	    },

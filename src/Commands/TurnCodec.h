@@ -36,12 +36,12 @@
 ///   the frame. The parts of a turn, in order, are the server's world state at the start of that turn.
 /// - Command: tag (u8), then the fields of the command in the order of its structure. A thing is its entity number
 ///   (u32). A place or a velocity is three floats. A let-go has the velocity, then the spin, the origin and the
-///   angles of the start.
+///   angles of the start. A seed or a leash is its number (u8).
 namespace openblack::turn_codec
 {
 
 /// The version of the format. A change of the format gives a new version.
-inline constexpr uint8_t k_Version = 5;
+inline constexpr uint8_t k_Version = 12;
 /// The largest frame that a computer sends or accepts
 inline constexpr size_t k_MostFrameBytes = 64 * 1024;
 /// The most commands in one block, as a client sends them
@@ -77,7 +77,21 @@ enum class CommandTag : uint8_t
 	TotemShare = 15,
 	CreatureBruise = 16,
 	PlayerLeft = 17,
-	PlayerJoined = 23,
+	FightGround = 18,
+	FightMove = 19,
+	FightCharge = 20,
+	CreatureReaction = 21,
+	HandClick = 22,
+	SeedGesture = 23,
+	HandPick = 24,
+	PlayerJoined = 25,
+	MiracleRequest = 26,
+	MiracleRepeat = 27,
+	HandCast = 28,
+	HandCastUnlock = 29,
+	LeashPick = 30,
+	HandShakeOff = 31,
+	GripDust = 32,
 };
 
 /// The sizes of the parts of the frames, in bytes

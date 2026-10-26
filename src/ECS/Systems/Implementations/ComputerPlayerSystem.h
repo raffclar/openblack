@@ -39,6 +39,8 @@ public:
 	[[nodiscard]] bool Ready(PlayerNames player) override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
+	void WaitForHumans() override;
+	void HumansJoined(std::span<const PlayerNames> humans) override;
 
 private:
 	/// The computer mind of the player, made with the player when the land has none

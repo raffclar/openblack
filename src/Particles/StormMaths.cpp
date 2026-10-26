@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 
 using namespace openblack::particles;
@@ -140,7 +141,7 @@ float storm::CloudAngularSpeed(float lifeFraction, float maxAngularSpeed, float 
 
 float storm::CloudDistance(float lifeFraction, float radius, float collectionAge, float angle, float radiusScale)
 {
-	const float wobble = std::cos(collectionAge * k_DistanceWobbleRate + angle) * k_DistanceWobble + 1.0f;
+	const float wobble = openblack::portable_math::Cos(collectionAge * k_DistanceWobbleRate + angle) * k_DistanceWobble + 1.0f;
 	return (1.0f - lifeFraction) * radius * wobble * radiusScale;
 }
 

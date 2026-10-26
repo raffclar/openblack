@@ -188,7 +188,7 @@ public:
 class ListedGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t range) override
+	uint32_t SyncedRand(uint32_t range, DrawSite /*site*/) override
 	{
 		ranges.push_back(range);
 		if (next < numbers.size())
@@ -197,7 +197,7 @@ public:
 		}
 		return 0;
 	}
-	float GameFloatRand(float) override { return 0.0f; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }
@@ -309,6 +309,40 @@ TEST_F(CreatureFightSystemTest, TheMoveButtonReplacesAndTheActionButtonQueues)
 	// The ground beyond the arena isn't the fight's
 	EXPECT_FALSE(PressGround({45.0f, 0.0f}, fight::Button::Action));
 	EXPECT_EQ(QueueOf(first).Size(), 1u);
+}
+
+TEST_F(CreatureFightSystemTest, TheTurnGivesTheSentMovesToTheSendingPlayersCreature)
+{
+	// A press on the opponent: the blow goes to the sender's creature and waits for its charge
+	fights.DoMove(PlayerNames::PLAYER_ONE, second, fight::AttackMove(fight::Band::High), false);
+	ASSERT_EQ(QueueOf(first).Size(), 1u);
+	EXPECT_FALSE(QueueOf(first).Moves()[0].chargeMs.has_value());
+	// A press on a thing that is gone by the turn gives nothing
+	fights.DoMove(PlayerNames::PLAYER_ONE, entt::null, fight::BlockMove(), false);
+	EXPECT_EQ(QueueOf(first).Size(), 1u);
+	// The other player's press goes to the other player's creature
+	fights.DoMove(PlayerNames::PLAYER_TWO, first, fight::BlockMove(), false);
+	EXPECT_EQ(QueueOf(second).Size(), 1u);
+	EXPECT_EQ(QueueOf(first).Size(), 1u);
+	// The let go charges the blow that waits
+	fights.DoCharge(PlayerNames::PLAYER_ONE, 400.0f);
+	ASSERT_TRUE(QueueOf(first).Moves()[0].chargeMs.has_value());
+	EXPECT_EQ(*QueueOf(first).Moves()[0].chargeMs, 400.0f);
+}
+
+TEST_F(CreatureFightSystemTest, TheTurnStepsFromWhereTheCreatureStandsThen)
+{
+	// The press was made with the creature at its place; by the turn it stands past the point, so it steps back
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<Transform>(first).position = {-5.0f, 0.0f, 0.0f};
+	fights.DoGroundPress(PlayerNames::PLAYER_ONE, first, {-10.0f, 0.0f, 0.0f}, true);
+	registry.Get<Transform>(first).position = {-15.0f, 0.0f, 0.0f};
+	fights.DoGroundPress(PlayerNames::PLAYER_ONE, first, {-10.0f, 0.0f, 0.0f}, false);
+	ASSERT_EQ(QueueOf(first).Size(), 2u);
+	EXPECT_NE(QueueOf(first).Moves()[0].move, QueueOf(first).Moves()[1].move);
+	// Only the sender's own creature steps
+	fights.DoGroundPress(PlayerNames::PLAYER_TWO, first, {-10.0f, 0.0f, 0.0f}, false);
+	EXPECT_EQ(QueueOf(first).Size(), 2u);
 }
 
 TEST_F(CreatureFightSystemTest, ADoubleClickIntoTheArenaShowsTheFightAtOnce)

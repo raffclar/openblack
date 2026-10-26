@@ -128,6 +128,10 @@ CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("196.0,82.0", "200.0,80.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The line of the Island Wars land that makes an anti-influence of 20 m for player one, here 40 m north of the middle
+constexpr std::string_view k_AntiInfluenceRingScript = R"(CREATE_INFLUENCE_RING("0.0,40.0", 0, 20.000000, 202594004)
+)";
+
 } // namespace
 
 void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
@@ -180,5 +184,18 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	    .landScript = k_ComputerGodFarTownScript,
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
+	});
+
+	all.push_back({
+	    .id = "multiplayer.land_anti_influence_ring",
+	    .name = "An anti-influence ring that a land's script makes",
+	    .facet = Facet::Multiplayer,
+	    .description = "The line of the Island Wars land that makes an influence ring. Its last value is not 0, so it is "
+	                   "an anti-influence of 20 m for player one, here 40 m north of the middle, inside the player's "
+	                   "testbed influence.",
+	    .expected = "Inside 20 m of the spot the player has no influence: the hand cannot pick up, drop or cast there, and "
+	                "the influence.at query gives 0 for player one. Just outside it the hand works as before.",
+	    .environment = {.dispenserGrid = false},
+	    .landScript = k_AntiInfluenceRingScript,
 	});
 }

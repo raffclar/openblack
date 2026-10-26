@@ -18,6 +18,8 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Online/StartRules.h"
+
 namespace openblack::online
 {
 namespace
@@ -64,6 +66,9 @@ void NetworkSession::Join(NetworkSessionSettings settings)
 	_end = End::None;
 	_joined.reset();
 	_start.reset();
+	_startEvents.clear();
+	_startCreatures.clear();
+	_startAlignments.clear();
 	_turns.clear();
 	_playout.Reset();
 	_turnsDone = 0;
@@ -76,71 +81,72 @@ void NetworkSession::Open(bool resume)
 	const auto generation = _generation;
 	_stream = std::make_unique<TurnStream>(_sockets, [this] { return static_cast<uint64_t>(_clock()); });
 	_state = resume ? State::Reconnecting : State::Connecting;
-	_stream->Open(_settings.request,
-	              TurnStreamHandlers {
-	                  .opened =
-	                      [this, generation, resume] {
-		                      if (generation != _generation)
-		                      {
-			                      return;
-		                      }
-		                      if (resume && _joined.has_value())
-		                      {
-			                      _stream->SendText(game_socket::ToJson(game_socket::Resume {
-			                          .session = _joined->session, .turn = _turnsDone, .world = _wantsWorld}));
-		                      }
-		                      else
-		                      {
-			                      _stream->SendText(game_socket::ToJson(
-			                          game_socket::Join {.ticket = _settings.ticket, .gamePassword = _settings.gamePassword}));
-			                      _state = State::Joining;
-		                      }
-	                      },
-	                  .turn =
-	                      [this, generation](const turn_codec::TurnBundle& turn) {
-		                      if (generation == _generation)
-		                      {
-			                      Turn(turn);
-		                      }
-	                      },
-	                  .checksum =
-	                      [this, generation](const turn_codec::TurnChecksum& checksum) {
-		                      if (generation == _generation)
-		                      {
-			                      ServerChecksum(checksum);
-		                      }
-	                      },
-	                  .worldPart =
-	                      [this, generation](const turn_codec::WorldPart& part) {
-		                      if (generation == _generation)
-		                      {
-			                      WorldPart(part);
-		                      }
-	                      },
-	                  .text =
-	                      [this, generation](std::string_view text) {
-		                      if (generation == _generation)
-		                      {
-			                      Text(text);
-		                      }
-	                      },
-	                  .closed =
-	                      [this, generation](const WebSocketClosed& closed) {
-		                      if (generation == _generation)
-		                      {
-			                      Closed(closed);
-		                      }
-	                      },
-	              });
+	_stream->Open(
+	    _settings.request,
+	    TurnStreamHandlers {
+	        .opened =
+	            [this, generation, resume] {
+		            if (generation != _generation)
+		            {
+			            return;
+		            }
+		            if (resume && _joined.has_value())
+		            {
+			            _stream->SendText(game_socket::ToJson(
+			                game_socket::Resume {.session = _joined->session, .turn = _turnsDone, .world = _wantsWorld}));
+		            }
+		            else
+		            {
+			            _stream->SendText(game_socket::ToJson(game_socket::Join {
+			                .ticket = _settings.ticket, .gamePassword = _settings.gamePassword, .name = _settings.name}));
+			            _state = State::Joining;
+		            }
+	            },
+	        .turn =
+	            [this, generation](const turn_codec::TurnBundle& turn) {
+		            if (generation == _generation)
+		            {
+			            Turn(turn);
+		            }
+	            },
+	        .checksum =
+	            [this, generation](const turn_codec::TurnChecksum& checksum) {
+		            if (generation == _generation)
+		            {
+			            ServerChecksum(checksum);
+		            }
+	            },
+	        .worldPart =
+	            [this, generation](const turn_codec::WorldPart& part) {
+		            if (generation == _generation)
+		            {
+			            WorldPart(part);
+		            }
+	            },
+	        .text =
+	            [this, generation](std::string_view text) {
+		            if (generation == _generation)
+		            {
+			            Text(text);
+		            }
+	            },
+	        .closed =
+	            [this, generation](const WebSocketClosed& closed) {
+		            if (generation == _generation)
+		            {
+			            Closed(closed);
+		            }
+	            },
+	    });
 	_nextPing = _clock() + k_PingMicroseconds;
 }
 
-void NetworkSession::SetReady()
+void NetworkSession::SetReady(bool ready)
 {
-	_ready = true;
-	if (_state == State::Waiting && _stream)
+	_ready = ready;
+	if (_state == State::Waiting && _stream && _stream->IsOpen())
 	{
-		_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = true}));
+		_stream->SendText(game_socket::ToJson(game_socket::Ready {.ready = ready}));
 	}
 }
 
@@ -151,6 +157,21 @@ void NetworkSession::Leave()
 		_stream->SendText(game_socket::ToJson(game_socket::Leave {}));
 	}
 	FinishWith(End::Left);
+}
+
+void NetworkSession::StopGame()
+{
+	// The request goes once. A request that cannot go now waits for no socket: another computer stops the turns, or the
+	// player leaves.
+	if (_stopAsked || _stoppedAfter.has_value())
+	{
+		return;
+	}
+	if (_stream && _stream->IsOpen())
+	{
+		_stopAsked = true;
+		_stream->SendText(game_socket::ToJson(game_socket::StopRequest {}));
+	}
 }
 
 void NetworkSession::DropStream()
@@ -216,12 +237,120 @@ void NetworkSession::Text(std::string_view text)
 		}
 		SendWaiting();
 	}
+	else if (const auto* stop = std::get_if<game_socket::GameStop>(&*frame))
+	{
+		_stoppedAfter = stop->turn;
+		Log(spdlog::level::info, fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
+	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
 		_refusedReason = refused->reason;
 		Log(spdlog::level::warn, fmt::format("The game server refused the client: {}", refused->reason));
 		FinishWith(End::Refused);
 	}
+	else if (_state == State::Waiting)
+	{
+		StartFrame(*frame);
+	}
+}
+
+void NetworkSession::StartFrame(const game_socket::Frame& frame)
+{
+	if (const auto* query = std::get_if<game_socket::StartQuery>(&frame))
+	{
+		// The server names a land in the Scripts folder of the game, never a path out of it
+		std::optional<std::vector<uint8_t>> landFile;
+		if (!query->testbed && _settings.readLand && start_rules::IsLandPath(query->land))
+		{
+			landFile = _settings.readLand(query->land);
+		}
+		const auto reply = start_rules::Reply(*query, landFile);
+		Log(spdlog::level::info, reply.have ? fmt::format("This computer has the land of the game ({})", query->land)
+		                                    : fmt::format("This computer does not have the land {}", query->land));
+		_stream->SendText(game_socket::ToJson(reply));
+		if (!reply.have)
+		{
+			// The server takes the Ready of a player who cannot play the land
+			_ready = false;
+		}
+		_startEvents.push_back(reply.have ? StartEvent::HasLand : StartEvent::LacksLand);
+	}
+	else if (std::holds_alternative<game_socket::StartTransfer>(frame))
+	{
+		_startCreatures.clear();
+		_startAlignments.clear();
+		// An observer has no god, so it has no creature to send
+		if (_joined.has_value() && _joined->role == game_socket::Role::God)
+		{
+			auto file = _settings.readCreature ? _settings.readCreature() : std::vector<uint8_t> {};
+			if (file.size() > game_socket::k_MostCreatureFileBytes)
+			{
+				Log(spdlog::level::warn, fmt::format("The creature file of {} bytes is too large to send", file.size()));
+				file.clear();
+			}
+			// The god starts the game at the alignment of the player's profile
+			const auto alignment = _settings.readAlignment ? _settings.readAlignment() : 0.0f;
+			Log(spdlog::level::info,
+			    fmt::format("This computer sends a creature file of {} bytes and the alignment {}", file.size(), alignment));
+			_stream->SendText(game_socket::ToJson(
+			    game_socket::StartCreature {.slot = std::nullopt, .file = std::move(file), .alignment = alignment}));
+		}
+		_startEvents.push_back(StartEvent::Transfer);
+	}
+	else if (const auto* creature = std::get_if<game_socket::StartCreature>(&frame))
+	{
+		if (creature->slot.has_value())
+		{
+			_startCreatures[*creature->slot] = creature->file;
+			_startAlignments[*creature->slot] = creature->alignment;
+		}
+	}
+	else if (std::holds_alternative<game_socket::StartCancel>(frame))
+	{
+		Log(spdlog::level::info, "A player does not have the land: the start stops");
+		_startCreatures.clear();
+		_startAlignments.clear();
+		_startEvents.push_back(StartEvent::Cancelled);
+	}
+	else if (std::holds_alternative<game_socket::StartStop>(frame))
+	{
+		Log(spdlog::level::info, "A player left during the start: the start stops");
+		_startCreatures.clear();
+		_startAlignments.clear();
+		_startEvents.push_back(StartEvent::Stopped);
+	}
+}
+
+std::span<const uint8_t> NetworkSession::StartCreatureFile(PlayerNames god) const
+{
+	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
+
+std::optional<float> NetworkSession::StartAlignment(PlayerNames god) const
+{
+	const auto alignment = _startAlignments.find(static_cast<uint8_t>(god));
+	return alignment != _startAlignments.end() ? std::optional<float>(alignment->second) : std::nullopt;
+}
+
+std::optional<PlayerNames> NetworkSession::OwnGod() const
+{
+	if (!_joined.has_value() || _joined->role != game_socket::Role::God || !_joined->slot.has_value())
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*_joined->slot);
+}
+
+std::optional<StartEvent> NetworkSession::TakeStartEvent()
+{
+	if (_startEvents.empty())
+	{
+		return std::nullopt;
+	}
+	const auto event = _startEvents.front();
+	_startEvents.erase(_startEvents.begin());
+	return event;
 }
 
 void NetworkSession::Closed(const WebSocketClosed& closed)
@@ -326,6 +455,10 @@ void NetworkSession::Send(const player_commands::Action& action)
 bool NetworkSession::HasTurn(uint32_t turn) const
 {
 	if ((_state != State::Playing && _state != State::Reconnecting) || _worldTurn.has_value())
+	{
+		return false;
+	}
+	if (_stoppedAfter.has_value() && turn > *_stoppedAfter)
 	{
 		return false;
 	}
@@ -443,6 +576,10 @@ void NetworkSession::Compare(uint32_t turn)
 	{
 		_compares.firstDifferent = _compares.firstDifferent.value_or(turn);
 		Log(spdlog::level::warn, fmt::format("The world parts from the server's world at turn {}", turn));
+		if (_settings.parts)
+		{
+			_settings.parts(turn);
+		}
 		switch (_resync.Differ(turn))
 		{
 		case ResyncRule::Action::Rejoin:

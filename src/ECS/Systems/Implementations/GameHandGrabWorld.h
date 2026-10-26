@@ -85,7 +85,7 @@ public:
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;
 	void TreeUprooted(PlayerNames player, entt::entity tree) override;
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
-	void LeaveRootsHole(entt::entity tree) override;
+	void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) override;
 	void RemakeDrawList(uint32_t frames) override;
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
@@ -94,6 +94,8 @@ public:
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity hand) const override;
 	[[nodiscard]] std::vector<PlayerNames> OtherHandPlayers() const override;
 	void SetPose(entt::entity object, const Pose& pose) override;
+	void DrawPulledPose(entt::entity object, const Pose& pose) override;
+	void ForgetPulledPose(entt::entity object) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;

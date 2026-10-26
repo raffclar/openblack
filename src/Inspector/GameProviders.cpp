@@ -71,6 +71,7 @@
 #include "ECS/Components/CreatureCopy.h"
 #include "ECS/Components/CreatureHelp.h"
 #include "ECS/Components/CreatureLeash.h"
+#include "ECS/Components/CreatureLeashRope.h"
 #include "ECS/Components/CreatureLocomotion.h"
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Dance.h"
@@ -79,6 +80,7 @@
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/GameStanding.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -156,6 +158,7 @@
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -408,6 +411,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"spellIconSystem", "town.spells"},
     LocatorCoverage {"artefactSystem", "living.artefacts"},
     LocatorCoverage {"heartbeatSystem", "players.heartbeat"},
+    LocatorCoverage {"gameEndSystem", "players.game_end"},
     LocatorCoverage {"playerCommandSystem", "players.commands"},
     LocatorCoverage {"syncChecksumSystem", "players.checksum"},
     LocatorCoverage {"landSystem", "level.current"},
@@ -848,6 +852,22 @@ std::unique_ptr<ProviderInterface> LandProvider()
 		                               {"season", weather.GetSeason(turn)},
 		                               {"days_from_start", weather.GetDaysFromStart(turn)}};
 	                  }));
+	provider->Add(Query("storm_clouds", "The clouds of the storms that the frames make and draw: for each, its storm, its "
+	                                    "place in the order that its storm gathered them, where it is drawn, its size and "
+	                                    "its alpha"),
+	              Serve<Locator::cloudSystem>(
+	                  "the clouds", [](const ecs::systems::CloudSystemInterface& clouds, const QueryContext& /*c*/) {
+		                  Json list = Json::array();
+		                  for (const auto& cloud : clouds.GetStormClouds())
+		                  {
+			                  list.push_back({{"storm", entt::to_integral(cloud.storm)},
+			                                  {"index", cloud.index},
+			                                  {"position", Point(cloud.position)},
+			                                  {"size", cloud.mist.size},
+			                                  {"alpha", cloud.mist.colour >> 24u}});
+		                  }
+		                  return Json {{"count", clouds.GetStormClouds().size()}, {"clouds", std::move(list)}};
+	                  }));
 	provider->Add(Query("real_weather", "The real-world weather: the weather that the lobby gave, whether it changes the land, "
 	                                    "its storm and the background weather"),
 	              Serve<Locator::realWeatherSystem>(
@@ -1009,7 +1029,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	provider->Add(
 	    Query("totems",
 	          "The village centres' totems: their town centre and icon, the share they stand at, ease to and are "
-	          "held at, how fast they move, whether the hand grips one, and their see-through second totem",
+	          "held at, how fast they move, whether the hand grips one, and their see-through second totem and "
+	          "whether it shows",
 	          {}, ResultKind::List),
 	    ServeRegistry([](const ecs::Registry& registry, const QueryContext& /*c*/) {
 		    Json items = Json::array();
@@ -1027,6 +1048,7 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 			    item["held"] = totem.held;
 			    item["gripped"] = gripped.has_value() && *gripped == entity;
 			    item["ghost"] = Id(totem.ghost);
+			    item["ghost_shown"] = registry.Valid(totem.ghost) && !registry.AllOf<VillageTotemGhostHidden>(totem.ghost);
 			    items.push_back(std::move(item));
 		    });
 		    return items;
@@ -1350,8 +1372,13 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 		        Json parts = Json::array();
 		        if (const auto* registry = Registry(); registry != nullptr)
 		        {
+			        // Only the things of the film that the frames show now
 			        registry->Each<const BoatFilmPart, const Transform>(
 			            [&parts, registry](entt::entity entity, const BoatFilmPart& part, const Transform& transform) {
+				            if (registry->AllOf<HiddenByState>(entity))
+				            {
+					            return;
+				            }
 				            auto item = Listed(*registry, entity);
 				            item["role"] = static_cast<int32_t>(part.role);
 				            item["index"] = part.index;
@@ -1914,6 +1941,30 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		                  return items;
 	                  }));
 	provider->Add(
+	    Query("game_end", "The end of a skirmish or a network game: whether it is decided, and where each god stands"),
+	    Serve<Locator::gameEndSystem>(
+	        "the end of the game", [](const ecs::systems::GameEndSystemInterface& end, const QueryContext& /*c*/) {
+		        Json gods = Json::array();
+		        if (const auto* registry = Registry(); registry != nullptr)
+		        {
+			        registry->Each<const Player, const ecs::components::GameStanding>(
+			            [&gods](const Player& player, const ecs::components::GameStanding& standing) {
+				            gods.push_back({{"player", static_cast<int>(player.name)},
+				                            {"out", standing.out},
+				                            {"finished", standing.finished},
+				                            {"share", standing.share},
+				                            {"place", standing.place.has_value() ? Json(*standing.place) : Json(nullptr)},
+				                            {"left", standing.reason == ecs::components::OutReason::Left}});
+			            });
+		        }
+		        Json events = Json::array();
+		        for (const auto& event : end.LastEvents())
+		        {
+			        events.push_back({{"god", static_cast<int>(event.god)}, {"kind", static_cast<int>(event.kind)}});
+		        }
+		        return Json {{"decided", end.IsDecided()}, {"gods", gods}, {"last_events", events}};
+	        }));
+	provider->Add(
 	    Query("hand", "This computer's hands: where they are, and what the hand holds or takes"),
 	    Serve<Locator::handSystem>("the hands", [](const ecs::systems::HandSystemInterface& hands, const QueryContext& /*c*/) {
 		    Json result = Json::object();
@@ -2200,7 +2251,7 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 	});
 	provider->Add(
 	    Query("state", "The hand's miracle, the spells and dispensers there are, and the other miracles' "
-	                   "systems: shields, tornadoes, explosions"),
+	                   "systems: shields, tornadoes, explosions and the piles of roots"),
 	    Serve<Locator::magicSystem>("magic", [](const ecs::systems::MagicSystemInterface& magic, const QueryContext& /*c*/) {
 		    Json result = {{"spells", magic.GetSpells().size()},
 		                   {"dispensers", magic.GetDispensers().size()},
@@ -2220,6 +2271,16 @@ std::unique_ptr<ProviderInterface> MagicProvider()
 		    {
 			    result["shaking"] = Locator::explosionSystem::value().IsShaking();
 			    result["ghosts"] = Locator::explosionSystem::value().Ghosts().size();
+			    // The piles of roots that this computer draws, with the milliseconds that stay for each
+			    auto piles = Json::array();
+			    for (const auto& pile : Locator::explosionSystem::value().RootsPiles())
+			    {
+				    piles.push_back({{"position", {pile.position.x, pile.position.y, pile.position.z}},
+				                     {"scale", pile.scale},
+				                     {"ms_left", pile.millisecondsLeft},
+				                     {"alpha", pile.alpha.has_value() ? Json(*pile.alpha) : Json(nullptr)}});
+			    }
+			    result["roots_piles"] = std::move(piles);
 		    }
 		    if (Locator::floatingNumberSystem::has_value())
 		    {
@@ -3281,15 +3342,16 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 		    if (leashes->worn.has_value())
 		    {
 			    const auto& worn = *leashes->worn;
-			    const auto& rope = worn.rope;
+			    const auto* drawn = registry.TryGet<const ecs::components::CreatureLeashRope>(creature);
+			    const auto rope = drawn != nullptr ? drawn->rope : leash_rope::Rope {};
 			    result["type"] = static_cast<int>(worn.type);
 			    result["works"] = worn.works;
 			    result["tied_to"] = Id(worn.tiedTo);
-			    result["held_rope"] = worn.held.has_value();
+			    result["held_rope"] = drawn != nullptr && drawn->held.has_value();
 			    result["rope"] = {{"start", {rope.start.x, rope.start.y, rope.start.z}},
 			                      {"end", {rope.end.x, rope.end.y, rope.end.z}},
-			                      {"slack_length", rope.slackLength},
-			                      {"max_length", rope.maxLength},
+			                      {"slack_length", worn.slackLength},
+			                      {"max_length", worn.maxLength},
 			                      {"tension", rope.tension}};
 		    }
 		    return QueryResult::Value(std::move(result));
@@ -4057,6 +4119,13 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 			    return {};
 		    }
 		    return Locator::liquidParticleSystem::value().Particles();
+	    },
+	    .playerLiquids = [](PlayerNames player) -> std::span<const liquid_particles::Particle> {
+		    if (!Locator::liquidParticleSystem::has_value())
+		    {
+			    return {};
+		    }
+		    return Locator::liquidParticleSystem::value().PlayerParticles(player);
 	    },
 	}));
 

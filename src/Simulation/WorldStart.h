@@ -127,5 +127,12 @@ public:
 /// The start of play after the first land loaded: the things go into the map's cells, the clocks start and, if asked,
 /// every resource loads before the first frame. A game that continued from a save keeps the time of the save.
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view);
+/// Loads every resource that waits, as the loading screen does, before the next frame. A thing that waits for its
+/// picture or its model then starts after the same frames on each run and on each computer of a network game.
+void LoadEveryResource();
+/// Every computer of a network game, the game server too, calls this just before it loads the land, so that each starts
+/// the land from the same state: the next reset of the registry gives the ids of a new registry, the game's random state
+/// is as in a new program, and every stream starts from the seed
+void PrepareNetworkLand(uint32_t seed);
 
 } // namespace openblack::simulation

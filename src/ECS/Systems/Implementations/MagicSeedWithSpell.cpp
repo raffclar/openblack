@@ -114,11 +114,14 @@ bool MagicSystem::SeedShownWithSpell(const SpellSeed& seed, const Spell& spell) 
 void MagicSystem::KeepSeedInHand(const Spell& spell)
 {
 	auto& registry = EntityRegistry();
-	if (!_held.has_value() || spell.seed != *_held || !registry.Valid(*_held))
+	// Only a seed in the hand of a player, which these rules act on in that hand
+	const auto holder = HolderOf(spell.seed);
+	if (!holder.has_value() || !registry.Valid(spell.seed))
 	{
 		return;
 	}
-	const auto& info = magic::GetSpellSeedInfo(Info(), registry.Get<const SpellSeed>(*_held).seedType);
+	const ActingAs acting(*this, *holder);
+	const auto& info = magic::GetSpellSeedInfo(Info(), registry.Get<const SpellSeed>(*Held()).seedType);
 	// Only a phial kept in the hand after its cast (a kept seed that is not cast in the hand) has these rules
 	if (info.isKeptInHand == 0 || info.castType == SpellCastType::SpellCastInHand)
 	{
@@ -127,7 +130,7 @@ void MagicSystem::KeepSeedInHand(const Spell& spell)
 	// It goes when its miracle has closed down; it leaves the hand, still linked, once its miracle is old enough
 	if (spell.closedDown)
 	{
-		DeleteSeed(*_held);
+		DeleteSeed(*Held());
 	}
 	else if (magic::SeedLeavesHandWithSpell(spell.spellClass, spell.age))
 	{
@@ -150,7 +153,13 @@ void MagicSystem::KeepSeedInInfluence(entt::entity spellEntity, const Spell& spe
 	{
 		return;
 	}
-	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, transform->position),
+	// A seed in the hand is where the reports of its player put the hand; the frames draw it at the hand of this computer
+	auto position = transform->position;
+	if (const auto holder = HolderOf(spell.seed); holder.has_value())
+	{
+		position = ReportedHandOf(*holder).value_or(position);
+	}
+	if (magic::ClosesOutOfInfluence(SeedShownWithSpell(*seed, spell), _world.InInfluence(seed->player, position),
 	                                spell.closedDown))
 	{
 		CloseDown(spellEntity);

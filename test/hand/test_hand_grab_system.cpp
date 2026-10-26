@@ -26,6 +26,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
 #include "ECS/Components/Pot.h"
@@ -104,8 +105,15 @@ public:
 		return hand;
 	}
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
+	[[nodiscard]] bool IsOtherPlayersHand(entt::entity of) const override { return otherHands.contains(of); }
+	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
+	{
+		const auto found = reportedPlaces.find(of);
+		return found != reportedPlaces.end() ? found->second : ReportedHandPlace();
+	}
 	void SetActingPlayer(std::optional<PlayerNames> player) override { acting = player; }
 	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return acting; }
+	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override { return ownHandPlayer; }
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override { return underCursor; }
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override { return nearHand; }
 	[[nodiscard]] std::optional<glm::vec3> PickedPoint() const override { return pickedPoint; }
@@ -193,6 +201,8 @@ public:
 		return true;
 	}
 	[[nodiscard]] uint32_t LocalRandom(uint32_t) override { return 0; }
+	[[nodiscard]] bool IsNetworkGame() const override { return networkGame; }
+	bool networkGame {false};
 	void SendCommand(player_commands::Action action) override
 	{
 		sent.push_back(action);
@@ -213,7 +223,11 @@ public:
 		treesGiven.emplace_back(bigForest, tree);
 		return tree;
 	}
-	void LeaveRootsHole(entt::entity tree) override { holes.push_back(tree); }
+	void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) override
+	{
+		holes.push_back(tree);
+		holePlaces.push_back({.place = place, .rotation = rotation, .scale = scale});
+	}
 	void RemakeDrawList(uint32_t frames) override
 	{
 		++drawListsRemade;
@@ -241,6 +255,25 @@ public:
 			transform.scale[column] = length;
 		}
 		transform.position = pose.origin;
+	}
+	// As the game's world: the frames draw the pulled pose apart from the world's Transform
+	void DrawPulledPose(entt::entity object, const Pose& pose) override
+	{
+		HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+		for (glm::length_t column = 0; column < 3; ++column)
+		{
+			const float length = glm::length(pose.axes[column]);
+			pulled.rotation[column] = pose.axes[column] / length;
+			pulled.scale[column] = length;
+		}
+		registry.AssignOrReplace<HandPulled>(object, pulled);
+	}
+	void ForgetPulledPose(entt::entity object) override
+	{
+		if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+		{
+			registry.Remove<HandPulled>(object);
+		}
 	}
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity, const glm::mat3& axes) const override
 	{
@@ -408,9 +441,14 @@ public:
 	entt::entity hand {entt::null};
 	/// The hand of the second player, which a command of that player acts with
 	entt::entity secondHand {entt::null};
+	/// The hands of the other gods of a network game, and where each last reported its hand
+	std::set<entt::entity> otherHands;
+	std::map<entt::entity, glm::vec3> reportedPlaces;
 	/// The second player has hands only once a network game gave them
 	bool secondPlayerHasHands {false};
 	std::optional<PlayerNames> acting;
+	/// The player whose hands this computer moves, when it is not the first player
+	std::optional<PlayerNames> ownHandPlayer;
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
@@ -441,6 +479,13 @@ public:
 	std::vector<entt::entity> uprooted;
 	std::vector<std::pair<entt::entity, entt::entity>> treesGiven;
 	std::vector<entt::entity> holes;
+	struct HolePlace
+	{
+		glm::vec3 place;
+		glm::mat3 rotation;
+		float scale;
+	};
+	std::vector<HolePlace> holePlaces;
 	int drawListsRemade {0};
 	std::vector<uint32_t> drawListFrames;
 	std::vector<entt::entity> poured;
@@ -554,9 +599,16 @@ protected:
 			    {
 				    system->DoApply(player, command.target);
 			    }
+			    else if constexpr (std::is_same_v<Kind, player_commands::HandClick>)
+			    {
+				    system->DoClick(player, command, commandTurn);
+			    }
 		    },
 		    action);
 	}
+
+	/// The turn at which the world does the commands
+	uint32_t commandTurn {0};
 
 	/// The start of a turn: the world does the commands that wait
 	void RunWaiting()
@@ -995,6 +1047,38 @@ TEST_F(HandGrabSystemWithWorld, LettingGoOverTheLandClicksThePlace)
 	EXPECT_EQ(clicked.placeTurn, 8u);
 }
 
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheTurnWritesTheClicks)
+{
+	world->networkGame = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	world->underCursor = rock;
+	commandTurn = 12;
+	system->ClickThing(rock, 7);
+	ASSERT_EQ(world->sent.size(), 1u);
+	EXPECT_EQ(std::get<player_commands::HandClick>(world->sent[0]).thing, rock);
+	// The click has the number of the turn that wrote it, not of the frame that sent it
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thingTurn, 12u);
+	// A let go over the land sends the place
+	world->underCursor.reset();
+	Frame(10, {}, {20.0f, 0.0f, 30.0f});
+	commandTurn = 13;
+	system->ClickReleased(8);
+	const auto& clicked = world->registry.Get<HandClicked>(world->hand);
+	EXPECT_TRUE(clicked.thing == entt::null);
+	EXPECT_EQ(clicked.place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(clicked.placeTurn, 13u);
+	// A thing that is gone by the turn is not clicked
+	const auto gone = world->AddRock({5.0f, 0.0f, 0.0f});
+	world->underCursor = gone;
+	waiting.clear();
+	world->onCommand = [this](const player_commands::Action& action) { waiting.push_back(action); };
+	system->ClickReleased(9);
+	world->registry.Destroy(gone);
+	RunWaiting();
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
+}
+
 TEST_F(HandGrabSystemWithWorld, ARewardWithTheLeashLooseInTheHandIsTheLand)
 {
 	const auto chest = world->AddRock({0.0f, 0.0f, 0.0f});
@@ -1021,6 +1105,33 @@ TEST_F(HandGrabSystemWithWorld, ClicksAreForgottenAfterFifteenSeconds)
 	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).thing, rock);
 	Frame(100);
 	EXPECT_TRUE(world->registry.Get<HandClicked>(world->hand).thing == entt::null);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameEveryComputerForgetsTheClicksOfAllHands)
+{
+	// This computer moves the hands of the second player. The first player clicked a place, and the second a thing.
+	world->networkGame = true;
+	world->secondPlayerHasHands = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoClick(PlayerNames::PLAYER_ONE,
+	                player_commands::HandClick {.thing = entt::null,
+	                                            .release = true,
+	                                            .hasPlace = true,
+	                                            .placeX = map_coords::ToFixed(20.0f),
+	                                            .placeZ = map_coords::ToFixed(30.0f)},
+	                10);
+	system->DoClick(PlayerNames::PLAYER_TWO, player_commands::HandClick {.thing = rock, .release = false}, 10);
+	ASSERT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, map_coords::ToFixed(20.0f));
+	ASSERT_EQ(world->registry.Get<HandClicked>(world->secondHand).thing, rock);
+	// Before 15 seconds, the turn keeps both clicks
+	system->InterfaceTurn(15900, 159);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, map_coords::ToFixed(20.0f));
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->secondHand).thing, rock);
+	// After 15 seconds, the turn forgets the click of the first player too, not only the click of this computer's hand
+	system->InterfaceTurn(16000, 160);
+	EXPECT_EQ(world->registry.Get<HandClicked>(world->hand).place.x, 0);
+	EXPECT_TRUE(world->registry.Get<HandClicked>(world->secondHand).thing == entt::null);
 }
 
 TEST_F(HandGrabSystemWithWorld, AThingInFlightIsCaughtOnlyAfterTheWait)
@@ -1067,6 +1178,106 @@ TEST_F(HandGrabSystemWithWorld, AHeavyTreeIsNeverPulledFree)
 	EXPECT_FALSE(Release().has_value());
 	EXPECT_FALSE(system->GetPullPose().has_value());
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeIsDrawnLeaningAndKeepsItsPlaceInTheWorld)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	const auto before = world->registry.Get<const Transform>(tree);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// The frames draw the lean and the stretch; the world keeps the tree as it stood
+	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(pulled, nullptr);
+	EXPECT_TRUE(pulled->rotation != before.rotation || pulled->scale != before.scale);
+	EXPECT_FALSE(Release().has_value());
+	const auto& after = world->registry.Get<const Transform>(tree);
+	EXPECT_EQ(after.position, before.position);
+	EXPECT_EQ(after.rotation, before.rotation);
+	EXPECT_EQ(after.scale, before.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameAPulledThingKeepsThePlaceThatTheTurnsGaveIt)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// The turns of every computer move the thing while this hand pulls at it, as they move a villager that walks
+	auto& transform = world->registry.Get<Transform>(tree);
+	transform.position = {4.0f, 0.5f, -3.0f};
+	const auto walked = transform;
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
+	// The let go does not put it back where the pull started
+	EXPECT_FALSE(Release().has_value());
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
+	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNotItsLean)
+{
+	const auto tree = world->AddTree({3.0f, 1.0f, -2.0f}, 1.0e6f);
+	auto& transform = world->registry.Get<Transform>(tree);
+	transform.rotation = glm::mat3(glm::vec3(0.0f, 0.0f, -1.0f), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	transform.scale = glm::vec3(1.5f);
+	const auto before = transform;
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	// Too heavy to come free, the tree leans towards the hand
+	for (int i = 0; i < 50; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	const auto* leaned = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(leaned, nullptr);
+	ASSERT_TRUE(leaned->rotation != before.rotation || leaned->scale != before.scale);
+	ASSERT_TRUE(world->holes.empty());
+	// Light again, it comes free and leaves its hole where it stood before the pull
+	world->weights[tree] = 10.0f;
+	for (int i = 0; i < 30 && world->holes.empty(); ++i)
+	{
+		Frame(10, {20.0f, 50.0f, 0.0f});
+	}
+	ASSERT_EQ(world->holes, std::vector<entt::entity> {tree});
+	ASSERT_EQ(world->holePlaces.size(), 1u);
+	EXPECT_EQ(world->holePlaces.front().place, before.position);
+	EXPECT_EQ(world->holePlaces.front().rotation, before.rotation);
+	EXPECT_EQ(world->holePlaces.front().scale, 1.5f);
+}
+
+TEST_F(HandGrabSystemWithWorld, ATreeThatThePullFreedIsTakenWhenTheButtonIsLetGoBeforeTheTake)
+{
+	deferCommands = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 30 && world->holes.empty(); ++i)
+	{
+		Frame(10, {0.0f, 50.0f, 0.0f});
+	}
+	ASSERT_EQ(world->holes, std::vector<entt::entity> {tree});
+	ASSERT_TRUE(world->sent.empty());
+	// The take comes before the release, so a short press is no tap
+	EXPECT_FALSE(Release().has_value());
+	ASSERT_EQ(world->sent.size(), 1u);
+	ASSERT_TRUE(std::holds_alternative<player_commands::HandTake>(world->sent.front()));
+	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, tree);
+	RunWaiting();
+	EXPECT_EQ(system->GetHeld(), std::optional(tree));
 }
 
 TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
@@ -2273,4 +2484,24 @@ TEST_F(HandGrabSystemWithWorld, TheEndOfTheLockOfAnotherThingLeavesTheScoop)
 	system->DoUnlock(world->HandPlayer(), *handful);
 	system->ProcessTurn();
 	EXPECT_EQ(world->registry.Get<const Pot>(*handful).amount, 25u + 8u);
+}
+
+TEST_F(HandGrabSystemWithWorld, TheSeedInTheHandOfAnotherGodIsDrawnAtTheHandItReported)
+{
+	auto& registry = world->registry;
+	const auto seed = registry.Create();
+	registry.Assign<Transform>(seed, glm::vec3(1.0f, 2.0f, 3.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->secondHand, HandHeldSeed {.seed = seed});
+	const auto ownSeed = registry.Create();
+	registry.Assign<Transform>(ownSeed, glm::vec3(7.0f, 8.0f, 9.0f), glm::mat3(2.0f), glm::vec3(1.0f));
+	registry.Assign<HandHeldSeed>(world->hand, HandHeldSeed {.seed = ownSeed});
+	world->otherHands.insert(world->secondHand);
+	world->reportedPlaces[world->secondHand] = glm::vec3(40.0f, 5.0f, 60.0f);
+	system->PlaceOthersHeldForFrame(20);
+	// Upright at the reported hand, as another god's held thing is
+	const auto& placed = registry.Get<const Transform>(seed);
+	EXPECT_EQ(placed.position, glm::vec3(40.0f, 5.0f, 60.0f));
+	EXPECT_EQ(placed.rotation, glm::mat3(1.0f));
+	// The seed of the own hand is where the hand's pose puts it
+	EXPECT_EQ(registry.Get<const Transform>(ownSeed).position, glm::vec3(7.0f, 8.0f, 9.0f));
 }

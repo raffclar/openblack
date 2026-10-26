@@ -7,22 +7,20 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
-#pragma once
+#include <gtest/gtest.h>
 
-#include <cstdint>
+#include "ECS/InfluenceRules.h"
 
-#include <optional>
+using openblack::influence_rules::CanHaveInfluence;
 
-namespace openblack::ecs::components
+TEST(InfluenceRules, APlayerWithNoTempleHasNoInfluenceInANetworkGame)
 {
+	EXPECT_FALSE(CanHaveInfluence(true, false));
+	EXPECT_TRUE(CanHaveInfluence(true, true));
+}
 
-/// A heap of rubble a blast left on the land: it lies there for a while of the game's time and fades away in its last
-/// second
-struct GroundMark
+TEST(InfluenceRules, EveryPlayerCanHaveInfluenceInAGameAlone)
 {
-	float millisecondsLeft {0.0f};
-	/// Its alpha, 0 to 255, once it is fading; drawn without blending until then
-	std::optional<uint8_t> alpha;
-};
-
-} // namespace openblack::ecs::components
+	EXPECT_TRUE(CanHaveInfluence(false, false));
+	EXPECT_TRUE(CanHaveInfluence(false, true));
+}

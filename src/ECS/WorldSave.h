@@ -88,6 +88,9 @@ enum class LoadKind : uint8_t
 	WorldState,
 };
 
+/// The saved state of each system that a save keeps, by the name of the system
+[[nodiscard]] std::vector<reflection::NamedSection> SavedSystemSections(const entt::meta_ctx& reflection);
+
 /// Puts back the entities, their components and the context of the registry. The registry must have no live entity.
 /// Returns nothing when the blocks do not read.
 [[nodiscard]] std::optional<reflection::WorldLoadReport>
@@ -98,7 +101,8 @@ LoadEntities(const entt::meta_ctx& reflection, const gamesave::WorldFile& file, 
 [[nodiscard]] OutsideCamera CameraToSave(const std::optional<OutsideCamera>& outside, const OutsideCamera& current);
 
 /// Forgets what the game does not keep in a save. After a load the creature wants again the actions that the area that
-/// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it.
+/// holds it refused. The rooms of the temple go, because the temple makes them when the player goes into it. A footpath
+/// that the game still looks for starts its search again.
 void ForgetUnsavedState(entt::registry& registry);
 
 /// After the land starts again: puts back the game clock at the turn, the streams of random numbers, the camera, the

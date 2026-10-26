@@ -258,6 +258,7 @@ class FakeSlotWorld final: public SlotWorld
 public:
 	[[nodiscard]] bool HasCitadel(PlayerNames player) const override { return citadels.contains(player); }
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames player) const override { return computers.contains(player); }
+	void MakePlayer(PlayerNames player) override { players.push_back(player); }
 	void SwitchOn(PlayerNames player) override { switchedOn.push_back(player); }
 	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
 	{
@@ -286,6 +287,7 @@ public:
 	std::map<PlayerNames, bool> computers;
 	std::vector<uint32_t> rolls;
 	std::vector<uint32_t> rangesAsked;
+	std::vector<PlayerNames> players;
 	std::vector<PlayerNames> switchedOn;
 	std::vector<Made> made;
 };
@@ -333,4 +335,43 @@ TEST(ComputerPlayerStart, AComputerGodOrAGodWithNoCitadelTakesNoRoll)
 	EXPECT_TRUE(world.rangesAsked.empty());
 	EXPECT_TRUE(world.made.empty());
 	EXPECT_TRUE(world.switchedOn.empty());
+}
+
+TEST(ComputerPlayerStart, TheHumansWhoJoinGetTheirPlayersAndTheSlotsOfAWaitingLandFill)
+{
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_ONE, true},
+	                  {PlayerNames::PLAYER_TWO, true},
+	                  {PlayerNames::PLAYER_THREE, true},
+	                  {PlayerNames::NEUTRAL, true}};
+	const std::vector humans {PlayerNames::PLAYER_ONE, PlayerNames::PLAYER_THREE};
+	HumansJoin(world, humans, true);
+
+	EXPECT_EQ(world.players, humans);
+	// Only the god of slot 2 has a citadel and no human; the neutral player is not a god of a slot
+	EXPECT_EQ(world.switchedOn, (std::vector {PlayerNames::PLAYER_TWO}));
+	ASSERT_EQ(world.made.size(), 1);
+	EXPECT_EQ(world.made[0].player, PlayerNames::PLAYER_TWO);
+}
+
+TEST(ComputerPlayerStart, ALandThatDoesNotWaitForItsHumansFillsNoSlotWhenTheyJoin)
+{
+	FakeSlotWorld world;
+	world.citadels = {{PlayerNames::PLAYER_ONE, true}, {PlayerNames::PLAYER_TWO, true}};
+	const std::vector humans {PlayerNames::PLAYER_ONE};
+	HumansJoin(world, humans, false);
+
+	EXPECT_EQ(world.players, humans);
+	EXPECT_TRUE(world.rangesAsked.empty());
+	EXPECT_TRUE(world.switchedOn.empty());
+	EXPECT_TRUE(world.made.empty());
+}
+
+TEST(ComputerPlayerStart, TheGodsOfTheSlotsAreTheSevenPlayersInOrder)
+{
+	ASSERT_EQ(k_SlotGods.size(), 7);
+	for (size_t i = 0; i < k_SlotGods.size(); ++i)
+	{
+		EXPECT_EQ(static_cast<size_t>(k_SlotGods.at(i)), i);
+	}
 }

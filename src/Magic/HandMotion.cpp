@@ -16,6 +16,8 @@
 #include <glm/common.hpp>
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack::magic;
 
 glm::vec3 openblack::magic::FilterHandVelocity(glm::vec3 smoothed, glm::vec3 raw, float seconds)
@@ -25,8 +27,8 @@ glm::vec3 openblack::magic::FilterHandVelocity(glm::vec3 smoothed, glm::vec3 raw
 		return smoothed;
 	}
 	// Eased so that the share is reached over the time, whatever the step
-	const float rate = -std::log(1.0f - k_HandVelocityShare) / k_HandVelocitySeconds;
-	return smoothed + (raw - smoothed) * (1.0f - std::exp(-rate * seconds));
+	const float rate = -openblack::portable_math::Log(1.0f - k_HandVelocityShare) / k_HandVelocitySeconds;
+	return smoothed + (raw - smoothed) * (1.0f - openblack::portable_math::Exp(-rate * seconds));
 }
 
 void openblack::magic::StepHandSpin(HandSpin& spin, glm::vec3 step, glm::vec3 smoothedVelocity, float seconds)
@@ -45,8 +47,8 @@ void openblack::magic::StepHandSpin(HandSpin& spin, glm::vec3 step, glm::vec3 sm
 	{
 		sideways = glm::dot(glm::normalize(side), step);
 	}
-	const float rate = -10.0f * std::log(1.0f - k_HandLateralShare);
-	spin.lateral += (sideways * perSecond * perSecond - spin.lateral) * (1.0f - std::exp(-seconds * rate));
+	const float rate = -10.0f * openblack::portable_math::Log(1.0f - k_HandLateralShare);
+	spin.lateral += (sideways * perSecond * perSecond - spin.lateral) * (1.0f - openblack::portable_math::Exp(-seconds * rate));
 	const float speed = glm::length(smoothedVelocity);
 	spin.spin = speed > k_HandStill ? -spin.lateral / speed : 0.0f;
 }

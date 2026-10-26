@@ -29,6 +29,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
@@ -279,7 +280,7 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		transform->rotation = physics::QuarterTurned(living::HeadingAxes(heading));
 		// Its heading across the land as the animals keep it, from the way it is drawn
 		const auto side = transform->rotation[0];
-		animal->heading = std::atan2(-side.x, side.z);
+		animal->heading = portable_math::Atan2(-side.x, side.z);
 	}
 	// It goes on from where it came down, on the land
 	if (const auto land = world.LandHeight(glm::vec2(transform->position.x, transform->position.z)))
@@ -492,14 +493,13 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	std::vector<entt::entity> creatures;
 	registry.Each<const Creature, const Transform>(
 	    [&creatures](entt::entity creature, const Creature&, const Transform&) { creatures.push_back(creature); });
-	const auto handHeld = world.HandHeldCreature();
 	const float objectWeight = world.WeightOf(object);
 	for (const auto creature : creatures)
 	{
 		// Not one the hand is holding, one that plans to fight or is fighting, one a script controls, nor one whose plan
 		// is a catch, a catch still waiting for its body included. Also not one that may not take up a reaction now,
 		// unless a desire was made its only desire.
-		if (handHeld == creature || PlansToFightOrCatch(world, registry, creature) ||
+		if (world.HandHolds(creature) || PlansToFightOrCatch(world, registry, creature) ||
 		    registry.AllOf<CreatureFighting>(creature) || registry.AllOf<ScriptControlled>(creature) ||
 		    !world.FreeToCatch(creature) || registry.AllOf<PendingCatch>(creature))
 		{

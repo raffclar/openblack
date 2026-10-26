@@ -54,11 +54,17 @@ public:
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
 	void DoLock(PlayerNames player, entt::entity object) override;
 	void DoApply(PlayerNames player, entt::entity target) override;
+	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
+	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
+	void ForgetClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
+	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
+	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
@@ -74,11 +80,13 @@ public:
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;
+	[[nodiscard]] bool IsBusyOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
 	bool HandOver(entt::entity object) override;
 	bool TakeIntoHand(entt::entity object) override;
+	bool TakeIntoHandOf(PlayerNames player, entt::entity object) override;
 	bool LetGoAt(glm::vec3 velocity) override;
 	bool GiveHeldTo(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
@@ -114,7 +122,9 @@ private:
 	glm::vec3 Pull(components::HandGrab& grab, const Frame& frame);
 	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops. With
 	/// sounds, the hand also plays the sounds of the take.
-	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true);
+	/// Without askInfluence, the hand takes the thing outside its player's influence too (the debug tools only)
+	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true,
+	          bool askInfluence = true);
 	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take
 	void SendTake(components::HandGrab& grab, entt::entity object);
 	/// The pick-up sound of a thing, and the cry of a villager
@@ -164,6 +174,8 @@ private:
 	[[nodiscard]] bool HandInInfluence() const;
 
 	std::unique_ptr<hand_grab::HandGrabWorldInterface> _world;
+	/// The thing that the frames of this computer draw in the pose of a pull, until the pull ends
+	entt::entity _drawnPull {entt::null};
 };
 
 } // namespace openblack::ecs::systems

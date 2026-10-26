@@ -44,7 +44,8 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::ReportedHand::collidePoint>("collidePoint")
 	    .Field<&components::ReportedHand::handPoint>("handPoint")
 	    .Field<&components::ReportedHand::camera>("camera")
-	    .Field<&components::ReportedHand::focus>("focus");
+	    .Field<&components::ReportedHand::focus>("focus")
+	    .Field<&components::ReportedHand::pickedObject>("pickedObject");
 	Reflect<components::ResourceLastTaken>(context).Field<&components::ResourceLastTaken::turn>(
 	    "turn", {k_PlayerNamesNames, std::span<const std::string_view> {}});
 	Reflect<components::ResourcePile>(context)
@@ -80,5 +81,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::RisingSoul::clip>("clip")
 	    .Field<&components::RisingSoul::timeMs>("timeMs")
 	    .Field<&components::RisingSoul::alpha>("alpha")
-	    .Field<&components::RisingSoul::bones>("bones");
+	    .Field<&components::RisingSoul::bones>("bones")
+	    .Field<&components::RisingSoul::turns>("turns")
+	    .Field<&components::RisingSoul::shownOut>("shownOut");
 }

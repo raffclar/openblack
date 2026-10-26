@@ -12,7 +12,11 @@
 #include <cstdint>
 
 #include <bit>
+#include <memory>
 #include <optional>
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include <source_location>
+#endif
 
 #include <glm/vec3.hpp>
 
@@ -59,6 +63,22 @@ inline constexpr float k_CrtRandomScale = std::bit_cast<float>(0x38000100u);
 }
 } // namespace game_random
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// The place in the source of a call that draws on the synced seed, for the draw trace of the developer tools
+using DrawSite = std::source_location;
+
+namespace draw_trace
+{
+class DrawTrace;
+}
+#else
+/// A build without the developer tools keeps no place of a draw: the type is empty and costs nothing
+struct DrawSite
+{
+	[[nodiscard]] static constexpr DrawSite current() noexcept { return {}; }
+};
+#endif
+
 /// The seed every machine of a game shares, and this machine's own
 struct GameRandomSeeds
 {
@@ -82,10 +102,10 @@ class GameRandomInterface
 public:
 	virtual ~GameRandomInterface() = default;
 
-	/// 0 for 0 without a draw, else LHRand(n) on the synced seed
-	virtual uint32_t GameRand(uint32_t n) = 0;
-	/// FloatRand(x) on the synced seed
-	virtual float GameFloatRand(float x) = 0;
+	/// 0 for 0 without a draw, else LHRand(n) on the synced seed. The site is the place of the call, for the draw trace
+	uint32_t GameRand(uint32_t n, DrawSite site = DrawSite::current()) { return SyncedRand(n, site); }
+	/// FloatRand(x) on the synced seed. The site is the place of the call, for the draw trace
+	float GameFloatRand(float x, DrawSite site = DrawSite::current()) { return SyncedFloatRand(x, site); }
 	/// 0 for 0 without a draw, else LHRand(n) on the local seed (a negative n divides as a large unsigned one)
 	virtual uint32_t LocalRand(int32_t n) = 0;
 	/// FloatRand(x) on the local seed
@@ -108,25 +128,44 @@ public:
 	/// Both are k_InitialSeed when the game starts and 0 from every map loaded, and saved games keep and restore them
 	virtual void SetSeeds(GameRandomSeeds seeds) = 0;
 
+	/// Puts the state back as it is when the program starts: both seeds k_InitialSeed, no particle stream, the C runtime
+	/// seed 1 and no synced draw counted. A network game that starts in a running program starts from this state, as the
+	/// game server does. A source that keeps no state does nothing.
+	virtual void Restart() {}
+
 	[[nodiscard]] virtual ParticleRandomStream GetParticleStream() const = 0;
 	virtual void SetParticleStream(ParticleRandomStream stream) = 0;
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// The developer tools: from now on, each draw on the synced seed goes to this trace. None stops the trace. A source
+	/// that counts no draws ignores it.
+	virtual void SetDrawTrace([[maybe_unused]] std::shared_ptr<draw_trace::DrawTrace> trace) {}
+	/// The trace of the synced draws, or none
+	[[nodiscard]] virtual draw_trace::DrawTrace* GetDrawTrace() const { return nullptr; }
+#endif
+
 	/// GameFloatRand(b - a) + a, b - a rounded to a float first
-	float GameFloatRange(float a, float b);
+	float GameFloatRange(float a, float b, DrawSite site = DrawSite::current());
 	/// ((CrtRand() * k) * (b - a)) + a
 	float CrtRandom(float a, float b);
 
 	/// 0 outside an effect's step, else (u * k) * x with u = LHRand(0xFFFF) on the stream's seed.
 	/// Unlike GameFloatRand it draws even for x == 0
-	float ParticleFloatRand(float x);
+	float ParticleFloatRand(float x, DrawSite site = DrawSite::current());
 	/// ParticleFloatRand(b - a) + a, b - a rounded to a float first
-	float ParticleFloatRand(float a, float b);
+	float ParticleFloatRand(float a, float b, DrawSite site = DrawSite::current());
 	/// 0 outside an effect's step, else GameRand(n) or LocalRand(n) by the stream
-	int32_t ParticleRand(int32_t n);
+	int32_t ParticleRand(int32_t n, DrawSite site = DrawSite::current());
 	/// A point in the unit ball, x, y and z drawn in that order as ParticleFloatRand(2) - 1 until
 	/// (z^2 + y^2) + x^2 <= 1. Outside an effect's step the game would loop forever, which it never does; here it gives
 	/// (-1, -1, -1)
-	glm::vec3 ParticleRandR3();
+	glm::vec3 ParticleRandR3(DrawSite site = DrawSite::current());
+
+protected:
+	/// The draw of GameRand, with the place of its call
+	virtual uint32_t SyncedRand(uint32_t n, DrawSite site) = 0;
+	/// The draw of GameFloatRand, with the place of its call
+	virtual float SyncedFloatRand(float x, DrawSite site) = 0;
 };
 
 /// The game's random numbers for one system. It draws on the game's seeds when the locator has them. Else it draws on a
@@ -135,23 +174,25 @@ class GameRandomSource
 {
 public:
 	/// LHRand(n) on the synced seed, and 0 for 0 without a draw
-	uint32_t GameRand(uint32_t n);
+	uint32_t GameRand(uint32_t n, DrawSite site = DrawSite::current());
 	/// FloatRand(x) on the synced seed
-	float GameFloatRand(float x);
+	float GameFloatRand(float x, DrawSite site = DrawSite::current());
 	/// LHRand(n) on the local seed, and 0 for 0 without a draw
 	uint32_t LocalRand(int32_t n);
 	/// FloatRand(x) on the local seed
 	float LocalFloatRand(float x);
 
-	/// GameRand as a function, for the rules that take the draw as a parameter
-	[[nodiscard]] auto Game()
+	/// GameRand as a function, for the rules that take the draw as a parameter. The draw trace shows the place that
+	/// made the function
+	[[nodiscard]] auto Game(DrawSite site = DrawSite::current())
 	{
-		return [this](uint32_t n) { return GameRand(n); };
+		return [this, site](uint32_t n) { return GameRand(n, site); };
 	}
-	/// GameFloatRand as a function, for the rules that take the draw as a parameter
-	[[nodiscard]] auto GameFloat()
+	/// GameFloatRand as a function, for the rules that take the draw as a parameter. The draw trace shows the place
+	/// that made the function
+	[[nodiscard]] auto GameFloat(DrawSite site = DrawSite::current())
 	{
-		return [this](float x) { return GameFloatRand(x); };
+		return [this, site](float x) { return GameFloatRand(x, site); };
 	}
 
 private:

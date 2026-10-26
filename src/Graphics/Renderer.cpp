@@ -66,6 +66,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "3D/TempleMap.h"
 #include "3D/WaterRings.h"
+#include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
 #include "Common/Platform.h"
@@ -108,7 +109,6 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Sky.h"
 #include "ECS/Components/Sprite.h"
-#include "ECS/Components/StormCloud.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
@@ -119,6 +119,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -127,6 +128,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
@@ -2405,7 +2407,8 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& temple = Locator::temple::value();
 	const auto* shader = _shaderManager->GetShader("Beam");
-	const auto& registry = Locator::entitiesRegistry::value();
+	// The mists are things of the temple's rooms
+	const auto& registry = temple.GetRooms();
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto smoke = entt::hashed_string("raw/smoke");
 	const auto smokeAlpha = entt::hashed_string("raw/smokea");
@@ -2478,7 +2481,8 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	const auto& temple = Locator::temple::value();
 	const auto inDrawnRoom = [&temple](TempleRoom room) { return temple.IsRoomDrawn(room); };
 	const auto* beamShader = _shaderManager->GetShader("Beam");
-	const auto& registry = Locator::entitiesRegistry::value();
+	// The cones and the rooms are things of the temple's rooms
+	const auto& registry = temple.GetRooms();
 	auto& resources = Locator::resources::value();
 
 	bgfx::VertexLayout layout;
@@ -2902,25 +2906,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 	const ProgramUniform u_mistUniform {*program, "u_mist"};
 	const ProgramUniform u_mistColourUniform {*program, "u_mistColour"};
 
-	desc.entities.Each<const Mist, const ecs::components::Transform>([&](entt::entity entity, const Mist& mist,
-	                                                                     const ecs::components::Transform& transform) {
-		auto colour = mist.colour;
-		if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
-		{
-			if (!cloudsShown)
-			{
-				return;
-			}
-			// How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
-			const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
-			colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
-		}
-		// A storm's cloud takes the land's colour, darkened by the storm's shade, and is lit by its lightning
-		const auto* stormCloud = desc.entities.TryGet<ecs::components::StormCloud>(entity);
-		if (stormCloud != nullptr)
-		{
-			colour = (colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud->shade);
-		}
+	// A storm's cloud is lit by the lightning of its storm
+	const auto drawMist = [&](const Mist& mist, const glm::vec3& position, uint32_t colour,
+	                          const ecs::systems::StormCloud* stormCloud) {
 		const auto alpha = static_cast<float>(colour >> 24u);
 		if (alpha <= 0.0f)
 		{
@@ -2930,9 +2918,9 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 		glm::vec3 scale {mist.size};
 		if (mist.shrinksEdgeOn)
 		{
-			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, transform.position - origin);
+			scale.y = scale.z = mists::EdgeOnSize(mist.size, mist.edgeShrink, position - origin);
 		}
-		const auto model = glm::translate(transform.position) * glm::mat4(facing) * glm::scale(scale);
+		const auto model = glm::translate(position) * glm::mat4(facing) * glm::scale(scale);
 		const auto frame = mists::FrameOffset(mists::Frame(mist.counter), mist.shrinksEdgeOn);
 		const glm::vec4 u_mist {frame, 0.0f, 0.0f};
 		const glm::vec4 u_mistColour {static_cast<float>((colour >> 16u) & 0xFFu) / 255.0f,
@@ -2971,11 +2959,35 @@ void Renderer::DrawMists(const DrawSceneDesc& desc) const
 				// Both sides, blended over what is behind, tested against but not writing depth
 				bgfx::setState(BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST_GREATER | BGFX_STATE_BLEND_ALPHA | BGFX_STATE_MSAA);
 				// In its place among everything that blends, the farthest first
-				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)),
-				                zsort::Depth(transform.position, origin));
+				program->Submit(static_cast<bgfx::ViewId>(TranslucentView(desc.viewId)), zsort::Depth(position, origin));
 			}
 		}
-	});
+	};
+
+	desc.entities.Each<const Mist, const ecs::components::Transform>(
+	    [&](entt::entity entity, const Mist& mist, const ecs::components::Transform& transform) {
+		    auto colour = mist.colour;
+		    if (desc.entities.AnyOf<ecs::components::Cloud>(entity))
+		    {
+			    if (!cloudsShown)
+			    {
+				    return;
+			    }
+			    // How far the cloud has faded at the track's ends, times the sky's own alpha, in whole numbers
+			    const auto cloudAlpha = ((mist.colour >> 24u) * (cloudColour >> 24u)) / 255u;
+			    colour = (cloudAlpha << 24u) | (cloudColour & 0xFFFFFFu);
+		    }
+		    drawMist(mist, transform.position, colour, nullptr);
+	    });
+	// A storm's cloud takes the land's colour, darkened by the storm's shade
+	if (Locator::cloudSystem::has_value())
+	{
+		for (const auto& stormCloud : Locator::cloudSystem::value().GetStormClouds())
+		{
+			const auto colour = (stormCloud.mist.colour & 0xFF000000u) | storm_clouds::Tint(landColour, stormCloud.shade);
+			drawMist(stormCloud.mist, stormCloud.position, colour, &stormCloud);
+		}
+	}
 }
 
 void Renderer::DrawCreatureFootprints(const DrawSceneDesc& desc) const
@@ -3081,6 +3093,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
+	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
+	vertices.reserve(ground_blobs::k_Indices.size() *
+	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -3089,8 +3106,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
-	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
+	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
+		    // A villager in a creature's hand is where the frame draws the hand
+		    const auto transform = ecs::drawn_place::DrawnTransformOf(desc.entities, entity, placed);
 		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
@@ -3124,7 +3143,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
-	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	for (const auto& [entity, meshId, model] : animalDraws)
 	{
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
 		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
@@ -6869,7 +6888,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
-					DrawCreatureHair(desc, *hair, transform->position);
+					// The hair hangs from the body where the frame draws it
+					DrawCreatureHair(desc, *hair,
+					                 ecs::components::DrawnTransform(
+					                     *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+					                     .position);
 				}
 				// The glows on its body, where its pose put them
 				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
@@ -7271,7 +7294,35 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					              renderCtx.heldInstanceBuffer);
 				}
 			};
+			// The piles of roots, which only this computer draws: the opaque piles here, the piles that fade with the
+			// blended things, each in its own place in the sort
+			const auto rootsPileMesh = resources::HashIdentifier(roots_pile::k_Mesh);
+			const auto drawRootsPiles = [&](bool fading) {
+				const auto first = fading ? renderCtx.rootsPileOpaqueCount : 0;
+				const auto end =
+				    fading ? static_cast<uint32_t>(renderCtx.rootsPileInstances.size()) : renderCtx.rootsPileOpaqueCount;
+				if (first == end || !meshManager.Contains(rootsPileMesh))
+				{
+					return;
+				}
+				RenderContext::InstancedDrawDesc placers {first, end - first, true};
+				placers.instanceAlpha = fading;
+				if (!fading)
+				{
+					drawInstances(rootsPileMesh, placers, false, first, end - first, nullptr, nullptr,
+					              renderCtx.rootsPileInstanceBuffer);
+					return;
+				}
+				for (uint32_t instance = first; instance < end; ++instance)
+				{
+					submitDesc.sortDepth =
+					    zsort::Depth(glm::vec3(renderCtx.rootsPileInstances.at(instance).model[3]), cameraOrigin);
+					drawInstances(rootsPileMesh, placers, false, instance, 1, nullptr, nullptr,
+					              renderCtx.rootsPileInstanceBuffer);
+				}
+			};
 			drawHeld(false);
+			drawRootsPiles(false);
 			DrawTempleUnderside(desc);
 			// The translucent meshes blend over the opaque ones, each in its own place in the sort
 			submitDesc.viewId = translucentViewId;
@@ -7323,6 +7374,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 			}
 			drawHeld(true);
+			drawRootsPiles(true);
 			// The souls of the dead rising or sinking, each white and see-through, posed by its own clip; the sea doesn't
 			// reflect them
 			if (desc.viewId != RenderPass::Reflection)
@@ -7752,67 +7804,79 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
-				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &registry, bookmarksShown,
-				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
-					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
-					    {
-						    return;
-					    }
-					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
-					    {
-						    return;
-					    }
-					    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
-					    // alone in its floor
-					    if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
-					    {
-						    const bool inMainRoom = templePart->room == TempleRoom::Main;
-						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-						    const bool inReflection = desc.viewId == RenderPass::Reflection;
-						    if ((inReflection ? !inMainRoom : !drawn) ||
-						        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
+				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
+				                          bookmarksShown, leashMarkersShown](const ecs::Registry& from) {
+					from.Each<const Sprite, const Transform>(
+					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
+					     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
 						    {
 							    return;
 						    }
-					    }
-					    // A sprite whose texture the cache does not have is not drawn
-					    const auto found =
-					        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
-					    if (!found.has_value())
-					    {
-						    return;
-					    }
-					    const auto* texture = found->texture;
-					    const auto* alpha = found->alpha;
-					    glm::mat4 modelMatrix = glm::mat4(1.0f);
-					    modelMatrix = glm::translate(modelMatrix, transform.position);
-					    modelMatrix *= glm::mat4(transform.rotation);
-					    modelMatrix = glm::scale(modelMatrix, transform.scale);
+						    if (!leashMarkersShown && from.AllOf<LeashMarker>(entity))
+						    {
+							    return;
+						    }
+						    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
+						    // alone in its floor
+						    if (const auto* templePart = from.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
+						    {
+							    const bool inMainRoom = templePart->room == TempleRoom::Main;
+							    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
+							    const bool inReflection = desc.viewId == RenderPass::Reflection;
+							    if ((inReflection ? !inMainRoom : !drawn) ||
+							        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
+							    {
+								    return;
+							    }
+						    }
+						    // A sprite whose texture the cache does not have is not drawn
+						    const auto found = sprite_textures::FindTextures(
+						        sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+						    if (!found.has_value())
+						    {
+							    return;
+						    }
+						    const auto* texture = found->texture;
+						    const auto* alpha = found->alpha;
+						    // A sprite that moves between the turns is drawn at its drawn place
+						    const auto placed = ecs::drawn_place::DrawnTransformOf(from, entity, transform);
+						    glm::mat4 modelMatrix = glm::mat4(1.0f);
+						    modelMatrix = glm::translate(modelMatrix, placed.position);
+						    modelMatrix *= glm::mat4(placed.rotation);
+						    modelMatrix = glm::scale(modelMatrix, placed.scale);
 
-					    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
+						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
-					    bgfx::setTransform(glm::value_ptr(modelMatrix));
-					    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
-					    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
-					                                    sprite.alpha.has_value() ? 1.0f : 0.0f, sprite.additive ? 1.0f : 0.0f,
-					                                    0.0f};
-					    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-					    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
-					    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
-					    // premultiplied by alpha when the tint is
-					    const auto tint =
-					        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
-					    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-					    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
+						    bgfx::setTransform(glm::value_ptr(modelMatrix));
+						    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
+						    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
+						                                    sprite.alpha.has_value() ? 1.0f : 0.0f,
+						                                    sprite.additive ? 1.0f : 0.0f, 0.0f};
+						    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
+						    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
+						    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
+						    // premultiplied by alpha when the tint is
+						    const auto tint = sprite.additive
+						                          ? sprite.tint
+						                          : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
+						    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
+						    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
 
-					    _plane->GetVertexBuffer().Bind();
+						    _plane->GetVertexBuffer().Bind();
 
-					    bgfx::setState(SpriteState(sprite.additive));
+						    bgfx::setState(SpriteState(sprite.additive));
 
-					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-					                         zsort::Depth(transform.position, cameraOrigin));
-				    });
+						    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
+						                         zsort::Depth(placed.position, cameraOrigin));
+					    });
+				};
+				// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room
+				if (Locator::temple::has_value() && Locator::temple::value().Active())
+				{
+					drawSprites(Locator::temple::value().GetRooms());
+				}
+				drawSprites(registry);
 				DrawTempleLeashes(desc);
 			}
 		}

@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <tuple>
 
 #include <SDL_events.h>
@@ -308,6 +309,29 @@ std::string GameInput::Apply(const InputEvent& event)
 	case InputEvent::Kind::Release:
 		Release();
 		return {};
+	case InputEvent::Kind::Text:
+	{
+		// The letters go in pieces of at most 30 bytes, each cut between two whole UTF-8 characters. The last byte of
+		// each event marks it as the game's own.
+		constexpr size_t k_MostTextEventBytes = sizeof(SDL_TextInputEvent::text) - 2;
+		std::string_view rest = event.text;
+		while (!rest.empty())
+		{
+			auto size = std::min(rest.size(), k_MostTextEventBytes);
+			while (size < rest.size() && size > 0 && (static_cast<unsigned char>(rest[size]) & 0xC0U) == 0x80U)
+			{
+				--size;
+			}
+			SDL_Event text {};
+			text.type = SDL_TEXTINPUT;
+			text.text.windowID = WindowId();
+			std::copy_n(rest.data(), size, text.text.text);
+			input::MarkInjected(text);
+			SDL_PushEvent(&text);
+			rest.remove_prefix(size);
+		}
+		return {};
+	}
 	}
 	return "unknown input";
 }
@@ -518,13 +542,15 @@ Json GameInput::State() const
 			}
 		}
 		// A town's totem under the cursor is not taken into the hand: the Action button takes hold of it to slide it.
-		// Whether the first player's hand would take hold of it.
+		// Whether the hand of the god of this computer would take hold of it.
 		if (pick.object.has_value() && Locator::villageTotemSystem::has_value())
 		{
 			const auto& totems = Locator::villageTotemSystem::value();
 			if (const auto totem = totems.TotemOf(*pick.object); totem.has_value())
 			{
-				const auto why = totems.WhyNotGrip(*totem, PlayerNames::PLAYER_ONE);
+				const auto own =
+				    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+				const auto why = totems.WhyNotGrip(*totem, own);
 				state["pick"]["totem"] = {{"id", entt::to_integral(*totem)}, {"grips", why.empty()}, {"button", "right"}};
 				if (!why.empty())
 				{

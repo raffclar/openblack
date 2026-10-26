@@ -21,6 +21,7 @@
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Construction.h"
@@ -498,7 +499,7 @@ void TownDesireSystem::UpdateFlags(float seconds)
 		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({position.x, position.z}) : 0.0f;
 		position.y = ground + flag.overGround + town_desire_flags::Rise(flag.level);
 		transform.position = position;
-		transform.rotation = glm::mat3(glm::eulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
+		transform.rotation = glm::mat3(portable_math::EulerAngleY(-town_desire_flags::FacingAngle(position, eye)));
 		transform.scale = glm::vec3(town_desire_flags::DrawnScale(flag.level, showsAfter));
 	});
 }

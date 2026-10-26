@@ -9,12 +9,15 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <glm/vec3.hpp>
 
 namespace openblack::ecs::components
 {
 
-/// One sprite of the puff of dust thrown up where the hand grips the land
+/// One sprite of the puff of dust thrown up where the hand grips the land. The turns make and remove the sprite. The
+/// frames move it, so only its centre and its turns are the same on each computer of a network game.
 struct GripLandscapeParticle
 {
 	/// The puff's centre, which the sprites spread out from as it grows
@@ -25,6 +28,8 @@ struct GripLandscapeParticle
 	float age = 0.0f;
 	/// Animation frame, in frames since the start of the sprite sheet
 	float frame = 0.0f;
+	/// The steps of the turns that the sprite has before it goes, with the step of the turn that makes it
+	int32_t turnsLeft = 0;
 };
 
 } // namespace openblack::ecs::components

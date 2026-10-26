@@ -15,6 +15,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <glm/vec2.hpp>
@@ -68,6 +69,9 @@ public:
 	void DrawPicture(glm::u16vec2 resolution, const graphics::VideoOverlay::Planes& planes, video::ScreenRect rect,
 	                 uint8_t alpha);
 
+	/// The openblack build that the tips screen names in its bottom left corner, as the short commit hash
+	void SetBuild(std::string_view shortVersion);
+
 	/// The time spent loading, which moves the bar on
 	[[nodiscard]] loading::LoadingClock& GetClock() noexcept { return _clock; }
 
@@ -113,6 +117,8 @@ private:
 	std::optional<TipPicture> _picture;
 	bool _tipShowing {false};
 	std::u16string _version;
+	/// The openblack build, empty until the game gives it
+	std::u16string _build;
 	loading::LoadingClock _clock;
 };
 

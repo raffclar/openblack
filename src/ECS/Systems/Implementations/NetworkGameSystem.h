@@ -13,6 +13,7 @@
 #include <memory>
 #include <optional>
 #include <string>
+#include <vector>
 
 #include "ECS/Systems/NetworkGameSystemInterface.h"
 #include "Online/NetworkSession.h"
@@ -32,7 +33,10 @@ public:
 	/// the platform has no such client.
 	using MakeTestClient = std::function<std::unique_ptr<online::WebSocketClientInterface>(const std::string& authorities)>;
 
-	NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient);
+	/// Reads the creature file of the player's profile. Empty when the player has no creature.
+	using ReadCreature = std::function<std::vector<uint8_t>()>;
+
+	NetworkGameSystem(online::WebSocketClientInterface& sockets, MakeTestClient makeTestClient, ReadCreature readCreature);
 	~NetworkGameSystem() override;
 	NetworkGameSystem(const NetworkGameSystem&) = delete;
 	NetworkGameSystem& operator=(const NetworkGameSystem&) = delete;
@@ -40,23 +44,45 @@ public:
 	NetworkGameSystem& operator=(NetworkGameSystem&&) = delete;
 
 	bool Join(NetworkJoin join) override;
+	void SetReady(bool ready) override;
 	void PlayAlone() override;
+	void EndNetworkGame() override;
 	void Leave() override;
+	void StopGame() override;
+	[[nodiscard]] std::optional<game_socket::Start> TakeStart() override;
+	void BeginPlay() override;
 	void Update() override;
 	[[nodiscard]] bool InGame() const override;
 	[[nodiscard]] const online::NetworkSession* Session() const override { return _session.get(); }
+	[[nodiscard]] std::optional<online::StartEvent> TakeStartEvent() override
+	{
+		return _session ? _session->TakeStartEvent() : std::nullopt;
+	}
 
 private:
 	void Detach();
+	/// The world does the turns of the session
+	void Attach();
 	/// Loads the world state that the server sent after a resync
 	void LoadWorld(const online::NetworkSession::WorldState& world);
 
 	online::WebSocketClientInterface& _sockets;
 	MakeTestClient _makeTestClient;
+	ReadCreature _readCreature;
 	/// The WSS client of a test join, which only the session uses
 	std::unique_ptr<online::WebSocketClientInterface> _testClient;
 	std::unique_ptr<online::NetworkSession> _session;
 	bool _started {false};
+	/// The game loads the server's land, and calls BeginPlay once it loaded
+	bool _awaitingLand {false};
+	/// The join came from the command line: the game loads the server's land of the server's reply to the join, before
+	/// the player is ready
+	bool _fromCommandLine {false};
+	/// The reply of the server to the join of the command line was read
+	bool _joinReplyRead {false};
+	/// The clock stopped after the last turn of the game
+	bool _stopped {false};
+	std::optional<game_socket::Start> _pendingStart;
 	bool _endLogged {false};
 	std::optional<uint32_t> _partAt;
 	bool _partAgain {false};

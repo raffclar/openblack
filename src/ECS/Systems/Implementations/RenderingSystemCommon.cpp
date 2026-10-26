@@ -28,6 +28,7 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "Fire/FireGraphic.h"
 #include "Graphics/BonePalette.h"
@@ -99,12 +100,13 @@ RenderContext::RenderContext()
     , partialBuildInstanceBuffer(BGFX_INVALID_HANDLE)
     , heldInstanceBuffer(BGFX_INVALID_HANDLE)
     , soulInstanceBuffer(BGFX_INVALID_HANDLE)
+    , rootsPileInstanceBuffer(BGFX_INVALID_HANDLE)
 {
 }
 RenderContext::~RenderContext()
 {
-	for (const auto& handle :
-	     {instanceUniformBuffer, treeInstanceUniformBuffer, partialBuildInstanceBuffer, heldInstanceBuffer, soulInstanceBuffer})
+	for (const auto& handle : {instanceUniformBuffer, treeInstanceUniformBuffer, partialBuildInstanceBuffer, heldInstanceBuffer,
+	                           soulInstanceBuffer, rootsPileInstanceBuffer})
 	{
 		if (bgfx::isValid(toBgfx(handle)))
 		{
@@ -126,6 +128,62 @@ void RenderingSystemCommon::SetLayoutDirty()
 {
 	_renderContext.dirty = true;
 	_renderContext.layoutDirty = true;
+}
+
+void RenderingSystemCommon::UploadRootsPiles()
+{
+	auto& instances = _renderContext.rootsPileInstances;
+	instances.clear();
+	_renderContext.rootsPileOpaqueCount = 0;
+	if (!Locator::explosionSystem::has_value())
+	{
+		return;
+	}
+	const auto piles = Locator::explosionSystem::value().RootsPiles();
+	// The opaque piles first, then the piles that fade, each blended by its alpha
+	for (const bool fading : {false, true})
+	{
+		for (const auto& pile : piles)
+		{
+			if (pile.alpha.has_value() != fading)
+			{
+				continue;
+			}
+			const float faded = fading ? -(1.0f - static_cast<float>(*pile.alpha) / 255.0f) : 0.0f;
+			instances.push_back({.model = PlacedMatrix(pile.position, pile.rotation, glm::vec3(pile.scale)),
+			                     .look = glm::vec4(0.0f, 0.0f, faded, 0.0f)});
+		}
+		if (!fading)
+		{
+			_renderContext.rootsPileOpaqueCount = static_cast<uint32_t>(instances.size());
+		}
+	}
+	const auto count = static_cast<uint32_t>(instances.size());
+	if (count == 0)
+	{
+		return;
+	}
+	if (_renderContext.rootsPileCapacity < count)
+	{
+		if (bgfx::isValid(toBgfx(_renderContext.rootsPileInstanceBuffer)))
+		{
+			bgfx::destroy(toBgfx(_renderContext.rootsPileInstanceBuffer));
+		}
+		bgfx::VertexLayout layout;
+		layout.begin()
+		    .add(bgfx::Attrib::TexCoord7, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord6, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord5, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord4, 4, bgfx::AttribType::Float)
+		    .add(bgfx::Attrib::TexCoord3, 4, bgfx::AttribType::Float)
+		    .end();
+		// Room for a few more piles, so that the next trees pulled free do not make it again
+		const uint32_t capacity = count + 8;
+		_renderContext.rootsPileInstanceBuffer = graphics::fromBgfx(bgfx::createDynamicVertexBuffer(capacity, layout));
+		_renderContext.rootsPileCapacity = capacity;
+	}
+	bgfx::update(toBgfx(_renderContext.rootsPileInstanceBuffer), 0,
+	             bgfx::copy(instances.data(), static_cast<uint32_t>(count * sizeof(RenderContext::ObjectInstance))));
 }
 
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
@@ -150,6 +208,8 @@ void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths
 		    _renderContext.streamSegments.push_back(glm::translate(transform.position) * glm::mat4(transform.rotation) *
 		                                            glm::scale(transform.scale));
 	    });
+
+	UploadRootsPiles();
 
 	const bool optionsChanged = _renderContext.hasBoundingBoxes != drawBoundingBox ||
 	                            (_renderContext.footpaths != nullptr) != drawFootpaths ||

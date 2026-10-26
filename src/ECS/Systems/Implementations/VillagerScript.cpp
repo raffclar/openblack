@@ -26,6 +26,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/HandGrab.h"
@@ -281,7 +282,7 @@ void villager_script::Face(entt::entity villager, glm::vec2 point)
 	{
 		return;
 	}
-	SetYAngle(villager, std::atan2(offset.y, offset.x));
+	SetYAngle(villager, portable_math::Atan2(offset.y, offset.x));
 }
 
 namespace
@@ -375,7 +376,7 @@ void villager_script::SetYAngle(entt::entity villager, float angle)
 	}
 	wallHug->yAngle = angle;
 	wallHug->gameAngle = static_cast<uint16_t>(gutils::ConvertAngle3DToGame(angle));
-	transform->rotation = glm::eulerAngleY(-angle - glm::radians(90.0f));
+	transform->rotation = portable_math::EulerAngleY(-angle - glm::radians(90.0f));
 	registry.SetDirty();
 }
 
@@ -442,7 +443,7 @@ uint32_t villager_script::MoveAlongPath(LivingAction& action)
 	constexpr float k_LeastSquaredDistance = 0.001f;
 	if (glm::dot(offset, offset) > k_LeastSquaredDistance)
 	{
-		SetYAngle(villager, std::atan2(offset.y, offset.x));
+		SetYAngle(villager, portable_math::Atan2(offset.y, offset.x));
 	}
 	// At the map position there, on the ground
 	const auto place = map_coords::FromMetres(*point);

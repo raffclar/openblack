@@ -31,6 +31,7 @@
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Particles/ParticleEffect.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -58,6 +59,11 @@ std::optional<PlayerNames> GameTempleDestructionWorld::LocalPlayer() const
 		return std::nullopt;
 	}
 	return Locator::playerSystem::value().GetLocalPlayer();
+}
+
+bool GameTempleDestructionWorld::NetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
 }
 
 entt::entity GameTempleDestructionWorld::StartLoop(entt::id_type sound, glm::vec3 position, entt::entity owner)
@@ -187,7 +193,7 @@ void GameTempleDestructionWorld::StartScript(std::string_view name)
 {
 	if (Locator::vm::has_value())
 	{
-		Locator::vm::value().StartScript(std::string(name), lhvm::ScriptType::All);
+		Locator::vm::value().StartScript(std::string(name), script::start::StartableScripts());
 	}
 }
 

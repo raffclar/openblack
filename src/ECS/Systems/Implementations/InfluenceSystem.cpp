@@ -42,6 +42,7 @@
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/InfluenceRules.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
@@ -744,6 +745,13 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
+	// In a network game a player with no temple has no influence at all
+	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
+	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
+	                                                  hasTemple))
+	{
+		return 0.0f;
+	}
 	// Under another player's shield a player has no influence at all, nor within an anti-influence a script made for them
 	if (Shielded(player, position))
 	{

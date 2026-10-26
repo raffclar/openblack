@@ -37,8 +37,8 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
-#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -75,9 +75,10 @@ namespace
 	return found;
 }
 
-[[nodiscard]] PlayerNames LocalPlayer()
+/// The player whose hand this computer moves: only this player hears the icons
+[[nodiscard]] PlayerNames OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 } // namespace
 
@@ -336,6 +337,30 @@ void SpellIconSystem::TownChangedHands(entt::entity town, PlayerNames previous)
 	}
 }
 
+void SpellIconSystem::PlayerMade(PlayerNames player)
+{
+	// The towns of the player gave their miracles to no one while the player had no entity
+	auto& registry = Entities();
+	std::vector<MagicType> offered;
+	registry.Each<const Town, const TownMagic>([player, &offered](const Town& town, const TownMagic& magicHeld) {
+		if (town.owner != player)
+		{
+			return;
+		}
+		for (size_t i = 0; i < magicHeld.held.size(); ++i)
+		{
+			if (magicHeld.held.at(i))
+			{
+				offered.push_back(static_cast<MagicType>(i));
+			}
+		}
+	});
+	for (const auto type : offered)
+	{
+		SetEnabled(player, type, true);
+	}
+}
+
 std::vector<SpellSeedType> SpellIconSystem::SeedsOfTown(entt::entity town) const
 {
 	auto& registry = Entities();
@@ -529,13 +554,20 @@ bool SpellIconSystem::IsEnabled(PlayerNames player, MagicType type) const
 
 bool SpellIconSystem::HandReady(PlayerNames player) const
 {
-	// Only the hand at this machine takes miracles from icons, and only while it holds nothing
-	if (player != LocalPlayer() || !Locator::magicSystem::has_value())
+	// Only the hand of a human player takes miracles from icons, and only while it holds nothing. Each computer reads the
+	// same hands, so the turns may read this.
+	if (!Locator::magicSystem::has_value())
 	{
 		return false;
 	}
-	const bool holdsThing = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsBusy();
-	return !holdsThing && !Locator::magicSystem::value().IsHandBusy();
+	const bool human = Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(player).has_value()
+	                                                    : player == PlayerNames::PLAYER_ONE;
+	if (!human)
+	{
+		return false;
+	}
+	const bool holdsThing = Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().IsBusyOf(player);
+	return !holdsThing && !Locator::magicSystem::value().IsHandBusyOf(player);
 }
 
 float SpellIconSystem::Required(const WorshipIcon& icon) const
@@ -564,13 +596,17 @@ entt::entity SpellIconSystem::HeldSeedOf(const WorshipIcon& icon) const
 {
 	auto& registry = Entities();
 	const auto* site = registry.Valid(icon.site) ? registry.TryGet<const WorshipSite>(icon.site) : nullptr;
-	const auto held = Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeed() : std::nullopt;
-	if (site == nullptr || !held.has_value() || !registry.Valid(*held) ||
-	    std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	if (site == nullptr)
 	{
 		return entt::null;
 	}
-	// Only a hand of the icon's player counts
+	// Only the hand of the icon's player counts
+	const auto held =
+	    Locator::magicSystem::has_value() ? Locator::magicSystem::value().GetHeldSeedOf(site->player) : std::nullopt;
+	if (!held.has_value() || !registry.Valid(*held) || std::ranges::find(icon.seedsOut, *held) == icon.seedsOut.end())
+	{
+		return entt::null;
+	}
 	const auto* seed = registry.TryGet<const SpellSeed>(*held);
 	return seed != nullptr && seed->player == site->player ? *held : entt::null;
 }
@@ -648,15 +684,7 @@ icons::TapResult SpellIconSystem::TapSiteIcon(entt::entity icon, PlayerNames pla
 		component.store = 0.0f;
 		break;
 	case icons::TapResult::StartedCharge:
-		component.charging = true;
-		component.powerUp = magic::k_BasePowerUpLevel;
-		component.charger = player;
-		component.chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-		// Already full, it goes straight into the hand
-		if (icons::ReadyForHand(ChargeOf(component, player), handReady))
-		{
-			GiveSeed(icon);
-		}
+		StartCharge(icon, player);
 		break;
 	case icons::TapResult::Nothing:
 		break;
@@ -718,6 +746,153 @@ void SpellIconSystem::TakeCastCharge(entt::entity icon)
 	}
 	const float cost = RequiredNow(*component, HeldSeedOf(*component));
 	component->store -= std::min(cost, component->store);
+}
+
+void SpellIconSystem::StartCharge(entt::entity icon, PlayerNames player)
+{
+	auto& component = Entities().Get<WorshipIcon>(icon);
+	component.charging = true;
+	component.powerUp = magic::k_BasePowerUpLevel;
+	component.charger = player;
+	component.chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// Already full, it goes straight into the hand
+	if (icons::ReadyForHand(ChargeOf(component, player), HandReady(player)))
+	{
+		GiveSeed(icon);
+	}
+}
+
+std::vector<entt::entity> SpellIconSystem::SitesOf(PlayerNames player) const
+{
+	std::vector<entt::entity> sites;
+	if (!Locator::worshipSiteSystem::has_value())
+	{
+		return sites;
+	}
+	const auto& registry = Entities();
+	const auto temple = Locator::worshipSiteSystem::value().TempleOf(player);
+	const auto* worship = registry.Valid(temple) ? registry.TryGet<const CitadelWorship>(temple) : nullptr;
+	if (worship == nullptr)
+	{
+		return sites;
+	}
+	for (const auto site : worship->sites)
+	{
+		if (registry.Valid(site) && registry.AllOf<WorshipSite>(site))
+		{
+			sites.push_back(site);
+		}
+	}
+	return sites;
+}
+
+bool SpellIconSystem::IconValidForRequest(entt::entity icon, PlayerNames player) const
+{
+	const auto& registry = Entities();
+	const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+	if (component == nullptr || !Locator::infoConstants::has_value() || !Locator::worshipSiteSystem::has_value())
+	{
+		return false;
+	}
+	const auto& sites = Locator::worshipSiteSystem::value();
+	const bool functional = icons::Functional(ecs::world_objects::LifeOf(icon), sites.IsBuilt(component->site));
+	const auto plain = magic::GetMagicTypeFromPowerUpLevel(
+	    magic::GetSpellSeedInfo(Locator::infoConstants::value(), component->seed), magic::k_BasePowerUpLevel);
+	return icons::ValidForRequest(ChargeOf(*component, player), functional, HandReady(player), IsEnabled(player, plain),
+	                              sites.TotalChantsAvailable(component->site));
+}
+
+std::vector<SpellSeedType> SpellIconSystem::SeedsForSelection(PlayerNames player, GestureType opening) const
+{
+	std::vector<SpellSeedType> seeds;
+	if (opening == GestureType::None || !Locator::infoConstants::has_value())
+	{
+		return seeds;
+	}
+	const auto& info = Locator::infoConstants::value();
+	const auto& registry = Entities();
+	for (const auto site : SitesOf(player))
+	{
+		const auto* list = registry.TryGet<const SiteIcons>(site);
+		if (list == nullptr)
+		{
+			continue;
+		}
+		for (const auto icon : list->icons)
+		{
+			const auto* component = registry.Valid(icon) ? registry.TryGet<const WorshipIcon>(icon) : nullptr;
+			if (component != nullptr && magic::GetSpellSeedInfo(info, component->seed).selectionGesture == opening &&
+			    IconValidForRequest(icon, player))
+			{
+				seeds.push_back(component->seed);
+			}
+		}
+	}
+	return seeds;
+}
+
+bool SpellIconSystem::ValidForRequest(PlayerNames player, SpellSeedType seed) const
+{
+	if (seed == SpellSeedType::None)
+	{
+		return false;
+	}
+	return std::ranges::any_of(SitesOf(player), [this, player, seed](entt::entity site) {
+		return IconValidForRequest(SiteIconOf(site, seed), player);
+	});
+}
+
+SpellSeedType SpellIconSystem::LastSeedGained(PlayerNames player) const
+{
+	auto seed = SpellSeedType::None;
+	Entities().Each<const ecs::components::Player>([player, &seed](entt::entity, const ecs::components::Player& record) {
+		if (record.name == player)
+		{
+			seed = record.lastSeedGained;
+		}
+	});
+	return seed;
+}
+
+bool SpellIconSystem::RequestSeed(PlayerNames player, SpellSeedType seed)
+{
+	if (seed == SpellSeedType::None || !Locator::worshipSiteSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	// The icon at the site with the most prayer power left this turn gives the miracle; the first site wins a tie
+	entt::entity best = entt::null;
+	float bestChants = -1.0f;
+	for (const auto site : SitesOf(player))
+	{
+		const float chants = Locator::worshipSiteSystem::value().ChantsAvailable(site);
+		const auto icon = SiteIconOf(site, seed);
+		if (IconValidForRequest(icon, player) && chants > bestChants)
+		{
+			bestChants = chants;
+			best = icon;
+		}
+	}
+	if (best == entt::null)
+	{
+		return false;
+	}
+	const auto& component = Entities().Get<const WorshipIcon>(best);
+	const auto plain = magic::GetMagicTypeFromPowerUpLevel(
+	    magic::GetSpellSeedInfo(Locator::infoConstants::value(), component.seed), magic::k_BasePowerUpLevel);
+	switch (icons::Request(ChargeOf(component, player), HandReady(player), IsEnabled(player, plain),
+	                       Locator::worshipSiteSystem::value().TotalChantsAvailable(component.site)))
+	{
+	case icons::TapResult::PutInHand:
+		return GiveSeed(best);
+	case icons::TapResult::StartedCharge:
+		StartCharge(best, player);
+		return true;
+	case icons::TapResult::Cancelled:
+	case icons::TapResult::Nothing:
+		break;
+	}
+	return false;
 }
 
 bool SpellIconSystem::ValidToTap(entt::entity icon, PlayerNames player) const
@@ -784,7 +959,7 @@ bool SpellIconSystem::Tap(entt::entity icon, PlayerNames player)
 	}
 	const auto result = TapSiteIcon(siteIcon, player);
 	// A tap that did something clicks, faster the further along the centre its hand stands, for the hand at this machine
-	if (result != icons::TapResult::Nothing && player == LocalPlayer() && Locator::audio::has_value())
+	if (result != icons::TapResult::Nothing && player == OwnPlayer() && Locator::audio::has_value())
 	{
 		audio::StartGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_ClickOnSpell_01),
 		                            {.pitchPercent = icons::ClickPitch(hand)});
@@ -900,7 +1075,7 @@ void SpellIconSystem::ChargedAt(entt::entity site, std::span<const magic::Worshi
 			{
 				GiveSeed(made.at(i));
 			}
-			if (sitePlayer == LocalPlayer() && Locator::audio::has_value())
+			if (sitePlayer == OwnPlayer() && Locator::audio::has_value())
 			{
 				const auto voice = icons::FullyChargedVoice(component.seed);
 				audio::StartGameSoundEffect(entt::hashed_string(fmt::format("SpellDialogue.sad/{}", voice).c_str()).value(),

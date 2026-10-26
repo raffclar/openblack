@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <span>
 #include <string>
+#include <tuple>
 #include <utility>
 #include <vector>
 
@@ -47,6 +48,29 @@ namespace
 
 /// Where the hand of a god with no temple starts, in metres
 constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
+
+/// The entity of the player. The game makes the player when the land has none, and the player is known to the players at
+/// once, so that a creature made for it next is its creature.
+entt::entity PlayerEntity(PlayerNames player)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	entt::entity entity = entt::null;
+	registry.Each<const Player>([&entity, player](entt::entity each, const Player& name) {
+		if (name.name == player && entity == entt::null)
+		{
+			entity = each;
+		}
+	});
+	if (entity == entt::null)
+	{
+		entity = ecs::archetypes::PlayerArchetype::Create(player);
+		if (Locator::playerSystem::has_value())
+		{
+			Locator::playerSystem::value().AddPlayer(entity);
+		}
+	}
+	return entity;
+}
 
 /// The game's own world, through the registry and the systems in the locator
 class GameWorld final: public computer_player::World
@@ -169,6 +193,8 @@ public:
 		return computer;
 	}
 
+	void MakePlayer(PlayerNames player) override { std::ignore = PlayerEntity(player); }
+
 	void SwitchOn(PlayerNames player) override { _minds.SwitchOn(player, true); }
 
 	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
@@ -223,22 +249,7 @@ ComputerPlayerSystem::~ComputerPlayerSystem() = default;
 ComputerPlayer& ComputerPlayerSystem::MindOf(PlayerNames player)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	entt::entity entity = entt::null;
-	registry.Each<const Player>([&entity, player](entt::entity each, const Player& name) {
-		if (name.name == player && entity == entt::null)
-		{
-			entity = each;
-		}
-	});
-	// The player made here is known to the players at once, so that the creature made for it next is its creature
-	if (entity == entt::null)
-	{
-		entity = ecs::archetypes::PlayerArchetype::Create(player);
-		if (Locator::playerSystem::has_value())
-		{
-			Locator::playerSystem::value().AddPlayer(entity);
-		}
-	}
+	const auto entity = PlayerEntity(player);
 	auto* mind = registry.TryGet<ComputerPlayer>(entity);
 	auto& state = mind != nullptr ? *mind : registry.Assign<ComputerPlayer>(entity);
 	// Every player has the tree of needs from its start, so a land script can set its weights at any time
@@ -334,4 +345,17 @@ void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std
 {
 	GameSlotWorld world(*this);
 	computer_player::FillEmptySlots(world, gods, humans);
+}
+
+void ComputerPlayerSystem::WaitForHumans()
+{
+	Locator::entitiesRegistry::value().Context().slotsWaitForHumans = true;
+}
+
+void ComputerPlayerSystem::HumansJoined(std::span<const PlayerNames> humans)
+{
+	// The slots fill one time on the land
+	const bool waits = std::exchange(Locator::entitiesRegistry::value().Context().slotsWaitForHumans, false);
+	GameSlotWorld world(*this);
+	computer_player::HumansJoin(world, humans, waits);
 }

@@ -34,11 +34,13 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -52,9 +54,6 @@ constexpr uint32_t k_TurnsPerSecond =
     static_cast<uint32_t>(std::chrono::milliseconds(std::chrono::seconds(1)) / TimeSystemInterface::k_TurnDuration);
 /// The messages kept for the inspector
 constexpr size_t k_ToldKept = 16;
-/// The kinds of script a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
-
 uint32_t Turn()
 {
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
@@ -96,7 +95,8 @@ bool InView(const ecs::Registry& registry, entt::entity creature)
 	{
 		return false;
 	}
-	const auto camera = ecs::TurnCamera(body->owner);
+	// A camera of the creature's player looks at it: the camera that the player last reported, in a game alone too
+	const auto camera = ecs::ReportedPlayerCamera(body->owner);
 	return camera.has_value() && help::LooksAt(camera->origin, camera->focus, transform->position);
 }
 
@@ -190,7 +190,7 @@ void Say(std::string_view script, uint32_t text)
 	}
 	auto& vm = Locator::vm::value();
 	vm.Pushf(static_cast<float>(text));
-	vm.StartScript(std::string(script), k_SinglePlayerScripts);
+	vm.StartScript(std::string(script), script::start::StartableScripts());
 }
 
 help::Memory& MemoryOf(ecs::Registry& registry, entt::entity creature)
@@ -235,8 +235,7 @@ void CreatureHelpSystem::Raise(entt::entity creature, const help::Message& messa
 	    .stage = mind != nullptr ? mind->developmentPhase : help::k_HelpStage,
 	    .outOrAsleep = OutOrAsleep(registry, creature),
 	    .dialogueTaken = DialogueTaken(),
-	    .handOnCreature =
-	        Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == creature,
+	    .handOnCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature),
 	    .raisedThisTurn = _toldTurn == turn,
 	    .scriptControlled = registry.AllOf<ScriptControlled>(creature),
 	    .inDevelopmentScript = mind != nullptr && mind->inDevelopmentScript,
@@ -273,7 +272,7 @@ void CreatureHelpSystem::Tell(entt::entity creature, const help::Message& messag
 		const auto land = static_cast<uint32_t>(registry.Context().mapScriptGlobals.landNumber);
 		if (const auto script = help::StageScript(message.kind, land); script.has_value() && Locator::vm::has_value())
 		{
-			Locator::vm::value().StartScript(std::string(*script), k_SinglePlayerScripts);
+			Locator::vm::value().StartScript(std::string(*script), script::start::StartableScripts());
 			if (auto* mind = registry.TryGet<CreatureMindState>(creature); mind != nullptr)
 			{
 				mind->inDevelopmentScript = true;
@@ -412,8 +411,13 @@ void CreatureHelpSystem::UpdateCreature(entt::entity creature)
 		}
 	}();
 
-	// How steadily the player's hand has been over it
-	const bool over = Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object == creature;
+	// How steadily the player's hand has been over it. In a network game the turn knows the thing under the cursor
+	// from the player's last pick, so that every computer counts the same. A single game reads the pick of this
+	// computer at once.
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	const bool over = networkGame
+	                      ? Locator::handSystem::has_value() && Locator::handSystem::value().GetReportedPick() == creature
+	                      : Locator::pickingSystem::has_value() && Locator::pickingSystem::value().GetPick().object == creature;
 	auto& memory = MemoryOf(registry, creature);
 	memory.handOver = help::NextHandOver(memory.handOver, over);
 }

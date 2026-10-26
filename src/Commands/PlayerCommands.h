@@ -190,22 +190,178 @@ struct CreatureBruise
 	std::optional<creature_marks::Mark> wound;
 };
 
+/// A press of the hand on the ground of the arena while the hand directs the fight of the player's creature. The turn
+/// makes the creature step towards the point, from where the creature stands and the way that it faces then.
+struct FightGround
+{
+	entt::entity creature;
+	/// The point on the ground that the hand pressed
+	glm::vec3 point;
+	/// The Move button makes the step in place of the queued moves; the Action button adds it after them
+	bool replace;
+};
+
+/// A move of the player's fighting creature that the hand or a gesture of the player gives: a press on the opponent or
+/// on the player's creature, the special move or a miracle of the fight. The turn adds the move to the queue of the
+/// sending player's creature.
+struct FightMove
+{
+	/// What the hand pressed on: the opponent or the player's own creature, or the creature of a gesture
+	entt::entity target;
+	/// The kind of the move (a creature_fight::Move::Kind) and its value: the animation or the miracle
+	uint8_t kind;
+	uint32_t value;
+	/// The move goes in place of the queued moves (the Move button), or after them
+	bool replace;
+};
+
+/// The player let go of the button that pressed on a body in a fight: the blow that waits last in the queue of the
+/// sending player's creature gets the charge
+struct FightCharge
+{
+	/// How long the button was held, in milliseconds
+	uint32_t heldMs;
+};
+
+/// A stroke or a slap of the creature that the hand holds, in a network game: every computer plays the creature's
+/// reaction at the same turn
+struct CreatureReaction
+{
+	entt::entity creature;
+	/// The animation of the reaction and whether it plays mirrored
+	uint32_t animation;
+	bool mirrored;
+	/// The face that the reaction pulls, if it pulls one: the face (a creature_face::Face), how long and why (a
+	/// creature_face::Cue)
+	bool pullsFace;
+	uint8_t face;
+	float faceMs;
+	uint8_t cue;
+	/// The share of the way through what the body plays that the reaction can stop it at
+	float interruptsAfter;
+};
+
+/// A click of the hand in a network game: the turn writes the click that the scripts read, so that the scripts of
+/// every computer read the same click
+struct HandClick
+{
+	/// The thing that the hand clicked, or none
+	entt::entity thing;
+	/// The click is the let go of a press: with no thing, the place on the land is clicked, or with no place the thing
+	/// is forgotten
+	bool release;
+	/// The place on the land of a let go, in the fixed units of the map
+	bool hasPlace;
+	int32_t placeX;
+	int32_t placeZ;
+};
+
+/// A gesture of the hand on the miracle in the hand: a power-up, a scribble or a shake. The turn powers the seed up,
+/// stops its power-up or drops it.
+struct SeedGesture
+{
+	enum class Kind : uint8_t
+	{
+		PowerUp,
+		Scribble,
+		Shake,
+	};
+	Kind kind;
+	/// The level of a power-up
+	int8_t level;
+};
+
 /// The player of the command left a network game, or did not come back in time. Only the game server sends it. The
 /// world defeats the player's god at the turn, and the god's slot stays closed.
 struct PlayerLeft
 {
 };
 
-/// The player of the command is a god of the network game from its start. Only the game server sends it, in the first
-/// turn. The world gives the player hands of its own.
+/// The thing under the cursor of the player's hand in a network game, sent when it changes. The turn keeps it with the
+/// report of the hand, so that every computer counts the same time that the hand stays over the creature.
+struct HandPick
+{
+	/// The thing under the cursor, or none
+	entt::entity object;
+};
+
+/// The player of the command is a human god of the network game from its start. Only the game server sends it, for each
+/// human in the first turn. The world gives the player hands of its own, makes the player when the land has none, and
+/// gives each slot with no human a computer god.
 struct PlayerJoined
 {
+};
+
+/// The miracle selection chose a miracle: the player's icons give the miracle of the seed to the hand, or one of them
+/// starts to charge it. The turn checks again that an icon may do it.
+struct MiracleRequest
+{
+	SpellSeedType seed;
+};
+
+/// The R gesture or the R key: the player's icons give the last miracle that went into the player's hand again, or one
+/// of them starts to charge it. The turn reads that miracle and checks again that an icon may do it.
+struct MiracleRepeat
+{
+};
+
+/// The cast of the miracle in the player's hand, as the hand of that player found it: on a thing, or at a point on the
+/// land. A miracle that the hand keeps locked on sends one cast at each turn that the button stays down. The turn checks
+/// again that the miracle may be cast there, then casts it with the hand as the command gives it. Thus every computer
+/// casts the same miracle at the same turn.
+struct HandCast
+{
+	/// The thing that the miracle is cast on, or none for a cast on the land
+	entt::entity object {entt::null};
+	/// The point on the land: the point under the hand, or the middle of the circle that the player drew
+	glm::vec3 point {0.0f};
+	/// The size of the miracle: the radius of the circle that the player drew, or the plain size
+	float size {0.0f};
+	/// The place of the hand at the cast
+	glm::vec3 handPosition {0.0f};
+	/// The direction that the camera looks in at the cast
+	glm::vec3 cameraForward {0.0f, 0.0f, 1.0f};
+	/// The smoothed velocity of the hand at the cast
+	glm::vec3 handVelocity {0.0f};
+	/// The spin that the movement of the hand gives the miracle
+	float spin {0.0f};
+};
+
+/// The player let go of the button that kept a miracle locked on in the hand: the miracle stops, and the seed keeps what
+/// the miracle has left
+struct HandCastUnlock
+{
+	/// The seed in the hand
+	entt::entity seed {entt::null};
+};
+
+/// The gesture of the leash picker chose a leash: the creature of the player changes to the leash of this type, if it
+/// knows that leash
+struct LeashPick
+{
+	LeashType type;
+};
+
+/// A scribble of the hand shakes off the thing that the hand holds. The thing falls from where the hand holds it, with
+/// no speed, and the turn does not plant it again.
+struct HandShakeOff
+{
+};
+
+/// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
+/// makes the same dust at the same turn.
+struct GripDust
+{
+	/// The point on the ground under the hand at the grip
+	glm::vec3 point {0.0f};
 };
 
 /// What a command does
 using Action =
     std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, PlayerLeft, PlayerJoined>;
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust>;
 
 /// A command and the player that sent it
 struct Command

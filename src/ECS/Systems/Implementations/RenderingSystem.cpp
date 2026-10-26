@@ -50,7 +50,6 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Graveyard.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -75,13 +74,16 @@
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
 #include "ECS/Registry.h"
 #include "ECS/SnowLevels.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -137,16 +139,28 @@ entt::id_type DrawnMeshOf(entt::entity entity, const Mesh& mesh)
 	           : mesh.id;
 }
 
+/// Where the camera is and the way that it looks. The frame finds them one time, not one time for each thing.
+struct ViewPoint
+{
+	glm::vec3 eye;
+	glm::vec3 forward;
+
+	[[nodiscard]] static ViewPoint Of(const openblack::Camera& camera)
+	{
+		return {.eye = camera.GetOrigin(), .forward = camera.GetForward()};
+	}
+};
+
 /// How a thing is drawn this frame by how deep into the view the middle of `box` is, drawn by `model`: the box of its
 /// own mesh, or of a villager's standard mesh. Whether it fades out is only asked of one that has come that far.
 template <typename Disappears>
 openblack::graphics::mesh_detail::Choice ChooseDetail(const openblack::AxisAlignedBoundingBox& box, float importance,
                                                       const glm::mat4& model, float scale, Disappears&& disappears,
-                                                      const openblack::Camera& camera, float modelDetail)
+                                                      const ViewPoint& camera, float modelDetail)
 {
 	namespace mesh_detail = openblack::graphics::mesh_detail;
 	const auto centre = glm::vec3(model * glm::vec4(box.Center(), 1.0f));
-	const float depth = mesh_detail::ViewDepth(centre, camera.GetOrigin(), camera.GetForward());
+	const float depth = mesh_detail::ViewDepth(centre, camera.eye, camera.forward);
 	const float reach = mesh_detail::Reach(importance, mesh_detail::ScaledRadius(box.Size(), scale), modelDetail);
 	const auto choice = mesh_detail::Choose(depth, reach, true);
 	if ((choice.alpha.has_value() || !choice.mesh.has_value()) && !disappears())
@@ -215,7 +229,8 @@ void EachBySegment(const Place& place, SegmentPasses passes)
 	using namespace openblack::ecs::components;
 	do
 	{
-		passes.registry.Each<Components...>(place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+		passes.registry.Each<Components...>(
+		    place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	} while (passes.placed++ < passes.last);
 }
 
@@ -302,8 +317,7 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 			count.first->second.alphaTexturedAdditive = true;
 			count.first->second.shineColour = blended->shineColour;
 		}
-		if (const auto* mark = registry.TryGet<const GroundMark>(entity);
-		    (mark != nullptr && mark->alpha.has_value()) || registry.AllOf<SeeThrough>(entity))
+		if (registry.AllOf<SeeThrough>(entity))
 		{
 			count.first->second.translucent = true;
 			count.first->second.instanceAlpha = true;
@@ -347,12 +361,45 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);
 	    },
 	    entt::exclude<Tree>);
+	// The marks on the land, which only the frames draw, are drawn as the things of their model are. Each one has room
+	// among those fading out too.
+	if (Locator::explosionSystem::has_value())
+	{
+		for (const auto& mark : Locator::explosionSystem::value().GroundMarks())
+		{
+			auto count = meshIds.insert(std::make_pair(mark.mesh, MeshInstances {.count = 0,
+			                                                                     .morphWithTerrain = mark.morphWithTerrain,
+			                                                                     .unlit = false,
+			                                                                     .perEntity = false,
+			                                                                     .translucent = false,
+			                                                                     .alphaTexturedAdditive = false,
+			                                                                     .shineColour = std::nullopt,
+			                                                                     .additiveShare = std::nullopt,
+			                                                                     .instanceAlpha = false,
+			                                                                     .villagers = true,
+			                                                                     .film = true,
+			                                                                     .environmentMapped = true,
+			                                                                     .changedMaterials = std::nullopt}));
+			count.first->second.count++;
+			count.first->second.villagers = false;
+			count.first->second.film = false;
+			count.first->second.environmentMapped = false;
+			// A mark that fades by its alpha is blended
+			if (mark.alpha.has_value())
+			{
+				count.first->second.translucent = true;
+				count.first->second.instanceAlpha = true;
+			}
+			++fadingCounts[mark.mesh];
+			instanceCount += 2;
+		}
+	}
 	// A tree out of the land has its roots drawn under it: once, or twice while it moves in the physics
 	const Mesh roots {.id = RootsMesh(), .submeshId = 0, .bbSubmeshId = 0};
 	registry.Each<const Tree, const ShownRoots>(
@@ -551,6 +598,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	_fadingThings.clear();
 	_goneThings.clear();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 
 	const auto& vegetation = Locator::vegetation::value();
@@ -583,7 +631,8 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	uint32_t lastSegment = 0;
 	EachBySegment<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
-	     drawBoundingBox, camera, modelDetail, drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     drawBoundingBox, camera, &view, modelDetail,
+	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
 		    const auto segment = fizzOrder.SegmentOf(entity);
 		    lastSegment = std::max(lastSegment, segment);
 		    if (segment != segmentPlaced)
@@ -593,8 +642,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    // A villager is drawn gliding between its turns and turning after the way it faces; one held by the opening's
 		    // hand is drawn in its grip
 		    const auto* villagerPose = registry.TryGet<const VillagerPose>(entity);
-		    const auto standsAt = DrawnPosition(transform.position, villagerPose);
-		    const auto rotation = DrawnRotation(transform.rotation, villagerPose);
+		    // A walking creature is drawn between its last two turns, and what it holds in its drawn hand
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    const auto standsAt = DrawnPosition(drawnPlace.position, villagerPose);
+		    const auto rotation = DrawnRotation(drawnPlace.rotation, villagerPose);
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
@@ -648,7 +699,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				    return;
 			    }
 			    gone = true;
-			    _goneThings.insert(entity);
+			    _goneThings.push(entity);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
 		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
@@ -671,7 +722,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 				        [&registry, entity] {
 					        return object_detail::Disappears(registry, entity, IsTownCentre(registry, entity));
 				        },
-				        *camera, modelDetail);
+				        *view, modelDetail);
 				    if (noteKept)
 				    {
 					    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, keptBox,
@@ -683,7 +734,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    if (detail == nullptr)
 					    {
 						    gone = true;
-						    _goneThings.insert(entity);
+						    _goneThings.push(entity);
 					    }
 					    else if (!registry.AllOf<Villager>(entity))
 					    {
@@ -851,11 +902,6 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    if (const auto* glow = registry.TryGet<const ObjectGlow>(entity); glow != nullptr && abode == nullptr)
 		    {
 			    added = glow->Packed();
-		    }
-		    // A blast's rubble fades by its alpha in its last second
-		    if (const auto* mark = registry.TryGet<const GroundMark>(entity); mark != nullptr && mark->alpha.has_value())
-		    {
-			    look.z = -(1.0f - static_cast<float>(*mark->alpha) / 255.0f);
 		    }
 		    // A see-through copy is blended by its own alpha
 		    if (const auto* seeThrough = registry.TryGet<const SeeThrough>(entity))
@@ -1055,8 +1101,7 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 					    {
 						    const auto box = meshes.Handle(heldId)->GetBoundingBox();
 						    const auto centre = glm::vec3(held * glm::vec4(box.Center(), 1.0f));
-						    const float depth =
-						        graphics::mesh_detail::ViewDepth(centre, camera->GetOrigin(), camera->GetForward());
+						    const float depth = graphics::mesh_detail::ViewDepth(centre, view->eye, view->forward);
 						    const float reach = graphics::mesh_detail::Reach(
 						        0.0f, graphics::mesh_detail::ScaledRadius(box.Size(), glm::length(glm::vec3(held[0]))),
 						        modelDetail);
@@ -1131,6 +1176,82 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	    },
 	    SegmentPasses {.registry = registry, .placed = segmentPlaced, .last = lastSegment});
 
+	// The marks on the land, which only the frames draw. They are drawn in less detail the further off they are, and fade
+	// out, as the other things of the land do. A mark that fades by its own alpha is drawn whole until it has gone.
+	if (Locator::explosionSystem::has_value())
+	{
+		for (const auto& mark : Locator::explosionSystem::value().GroundMarks())
+		{
+			if (!fits)
+			{
+				break;
+			}
+			const auto modelMatrix = PlacedMatrix(mark.transform.position, mark.transform.rotation, mark.transform.scale);
+			auto* slotMap = &_instanceSlots;
+			std::optional<uint8_t> fade;
+			auto level = graphics::mesh_detail::Mesh::High;
+			bool gone = false;
+			if (view.has_value() && openblack::ecs::object_detail::MarkBandedNow(mark.alpha))
+			{
+				if (const auto& box = MeshBox(mark.mesh); box.has_value())
+				{
+					const auto choice =
+					    ChooseDetail(*box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *view, modelDetail);
+					if (!choice.mesh.has_value())
+					{
+						gone = true;
+					}
+					else
+					{
+						level = *choice.mesh;
+						if (choice.alpha.has_value())
+						{
+							slotMap = &_fadingSlots;
+							fade = choice.alpha;
+						}
+					}
+				}
+			}
+			const auto slots = slotMap->find(mark.mesh);
+			if (slots == slotMap->end() || slots->second.filled + slots->second.gone >= slots->second.count)
+			{
+				fits = false;
+				break;
+			}
+			// One too far off keeps a place at the back of its model's instances, not drawn
+			const uint32_t idx = gone ? slots->second.offset + slots->second.count - 1 - slots->second.gone
+			                          : slots->second.offset + slots->second.filled;
+			glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f, 0.0f};
+			if (gone)
+			{
+				look.z = 1.0f;
+			}
+			else if (mark.alpha.has_value())
+			{
+				look.z = -(1.0f - static_cast<float>(*mark.alpha) / 255.0f);
+			}
+			else if (fade.has_value())
+			{
+				look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));
+			}
+			_renderContext.instanceUniforms[idx] = {.model = modelMatrix, .look = look};
+			_renderContext.instanceLevels[idx] = graphics::mesh_detail::LevelBit(level);
+			if (drawBoundingBox)
+			{
+				_renderContext.instanceUniforms[idx + (_renderContext.instanceUniforms.size() / 2)] = {.model =
+				                                                                                           glm::mat4(0.0f)};
+			}
+			if (gone)
+			{
+				++slots->second.gone;
+			}
+			else
+			{
+				++slots->second.filled;
+			}
+		}
+	}
+
 	// The roots under a tree out of the land, at its base, turned and stretched as the tree is placed
 	const auto rootsSlots = _instanceSlots.find(RootsMesh());
 	registry.Each<const Mesh, const Transform, const Tree, const ShownRoots>(
@@ -1143,7 +1264,9 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    fits = false;
 			    return;
 		    }
-		    const auto standing = PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // A tree in a creature's hand has its roots where the drawn hand holds it
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, tree, transform);
+		    const auto standing = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
 		    const auto placed = physics_draw::ModelMatrix(standing, registry.TryGet<const PhysicsDrawPose>(tree));
 		    const float halfWidth = meshes.Contains(mesh.id) ? meshes.Handle(mesh.id)->GetBoundingBox().Size().x * 0.5f : 0.0f;
 		    for (const float scale : scales)
@@ -1425,6 +1548,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& vegetation = Locator::vegetation::value();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	using Group = PlacedTree::Group;
@@ -1444,7 +1568,9 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    {
 			    return;
 		    }
-		    auto modelMatrix = PlacedMatrix(transform.position, transform.rotation, transform.scale);
+		    // A tree in a creature's hand is drawn where the drawn hand is
+		    const auto drawnPlace = openblack::ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+		    auto modelMatrix = PlacedMatrix(drawnPlace.position, drawnPlace.rotation, transform.scale);
 		    // A body moving in the physics is drawn between its last two turns. Sunk wholly under the sea it isn't drawn at
 		    // all: every vertex lands on one point, which draws nothing, and it neither sways nor bends, which would take its
 		    // vertices out to the horizon
@@ -1483,7 +1609,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 		    {
 			    const auto choice = ChooseDetail(
 			        *box, 0.0f, modelMatrix, transform.scale.x,
-			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *camera, modelDetail);
+			        [&registry, entity] { return object_detail::Disappears(registry, entity, false); }, *view, modelDetail);
 			    if (noteKept)
 			    {
 				    NoteKept(*drawList, registry, entity, modelMatrix, transform.scale.x, mesh.id, !choice.mesh.has_value());
@@ -1539,7 +1665,7 @@ bool RenderingSystem::UploadTreeInstances(bool drawBoundingBox)
 			                           ? openblack::ecs::tree_roots::PlaceOf(registry, entity)
 			                           : TreePlace::InTheLand;
 			    drawnMatrix = openblack::physics::objects::SwaysAndBends(place)
-			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, transform.position, transform.scale.y,
+			                      ? vegetation.GetTreeMatrix(entity, modelMatrix, drawnPlace.position, transform.scale.y,
 			                                                 swayable.swaySlot)
 			                      : modelMatrix;
 		    }

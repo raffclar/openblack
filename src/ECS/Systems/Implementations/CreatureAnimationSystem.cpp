@@ -815,7 +815,7 @@ void CreatureAnimationSystem::ProcessTurn()
 void CreatureAnimationSystem::BodyTurn(entt::entity creature)
 {
 	// While the player's hand holds the creature to interact with it, the body keeps its looks
-	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == creature)
+	if (Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(creature))
 	{
 		return;
 	}
@@ -909,6 +909,92 @@ void CreatureAnimationSystem::MotesTurn(entt::entity entity)
 	AddPukeDrops(entity);
 }
 
+namespace
+{
+/// Builds the skeleton and the rest pose of a body for the shape that it is drawn with, when the shape changed since
+/// they were built or there are none yet. It is true when the body has a base mesh.
+bool BuildSkeleton(const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation)
+{
+	auto& resources = Locator::resources::value();
+	const auto& meshes = resources.GetMeshes();
+	const auto& rigs = resources.GetCreatureRigs();
+	const auto bodyMeshes =
+	    creature_morph::MeshesOf(creature.species, morph.drawn, [&meshes](entt::id_type id) { return meshes.Contains(id); });
+	if (!meshes.Contains(bodyMeshes.base))
+	{
+		return false;
+	}
+	if (animation.builtRevision == morph.revision && !animation.skeleton.Empty())
+	{
+		return true;
+	}
+	const auto base = meshes.Handle(bodyMeshes.base);
+	const auto rigId = creature::GetRigId(creature.species);
+	const CreatureRig* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+	// The rest pose and the animations follow the evil to good and thin to fat axes
+	const auto evilGood = meshes.Handle(bodyMeshes.evilGood);
+	const auto thinFat = meshes.Handle(bodyMeshes.thinFat);
+	auto rest =
+	    creature_animation::BlendRest(base->GetBoneMatrices(), evilGood->GetBoneMatrices(), std::abs(morph.drawn.evilGood),
+	                                  thinFat->GetBoneMatrices(), std::abs(morph.drawn.thinFat));
+	animation.skeleton = skeletal_animation::Skeleton::FromRestMatrices(base->GetBoneParents(), rest);
+	animation.animations.clear();
+	animation.pair.reset();
+	animation.builtRevision = morph.revision;
+	// Each bone's mirror as the species' file has it
+	auto mirror = rig != nullptr ? rig->MirrorBones(rest.size()) : std::nullopt;
+	animation.mirror = mirror.has_value() ? std::move(*mirror) : skeletal_animation::MirrorJoints(rest);
+	animation.boneMatrices = std::move(rest);
+	return true;
+}
+} // namespace
+
+void CreatureAnimationSystem::MorphTurn(entt::entity entity)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto* creature = registry.TryGet<const Creature>(entity);
+	auto* morph = registry.TryGet<CreatureMorph>(entity);
+	auto* animation = registry.TryGet<CreatureAnimation>(entity);
+	if (creature == nullptr || morph == nullptr || animation == nullptr || !registry.AllOf<Transform>(entity))
+	{
+		return;
+	}
+	const auto refresh = creature_morph::RefreshDrawn(morph->drawn, TargetMorph(*creature, *morph));
+	morph->drawn = refresh.drawn;
+	if (refresh.animations)
+	{
+		++morph->revision;
+	}
+	BuildSkeleton(*creature, *morph, *animation);
+}
+
+void CreatureAnimationSystem::ShapeBodies()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<entt::entity> unposed;
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
+	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
+	        const Transform& /*transform*/) {
+		    if (!BuildSkeleton(creature, morph, animation))
+		    {
+			    return;
+		    }
+		    // Before its first game turn, the body takes its first pose, and the animations do not move on
+		    if (animation.newerTurnPose.empty() || animation.newerTurnPose.size() != animation.skeleton.parents.size())
+		    {
+			    unposed.push_back(entity);
+		    }
+	    });
+	for (const auto entity : unposed)
+	{
+		auto& animation = registry.Get<CreatureAnimation>(entity);
+		animation.olderTurnPose.clear();
+		animation.newerTurnPose.clear();
+		// The first pose stands for the pose of the next turn
+		PoseForTurn(entity, 0.0f);
+	}
+}
+
 void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> gameTime)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -920,16 +1006,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 	const auto weight =
 	    creature_turn_pose::DrawWeight(Locator::time::has_value() ? Locator::time::value().GetTurnFraction() : 1.0f);
 
-	registry.Each<const Creature, CreatureMorph, CreatureAnimation, const Transform>(
-	    [&](entt::entity entity, const Creature& creature, CreatureMorph& morph, CreatureAnimation& animation,
-	        const Transform& transform) {
-		    const auto refresh = creature_morph::RefreshDrawn(morph.drawn, TargetMorph(creature, morph));
-		    morph.drawn = refresh.drawn;
-		    if (refresh.animations)
-		    {
-			    ++morph.revision;
-		    }
-
+	registry.Each<const Creature, const CreatureMorph, CreatureAnimation, const Transform>(
+	    [&](entt::entity entity, const Creature& creature, const CreatureMorph& morph, CreatureAnimation& animation,
+	        const Transform& turnTransform) {
 		    const auto bodyMeshes = creature_morph::MeshesOf(creature.species, morph.drawn,
 		                                                     [&meshes](entt::id_type id) { return meshes.Contains(id); });
 		    if (!meshes.Contains(bodyMeshes.base))
@@ -939,33 +1018,9 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		    const auto base = meshes.Handle(bodyMeshes.base);
 		    const auto rigId = creature::GetRigId(creature.species);
 		    const CreatureRig* rig = rigs.Contains(rigId) ? &*rigs.Handle(rigId) : nullptr;
+		    // A walking body is drawn between the places of its last two turns
+		    const auto transform = DrawnTransform(turnTransform, &animation);
 
-		    // The rest pose and the animations follow the evil to good and thin to fat axes
-		    std::vector<glm::mat4> rest;
-		    if (animation.builtRevision != morph.revision || animation.skeleton.Empty())
-		    {
-			    const auto evilGood = meshes.Handle(bodyMeshes.evilGood);
-			    const auto thinFat = meshes.Handle(bodyMeshes.thinFat);
-			    rest = creature_animation::BlendRest(base->GetBoneMatrices(), evilGood->GetBoneMatrices(),
-			                                         std::abs(morph.drawn.evilGood), thinFat->GetBoneMatrices(),
-			                                         std::abs(morph.drawn.thinFat));
-			    animation.skeleton = skeletal_animation::Skeleton::FromRestMatrices(base->GetBoneParents(), rest);
-			    animation.animations.clear();
-			    animation.pair.reset();
-			    animation.builtRevision = morph.revision;
-			    animation.boneMatrices = rest;
-			    // Each bone's mirror as the species' file has it
-			    auto mirror = rig != nullptr ? rig->MirrorBones(rest.size()) : std::nullopt;
-			    animation.mirror = mirror.has_value() ? std::move(*mirror) : skeletal_animation::MirrorJoints(rest);
-		    }
-
-		    // Before its first game turn, the body takes its first pose now, and the animations do not move on
-		    if (animation.newerTurnPose.empty() || animation.newerTurnPose.size() != animation.skeleton.parents.size())
-		    {
-			    animation.olderTurnPose.clear();
-			    animation.newerTurnPose.clear();
-			    PoseForTurn(entity, 0.0f);
-		    }
 		    if (!animation.newerTurnPose.empty() && animation.olderTurnPose.size() == animation.newerTurnPose.size() &&
 		        transform.scale.x != 0.0f && transform.scale.y != 0.0f && transform.scale.z != 0.0f)
 		    {
@@ -1436,12 +1491,15 @@ void CreatureAnimationSystem::AddPukeDrops(entt::entity creature)
 		return;
 	}
 	const auto* rig = RigOf(body->species);
-	const std::span<const glm::mat4> bones = animation->boneMatrices;
 	if (rig == nullptr)
 	{
 		return;
 	}
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The sick comes out of the body as it is posed at the end of its newest game turn
+	const auto pose = creature::TurnPose(animation->newerTurnPose, animation->boneMatrices,
+	                                     creature::PlacementMatrix(transform->position, transform->rotation, transform->scale));
+	const std::span<const glm::mat4> bones = pose.bones;
+	const auto& placement = pose.placement;
 	// The sick comes out of the point at the lips, else out of the head bone
 	glm::vec3 lips(0.0f);
 	if (rig->pukePoint.has_value())
@@ -1547,7 +1605,9 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		return;
 	}
 	const auto* rig = RigOf(body->species);
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The glows follow the body where the frame draws it
+	const auto drawn = DrawnTransform(*transform, animation);
+	const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 	const std::span<const glm::mat4> bones = animation->boneMatrices;
 	const auto posed = [&](uint32_t bone) { return creature::PosedBone(bone, bones, placement); };
 	for (size_t i = 0; i < creature_hand_glow::k_PlaceCount; ++i)

@@ -16,13 +16,17 @@
 #include <random>
 #include <thread>
 #include <utility>
+#include <vector>
 
 #include <JoinTicket.h>
+#include <LobbyApiJson.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/BuildVersion.h"
 #include "Online/Desktop/CurlHttpClient.h"
 #include "Server/Desktop/SocketWebSocketServer.h"
 #include "Server/Ed25519.h"
+#include "Server/LobbyStatus.h"
 #include "Server/TicketCheck.h"
 
 namespace openblack::server
@@ -34,6 +38,8 @@ namespace
 constexpr auto k_KeysAgainAfter = std::chrono::seconds(60);
 /// The first fetch of the keys waits this long at most
 constexpr auto k_FirstKeysLimit = std::chrono::seconds(15);
+/// The last report, when the server stops, waits this long at most
+constexpr auto k_LastReportLimit = std::chrono::seconds(3);
 
 int64_t SteadyMicroseconds()
 {
@@ -72,6 +78,45 @@ struct GameRole::Parts
 	std::string keysAddress;
 	std::chrono::steady_clock::time_point lastFetch {};
 	bool fetching {false};
+	/// The status reports to the lobby, over mutual TLS
+	std::unique_ptr<online::CurlHttpClient> lobby;
+	std::string statusAddress;
+	lobby_status::Room room;
+	std::chrono::steady_clock::time_point nextReport {};
+	bool reporting {false};
+	bool listed {false};
+
+	void Report(lobby_status::Phase phase)
+	{
+		if (!lobby || reporting || !host)
+		{
+			return;
+		}
+		reporting = true;
+		nextReport = std::chrono::steady_clock::now() + lobby_status::k_ReportInterval;
+		const auto text = lobby_api::ToJson(lobby_status::MakeStatus(room, phase, host->Seats()));
+		online::HttpRequest request {.method = online::HttpMethod::Put,
+		                             .url = statusAddress,
+		                             .headers = {{"Content-Type", "application/json"}},
+		                             .body = std::vector<uint8_t>(text.begin(), text.end())};
+		lobby->Send(std::move(request), [this](online::HttpResponse&& response) {
+			reporting = false;
+			const bool ok = response.status == 200;
+			if (ok != listed)
+			{
+				if (ok)
+				{
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "The lobby lists the server");
+				}
+				else
+				{
+					SPDLOG_LOGGER_WARN(spdlog::get("game"), "The lobby did not take the status of the server (status {}): {}",
+					                   response.status, response.Text().substr(0, 200));
+				}
+			}
+			listed = ok;
+		});
+	}
 
 	void FetchKeys()
 	{
@@ -114,7 +159,7 @@ uint16_t GameRole::Port() const
 	return _parts->sockets.Port();
 }
 
-std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start)
+std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game_socket::Start start, uint64_t landChecksum)
 {
 	auto& parts = *_parts;
 	if (settings.serverId.empty())
@@ -122,9 +167,24 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		return "the game role needs the server's id (--server-id)";
 	}
 	parts.tickets = TicketCheck(settings.serverId, ed25519::Verify);
+	// The test authorities are only for a lobby on this computer
+	const auto testAuthorities = [&settings](std::string_view address) -> std::optional<std::filesystem::path> {
+		if (settings.lobbyTestAuthorities.has_value() && online::http_policy::IsLoopbackAddress(address))
+		{
+			return settings.lobbyTestAuthorities;
+		}
+		return std::nullopt;
+	};
+	if (settings.lobbyTestAuthorities.has_value() && !online::http_policy::IsLoopbackAddress(settings.lobbyApi) &&
+	    !online::http_policy::IsLoopbackAddress(settings.ticketKeys))
+	{
+		return "the test authorities (--lobby-test-ca) are only for a lobby on a loopback address";
+	}
 	if (IsAddress(settings.ticketKeys))
 	{
-		parts.http = std::make_unique<online::CurlHttpClient>();
+		const auto authorities = testAuthorities(settings.ticketKeys);
+		parts.http = authorities.has_value() ? std::make_unique<online::CurlHttpClient>(std::nullopt, *authorities)
+		                                     : std::make_unique<online::CurlHttpClient>();
 		parts.keysAddress = settings.ticketKeys;
 		parts.FetchKeys();
 		const auto until = std::chrono::steady_clock::now() + k_FirstKeysLimit;
@@ -168,9 +228,32 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 		}
 		return result;
 	};
+	if (!settings.lobbyApi.empty())
+	{
+		if (!IsAddress(settings.lobbyApi) || !settings.clientCertificate.has_value() || !settings.clientKey.has_value())
+		{
+			return "the status reports need an https:// address of the lobby and a client certificate and key";
+		}
+		const online::ClientIdentity identity {.certificate = *settings.clientCertificate, .key = *settings.clientKey};
+		const auto authorities = testAuthorities(settings.lobbyApi);
+		parts.lobby = authorities.has_value() ? std::make_unique<online::CurlHttpClient>(identity, *authorities)
+		                                      : std::make_unique<online::CurlHttpClient>(identity);
+		auto base = settings.lobbyApi;
+		while (base.ends_with('/'))
+		{
+			base.pop_back();
+		}
+		parts.statusAddress = base + "/servers/" + settings.serverId + "/status";
+		parts.room = lobby_status::Room {.hostname = settings.roomName,
+		                                 .land = start.land,
+		                                 .maxGods = static_cast<int32_t>(settings.godsToStart),
+		                                 .version = std::string(build_version::Semantic())};
+	}
+
 	parts.host = std::make_unique<LockstepHost>(
 	    parts.sockets, std::move(check), SteadyMicroseconds, MakeSecret,
 	    HostSettings {.start = std::move(start),
+	                  .landChecksum = landChecksum,
 	                  .godsToStart = settings.godsToStart,
 	                  .godSlots = 7,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
@@ -190,6 +273,35 @@ void GameRole::Update()
 	{
 		parts.host->Update();
 	}
+	if (parts.lobby)
+	{
+		if (std::chrono::steady_clock::now() >= parts.nextReport)
+		{
+			parts.Report(lobby_status::PhaseOf(parts.host && parts.host->Started(), false));
+		}
+		parts.lobby->Poll();
+	}
+}
+
+void GameRole::Close()
+{
+	auto& parts = *_parts;
+	if (!parts.lobby || !parts.host)
+	{
+		return;
+	}
+	// The last report goes after the report that did not come back yet
+	const auto until = std::chrono::steady_clock::now() + k_LastReportLimit;
+	const auto wait = [&parts, until] {
+		while (parts.reporting && std::chrono::steady_clock::now() < until)
+		{
+			parts.lobby->Poll();
+			std::this_thread::sleep_for(std::chrono::milliseconds(10));
+		}
+	};
+	wait();
+	parts.Report(lobby_status::Phase::Exiting);
+	wait();
 }
 
 } // namespace openblack::server

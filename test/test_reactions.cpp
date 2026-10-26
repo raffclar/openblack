@@ -20,6 +20,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GameRandom.h"
+#include "Creature/CreatureTeleportAgendas.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -135,8 +136,8 @@ public:
 class AlwaysLowGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t) override { return 0; }
-	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t, DrawSite) override { return 0; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }
@@ -947,10 +948,18 @@ TEST_F(Reactions, ACreatureWithNoLifeOrCarriedByATeleportIsNotImpressed)
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
 	registry.Remove<CreatureNeeds>(_creature);
+	// A stone controls the creature while its plan has a step of the teleport left
 	registry.Assign<TeleportTraveller>(_creature);
+	auto& mind = registry.Assign<CreatureMindState>(_creature);
+	mind.idle.agenda = openblack::creature_mind::AfterTeleport(std::nullopt);
 	_reactions.Create(Miracle());
 	EXPECT_FALSE(impressed());
+	// Once its plan has no step of the teleport left, the stone no longer controls it, at once
+	registry.Get<CreatureMindState>(_creature).idle.step = 2;
+	_reactions.Create(Miracle());
+	EXPECT_TRUE(impressed());
 	registry.Remove<TeleportTraveller>(_creature);
+	registry.Remove<CreatureMindState>(_creature);
 	_reactions.Create(Miracle());
 	EXPECT_TRUE(impressed());
 }
@@ -1958,4 +1967,21 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_EQ(animals.wentTo, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
 	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, ANetworkLandStartsTheIdsOfTheReactionsAgain)
+{
+	const auto first = _reactions.Create(Miracle());
+	const auto second = _reactions.Create(Miracle());
+	EXPECT_NE(first, second);
+	// A plain new land keeps the count of the ids
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
+	// A network land starts them again, so that each computer gives the same ids
+	_reactions.SetFreshIdsAtNextReset();
+	_reactions.Reset();
+	EXPECT_EQ(_reactions.Create(Miracle()), first);
+	// Only the next reset does it
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
 }
