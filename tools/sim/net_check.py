@@ -57,6 +57,7 @@ import ipaddress
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
+import row_dump  # noqa: E402
 import sim_report  # noqa: E402
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -521,6 +522,12 @@ def main():
                         help="put the camera of each client (--camera1 to --camera4) there again once the client "
                         "compared this many turns (a multiple of 100), because a land's scripts can move the camera "
                         "after the start")
+    parser.add_argument("--row-dump", action="store_true",
+                        help="the server and each client keep the rows of the synced world of the last turns and write "
+                        "the rows of a turn at which a client parts (server/rows.txt, clientN/rows.txt); the summary "
+                        "names the first different entity, component and field of each client (row_dump.py)")
+    parser.add_argument("--row-dump-turn", type=int,
+                        help="with --row-dump, the server and the clients also write the rows of this turn")
     parser.add_argument("--input3", help="recorded input for the third client's hand")
     parser.add_argument("--input4", help="recorded input for the fourth client's hand")
     parser.add_argument("--camera3", help="the camera of the third client before its input (JSON)")
@@ -576,8 +583,8 @@ def main():
     server_log = os.path.join(server_dir, "server.log")
     client_dirs = [os.path.join(out, f"client{index + 1}") for index in range(options.clients)]
     server_trace = os.path.join(server_dir, "draws.tsv")
-    for path in [server_log, server_trace] + [os.path.join(d, n) for d in client_dirs
-                                              for n in ("client.log", "record.jsonl", "draws.tsv")]:
+    for path in [server_log, server_trace, os.path.join(server_dir, "rows.txt")] + [
+            os.path.join(d, n) for d in client_dirs for n in ("client.log", "record.jsonl", "draws.tsv", "rows.txt")]:
         if os.path.exists(path):
             os.remove(path)
 
@@ -595,6 +602,10 @@ def main():
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
             server_command.append("--record-fields")
+    if options.row_dump:
+        server_command += ["--row-dump", os.path.join(server_dir, "rows.txt")]
+        if options.row_dump_turn is not None:
+            server_command += ["--row-dump-turn", str(options.row_dump_turn)]
     processes = []
     miracle_done = None
     try:
@@ -621,6 +632,10 @@ def main():
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
+            if options.row_dump:
+                command += ["--sim-row-dump", os.path.join(client_dir, "rows.txt")]
+                if options.row_dump_turn is not None:
+                    command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.hash_fields:
                 command.append("--sim-hash-fields")
             elif options.hash_parts:
@@ -729,6 +744,7 @@ def main():
             "session_compared": counts[0] if counts else None, "session_same": counts[1] if counts else None,
             "recovered": recovered[-1:] if recovered else [],
             "different": different[:20], "same": same, "parts_against_server": parts, "draws_against_server": draws,
+            "rows_against_server": rows_against_server(server_dir, client_dir) if options.row_dump else None,
             "session": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The network game ended", "Network game:", "parts from", "Resynchronising"])[-3:],
         })
@@ -748,6 +764,19 @@ def main():
         json.dump(summary, file, indent=2)
     print(json.dumps(summary, indent=2))
     return 0 if all_same else 1
+
+
+def rows_against_server(server_dir, client_dir):
+    """The first entity, component and field that differ in the row dumps of the server and a client, at the first
+    turn that both wrote, with each different entity"""
+    server_rows = os.path.join(server_dir, "rows.txt")
+    client_rows = os.path.join(client_dir, "rows.txt")
+    if not (os.path.exists(server_rows) and os.path.exists(client_rows)):
+        return None
+    result = row_dump.compare(row_dump.read_dump(server_rows), row_dump.read_dump(client_rows))
+    if "entities" in result:
+        result["entities"] = result["entities"][:10]
+    return result
 
 
 if __name__ == "__main__":

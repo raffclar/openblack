@@ -1787,3 +1787,7 @@ add_test(NAME test_frame_time_check
 openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
 openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
 openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp)
+openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
+add_test(NAME test_row_dump_compare
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
+)
