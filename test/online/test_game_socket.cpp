@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <variant>
@@ -156,6 +160,25 @@ TEST(GameSocket, TheFramesOfTheStartGoToJsonAndBack)
 	const auto toClient = RoundTrip(StartCreature {.slot = 31, .file = {}});
 	EXPECT_EQ(toClient.slot, 31);
 	EXPECT_TRUE(toClient.file.empty());
+	EXPECT_EQ(toClient.alignment, 0.0f);
+}
+
+// The alignment of the start reads back as the same float, and only from -1 to 1
+TEST(GameSocket, TheAlignmentOfTheStartReadsBackAsTheSameFloat)
+{
+	for (const float alignment : {0.7f, -0.5f, 0.002555664f, 1.0f, -1.0f, -0.0f, 1.0e-30f})
+	{
+		const auto creature = RoundTrip(StartCreature {.slot = 2, .file = {1}, .alignment = alignment});
+		EXPECT_EQ(std::bit_cast<uint32_t>(creature.alignment), std::bit_cast<uint32_t>(alignment));
+	}
+	// A frame with no alignment is a god at 0
+	const auto none = Parse(R"({"type":"start.creature","file":""})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(std::get<StartCreature>(*none).alignment, 0.0f);
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":1.5})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":-1.0001})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":"0.5"})").has_value());
+	EXPECT_TRUE(Parse(R"({"type":"start.creature","file":"","alignment":-1})").has_value());
 }
 
 TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)

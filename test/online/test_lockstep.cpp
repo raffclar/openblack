@@ -71,7 +71,8 @@ const std::vector<uint8_t> k_LandFile = {'L', 'A', 'N', 'D', '\n', '1', '\n'};
 struct Computer
 {
 	Computer(LoopbackSockets& network, int64_t& now, std::string ticket,
-	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'})
+	         std::optional<std::vector<uint8_t>> landFile = k_LandFile, std::vector<uint8_t> creature = {'C'},
+	         float alignment = 0.0f)
 	    : sockets(network.MakeClient())
 	    , session(*sockets, [&now] { return now; })
 	{
@@ -85,6 +86,7 @@ struct Computer
 			    return this->landFile;
 		    },
 		    .readCreature = [this] { return this->creature; },
+		    .readAlignment = [alignment] { return alignment; },
 		});
 		this->landFile = std::move(landFile);
 		this->creature = std::move(creature);
@@ -456,9 +458,9 @@ TEST_F(LockstepTest, AClientThatPartsLoadsTheWorldOfTheServerAndStaysInStep)
 TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)
 {
 	MakeHost(2);
-	Computer alice(network, now, "god:alice", k_LandFile, {'A', 'L'});
-	Computer bob(network, now, "god:bob", k_LandFile, {});
-	Computer watcher(network, now, "observer:watcher", std::nullopt, {'W'});
+	Computer alice(network, now, "god:alice", k_LandFile, {'A', 'L'}, -0.5f);
+	Computer bob(network, now, "god:bob", k_LandFile, {}, 0.7f);
+	Computer watcher(network, now, "observer:watcher", std::nullopt, {'W'}, 0.25f);
 	Frames({&alice, &bob, &watcher}, 8);
 	ASSERT_TRUE(host->Started());
 	EXPECT_EQ(alice.askedLand, "Land1.txt");
@@ -484,6 +486,10 @@ TEST_F(LockstepTest, TheGodsSendTheirCreaturesToAllPlayersBeforeTheStart)
 		EXPECT_EQ(std::vector<uint8_t>(first.begin(), first.end()), (std::vector<uint8_t> {'A', 'L'}));
 		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::PLAYER_TWO).empty());
 		EXPECT_TRUE(source->StartCreatureFile(PlayerNames::PLAYER_THREE).empty());
+		// Each god's alignment comes with its file; a slot with no player has none
+		EXPECT_EQ(source->StartAlignment(PlayerNames::PLAYER_ONE), -0.5f);
+		EXPECT_EQ(source->StartAlignment(PlayerNames::PLAYER_TWO), 0.7f);
+		EXPECT_FALSE(source->StartAlignment(PlayerNames::PLAYER_THREE).has_value());
 	}
 	// Each client knows the god that it plays; the server and an observer play none
 	EXPECT_EQ(alice.session.OwnGod(), PlayerNames::PLAYER_ONE);

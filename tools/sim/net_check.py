@@ -34,6 +34,12 @@ leave it with no start. In each case every client must stay in step with the ser
     python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 300 --hash-fields
         --server-alignment 0.0025 --leave-room-first
 
+--alignment gives the profile of a client an alignment from earlier games. Each god of the game starts at the alignment
+of its own player's profile, on the server and on every client:
+
+    python tools/sim/net_check.py --land "Online Maps/mpm_2p_1.map" --turns 300 --hash-fields
+        --alignment 1:-0.5 --alignment 2:0.7
+
 The game reads its vanilla switches anywhere in its command line, as the original game did, so a path with "-multiplayer"
 or "/multiplayer" in it opens the multiplayer front end (the -MULTIPLAYER switch). The script copies the programs into
 its output folder and refuses an output folder with such a name.
@@ -563,8 +569,8 @@ def slot_cast(pid, player):
 
 
 def write_kept_alignment(folder, alignment):
-    """Writes the list of profiles of a server whose profile kept an alignment from an earlier game. The world of each
-    game must start the same with any value."""
+    """Writes the list of profiles of a server or a client whose profile kept an alignment from an earlier game. The
+    world of each game must start the same on every computer with any value."""
     os.makedirs(folder, exist_ok=True)
     lines = ["current\tPlayer", "profile\tPlayer\tC4fcabbcd.erc\t0\tPlayer", f"alignment\tPlayer\t{alignment!r}"]
     with open(os.path.join(folder, "Profiles.txt"), "w", encoding="utf-8", newline="\n") as file:
@@ -688,6 +694,9 @@ def main():
     parser.add_argument("--server-alignment", type=float,
                         help="the server's profile keeps this alignment from an earlier game, as the profile of the live "
                              "server does (a new profile folder in the output folder, unless --server-profile names one)")
+    parser.add_argument("--alignment", action="append", default=[],
+                        help="CLIENT:VALUE, the profile of the client (clients from 1) keeps this alignment from earlier "
+                             "games (a new profile folder in the client's folder); repeat for each client")
     parser.add_argument("--room-wait", type=float, default=0.0,
                         help="the seconds that the server waits in its room with nobody, before any client joins, as "
                              "a live server waits for its players")
@@ -812,6 +821,11 @@ def main():
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
                 command += ["--join-creature", os.path.abspath(creatures[index])]
+            alignments = {int(value.split(":", 1)[0]) - 1: float(value.split(":", 1)[1]) for value in options.alignment}
+            if index in alignments:
+                profile = os.path.join(client_dir, "profile")
+                write_kept_alignment(profile, alignments[index])
+                command.append(f"--profile-folder={os.path.abspath(profile)}")
             if index == 1 and options.part_second_at is not None:
                 command += ["--join-part-at", str(options.part_second_at)]
             clients.append(start(command, client_dir))

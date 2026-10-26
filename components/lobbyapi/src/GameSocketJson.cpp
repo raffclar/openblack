@@ -106,6 +106,28 @@ bool ReadBool(const Json& object, std::string_view key, bool& out, bool required
 	return true;
 }
 
+/// Reads an alignment, a number from -1 to 1 that the frame holds as a float. A frame with no alignment gives 0.
+bool ReadAlignment(const Json& object, std::string_view key, float& out)
+{
+	const auto* member = Member(object, key);
+	if (member == nullptr || member->is_null())
+	{
+		out = 0.0f;
+		return true;
+	}
+	if (!member->is_number())
+	{
+		return false;
+	}
+	const auto value = member->get<double>();
+	if (!(value >= -1.0 && value <= 1.0))
+	{
+		return false;
+	}
+	out = static_cast<float>(value);
+	return true;
+}
+
 constexpr std::string_view StateName(PlayerState::State state) noexcept
 {
 	switch (state)
@@ -367,6 +389,10 @@ std::optional<Frame> ParseObject(const Json& object, std::string_view type)
 			}
 			creature.slot = static_cast<uint8_t>(slot);
 		}
+		if (!ReadAlignment(object, "alignment", creature.alignment))
+		{
+			return std::nullopt;
+		}
 		return creature;
 	}
 	if (type == k_StopRequest)
@@ -510,7 +536,10 @@ std::string ToJson(const Frame& frame)
 		    }
 		    else
 		    {
-			    object = Json {{"type", k_StartCreature}, {"file", join_ticket::EncodeBase64Url(value.file)}};
+			    // The alignment goes as the double of the float, which reads back to the same float
+			    object = Json {{"type", k_StartCreature},
+			                   {"file", join_ticket::EncodeBase64Url(value.file)},
+			                   {"alignment", static_cast<double>(value.alignment)}};
 			    if (value.slot.has_value())
 			    {
 				    object["slot"] = *value.slot;
