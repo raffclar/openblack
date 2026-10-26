@@ -335,6 +335,30 @@ void SpellIconSystem::TownChangedHands(entt::entity town, PlayerNames previous)
 	}
 }
 
+void SpellIconSystem::PlayerMade(PlayerNames player)
+{
+	// The towns of the player gave their miracles to no one while the player had no entity
+	auto& registry = Entities();
+	std::vector<MagicType> offered;
+	registry.Each<const Town, const TownMagic>([player, &offered](const Town& town, const TownMagic& magicHeld) {
+		if (town.owner != player)
+		{
+			return;
+		}
+		for (size_t i = 0; i < magicHeld.held.size(); ++i)
+		{
+			if (magicHeld.held.at(i))
+			{
+				offered.push_back(static_cast<MagicType>(i));
+			}
+		}
+	});
+	for (const auto type : offered)
+	{
+		SetEnabled(player, type, true);
+	}
+}
+
 std::vector<SpellSeedType> SpellIconSystem::SeedsOfTown(entt::entity town) const
 {
 	auto& registry = Entities();
