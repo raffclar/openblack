@@ -364,25 +364,6 @@ TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
 }
 
-// The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
-// checksum reads the world
-TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
-{
-	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::DrawnPlaces, Step::CreaturesTurnStart));
-	EXPECT_TRUE(recorder.Before(Step::Living, Step::CreatureShapes));
-	EXPECT_TRUE(recorder.Before(Step::CreatureShapes, Step::SyncChecksum));
-}
-
-// The frames only read the map's cells: the things that the turn made go into them at the end of the turn, before the
-// checksum reads the world
-TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
-{
-	const auto recorder = PlayOneTurn();
-	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
-	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
-}
-
 TEST(GameTurnOrder, TheFullTurnMeasuresTheInfluenceFromTheTurnHands)
 {
 	// The players' commands and the hand's own work come before the influence of the turn, and measure as it does
@@ -408,4 +389,23 @@ TEST(GameTurnOrder, EachStepOfTheTurnBeforeItsEndMeasuresFromTheTurnHands)
 	ASSERT_NE(end, steps.end());
 	EXPECT_TRUE(std::all_of(steps.begin(), end, MeasuresInfluenceFromTurnHands));
 	EXPECT_TRUE(std::none_of(end, steps.end(), MeasuresInfluenceFromTurnHands));
+}
+
+// The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::DrawnPlaces, Step::CreaturesTurnStart));
+	EXPECT_TRUE(recorder.Before(Step::Living, Step::CreatureShapes));
+	EXPECT_TRUE(recorder.Before(Step::CreatureShapes, Step::SyncChecksum));
+}
+
+// The frames only read the map's cells: the things that the turn made go into them at the end of the turn, before the
+// checksum reads the world
+TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
+{
+	const auto recorder = PlayOneTurn();
+	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
+	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
 }

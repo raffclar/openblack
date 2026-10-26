@@ -10,6 +10,7 @@
 #pragma once
 
 #include <memory>
+#include <optional>
 
 #include <entt/entity/entity.hpp>
 
@@ -39,6 +40,7 @@ public:
 
 	void StopVoices() override;
 	void Update(const Frame& frame) override;
+	void ProcessTurn(uint32_t milliseconds) override;
 	bool RunText(bool singleLine, uint32_t text, int32_t withInteraction) override;
 	bool RunTextWithNumber(bool singleLine, uint32_t text, float number, int32_t withInteraction) override;
 	void TempText(bool singleLine, std::string_view words, int32_t withInteraction) override;
@@ -85,7 +87,12 @@ private:
 	/// When that sound started and its length. Once the machine loses the sound device, the line lasts this long with no
 	/// sound.
 	audio::SilentPlayback _advisorPlayback;
+	/// The advisors' line as the scripts time it on their clock: from its start delay, for the length of its sample
+	std::optional<audio::SilentPlayback> _scriptAdvisorLine;
 	bool _inTemple {false};
+	/// The player's click and key of the frames since the last turn
+	bool _pendingClick {false};
+	bool _pendingSkipKey {false};
 };
 
 } // namespace openblack::ecs::systems

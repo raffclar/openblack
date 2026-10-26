@@ -1765,13 +1765,6 @@ openblack_setup_and_add_test(test_network_land online/test_network_land.cpp)
 openblack_setup_and_add_test(test_online_map_land test_online_map_land.cpp)
 openblack_setup_and_add_test(test_player_sparkles test_player_sparkles.cpp)
 openblack_setup_and_add_test(test_other_held_draw test_other_held_draw.cpp)
-openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
-add_test(NAME test_frame_time_check
-         COMMAND ${Python3_EXECUTABLE}
-                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
-)
-openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
-openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
 openblack_setup_and_add_test(test_miracle_selection test_miracle_selection.cpp)
 openblack_setup_and_add_test(test_hand_cast_commands test_hand_cast_commands.cpp)
 target_link_libraries(test_hand_cast_commands PRIVATE edt psys)
@@ -1791,3 +1784,11 @@ add_test(NAME test_draw_trace_compare
 )
 openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
 target_link_libraries(test_hand_held_seeds PRIVATE edt psys)
+openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
+add_test(NAME test_frame_time_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
+)
+openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
+openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
+openblack_setup_and_add_test(test_join_online_entry test_join_online_entry.cpp)
