@@ -1801,3 +1801,4 @@ openblack_setup_and_add_test(
   test_creature_tattoo_change test_creature_tattoo_change.cpp
 )
 openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)
+openblack_setup_and_add_test(test_physics_face_search test_physics_face_search.cpp)
