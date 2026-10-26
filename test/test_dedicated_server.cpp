@@ -119,3 +119,18 @@ TEST(DedicatedServer, AStopBeforeTheFirstFrameEndsTheServerWithNoTurn)
 	EXPECT_EQ(exitCode, EXIT_SUCCESS);
 	EXPECT_EQ(count, 0u);
 }
+
+TEST(DedicatedServer, TheServerWritesNothingInTheProfileFolderItIsGiven)
+{
+	const openblack::test::TestTempFolder profileFolder;
+	const std::atomic<bool> stop {false};
+	const auto exitCode =
+	    openblack::server::Run(MockSettings(profileFolder.Path()), stop, [](uint32_t /*turn*/, uint64_t /*checksum*/) {});
+	EXPECT_EQ(exitCode, EXIT_SUCCESS);
+	std::vector<std::filesystem::path> files;
+	for (const auto& entry : std::filesystem::recursive_directory_iterator(profileFolder.Path()))
+	{
+		files.push_back(entry.path());
+	}
+	EXPECT_TRUE(files.empty());
+}
