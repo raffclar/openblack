@@ -1189,12 +1189,12 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			std::optional<uint8_t> fade;
 			auto level = graphics::mesh_detail::Mesh::High;
 			bool gone = false;
-			if (camera != nullptr && openblack::ecs::object_detail::MarkBandedNow(mark.alpha))
+			if (view.has_value() && openblack::ecs::object_detail::MarkBandedNow(mark.alpha))
 			{
 				if (const auto& box = MeshBox(mark.mesh); box.has_value())
 				{
 					const auto choice = ChooseDetail(
-					    *box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *camera, modelDetail);
+					    *box, 0.0f, modelMatrix, mark.transform.scale.x, [] { return true; }, *view, modelDetail);
 					if (!choice.mesh.has_value())
 					{
 						gone = true;
