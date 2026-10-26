@@ -66,6 +66,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -781,6 +782,10 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// Nor the beat of its scrolls
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().Reset();
+	}
 	Locator::handDemoSystem::value().Reset();
 	// The commands that the players made on the old land do nothing on the new land
 	Locator::playerCommandSystem::value().Reset();

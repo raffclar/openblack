@@ -41,6 +41,7 @@
 #include "ECS/Systems/AppleBarrelSystemInterface.h"
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -807,6 +808,11 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		if (Locator::guidanceSystem::has_value())
 		{
 			Locator::guidanceSystem::value().ProcessTurn();
+		}
+		// What the player sent in the chat since the last turn makes the advisors of this computer speak
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().ProcessTurn();
 		}
 		break;
 	case Step::CameraChecks:

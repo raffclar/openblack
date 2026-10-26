@@ -574,6 +574,7 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
+	    .gods = {},
 	};
 	if (const auto error = network->Start(*settings.network, start, landChecksum); error.has_value())
 	{

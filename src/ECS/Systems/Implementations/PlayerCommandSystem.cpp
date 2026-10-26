@@ -26,6 +26,7 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureHandSystemInterface.h"
@@ -151,6 +152,14 @@ void Run(const Command& command, uint32_t turn)
 		    else if constexpr (std::is_same_v<Kind, GripDust>)
 		    {
 			    openblack::GripLandscapeEffect::Spawn(action.point);
+		    }
+		    else if constexpr (std::is_same_v<Kind, ChatSpeech> || std::is_same_v<Kind, ChatTaunt>)
+		    {
+			    // A line of the chat changes nothing of the synced world
+			    if (openblack::Locator::chatSystem::has_value())
+			    {
+				    openblack::Locator::chatSystem::value().Receive(command.player, action);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {

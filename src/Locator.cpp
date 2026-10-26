@@ -115,8 +115,12 @@
 #if defined(OPENBLACK_INSPECTOR)
 #include "ECS/Systems/Implementations/InspectorSystem.h"
 #endif
+#include "ECS/IncomingMessageRules.h"
+#include "ECS/Systems/GuidanceSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/AbodeSoundSystem.h"
 #include "ECS/Systems/Implementations/ArtefactSystem.h"
+#include "ECS/Systems/Implementations/ChatSystem.h"
 #include "ECS/Systems/Implementations/ComputerPlayerSystem.h"
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
@@ -172,15 +176,24 @@
 #include "ECS/Systems/Implementations/WeatherSystem.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
+#include "ECS/Systems/NetworkGameSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerProfileSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Graphics/RendererInterface.h"
 #include "Gui/TextDatabase.h"
+#include "Help/GuidanceRules.h"
 #include "Input/GameActionMap.h"
 #include "LHVM.h"
 #include "Online/HttpClientInterface.h"
+#include "Online/NetworkSession.h"
 #include "Online/PushChannelInterface.h"
 #include "Online/TokenStoreInterface.h"
 #include "Online/WebSocketInterface.h"
 #include "Online/WebSocketPushChannel.h"
+#include "PlayerSlots.h"
 #include "Profiler.h"
 #if defined(__EMSCRIPTEN__)
 #include "Web/BrowserWebSocketClient.h"
@@ -221,6 +234,7 @@ using openblack::ecs::systems::CameraBookmarkSystem;
 using openblack::ecs::systems::CameraHelpSystem;
 using openblack::ecs::systems::CameraPathSystem;
 using openblack::ecs::systems::CameraZoneSystem;
+using openblack::ecs::systems::ChatSystem;
 using openblack::ecs::systems::ChimneySmokeSystem;
 using openblack::ecs::systems::CinematicDirectorSystem;
 using openblack::ecs::systems::CloudSystem;
@@ -537,6 +551,94 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	    });
 }
 
+/// The chat of a network game, and what it asks of the rest of the game
+void EmplaceChat(bool developer)
+{
+	ChatSystem::Services services;
+	services.submit = [](player_commands::Action action) {
+		if (Locator::playerCommandSystem::has_value())
+		{
+			Locator::playerCommandSystem::value().Submit(std::move(action));
+		}
+	};
+	services.localPlayer = []() -> std::optional<PlayerNames> {
+		if (!Locator::handSystem::has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& hands = Locator::handSystem::value();
+		const auto own = hands.GetOwnPlayer();
+		return hands.IsOwnPlayer(own) ? std::optional(own) : std::nullopt;
+	};
+	services.creatureOf = [](PlayerNames player) -> std::optional<entt::entity> {
+		return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetPrimaryCreature(player) : std::nullopt;
+	};
+	services.players = []() {
+		std::vector<PlayerNames> players;
+		for (size_t slot = 0; slot < player_slots::k_MaxPlayers; ++slot)
+		{
+			players.push_back(static_cast<PlayerNames>(slot));
+		}
+		return players;
+	};
+	services.incoming = [](std::u16string_view line) {
+		if (Locator::incomingMessageSystem::has_value())
+		{
+			Locator::incomingMessageSystem::value().Add(incoming_messages::Kind::Chat, line, 0);
+		}
+	};
+	// A taunt is said as the remark of the first kind, as the original game does
+	services.advisorsSay = [](uint32_t text) {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayText(text, guidance::Kind::TownDesireSound);
+		}
+	};
+	services.yackingRemark = []() {
+		if (Locator::guidanceSystem::has_value())
+		{
+			Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::QuitTheYacking);
+		}
+	};
+	// The lines go to the chat log in the folder of the current profile. A developer's run keeps no files for its player.
+	services.log = [developer](std::string_view line) {
+		if (developer || !Locator::playerProfileSystem::has_value() || !Locator::profileFolderSystem::has_value())
+		{
+			return;
+		}
+		const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+		if (profile.has_value())
+		{
+			const auto* bytes = reinterpret_cast<const uint8_t*>(line.data());
+			Locator::profileFolderSystem::value().AppendPlayerFile(gui::ToUtf16(profile->name), "chat.log",
+			                                                       {bytes, line.size()});
+		}
+	};
+	services.names = []() {
+		std::map<PlayerNames, std::u16string> names;
+		if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+		{
+			return names;
+		}
+		const auto& session = *Locator::networkGame::value().Session();
+		const auto& start = session.GetStart();
+		const auto& joined = session.GetJoined();
+		const auto* gods = start.has_value()                                 ? &start->gods
+		                   : joined.has_value() && joined->start.has_value() ? &joined->start->gods
+		                                                                     : nullptr;
+		if (gods != nullptr)
+		{
+			for (const auto& god : *gods)
+			{
+				names[static_cast<PlayerNames>(god.slot)] = gui::ToUtf16(god.name);
+			}
+		}
+		return names;
+	};
+	services.turn = []() { return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u; };
+	Locator::chatSystem::emplace<ChatSystem>(std::move(services));
+}
+
 } // namespace
 } // namespace openblack
 
@@ -657,6 +759,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::miracleFxSystem::emplace<MiracleFxSystem>();
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
 	Locator::incomingMessageSystem::emplace<IncomingMessageSystem>([]() { return machine_clock::Ticks(); });
+	EmplaceChat(profiles.developer);
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
 	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
@@ -887,6 +990,7 @@ void openblack::ShutDownServices()
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
 	Locator::incomingMessageSystem::reset();
+	Locator::chatSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
 	Locator::floatingNumberSystem::reset();

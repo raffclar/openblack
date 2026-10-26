@@ -231,6 +231,14 @@ TEST_F(LockstepTest, TwoGodsJoinAndTheGameStartsWhenBothAreReady)
 	ASSERT_TRUE(alice.session.GetStart().has_value());
 	EXPECT_EQ(alice.session.GetStart()->land, "Land1.txt");
 	EXPECT_EQ(alice.session.GetState(), NetworkSession::State::Playing);
+	// The start names the gods of the game for the chat
+	const auto& gods = alice.session.GetStart()->gods;
+	ASSERT_EQ(gods.size(), 2);
+	EXPECT_EQ(gods[0].slot, 0);
+	EXPECT_EQ(gods[1].slot, 1);
+	EXPECT_EQ(gods[0].name, alice.session.GetJoined()->name);
+	EXPECT_EQ(gods[1].name, bob.session.GetJoined()->name);
+	EXPECT_NE(gods[0].name, gods[1].name);
 }
 
 TEST_F(LockstepTest, TheCommandsOfBothGodsComeInTheSameTurnsOnEveryComputer)

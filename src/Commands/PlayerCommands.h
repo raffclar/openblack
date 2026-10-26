@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <string>
 #include <variant>
 #include <vector>
 
@@ -356,12 +357,34 @@ struct GripDust
 	glm::vec3 point {0.0f};
 };
 
+/// A line of the chat that the player typed. The line goes to the players of the list, by god slot. Each computer does
+/// the command at the same turn: the line shows only to the players of the list, but the creatures of the sender and of
+/// the players of the list say it in their bubbles on every computer. An empty list sends it to all players. The line
+/// is not a part of the synced world.
+struct ChatSpeech
+{
+	std::vector<PlayerNames> recipients;
+	std::u16string text;
+
+	[[nodiscard]] bool operator==(const ChatSpeech&) const = default;
+};
+
+/// A line of the quick chat that the player picked: a taunt, by its number in the list of taunts. The advisors of every
+/// computer say the taunt at the turn, and the line goes to the players of the list as a typed line does.
+struct ChatTaunt
+{
+	std::vector<PlayerNames> recipients;
+	uint32_t taunt {0};
+
+	[[nodiscard]] bool operator==(const ChatTaunt&) const = default;
+};
+
 /// What a command does
 using Action =
     std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
                  HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
                  FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust>;
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust, ChatSpeech, ChatTaunt>;
 
 /// A command and the player that sent it
 struct Command

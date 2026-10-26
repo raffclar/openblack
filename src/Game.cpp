@@ -173,6 +173,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraPathSystemInterface.h"
+#include "ECS/Systems/ChatSystemInterface.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
@@ -738,6 +739,10 @@ Game::~Game() noexcept
 	if (Locator::incomingMessageSystem::has_value())
 	{
 		Locator::incomingMessageSystem::value().SetTexts(nullptr);
+	}
+	if (Locator::chatSystem::has_value())
+	{
+		Locator::chatSystem::value().SetTexts(nullptr);
 	}
 	if (Locator::saveGameSystem::has_value())
 	{
@@ -3955,6 +3960,10 @@ const gui::TextDatabase* Game::MakeInterface()
 		if (Locator::incomingMessageSystem::has_value())
 		{
 			Locator::incomingMessageSystem::value().SetTexts(&_interface->GetTexts());
+		}
+		if (Locator::chatSystem::has_value())
+		{
+			Locator::chatSystem::value().SetTexts(&_interface->GetTexts());
 		}
 	}
 	return _interface ? &_interface->GetTexts() : nullptr;

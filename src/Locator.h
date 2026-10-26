@@ -221,6 +221,7 @@ class GestureSystemInterface;
 class MiracleFxSystemInterface;
 class PauseTextSystemInterface;
 class IncomingMessageSystemInterface;
+class ChatSystemInterface;
 class LandSystemInterface;
 class FireSystemInterface;
 class ExplosionSystemInterface;
@@ -404,6 +405,7 @@ struct Locator
 	using miracleFxSystem = entt::locator<ecs::systems::MiracleFxSystemInterface>;
 	using pauseTextSystem = entt::locator<ecs::systems::PauseTextSystemInterface>;
 	using incomingMessageSystem = entt::locator<ecs::systems::IncomingMessageSystemInterface>;
+	using chatSystem = entt::locator<ecs::systems::ChatSystemInterface>;
 	using landSystem = entt::locator<ecs::systems::LandSystemInterface>;
 	using fireSystem = entt::locator<ecs::systems::FireSystemInterface>;
 	using explosionSystem = entt::locator<ecs::systems::ExplosionSystemInterface>;

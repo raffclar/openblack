@@ -12,7 +12,9 @@
 #include <algorithm>
 #include <bit>
 #include <limits>
+#include <string>
 #include <type_traits>
+#include <utility>
 
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFight.h"
@@ -117,6 +119,37 @@ private:
 	bool _bad {false};
 };
 
+/// The players that get a line of the chat: their count, then the god slot of each
+void WriteRecipients(Writer& out, const std::vector<PlayerNames>& recipients)
+{
+	out.Byte(static_cast<uint8_t>(recipients.size()));
+	for (const auto recipient : recipients)
+	{
+		out.Byte(static_cast<uint8_t>(recipient));
+	}
+}
+
+/// Reads the players that get a line of the chat. A count or a slot past the slots of the game is out of range.
+DecodeError ReadRecipients(Reader& in, std::vector<PlayerNames>& recipients)
+{
+	const auto count = in.Byte();
+	if (count > player_slots::k_MaxPlayers)
+	{
+		return DecodeError::Value;
+	}
+	recipients.resize(count);
+	for (auto& recipient : recipients)
+	{
+		const auto slot = in.Byte();
+		if (slot >= player_slots::k_MaxPlayers)
+		{
+			return DecodeError::Value;
+		}
+		recipient = static_cast<PlayerNames>(slot);
+	}
+	return in.Bad() ? DecodeError::Truncated : DecodeError::None;
+}
+
 void WriteAction(Writer& out, const Action& action)
 {
 	out.Byte(static_cast<uint8_t>(TagOf(action)));
@@ -217,6 +250,18 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const LeashPick& command) { out.Byte(static_cast<uint8_t>(command.type)); },
 	               [](const HandShakeOff& /*command*/) {},
 	               [&out](const GripDust& command) { out.Vector(command.point); },
+	               [&out](const ChatSpeech& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(static_cast<uint16_t>(command.text.size()));
+		               for (const auto character : command.text)
+		               {
+			               out.Number(static_cast<uint16_t>(character));
+		               }
+	               },
+	               [&out](const ChatTaunt& command) {
+		               WriteRecipients(out, command.recipients);
+		               out.Number(command.taunt);
+	               },
 	               [&out](const HandReport& command) {
 		               out.Vector(command.collidePoint);
 		               out.Vector(command.handPoint);
@@ -469,6 +514,41 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::GripDust:
 		action = GripDust {.point = in.Vector()};
 		return DecodeError::None;
+	case CommandTag::ChatSpeech:
+	{
+		ChatSpeech speech;
+		if (const auto error = ReadRecipients(in, speech.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		const auto length = in.Number<uint16_t>();
+		if (length > k_MostChatCharacters)
+		{
+			return DecodeError::Value;
+		}
+		if (in.Left() < size_t {length} * 2)
+		{
+			return DecodeError::Truncated;
+		}
+		speech.text.resize(length);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(in.Number<uint16_t>());
+		}
+		action = std::move(speech);
+		return DecodeError::None;
+	}
+	case CommandTag::ChatTaunt:
+	{
+		ChatTaunt taunt;
+		if (const auto error = ReadRecipients(in, taunt.recipients); error != DecodeError::None)
+		{
+			return error;
+		}
+		taunt.taunt = in.Number<uint32_t>();
+		action = std::move(taunt);
+		return DecodeError::None;
+	}
 	case CommandTag::HandReport:
 	{
 		const auto collidePoint = in.Vector();
@@ -503,9 +583,28 @@ DecodeError ReadActions(Reader& in, std::vector<Action>& actions)
 	return DecodeError::None;
 }
 
+/// The players of a line of the chat are slots of the game, and the line is not too long
+[[nodiscard]] bool ValidChat(const Action& action)
+{
+	const auto validRecipients = [](const std::vector<PlayerNames>& recipients) {
+		return recipients.size() <= player_slots::k_MaxPlayers && std::ranges::all_of(recipients, [](PlayerNames recipient) {
+			       return static_cast<size_t>(recipient) < player_slots::k_MaxPlayers;
+		       });
+	};
+	if (const auto* speech = std::get_if<ChatSpeech>(&action); speech != nullptr)
+	{
+		return validRecipients(speech->recipients) && speech->text.size() <= k_MostChatCharacters;
+	}
+	if (const auto* taunt = std::get_if<ChatTaunt>(&action); taunt != nullptr)
+	{
+		return validRecipients(taunt->recipients);
+	}
+	return true;
+}
+
 [[nodiscard]] bool ValidActions(const std::vector<Action>& actions)
 {
-	return actions.size() <= k_MostBlockCommands;
+	return actions.size() <= k_MostBlockCommands && std::ranges::all_of(actions, ValidChat);
 }
 
 [[nodiscard]] bool ValidFrame(const Frame& frame)
@@ -582,6 +681,8 @@ CommandTag TagOf(const Action& action) noexcept
 	                      [](const LeashPick& /*command*/) { return CommandTag::LeashPick; },
 	                      [](const HandShakeOff& /*command*/) { return CommandTag::HandShakeOff; },
 	                      [](const GripDust& /*command*/) { return CommandTag::GripDust; },
+	                      [](const ChatSpeech& /*command*/) { return CommandTag::ChatSpeech; },
+	                      [](const ChatTaunt& /*command*/) { return CommandTag::ChatTaunt; },
 	                  },
 	                  action);
 }
@@ -589,41 +690,44 @@ CommandTag TagOf(const Action& action) noexcept
 size_t SizeOf(const Action& action) noexcept
 {
 	using namespace sizes;
-	const size_t fields = std::visit(Overloaded {
-	                                     [](const LeashKey& /*command*/) { return size_t {1}; },
-	                                     [](const LeashTap& /*command*/) { return k_Entity; },
-	                                     [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
-	                                     [](const HandTake& /*command*/) { return k_Entity; },
-	                                     [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
-	                                     [](const HandTap& /*command*/) { return k_Entity; },
-	                                     [](const HandGive& /*command*/) { return 2 * k_Entity; },
-	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
-	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
-	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },
-	                                     [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
-	                                     [](const HandLock& /*command*/) { return k_Entity; },
-	                                     [](const HandUnlock& /*command*/) { return k_Entity; },
-	                                     [](const HandApply& /*command*/) { return k_Entity; },
-	                                     [](const TotemShare& /*command*/) { return k_Entity + 4; },
-	                                     [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
-	                                     [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
-	                                     [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
-	                                     [](const FightCharge& /*command*/) { return size_t {4}; },
-	                                     [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
-	                                     [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
-	                                     [](const SeedGesture& /*command*/) { return size_t {2}; },
-	                                     [](const PlayerLeft& /*command*/) { return size_t {0}; },
-	                                     [](const HandPick& /*command*/) { return k_Entity; },
-	                                     [](const PlayerJoined& /*command*/) { return size_t {0}; },
-	                                     [](const MiracleRequest& /*command*/) { return size_t {1}; },
-	                                     [](const MiracleRepeat& /*command*/) { return size_t {0}; },
-	                                     [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
-	                                     [](const HandCastUnlock& /*command*/) { return k_Entity; },
-	                                     [](const LeashPick& /*command*/) { return size_t {1}; },
-	                                     [](const HandShakeOff& /*command*/) { return size_t {0}; },
-	                                     [](const GripDust& /*command*/) { return k_Vector; },
-	                                 },
-	                                 action);
+	const size_t fields =
+	    std::visit(Overloaded {
+	                   [](const LeashKey& /*command*/) { return size_t {1}; },
+	                   [](const LeashTap& /*command*/) { return k_Entity; },
+	                   [](const CreatureFeedback& /*command*/) { return k_Entity + 4; },
+	                   [](const HandTake& /*command*/) { return k_Entity; },
+	                   [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
+	                   [](const HandTap& /*command*/) { return k_Entity; },
+	                   [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                   [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
+	                   [](const LeashPostTap& /*command*/) { return k_Entity; },
+	                   [](const HandReport& /*command*/) { return 4 * k_Vector; },
+	                   [](const HandTwist& /*command*/) { return k_Entity + k_Vector; },
+	                   [](const HandLock& /*command*/) { return k_Entity; },
+	                   [](const HandUnlock& /*command*/) { return k_Entity; },
+	                   [](const HandApply& /*command*/) { return k_Entity; },
+	                   [](const TotemShare& /*command*/) { return k_Entity + 4; },
+	                   [](const CreatureBruise& /*command*/) { return k_Entity + 7; },
+	                   [](const FightGround& /*command*/) { return k_Entity + k_Vector + 1; },
+	                   [](const FightMove& /*command*/) { return k_Entity + 1 + 4 + 1; },
+	                   [](const FightCharge& /*command*/) { return size_t {4}; },
+	                   [](const CreatureReaction& /*command*/) { return k_Entity + 4 + 3 + 4 + 1 + 4; },
+	                   [](const HandClick& /*command*/) { return k_Entity + 2 + 4 + 4; },
+	                   [](const SeedGesture& /*command*/) { return size_t {2}; },
+	                   [](const PlayerLeft& /*command*/) { return size_t {0}; },
+	                   [](const HandPick& /*command*/) { return k_Entity; },
+	                   [](const PlayerJoined& /*command*/) { return size_t {0}; },
+	                   [](const MiracleRequest& /*command*/) { return size_t {1}; },
+	                   [](const MiracleRepeat& /*command*/) { return size_t {0}; },
+	                   [](const HandCast& /*command*/) { return k_Entity + 4 * k_Vector + 4 + 4; },
+	                   [](const HandCastUnlock& /*command*/) { return k_Entity; },
+	                   [](const LeashPick& /*command*/) { return size_t {1}; },
+	                   [](const HandShakeOff& /*command*/) { return size_t {0}; },
+	                   [](const GripDust& /*command*/) { return k_Vector; },
+	                   [](const ChatSpeech& command) { return 1 + command.recipients.size() + 2 + (2 * command.text.size()); },
+	                   [](const ChatTaunt& command) { return 1 + command.recipients.size() + 4; },
+	               },
+	               action);
 	return 1 + fields;
 }
 

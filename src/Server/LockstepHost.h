@@ -163,6 +163,8 @@ private:
 	void StartGame();
 	/// The start stops before the game starts: the frame tells the players why
 	void StopStart(const game_socket::Frame& why);
+	/// The human gods of the seats, with their names, for the start of a player
+	[[nodiscard]] std::vector<game_socket::God> Gods() const;
 	/// The connections of the gods with a player
 	[[nodiscard]] std::set<ConnectionId> GodConnections() const;
 	void SendTo(ConnectionId connection, const game_socket::Frame& frame);

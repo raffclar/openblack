@@ -13,6 +13,7 @@
 #include <bit>
 #include <limits>
 #include <random>
+#include <string>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -87,6 +88,8 @@ std::vector<Action> EachCommand()
 	    LeashPick {.type = LeashType::Good},
 	    HandShakeOff {},
 	    GripDust {.point = {2000.5f, 104.25f, -2363.0f}},
+	    ChatSpeech {.recipients = {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_FOUR}, .text = u"Hello"},
+	    ChatTaunt {.recipients = {PlayerNames::PLAYER_ONE}, .taunt = 30},
 	};
 }
 
@@ -110,7 +113,7 @@ Action RandomAction(std::mt19937& random)
 	const auto entity = [&]() { return Entity(bits(random)); };
 	const auto number = [&]() { return std::bit_cast<float>(bits(random)); };
 	const auto vector = [&]() { return glm::vec3 {number(), number(), number()}; };
-	switch (bits(random) % 32)
+	switch (bits(random) % 34)
 	{
 	case 0:
 		return LeashKey {.key = static_cast<creature_leash::LeashKey>(bits(random) % 3)};
@@ -212,6 +215,23 @@ Action RandomAction(std::mt19937& random)
 		return HandShakeOff {};
 	case 30:
 		return GripDust {.point = vector()};
+	case 31:
+	{
+		ChatSpeech speech;
+		speech.recipients.resize(bits(random) % 33);
+		for (auto& recipient : speech.recipients)
+		{
+			recipient = static_cast<PlayerNames>(bits(random) % 32);
+		}
+		speech.text.resize(bits(random) % 300);
+		for (auto& character : speech.text)
+		{
+			character = static_cast<char16_t>(bits(random));
+		}
+		return speech;
+	}
+	case 32:
+		return ChatTaunt {.recipients = {static_cast<PlayerNames>(bits(random) % 32)}, .taunt = bits(random)};
 	default:
 		return PlayerLeft {};
 	}
@@ -273,8 +293,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1, 13};
+	const std::vector<size_t> sizes {2,  5,  9, 5,  53, 5, 9, 18, 5, 49, 17, 5, 5, 5, 9,  12, 1,
+	                                 18, 11, 5, 21, 15, 3, 5, 1,  2, 1,  61, 5, 2, 1, 13, 16, 7};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -285,6 +305,15 @@ TEST(TurnCodec, EachCommandHasItsSize)
 		if (std::holds_alternative<PlayerLeft>(commands[i]))
 		{
 			tag = 17;
+		}
+		// The lines of the chat have the tags 41 and 42
+		if (std::holds_alternative<ChatSpeech>(commands[i]))
+		{
+			tag = 41;
+		}
+		if (std::holds_alternative<ChatTaunt>(commands[i]))
+		{
+			tag = 42;
 		}
 		EXPECT_EQ(static_cast<size_t>(TagOf(commands[i])), tag) << i;
 	}
@@ -679,4 +708,69 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, ALineOfTheChatHasItsPlayersThenItsCharacters)
+{
+	const CommandBlock block {
+	    .sequence = 1,
+	    .turn = 2,
+	    .actions = {ChatSpeech {.recipients = {PlayerNames::PLAYER_THREE}, .text = u"Hi\u00E9"}},
+	};
+	const std::vector<uint8_t> expected {
+	    k_Version, 1,         // version, kind Commands
+	    1,         0,         // sequence
+	    2,         0, 0,   0, // turn
+	    1,                    // count
+	    41,                   // tag ChatSpeech
+	    1,         2,         // one player, slot 2
+	    3,         0,         // three characters
+	    'H',       0, 'i', 0, 0xE9, 0,
+	};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	const auto& actions = std::get<CommandBlock>(*decoded.frame).actions;
+	ASSERT_EQ(actions.size(), 1);
+	EXPECT_EQ(std::get<ChatSpeech>(actions[0]), std::get<ChatSpeech>(block.actions[0]));
+}
+
+TEST(TurnCodec, ATauntHasItsNumberAfterItsPlayers)
+{
+	const CommandBlock block {
+	    .sequence = 0,
+	    .turn = 0,
+	    .actions = {ChatTaunt {.recipients = {}, .taunt = 0x01020304}},
+	};
+	const std::vector<uint8_t> expected {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 0, 4, 3, 2, 1};
+	EXPECT_EQ(Encode(block), expected);
+	const auto decoded = Decode(expected);
+	ASSERT_EQ(decoded.error, DecodeError::None);
+	EXPECT_EQ(std::get<ChatTaunt>(std::get<CommandBlock>(*decoded.frame).actions[0]).taunt, 0x01020304u);
+}
+
+TEST(TurnCodec, ALineOfTheChatKeepsToItsLimits)
+{
+	// The longest line goes, one character more does not
+	ChatSpeech longest {.recipients = {}, .text = std::u16string(k_MostChatCharacters, u'a')};
+	EXPECT_FALSE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	longest.text.push_back(u'a');
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0, .turn = 0, .actions = {longest}}).empty());
+	// A player past the slots of the game does not go
+	EXPECT_TRUE(Encode(CommandBlock {.sequence = 0,
+	                                 .turn = 0,
+	                                 .actions = {ChatTaunt {.recipients = {static_cast<PlayerNames>(32)}, .taunt = 0}}})
+	                .empty());
+
+	// The reader refuses the same: a slot out of range, too many players, and a line that is too long
+	const std::vector<uint8_t> badSlot {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 1, 32, 0, 0, 0, 0};
+	EXPECT_EQ(Decode(badSlot).error, DecodeError::Value);
+	std::vector<uint8_t> tooMany {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 42, 33};
+	tooMany.insert(tooMany.end(), 33 + 4, 0);
+	EXPECT_EQ(Decode(tooMany).error, DecodeError::Value);
+	const std::vector<uint8_t> tooLong {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 0x00, 0x04};
+	EXPECT_EQ(Decode(tooLong).error, DecodeError::Value);
+	// A line that says more characters than it has stops early
+	const std::vector<uint8_t> shortLine {k_Version, 1, 0, 0, 0, 0, 0, 0, 1, 41, 0, 2, 0, 'a', 0};
+	EXPECT_EQ(Decode(shortLine).error, DecodeError::Truncated);
 }

@@ -323,6 +323,7 @@ void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_t
 	});
 	auto start = _settings.start;
 	start.turn = _turnsDone;
+	start.gods = Gods();
 	game_socket::Joined joined {
 	    .role = game_socket::Role::Observer, .slot = std::nullopt, .session = {}, .name = claims.name, .start = start};
 	if (own != _seats.end())
@@ -592,6 +593,7 @@ void LockstepHost::StartGame()
 	_started = true;
 	auto start = _settings.start;
 	start.turn = _turnsDone;
+	start.gods = Gods();
 	const auto gods = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 	Log(spdlog::level::info, fmt::format("The network game starts with {} gods", gods));
 	// The first turn names the humans of the game on every computer: each gets its player and its hands, and the slots
@@ -604,6 +606,19 @@ void LockstepHost::StartGame()
 		}
 	}
 	Broadcast(start);
+}
+
+std::vector<game_socket::God> LockstepHost::Gods() const
+{
+	std::vector<game_socket::God> gods;
+	for (size_t i = 0; i < _seats.size(); ++i)
+	{
+		if (_seats[i].state == SeatState::Taken || _seats[i].state == SeatState::Away)
+		{
+			gods.push_back({.slot = static_cast<uint8_t>(i), .name = _seats[i].name});
+		}
+	}
+	return gods;
 }
 
 void LockstepHost::StopStart(const game_socket::Frame& why)
