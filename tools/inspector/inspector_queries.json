@@ -46,6 +46,12 @@
   "query": "ecs.components"
  },
  {
+  "description": "The component types that have entities but no registration with the reflection, so the sync checksum and the saves leave them out. A correct game gives an empty list.",
+  "kind": "list",
+  "parameters": [],
+  "query": "ecs.unregistered"
+ },
+ {
   "description": "A hash of where every entity is (its id and transform), and of a component's fields when one is named, to tell whether two runs ended the same",
   "kind": "object",
   "parameters": [
@@ -766,7 +772,7 @@
   "writes": true
  },
  {
-  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, and the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat)",
+  "description": "The debug windows and the game's own (its menu, the start-of-game question skip_box, the tattoo_editor, the custom music controls music_player, the multiplayer front end multiplayer, the end box end_box, the Creature Cave): name, kind, open; the menu's page (or question), the multiplayer box (choose_connection, find_games, login, game_list, room, conditions, or message: its text), the controls of the game's dialogs that can be pressed by name, the skip box's answer picked, and the multiplayer lines (the games of game_list, or the last 10 lines of the room's chat)",
   "kind": "list",
   "parameters": [],
   "query": "gui.windows"
@@ -800,7 +806,7 @@
   "writes": true
  },
  {
-  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
+  "description": "Presses a button of a window by its label, as a click on it would. The game's menu: any control of the page it shows (buttons, check boxes, sliders in their middle, tabs) or of the question it asks, as gui.windows lists them; path [n] for the n-th of a name. The start-of-game question (skip_box): OK, or an answer's radio button by its answer or by normal, creature, story, old or cow. The tattoo_editor: OK or Cancel. The multiplayer front end (multiplayer): the controls of its box, or of its message, by name. The music_player: its buttons by name (Music, Play, Pause, Stop, Previous, Next, Rewind, Fast Forward, Shuffle, Repeat, Play List) while they show. The end box (end_box): its tabs and arrows by name. The game's dialogs are clicked through the game's input, in order behind any input still to come. A debug window's button inside a table row or another scope its window pushed needs path: the labels and numbers leading to it. The press is made at the window's next frame; read what it changed after. When another dialog takes the clicks, no click is sent and the answer gives the reason",
   "kind": "object",
   "parameters": [
    {
@@ -1172,7 +1178,7 @@
   "query": "living.apple_barrel"
  },
  {
-  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem",
+  "description": "The village centres' totems: their town centre and icon, the share they stand at, ease to and are held at, how fast they move, whether the hand grips one, and their see-through second totem and whether it shows",
   "kind": "list",
   "parameters": [],
   "query": "living.totems"
@@ -1457,6 +1463,12 @@
   "kind": "list",
   "parameters": [],
   "query": "players.heartbeat"
+ },
+ {
+  "description": "The end of a skirmish or a network game: whether it is decided, and where each god stands",
+  "kind": "object",
+  "parameters": [],
+  "query": "players.game_end"
  },
  {
   "description": "This computer's hands: where they are, and what the hand holds or takes",

@@ -58,6 +58,11 @@ PlayerNames LocalPlayer()
 	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 }
 
+bool NetworkGame()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 /// The player's creature: the first they got, the one they lead on the leash
 std::optional<entt::entity> PlayersCreature()
 {
@@ -122,7 +127,8 @@ std::optional<creature_carry_over::KeptFiles> CreatureCarryOverSystem::Files() c
 
 void CreatureCarryOverSystem::KeepPlayersCreature()
 {
-	if (const auto creature = PlayersCreature(); creature.has_value())
+	// In a network game, the player's creature is the creature that the god of this computer brought
+	if (const auto creature = NetworkGame() ? _brought : PlayersCreature(); creature.has_value())
 	{
 		KeepCreature(*creature);
 	}
@@ -132,7 +138,9 @@ void CreatureCarryOverSystem::KeepCreature(entt::entity creature)
 {
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto* body = registry.Valid(creature) ? registry.TryGet<const Creature>(creature) : nullptr;
-	if (body == nullptr || body->owner != LocalPlayer() || !Locator::creatureMindSystem::has_value())
+	if (body == nullptr || !Locator::creatureMindSystem::has_value() ||
+	    !creature_carry_over::WritesToPlayersFiles(
+	        {.networkGame = NetworkGame(), .localPlayers = body->owner == LocalPlayer(), .broughtHere = _brought == creature}))
 	{
 		return;
 	}
@@ -310,24 +318,41 @@ void CreatureCarryOverSystem::SaveAsTheyLive()
 void CreatureCarryOverSystem::SaveAsItLives(entt::entity entity)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureNeeds>(entity) ||
-	    registry.Get<const Creature>(entity).owner != LocalPlayer())
+	if (NetworkGame())
 	{
-		return;
+		// Each computer writes only the creature of its own god, so the count stays out of the world
+		if (_brought != entity || !registry.Valid(entity) || !registry.AllOf<CreatureNeeds>(entity))
+		{
+			return;
+		}
+		const auto turns = registry.Get<const CreatureNeeds>(entity).needs.turns;
+		const auto before = std::exchange(_broughtTurnsSeen, turns);
+		if (!before.has_value() || !creature_carry_over::SavesAsItLives(*before, turns))
+		{
+			return;
+		}
 	}
-	const auto turns = registry.Get<const CreatureNeeds>(entity).needs.turns;
-	auto* save = registry.TryGet<CreatureFileSave>(entity);
-	if (save == nullptr)
+	else
 	{
-		// A creature first looked at now is written only once it gets to the next multiple of 600 turns
-		registry.Assign<CreatureFileSave>(entity, turns);
-		return;
-	}
-	const bool due = creature_carry_over::SavesAsItLives(save->turnsSeen, turns);
-	save->turnsSeen = turns;
-	if (!due)
-	{
-		return;
+		if (!registry.Valid(entity) || !registry.AllOf<Creature, CreatureNeeds>(entity) ||
+		    registry.Get<const Creature>(entity).owner != LocalPlayer())
+		{
+			return;
+		}
+		const auto turns = registry.Get<const CreatureNeeds>(entity).needs.turns;
+		auto* save = registry.TryGet<CreatureFileSave>(entity);
+		if (save == nullptr)
+		{
+			// A creature first looked at now is written only once it gets to the next multiple of 600 turns
+			registry.Assign<CreatureFileSave>(entity, turns);
+			return;
+		}
+		const bool due = creature_carry_over::SavesAsItLives(save->turnsSeen, turns);
+		save->turnsSeen = turns;
+		if (!due)
+		{
+			return;
+		}
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player's creature {} has lived another {} turns", entt::to_integral(entity),
 	                   creature_carry_over::k_SaveEveryTurns);
@@ -384,6 +409,14 @@ void CreatureCarryOverSystem::StepArrivals(std::optional<entt::entity> creature)
 void CreatureCarryOverSystem::Reset()
 {
 	_arriving.clear();
+	_brought.reset();
+	_broughtTurnsSeen.reset();
+}
+
+void CreatureCarryOverSystem::SetBroughtCreature(entt::entity creature)
+{
+	_brought = creature;
+	_broughtTurnsSeen.reset();
 }
 
 void CreatureCarryOverSystem::SetLandKeepsCreatures(bool keeps)

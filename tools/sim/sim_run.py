@@ -83,9 +83,11 @@ def default_exe(config):
 def game_arguments(options, record, log, until_turn, fast, driven):
     """The command line of the game for a run"""
     args = ["-g", options.game_path, "--skip-logos", "--seed", str(options.seed), "--inspect-port", "0",
-            "--inspect-lock-input", "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(until_turn),
-            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000",
-            "--background"]
+            "--inspect-lock-input", "--sim-until-turn", str(until_turn), "--sim-record", record,
+            "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000", "--background"]
+    # Without a frame time, each frame takes the real time that it took, as in a player's game
+    if options.frame_ms is not None:
+        args += ["--sim-frame-ms", str(options.frame_ms)]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
     if getattr(options, "still_hand", False):
@@ -376,6 +378,11 @@ def command_match(options):
     result["normal_wall_s"] = (sim_report.load(normal[0])[2] or {}).get("wall_s")
     result["fast_wall_s"] = (sim_report.load(fast[0])[2] or {}).get("wall_s")
     result["exit_codes"] = [normal[2], fast[2]]
+    unregistered = sim_report.unregistered_in_files(normal[0], normal[1], fast[0], fast[1])
+    result["unregistered"] = sorted(unregistered)
+    if unregistered:
+        result["same"] = False
+        print(sim_report.unregistered_line(unregistered), flush=True)
     with open(os.path.join(options.out, "match.json"), "w", encoding="utf-8") as file:
         json.dump(result, file, indent=1)
     print(json.dumps(result))
@@ -446,8 +453,10 @@ def command_repeat(options):
     first_save = keep_exit_save(options, "repeat-1")
     _, records_first, _ = sim_report.load(first[0])
     results = []
+    repeated_files = []
     for index in range(2, runs + 1):
         other = run_once(run_options(index), f"repeat-{index}", True, options.turns)
+        repeated_files += [other[0], other[1]]
         _, records_other, _ = sim_report.load(other[0])
         result = repeat_result(records_first, records_other, synced)
         result["run"] = index
@@ -461,11 +470,15 @@ def command_repeat(options):
         shown = ("run", "same", "turn", "differs", "parts", "draws_last", "save_differs", "frame_ms", "draw_every")
         print(json.dumps({key: result.get(key) for key in shown}), flush=True)
     divergences = [result for result in results if not result["same"]]
+    unregistered = sim_report.unregistered_in_files(first[0], first[1], *repeated_files)
+    if unregistered:
+        print(sim_report.unregistered_line(unregistered), flush=True)
     exit_ok = all(code == 0 for result in results for code in result["exit_codes"])
     # With two runs the report keeps the form it had, the comparison of the second run with the first
     summary = dict(results[0]) if runs == 2 else {}
     summary.update({
-        "same": not divergences and exit_ok,
+        "same": not divergences and exit_ok and not unregistered,
+        "unregistered": sorted(unregistered),
         "runs": runs,
         "frames": frames,
         "divergences": len(divergences),
@@ -476,7 +489,7 @@ def command_repeat(options):
     })
     with open(os.path.join(options.out, "repeat.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=1)
-    print(json.dumps({key: summary[key] for key in ("same", "runs", "divergences", "diverged")}))
+    print(json.dumps({key: summary[key] for key in ("same", "runs", "divergences", "diverged", "unregistered")}))
     return 0 if summary["same"] else 1
 
 

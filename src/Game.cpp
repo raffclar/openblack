@@ -23,6 +23,7 @@
 #include <string>
 #include <string_view>
 #include <thread>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -45,10 +46,6 @@
 #include <glm/gtx/vec_swizzle.hpp>
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
-
-#if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
-#endif
 
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
@@ -92,6 +89,9 @@
 #include "Common/BuildVersion.h"
 #include "Common/BuildVersionFile.h"
 #include "Common/DeveloperToolsGate.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/EventManager.h"
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
@@ -109,6 +109,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
+#include "Debug/FrameWriteGuard.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
@@ -206,6 +207,7 @@
 #include "ECS/Systems/FootpathSystemInterface.h"
 #include "ECS/Systems/FootprintSystemInterface.h"
 #include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/GameEndSystemInterface.h"
 #include "ECS/Systems/GestureEventsInterface.h"
 #include "ECS/Systems/GestureSystemInterface.h"
 #include "ECS/Systems/GuidanceSystemInterface.h"
@@ -298,11 +300,13 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
+#include "Gui/JoinOnlineEntry.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
 #include "Gui/ScreenFit.h"
 #include "Gui/StartupRules.h"
+#include "Gui/StatisticsBoxRules.h"
 #include "Gui/WorldToolTips.h"
 #include "Hand/HandBlend.h"
 #include "Hand/HandFeel.h"
@@ -318,6 +322,7 @@
 #include "Input/GameActionMapInterface.h"
 #include "Input/KeyBindings.h"
 #include "Input/KeyRebinding.h"
+#include "Input/LocalPlayer.h"
 #include "Input/PlatformKeys.h"
 #include "LHScriptX/MapScript.h"
 #include "LHScriptX/Script.h"
@@ -379,6 +384,13 @@ windowing::DisplayMode DisplayModeOf(std::string_view name, windowing::DisplayMo
 	}
 	return otherwise;
 }
+
+/// The game plays in a browser page
+#if defined(__EMSCRIPTEN__)
+constexpr bool k_Browser = true;
+#else
+constexpr bool k_Browser = false;
+#endif
 
 /// The version file next to the game. The web build has it in its working folder, where the page puts it.
 std::filesystem::path BuildVersionPath()
@@ -513,10 +525,10 @@ std::optional<entt::entity> ScriptCameraCreature()
 	return registry.Valid(entity) && registry.AllOf<ecs::components::Creature>(entity) ? std::optional(entity) : std::nullopt;
 }
 
-/// The player whose hand this computer moves: the first player, unless a network game gave this computer another god
-PlayerNames OwnPlayer()
+/// The player that the mouse, the keys and the gestures of this computer act for
+PlayerNames LocalInputPlayer()
 {
-	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return input::LocalPlayer(Locator::handSystem::has_value() ? &Locator::handSystem::value() : nullptr);
 }
 
 /// Whether the hand is within the local player's influence, as what it offers and does asks it: at the point picked,
@@ -530,7 +542,7 @@ bool HandInInfluence()
 		return Locator::handGrabSystem::value().IsInInfluence();
 	}
 	const auto point = Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().point : std::nullopt;
-	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(OwnPlayer(), *point);
+	return !point.has_value() || Locator::influenceSystem::value().IsHandInInfluence(LocalInputPlayer(), *point);
 }
 
 /// Whether the hand points at the water where the fish of a fish farm show, with the hand in the local player's
@@ -608,6 +620,56 @@ graphics::RendererInterface::DrawSceneDesc SceneDrawDesc(const EngineConfig& con
 	    .wireframe = config.wireframe,
 	    .drawHand = drawHand,
 	};
+}
+
+/// The player of this computer is in the temple. In a network game the world's turns go on there, and their audio
+/// plays the temple's sounds.
+bool PlayerInTemple()
+{
+	return Locator::temple::has_value() && Locator::temple::value().Active();
+}
+
+/// A network game with a session: the menu has Exit Online Game and the Multiplayer tab
+bool InNetworkGame()
+{
+	return Locator::networkGame::has_value() && Locator::networkGame::value().Session() != nullptr &&
+	       Locator::time::value().IsNetworkGame();
+}
+
+/// What the box of the winning conditions shows: the score history and the conditions of each god among the first four
+/// players that plays, and the conditions of the player of this computer
+gui::conditions_box::Figures ConditionsFigures()
+{
+	gui::conditions_box::Figures figures;
+	if (!Locator::gameEndSystem::has_value() || !Locator::playerSystem::has_value())
+	{
+		return figures;
+	}
+	const auto local = Locator::playerSystem::value().GetLocalPlayer();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
+	{
+		if (god == local)
+		{
+			for (size_t number = 0; number < standing.conditions.size(); ++number)
+			{
+				if (const auto& condition = standing.conditions.at(number); condition.has_value())
+				{
+					figures.conditions.push_back({.number = number, .target = condition->target});
+				}
+			}
+		}
+		if (!game_end::CanLose(god))
+		{
+			continue;
+		}
+		const auto scores = game_end::ShownScores(standing);
+		figures.gods.push_back({.player = god,
+		                        .colour = gui::statistics_box::PlayerColour(god, landNumber),
+		                        .scores = std::vector<float>(scores.begin(), scores.end()),
+		                        .conditions = standing.conditions});
+	}
+	return figures;
 }
 
 } // namespace
@@ -803,7 +865,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	ecs::components::InterfaceLimits interfaceLimits {};
 	if (Locator::playerSystem::has_value())
 	{
-		const auto player = Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE);
+		const auto player = Locator::playerSystem::value().GetPlayer(LocalInputPlayer());
 		const auto& registry = Locator::entitiesRegistry::value();
 		if (const auto* limits =
 		        registry.Valid(player) ? registry.TryGet<const ecs::components::InterfaceLimits>(player) : nullptr;
@@ -846,10 +908,10 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	{
 		// Letting go of the rope of the tied leash: the leash's length becomes how far the hand is from what it is tied to,
 		// and the creature goes to the place under the hand
-		if (Locator::leashSystem::value().RopeHand(OwnPlayer()) == leash_snap::Hand::Holding &&
+		if (Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding &&
 		    Locator::pickingSystem::has_value())
 		{
-			Locator::leashSystem::value().LetGoOfRope(OwnPlayer(), Locator::pickingSystem::value().GetPick().point);
+			Locator::leashSystem::value().LetGoOfRope(LocalInputPlayer(), Locator::pickingSystem::value().GetPick().point);
 		}
 		magic.ReleaseAction();
 		// Let go quickly on a fireball, it is tapped
@@ -877,8 +939,8 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			glm::vec3 rayDirection;
 			Locator::camera::value().DeprojectScreenToWorld(
 			    cursor / static_cast<glm::vec2>(glm::max(screenSize, glm::ivec2(1))), rayOrigin, rayDirection);
-			_actionPressTaken =
-			    Locator::leashSystem::value().PressAction(OwnPlayer(), rayOrigin, rayDirection, cursor, machine_clock::Ticks());
+			_actionPressTaken = Locator::leashSystem::value().PressAction(LocalInputPlayer(), rayOrigin, rayDirection, cursor,
+			                                                              machine_clock::Ticks());
 		}
 		// With an empty hand on the tip bubble, the hand grips it and the words follow the hand until the button is let go
 		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
@@ -889,7 +951,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 		}
 		// With an empty hand over the rope of the tied leash, the hand takes hold of the rope
 		if (!_actionPressTaken && !fightTakesPress && !handHoldsThing && !magic.IsHandBusy() &&
-		    Locator::leashSystem::value().PressRope(OwnPlayer()))
+		    Locator::leashSystem::value().PressRope(LocalInputPlayer()))
 		{
 			_actionPressTaken = true;
 		}
@@ -926,7 +988,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 				_actionPressTaken = true;
 			}
 			const auto& leashes = Locator::leashSystem::value();
-			const auto own = leashes.PlayersCreature(OwnPlayer());
+			const auto own = leashes.PlayersCreature(LocalInputPlayer());
 			const auto under = creatureHand.CreatureUnderCursor();
 			const bool tying =
 			    under.has_value() && own.has_value() &&
@@ -953,8 +1015,7 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			auto& totems = Locator::villageTotemSystem::value();
 			if (picked.has_value())
 			{
-				if (const auto totem = totems.TotemOf(*picked);
-				    totem.has_value() && totems.Grip(*totem, PlayerNames::PLAYER_ONE))
+				if (const auto totem = totems.TotemOf(*picked); totem.has_value() && totems.Grip(*totem, LocalInputPlayer()))
 				{
 					_actionPressTaken = true;
 					_totemPointer = _mousePosition;
@@ -1055,11 +1116,11 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 			auto& gestures = Locator::gestureSystem::value();
 			if (event.key.keysym.scancode == SDL_SCANCODE_M)
 			{
-				gestures.OpenSelectionByKey(PlayerNames::PLAYER_ONE);
+				gestures.OpenSelectionByKey(LocalInputPlayer());
 			}
 			else
 			{
-				gestures.RepeatMiracleByKey(PlayerNames::PLAYER_ONE);
+				gestures.RepeatMiracleByKey(LocalInputPlayer());
 			}
 			break;
 		}
@@ -1320,7 +1381,7 @@ void Game::UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float del
 	    .overWorld = !Locator::debugGui::value().StealsFocus() && !Locator::debugGui::value().IsMouseOverWindow() &&
 	                 Locator::cinematicDirectorSystem::value().IsInterfaceActive(),
 	    .actionHeld = Locator::gameActionSystem::value().Get(input::BindableActionMap::ACTION),
-	    .player = PlayerNames::PLAYER_ONE,
+	    .player = LocalInputPlayer(),
 	    .view = {.screenSize = size,
 	             .cameraRight = camera.GetRight(),
 	             .cameraEye = camera.GetOrigin(),
@@ -1430,9 +1491,9 @@ void Game::ResolveScreenShapes()
 	if (Locator::leashSystem::has_value())
 	{
 		shapes.rope = Locator::leashSystem::value().RopeUnderCursor(
-		    OwnPlayer(), {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
-		                  .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
-		                  .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
+		    LocalInputPlayer(), {.viewProjection = Locator::camera::value().GetViewProjectionMatrix(),
+		                         .screenSize = static_cast<glm::vec2>(Locator::windowing::value().GetSize()),
+		                         .cursor = Locator::gameActionSystem::value().GetPointerPosition()});
 	}
 	auto& picking = Locator::pickingSystem::value();
 	picking.ResolveScreenShapes(shapes);
@@ -1443,7 +1504,7 @@ void Game::ResolveScreenShapes()
 	}
 	if (Locator::leashSystem::has_value())
 	{
-		Locator::leashSystem::value().SetRopeHovered(OwnPlayer(), pick.rope);
+		Locator::leashSystem::value().SetRopeHovered(LocalInputPlayer(), pick.rope);
 	}
 }
 
@@ -1718,7 +1779,7 @@ void Game::ProcessHandToolTipTurn()
 	}
 	// As the player's own totem moves on the screen, the hand shows the share it is held at, over anything else
 	if (const auto tip = Locator::villageTotemSystem::has_value()
-	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(PlayerNames::PLAYER_ONE)
+	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(LocalInputPlayer())
 	                         : std::nullopt;
 	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
 	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
@@ -1771,7 +1832,7 @@ void Game::SubmitHandToolTips(gui::ToolTips& toolTips, std::optional<entt::entit
 	};
 	// What a tap does with the leash. Each time the hand offers to focus on the creature, the help counts it.
 	const auto leashTip = [pointed]() {
-		const auto tip = Locator::leashSystem::value().ToolTip(OwnPlayer(), pointed);
+		const auto tip = Locator::leashSystem::value().ToolTip(LocalInputPlayer(), pointed);
 		if (tip == creature_leash_orders::k_FocusCreatureTip && Locator::helpProfileSystem::has_value())
 		{
 			Locator::helpProfileSystem::value().Trigger(help::profile::k_FocusCreatureTip);
@@ -2054,13 +2115,13 @@ void Game::PlayViewStep(game_turn::Step step, glm::vec3 cameraPosition)
 			        },
 			    .paused = false,
 			    .turn = clock.GetTurn(),
-			    .inCitadel = false,
+			    .inCitadel = PlayerInTemple(),
 			    .videoPlaying = Locator::videoSystem::value().IsPlaying(),
 			});
 		}
 		break;
 	case Step::Music:
-		ProcessMusicTurn(cameraPosition, false);
+		ProcessMusicTurn(cameraPosition, PlayerInTemple());
 		break;
 	default:
 		// The world does the other steps (see simulation::PlayTurnStep)
@@ -2202,7 +2263,22 @@ bool Game::Update() noexcept
 {
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
-	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) { return PlayFrameStep(step, frame); }))
+	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
+		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world
+		    if (!_frameGuard || step == game_frame::Step::Turns ||
+		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
+		    {
+			    if (_frameGuard)
+			    {
+				    _frameGuard->Forget();
+			    }
+			    return PlayFrameStep(step, frame);
+		    }
+		    _frameGuard->Before();
+		    const bool played = PlayFrameStep(step, frame);
+		    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
+		    return played;
+	    }))
 	{
 		return false;
 	}
@@ -2217,6 +2293,18 @@ bool Game::Update() noexcept
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the game stops");
 		return false;
+	}
+	// A run of the tools stops after the last turn of a decided network game: no turn comes after it
+	if (Locator::simulation::value().GetSettings().untilTurn.has_value() && Locator::networkGame::has_value())
+	{
+		const auto* session = Locator::networkGame::value().Session();
+		const auto last = session != nullptr ? session->StoppedAfter() : std::nullopt;
+		if (last.has_value() && Locator::time::value().GetTurn() > *last)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns of the network game stopped after turn {}: the game stops",
+			                   *last);
+			return false;
+		}
 	}
 	if (_joinedFromCommandLine && Locator::networkGame::has_value() && !Locator::networkGame::value().InGame() &&
 	    !_outOfSyncAsked)
@@ -2286,17 +2374,12 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
-		const auto turn = Locator::time::value().GetTurn();
-		const bool played = PlayTurns();
-		// A turn makes the dust of the grips that the hand made before it
-		if (Locator::time::value().GetTurn() != turn)
+		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
+		if (_scenarioStager && _scenarioRequest.has_value())
 		{
-			for (const auto& dust : std::exchange(_gripDust, {}))
-			{
-				GripLandscapeEffect::Spawn(dust);
-			}
+			_scenarioStager();
 		}
-		return played;
+		return PlayTurns();
 	}
 	case Step::SendCommands:
 		// A tool's run that plays the commands of a file does no command of its own player
@@ -2397,6 +2480,7 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Online:
 		UpdateOnline();
+		FollowGameEnd();
 		break;
 	case Step::CameraKeys:
 		UpdateCameraKeys(frame.deltaTime);
@@ -2456,6 +2540,93 @@ void Game::UpdateOnline()
 				}
 			}
 		}
+	}
+}
+
+void Game::FollowGameEnd()
+{
+	if (!_interface || !Locator::gameEndSystem::has_value())
+	{
+		return;
+	}
+	// Tests: at a turn, the player leaves the network game as a player does
+	if (const auto leaveAt = Locator::simulation::value().GetSettings().leaveAt;
+	    leaveAt.has_value() && !_testLeaveDone && Locator::time::value().GetTurn() >= *leaveAt && InNetworkGame())
+	{
+		_testLeaveDone = true;
+		LeaveAsAPlayerDoes();
+	}
+	auto& gameEnd = Locator::gameEndSystem::value();
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	// The end box stops to show itself when it closes, or when the box of one of its tabs opens over it
+	if (!_interface->GetEndGameBox().ShowsItself())
+	{
+		end_game_box::StoppedShowing(_endGameBoxState);
+	}
+	// The player's choice in the end box: Leave Game leaves the network game. A skirmish has no front end to go back to yet.
+	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
+	{
+		if (session != nullptr)
+		{
+			LeaveNetworkGame();
+			return;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
+	}
+	const auto events = gameEnd.TakeEventsToShow();
+	if (events.empty())
+	{
+		return;
+	}
+	const auto local = LocalGodForGameEnd();
+	const auto opened = end_game_box::Follow(events, local, _endGameBoxState);
+
+	// The name of a god: the name of the player of its slot in a network game, the profile's name for the god of this
+	// computer in another game
+	const auto profile = Locator::playerProfileSystem::value().GetCurrentProfile();
+	const auto nameOf = [session, local, &profile](PlayerNames god) {
+		std::optional<std::u16string> human;
+		if (session != nullptr && session->GetStart().has_value())
+		{
+			const auto& names = session->GetStart()->names;
+			if (static_cast<size_t>(god) < names.size())
+			{
+				human = gui::ToUtf16(names.at(static_cast<size_t>(god)));
+			}
+		}
+		else if (god == local && profile.has_value())
+		{
+			human = gui::ToUtf16(profile->name);
+		}
+		return end_game_box::GodName(god, human.has_value() ? std::optional<std::u16string_view>(*human) : std::nullopt);
+	};
+	if (opened.godOut.has_value())
+	{
+		_interface->ShowGodOut(nameOf(*opened.godOut));
+	}
+	if (!opened.endBox.has_value())
+	{
+		return;
+	}
+	const auto& texts = _interface->GetTexts();
+	const auto winner = gameEnd.LastGodIn();
+	const auto winnerName = winner.has_value() ? nameOf(*winner) : std::u16string();
+	const auto title = end_game_box::Title(opened.endBox->kind, end_game_box::LooksOn(local), winnerName,
+	                                       {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"),
+	                                        .lost = texts.Get("HELP_TEXT_DIALOG_ADDITION_152"),
+	                                        .won = texts.Get("HELP_TEXT_WIN_GAME_04"),
+	                                        .gameOver = texts.Get("HELP_TEXT_GAME_OVER"),
+	                                        .winnerFormat = u"%s - %s Won"});
+	// The band under the title has the colour of the player's god. A looker-on has no god among the four, and its
+	// band is not drawn (vanilla-bugs 470).
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	_interface->OpenEndGameBox({.box = *opened.endBox, .title = title, .colour = colour});
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box opens for player {}: {}", static_cast<int>(local), gui::ToUtf8(title));
+	// The end box of a decided game asks the game server to stop the turns of the game
+	if (session != nullptr && end_game_box::StopsTheGame(*opened.endBox, _endGameBoxState))
+	{
+		Locator::networkGame::value().StopGame();
 	}
 }
 
@@ -2706,6 +2877,13 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
+#if defined(__EMSCRIPTEN__)
+		if (web::TakeJoinOnlineRequest())
+		{
+			RequestJoinOnline();
+		}
+#endif
+		AnswerJoinOnline();
 		UpdateMultiplayerFrontEnd();
 		if (const auto end = std::exchange(_gameEndAsked, std::nullopt); end.has_value())
 		{
@@ -2818,14 +2996,6 @@ void Game::UpdateScreenMarks()
 	UpdateLearningMarks(milliseconds);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(milliseconds * 0.001f);
-}
-
-void Game::CatchUpFrame()
-{
-	// The frame steps that change the world, as the frame after a turn does them, with no draw
-	Locator::time::value().CatchUpFrame();
-	simulation::PlayCreaturePoses();
-	simulation::PlayFrameEffects(*this);
 }
 
 void Game::UpdateFrameEffects()
@@ -2992,7 +3162,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 					// Over the help's text bubble or the leash's rope, the hand stands straight up; over the bubble it
 					// eases to the bubble's distance. While the hand holds the rope, the rope counts as under the cursor.
 					const bool rope =
-					    pick.rope || Locator::leashSystem::value().RopeHand(OwnPlayer()) == leash_snap::Hand::Holding;
+					    pick.rope || Locator::leashSystem::value().RopeHand(LocalInputPlayer()) == leash_snap::Hand::Holding;
 					_handStandsStraight = !pick.object.has_value() && (pick.textBubble || rope);
 					_handBubbleDistance =
 					    !pick.object.has_value() && pick.textBubble && !rope ? std::optional(pick.distance) : std::nullopt;
@@ -3361,7 +3531,7 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 			                   : _handCameraState          ? HandState::Camera
 			                                               : HandState::Normal;
 			// Over the rope of the tied leash the fingers open to pinch it, and holding it they pinch it
-			const auto ropeHand = Locator::leashSystem::value().RopeHand(OwnPlayer());
+			const auto ropeHand = Locator::leashSystem::value().RopeHand(LocalInputPlayer());
 			const auto cycle = hand_cycle::Choose({
 			    .pose = _handPose,
 			    .cameraState = _handCameraState,
@@ -3912,11 +4082,24 @@ const gui::TextDatabase* Game::MakeInterface()
 			// A save that did not write its world files completely is told to the player in a box
 			Locator::saveGameSystem::value().SetReportProblem([this]() { _interface->ShowSaveProblem(); });
 		}
-		// The Game Statistics box takes the players' figures as it opens
-		_interface->GetMenu().SetStatisticsSource([] {
+		// The Game Statistics box takes the players' figures as it opens, from the menu and from the end box
+		const auto statistics = [] {
 			const auto local =
 			    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 			return std::pair(player_statistics::Box(), local);
+		};
+		_interface->GetMenu().SetStatisticsSource(statistics);
+		_interface->GetEndGameBox().SetStatisticsSource(statistics);
+		// The box of the winning conditions takes the gods' standings as it opens
+		_interface->GetMenu().SetConditionsSource(ConditionsFigures);
+		_interface->GetEndGameBox().SetConditionsSource(ConditionsFigures);
+		// Each time the end box shows that the player lost while the game goes on, the advisors can say their one-off
+		// line about it
+		_interface->GetEndGameBox().SetShownHandler([](const gui::EndGameBox::Contents& contents) {
+			if (contents.box.kind == end_game_box::Kind::Lost && Locator::guidanceSystem::has_value())
+			{
+				Locator::guidanceSystem::value().SayOneOff(guidance::OneOff::NotVeryGood);
+			}
 		});
 		if (Locator::temple::has_value())
 		{
@@ -3952,6 +4135,21 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->traceDrawsPath.has_value())
+	{
+		if (!draw_trace::Start(Locator::gameRandom::value(), *_simulation->traceDrawsPath))
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+			                    _simulation->traceDrawsPath->string());
+		}
+	}
+#endif
+	if (_simulation->frameGuard != sim_run::HashDetail::None)
+	{
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
+	}
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
@@ -3967,7 +4165,7 @@ void Game::StartSimulationLogs()
 			}
 			checksums.SetTurnListener(
 			    [log = _checksumLog.get()](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-				    log->Write(turn.turn, turn.checksum, turn.parts);
+				    log->Write(turn.turn, turn.checksum, turn.parts, turn.unregistered);
 				    if (!turn.dump.empty())
 				    {
 					    log->WriteDump(turn.turn, turn.dump);
@@ -3980,6 +4178,22 @@ void Game::StartSimulationLogs()
 			                    _simulation->checksumsPath->string());
 		}
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->rowDumpPath.has_value())
+	{
+		// The rows come from the checksum of each turn, so the checksum is on also in a single player game
+		auto& checksums = Locator::syncChecksumSystem::value();
+		if (checksums.StartRowDump(*_simulation->rowDumpPath, _simulation->rowDump))
+		{
+			checksums.SetEnabled(true);
+		}
+		else
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}",
+			                    _simulation->rowDumpPath->string());
+		}
+	}
+#endif
 	if (_simulation->playCommandsPath.has_value())
 	{
 		auto turns = command_log::ReadFile(*_simulation->playCommandsPath);
@@ -4190,10 +4404,15 @@ Game::RunStart Game::StartRun() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame. A first start always starts a new game.
 		const bool hadProfile = HasPlayerProfiles();
-		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch
-		_frontEndOnStart =
-		    hadProfile && launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Multiplayer;
 		AskForNewPlayer();
+		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch. In a browser, the front
+		// end opens after the new player's box.
+		_frontEndOnStart = join_online_entry::FrontEndOnStart({
+		    .multiplayerSwitch = launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Multiplayer,
+		    .hadProfile = hadProfile,
+		    .hasProfile = HasPlayerProfiles(),
+		    .browser = k_Browser,
+		});
 		// A plain start continues from the save on exit of the player. The continue loads the save once the scripts are
 		// ready, because the save keeps the state of the scripts.
 		start = game_session::FirstStart({.hadProfile = hadProfile,
@@ -4328,20 +4547,10 @@ void Game::BeforeFirstFrame(bool continued)
 		PlayLogoEffect();
 	}
 	// The -MULTIPLAYER switch: the multiplayer front end opens in place of the menu
-	if (std::exchange(_frontEndOnStart, false))
+	if (std::exchange(_frontEndOnStart, false) && OpenFrontEndInPlaceOfMenu())
 	{
-		if (OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
-		{
-			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -MULTIPLAYER switch: the multiplayer front end opens");
-			return;
-		}
-		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
-		// The land's start-of-game question waited for the front end, which did not open
-		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
-		    hasCreature.has_value() && _interface)
-		{
-			_interface->ShowSkipBox(*hasCreature);
-		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -MULTIPLAYER switch: the multiplayer front end opens");
+		return;
 	}
 	// A game that continued from the save on exit starts under the menu
 	if (game_session::ShowsMenuOnStart(game_session::Start::Continue, continued))
@@ -4626,6 +4835,11 @@ void Game::MakeSymbolSheet()
 	MakePlayersSymbols();
 }
 
+void Game::StartCameraAtTemple()
+{
+	_shortcutKeys.StartAtTemple(LocalInputPlayer());
+}
+
 void Game::TestbedLoaded()
 {
 	if (Locator::debugGui::has_value() && _testbedWindow)
@@ -4733,6 +4947,7 @@ void Game::HandleEscapeInPlay(uint16_t keyModifiers)
 	case escape_key::Outcome::OpenMenu:
 		// The game keeps the help record of the player when Escape opens the menu
 		SaveHelpRecord();
+		_interface->GetMenu().SetNetworkGame(InNetworkGame());
 		_interface->OpenMenu();
 		// The menu reads the profile's own pictures again as it opens
 		ReadTattooPictures();
@@ -4898,6 +5113,12 @@ void Game::HandleInterfaceAction()
 	case Action::StartSkirmish:
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "This part of the menu is not available yet");
 		break;
+	case Action::ExitOnlineGame:
+		ExitOnlineGame();
+		break;
+	case Action::AskToLeave:
+		AskToLeaveNetworkGame();
+		break;
 	case Action::Continue:
 	case Action::None:
 		break;
@@ -4941,7 +5162,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 #endif
 	// The internet connection's name in the list is the lobby's host: in the browser, the host of the page
 #if defined(__EMSCRIPTEN__)
-	settings.internetName = gui::ToUtf16(emscripten_run_script_string("location.host"));
+	settings.internetName = gui::ToUtf16(web::PageHost());
 #else
 	const auto host = origin.find("://");
 	settings.internetName = gui::ToUtf16(host == std::string::npos ? origin : origin.substr(host + 3));
@@ -4957,6 +5178,205 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
+}
+
+void Game::AnswerJoinOnline()
+{
+	if (!_joinOnlineAsked || !_interface)
+	{
+		return;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	const bool networkGame = _networkLandPending || Locator::time::value().IsNetworkGame() ||
+	                         (Locator::networkGame::has_value() && Locator::networkGame::value().InGame());
+	const auto decision = join_online_entry::Decide({
+	    .frontEndOpen = _interface->GetMultiplayerBoxes().IsActive(),
+	    .networkGame = networkGame,
+	    .boxToAnswer = _interface->GetNewPlayerBox().IsActive() || _interface->GetSaveGameBoxes().IsActive() ||
+	                   _interface->GetTattooEditor().IsOpen() || _gameEnding.has_value() || _gameEndAsked.has_value(),
+	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .startQuestionOpen = _interface->GetSkipBox().IsActive(),
+	});
+	switch (decision.outcome)
+	{
+	case join_online_entry::Outcome::Wait:
+		return;
+	case join_online_entry::Outcome::Ignore:
+		_joinOnlineAsked = false;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Join Online Game: the front end is open or a network game plays");
+		return;
+	case join_online_entry::Outcome::Open:
+		break;
+	}
+	_joinOnlineAsked = false;
+	// The start-of-game question waits behind the front end, as it does for the -MULTIPLAYER switch
+	std::optional<bool> question;
+	if (decision.askQuestionAfter)
+	{
+		const bool hasCreature = _interface->GetSkipBox().IsOffered(new_game_choice::Choice::KeepOldCreature);
+		if (_interface->WithdrawSkipBox())
+		{
+			question = hasCreature;
+		}
+	}
+	if (!OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+		if (question.has_value())
+		{
+			_interface->ShowSkipBox(*question);
+		}
+		return;
+	}
+	if (question.has_value())
+	{
+		_startQuestionAfterFrontEnd = question;
+	}
+	if (decision.holdLand)
+	{
+		_frontEndHoldsLand = true;
+		Locator::time::value().SetPlayerPause(true);
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Join Online Game of the page: the multiplayer front end opens{}",
+	                   decision.holdLand ? ", and the cut scene stops until the player leaves it" : "");
+}
+
+bool Game::OpenFrontEndInPlaceOfMenu()
+{
+	if (OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+	{
+		return true;
+	}
+	SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+	// The land's start-of-game question waited for the front end, which did not open
+	if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
+	    hasCreature.has_value() && _interface)
+	{
+		_interface->ShowSkipBox(*hasCreature);
+	}
+	return false;
+}
+
+void Game::StartAfterNetworkGame()
+{
+	// The network game of this computer ends: the next land is a land of this computer alone. As the -MULTIPLAYER switch
+	// does, the start land loads as a plain start does, and the multiplayer front end opens in place of the menu.
+	if (Locator::networkGame::has_value())
+	{
+		Locator::networkGame::value().EndNetworkGame();
+	}
+	_endGameBoxState = {};
+	_frontEndOnStart = true;
+	ContinueGame();
+	_frontEndOnStart = false;
+	if (OpenFrontEndInPlaceOfMenu())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player left the network game: the multiplayer front end opens");
+	}
+}
+
+void Game::AskToLeaveNetworkGame()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	// The end box asks the question to leave, in place of the menu
+	const auto box = end_game_box::AskToLeave(_endGameBoxState);
+	const auto& texts = _interface->GetTexts();
+	const auto title = end_game_box::Title(
+	    box.kind, false, {},
+	    {.leave = texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"), .lost = {}, .won = {}, .gameOver = {}, .winnerFormat = {}});
+	const auto local = LocalGodForGameEnd();
+	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
+	const auto colour = end_game_box::LooksOn(local) ? glm::vec4(0.0f) : gui::statistics_box::PlayerColour(local, landNumber);
+	_interface->OpenEndGameBox({.box = box, .title = title, .colour = colour});
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box asks the question to leave the network game");
+}
+
+void Game::ExitOnlineGame()
+{
+	// The question to leave, unless the god of the player is out of the game already: then the player leaves at once
+	if (Locator::gameEndSystem::has_value())
+	{
+		const auto local = LocalGodForGameEnd();
+		for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
+		{
+			if (god == local && standing.out)
+			{
+				if (_interface)
+				{
+					_interface->GetMenu().Close();
+				}
+				LeaveNetworkGame();
+				return;
+			}
+		}
+	}
+	AskToLeaveNetworkGame();
+}
+
+void Game::LeaveNetworkGame()
+{
+	if (!Locator::networkGame::has_value() || Locator::networkGame::value().Session() == nullptr)
+	{
+		return;
+	}
+	// The game server makes the god of the player a leaver for every computer
+	Locator::networkGame::value().Leave();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The player leaves the network game");
+	// A join from the command line, and a run of the tools, stop the game. A join from the front end goes back to it.
+	const bool toolRun = Locator::simulation::value().GetSettings().untilTurn.has_value();
+	if (_joinedFromCommandLine || toolRun)
+	{
+		_leaveNetworkGame = true;
+		return;
+	}
+	_gameEndAsked = game_session::End::Online;
+}
+
+void Game::LeaveAsAPlayerDoes()
+{
+	// The centre of the control of a name, among the controls that a box shows now
+	const auto centreOf = [](const std::vector<gui::Dialog::NamedControl>& controls,
+	                         std::u16string_view name) -> std::optional<glm::ivec2> {
+		const auto found = std::ranges::find(controls, name, &gui::Dialog::NamedControl::name);
+		if (found == controls.end())
+		{
+			return std::nullopt;
+		}
+		return (found->rect.min + found->rect.max) / 2;
+	};
+	// Escape opens the menu, Exit Online Game asks the question to leave, and Leave Game leaves
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Tests: the player leaves the network game at turn {}",
+	                   Locator::time::value().GetTurn());
+	auto& menu = _interface->GetMenu();
+	menu.SetNetworkGame(InNetworkGame());
+	_interface->OpenMenu();
+	const auto& texts = _interface->GetTexts();
+	if (const auto exit = centreOf(menu.GetNamedControls(), texts.Get("HELP_TEXT_FRONT_END_03")); exit.has_value())
+	{
+		menu.MouseDown(*exit);
+		if (menu.MouseUp(*exit) == gui::GameMenu::Action::ExitOnlineGame)
+		{
+			ExitOnlineGame();
+		}
+	}
+	auto& endBox = _interface->GetEndGameBox();
+	if (const auto leave = centreOf(endBox.GetNamedControls(), texts.Get("HELP_TEXT_DIALOG_LEAVE_GAME")); leave.has_value())
+	{
+		endBox.MouseDown(*leave);
+		std::ignore = endBox.MouseUp(*leave);
+	}
+}
+
+PlayerNames Game::LocalGodForGameEnd() const
+{
+	// A looker-on of a network game has no god: the game names it player seven
+	const auto* session = Locator::networkGame::has_value() ? Locator::networkGame::value().Session() : nullptr;
+	const bool looksOn =
+	    session != nullptr && session->GetJoined().has_value() && session->GetJoined()->role == game_socket::Role::Observer;
+	return looksOn ? PlayerNames::PLAYER_SEVEN : LocalInputPlayer();
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
@@ -4992,8 +5412,10 @@ void Game::UpdateMultiplayerFrontEnd()
 			{
 				Locator::temple::value().LeaveMultiplayerFrontEnd();
 			}
-			// The land of the question goes: the network game's land does not ask it
-			if (std::exchange(_startQuestionAfterFrontEnd, std::nullopt).has_value())
+			// The land of the question goes: the network game's land does not ask it. A land that the front end held
+			// goes too.
+			const bool held = std::exchange(_frontEndHoldsLand, false);
+			if (std::exchange(_startQuestionAfterFrontEnd, std::nullopt).has_value() || held)
 			{
 				Locator::time::value().SetPlayerPause(false);
 			}
@@ -5014,6 +5436,11 @@ void Game::UpdateMultiplayerFrontEnd()
 	{
 		return;
 	}
+	// The cut scene stays stopped while the front end is open, also when the menu closed and let the game continue
+	if (_frontEndHoldsLand)
+	{
+		Locator::time::value().SetPlayerPause(true);
+	}
 	const bool templeGone = !Locator::temple::has_value() || !Locator::temple::value().IsMultiplayerFrontEnd();
 	if (boxes.TakeLeft() || templeGone)
 	{
@@ -5023,9 +5450,15 @@ void Game::UpdateMultiplayerFrontEnd()
 			Locator::temple::value().LeaveMultiplayerFrontEnd();
 		}
 		// The land's start-of-game question waited for the front end
-		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt); hasCreature.has_value())
+		const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
+		if (hasCreature.has_value())
 		{
 			_interface->ShowSkipBox(*hasCreature);
+		}
+		// The cut scene that the front end stopped continues. The question keeps the land stopped until its answer.
+		if (std::exchange(_frontEndHoldsLand, false) && !hasCreature.has_value())
+		{
+			Locator::time::value().SetPlayerPause(false);
 		}
 	}
 }
@@ -5345,7 +5778,9 @@ void Game::AskForAnotherPlayer(bool canCancel)
 void Game::EndGame(game_session::End end)
 {
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The game ends: {}",
-	                   end == game_session::End::NewGame ? "a new game starts" : "the game continues as the profile picked");
+	                   end == game_session::End::NewGame  ? "a new game starts"
+	                   : end == game_session::End::Online ? "the player left the network game"
+	                                                      : "the game continues as the profile picked");
 	SaveAsGameEnds(end, false);
 	// The next game has no previous profile until the Players page opens again
 	if (_interface)
@@ -5387,8 +5822,10 @@ void Game::StartNextGameWhenSaved()
 			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The new game could not start");
 		}
 		break;
-	case game_session::Start::SavedGame:
 	case game_session::Start::Online:
+		StartAfterNetworkGame();
+		break;
+	case game_session::Start::SavedGame:
 	case game_session::Start::Skirmish:
 		SPDLOG_LOGGER_WARN(spdlog::get("game"), "This start of a game is not available yet");
 		break;
@@ -5401,8 +5838,7 @@ game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
 	game_session::ExitSaveFacts facts {
 	    .end = end,
 	    .gameOver = context.gameOver,
-	    // openblack's games are all single player
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::value().IsNetworkGame(),
 	    .skirmish = context.skirmish,
 	    .godsPlayground = context.mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
 	    .previousProfile = std::nullopt,
@@ -5500,6 +5936,7 @@ void Game::ShowMenuOnStart()
 		return;
 	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The menu shows over the game that continued");
+	_interface->GetMenu().SetNetworkGame(InNetworkGame());
 	_interface->OpenMenu();
 	// The menu reads the profile's own pictures again as it opens
 	ReadTattooPictures();
@@ -6269,10 +6706,13 @@ void Game::PlayHandGrabSound()
 	}
 	if (feedback == hand_grab::GripFeedback::Dust)
 	{
-		// The next turn makes a puff of dust where the hand grips the land. The sound plays at once.
-		_gripDust.emplace_back(position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z);
-		// One of G_HandGrabLand_01 to _06, centred on the listener
-		const auto sample = 4 + Locator::rng::value().NextValue(0, 5);
+		// The next turn makes a puff of dust where the hand grips the land, on each computer of a network game. The sound
+		// plays at once, only on this computer.
+		Locator::playerCommandSystem::value().Submit(player_commands::GripDust {
+		    .point = {position.x, Locator::terrainSystem::value().GetHeightAt(glm::xz(position)), position.z}});
+		// One of G_HandGrabLand_01 to _06, centred on the listener. The number comes from this computer's own seed, so
+		// that the synced numbers of the world do not change.
+		const auto sample = 4 + Locator::gameRandom::value().LocalRand(6);
 		const auto id = fmt::format("InGame.sad/{}", sample);
 		// The grip is a sound of its own to the voice rules
 		audio::StartGameSoundEffect(entt::hashed_string(id.c_str()), {.voiceOwner = audio::VoiceOwner::OwnSound});

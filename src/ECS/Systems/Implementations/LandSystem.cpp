@@ -40,6 +40,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
 #include "Common/StringUtils.h"
@@ -207,6 +208,8 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 
 	PrepareNewLand(change);
+	// The script of the land gives the start place of the camera again, if it gives one
+	_startCameraPlace.reset();
 	timer.Step("reset");
 	View().ShowLoadingFrame();
 
@@ -281,6 +284,12 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	}
 	// The square of the player of this computer in the sheet of the players' symbols takes the profile's symbol
 	View().MakeSymbolSheet();
+	// A game that starts here can start with the camera at the player's temple
+	if (start_camera::StartsAtTemple(
+	        {.change = change, .networkGame = Locator::time::value().IsNetworkGame(), .scriptPlace = _startCameraPlace}))
+	{
+		View().StartCameraAtTemple();
+	}
 	View().ShowLoadingFrame();
 	StartNewLand(change);
 	timer.Step("start");
@@ -471,6 +480,11 @@ bool LandSystem::LoadGodsRingMap()
 	Locator::camera::value()
 	    .SetOrigin({eye.x, land.GetHeightAt(eye) + gods_ring_map::k_StartCameraHeight, eye.y})
 	    .SetFocus({focus.x, land.GetHeightAt(focus), focus.y});
+	// A network game on the map starts with the camera at the player's temple, as on every land of a network game
+	if (Locator::time::value().IsNetworkGame())
+	{
+		View().StartCameraAtTemple();
+	}
 	View().EndLoadingScreen();
 	StartNewLand(land_change::Kind::Testbed);
 	return true;
@@ -1095,12 +1109,20 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 
 	// The game pauses the world while the player is in the temple. The temple's own turns, by real time whatever the
 	// game's speed, run the temple's scripts and its help scripts, keep the audio going and have the advisors follow
-	// what they point at.
-	if (Locator::temple::has_value() && Locator::temple::value().Active())
+	// what they point at. A network game does not pause: the world's turns go on while the player is in the temple.
+	if (!clock.IsNetworkGame() && Locator::temple::has_value() && Locator::temple::value().Active())
 	{
 		if (temple_help::TurnDue(_lastTempleTurnTime, currentTime))
 		{
+			// The scripts' clock moves on by the temple's turn, and the dialogue takes the player's clicks
+			if (Locator::helpTextSystem::has_value())
+			{
+				Locator::helpTextSystem::value().ProcessTurn(temple_help::k_TurnMilliseconds);
+			}
 			Locator::vm::value().LookIn(lhvm::ScriptType::TempleHelp | lhvm::ScriptType::TempleSpecial);
+			// The bars that the temple's scripts wait for slide by the real time of the temple's turn, as the game's draw
+			// slides them by real time in the temple
+			Locator::cinematicDirectorSystem::value().ProcessTempleTurn();
 			view.PlayTempleAudioTurn();
 			Locator::advisorSystem::value().ProcessTurn();
 			// The help's banter check runs in the temple too. The help's clock stands still there, so the banter starts
@@ -1125,7 +1147,6 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 	// turns catches up, up to 10 turns a frame: when the next turn is there too, the clock of this computer follows the
 	// server's and the turn is due.
 	const auto& commands = Locator::playerCommandSystem::value();
-	bool played = false;
 	while (commands.TurnReady(clock.GetTurn()))
 	{
 		if (commands.IsBehind(clock.GetTurn()))
@@ -1136,14 +1157,9 @@ void LandSystem::GameLogicLoop(simulation::TurnViewInterface& view)
 		{
 			return;
 		}
-		// A second turn in the frame comes after the frame steps of the turn before it
-		if (played)
-		{
-			view.CatchUpFrame();
-		}
-		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn)
+		// The turn's steps go in the game's order, because many systems depend on it (see game_turn::k_Turn). A second
+		// turn in the frame follows the turn before it at once: the frame steps only draw, so none come between them.
 		simulation::PlayTurn(view);
-		played = true;
 
 		_lastGameLoopTime = currentTime;
 		_turnDeltaTime = delta;

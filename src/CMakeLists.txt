@@ -14,10 +14,16 @@ if (NOT OPENBLACK_INSPECTOR)
 endif ()
 # Without the developer tools, the game does not make the debug windows: a debug GUI that does nothing replaces them.
 # The windows, the editor and the editor system are then not in the program, because no part of the program uses them.
+# The trace of the synced random draws is a developer tool too.
 if (OPENBLACK_DEVELOPER_TOOLS)
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/NoDebugGui[.]cpp$")
 else ()
   list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/Gui[.]cpp$")
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Common/DrawTrace[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Common/DrawTrace[.]h$")
+  # The dump of the rows of the synced world is a developer tool
+  list(FILTER OPENBLACK_SOURCES EXCLUDE REGEX "/Debug/RowDump[.]cpp$")
+  list(FILTER OPENBLACK_HEADERS EXCLUDE REGEX "/Debug/RowDump[.]h$")
 endif ()
 # The code that connects the game to a browser page is built only for the web
 if (NOT EMSCRIPTEN)

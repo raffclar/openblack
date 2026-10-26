@@ -215,10 +215,10 @@ uint32_t HandBone(const CreatureRig::ActionPoints& points, const CreatureAnimati
 	return mirrored && points.rightHand < animation.mirror.size() ? animation.mirror[points.rightHand] : points.rightHand;
 }
 
-/// The pose drawn this frame, with the creature's placement
+/// The pose drawn this frame, with the placement that the frame draws the creature at
 creature::RulePose DrawnPoseOf(const CreatureAnimation& animation, const Transform& transform)
 {
-	return {.bones = animation.boneMatrices, .placement = PlacementOf(transform)};
+	return {.bones = animation.boneMatrices, .placement = PlacementOf(DrawnTransform(transform, &animation))};
 }
 
 /// The pose at the end of the newest game turn, which game rules read
@@ -3384,17 +3384,35 @@ void CreatureObjectActionSystem::PlaceHeld(bool drawn)
 	// What is held rides in the hand, turned with it
 	bool moved = false;
 	registry.Each<const Creature, const Transform, const CreatureAnimation, const CreatureHeldObject>(
-	    [&](const Creature&, const Transform& transform, const CreatureAnimation& animation, const CreatureHeldObject& held) {
+	    [&](entt::entity creature, const Creature&, const Transform& transform, const CreatureAnimation& animation,
+	        const CreatureHeldObject& held) {
 		    auto* at = registry.Valid(held.object) ? registry.TryGet<Transform>(held.object) : nullptr;
 		    if (at == nullptr)
 		    {
 			    return;
 		    }
+		    auto* holder = registry.TryGet<HeldByCreature>(held.object);
 		    // It turns with the hand bone and hangs below the finger ends by its own distance
-		    const auto pose =
-		        HeldPoseOf(held, animation, drawn ? DrawnPoseOf(animation, transform) : TurnPoseOf(animation, transform));
+		    if (drawn)
+		    {
+			    // The frame only draws it where the drawn hand is
+			    if (holder == nullptr || holder->creature != creature)
+			    {
+				    return;
+			    }
+			    const auto pose = HeldPoseOf(held, animation, DrawnPoseOf(animation, transform));
+			    holder->drawn = HeldByCreature::Drawn {.position = pose.position, .rotation = pose.rotation};
+			    moved = true;
+			    return;
+		    }
+		    const auto pose = HeldPoseOf(held, animation, TurnPoseOf(animation, transform));
 		    at->rotation = pose.rotation;
 		    at->position = pose.position;
+		    // The frames draw it where the turn put it until the next frame places it
+		    if (holder != nullptr)
+		    {
+			    holder->drawn.reset();
+		    }
 		    moved = true;
 	    });
 

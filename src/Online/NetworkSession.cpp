@@ -158,6 +158,21 @@ void NetworkSession::Leave()
 	FinishWith(End::Left);
 }
 
+void NetworkSession::StopGame()
+{
+	// The request goes once. A request that cannot go now waits for no socket: another computer stops the turns, or the
+	// player leaves.
+	if (_stopAsked || _stoppedAfter.has_value())
+	{
+		return;
+	}
+	if (_stream && _stream->IsOpen())
+	{
+		_stopAsked = true;
+		_stream->SendText(game_socket::ToJson(game_socket::StopRequest {}));
+	}
+}
+
 void NetworkSession::DropStream()
 {
 	// The handlers of the old socket do nothing more. The socket closes in the next update, never inside its own handler.
@@ -220,6 +235,11 @@ void NetworkSession::Text(std::string_view text)
 			_playout.Reset();
 		}
 		SendWaiting();
+	}
+	else if (const auto* stop = std::get_if<game_socket::GameStop>(&*frame))
+	{
+		_stoppedAfter = stop->turn;
+		Log(spdlog::level::info, fmt::format("The game server stopped the turns of the game after turn {}", stop->turn));
 	}
 	else if (const auto* refused = std::get_if<game_socket::Refused>(&*frame))
 	{
@@ -290,6 +310,21 @@ void NetworkSession::StartFrame(const game_socket::Frame& frame)
 		_startCreatures.clear();
 		_startEvents.push_back(StartEvent::Stopped);
 	}
+}
+
+std::span<const uint8_t> NetworkSession::StartCreatureFile(PlayerNames god) const
+{
+	const auto file = _startCreatures.find(static_cast<uint8_t>(god));
+	return file != _startCreatures.end() ? std::span<const uint8_t>(file->second) : std::span<const uint8_t> {};
+}
+
+std::optional<PlayerNames> NetworkSession::OwnGod() const
+{
+	if (!_joined.has_value() || _joined->role != game_socket::Role::God || !_joined->slot.has_value())
+	{
+		return std::nullopt;
+	}
+	return static_cast<PlayerNames>(*_joined->slot);
 }
 
 std::optional<StartEvent> NetworkSession::TakeStartEvent()
@@ -408,6 +443,10 @@ bool NetworkSession::HasTurn(uint32_t turn) const
 	{
 		return false;
 	}
+	if (_stoppedAfter.has_value() && turn > *_stoppedAfter)
+	{
+		return false;
+	}
 	return _turns.contains(turn) && _playout.Due(turn, _clock());
 }
 
@@ -522,6 +561,10 @@ void NetworkSession::Compare(uint32_t turn)
 	{
 		_compares.firstDifferent = _compares.firstDifferent.value_or(turn);
 		Log(spdlog::level::warn, fmt::format("The world parts from the server's world at turn {}", turn));
+		if (_settings.parts)
+		{
+			_settings.parts(turn);
+		}
 		switch (_resync.Differ(turn))
 		{
 		case ResyncRule::Action::Rejoin:

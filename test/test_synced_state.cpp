@@ -7,17 +7,23 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstring>
+
 #include <algorithm>
 #include <array>
 #include <string>
 #include <utility>
+#include <vector>
 
 #include <entt/entity/registry.hpp>
 #include <entt/meta/context.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
+#include "ECS/Components/SnowLevel.h"
 #include "ECS/Reflection/ComponentReflection.h"
+#include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
 
 using namespace openblack;
@@ -236,3 +242,148 @@ TEST(SyncedState, TheThreadsOfAPoolGiveTheSameHash)
 		EXPECT_EQ(shared.parts, alone.parts);
 	}
 }
+
+namespace
+{
+
+/// A component that nothing registered with the reflection
+struct FakeUnregistered
+{
+	int value {0};
+};
+
+} // namespace
+
+TEST(SyncedStateUnregistered, AWorldOfRegisteredComponentsHasNoneUnregistered)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body);
+	registry.emplace<FakeHidden>(body);
+	EXPECT_TRUE(synced_state::HashOf(registry, context, k_Presentation).unregistered.empty());
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
+}
+
+TEST(SyncedStateUnregistered, AComponentWithNoRegistrationIsNamedInTheHashAndLeftOutOfIt)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body);
+	const auto before = synced_state::HashOf(registry, context, k_Presentation);
+	registry.emplace<FakeUnregistered>(body, FakeUnregistered {.value = 7});
+	const auto after = synced_state::HashOf(registry, context, k_Presentation);
+	EXPECT_EQ(after.unregistered, std::vector<std::string> {"FakeUnregistered"});
+	EXPECT_EQ(UnregisteredStorages(registry, context), after.unregistered);
+	// The hash cannot see the component, which is why the game must have none
+	EXPECT_EQ(after.hash, before.hash);
+	registry.get<FakeUnregistered>(body).value = 8;
+	EXPECT_EQ(synced_state::HashOf(registry, context, k_Presentation).hash, before.hash);
+}
+
+TEST(SyncedStateUnregistered, AnEmptyStorageIsNotUnregistered)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto entity = registry.create();
+	registry.emplace<FakeUnregistered>(entity);
+	registry.erase<FakeUnregistered>(entity);
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
+}
+
+TEST(SyncedStateUnregistered, TheReporterTellsOfEachNameOnce)
+{
+	synced_state::UnregisteredReporter reporter;
+	const std::vector<std::string> first {"Alpha", "Beta"};
+	EXPECT_EQ(reporter.Fresh(first), first);
+	EXPECT_TRUE(reporter.Fresh(first).empty());
+	const std::vector<std::string> more {"Beta", "Gamma"};
+	EXPECT_EQ(reporter.Fresh(more), std::vector<std::string> {"Gamma"});
+}
+
+TEST(SyncedStateUnregistered, TheLineHasTheWordsThatTheToolsLookFor)
+{
+	const std::vector<std::string> names {"Alpha", "Beta"};
+	EXPECT_EQ(synced_state::UnregisteredLine(names), "unregistered component storage: Alpha, Beta");
+}
+
+// Every component that the game's reflection registers gives no unregistered storage, with the real registration
+TEST(SyncedStateUnregistered, TheGamesOwnRegistrationCoversACameraPoint)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry registry;
+	const auto entity = registry.create();
+	registry.emplace<CameraPoint>(entity);
+	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
+}
+
+TEST(SyncedState, TheSnowThatAThingShowsDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<ecs::components::SnowLevel>(context).Field<&ecs::components::SnowLevel::level>("level");
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto tree = registry.create();
+	registry.emplace<FakeBody>(tree, FakeBody {.place = 3.0f});
+	registry.emplace<ecs::components::SnowLevel>(tree, ecs::components::SnowLevel {.level = 10});
+	const auto parts = synced_state::PresentationParts();
+	const auto before = synced_state::HashOf(registry, context, parts).hash;
+	// The frames of one computer draw the two things in the snow: the snow eases on the tree and starts on the body
+	registry.get<ecs::components::SnowLevel>(tree).level = 40;
+	registry.emplace<ecs::components::SnowLevel>(body, ecs::components::SnowLevel {.level = 5});
+	EXPECT_EQ(synced_state::HashOf(registry, context, parts).hash, before);
+	// The turn moves the tree: the synced state changes
+	registry.get<FakeBody>(tree).place = 4.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, parts).hash, before);
+}
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 2.0f, .drawnPlace = 5.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow);
+	registry.emplace<FakeGlow>(glow, FakeGlow {.shine = 0.5f});
+	WorkerPool pool(2);
+	ecs::reflection::WorldRows rows;
+	const auto hash = synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &rows);
+	// The rows do not change the hash
+	EXPECT_EQ(hash.hash, synced_state::HashOf(registry, context, k_Presentation).hash);
+	// The hash keeps the place of the body only: the drawn place and the marked glow are presentation parts, which the
+	// rows mark
+	const auto synced = std::ranges::count(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	ASSERT_EQ(synced, 1);
+	const auto shown = std::ranges::count(rows.rows, true, &ecs::reflection::WorldRows::Row::presentation);
+	// The drawn place, the glow and the glow mark
+	EXPECT_EQ(shown, 3);
+	// A mark with no values is a row of no bytes
+	registry.emplace<FakeHidden>(body);
+	ecs::reflection::WorldRows marked;
+	static_cast<void>(synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &marked));
+	const auto hidden = std::ranges::find_if(marked.rows, [&marked](const ecs::reflection::WorldRows::Row& each) {
+		return marked.fields.at(each.field) == "FakeHidden.*";
+	});
+	ASSERT_NE(hidden, marked.rows.end());
+	EXPECT_EQ(hidden->entity, body);
+	EXPECT_EQ(hidden->size, 0u);
+	EXPECT_FALSE(hidden->presentation);
+	const auto& row = *std::ranges::find(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	EXPECT_EQ(row.entity, body);
+	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
+	ASSERT_EQ(row.size, sizeof(float));
+	float place = 0.0f;
+	std::memcpy(&place, rows.bytes.data() + row.offset, sizeof(place));
+	EXPECT_EQ(place, 2.0f);
+}
+#endif

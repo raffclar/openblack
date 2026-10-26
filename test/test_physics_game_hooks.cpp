@@ -450,8 +450,8 @@ public:
 	    , _fractions(std::move(fractions))
 	{
 	}
-	uint32_t GameRand(uint32_t /*n*/) override { return 0; }
-	float GameFloatRand(float /*x*/) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t /*n*/, DrawSite /*site*/) override { return 0; }
+	float SyncedFloatRand(float /*x*/, DrawSite /*site*/) override { return 0.0f; }
 	uint32_t LocalRand(int32_t /*n*/) override { return _wholes.at(_whole++); }
 	float LocalFloatRand(float /*x*/) override { return _fractions.at(_fraction++); }
 	int32_t CrtRand() override { return 0; }

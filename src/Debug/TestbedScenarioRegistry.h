@@ -182,6 +182,9 @@ struct Environment
 	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
 	/// script makes a creature. The runner removes them when the scenario stops.
 	std::vector<PlayerNames> players;
+	/// The game is a skirmish while the scenario runs: a god with no temple is out, and the last god in wins. The runner
+	/// puts the testbed back when the scenario stops.
+	bool skirmish {false};
 };
 
 /// Where the camera looks as the scenario starts
@@ -964,10 +967,21 @@ struct Command
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
 		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
-		/// takes the scenario's object (object). Then the player reports its hand at the point (point), so high above
-		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
-		/// creature.
+		/// takes the scenario's object (object), or holds a miracle seed (heldSeed) in place of the object. Then the
+		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
+		/// hand. This computer does not move these hands. Needs no creature.
 		OtherGodHand,
+		/// A press of the Join Online Game button of the browser page: the game opens the multiplayer front end at the
+		/// next frame that it may open in, also while a cut scene has the cinema bars in. Needs no creature.
+		JoinOnline,
+		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
+		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
+		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
+		EndBox,
+		/// The god of the player (player) brings a creature as it does at the start of a network game. The mind file
+		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
+		/// The creature comes at the creature home of the god's temple. Needs no creature.
+		BringCreature,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -990,6 +1004,8 @@ struct Command
 	float hour {12.0f};
 	/// The object picked up, knocked down or tied to, by its place in the scenario's objects
 	size_t object {0};
+	/// The miracle seed that another god's hand holds in place of the object
+	std::optional<SpellSeedType> heldSeed;
 	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
 	std::string_view action;
 	std::optional<size_t> with;
@@ -1051,6 +1067,8 @@ struct Command
 	std::string_view title;
 	/// A script run, its arguments, and the globals set before it runs
 	std::string_view script;
+	/// The name of a mind file in the creature mind folder of the game
+	std::string_view mindFile;
 	std::vector<ScriptArgument> scriptArguments;
 	std::vector<std::pair<std::string_view, ScriptArgument>> scriptGlobals;
 };
@@ -1212,6 +1230,8 @@ void AddVillageTotemScenarios(std::vector<Scenario>& all);
 void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
 /// The hands of the other gods of a network game, as this computer shows them, with no game server
 void AddOtherGodScenarios(std::vector<Scenario>& all);
+/// The Join Online Game button of the browser page
+void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up
@@ -1235,6 +1255,7 @@ void AddFishScenarios(std::vector<Scenario>& all);
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// A computer player's creature at the start of the computer mind
 void AddComputerPlayerScenarios(std::vector<Scenario>& all);
+void AddGameEndScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios

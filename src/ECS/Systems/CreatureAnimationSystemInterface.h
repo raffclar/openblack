@@ -44,9 +44,15 @@ public:
 	virtual void SwayTurn(entt::entity /*creature*/) {}
 	/// At the end of the creature's own turn, its body takes its pose for the turn if it has no pose yet
 	virtual void EndPoseTurn(entt::entity /*creature*/) {}
-	/// Once a frame, by the game time, which stops while the game is paused: the bodies are reshaped where they have
-	/// changed enough, drawn between the poses of their last two game turns, and their eyes placed
+	/// Once a frame, by the game time, which stops while the game is paused: the bodies are drawn between the poses of
+	/// their last two game turns, and their eyes placed. The frame changes only what the draw reads.
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
+	/// In the creature's own turn, as its body lives the turn: the shape that the body is drawn with follows its
+	/// alignment, fatness and strength once they changed enough, and its skeleton follows the shape
+	virtual void MorphTurn(entt::entity /*creature*/) {}
+	/// At the end of each game turn: a creature with no skeleton for its shape gets one, and a creature with no pose yet
+	/// takes its first pose
+	virtual void ShapeBodies() {}
 	/// A creature in the world takes its pose for this game turn now, at the end of its turn: its animations move on by
 	/// one turn, at the place and heading where its turn took it. A creature that has its pose for this turn keeps it.
 	virtual void PoseTurn(entt::entity creature) = 0;

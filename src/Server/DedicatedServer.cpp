@@ -30,6 +30,9 @@
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
@@ -42,6 +45,7 @@
 #include "ECS/SyncedState.h"
 #include "ECS/Systems/CreatureWebPageSystemInterface.h"
 #include "ECS/Systems/HandDemoSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/InspectorSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MusicMoodSystemInterface.h"
@@ -240,6 +244,11 @@ bool ServerWorld::Initialize()
 	land.SetNewGameStart(_settings.opening);
 	// The game server gets the humans of its land from the network session
 	land.SetHumansFromSession(_settings.network.has_value());
+	// No player sits at the game server, so no god's tap takes the server into the temple or another state of a player
+	if (Locator::handSystem::has_value())
+	{
+		Locator::handSystem::value().ClearOwnPlayer();
+	}
 
 	// Every random number from the seed, the date pinned
 	Locator::rng::value().SetRunSeed(_settings.seed);
@@ -253,6 +262,13 @@ bool ServerWorld::Initialize()
 	{
 		Locator::time::value().SetFixedFrameTime(*_simulation.frameTime);
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation.traceDrawsPath.has_value() && !draw_trace::Start(Locator::gameRandom::value(), *_simulation.traceDrawsPath))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the draw trace cannot open: {}",
+		                    _simulation.traceDrawsPath->string());
+	}
+#endif
 	// The run record of the tools starts with the inspector
 	if (_simulation.recordPath.has_value() && StartInspector(0))
 	{
@@ -568,6 +584,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	auto& host = network->Host();
 	// The world turns only with the turns that the host closes: before the start and with no player, it does no turn.
 	Locator::playerCommandSystem::value().SetSource(&host);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The row dump of the tools writes the rows of the turn at which the world of a client parts
+	host.SetPartListener([](uint8_t seat, uint32_t turn) {
+		Locator::syncChecksumSystem::value().DumpPart(turn, fmt::format("slot {} parts", seat), seat);
+	});
+#endif
 	// A client whose world parted gets the world of the server, at the start of the next turn
 	host.SetWorldState([] {
 		return Locator::saveGameSystem::has_value() ? Locator::saveGameSystem::value().WorldState() : std::vector<uint8_t> {};
@@ -626,7 +648,9 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 	simulation.settings.paceToWallClock = !settings.fast;
 	simulation.settings.untilTurn = settings.turns;
 	simulation.settings.stillHand = true;
+	simulation.settings.templeLoss = settings.templeLoss;
 	simulation.frameTime = sim_run::FrameTimeFromMs(settings.frameMilliseconds);
+	simulation.traceDrawsPath = settings.traceDrawsPath;
 	if (settings.recordPath.has_value())
 	{
 		simulation.recordPath = settings.recordPath;
@@ -682,6 +706,12 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 	// network game
 	auto& checksums = Locator::syncChecksumSystem::value();
 	checksums.SetEnabled(true);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (settings.rowDumpPath.has_value() && !checksums.StartRowDump(*settings.rowDumpPath, settings.rowDump))
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
+	}
+#endif
 	checksums.SetTurnListener([&onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
 		if (onTurn)

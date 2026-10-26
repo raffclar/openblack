@@ -25,12 +25,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// The real time since the game started, in milliseconds
-uint32_t NowMs()
-{
-	return static_cast<uint32_t>(Locator::time::value().GetElapsedTime().count());
-}
-
 /// Whether the length of its sample times a spoken line, not the sound device
 bool TimedByLength(const audio::AudioManagerInterface& audio)
 {
@@ -60,8 +54,9 @@ void HelpSpeechSystem::Say(uint32_t text, audio::SpeechVoice voice, std::optiona
 	const auto emitter = audio.StartSoundEffect(
 	    sample->sound,
 	    {.position = position, .voiceOwner = audio::VoiceOwner::Number, .ownerNumber = audio::OwnerNumberOf(voice)});
+	// The scripts time the line by the length of its sample on their own clock, whatever the sound device does
 	const audio::SilentPlayback playback {
-	    .startMs = NowMs(),
+	    .startMs = _clockMs,
 	    .lengthMs = Locator::resources::value().GetSounds().Handle(sample->sound)->duration * 1000.0f,
 	};
 	_voices.Add(voice, *sample, emitter, playback, TimedByLength(audio));
@@ -78,13 +73,9 @@ bool HelpSpeechSystem::IsSaying(uint32_t text, audio::SpeechVoice voice)
 	{
 		return false;
 	}
-	auto& audio = Locator::audio::value();
-	const bool lost = TimedByLength(audio);
-	const auto now = NowMs();
-	return _voices.IsSaying(voice, *sample, [&audio, lost, now](entt::entity emitter, const audio::SilentPlayback& playback) {
-		// Not yet started or paused with the game is still saying it
-		const bool sounding = audio.EmitterExists(emitter) && audio.GetStatus(emitter) != audio::AudioStatus::Stopped;
-		return audio::PlaysOn(sounding, lost, playback, now);
+	const auto now = _clockMs;
+	return _voices.IsSaying(voice, *sample, [now](entt::entity /*emitter*/, const audio::SilentPlayback& playback) {
+		return playback.IsPlaying(now);
 	});
 }
 

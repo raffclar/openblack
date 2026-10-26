@@ -33,13 +33,30 @@ struct VillageTotem
 	float held {0.0f};
 	/// Whether the hand holds it
 	bool gripped {false};
-	/// The see-through second plinth and icon at the other share, while the two stand apart
+	/// The see-through second plinth and icon at the other share. The turn makes them with the totem, the same on every
+	/// computer. The frames only move them, and show them while the two shares stand apart.
 	entt::entity ghost {entt::null};
 	entt::entity ghostIcon {entt::null};
 	/// How high it was last drawn risen, none until it is drawn after its icon is put on
 	std::optional<float> lastShownRise;
 	/// The next time it moves shows no tooltip: it was only just given its player's icon
 	bool quietOnce {false};
+};
+
+/// The icon on top of a totem. The frames move it up and down with its plinth.
+struct VillageTotemIcon
+{
+};
+
+/// The see-through second plinth or icon of a totem. It is only a picture: the turns do not read it, and only the frames
+/// change it.
+struct VillageTotemGhost
+{
+};
+
+/// A second totem that the frames do not show now: its two shares stand together
+struct VillageTotemGhostHidden
+{
 };
 
 } // namespace openblack::ecs::components

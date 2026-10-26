@@ -44,6 +44,9 @@ import sys
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.insert(0, HERE)
+
+import sim_report  # noqa: E402
 ROOT = os.path.normpath(os.path.join(HERE, "..", ".."))
 DEFAULT_BUILDS = os.environ.get("OB_BUILDS", "E:/openblack/builds")
 DEFAULT_GAME_PATH = os.environ.get("OB_GAME_PATH", "C:/projects/black")
@@ -281,11 +284,20 @@ def main(argv=None):
         summary["record_desktop"] = compare(turns["record"], turns["desktop"], options.turns)
     summary["seconds"] = round(time.monotonic() - started, 1)
     summary["same"] = summary.get("desktop_web", {}).get("same", False)
+    # A component with no registration is left out of the checksum: a change in it would never show here
+    folders = [os.path.join(out, name) for name in os.listdir(out) if os.path.isdir(os.path.join(out, name))]
+    unregistered = sim_report.unregistered_in_files(
+        *[path for path in (recorded, desktop, web) if path],
+        *[os.path.join(folder, name) for folder in folders for name in ("game.log", "cdp-run.log", "record.jsonl")])
+    summary["unregistered"] = sorted(unregistered)
+    if unregistered:
+        summary["same"] = False
+        print(sim_report.unregistered_line(unregistered))
     with open(os.path.join(out, "cross_check.json"), "w", encoding="utf-8") as file:
         json.dump(summary, file, indent=2)
     print(json.dumps(summary))
     if options.desktop_only:
-        return 0 if summary.get("record_desktop", {}).get("same", False) else 1
+        return 0 if summary.get("record_desktop", {}).get("same", False) and not unregistered else 1
     return 0 if summary["same"] else 1
 
 

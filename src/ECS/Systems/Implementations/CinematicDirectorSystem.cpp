@@ -11,12 +11,15 @@
 
 #include "CinematicDirectorSystem.h"
 
+#include <chrono>
 #include <utility>
 #include <vector>
 
 #include "ECS/Reflection/BinaryArchive.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Temple/TempleHelp.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -105,6 +108,14 @@ float CinematicDirectorSystem::GetWideScreenFraction() const
 void CinematicDirectorSystem::ProcessTurn()
 {
 	_fade.ProcessTurn();
+	// The bars that the scripts wait for slide by the time of the turn
+	_bars.ProcessTurn(static_cast<float>(std::chrono::milliseconds(TimeSystemInterface::k_TurnDuration).count()),
+	                  WideScreenTime());
+}
+
+void CinematicDirectorSystem::ProcessTempleTurn()
+{
+	_bars.ProcessTurn(static_cast<float>(temple_help::k_TurnMilliseconds), WideScreenTime());
 }
 
 void CinematicDirectorSystem::Update(std::chrono::duration<float, std::milli> gameTime)
@@ -149,6 +160,7 @@ bool CinematicDirectorSystem::LoadState(reflection::BinaryReader& in)
 {
 	reflection::Load(in, _fade);
 	reflection::Load(in, _bars);
+	_bars.DrawFromTurns();
 	reflection::Load(in, _wideScreenOwner);
 	reflection::Load(in, _interfaceActive);
 	reflection::Load(in, _hideDialogs);

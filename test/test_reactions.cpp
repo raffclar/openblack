@@ -136,8 +136,8 @@ public:
 class AlwaysLowGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t) override { return 0; }
-	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t, DrawSite) override { return 0; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }

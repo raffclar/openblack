@@ -271,6 +271,9 @@ struct ComponentHash
 	bool kept {false};
 	uint64_t hash {0};
 	std::vector<uint64_t> fields;
+	/// Tools: the bytes of each field of each row, when asked. The field of a row is the index of the field in the
+	/// component.
+	WorldRows rows;
 };
 
 /// FNV-1a over the bytes of each part
@@ -285,9 +288,54 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 	}
 }
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// Tools: keeps the bytes of each field of each row that the hash leaves out, marked as a part that only shows the world
+template <typename KeepsField>
+void KeepLeftOutRows(const ComponentStorage& component, const TypeCodec* codec, std::span<const KeptField> fields,
+                     const KeepsField& keepsField, BinaryWriter& out, WorldRows& kept)
+{
+	const auto keep = [&](size_t index, entt::entity row, std::span<const uint8_t> bytes) {
+		kept.rows.push_back({.entity = row,
+		                     .field = static_cast<uint32_t>(index),
+		                     .offset = static_cast<uint32_t>(kept.bytes.size()),
+		                     .size = static_cast<uint32_t>(bytes.size()),
+		                     .presentation = true});
+		kept.bytes.insert(kept.bytes.end(), bytes.begin(), bytes.end());
+	};
+	for (const auto row : LiveRows(*component.storage))
+	{
+		const void* value = component.storage->value(row);
+		const size_t count = codec != nullptr ? 1 : fields.size();
+		for (size_t index = 0; index < count; ++index)
+		{
+			if (keepsField(index, row))
+			{
+				continue;
+			}
+			out.Bytes().clear();
+			if (codec != nullptr)
+			{
+				codec->save(value, out);
+			}
+			else if (fields[index].info->saveFrom != nullptr)
+			{
+				fields[index].info->saveFrom(value, out);
+			}
+			else
+			{
+				auto instance = component.type.from_void(value);
+				fields[index].info->save(fields[index].data.get(instance), out);
+			}
+			keep(index, row, out.Bytes());
+		}
+	}
+	out.Bytes().clear();
+}
+#endif
+
 /// Hashes the rows of one component. The writer is the scratch memory of the caller.
 [[nodiscard]] ComponentHash HashComponent(const ComponentStorage& component, std::span<const HashLeaveOut> leaveOut,
-                                          bool byField, const RowVisitor& visit, BinaryWriter& out)
+                                          bool byField, const RowVisitor& visit, BinaryWriter& out, bool keepRows)
 {
 	ComponentHash result;
 	// Each row: its entity, then each field that the hash keeps, with the bytes that a save writes
@@ -304,21 +352,56 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 		                       [](const KeptField& field) { return std::string_view(field.info->name); });
 	}
 	const auto left = FindLeaveOut(leaveOut, component.name, names);
+	const auto keepsField = [&left](size_t index, entt::entity row) {
+		return !left.whole && !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row) &&
+		       !AnyHas(left.rowMarkers, row);
+	};
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// Tools: the rows also keep the fields that the hash leaves out, with a mark, so that a compare shows what each
+	// computer draws of the thing that parts
+	if (keepRows)
+	{
+		KeepLeftOutRows(component, codec, fields, keepsField, out, result.rows);
+	}
+	// A component with no values is one row of no bytes for each entity, so that a compare sees the mark
+	if (keepRows && codec == nullptr && fields.empty())
+	{
+		for (const auto row : LiveRows(*component.storage))
+		{
+			result.rows.rows.push_back({.entity = row,
+			                            .field = 0,
+			                            .offset = static_cast<uint32_t>(result.rows.bytes.size()),
+			                            .size = 0,
+			                            .presentation = left.whole || AnyHas(left.rowMarkers, row)});
+		}
+	}
+#endif
 	if (left.whole)
 	{
 		return result;
 	}
-	const auto keepsField = [&left](size_t index, entt::entity row) {
-		return !left.fieldAlways[index] && !AnyHas(left.fieldMarkers[index], row);
-	};
 	result.hash = k_HashOffset;
 	// The hash of each field on its own, when asked: the whole value of a component that saves as one value
 	result.fields.assign(byField ? std::max<size_t>(fields.size(), 1) : 0, k_HashOffset);
-	const auto mixField = [&](size_t index, std::span<const uint8_t> bytes) {
+	const auto mixField = [&](size_t index, std::span<const uint8_t> bytes, entt::entity row) {
 		if (byField)
 		{
 			MixBytes(result.fields.at(index), bytes);
 		}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (keepRows)
+		{
+			auto& kept = result.rows;
+			kept.rows.push_back({.entity = row,
+			                     .field = static_cast<uint32_t>(index),
+			                     .offset = static_cast<uint32_t>(kept.bytes.size()),
+			                     .size = static_cast<uint32_t>(bytes.size())});
+			kept.bytes.insert(kept.bytes.end(), bytes.begin(), bytes.end());
+		}
+#else
+		static_cast<void>(row);
+		static_cast<void>(keepRows);
+#endif
 	};
 	// A component with no values only marks its entities. The game never reads the order of such a mark, so the hash
 	// takes its entities in the order of their numbers.
@@ -344,7 +427,7 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 			{
 				const auto start = out.Bytes().size();
 				codec->save(value, out);
-				mixField(0, std::span(out.Bytes()).subspan(start));
+				mixField(0, std::span(out.Bytes()).subspan(start), row);
 				if (visit)
 				{
 					visit(component.name, row, k_WholeComponent, std::span(out.Bytes()).subspan(start));
@@ -370,7 +453,7 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 					auto instance = component.type.from_void(value);
 					field.info->save(field.data.get(instance), out);
 				}
-				mixField(index, std::span(out.Bytes()).subspan(start));
+				mixField(index, std::span(out.Bytes()).subspan(start), row);
 				if (visit)
 				{
 					visit(component.name, row, field.info->name, std::span(out.Bytes()).subspan(start));
@@ -381,6 +464,38 @@ void MixBytes(uint64_t& hash, std::span<const uint8_t> bytes)
 	}
 	return result;
 }
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+/// Adds the rows of one component to the rows of the world. The fields of the component get the indices of the world.
+void AddRows(WorldRows& world, const ComponentStorage& component, const WorldRows& rows)
+{
+	if (rows.rows.empty())
+	{
+		return;
+	}
+	std::vector<std::string> names;
+	const auto fields = KeptFields(component.type);
+	if (ComponentCodec(component.type) != nullptr || fields.empty())
+	{
+		names.emplace_back(k_WholeComponent);
+	}
+	else
+	{
+		std::ranges::transform(fields, std::back_inserter(names),
+		                       [](const KeptField& field) { return std::string(field.info->name); });
+	}
+	const auto first = static_cast<uint32_t>(world.fields.size());
+	std::ranges::transform(names, std::back_inserter(world.fields),
+	                       [&component](const std::string& field) { return component.name + "." + field; });
+	const auto start = static_cast<uint32_t>(world.bytes.size());
+	world.bytes.insert(world.bytes.end(), rows.bytes.begin(), rows.bytes.end());
+	std::ranges::transform(rows.rows, std::back_inserter(world.rows), [first, start](WorldRows::Row row) {
+		row.field += first;
+		row.offset += start;
+		return row;
+	});
+}
+#endif
 
 } // namespace
 
@@ -414,11 +529,19 @@ std::vector<uint8_t> openblack::ecs::reflection::SaveWorld(const entt::registry&
 	return std::move(out.Bytes());
 }
 
+std::vector<std::string> openblack::ecs::reflection::UnregisteredStorages(const entt::registry& registry,
+                                                                          const entt::meta_ctx& context)
+{
+	std::vector<std::string> unregistered;
+	static_cast<void>(RegisteredStorages(registry, context, unregistered));
+	return unregistered;
+}
+
 openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(const entt::registry& registry,
                                                                               const entt::meta_ctx& context,
                                                                               std::span<const HashLeaveOut> leaveOut,
                                                                               bool byField, const RowVisitor& visit,
-                                                                              WorkerPool* pool)
+                                                                              WorkerPool* pool, WorldRows* rows)
 {
 	WorldHashes hashes;
 	{
@@ -434,8 +557,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		hashes.entities = k_HashOffset;
 		MixBytes(hashes.entities, out.Bytes());
 	}
-	std::vector<std::string> unregistered;
-	const auto components = RegisteredStorages(registry, context, unregistered);
+	const auto components = RegisteredStorages(registry, context, hashes.unregistered);
 	std::vector<ComponentHash> results(components.size());
 	// The hash of a component does not use the other components, so the threads of the pool can share them. The
 	// visitor of the tools must get the rows in order, so then this thread does all of them.
@@ -443,7 +565,7 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 	{
 		std::vector<BinaryWriter> writers(pool->GetLaneCount(), BinaryWriter(context));
 		pool->ForEach(components.size(), [&](size_t index, size_t lane) {
-			results[index] = HashComponent(components[index], leaveOut, byField, visit, writers[lane]);
+			results[index] = HashComponent(components[index], leaveOut, byField, visit, writers[lane], rows != nullptr);
 		});
 	}
 	else
@@ -451,13 +573,19 @@ openblack::ecs::reflection::WorldHashes openblack::ecs::reflection::HashWorld(co
 		BinaryWriter out(context);
 		for (size_t index = 0; index < components.size(); ++index)
 		{
-			results[index] = HashComponent(components[index], leaveOut, byField, visit, out);
+			results[index] = HashComponent(components[index], leaveOut, byField, visit, out, rows != nullptr);
 		}
 	}
 	for (size_t index = 0; index < components.size(); ++index)
 	{
 		const auto& component = components[index];
 		const auto& result = results[index];
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (rows != nullptr)
+		{
+			AddRows(*rows, component, result.rows);
+		}
+#endif
 		// A component of which the hash keeps no row is not in the hash, as a component that no entity has
 		if (!result.kept)
 		{

@@ -477,6 +477,11 @@ TEST(MultiplayerRules, LocalMapsAndTheirConditions)
 	EXPECT_EQ(FindLand(maps, "mpm_3p_1"), 1u);
 	EXPECT_EQ(FindLand(maps, "Bombardment - 2 players"), 0u);
 	EXPECT_FALSE(FindLand(maps, "mpm_9p_1").has_value());
+	// The server sends the path of the map file of a network land
+	EXPECT_EQ(FindLand(maps, "Online Maps/mpm_3p_1.map"), 1u);
+	EXPECT_EQ(FindLand(maps, "Online Maps/MPM_2P_1.MAP"), 0u);
+	EXPECT_FALSE(FindLand(maps, "Online Maps/mpm_9p_1.map").has_value());
+	EXPECT_FALSE(FindLand(maps, "Playgrounds/TwoGods.txt").has_value());
 	EXPECT_EQ(LandInfoText(0), "HELP_TEXT_DYK_RULES_02");
 	EXPECT_EQ(LandInfoText(2), "HELP_TEXT_DYK_RULES_11");
 	EXPECT_FALSE(LandInfoText(3).has_value());
@@ -772,6 +777,24 @@ TEST_F(FrontEndTest, AFullRoomIsJoinedAsAnObserver)
 	auto again = std::move(lobby.ticket);
 	again({.value = std::nullopt,
 	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "server_full"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
+TEST_F(FrontEndTest, AStartedGameIsJoinedAsAnObserverWhenTheAccountHasNoGodInIt)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto started = std::move(lobby.ticket);
+	started({.value = std::nullopt,
+	         .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
+	// The front end asks again, for an observer's ticket, with no message
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
+	// The lobby also refuses the observer: the join fails, with no loop
+	auto again = std::move(lobby.ticket);
+	again({.value = std::nullopt,
+	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
 	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 }
 

@@ -84,6 +84,10 @@ class OffscreenScreenshots;
 class MorphStreamLayouts;
 class ShaderProgram;
 class Mesh;
+namespace view_frustum
+{
+struct Frustum;
+}
 
 class Renderer final: public RendererInterface
 {
@@ -213,7 +217,9 @@ private:
 		/// The alignment of the player it is shown for, which makes the flying flock's seed a bat or a dove
 		float ownerAlignment;
 	};
-	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown) const;
+	/// With `seenBy`, the function does not send a draw of the model that is out of that view
+	void DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown,
+	                   const view_frustum::Frustum* seenBy = nullptr) const;
 	/// The pass what blends in a scene goes to: its own pass after the scene's, but in the temple the scene's own
 	[[nodiscard]] static RenderPass TranslucentView(RenderPass scene);
 	/// The seeds of the creature's best-learnt miracles hovering by the plinths in the creature's room

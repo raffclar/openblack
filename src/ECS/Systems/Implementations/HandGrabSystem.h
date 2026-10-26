@@ -59,9 +59,12 @@ public:
 	void ForgetClicks(uint32_t turn);
 	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
+	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
 	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
+	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
@@ -77,6 +80,7 @@ public:
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;
+	[[nodiscard]] bool IsBusyOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
@@ -165,13 +169,13 @@ private:
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, glm::vec3 velocity);
 	/// The hand holds nothing, having let go before taking anything or let go of what it held
 	void Empty(components::HandGrab& grab);
-	/// A thing that the hand pulls at stands again as it stood before the pull
-	void StandAsBeforePull(const components::HandGrab& grab);
 
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] bool HandInInfluence() const;
 
 	std::unique_ptr<hand_grab::HandGrabWorldInterface> _world;
+	/// The thing that the frames of this computer draw in the pose of a pull, until the pull ends
+	entt::entity _drawnPull {entt::null};
 };
 
 } // namespace openblack::ecs::systems

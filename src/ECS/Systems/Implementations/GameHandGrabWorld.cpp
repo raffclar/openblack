@@ -603,7 +603,8 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	{
 		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
 	}
-	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+	// The game server and an observer have no hand of their own
+	const bool ownHand = !Locator::handSystem::has_value() || Locator::handSystem::value().IsOwnPlayer(player);
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {
 		if (ownHand && Locator::helpProfileSystem::has_value())
@@ -627,12 +628,15 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
 	}
 	// A temple's entrance takes the player of this computer into their own temple. The held leash takes the tap first.
+	// The game server and the other computers play the tap, but stay out of the temple.
 	if (const auto* entrance = Entities().TryGet<const TempleEntrance>(object); entrance != nullptr)
 	{
 		const auto* heart = Entities().Valid(entrance->temple) ? Entities().TryGet<const Temple>(entrance->temple) : nullptr;
 		const auto tap = openblack::temple::TapEntrance({
 		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
-		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
+		    .networkGame = IsNetworkGame(),
+		    .ownTemple = heart != nullptr && heart->owner == player,
+		    .byThisComputer = ownHand,
 		    .leashHeld = LeashTakesTap(object, player),
 		});
 		if (tap.tapped)
@@ -659,7 +663,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
 	{
 		countTap();
-		return Locator::magicSystem::value().TapGlobe(object);
+		return Locator::magicSystem::value().TapGlobe(object, player);
 	}
 	// A reward chest is opened by its player's tap, until it is open
 	if (const auto* reward = Entities().TryGet<const Reward>(object); reward != nullptr && Locator::rewardSystem::has_value())
@@ -948,6 +952,34 @@ void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
 	}
 	transform->position = pose.origin;
 	Locator::entitiesRegistry::value().SetDirty();
+}
+
+void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return;
+	}
+	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = glm::length(pose.axes[column]);
+		pulled.rotation[column] = length > 0.0f ? pose.axes[column] / length : pose.axes[column];
+		pulled.scale[column] = length;
+	}
+	registry.AssignOrReplace<HandPulled>(object, pulled);
+	registry.SetDirty();
+}
+
+void GameHandGrabWorld::ForgetPulledPose(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+	{
+		registry.Remove<HandPulled>(object);
+		registry.SetDirty();
+	}
 }
 
 glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat3& axes) const

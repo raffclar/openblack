@@ -26,6 +26,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mobile.h"
@@ -506,15 +507,10 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 			SendTake(*grab, grab->object);
 			return std::nullopt;
 		}
-		// Let go before the thing came free: it stays where it is, leaning as it was pulled, and a short press was a tap.
-		// Only this computer pulled it and the other computers did not see the lean. Thus in a network game, the thing
-		// stands again as it stood before the pull, so that all the worlds stay the same.
+		// Let go before the thing came free: it stays where the turns put it, and a short press was a tap. The lean of
+		// the pull was only drawn, so the world does not change here.
 		const auto object = grab->object;
 		const bool tap = hand_grab::ElapsedMs(nowMs, grab->pressMs, turn, grab->pressTurn) <= hand_grab::k_GrabWaitMs;
-		if (_world->IsNetworkGame())
-		{
-			StandAsBeforePull(*grab);
-		}
 		Empty(*grab);
 		// It still becomes the thing last let go, which a flying thing's twist then finds
 		grab->released = object;
@@ -1043,7 +1039,6 @@ void HandGrabSystem::StartPull(HandGrab& grab, const Frame& frame)
 	grab.stretch.Reset(1.0f);
 	grab.tug = tug;
 	const auto& before = _world->Entities().Get<const Transform>(object);
-	grab.pullPosition = before.position;
 	grab.pullRotation = before.rotation;
 	grab.pullScale = before.scale;
 }
@@ -1096,7 +1091,8 @@ glm::vec3 HandGrabSystem::Pull(HandGrab& grab, const Frame& frame)
 		{
 			axes[1] *= grab.stretch.GetValue();
 		}
-		_world->SetPose(object, {.axes = axes, .origin = tug.base});
+		_world->DrawPulledPose(object, {.axes = axes, .origin = tug.base});
+		_drawnPull = object;
 	}
 	// How far up it the hand grips it, as the hand measures it every frame
 	grab.holdDistance = HoldOfObject(object).loweringMultiplier * size.height;
@@ -1126,14 +1122,10 @@ void HandGrabSystem::PlayTakeSounds(entt::entity object)
 
 void HandGrabSystem::SendTake(HandGrab& grab, entt::entity object)
 {
-	// A thing that the hand can no longer take is let go of. In a network game, a pulled thing stands again as it stood
-	// before the pull, as when the hand lets go of it before it comes free.
+	// A thing that the hand can no longer take is let go of. It stays where the turns put it, as when the hand lets go
+	// of it before it comes free.
 	if (!MayTake(object))
 	{
-		if (_world->IsNetworkGame())
-		{
-			StandAsBeforePull(grab);
-		}
 		Empty(grab);
 		return;
 	}
@@ -1260,7 +1252,8 @@ void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld
 
 	// The player of most influence where the thing was is where what the hand holds came from
 	_world->NoteTakenAt(_world->PoseOf(object).origin);
-	// It is held at its own size
+	// It is held at its own size, and the frames draw it at the hand from now
+	_world->ForgetPulledPose(object);
 	auto pose = _world->PoseOf(object);
 	pose.axes = _world->UnstretchedAxes(object, pose.axes);
 	_world->SetPose(object, pose);
@@ -1379,6 +1372,14 @@ glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
 	}
 	grab->handSize = frame.handSize;
 	grab->handPoint = frame.cursorGround;
+	// A pull that ended leaves the thing drawn at its own place again
+	const bool tugs = (grab->state == HandGrab::State::Grabbing || grab->state == HandGrab::State::Taking) &&
+	                  grab->tug.has_value() && grab->object == _drawnPull;
+	if (_drawnPull != entt::null && !tugs)
+	{
+		_world->ForgetPulledPose(_drawnPull);
+		_drawnPull = entt::null;
+	}
 	// Clicks are forgotten as the game's turns go by. In a network game the turn writes the clicks and forgets them.
 	if (!_world->IsNetworkGame())
 	{
@@ -1841,13 +1842,8 @@ void HandGrabSystem::PlaceHeldForTurn()
 {
 	// The frames draw a held thing at the hand. The turn has it where the last report put the hand, at the turn and size
 	// that it had as the hand took it.
-	// A thing that the hand of this computer pulls at stands in the world as it stood before the pull
-	// The turn runs on every computer: it never gives a hand a grab that only this computer would have
-	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
-	if (const auto* grab = std::as_const(*this).Grab(); grab != nullptr)
-	{
-		StandAsBeforePull(*grab);
-	}
+	// A thing that the hand of this computer pulls at is not changed here. Only this computer knows of the pull, and
+	// the frames only draw the lean. Thus a pulled villager continues to walk in the same way on every computer.
 	// Each thing at the place of the hand that holds it
 	auto& registry = _world->Entities();
 	registry.Each<const InHand, Transform>([this](const InHand& inHand, Transform& transform) {
@@ -1857,23 +1853,10 @@ void HandGrabSystem::PlaceHeldForTurn()
 	});
 }
 
-void HandGrabSystem::StandAsBeforePull(const HandGrab& grab)
-{
-	if ((grab.state != HandGrab::State::Grabbing && grab.state != HandGrab::State::Taking) || !grab.tug.has_value() ||
-	    !Exists(grab.object))
-	{
-		return;
-	}
-	auto& pulled = _world->Entities().Get<Transform>(grab.object);
-	pulled.position = grab.pullPosition;
-	pulled.rotation = grab.pullRotation;
-	pulled.scale = grab.pullScale;
-}
-
 void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 {
 	auto& registry = _world->Entities();
-	registry.Each<const InHand, Transform>([this, &registry, frameMs](const InHand& inHand, Transform& transform) {
+	registry.Each<InHand>([this, &registry, frameMs](InHand& inHand) {
 		if (!Exists(inHand.hand) || !_world->IsOtherPlayersHand(inHand.hand))
 		{
 			return;
@@ -1881,9 +1864,26 @@ void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 		const auto reported = _world->ReportedPlaceOf(inHand.hand);
 		auto* track = registry.TryGet<HeldDrawTrack>(inHand.hand);
 		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
-		transform.position = _world->AsMapPlace(point);
-		transform.rotation = glm::mat3(1.0f);
-		transform.scale = inHand.scale;
+		// Only the draw reads this place. The turns keep the thing at the reported place of the hand.
+		inHand.drawn = InHand::Drawn {.position = _world->AsMapPlace(point), .rotation = glm::mat3(1.0f)};
+	});
+	// A miracle seed in the hand of another god moves the same way. Its model shows only for a miracle that shows one
+	// in the hand; this computer draws no effect of it, as the hand of another god is not drawn.
+	registry.Each<const HandHeldSeed>([this, &registry, frameMs](entt::entity hand, const HandHeldSeed& held) {
+		if (!registry.Valid(held.seed) || !_world->IsOtherPlayersHand(hand))
+		{
+			return;
+		}
+		auto* transform = registry.TryGet<Transform>(held.seed);
+		if (transform == nullptr)
+		{
+			return;
+		}
+		const auto reported = _world->ReportedPlaceOf(hand);
+		auto* track = registry.TryGet<HeldDrawTrack>(hand);
+		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		transform->position = _world->AsMapPlace(point);
+		transform->rotation = glm::mat3(1.0f);
 	});
 }
 
@@ -1913,6 +1913,13 @@ void HandGrabSystem::ForceDrop()
 	LetGo(*grab, glm::vec3(0.0f), std::nullopt);
 }
 
+void HandGrabSystem::DoShakeOff(PlayerNames player)
+{
+	// The command acts with the hand of the player that sent it
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	ForceDrop();
+}
+
 bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 {
 	// The input and the frames of this computer act with its own hand
@@ -1932,6 +1939,7 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 
 void HandGrabSystem::Reset()
 {
+	_drawnPull = entt::null;
 	if (auto* grab = Grab())
 	{
 		if (grab->scoopSource != entt::null)
@@ -1940,6 +1948,18 @@ void HandGrabSystem::Reset()
 		}
 		*grab = HandGrab {};
 	}
+}
+
+std::optional<entt::entity> HandGrabSystem::GetHeldOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	return GetHeld();
+}
+
+bool HandGrabSystem::IsInInfluenceOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	return HandInInfluence();
 }
 
 std::optional<entt::entity> HandGrabSystem::GetHeld() const
@@ -1964,6 +1984,15 @@ std::optional<entt::entity> HandGrabSystem::GetLockedOn() const
 
 bool HandGrabSystem::IsBusy() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	return grab != nullptr && grab->state != HandGrab::State::Empty;
+}
+
+bool HandGrabSystem::IsBusyOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
 	const auto* grab = Grab();
 	return grab != nullptr && grab->state != HandGrab::State::Empty;
 }

@@ -90,6 +90,8 @@ struct ServerSettings
 	uint32_t seed {1};
 	/// The server stops when the world gets to this turn. None for a server that runs until a signal stops it.
 	std::optional<uint32_t> turns;
+	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
+	std::optional<sim_run::TempleLoss> templeLoss;
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock
@@ -102,11 +104,19 @@ struct ServerSettings
 	std::optional<std::filesystem::path> recordPath;
 	/// Tools: the run record also has the hash of each field of each component
 	bool recordFields {false};
+	/// Tools: the server writes each draw on the synced seed to this file, as the game's --sim-trace-draws does
+	std::optional<std::filesystem::path> traceDrawsPath;
 	/// Tools: the commands of each turn that a game wrote (the game's --sim-commands). The server does them at the same
 	/// turns, as if the game sent them over the network.
 	std::optional<std::filesystem::path> commandsPath;
 	/// Tools: at this turn the server takes its whole world as a world state and loads it again
 	std::optional<uint32_t> reloadAt;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: the file of the row dump (row_dump::RowDump). The server writes the rows of a turn at which the world of a
+	/// client parts from the server's world, and at the turn of the settings.
+	std::optional<std::filesystem::path> rowDumpPath;
+	row_dump::Settings rowDump;
+#endif
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.
 	std::optional<NetworkSettings> network;
