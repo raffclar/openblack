@@ -17,7 +17,10 @@ same turns, and each turn's checksum must be the same.
 The hand of the game stays still, unless --input gives the game recorded input (--sim-input, from the first frame of
 the land): then the hand moves, takes, drops, throws and casts, and the server sees only the commands.
 The input can also be an object with the list as "events" and a "camera" as camera.set takes it: the game puts its camera
-there before the first frame of the land (tools/sim/hand_inputs/twogods.json).
+there before the first frame of the land, in place of the start view and its flight (tools/sim/hand_inputs/twogods.json).
+The object can also have an "expect", the least count of each deed of the hand ({"scoops": 1, "throws": 1}). The summary
+gives the deeds of the hand of each player that the server did ("Hand deed" lines of the logs: takes, scoops, throws,
+puts_down, pours, uses), and a run whose hand did fewer than its input expects is not the same.
 
 Both play as the profile of a tool's run, in their own working folders. Both programs start with no console window of their
 own. The game starts with --background. The script stops only the
@@ -310,6 +313,26 @@ def main():
         summary["different_without_ignored"] = others[:20]
         summary["parts_without_ignored"] = dict(sorted(parts.items(), key=lambda item: item[1])[:20])
         summary["same_without_ignored"] = not others and len(compared) >= options.turns
+    # What the turns did with the hand: the game and the server do the same commands, so each must count the same deeds.
+    # An input that expects deeds of its hand (its "expect") fails the run when the hand did fewer: the checksums are
+    # then the same only because the hand did nothing.
+    game_deeds = sim_report.hand_deeds_in_file(game_log)
+    server_deeds = sim_report.hand_deeds_in_file(server_log)
+    missing = sim_report.missing_deeds(game_deeds.get(0, {}), sim_report.expected_deeds(options.input))
+    summary["hand_deeds"] = {str(player): counts for player, counts in sorted(server_deeds.items())}
+    summary["hand_deeds_same"] = game_deeds == server_deeds
+    summary["missing_deeds"] = missing
+    # A land with no temple for the player's god (Land 1, the testbed) decides the network game at its first turn: the
+    # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
+    with open(game_log, encoding="utf-8", errors="replace") as file:
+        decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
+    summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
+    if events is not None and summary["decided_at_turn"] is not None:
+        print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
+    if missing or game_deeds != server_deeds:
+        summary["same"] = False
+        print(f"the hand did not do what its input expects: {missing}" if missing
+              else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")
     # A component with no registration is left out of the checksum: a change in it would never show here
     unregistered = sim_report.unregistered_in_files(server_log, game_log, record,
                                                     os.path.join(server_dir, "record.jsonl"))

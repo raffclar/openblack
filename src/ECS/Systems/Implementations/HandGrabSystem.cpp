@@ -12,9 +12,11 @@
 #include "HandGrabSystem.h"
 
 #include <algorithm>
+#include <string_view>
 #include <utility>
 
 #include <glm/geometric.hpp>
+#include <spdlog/spdlog.h>
 
 #include "ECS/AltarSacrifice.h"
 #include "ECS/Components/Animal.h"
@@ -66,6 +68,16 @@ constexpr uint32_t k_CriesEach = 7;
 /// A tree pulled up creaks, one of three
 constexpr uint32_t k_TreeCreaks = 32;
 constexpr uint32_t k_TreeCreaksEach = 3;
+
+/// Writes what a turn did with the hand of a player to the log. The check tools count these lines for each player.
+void LogHandDeed(PlayerNames player, std::string_view deed, entt::entity object)
+{
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Hand deed: the hand of player {} {} thing {}", static_cast<int>(player), deed,
+		                   entt::to_integral(object));
+	}
+}
 
 /// The statics with kinds of their own the hand never takes: lanterns, bonfires, shields, vortices and teleport stones
 bool StaticOfItsOwn(MobileStaticInfo type)
@@ -601,6 +613,8 @@ void HandGrabSystem::DoLetGo(PlayerNames player, const player_commands::HandLetG
 	// Letting go onto the land counts as one more turn for what the hand keeps of the player's influence past the border,
 	// before the throw
 	_world->HeldThingUsedOnLand(player);
+	const bool pours = _world->Entities().AllOf<Pot>(letGo.object) && hand_grab::PotPours(letGo.velocity);
+	LogHandDeed(player, pours ? "pours" : hand_grab::IsThrow(letGo.velocity, false) ? "throws" : "puts down", letGo.object);
 	LetGo(*grab, letGo.velocity, letGo.start);
 }
 
@@ -648,7 +662,10 @@ void HandGrabSystem::DoLock(PlayerNames player, entt::entity object)
 	{
 		return;
 	}
-	StartScoop(*grab, object);
+	if (StartScoop(*grab, object))
+	{
+		LogHandDeed(player, "scoops from", object);
+	}
 }
 
 void HandGrabSystem::DoUnlock(PlayerNames player, entt::entity object)
@@ -952,7 +969,10 @@ void HandGrabSystem::DoApply(PlayerNames player, entt::entity target)
 	{
 		return;
 	}
-	ApplyTo(*grab, target);
+	if (ApplyTo(*grab, target))
+	{
+		LogHandDeed(player, "uses what it holds on", target);
+	}
 }
 
 bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
@@ -1157,6 +1177,10 @@ void HandGrabSystem::DoTake(PlayerNames player, entt::entity object)
 		return;
 	}
 	Take(*grab, object, true, false);
+	if (Holds(*grab) && grab->object == object)
+	{
+		LogHandDeed(player, "takes", object);
+	}
 }
 
 void HandGrabSystem::Take(HandGrab& grab, entt::entity object, bool fromTheWorld, bool sounds, bool askInfluence)
