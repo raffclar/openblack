@@ -58,7 +58,6 @@ enum class Step : uint8_t
 	KeyCommands,
 	DebugGui,
 	Interface,
-	GripEffect,
 	Turns,
 	SendCommands,
 	FrameTime,
@@ -136,8 +135,6 @@ inline constexpr std::array k_Frame = std::to_array<Place>({
     // The villagers that a script drew in high detail are drawn as usual once its cinema bars are gone, as the land is
     // drawn
     {.step = Step::HighDetail, .stage = Stage::Draw},
-    // The dust where the hand grips the land moves on as the draw shows it, as the other spot effects do
-    {.step = Step::GripEffect, .stage = Stage::Draw},
     // The markers of the bookmarks throb by the game time of this frame, as the draw shows them
     {.step = Step::Bookmarks, .stage = Stage::Draw},
     // The effects that the draw moves on: the weather, the fires, the villagers and the animals, the marks and the texts

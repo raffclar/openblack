@@ -17,7 +17,6 @@
 #include <LHVM.h>
 #include <spdlog/spdlog.h>
 
-#include "3D/GripLandscapeEffect.h"
 #include "Audio/AudioManagerInterface.h"
 #include "CHLApi.h"
 #include "Camera/Camera.h"
@@ -662,8 +661,6 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		// The particle effects that no miracle owns take a step, and the spot visuals count down
 		auto particles = profiler.BeginScoped(Profiler::Stage::ParticlesUpdate);
 		Locator::particleSystem::value().ProcessTurn();
-		// The puffs of dust of the hand's grips count down too
-		GripLandscapeEffect::ProcessTurn();
 		break;
 	}
 	case Step::Tornadoes:

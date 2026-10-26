@@ -19,7 +19,6 @@
 #include <variant>
 #include <vector>
 
-#include "3D/GripLandscapeEffect.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LeftGame.h"
 #include "ECS/Components/MagicFireBall.h"
@@ -34,6 +33,7 @@
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
@@ -150,7 +150,13 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, GripDust>)
 		    {
-			    openblack::GripLandscapeEffect::Spawn(action.point);
+			    // The puff of dust is the spot visual of a grip of the land. Each computer and the game server make it at the
+			    // same turn, so its random numbers come from the shared seed.
+			    if (openblack::Locator::particleSystem::has_value())
+			    {
+				    openblack::Locator::particleSystem::value().StartSpotVisual(openblack::SpotVisualType::GripLandscape,
+				                                                                action.point, std::nullopt, entt::null, 1.0f);
+			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandClick>)
 		    {
