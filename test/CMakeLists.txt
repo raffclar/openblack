@@ -328,6 +328,9 @@ openblack_setup_and_add_test(test_leash_orders test_leash_orders.cpp)
 openblack_setup_and_add_test(test_temple_leashes test_temple_leashes.cpp)
 openblack_setup_and_add_test(test_testbed_scenarios test_testbed_scenarios.cpp)
 openblack_setup_and_add_test(
+  test_testbed_scenario_clock test_testbed_scenario_clock.cpp
+)
+openblack_setup_and_add_test(
   test_creature_status_panel test_creature_status_panel.cpp
 )
 openblack_setup_and_add_test(test_creature_mode test_creature_mode.cpp)
