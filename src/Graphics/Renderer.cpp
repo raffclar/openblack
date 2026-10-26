@@ -120,6 +120,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/DrawnPlace.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -7880,6 +7881,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					drawSprites(Locator::temple::value().GetRooms());
 				}
 				drawSprites(registry);
+				// The things that only the frames make, as the marks over the disciples, have sprites too
+				if (Locator::drawnRegistry::has_value())
+				{
+					drawSprites(Locator::drawnRegistry::value());
+				}
 				DrawTempleLeashes(desc);
 			}
 		}

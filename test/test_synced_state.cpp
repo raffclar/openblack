@@ -19,6 +19,7 @@
 
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
@@ -153,15 +154,6 @@ TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
 	}));
 }
 
-TEST(SyncedState, TheCopyOfTheCreatureInAFilmIsNotSynced)
-{
-	// The film shows the copy on this computer only, while the game waits
-	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
-		return part.component == "*" && part.marker == "FilmCreature";
-	}));
-}
-
 TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
 {
 	const auto parts = synced_state::PresentationParts();
@@ -189,14 +181,6 @@ TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
 }
 
-TEST(SyncedState, TheCopyOfTheCreatureInTheCaveOfTheTempleIsNotSynced)
-{
-	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
-		return part.component == "*" && part.marker == "CaveCreature";
-	}));
-}
-
 TEST(SyncedState, TheStaticOfAFizzingCreatureSlidesInTheFramesOnly)
 {
 	const auto parts = synced_state::PresentationParts();
@@ -209,30 +193,36 @@ TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
 	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
 }
 
-TEST(SyncedState, TheMarksOfTheDisciplesAreNotSynced)
-{
-	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
-		return part.component == "*" && part.marker == "DiscipleMark";
-	}));
-}
-
-TEST(SyncedState, TheStonesOnAPlinthAreNotSynced)
-{
-	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
-		return part.component == "*" && part.marker == "PlinthStone";
-	}));
-}
-
-TEST(SyncedState, TheSeeThroughCopyOfATotemIsNotSynced)
+TEST(SyncedState, TheEntitiesOfTheSeeThroughCopyOfATotemAreNotSynced)
 {
 	const auto parts = synced_state::PresentationParts();
 	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
 	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghostIcon"));
-	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
-		return part.component == "*" && part.marker == "SeeThrough";
-	}));
+}
+
+TEST(SyncedState, TheHeightWhereTheFramesDrawATotemIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "DrawnHeight", "y"));
+}
+
+TEST(SyncedState, TheThingsThatOnlyTheFramesMakeTakeNoEntityOfTheLand)
+{
+	entt::meta_ctx context;
+	Register(context);
+	ecs::Registry land;
+	ecs::DrawnRegistry drawn;
+	const auto body = land.Create();
+	land.Assign<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto before = synced_state::HashOf(land.Underlying(), context, k_Presentation).hash;
+	// The frames make and remove things of their own: the land keeps its entities and its hash
+	const auto mark = drawn.Create();
+	drawn.Assign<FakeBody>(mark, FakeBody {.place = 2.0f});
+	drawn.Create();
+	drawn.Destroy(mark);
+	EXPECT_EQ(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+	// A thing that the turn makes on the land changes the synced world
+	land.Create();
+	EXPECT_NE(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
 }
 
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)

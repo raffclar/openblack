@@ -105,6 +105,7 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -306,6 +307,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"weatherSystem", "land.weather"},
     LocatorCoverage {"pathfindingSystem", "living.pathfinding"},
     LocatorCoverage {"entitiesRegistry", "ecs.components"},
+    LocatorCoverage {"drawnRegistry", "drawn.components"},
     LocatorCoverage {"entitiesMap", "map.cell"},
     LocatorCoverage {"playerSystem", "players.list"},
     LocatorCoverage {"alignmentSystem", "players.list"},
@@ -471,6 +473,12 @@ Json Optional(const std::optional<Value>& value)
 const ecs::Registry* Registry()
 {
 	return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+}
+
+/// The things that only the frames make, out of the synced world
+const ecs::Registry* DrawnRegistry()
+{
+	return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
 }
 
 const InfoConstants* Info()
@@ -4010,6 +4018,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 {
 	const RegistrySources registrySources {.registry = &Registry, .info = &Info};
 	inspector.Add(std::make_unique<RegistryProvider>(registrySources, reflection));
+	// The same queries over the things that only the frames make: drawn.entities, drawn.entity and the others
+	inspector.Add(std::make_unique<RegistryProvider>(
+	    RegistrySources {.registry = &DrawnRegistry, .info = &Info, .name = "drawn"}, reflection));
 	inspector.Add(std::make_unique<ObjectsProvider>(registrySources));
 	inspector.Add(std::make_unique<EditProvider>(
 	    EditSources {

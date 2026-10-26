@@ -225,6 +225,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its

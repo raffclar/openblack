@@ -132,6 +132,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The rise that the totem last showed, by which the hand's tooltip of its share comes
     {.component = "VillageTotem", .field = "lastShownRise", .marker = ""},
     {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
+    // The height where the frames draw a town's totem and its icon as they ease by the computer's clock
+    {.component = "DrawnHeight", .field = "", .marker = ""},
     // The frames move the fish of a shoal near the camera of each computer, and a grip of the sea scares them only on the
     // computer of the hand. The turns read only the shoal's centre, which the land gives, and its fullness, which comes
     // from the fish of the farm.
@@ -159,10 +161,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The rooms of the temple, their lights and the mist of the creature cave are not a part of the land. The temple
     // makes them for the player of this computer when the player goes into it, and removes them when the player leaves.
     {.component = "*", .field = "", .marker = "TempleInteriorPart"},
-    // The copy of the creature in the creature cave of the temple. The temple makes it for the player of this computer.
-    {.component = "*", .field = "", .marker = "CaveCreature"},
-    // The copy of the creature in the film of a falling spell. The film shows it while the game waits.
-    {.component = "*", .field = "", .marker = "FilmCreature"},
     // The glows on a creature's body turn and slide in the frames, and the frames place them where the body is drawn.
     // The turns set their powers and scales.
     {.component = "CreatureHandGlows", .field = "slidePace", .marker = ""},
@@ -177,14 +175,10 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ChallengePicture", .field = "small", .marker = ""},
     {.component = "ChallengePicture", .field = "waiting", .marker = ""},
     {.component = "ChallengePicture", .field = "taken", .marker = ""},
-    // The see-through copy of a town totem and of its icon. The frames make, move and remove it.
-    {.component = "*", .field = "", .marker = "SeeThrough"},
+    // The see-through copy of a town totem and of its icon is a thing of the drawn registry. The frames make, move and
+    // remove it, and the totem keeps its entities.
     {.component = "VillageTotem", .field = "ghost", .marker = ""},
     {.component = "VillageTotem", .field = "ghostIcon", .marker = ""},
-    // The stones on a plinth. The frames make and place them as the land draws the plinth.
-    {.component = "*", .field = "", .marker = "PlinthStone"},
-    // The glows and the symbols of the disciples. The frames make, move and remove them.
-    {.component = "*", .field = "", .marker = "DiscipleMark"},
     // The draw gives the light of the frame to a thing in the hand, and takes it away when the hand lets go
     {.component = "HeldLight", .field = "", .marker = ""},
     // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.

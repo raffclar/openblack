@@ -52,6 +52,7 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/RealWeatherLand.h"
@@ -547,6 +548,11 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	// that go with them are forgotten.
 	auto& registry = Locator::entitiesRegistry::value();
 	registry.Reset();
+	// The things that only the frames make go with the things of the land that they go with
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Reset();
+	}
 	Locator::playerSystem::value().RegisterPlayers();
 	const bool restored = restore();
 	timer.Step("saved world");
@@ -834,8 +840,12 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	// The turns go back to 0 as the land clears, before the script of the next land starts. Thus the buildings that the
 	// script makes are not made in play, and they get no path from their storage pit, as on the first land of a game.
 	Locator::time::value().RestartTurns();
-	// Reset everything. Deletes all entities and their components
+	// Reset everything. Deletes all entities and their components, and the things that only the frames make
 	Locator::entitiesRegistry::value().Reset();
+	if (Locator::drawnRegistry::has_value())
+	{
+		Locator::drawnRegistry::value().Reset();
+	}
 	// The new land makes the draw list again on its first frame only. Thus reset the draw list after the entities go:
 	// a thing that the hand held asks for two frames when it goes.
 	if (Locator::objectDrawListSystem::has_value())

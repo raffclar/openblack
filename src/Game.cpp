@@ -152,6 +152,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/CreatureDanceMusic.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -1732,7 +1733,11 @@ void Game::ProcessHandToolTipTurn()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(LocalInputPlayer())
 	                         : std::nullopt;
 	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
-	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
+	    OnScreen(ecs::drawn_place::DrawnTransformOf(
+	                 Locator::entitiesRegistry::value(), tip->totem,
+	                 Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem))
+	                 .position)
+	        .has_value())
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
 	}

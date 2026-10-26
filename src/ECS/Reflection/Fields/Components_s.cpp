@@ -81,7 +81,8 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::ScriptStateArguments::first>("first")
 	    .Field<&components::ScriptStateArguments::second>("second");
 	Reflect<components::ScriptTimer>(context).Field<&components::ScriptTimer::timer>("timer");
-	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha");
+	Reflect<components::SeeThrough>(context).Field<&components::SeeThrough::alpha>("alpha").Field<&components::SeeThrough::of>(
+	    "of");
 	Reflect<components::Shark>(context)
 	    .Field<&components::Shark::position>("position")
 	    .Field<&components::Shark::turnStart>("turnStart")

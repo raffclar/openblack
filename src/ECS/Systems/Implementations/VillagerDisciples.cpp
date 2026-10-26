@@ -51,6 +51,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DiscipleRules.h"
 #include "ECS/DiscipleWorkRules.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
@@ -678,9 +679,9 @@ std::optional<entt::entity> PersonShown()
 	return shown;
 }
 
-entt::entity MakeMark(entt::entity villager, bool symbol)
+/// A mark is a thing of the drawn registry, over a villager of the land
+entt::entity MakeMark(ecs::Registry& registry, entt::entity villager, bool symbol)
 {
-	auto& registry = Entities();
 	const auto sheet = symbol ? k_SymbolSheet : k_GlowSheet;
 	const auto alpha = symbol ? k_SymbolSheetAlpha : k_GlowSheetAlpha;
 	const auto entity = registry.Create();
@@ -1085,11 +1086,12 @@ uint32_t villager_disciple::GlowFrame(uint64_t gameMilliseconds)
 
 void villager_disciple::UpdateMarks()
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	if (!Locator::entitiesRegistry::has_value() || !Locator::drawnRegistry::has_value() || !Locator::resources::has_value())
 	{
 		return;
 	}
 	auto& registry = Entities();
+	auto& marks = Locator::drawnRegistry::value();
 	const auto& textures = Locator::resources::value().GetTextures();
 	if (!textures.Contains(k_GlowSheet.value()) || !textures.Contains(k_GlowSheetAlpha.value()) ||
 	    !textures.Contains(k_SymbolSheet.value()) || !textures.Contains(k_SymbolSheetAlpha.value()))
@@ -1110,7 +1112,7 @@ void villager_disciple::UpdateMarks()
 	// Marks of villagers gone or no longer glowing go
 	std::vector<entt::entity> gone;
 	std::optional<entt::entity> symbolMark;
-	registry.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
+	marks.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
 		if (of.symbol)
 		{
 			symbolMark = mark;
@@ -1123,7 +1125,7 @@ void villager_disciple::UpdateMarks()
 	});
 	for (const auto mark : gone)
 	{
-		registry.Destroy(mark);
+		marks.Destroy(mark);
 	}
 	std::vector<entt::entity> glowing;
 	registry.Each<const Disciple>([&glowing](entt::entity villager, const Disciple& disciple) {
@@ -1133,7 +1135,7 @@ void villager_disciple::UpdateMarks()
 		}
 	});
 	std::vector<entt::entity> marked;
-	registry.Each<const DiscipleMark>([&marked](const DiscipleMark& of) {
+	marks.Each<const DiscipleMark>([&marked](const DiscipleMark& of) {
 		if (!of.symbol)
 		{
 			marked.push_back(of.villager);
@@ -1143,13 +1145,13 @@ void villager_disciple::UpdateMarks()
 	{
 		if (std::ranges::find(marked, villager) == marked.end())
 		{
-			MakeMark(villager, false);
+			MakeMark(marks, villager, false);
 		}
 	}
 
 	// Each glow over its villager's head, the size of the villager, its puffs turning; none while the villager is out of
 	// sight
-	registry.Each<const DiscipleMark, Sprite, Transform>(
+	marks.Each<const DiscipleMark, Sprite, Transform>(
 	    [&registry, frame](const DiscipleMark& of, Sprite& sprite, Transform& transform) {
 		    if (of.symbol)
 		    {
@@ -1171,12 +1173,12 @@ void villager_disciple::UpdateMarks()
 	{
 		if (symbolMark.has_value())
 		{
-			registry.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
+			marks.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
 		}
 		return;
 	}
-	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(*shown, true);
-	auto& transform = registry.Get<Transform>(mark);
+	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(marks, *shown, true);
+	auto& transform = marks.Get<Transform>(mark);
 	const auto& body = registry.Get<const Transform>(*shown);
 	transform.position = body.position + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
 	float size = k_LeastSpriteSize;
@@ -1187,6 +1189,6 @@ void villager_disciple::UpdateMarks()
 		size = disciple::SymbolSize(distance, screen.x, screen.y);
 	}
 	transform.scale = glm::vec3(size, size, 1.0f);
-	registry.Get<Sprite>(mark).uvMin = CellUv(*cell);
-	registry.Get<DiscipleMark>(mark).villager = *shown;
+	marks.Get<Sprite>(mark).uvMin = CellUv(*cell);
+	marks.Get<DiscipleMark>(mark).villager = *shown;
 }

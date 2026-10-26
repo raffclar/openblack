@@ -53,13 +53,13 @@ public:
 	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity creature) override;
 	void KickSway(entt::entity creature, glm::vec3 force, glm::vec3 point) override;
 	void Hurry(entt::entity creature) override;
-	void PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs) override;
+	void PlaceHandGlows(Registry& things, entt::entity creature, int32_t frameMs, int32_t gameMs) override;
 	void SetCreedPower(entt::entity creature, creature_hand_glow::Place place, float scale, float power) override;
 	void LoadCreedPowers(entt::entity creature,
 	                     std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount> powers) override;
 	void PlayCreedEvent(entt::entity creature, int32_t event) override;
-	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity creature) override;
-	void AddAlignmentMotesOf(entt::entity copy) override;
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry& things, entt::entity creature) override;
+	void AddAlignmentMotesOf(const Registry& copies, entt::entity copy) override;
 
 	/// A species' animation adjusted to the stand of a variant mesh that has no animation of its own, and the
 	/// animations that it comes from

@@ -35,6 +35,8 @@ public:
 	virtual ~WorldInterface() = default;
 
 	[[nodiscard]] virtual Registry& Entities() = 0;
+	/// The registry of the things that only the frames make, as the see-through second totem
+	[[nodiscard]] virtual Registry& DrawnThings() = 0;
 	/// The model of the icon on a player's town totems: the player's creature's species, or the hand without one
 	[[nodiscard]] virtual entt::id_type IconMeshFor(PlayerNames player) const = 0;
 	/// How big an object stands: its radius across the land and its height

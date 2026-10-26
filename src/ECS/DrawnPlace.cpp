@@ -13,6 +13,7 @@
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureObjectAction.h"
+#include "ECS/Components/DrawnHeight.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Reward.h"
@@ -64,6 +65,13 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	if (const auto* firefly = registry.TryGet<const components::Firefly>(entity); firefly != nullptr)
 	{
 		return {.position = firefly->drawn, .rotation = transform.rotation, .scale = transform.scale};
+	}
+	// A town's totem and its icon rise and sink by the computer's clock, at the height where the frames last put them
+	if (const auto* height = registry.TryGet<const components::DrawnHeight>(entity); height != nullptr)
+	{
+		return {.position = {transform.position.x, height->y, transform.position.z},
+		        .rotation = transform.rotation,
+		        .scale = transform.scale};
 	}
 	return transform;
 }

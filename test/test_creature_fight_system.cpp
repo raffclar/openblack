@@ -954,15 +954,15 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity, size_t) override { return std::nullopt; }
 	[[nodiscard]] std::optional<creature_kiss::KissPoints> KissPointsOf(entt::entity) override { return std::nullopt; }
 	void KickSway(entt::entity, glm::vec3, glm::vec3) override {}
-	void PlaceHandGlows(entt::entity, int32_t, int32_t) override {}
+	void PlaceHandGlows(Registry&, entt::entity, int32_t, int32_t) override {}
 	void SetCreedPower(entt::entity, creature_hand_glow::Place, float, float) override {}
 	void LoadCreedPowers(entt::entity,
 	                     std::span<const creature_hand_glow::SavedPower, creature_hand_glow::k_PlaceCount>) override
 	{
 	}
 	void PlayCreedEvent(entt::entity, int32_t) override {}
-	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(entt::entity) override { return std::nullopt; }
-	void AddAlignmentMotesOf(entt::entity) override {}
+	[[nodiscard]] std::optional<glm::vec3> MiddleOfGroinAndLips(const Registry&, entt::entity) override { return std::nullopt; }
+	void AddAlignmentMotesOf(const Registry&, entt::entity) override {}
 };
 
 /// Both fighters are in a state, and only scripts would move them

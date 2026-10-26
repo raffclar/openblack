@@ -21,6 +21,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/CreatureSight.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/FloatingNumberSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
@@ -55,6 +56,11 @@ std::optional<entt::entity> PrimaryCreature(PlayerNames player)
 ecs::Registry& GameVillageTotemWorld::Entities()
 {
 	return Locator::entitiesRegistry::value();
+}
+
+ecs::Registry& GameVillageTotemWorld::DrawnThings()
+{
+	return Locator::drawnRegistry::value();
 }
 
 entt::id_type GameVillageTotemWorld::IconMeshFor(PlayerNames player) const

@@ -11,15 +11,19 @@
 
 #include <cstdint>
 
+#include <entt/entity/entity.hpp>
+
 namespace openblack::ecs::components
 {
 
 /// A see-through copy of something, blended over what is behind it by its alpha, as the second totem shows the other
-/// share. It is only a picture: the cursor passes through it.
+/// share. It is only a picture, a thing of the drawn registry: the cursor passes through it.
 struct SeeThrough
 {
 	/// Its alpha, 0 to 255
 	uint8_t alpha {255};
+	/// The thing of the land that it copies
+	entt::entity of {entt::null};
 };
 
 } // namespace openblack::ecs::components
