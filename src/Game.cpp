@@ -4687,6 +4687,11 @@ void Game::MakeSymbolSheet()
 	MakePlayersSymbols();
 }
 
+void Game::StartCameraAtTemple()
+{
+	_shortcutKeys.StartAtTemple(LocalInputPlayer());
+}
+
 void Game::TestbedLoaded()
 {
 	if (Locator::debugGui::has_value() && _testbedWindow)
@@ -5537,8 +5542,7 @@ game_session::ExitSave Game::ExitSaveAsGameEnds(game_session::End end) const
 	game_session::ExitSaveFacts facts {
 	    .end = end,
 	    .gameOver = context.gameOver,
-	    // openblack's games are all single player
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::value().IsNetworkGame(),
 	    .skirmish = context.skirmish,
 	    .godsPlayground = context.mapScriptGlobals.landNumber == escape_key::k_GodsPlaygroundLand,
 	    .previousProfile = std::nullopt,

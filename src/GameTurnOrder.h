@@ -113,6 +113,8 @@ enum class Step : uint8_t
 	TempleLooks,
 	WorshipSiteLooks,
 	PlayerAlignment,
+	/// The end of a skirmish or a network game
+	GameEnd,
 	VillageTotems,
 	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
 	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
@@ -278,6 +280,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The temples' looks follow their players' alignments as they were at the end of the last turn
     {.step = Step::TempleLooks, .stage = Stage::Players},
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
+    // After the players' turns, a god with no temple is out, and the game is decided when one god is left
+    {.step = Step::GameEnd, .stage = Stage::Players},
     // At the end of the players' turns: their alignments, then the alignment at the camera's eye
     {.step = Step::PlayerAlignment, .stage = Stage::Players},
     {.step = Step::Dances, .stage = Stage::Dances},
