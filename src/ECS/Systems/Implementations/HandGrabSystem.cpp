@@ -1620,11 +1620,12 @@ bool HandGrabSystem::Give(HandGrab& grab, std::optional<entt::entity> under)
 	{
 		return false;
 	}
-	_world->SendCommand(player_commands::HandGive {.creature = *creature, .object = held});
+	// The side of the hand of this computer goes with the give, as the turn of every computer reads it
+	_world->SendCommand(player_commands::HandGive {.creature = *creature, .object = held, .leftHand = !_world->RightHanded()});
 	return true;
 }
 
-void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::entity object)
+void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::entity object, bool leftHand)
 {
 	// The command acts with the hand of its player
 	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
@@ -1637,7 +1638,7 @@ void HandGrabSystem::DoGive(PlayerNames player, entt::entity creature, entt::ent
 	}
 	// The help counts the gift as the creature may take it, before the creature starts to take it
 	_world->CountHelpEvent(help::profile::k_Give);
-	if (!_world->GiveTo(creature, object, !_world->RightHanded()))
+	if (!_world->GiveTo(creature, object, leftHand))
 	{
 		return;
 	}

@@ -44,7 +44,7 @@ std::vector<Action> EachCommand()
 	        .velocity = {1.5f, -2.25f, 1e-30f},
 	        .start = {.angularMomentum = {0.0f, -0.0f, 2.0f}, .origin = {100.5f, 7.0f, -9.0f}, .angles = {0.1f, -3.1f, 1.5f}}},
 	    HandTap {.object = entt::null},
-	    HandGive {.creature = Entity(10), .object = Entity(11)},
+	    HandGive {.creature = Entity(10), .object = Entity(11), .leftHand = true},
 	    LeashOrder {.kind = LeashOrder::Kind::AtPlace, .object = entt::null, .place = {1000.5f, 12.0f, -3.0f}},
 	    LeashPostTap {.post = Entity(12)},
 	    HandReport {.collidePoint = {1.0f, 2.0f, 3.0f},
@@ -127,7 +127,7 @@ Action RandomAction(std::mt19937& random)
 	case 5:
 		return HandTap {.object = entity()};
 	case 6:
-		return HandGive {.creature = entity(), .object = entity()};
+		return HandGive {.creature = entity(), .object = entity(), .leftHand = bits(random) % 2 == 1};
 	case 7:
 		return LeashOrder {.kind = static_cast<LeashOrder::Kind>(bits(random) % 4), .object = entity(), .place = vector()};
 	case 8:
@@ -273,8 +273,8 @@ std::vector<Action> BusyCommands()
 
 TEST(TurnCodec, EachCommandHasItsSize)
 {
-	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  9, 18, 5, 49, 17, 5,  5, 5, 9, 12,
-	                                 1, 18, 11, 5, 21, 15, 3, 5,  1, 2,  1,  61, 5, 2, 1, 13};
+	const std::vector<size_t> sizes {2, 5,  9,  5, 53, 5,  10, 18, 5, 49, 17, 5,  5, 5, 9, 12,
+	                                 1, 18, 11, 5, 21, 15, 3,  5,  1, 2,  1,  61, 5, 2, 1, 13};
 	const auto commands = EachCommand();
 	ASSERT_EQ(commands.size(), sizes.size());
 	for (size_t i = 0; i < commands.size(); ++i)
@@ -679,4 +679,24 @@ TEST(TurnCodec, AMiracleRequestCarriesOnlyASeedOfTheGame)
 	auto wrong = bytes;
 	wrong.back() = static_cast<uint8_t>(SpellSeedType::BeamExplosion) + 1;
 	EXPECT_EQ(Decode(wrong).error, DecodeError::Value);
+}
+
+TEST(TurnCodec, AGiveCarriesTheSideOfTheHandOfTheGiver)
+{
+	for (const bool leftHand : {false, true})
+	{
+		const auto bytes =
+		    Encode(CommandBlock {.sequence = 0,
+		                         .turn = 0,
+		                         .actions = {HandGive {.creature = Entity(3), .object = Entity(4), .leftHand = leftHand}}});
+		const auto decoded = Decode(bytes);
+		ASSERT_EQ(decoded.error, DecodeError::None);
+		ASSERT_TRUE(decoded.frame.has_value());
+		const auto& give = std::get<HandGive>(std::get<CommandBlock>(*decoded.frame).actions.at(0));
+		EXPECT_EQ(give.creature, Entity(3));
+		EXPECT_EQ(give.object, Entity(4));
+		EXPECT_EQ(give.leftHand, leftHand);
+		// The side is the last byte of the command
+		EXPECT_EQ(bytes.back(), leftHand ? 1 : 0);
+	}
 }

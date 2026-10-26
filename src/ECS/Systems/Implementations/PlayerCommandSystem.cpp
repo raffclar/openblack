@@ -110,7 +110,7 @@ void Run(const Command& command, uint32_t turn)
 			    }
 			    else
 			    {
-				    hand.DoGive(command.player, action.creature, action.object);
+				    hand.DoGive(command.player, action.creature, action.object, action.leftHand);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashOrder>)

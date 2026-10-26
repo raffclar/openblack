@@ -108,8 +108,9 @@ public:
 	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*object*/) {}
 	/// At the turn: the twist of a thing that the hand let go (player_commands::HandTwist)
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
-	/// The hand gives the thing that it holds to a creature
-	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// At the turn: the hand gives the thing that it holds to a creature, which takes it with the hand that matches the
+	/// side of the hand of the giver (player_commands::HandGive)
+	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/, bool /*leftHand*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
 	/// Whether the hand still held it to give.
 	virtual bool HandOver(entt::entity /*object*/) { return false; }

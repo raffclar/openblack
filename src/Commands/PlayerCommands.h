@@ -99,6 +99,9 @@ struct HandGive
 {
 	entt::entity creature;
 	entt::entity object;
+	/// Whether the player who gives has a left hand. The creature takes the thing with its matching hand on every
+	/// computer, so the command carries the side of the hand of the computer that sends it.
+	bool leftHand {false};
 };
 
 /// An order to the player's creature on its leash

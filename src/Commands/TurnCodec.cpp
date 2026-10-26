@@ -139,6 +139,7 @@ void WriteAction(Writer& out, const Action& action)
 	               [&out](const HandGive& command) {
 		               out.Entity(command.creature);
 		               out.Entity(command.object);
+		               out.Byte(command.leftHand ? 1 : 0);
 	               },
 	               [&out](const LeashOrder& command) {
 		               out.Byte(static_cast<uint8_t>(command.kind));
@@ -273,7 +274,8 @@ DecodeError ReadAction(Reader& in, Action& action)
 	case CommandTag::HandGive:
 	{
 		const auto creature = in.Entity();
-		action = HandGive {.creature = creature, .object = in.Entity()};
+		const auto object = in.Entity();
+		action = HandGive {.creature = creature, .object = object, .leftHand = in.Byte() != 0};
 		return DecodeError::None;
 	}
 	case CommandTag::LeashOrder:
@@ -596,7 +598,7 @@ size_t SizeOf(const Action& action) noexcept
 	                                     [](const HandTake& /*command*/) { return k_Entity; },
 	                                     [](const HandLetGo& /*command*/) { return k_Entity + 4 * k_Vector; },
 	                                     [](const HandTap& /*command*/) { return k_Entity; },
-	                                     [](const HandGive& /*command*/) { return 2 * k_Entity; },
+	                                     [](const HandGive& /*command*/) { return 2 * k_Entity + 1; },
 	                                     [](const LeashOrder& /*command*/) { return 1 + k_Entity + k_Vector; },
 	                                     [](const LeashPostTap& /*command*/) { return k_Entity; },
 	                                     [](const HandReport& /*command*/) { return 4 * k_Vector; },

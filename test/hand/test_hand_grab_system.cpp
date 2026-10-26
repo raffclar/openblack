@@ -571,7 +571,7 @@ protected:
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandGive>)
 			    {
-				    system->DoGive(player, command.creature, command.object);
+				    system->DoGive(player, command.creature, command.object, command.leftHand);
 			    }
 			    else if constexpr (std::is_same_v<Kind, player_commands::HandTwist>)
 			    {
@@ -2075,6 +2075,26 @@ TEST_F(HandGrabSystemGiving, TheGiveOfThePressIsACommandThatWaitsForItsTurn)
 	RunWaiting();
 	ASSERT_EQ(world->given.size(), 1u);
 	EXPECT_EQ(world->given.front().creature, creature);
+}
+
+TEST_F(HandGrabSystemGiving, TheTurnGivesWithTheSideOfTheHandOfTheComputerThatSentTheGive)
+{
+	const auto rock = HoldRock();
+	const auto creature = AddCreature(creature_giving::Verdict::Give);
+	world->underCursor = creature;
+	Frame(16);
+	deferCommands = true;
+	// The giver has a right hand
+	world->rightHanded = true;
+	EXPECT_TRUE(Press());
+	ASSERT_EQ(waiting.size(), 1u);
+	EXPECT_FALSE(std::get<player_commands::HandGive>(waiting.front()).leftHand);
+	// Another computer, with a left hand, does the turn: the creature takes it with the giver's side
+	world->rightHanded = false;
+	RunWaiting();
+	ASSERT_EQ(world->given.size(), 1u);
+	EXPECT_EQ(world->given.front().held, rock);
+	EXPECT_FALSE(world->given.front().leftHand);
 }
 
 TEST_F(HandGrabSystemGiving, WhileTheCreatureReachesTheHandMeetsItsHandAtTheMomentOfTaking)

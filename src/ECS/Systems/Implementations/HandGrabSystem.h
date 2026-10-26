@@ -73,7 +73,7 @@ public:
 	void DoTake(PlayerNames player, entt::entity object) override;
 	void DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo) override;
 	void DoTap(PlayerNames player, entt::entity object) override;
-	void DoGive(PlayerNames player, entt::entity creature, entt::entity object) override;
+	void DoGive(PlayerNames player, entt::entity creature, entt::entity object, bool leftHand) override;
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
 	[[nodiscard]] std::optional<entt::entity> GetLockedOn() const override;
