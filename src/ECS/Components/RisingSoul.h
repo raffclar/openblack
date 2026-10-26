@@ -29,11 +29,15 @@ struct RisingSoul
 	/// The villager's own model, a child's for a child
 	entt::id_type mesh {0};
 	AnimId clip {AnimId::PDead1GotoHeaven};
-	/// How far into its clip it is, in milliseconds of the game's clock
+	/// How far into its clip the frames have drawn it, in milliseconds of the game's clock. Only the draw reads it.
 	uint32_t timeMs {0};
 	uint8_t alpha {0};
-	/// Its bones, posed from its clip as it was last moved on
+	/// Its bones, posed from its clip as it was last moved on. Empty once the frames have drawn its clip to its end.
 	std::vector<glm::mat4> bones;
+	/// The game turns since it rose. The turns remove it by this count, after the frames have drawn it to its end.
+	uint32_t turns {0};
+	/// The frames have drawn its clip to its end, and do not draw it again
+	bool shownOut {false};
 };
 
 } // namespace openblack::ecs::components

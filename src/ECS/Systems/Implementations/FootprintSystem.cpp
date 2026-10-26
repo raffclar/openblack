@@ -78,7 +78,9 @@ std::optional<CreatureDrawnFeet> FeetNow(const ecs::Registry& registry, entt::en
 	}
 	const auto rightBone = points->rightFoot;
 	const auto leftBone = rightBone < animation.mirror.size() ? animation.mirror[rightBone] : rightBone;
-	const auto placement = creature::PlacementMatrix(transform.position, transform.rotation, transform.scale);
+	// The feet are where the frame draws the body
+	const auto drawn = DrawnTransform(transform, &animation);
+	const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 	return CreatureDrawnFeet {
 	    .right = creature::PosedBone(rightBone, animation.boneMatrices, placement),
 	    .left = creature::PosedBone(leftBone, animation.boneMatrices, placement),

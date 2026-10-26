@@ -18,7 +18,6 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/DetailMeshes.h"
 #include "ECS/Components/DrawImportance.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HighDetail.h"
@@ -67,11 +66,8 @@ TEST(ObjectDetail, HeldThingsAreDrawnWhole)
 	registry.Assign<HighDetail>(person);
 	EXPECT_FALSE(object_detail::BandedNow(registry, person));
 	// Rubble is banded until it fades by its own alpha
-	const auto rubble = registry.Create();
-	registry.Assign<GroundMark>(rubble);
-	EXPECT_TRUE(object_detail::BandedNow(registry, rubble));
-	registry.Get<GroundMark>(rubble).alpha = 200;
-	EXPECT_FALSE(object_detail::BandedNow(registry, rubble));
+	EXPECT_TRUE(object_detail::MarkBandedNow(std::nullopt));
+	EXPECT_FALSE(object_detail::MarkBandedNow(uint8_t {200}));
 }
 
 TEST(ObjectDetail, MostThingsFadeButSomeAreKeptInView)
