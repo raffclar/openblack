@@ -36,6 +36,9 @@ public:
 	virtual void Destroy(entt::entity dance) = 0;
 	/// Each turn, after the players and before the living: each dance's turn
 	virtual void ProcessTurn() = 0;
+	/// After a load of a saved world or a world state: each dance with no file gets its file again, by the row of its
+	/// dance in the table. The world keeps no file.
+	virtual void FindFilesAgain() {}
 	/// Each frame that the camera reads the keys: a grip of the land ends the camera of a dance
 	virtual void ProcessCameraKeys(bool /*gripsLand*/) {}
 	/// Each turn, when the camera does its checks: the camera of a dance that ended, or whose dance went, gives the
