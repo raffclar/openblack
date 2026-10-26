@@ -69,6 +69,7 @@ int main(int argc, char* argv[])
 		("record-fields", "Tools: with --record, the hash of each field of each component too.")
 		("trace-draws", "Tools: write each draw on the synced random seed to this file, as the game's --sim-trace-draws.", cxxopts::value<std::string>())
 		("reload-at", "Tools: at this turn the server takes its whole world into memory as a world state and loads it again, as a client that comes back loads the server's world.", cxxopts::value<uint32_t>())
+		("gods-need-no-temple", "Tests: a god with no temple stays in the game, for a land that makes no temple at its start (a story land). Each client needs the same switch (--sim-gods-need-no-temple).")
 		("temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (the player from 0). Each client needs the same switch (--sim-temple-loss).", cxxopts::value<std::string>())
 		("commands", "Tools: do the commands of each turn that a game wrote with --sim-commands, at the same turns.", cxxopts::value<std::string>())
 		("listen", "The game role: listen for the clients on this IPv4 address and TCP port, such as 127.0.0.1:0 (0 for a free port).", cxxopts::value<std::string>())
@@ -140,6 +141,7 @@ int main(int argc, char* argv[])
 		{
 			settings.turns = result["turns"].as<uint32_t>();
 		}
+		settings.godsNeedNoTemple = result.count("gods-need-no-temple") != 0;
 		if (result.count("temple-loss") != 0)
 		{
 			settings.templeLoss = openblack::sim_run::ParseTempleLoss(result["temple-loss"].as<std::string>());

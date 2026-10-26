@@ -137,6 +137,7 @@ inline constexpr std::array k_DeveloperOptions {
     DeveloperOption {.name = "sim-network-game"},
     DeveloperOption {.name = "sim-still-hand"},
     DeveloperOption {.name = "sim-temple-loss", .takesValue = true},
+    DeveloperOption {.name = "sim-gods-need-no-temple"},
     DeveloperOption {.name = "sim-leave-at", .takesValue = true},
     DeveloperOption {.name = "sim-checksums", .takesValue = true},
     DeveloperOption {.name = "sim-checksum-parts"},
@@ -180,6 +181,7 @@ inline constexpr std::array k_ServerDeveloperOptions {
     DeveloperOption {.name = "trace-draws", .takesValue = true},
     DeveloperOption {.name = "commands", .takesValue = true},
     DeveloperOption {.name = "reload-at", .takesValue = true},
+    DeveloperOption {.name = "gods-need-no-temple"},
 };
 
 /// Whether an option of the command line, by its long name, is one of the developer options

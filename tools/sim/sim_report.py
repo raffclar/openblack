@@ -33,6 +33,28 @@ ASSERT_WORD = re.compile(r"assert", re.IGNORECASE)
 UNREGISTERED_WORDS = "unregistered component storage: "
 
 
+def land_makes_no_temples(land, testbed=False, gods_ring_map=False, scenario=None):
+    """Whether a tool's network run plays a land that makes no temple for its gods at the start.
+
+    A story land makes the player's temple only later, from a plan, and the testbed makes none. In a network game a god
+    with no temple is out at once, so the game would end at its first turn. The network maps and the skirmish lands
+    make each god's temple at the start. A testbed scenario keeps the rule: it can test the end of the game.
+    """
+    if gods_ring_map or scenario:
+        return False
+    if testbed:
+        return True
+    name = land.replace("\\", "/").lower()
+    return not (name.startswith("online maps/") or name.startswith("playgrounds/") or name.endswith(".map"))
+
+
+def gods_need_no_temple_args(server, **land):
+    """The switch that keeps gods with no temple in a tool's network run, for the server or a game"""
+    if not land_makes_no_temples(**land):
+        return []
+    return ["--gods-need-no-temple"] if server else ["--sim-gods-need-no-temple"]
+
+
 def unregistered_in_text(lines):
     """The names of the unregistered components that lines of a log, a record or a checksum file tell of. A log tells
     them as the words and the names with commas between them; a record or a checksum line has an "unregistered" list."""
