@@ -22,6 +22,15 @@ so a recorded input cannot find it. NET_CHECK_DEBUG=1 prints each try of the poi
 
 With --trace-draws the server and each client write a draw trace (each synced random draw with its turn and the place
 of its call), and the summary shows the first draw where each client is not the same as the server (draw_trace.py).
+With --slot-fight SECONDS the first client sends the fight cheat once it compared --hold-after turns: at the turn, the
+creature of its god fights the nearest creature. Then the fight autopilot of each client fights for its own god with the
+presses of its hand, and each client draws the star of the special move. The server takes test commands
+(--test-commands). The land must give both gods a creature near each other, such as a copy of TwoGods.txt with a
+creature of the first god next to the creature of the second god, in a game folder of its own (--game-path). Give
+both clients a camera that looks at the arena (--camera1, --camera2 and --camera-again-after): the fight view starts
+when the camera looks at a fight, and the autopilot makes no double click, because a click on the land grips it. Once
+the god's creature duels, the script frames the camera on it from within the arena. Until the turns read the pose of
+the turn for wounds, give the clients the frame time of the server (--frame-ms 100).
 
 With --stop-second-after the script stops the second client (by its own process id) that many seconds after it
 started. The server then defeats its god after --come-back-seconds, and the first client must stay in step.
@@ -457,6 +466,70 @@ def slot_totem(pid, player):
     return done
 
 
+def inspector_answer(pid, query, request):
+    """As inspector_call, but a failed request gives its error, so that a summary shows why"""
+    adapter = os.path.join(HERE, "..", "inspector", "openblack_inspector_mcp.py")
+    flags = getattr(subprocess, "CREATE_NO_WINDOW", 0)
+    done = subprocess.run([sys.executable, adapter, "--pid", str(pid), "--call", query, json.dumps(request)],
+                          timeout=120, capture_output=True, text=True, creationflags=flags)
+    try:
+        answer = json.loads(done.stdout)
+    except ValueError:
+        return {"error": (done.stdout + done.stderr)[-300:]}
+    return answer.get("result") if answer.get("ok") else {"error": answer.get("error")}
+
+
+def slot_fight(pids, seconds):
+    """The first client sends the fight cheat, so that the creature of its god fights the nearest creature: the creature
+    of the other god. The server must take test commands. The fight autopilot of each client then fights for the god
+    of that client with the presses of its hand, and each client draws the star of the special move once its hand
+    directs the fight. Every input goes through the inspector's input, so each client sends its commands as a player
+    would. Returns what each client did."""
+    done = {"cheat": inspector_answer(pids[0], "creatures.fight_cheat", {}), "clients": []}
+    for index, pid in enumerate(pids):
+        # The fight view starts as the camera looks at the arena: a double click would grip the land
+        started = inspector_answer(pid, "autopilot.start",
+                                   {"params": {"policy": "random", "seed": index + 1, "enter_view": False}})
+        done["clients"].append({"autopilot": started, "fighter": None, "star": None, "state": None})
+    end = time.monotonic() + seconds
+    while time.monotonic() < end:
+        for index, pid in enumerate(pids):
+            client = done["clients"][index]
+            systems = inspector_call(pid, "creatures.systems", {})
+            fighter = systems.get("players_fighter") if isinstance(systems, dict) else None
+            state = inspector_call(pid, "autopilot.state", {})
+            if fighter is not None and client["fighter"] is None:
+                # The camera looks at its god's fighter from within the arena, so that the fight view starts by the look
+                client["framed"] = inspector_answer(
+                    pid, "camera.frame", {"params": {"id": fighter, "yaw": 90 * index, "pitch": 60, "distance": 8}})
+            if fighter is not None:
+                client["fighter"] = fighter
+            if isinstance(state, dict):
+                client["state"] = state
+            # The star waits for presses that the fight took, so that the hand directs the fight
+            if (client["star"] is None and fighter is not None and isinstance(state, dict)
+                    and state.get("accepted", 0) >= 3):
+                client["star"] = inspector_answer(pid, "input.gesture", {"params": {"name": "Star"}})
+        time.sleep(1.0)
+    for pid in pids:
+        inspector_call(pid, "autopilot.stop", {})
+    # Each client keeps the transcript of the fight: the moves that the turns put in each creature's queue, and from
+    # where (the hand or a gesture). Every computer must have the same moves at the same turns.
+    for index, pid in enumerate(pids):
+        answer = inspector_answer(pid, "fights.transcript",
+                                  {"params": {"records": 3000, "kinds": "move_queued"}, "max_bytes": 4000000})
+        entries = answer.get("entries", []) if isinstance(answer, dict) else []
+        moves = [[entry["turn"], entry["fields"].get("creature"), entry["fields"].get("move"),
+                  entry["fields"].get("source")] for entry in entries]
+        counts = {}
+        for _, creature, _, source in moves:
+            counts[f"{creature}:{source}"] = counts.get(f"{creature}:{source}", 0) + 1
+        done["clients"][index]["queued"] = counts
+        done["clients"][index]["moves"] = moves
+    done["moves_same"] = len(pids) == 2 and done["clients"][0]["moves"] == done["clients"][1]["moves"]
+    return done
+
+
 def slot_miracle(pid, player):
     """The hand of a client in any god slot raises the totem of one of its towns, so that its worship site gathers
     prayer power, then asks an icon of its own worship site for a miracle and casts it on the land, then draws the leash
@@ -618,6 +691,11 @@ def main():
     parser.add_argument("--slot-miracle", type=int, choices=(1, 2),
                         help="this client asks an icon of its god for a miracle, casts it and uses the leash gestures, "
                              "through the inspector, once it compared --hold-after turns")
+    parser.add_argument("--slot-fight", type=int, metavar="SECONDS",
+                        help="once the first client compared --hold-after turns, it sends the fight cheat (its god's "
+                             "creature fights the nearest creature); then both clients fight with the fight autopilot "
+                             "and draw the star of the special move for this many seconds. The server takes test "
+                             "commands. Needs a land where both gods have a creature near each other.")
     parser.add_argument("--part-second-at", type=int,
                         help="the second client's world parts from the server's at this turn (--join-part-at), and must "
                              "come back in step by the server's world state")
@@ -677,6 +755,8 @@ def main():
         "--listen", "127.0.0.1:0", "--tls-cert", certs["server.pem"], "--tls-key", certs["server.key"],
         "--server-id", SERVER_ID, "--ticket-keys", keys_file, "--gods", str(options.clients),
         "--come-back-seconds", str(options.come_back_seconds)]
+    if options.slot_fight:
+        server_command.append("--test-commands")
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
     if options.temple_loss:
@@ -696,6 +776,7 @@ def main():
             server_command += ["--row-dump-turn", str(options.row_dump_turn)]
     processes = []
     miracle_done = None
+    fight_done = None
     try:
         server = start(server_command, server_dir)
         processes.append(server)
@@ -741,7 +822,7 @@ def main():
                 command.append("--sim-still-hand")
             camera = client_cameras[index]
             holds = {int(value.split(":")[0]) - 1: value.split(":")[1] for value in options.hold_creature}
-            if camera or index in holds or options.slot_miracle == index + 1:
+            if camera or index in holds or options.slot_miracle == index + 1 or options.slot_fight:
                 command += ["--inspect-port", "0"]
             creatures = {int(value.split(":", 1)[0]) - 1: value.split(":", 1)[1] for value in options.creature}
             if index in creatures:
@@ -781,6 +862,11 @@ def main():
                         [f"Network game: {options.hold_after} turns compared"]):
                     hold_creature(clients[index].pid, near)
                     held.add(index)
+            if (options.slot_fight and fight_done is None and len(clients) == 2
+                    and all(client.poll() is None for client in clients) and lines_with(
+                        os.path.join(client_dirs[0], "client.log"),
+                        [f"Network game: {options.hold_after} turns compared"])):
+                fight_done = slot_fight([client.pid for client in clients], options.slot_fight)
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again
@@ -868,6 +954,8 @@ def main():
         })
     if options.slot_miracle:
         summary["slot_miracle"] = miracle_done
+    if options.slot_fight:
+        summary["slot_fight"] = fight_done
     summary["server"] = lines_with(server_log, ["Network game:", "parts from", "defeated", "starts with", "lost the",
                                                 "turns of the game stop", "leaves the game"])
     # A component with no registration is left out of the checksum: a change in it would never show here

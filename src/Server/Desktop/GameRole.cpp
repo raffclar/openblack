@@ -257,7 +257,8 @@ std::optional<std::string> GameRole::Start(const NetworkSettings& settings, game
 	                  .godsToStart = settings.godsToStart,
 	                  .godSlots = 7,
 	                  .comeBackMicroseconds = static_cast<int64_t>(settings.comeBackSeconds) * 1'000'000,
-	                  .keptTurns = settings.comeBackSeconds * 10 + 200});
+	                  .keptTurns = settings.comeBackSeconds * 10 + 200,
+	                  .testCommands = settings.testCommands});
 	return std::nullopt;
 }
 

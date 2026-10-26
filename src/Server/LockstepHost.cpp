@@ -399,9 +399,11 @@ void LockstepHost::Binary(ConnectionId connection, std::span<const uint8_t> byte
 			return;
 		}
 		const auto before = block->actions.size();
-		std::erase_if(block->actions, [](const auto& action) {
+		// A command of the test tools goes in only when the server's test commands are on
+		std::erase_if(block->actions, [this](const auto& action) {
 			return std::holds_alternative<player_commands::PlayerLeft>(action) ||
-			       std::holds_alternative<player_commands::PlayerJoined>(action);
+			       std::holds_alternative<player_commands::PlayerJoined>(action) ||
+			       (!_settings.testCommands && std::holds_alternative<player_commands::CreatureFightCheat>(action));
 		});
 		if (block->actions.size() != before)
 		{
