@@ -8,8 +8,9 @@ it: the game puts its camera there before the first frame of the land.
     python tools/sim/hand_inputs/make_inputs.py
 
 writes land1.json, land1_camera.json (the same input with the camera turned), testbed.json, twogods.json,
-twogods_totem.json, strokes.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json, casts.json and
-twogods_slot1_tree_press.json beside this script. strokes.json plays on the testbed scenario hand.recorded_strokes
+twogods_totem.json, strokes.json, twogods_scoop_throw.json, gods_ring_slot1_scoop_throw.json, casts.json,
+twogods_slot1_tree_press.json, busy_hand.json and the store inputs of the online maps (<map>_slot<n>_store.json) beside
+this script. strokes.json plays on the testbed scenario hand.recorded_strokes
 (server_check.py --scenario hand.recorded_strokes), and casts.json on miracles.recorded_casts. The twogods inputs play on the
 playground Playgrounds/TwoGods.txt (server_check.py --land Playgrounds/TwoGods.txt), whose first town is the player's.
 
@@ -314,6 +315,105 @@ def two_gods_slot1_tree_press():
     return script.events
 
 
+def busy_hand(cycles):
+    """A hand that keeps busy on any land, from the camera that the land gives: in each cycle it takes what is at a
+    point near the middle of the screen and throws it, drags the land, taps a second point and moves about"""
+    points = [(640, 600), (560, 640), (720, 560), (600, 520), (700, 680), (520, 560), (760, 620), (640, 700)]
+    script = Script()
+    script.wait(10)
+    for cycle in range(cycles):
+        take = points[cycle % len(points)]
+        tap = points[(cycle + 3) % len(points)]
+        script.move(take, 30)
+        script.press()
+        script.wait(60)
+        script.move((take[0], take[1] - 80), 30)
+        script.move((take[0] - 120, take[1] + 60), 4)
+        script.release()
+        script.wait(40)
+        # Drag the land a little
+        script.move((640, 800), 30)
+        script.press()
+        script.move((660, 720), 40)
+        script.release()
+        script.wait(30)
+        script.move(tap, 30)
+        script.press()
+        script.wait(3)
+        script.release()
+        script.wait(30)
+        script.circle((640, 600), 100, 120, 1.0)
+        script.wait(250)
+    return script.events
+
+
+# The cameras of the online maps' store inputs: 35 m from the storage pit of each god slot's first town, looking down at 40
+# degrees (net_check.py --cameraN), and from there the pixels of the store's piles that have food or wood in the first
+# turns: the food pile first, then the wood pile. Each pixel is the middle of the pixels at which the hand picks that pile
+# (the inspector's pick, in steps of 10 pixels, at turns 50 to 820 of a seed 1 game). A pixel from the pile's place on the
+# land can fall on the pit's wall, and an empty pile does not let the hand scoop.
+ONLINE_MAP_STORES = {
+    "mpm_2p_1": [((2199.33, 2406.03), [(780, 480), (550, 420)]),
+                 ((2922.59, 2653.02), [(780, 480), (470, 400)])],
+    "mpm_3p_1": [((2571.61, 2196.73), [(520, 520), (710, 620)]),
+                 ((2217.39, 2671.21), [(750, 440), (460, 410)]),
+                 ((2806.55, 2811.45), [(780, 480), (540, 400)])],
+    "mpm_4p_1": [((3102.37, 2169.45), [(770, 500)]),
+                 ((1987.71, 1958.34), [(730, 650)]),
+                 ((1812.98, 3026.09), [(670, 530), (560, 660)]),
+                 ((3090.47, 2966.72), [(680, 640)])],
+}
+
+
+def store_camera(store):
+    """The camera of a store input, as the inspector's camera_set takes it"""
+    return {"focus": [store[0], store[1]], "yaw": 30, "pitch": 40, "distance": 35}
+
+
+def store_hand(piles, cycles):
+    """A god's own store, from store_camera: in each cycle the hand scoops from a pile and throws the handful far, takes
+    what is at a point near the store and throws it, taps a point and moves about. It does not drag the land, so the
+    camera stays at the store."""
+    points = [(640, 600), (560, 640), (720, 560), (600, 520), (700, 680), (520, 560), (760, 620), (640, 700)]
+    script = Script()
+    script.wait(10)
+    for cycle in range(cycles):
+        pile = piles[cycle % len(piles)]
+        take = points[cycle % len(points)]
+        tap = points[(cycle + 3) % len(points)]
+        # Scoop from the pile for 60 frames, then throw the handful from the land below
+        script.move(pile, 20)
+        script.wait(10)
+        script.press()
+        script.wait(60)
+        script.release()
+        script.wait(20)
+        script.move((300, 900), 30)
+        script.wait(10)
+        script.press()
+        script.wait(40)
+        script.move((300, 820), 20)
+        script.move((300, 560), 3)
+        script.release()
+        script.wait(60)
+        # Take what is at a point near the store and throw it
+        script.move(take, 30)
+        script.press()
+        script.wait(60)
+        script.move((take[0], take[1] - 80), 30)
+        script.move((take[0] - 120, take[1] - 200), 4)
+        script.release()
+        script.wait(40)
+        script.move(tap, 30)
+        script.press()
+        script.wait(3)
+        script.release()
+        script.wait(30)
+        script.circle((640, 600), 100, 120, 1.0)
+        script.wait(100)
+    return script.events
+
+
 def write(name, events, camera=None):
     # One event a line
     lines = ",\n".join(json.dumps(event) for event in events)
@@ -332,12 +432,19 @@ def main():
     write("twogods", two_gods(), TWO_GODS_STORE_CAMERA)
     write("twogods_totem", two_gods_totem(), TWO_GODS_TOTEM_CAMERA)
     write("strokes", strokes())
+    # The food pile of the first god's store on TwoGods (net_check.py --input with --camera1 TWO_GODS_STORE_CAMERA)
     write("twogods_scoop_throw", scoop_throw((712, 437)))
     # Slot 1's store on the map for 32 gods (net_check.py --gods-ring-map --camera2 with GODS_RING_SLOT1_STORE_CAMERA)
     write("gods_ring_slot1_scoop_throw", scoop_throw((769, 471)))
     write("casts", casts())
     # The second god's conifer on TwoGods (net_check.py --input2 with --camera2 TWO_GODS_SLOT1_TREE_CAMERA)
     write("twogods_slot1_tree_press", two_gods_slot1_tree_press())
+    # Any land, every god slot (net_check.py --input ... --input4 on the online maps)
+    write("busy_hand", busy_hand(18))
+    # Each god slot's own store on the online maps (net_check.py --inputN with --cameraN of store_camera)
+    for land, stores in ONLINE_MAP_STORES.items():
+        for slot, (_, piles) in enumerate(stores):
+            write(f"{land}_slot{slot}_store", store_hand(piles, 30))
 
 
 if __name__ == "__main__":

@@ -46,10 +46,6 @@
 #include <spdlog/sinks/stdout_color_sinks.h>
 #include <spdlog/spdlog.h>
 
-#if defined(__EMSCRIPTEN__)
-#include <emscripten.h>
-#endif
-
 #include "3D/CreatureBody.h"
 #include "3D/CreatureCaveTrophies.h"
 #include "3D/DayNightClock.h"
@@ -303,6 +299,7 @@
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/GameInterface.h"
 #include "Gui/HandToolTips.h"
+#include "Gui/JoinOnlineEntry.h"
 #include "Gui/LoadingScreen.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/OnlineMapTexts.h"
@@ -385,6 +382,13 @@ windowing::DisplayMode DisplayModeOf(std::string_view name, windowing::DisplayMo
 	}
 	return otherwise;
 }
+
+/// The game plays in a browser page
+#if defined(__EMSCRIPTEN__)
+constexpr bool k_Browser = true;
+#else
+constexpr bool k_Browser = false;
+#endif
 
 /// The version file next to the game. The web build has it in its working folder, where the page puts it.
 std::filesystem::path BuildVersionPath()
@@ -2732,6 +2736,13 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		_interface->Update(std::chrono::duration_cast<std::chrono::duration<float>>(deltaTime).count());
 		HandleInterfaceAction();
 		UpdateTattooMenu(std::chrono::duration<float, std::milli>(deltaTime).count());
+#if defined(__EMSCRIPTEN__)
+		if (web::TakeJoinOnlineRequest())
+		{
+			RequestJoinOnline();
+		}
+#endif
+		AnswerJoinOnline();
 		UpdateMultiplayerFrontEnd();
 		if (const auto end = std::exchange(_gameEndAsked, std::nullopt); end.has_value())
 		{
@@ -3970,11 +3981,6 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
-	if (_simulation->frameGuard != sim_run::HashDetail::None)
-	{
-		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
-		                                                         _simulation->frameGuardSystems);
-	}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	if (_simulation->traceDrawsPath.has_value())
 	{
@@ -3985,6 +3991,11 @@ void Game::StartSimulationLogs()
 		}
 	}
 #endif
+	if (_simulation->frameGuard != sim_run::HashDetail::None)
+	{
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
+	}
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
@@ -4013,6 +4024,22 @@ void Game::StartSimulationLogs()
 			                    _simulation->checksumsPath->string());
 		}
 	}
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (_simulation->rowDumpPath.has_value())
+	{
+		// The rows come from the checksum of each turn, so the checksum is on also in a single player game
+		auto& checksums = Locator::syncChecksumSystem::value();
+		if (checksums.StartRowDump(*_simulation->rowDumpPath, _simulation->rowDump))
+		{
+			checksums.SetEnabled(true);
+		}
+		else
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}",
+			                    _simulation->rowDumpPath->string());
+		}
+	}
+#endif
 	if (_simulation->playCommandsPath.has_value())
 	{
 		auto turns = command_log::ReadFile(*_simulation->playCommandsPath);
@@ -4223,10 +4250,15 @@ Game::RunStart Game::StartRun() noexcept
 		// A first start: the new player is asked their name before the first land; closing the window meanwhile ends
 		// the game at its first frame. A first start always starts a new game.
 		const bool hadProfile = HasPlayerProfiles();
-		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch
-		_frontEndOnStart =
-		    hadProfile && launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Multiplayer;
 		AskForNewPlayer();
+		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch. In a browser, the front
+		// end opens after the new player's box.
+		_frontEndOnStart = join_online_entry::FrontEndOnStart({
+		    .multiplayerSwitch = launch_switches::FirstGameOf(_launchSwitches) == launch_switches::FirstGame::Multiplayer,
+		    .hadProfile = hadProfile,
+		    .hasProfile = HasPlayerProfiles(),
+		    .browser = k_Browser,
+		});
 		// A plain start continues from the save on exit of the player. The continue loads the save once the scripts are
 		// ready, because the save keeps the state of the scripts.
 		start = game_session::FirstStart({.hadProfile = hadProfile,
@@ -4974,7 +5006,7 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 #endif
 	// The internet connection's name in the list is the lobby's host: in the browser, the host of the page
 #if defined(__EMSCRIPTEN__)
-	settings.internetName = gui::ToUtf16(emscripten_run_script_string("location.host"));
+	settings.internetName = gui::ToUtf16(web::PageHost());
 #else
 	const auto host = origin.find("://");
 	settings.internetName = gui::ToUtf16(host == std::string::npos ? origin : origin.substr(host + 3));
@@ -4990,6 +5022,67 @@ std::unique_ptr<gui::MultiplayerFrontEnd> Game::MakeMultiplayerFrontEnd()
 	settings.localMaps = std::move(maps.localMaps);
 	settings.conditionTemplate = std::move(maps.conditionTemplate);
 	return std::make_unique<gui::MultiplayerFrontEnd>(std::move(services), std::move(settings));
+}
+
+void Game::AnswerJoinOnline()
+{
+	if (!_joinOnlineAsked || !_interface)
+	{
+		return;
+	}
+	const auto& director = Locator::cinematicDirectorSystem::value();
+	const bool networkGame = _networkLandPending || Locator::time::value().IsNetworkGame() ||
+	                         (Locator::networkGame::has_value() && Locator::networkGame::value().InGame());
+	const auto decision = join_online_entry::Decide({
+	    .frontEndOpen = _interface->GetMultiplayerBoxes().IsActive(),
+	    .networkGame = networkGame,
+	    .boxToAnswer = _interface->GetNewPlayerBox().IsActive() || _interface->GetSaveGameBoxes().IsActive() ||
+	                   _interface->GetTattooEditor().IsOpen() || _gameEnding.has_value() || _gameEndAsked.has_value(),
+	    .scriptHoldsCinemaBars = director.IsWideScreenOn() && director.GetWideScreenOwner() != 0,
+	    .startQuestionOpen = _interface->GetSkipBox().IsActive(),
+	});
+	switch (decision.outcome)
+	{
+	case join_online_entry::Outcome::Wait:
+		return;
+	case join_online_entry::Outcome::Ignore:
+		_joinOnlineAsked = false;
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Join Online Game: the front end is open or a network game plays");
+		return;
+	case join_online_entry::Outcome::Open:
+		break;
+	}
+	_joinOnlineAsked = false;
+	// The start-of-game question waits behind the front end, as it does for the -MULTIPLAYER switch
+	std::optional<bool> question;
+	if (decision.askQuestionAfter)
+	{
+		const bool hasCreature = _interface->GetSkipBox().IsOffered(new_game_choice::Choice::KeepOldCreature);
+		if (_interface->WithdrawSkipBox())
+		{
+			question = hasCreature;
+		}
+	}
+	if (!OpenMultiplayerFrontEnd(MakeMultiplayerFrontEnd()))
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The multiplayer front end needs the temple and the interface");
+		if (question.has_value())
+		{
+			_interface->ShowSkipBox(*question);
+		}
+		return;
+	}
+	if (question.has_value())
+	{
+		_startQuestionAfterFrontEnd = question;
+	}
+	if (decision.holdLand)
+	{
+		_frontEndHoldsLand = true;
+		Locator::time::value().SetPlayerPause(true);
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Join Online Game of the page: the multiplayer front end opens{}",
+	                   decision.holdLand ? ", and the cut scene stops until the player leaves it" : "");
 }
 
 bool Game::OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd)
@@ -5025,8 +5118,10 @@ void Game::UpdateMultiplayerFrontEnd()
 			{
 				Locator::temple::value().LeaveMultiplayerFrontEnd();
 			}
-			// The land of the question goes: the network game's land does not ask it
-			if (std::exchange(_startQuestionAfterFrontEnd, std::nullopt).has_value())
+			// The land of the question goes: the network game's land does not ask it. A land that the front end held
+			// goes too.
+			const bool held = std::exchange(_frontEndHoldsLand, false);
+			if (std::exchange(_startQuestionAfterFrontEnd, std::nullopt).has_value() || held)
 			{
 				Locator::time::value().SetPlayerPause(false);
 			}
@@ -5047,6 +5142,11 @@ void Game::UpdateMultiplayerFrontEnd()
 	{
 		return;
 	}
+	// The cut scene stays stopped while the front end is open, also when the menu closed and let the game continue
+	if (_frontEndHoldsLand)
+	{
+		Locator::time::value().SetPlayerPause(true);
+	}
 	const bool templeGone = !Locator::temple::has_value() || !Locator::temple::value().IsMultiplayerFrontEnd();
 	if (boxes.TakeLeft() || templeGone)
 	{
@@ -5056,9 +5156,15 @@ void Game::UpdateMultiplayerFrontEnd()
 			Locator::temple::value().LeaveMultiplayerFrontEnd();
 		}
 		// The land's start-of-game question waited for the front end
-		if (const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt); hasCreature.has_value())
+		const auto hasCreature = std::exchange(_startQuestionAfterFrontEnd, std::nullopt);
+		if (hasCreature.has_value())
 		{
 			_interface->ShowSkipBox(*hasCreature);
+		}
+		// The cut scene that the front end stopped continues. The question keeps the land stopped until its answer.
+		if (std::exchange(_frontEndHoldsLand, false) && !hasCreature.has_value())
+		{
+			Locator::time::value().SetPlayerPause(false);
 		}
 	}
 }

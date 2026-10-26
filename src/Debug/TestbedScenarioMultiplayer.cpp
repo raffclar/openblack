@@ -140,6 +140,27 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	}
 }
 
+void testbed_scenarios::AddJoinOnlineScenarios(std::vector<Scenario>& all)
+{
+	using Kind = Command::Kind;
+	// The page's Join Online Game button, pressed while a script's cut scene has the cinema bars in
+	all.push_back({
+	    .id = "multiplayer.page_join_online",
+	    .name = "The page's Join Online Game button in a cut scene",
+	    .facet = Facet::Interface,
+	    .description = "A script's cinema bars slide in after half a second. One second later the player presses the Join "
+	                   "Online Game button of the browser page, which the scenario does for the page. Escape does not "
+	                   "open the menu while the bars are in.",
+	    .expected = "The multiplayer front end opens in the temple's future room with the box \"Choose a connection from "
+	                "the list below.\". The land behind stops. Click Back: the front end closes, the land shows again "
+	                "with the cinema bars in, and the land continues.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::JoinOnline, .delaySeconds = 1.0f}},
+	});
+}
+
 void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 {
 	using Kind = Command::Kind;

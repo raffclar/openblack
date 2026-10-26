@@ -109,9 +109,8 @@ struct HandGrab
 	bool grips {false};
 	/// The pull on a rooted thing once the fade is over, leaning and stretching it
 	std::optional<hand_grab::Tug> tug;
-	/// The place, the turn and the size of the pulled thing before the pull. The frames draw it leaning and stretched,
-	/// but the world keeps these.
-	glm::vec3 pullPosition {0.0f};
+	/// The turn and the size of the pulled thing before the pull. The frames draw it leaning and stretched, but the world
+	/// keeps these.
 	glm::mat3 pullRotation {1.0f};
 	glm::vec3 pullScale {1.0f};
 	/// How far it stretches towards the hand

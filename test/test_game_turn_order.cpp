@@ -364,6 +364,33 @@ TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
 }
 
+TEST(GameTurnOrder, TheFullTurnMeasuresTheInfluenceFromTheTurnHands)
+{
+	// The players' commands and the hand's own work come before the influence of the turn, and measure as it does
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::DrawnPlaces));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::PlayerCommands));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandStillness));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandInterface));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnStart));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::Influence));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::CreatureHandMoments));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HeldThing));
+	// After the end of that part, the frames measure from the hand that this computer shows
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnEnd));
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::SyncChecksum));
+}
+
+TEST(GameTurnOrder, EachStepOfTheTurnBeforeItsEndMeasuresFromTheTurnHands)
+{
+	// The turn with a creature's own steps in the turn of the living
+	const auto recorder = PlayOneTurn();
+	const auto& steps = recorder.Steps();
+	const auto end = std::ranges::find(steps, k_TurnHandsInfluenceEnd);
+	ASSERT_NE(end, steps.end());
+	EXPECT_TRUE(std::all_of(steps.begin(), end, MeasuresInfluenceFromTurnHands));
+	EXPECT_TRUE(std::none_of(end, steps.end(), MeasuresInfluenceFromTurnHands));
+}
+
 // The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
 // checksum reads the world
 TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
