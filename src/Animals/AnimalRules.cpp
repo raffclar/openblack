@@ -142,6 +142,14 @@ glm::mat3 animals::Orientation(float heading, float bank)
 	return glm::mat3(portable_math::EulerAngleY(-(heading + (k_Pi * 0.5f))) * portable_math::EulerAngleZ(bank));
 }
 
+animals::DrawnBetweenTurns animals::DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
+                                            float heading, float turnFraction)
+{
+	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
+	return {.position = previousPosition + ((position - previousPosition) * t),
+	        .heading = previousHeading + (std::remainder(heading - previousHeading, k_TwoPi) * t)};
+}
+
 animals::FormationSlot animals::FormationSlotOf(int place)
 {
 	int k = place;

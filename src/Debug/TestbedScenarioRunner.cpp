@@ -2849,6 +2849,16 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::JoinOnline)
+	{
+		auto* game = Game::Instance();
+		if (game != nullptr)
+		{
+			game->RequestJoinOnline();
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), game != nullptr ? "asked" : "failed: no game"));
+		return;
+	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
@@ -3545,6 +3555,7 @@ void Runner::Give(const Command& command)
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
 	case Kind::OtherGodHand:
+	case Kind::JoinOnline:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -3938,7 +3949,9 @@ void Runner::UpdateCamera()
 	case Shot::Head:
 		if (const auto entity = CreatureAt(_shotCreature))
 		{
-			const auto& transform = registry.Get<Transform>(*entity);
+			// The camera keeps up with the body where the frame draws it
+			const auto transform =
+			    DrawnTransform(registry.Get<Transform>(*entity), registry.TryGet<CreatureAnimation>(*entity));
 			const auto height = CreatureHeight(ShownSize(registry.Get<Creature>(*entity)));
 			placement = *_shot == Shot::Follow ? Follow(transform.position, height, _shotDistance)
 			                                   : Head(transform.position, AheadOf(transform), height, _shotDistance);

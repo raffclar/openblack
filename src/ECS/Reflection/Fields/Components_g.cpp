@@ -16,7 +16,6 @@
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Graveyard.h"
 #include "ECS/Components/GripLandscapeParticle.h"
-#include "ECS/Components/GroundMark.h"
 #include "ECS/Components/GroundPrint.h"
 #include "ECS/Components/GuidanceHeard.h"
 #include "ECS/Reflection/ComponentReflection.h"
@@ -42,9 +41,6 @@ void openblack::ecs::reflection::RegisterFields_Components_g(entt::meta_ctx& con
 	    .Field<&components::GripLandscapeParticle::age>("age")
 	    .Field<&components::GripLandscapeParticle::frame>("frame")
 	    .Field<&components::GripLandscapeParticle::turnsLeft>("turnsLeft");
-	Reflect<components::GroundMark>(context)
-	    .Field<&components::GroundMark::millisecondsLeft>("millisecondsLeft")
-	    .Field<&components::GroundMark::alpha>("alpha");
 	Reflect<components::GroundPrint>(context).Field<&components::GroundPrint::made>("made");
 	Reflect<components::GuidanceHeard>(context)
 	    .Field<&components::GuidanceHeard::lastTurn>("lastTurn")

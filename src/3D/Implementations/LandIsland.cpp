@@ -20,6 +20,7 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
@@ -248,15 +249,18 @@ void LandIsland::Build(const LandData& data)
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
 	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
 	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
-	// Threads that live as long as the build paint the blocks
+	// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
+	std::vector<const bgfx::Memory*> painted(_landBlocks.size());
+	std::ranges::generate(painted, [] { return bgfx::alloc(static_cast<uint32_t>(block_texture::k_BlockBytes)); });
 	WorkerPool painters(WorkerPool::DefaultThreadCount());
 	block_texture::BuildBlocks(
 	    _landBlocks.size(),
 	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-	    painters,
-	    [this](size_t block, std::span<const uint8_t> rgba) {
-		    _blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
-	    });
+	    painters, [&painted](size_t block) { return std::span<uint8_t>(painted[block]->data, painted[block]->size); });
+	for (size_t block = 0; block < painted.size(); ++block)
+	{
+		_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
+	}
 	// The footprints are painted into the blocks after
 	_repaintedBlocks.resize(_landBlocks.size());
 	std::iota(_repaintedBlocks.begin(), _repaintedBlocks.end(), size_t {0});

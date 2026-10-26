@@ -158,6 +158,10 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-checksum-parts", "Tools: with --sim-checksums, also write the hash of each part of the synced world, to find the part where two builds part.")
 		("sim-checksum-fields", "Tools: as --sim-checksum-parts, and the hash of each field of each component too.")
 		("sim-checksum-dump", "Tools: with --sim-checksums, write each field of each row of some components at one turn, as TURN:Component,Component (for example 7:CreatureMindState), to compare two builds value by value.", cxxopts::value<std::string>())
+		("sim-frame-guard", "Tools: log each frame step that changes the synced world, and the components that it changes. The synced world must change only in the game turns. The run is slower.")
+		("sim-frame-guard-fields", "Tools: as --sim-frame-guard, and the fields of the components too.")
+		("sim-frame-guard-systems", "Tools: as --sim-frame-guard, and the saved state of each system too. A system can keep state that the turns read outside the registry.")
+		("sim-frame-guard-from", "Tools: the turn at which --sim-frame-guard starts to look (0 by default).", cxxopts::value<uint32_t>()->default_value("0"))
 		("sim-play-commands", "Tools: do the commands of this file (as --sim-commands writes it) at their turns, and no command of the player of this computer, as a computer that only receives the commands of a network game.", cxxopts::value<std::string>())
 		("sim-trace-draws", "Tools: write each draw on the synced random seed to this file, with its turn and the place of its call in the source (tools/sim/draw_trace.py compares two files).", cxxopts::value<std::string>());
 #if defined(OPENBLACK_INSPECTOR)
@@ -400,6 +404,12 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				}
 				simulation.checksumDump = std::make_pair(static_cast<uint32_t>(std::stoul(text.substr(0, colon))), components);
 			}
+			simulation.frameGuardSystems = result.count("sim-frame-guard-systems") != 0;
+			simulation.frameGuard = result.count("sim-frame-guard-fields") != 0 ? openblack::sim_run::HashDetail::Fields
+			                        : result.count("sim-frame-guard") != 0 || simulation.frameGuardSystems
+			                            ? openblack::sim_run::HashDetail::Components
+			                            : openblack::sim_run::HashDetail::None;
+			simulation.frameGuardFrom = result["sim-frame-guard-from"].as<uint32_t>();
 			if (result.count("sim-play-commands") != 0)
 			{
 				simulation.playCommandsPath = std::filesystem::path(result["sim-play-commands"].as<std::string>());

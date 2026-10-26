@@ -119,6 +119,7 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -3092,6 +3093,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
+	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
+	vertices.reserve(ground_blobs::k_Indices.size() *
+	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -3100,8 +3106,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
-	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
+	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
+		    // A villager in a creature's hand is where the frame draws the hand
+		    const auto transform = ecs::drawn_place::DrawnTransformOf(desc.entities, entity, placed);
 		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
@@ -3135,7 +3143,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
-	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	for (const auto& [entity, meshId, model] : animalDraws)
 	{
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
 		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
@@ -6880,7 +6888,11 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
-					DrawCreatureHair(desc, *hair, transform->position);
+					// The hair hangs from the body where the frame draws it
+					DrawCreatureHair(desc, *hair,
+					                 ecs::components::DrawnTransform(
+					                     *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+					                     .position);
 				}
 				// The glows on its body, where its pose put them
 				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
@@ -7827,10 +7839,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    }
 						    const auto* texture = found->texture;
 						    const auto* alpha = found->alpha;
+						    // A sprite that moves between the turns is drawn at its drawn place
+						    const auto placed = ecs::drawn_place::DrawnTransformOf(from, entity, transform);
 						    glm::mat4 modelMatrix = glm::mat4(1.0f);
-						    modelMatrix = glm::translate(modelMatrix, transform.position);
-						    modelMatrix *= glm::mat4(transform.rotation);
-						    modelMatrix = glm::scale(modelMatrix, transform.scale);
+						    modelMatrix = glm::translate(modelMatrix, placed.position);
+						    modelMatrix *= glm::mat4(placed.rotation);
+						    modelMatrix = glm::scale(modelMatrix, placed.scale);
 
 						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
@@ -7854,7 +7868,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    bgfx::setState(SpriteState(sprite.additive));
 
 						    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-						                         zsort::Depth(transform.position, cameraOrigin));
+						                         zsort::Depth(placed.position, cameraOrigin));
 					    });
 				};
 				// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room

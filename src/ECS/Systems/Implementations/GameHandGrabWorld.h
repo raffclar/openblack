@@ -94,6 +94,8 @@ public:
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity hand) const override;
 	[[nodiscard]] std::vector<PlayerNames> OtherHandPlayers() const override;
 	void SetPose(entt::entity object, const Pose& pose) override;
+	void DrawPulledPose(entt::entity object, const Pose& pose) override;
+	void ForgetPulledPose(entt::entity object) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;

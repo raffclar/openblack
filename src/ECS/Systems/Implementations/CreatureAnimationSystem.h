@@ -38,6 +38,8 @@ public:
 	void SwayTurn(entt::entity creature) override;
 	void EndPoseTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
+	void MorphTurn(entt::entity creature) override;
+	void ShapeBodies() override;
 	void PoseTurn(entt::entity creature) override;
 	void PoseTurns() override;
 	void HoldTurnPose(entt::entity creature) override;

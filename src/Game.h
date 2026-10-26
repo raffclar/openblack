@@ -111,6 +111,10 @@ namespace checksum_log
 {
 class Writer;
 }
+namespace frame_write_guard
+{
+class Guard;
+}
 
 /// The fight autopilot asked for on the command line, as the command line gives it: its policy, the seed, the lesson stage
 /// to start at and the moves of a sequence
@@ -281,7 +285,6 @@ public:
 	[[nodiscard]] int32_t FrameRate() const override { return _statisticsFrameRate.Rate(); }
 	/// The audio of a turn of the temple
 	void PlayTempleAudioTurn() override { ProcessTempleAudioTurn(); }
-	void CatchUpFrame() override;
 	/// The parts of the land's loads that the view of the player does
 	void ShowLoadingFrame() override;
 	bool WithdrawSkipBox() override;
@@ -429,6 +432,9 @@ public:
 	/// it back
 	void RequestQuit() { _quitRequested = true; }
 	[[nodiscard]] std::optional<ScenarioRequest> TakeScenarioRequest() { return std::exchange(_scenarioRequest, std::nullopt); }
+	/// The scenarios' window sets the work that lays out a scenario asked for. The frame does it as the turns step
+	/// starts, so that only a load or a turn changes the world. None: the window is gone.
+	void SetScenarioStager(std::function<void()> stager) { _scenarioStager = std::move(stager); }
 	/// A scenario asked for that the scenarios' window hasn't started yet
 	[[nodiscard]] const std::optional<ScenarioRequest>& PendingScenario() const { return _scenarioRequest; }
 	/// Asks for a scenario while the game runs: the scenarios' window runs it on a fresh testbed next frame. A build
@@ -461,6 +467,9 @@ public:
 	/// Join Online Game: the player goes into the temple's future room, and the front end's first box shows over
 	/// it. Returns false when the game has no interface or no temple.
 	bool OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd);
+	/// The Join Online Game button of the browser page: the multiplayer front end opens at the next frame that it may
+	/// open in. Tools and the testbed use this request too.
+	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -566,6 +575,7 @@ private:
 	bool _startTestbed {false};
 	bool _startGodsRingMap {false};
 	std::optional<ScenarioRequest> _scenarioRequest;
+	std::function<void()> _scenarioStager;
 	/// The port the debug inspector is to listen on, if it is to start
 	std::optional<uint16_t> _inspectPort;
 	std::optional<FightAutopilotRequest> _fightAutopilot;
@@ -575,6 +585,8 @@ private:
 	std::unique_ptr<command_log::Writer> _commandLog;
 	/// The file that a tool's run writes the checksum of each turn to
 	std::unique_ptr<checksum_log::Writer> _checksumLog;
+	/// A tool's run that looks for the frame steps that change the synced world
+	std::unique_ptr<frame_write_guard::Guard> _frameGuard;
 	/// Where the players' profiles are kept instead of the game's own folder
 	std::optional<std::filesystem::path> _profileFolder;
 	/// Started by a developer or a tool, which plays as a profile of its own and never sees the new player's box
@@ -758,6 +770,12 @@ private:
 	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
 	/// creature
 	std::optional<bool> _startQuestionAfterFrontEnd;
+	/// Opens the multiplayer front end for a request of the page, when the situation lets it open
+	void AnswerJoinOnline();
+	/// The page asked for the multiplayer front end, and the front end did not open yet
+	bool _joinOnlineAsked {false};
+	/// The front end opened over a cut scene: the land stops until the player leaves the front end
+	bool _frontEndHoldsLand {false};
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.
