@@ -1819,3 +1819,11 @@ openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
 openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
 openblack_setup_and_add_test(test_start_alignment test_start_alignment.cpp)
+
+find_program(NODE_EXECUTABLE node)
+if (NODE_EXECUTABLE)
+  add_test(NAME test_web_launcher_arguments
+           COMMAND ${NODE_EXECUTABLE}
+                   ${CMAKE_CURRENT_SOURCE_DIR}/web_launcher_arguments.test.js
+  )
+endif ()
