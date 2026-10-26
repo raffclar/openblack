@@ -41,8 +41,6 @@ constexpr float k_DotError = 0x1p-20f;
 /// More than the largest distance between a hit and the plane of its face, for a unit size of the parts of the
 /// corners, the point and the direction
 constexpr float k_PlaneError = 0x1p-19f;
-/// More than the largest error of a hit and of the far end of the line, for a unit size of the point and the direction
-constexpr float k_LineError = 0x1p-17f;
 /// More than the relative error of the margin from the float operations that make it
 constexpr float k_MarginError = 0x1p-10f;
 /// A small distance that each margin gets in addition
@@ -52,8 +50,6 @@ constexpr float k_LargestLocalPart = 0x1p20f;
 constexpr float k_SmallestEdge = 0x1p-16f;
 constexpr float k_SmallestNormal = 0.5f;
 constexpr float k_LargestNormal = 2.0f;
-/// The largest size of a part of a point or of a direction that a line box accepts
-constexpr float k_LargestLinePart = 0x1p40f;
 
 [[nodiscard]] float LargestPart(glm::vec3 v)
 {
@@ -176,22 +172,4 @@ bool openblack::physics::hit_bounds::FitsMargin(const glm::mat3& axes, glm::vec3
 	}
 	return axisError <= 0.5f * k_LargestAxisError && glm::determinant(axes) > 0.5f &&
 	       LargestPart(centre) + LargestPart(ahead) <= 0.99f * shift;
-}
-
-std::optional<Box> openblack::physics::hit_bounds::LineBox(glm::vec3 point, glm::vec3 direction)
-{
-	const float size = LargestPart(point) + LargestPart(direction);
-	if (!(size <= k_LargestLinePart))
-	{
-		return std::nullopt;
-	}
-	const float margin = size * k_LineError;
-	const glm::vec3 end = point - direction;
-	return Box {.min = glm::min(point, end) - margin, .max = glm::max(point, end) + margin};
-}
-
-bool openblack::physics::hit_bounds::Touches(const Box& first, const Box& second)
-{
-	return first.min.x <= second.max.x && second.min.x <= first.max.x && first.min.y <= second.max.y &&
-	       second.min.y <= first.max.y && first.min.z <= second.max.z && second.min.z <= first.max.z;
 }

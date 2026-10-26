@@ -9,7 +9,9 @@
 
 #pragma once
 
-#include <optional>
+#include <cmath>
+
+#include <algorithm>
 #include <span>
 
 #include <glm/mat3x3.hpp>
@@ -58,11 +60,27 @@ struct LocalFace
 /// be less than the shift of the margins.
 [[nodiscard]] bool FitsMargin(const glm::mat3& axes, glm::vec3 centre, glm::vec3 ahead, float shift);
 
-/// The box that holds the line from a point back to one direction length behind it, with all hits that the search can
-/// find on it. There is no box when the parts are too large.
-[[nodiscard]] std::optional<Box> LineBox(glm::vec3 point, glm::vec3 direction);
+/// More than the largest error of a hit and of the far end of the line, for a unit size of the point and the direction
+inline constexpr float k_LineError = 0x1p-17f;
+/// The largest size of a part of a point or of a direction that a line box accepts
+inline constexpr float k_LargestLinePart = 0x1p40f;
 
-/// Whether two boxes touch
-[[nodiscard]] bool Touches(const Box& first, const Box& second);
+/// Whether the line from a point back to one direction length behind it can have a hit in a box. The test widens the
+/// box of the line by the errors of the hit and of the far end of the line. A line with parts that are too large
+/// touches every box.
+[[nodiscard]] inline bool LineTouches(const Box& box, glm::vec3 point, glm::vec3 direction)
+{
+	const auto largest = [](glm::vec3 v) { return std::max(std::max(std::abs(v.x), std::abs(v.y)), std::abs(v.z)); };
+	const float size = largest(point) + largest(direction);
+	if (!(size <= k_LargestLinePart))
+	{
+		return true;
+	}
+	const float margin = size * k_LineError;
+	const glm::vec3 end = point - direction;
+	return std::min(point.x, end.x) - margin <= box.max.x && box.min.x <= std::max(point.x, end.x) + margin &&
+	       std::min(point.y, end.y) - margin <= box.max.y && box.min.y <= std::max(point.y, end.y) + margin &&
+	       std::min(point.z, end.z) - margin <= box.max.z && box.min.z <= std::max(point.z, end.z) + margin;
+}
 
 } // namespace openblack::physics::hit_bounds

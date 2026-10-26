@@ -537,7 +537,7 @@ const hit_bounds::Box& Body::HitBox() const
 std::optional<RayHit> Body::FaceBehind(glm::vec3 point, glm::vec3 direction) const
 {
 	// A line that does not touch the box of all hits meets no face
-	if (const auto line = hit_bounds::LineBox(point, direction); line.has_value() && !hit_bounds::Touches(HitBox(), *line))
+	if (!hit_bounds::LineTouches(HitBox(), point, direction))
 	{
 		return std::nullopt;
 	}

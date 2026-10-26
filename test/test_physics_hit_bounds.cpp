@@ -171,9 +171,7 @@ TEST(PhysicsHitBounds, EveryHitIsInTheBoxOfTheBody)
 			}
 			++hits;
 			boxed += std::isfinite(margin) ? 1 : 0;
-			const auto line = LineBox(point, direction);
-			ASSERT_TRUE(line.has_value());
-			EXPECT_TRUE(Touches(box, *line));
+			EXPECT_TRUE(LineTouches(box, point, direction));
 		}
 	}
 	EXPECT_GT(hits, 50000);
@@ -227,15 +225,15 @@ TEST(PhysicsHitBounds, OnlyANearTurnFitsTheMargin)
 	EXPECT_FALSE(FitsMargin(square * 1.01f, glm::vec3(0.0f), glm::vec3(0.0f), 16.0f));
 }
 
-TEST(PhysicsHitBounds, TheLineBoxHoldsTheLine)
+TEST(PhysicsHitBounds, TheLineTestHoldsTheLine)
 {
-	const auto line = LineBox(glm::vec3(1.0f, 2.0f, 3.0f), glm::vec3(2.0f, -1.0f, 0.0f));
-	ASSERT_TRUE(line.has_value());
-	EXPECT_LE(line->min.x, -1.0f);
-	EXPECT_GE(line->max.x, 1.0f);
-	EXPECT_LE(line->min.y, 2.0f);
-	EXPECT_GE(line->max.y, 3.0f);
-	EXPECT_TRUE(Touches(*line, {.min = glm::vec3(0.0f, 2.5f, 3.0f), .max = glm::vec3(0.5f, 2.6f, 3.0f)}));
-	EXPECT_FALSE(Touches(*line, {.min = glm::vec3(0.0f, 2.5f, 3.1f), .max = glm::vec3(0.5f, 2.6f, 4.0f)}));
-	EXPECT_FALSE(LineBox(glm::vec3(0.0f), glm::vec3(0x1p41f)).has_value());
+	const glm::vec3 point(1.0f, 2.0f, 3.0f);
+	const glm::vec3 direction(2.0f, -1.0f, 0.0f);
+	// The line goes from (1, 2, 3) back to (-1, 3, 3)
+	EXPECT_TRUE(LineTouches({.min = glm::vec3(0.0f, 2.5f, 3.0f), .max = glm::vec3(0.5f, 2.6f, 3.0f)}, point, direction));
+	EXPECT_TRUE(LineTouches({.min = glm::vec3(-3.0f, 3.0f, 2.0f), .max = glm::vec3(-1.0f, 4.0f, 3.0f)}, point, direction));
+	EXPECT_FALSE(LineTouches({.min = glm::vec3(0.0f, 2.5f, 3.1f), .max = glm::vec3(0.5f, 2.6f, 4.0f)}, point, direction));
+	EXPECT_FALSE(LineTouches({.min = glm::vec3(1.1f, 0.0f, 0.0f), .max = glm::vec3(2.0f, 5.0f, 5.0f)}, point, direction));
+	// A line with parts that are too large touches every box
+	EXPECT_TRUE(LineTouches({.min = glm::vec3(5.0f), .max = glm::vec3(6.0f)}, glm::vec3(0.0f), glm::vec3(0x1p41f)));
 }
