@@ -873,8 +873,8 @@ void LandSystem::StartPlayerAtProfileAlignment()
 	{
 		return;
 	}
-	// A network game does not use the profile of this computer, so that each computer starts the same world.
-	// TODO(raffclar): each god of a network game starts at the alignment that its player sends with the start data.
+	// A network game does not use the profile of this computer, so that each computer starts the same world. Each god
+	// of a network game starts at the alignment that its player sent with the start, at the first turn.
 	if (profile_alignment::StartsFromOwnProfile(Locator::time::value().IsNetworkGame()))
 	{
 		SetPlayerAlignmentFromProfile();

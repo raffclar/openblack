@@ -184,6 +184,8 @@ struct StartCreature
 	/// The god's slot. None from a client.
 	std::optional<uint8_t> slot;
 	std::vector<uint8_t> file;
+	/// The alignment that the god starts the game at: the alignment of its player's profile, from -1 (evil) to 1 (good)
+	float alignment {0.0f};
 };
 
 /// Client to server: "game.stop_request". The end box of a decided game opened on the client. The server stops the turns

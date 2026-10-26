@@ -26,7 +26,9 @@
 #include "ECS/Components/Player.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/CreatureFromFile.h"
+#include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
+#include "ECS/Statistics.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -410,7 +412,21 @@ void PlayerCommandSystem::RunSent(uint32_t turn)
 	{
 		openblack::Locator::computerPlayerSystem::value().HumansJoined(joined);
 	}
+	StartGodsAtSentAlignments(joined);
 	BringCreatures(joined);
+}
+
+void PlayerCommandSystem::StartGodsAtSentAlignments(std::span<const PlayerNames> joined)
+{
+	if (_source == nullptr || joined.empty())
+	{
+		return;
+	}
+	// Each god starts at the alignment that its player sent before the start, and a god with no player at 0. Then the
+	// players' statistics note the alignments they start the game at. The creatures come after this.
+	auto& registry = openblack::Locator::entitiesRegistry::value();
+	openblack::profile_alignment::StartGods(registry, [this](PlayerNames god) { return _source->StartAlignment(god); });
+	openblack::player_statistics::GameStarts(registry);
 }
 
 void PlayerCommandSystem::BringCreatures(std::span<const PlayerNames> joined)
