@@ -1207,8 +1207,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
 	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
+	// The multiplayer front end can open over a cut scene from the browser page. Its room shows with no cinema bars.
 	const auto& director = Locator::cinematicDirectorSystem::value();
-	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
+	const auto barFraction = _multiplayerBoxes->IsActive() ? 0.0f : director.GetWideScreenFraction();
+	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, barFraction));
 	const auto screen = glm::vec2(resolution);
 	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);

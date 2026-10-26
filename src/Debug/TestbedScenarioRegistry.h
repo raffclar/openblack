@@ -968,6 +968,9 @@ struct Command
 		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
 		/// creature.
 		OtherGodHand,
+		/// A press of the Join Online Game button of the browser page: the game opens the multiplayer front end at the
+		/// next frame that it may open in, also while a cut scene has the cinema bars in. Needs no creature.
+		JoinOnline,
 		/// The tattoo editor works as in a network game (value 1) or as in a game alone (value 0). Needs no creature.
 		TattooEditorAsNetworkGame,
 	};
@@ -1214,6 +1217,8 @@ void AddVillageTotemScenarios(std::vector<Scenario>& all);
 void AddMultiplayerFrontEndScenarios(std::vector<Scenario>& all);
 /// The hands of the other gods of a network game, as this computer shows them, with no game server
 void AddOtherGodScenarios(std::vector<Scenario>& all);
+/// The Join Online Game button of the browser page
+void AddJoinOnlineScenarios(std::vector<Scenario>& all);
 /// The sounds of a village by day and by night: its buildings, its foresters and its animals
 void AddWorldSoundScenarios(std::vector<Scenario>& all);
 /// A town given miracles by the debug tool, and its worship site going up

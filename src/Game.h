@@ -467,6 +467,9 @@ public:
 	/// Join Online Game: the player goes into the temple's future room, and the front end's first box shows over
 	/// it. Returns false when the game has no interface or no temple.
 	bool OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd);
+	/// The Join Online Game button of the browser page: the multiplayer front end opens at the next frame that it may
+	/// open in. Tools and the testbed use this request too.
+	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -767,6 +770,12 @@ private:
 	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
 	/// creature
 	std::optional<bool> _startQuestionAfterFrontEnd;
+	/// Opens the multiplayer front end for a request of the page, when the situation lets it open
+	void AnswerJoinOnline();
+	/// The page asked for the multiplayer front end, and the front end did not open yet
+	bool _joinOnlineAsked {false};
+	/// The front end opened over a cut scene: the land stops until the player leaves the front end
+	bool _frontEndHoldsLand {false};
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.

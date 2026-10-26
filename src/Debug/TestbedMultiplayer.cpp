@@ -68,7 +68,8 @@ lobby_api::ServerEntry Server(std::string id, std::string name, std::string land
 
 std::vector<lobby_api::ServerEntry> DemoServers()
 {
-	auto bob = Server("w1", "Bob's game", "mpm_2p_1", 4);
+	// The game server sends the path of the map file of its land, as a real server does
+	auto bob = Server("w1", "Bob's game", "Online Maps/mpm_2p_1.map", 4);
 	bob.players = {Player(3, "Bob", "god"), Player(k_PlayerId, "Alice", "god"), Player(9, "Eve", "observer")};
 	auto fun = Server("w2", "Fun", "mpm_3p_1", 2);
 	fun.gamemode = "closedplaying";

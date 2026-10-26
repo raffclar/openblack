@@ -478,6 +478,11 @@ TEST(MultiplayerRules, LocalMapsAndTheirConditions)
 	EXPECT_EQ(FindLand(maps, "mpm_3p_1"), 1u);
 	EXPECT_EQ(FindLand(maps, "Bombardment - 2 players"), 0u);
 	EXPECT_FALSE(FindLand(maps, "mpm_9p_1").has_value());
+	// The server sends the path of the map file of a network land
+	EXPECT_EQ(FindLand(maps, "Online Maps/mpm_3p_1.map"), 1u);
+	EXPECT_EQ(FindLand(maps, "Online Maps/MPM_2P_1.MAP"), 0u);
+	EXPECT_FALSE(FindLand(maps, "Online Maps/mpm_9p_1.map").has_value());
+	EXPECT_FALSE(FindLand(maps, "Playgrounds/TwoGods.txt").has_value());
 	EXPECT_EQ(LandInfoText(0), "HELP_TEXT_DYK_RULES_02");
 	EXPECT_EQ(LandInfoText(2), "HELP_TEXT_DYK_RULES_11");
 	EXPECT_FALSE(LandInfoText(3).has_value());
