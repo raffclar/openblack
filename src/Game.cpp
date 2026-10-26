@@ -4409,6 +4409,11 @@ Game::RunStart Game::StartRun() noexcept
 		{
 			skirmishLand = AskForSkirmishLand();
 			skirmishBack = !skirmishLand.has_value();
+			// The window closed, or the run reached its number of frames, while the box was up
+			if (_quitRequested)
+			{
+				return RunStart::Done;
+			}
 		}
 		// With no player profile, the -MULTIPLAYER switch starts a new game as with no switch. In a browser, the front
 		// end opens after the new player's box.

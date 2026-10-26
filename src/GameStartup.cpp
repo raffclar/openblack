@@ -382,8 +382,18 @@ std::optional<std::filesystem::path> Game::AskForSkirmishLand()
 	gui::menu_backdrop::Fade fade;
 	auto last = Milliseconds();
 	std::optional<std::filesystem::path> picked;
+	// A run with a number of frames (-n) stops after that number of frames, also in the box
+	const auto frameLimit = Locator::config::value().numFramesToSimulate;
+	uint32_t boxFrames = 0;
 	while (!gui::menu_backdrop::FadeOver(fade) && !_quitRequested)
 	{
+		if (frameLimit > 0 && ++boxFrames > frameLimit)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "The -SKIRMISH switch: the run stops in the skirmish box after {} frames",
+			                   frameLimit);
+			RequestQuit();
+			break;
+		}
 		const auto now = Milliseconds();
 		const auto frame = static_cast<int>(now - last);
 		last = now;
