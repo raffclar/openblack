@@ -212,7 +212,8 @@ std::optional<glm::vec3> DrawnHandPoint()
 		return std::nullopt;
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// The hand of the player of this computer, which holds the rope
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
 	if (transform == nullptr || transform->position == glm::vec3(0.0f))
 	{
@@ -1642,7 +1643,7 @@ void LeashSystem::Update(float seconds)
 		    }
 	    });
 	// Untied while the hand held its rope, the hand lets go of it
-	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(k_LocalPlayer) == nullptr)
+	if (_ropeHand == leash_snap::Hand::Holding && HeldLeash(OwnPlayer()) == nullptr)
 	{
 		_ropeHand = leash_snap::Hand::Away;
 	}
@@ -1686,7 +1687,7 @@ CreatureLeashRope* LeashSystem::DrawnRope(PlayerNames player)
 
 std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const RopeFrame& frame)
 {
-	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand == leash_snap::Hand::Holding)
 	{
 		return std::nullopt;
 	}
@@ -1717,7 +1718,7 @@ std::optional<float> LeashSystem::RopeUnderCursor(PlayerNames player, const Rope
 
 void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
 {
-	if (player != k_LocalPlayer || _ropeHand == leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand == leash_snap::Hand::Holding)
 	{
 		return;
 	}
@@ -1726,13 +1727,13 @@ void LeashSystem::SetRopeHovered(PlayerNames player, bool hovered)
 
 leash_snap::Hand LeashSystem::RopeHand(PlayerNames player) const
 {
-	return player == k_LocalPlayer ? _ropeHand : leash_snap::Hand::Away;
+	return player == OwnPlayer() ? _ropeHand : leash_snap::Hand::Away;
 }
 
 bool LeashSystem::PressRope(PlayerNames player)
 {
 	const auto hand = DrawnHandPoint();
-	auto* worn = player == k_LocalPlayer && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
+	auto* worn = player == OwnPlayer() && _ropeHand == leash_snap::Hand::Over ? TiedLeash(player) : nullptr;
 	auto* drawn = worn != nullptr ? DrawnRope(player) : nullptr;
 	if (drawn == nullptr || !hand.has_value())
 	{
@@ -1755,7 +1756,7 @@ bool LeashSystem::PressRope(PlayerNames player)
 
 void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place)
 {
-	if (player != k_LocalPlayer || _ropeHand != leash_snap::Hand::Holding)
+	if (player != OwnPlayer() || _ropeHand != leash_snap::Hand::Holding)
 	{
 		return;
 	}
@@ -1785,10 +1786,10 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	// TODO(multiplayer): the frame changes the lengths of the leash here; a network game needs a command for it
 	worn->slackLength = lengths.slack;
 	worn->maxLength = lengths.max;
-	// And the creature goes to the place under the hand
+	// And the creature goes to the place under the hand. The order is a command, which every computer does at a turn.
 	if (place.has_value())
 	{
-		OrderAt(player, *place);
+		SendOrder({.kind = player_commands::LeashOrder::Kind::AtPlace, .place = *place});
 	}
 }
 
