@@ -1,4 +1,5 @@
-[
+{"camera": {"focus": [1987.71, 1958.34], "yaw": 30, "pitch": 40, "distance": 35}, "expect": {"scoops": 1, "throws": 1},
+"events": [
 {"frame": 10, "event": {"kind": "pointer", "timing": "mouse", "position": [644, 519]}},
 {"frame": 11, "event": {"kind": "pointer", "timing": "mouse", "position": [649, 526]}},
 {"frame": 12, "event": {"kind": "pointer", "timing": "mouse", "position": [654, 533]}},
@@ -8879,4 +8880,4 @@
 {"frame": 21777, "event": {"kind": "pointer", "timing": "mouse", "position": [739, 590]}},
 {"frame": 21778, "event": {"kind": "pointer", "timing": "mouse", "position": [740, 595]}},
 {"frame": 21779, "event": {"kind": "pointer", "timing": "mouse", "position": [740, 600]}}
-]
+]}

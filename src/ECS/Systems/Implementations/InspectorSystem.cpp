@@ -25,6 +25,8 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Camera/Camera.h"
+#include "Camera/CameraModel.h"
 #include "Common/DeveloperToolsGate.h"
 #include "Common/RandomNumberManager.h"
 #include "Debug/TestbedScenarioRegistry.h"
@@ -310,7 +312,9 @@ void InspectorSystem::EndLoading()
 	RequestQueuedScenario();
 	// The land has started, and none of its frames has run yet
 	_game->Loaded();
-	// A tool's camera stands where the recorded input expects it before the first frame of the land, once a land is there
+	// A tool's camera stands where the recorded input expects it before the first frame of the land, once a land is there.
+	// It takes the place of the start view: the flight of a new game to the player's temple does not start, so the pixels
+	// of the input fall on the same things at any start.
 	if (_cameraOnLoad.has_value() && Locator::terrainSystem::has_value() && Locator::terrainSystem::value().IsLoaded())
 	{
 		std::string error;
@@ -320,6 +324,10 @@ void InspectorSystem::EndLoading()
 		if (pose.has_value())
 		{
 			error = _controls->camera.Set(*pose);
+		}
+		if (error.empty() && pose.has_value() && Locator::camera::has_value())
+		{
+			Locator::camera::value().GetModel().StopFlight();
 		}
 		if (!error.empty() || !now.has_value())
 		{
