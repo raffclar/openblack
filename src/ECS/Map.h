@@ -66,6 +66,8 @@ public:
 	/// Once a game turn, and after the turn's movement: whatever moved to another cell goes into it, as the game moves
 	/// things into their new cells
 	virtual void Sync() = 0;
+	/// Files the things made since the last look, in the order they were made
+	virtual void FileMade() {}
 	/// A thing moved by a hand, a tool or a miracle goes into the cells it now stands in
 	virtual void Refile(entt::entity entity) = 0;
 	/// After the load of a saved world: each thing goes back into the cells that it keeps, in the order of the things

@@ -112,6 +112,7 @@
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/FrameStatsLog.h"
+#include "Debug/FrameWriteGuard.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Archetypes/SkyArchetype.h"
@@ -2212,7 +2213,22 @@ bool Game::Update() noexcept
 {
 	// The frame's steps go in the game's order, because many systems depend on it (see game_frame::k_Frame)
 	FrameState frame;
-	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) { return PlayFrameStep(step, frame); }))
+	if (!game_frame::PlayFrame([this, &frame](game_frame::Step step) {
+		    // The guard of a tool's run looks at each step but the turns, which alone may change the synced world
+		    if (!_frameGuard || step == game_frame::Step::Turns ||
+		        Locator::time::value().GetTurn() < _simulation->frameGuardFrom)
+		    {
+			    if (_frameGuard)
+			    {
+				    _frameGuard->Forget();
+			    }
+			    return PlayFrameStep(step, frame);
+		    }
+		    _frameGuard->Before();
+		    const bool played = PlayFrameStep(step, frame);
+		    _frameGuard->After(game_frame::Name(step), Locator::time::value().GetTurn());
+		    return played;
+	    }))
 	{
 		return false;
 	}
@@ -2296,6 +2312,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		break;
 	case Step::Turns:
 	{
+		// A scenario asked for is laid out on a fresh testbed before the turns, as a load is
+		if (_scenarioStager && _scenarioRequest.has_value())
+		{
+			_scenarioStager();
+		}
 		return PlayTurns();
 	}
 	case Step::SendCommands:
@@ -2818,14 +2839,6 @@ void Game::UpdateScreenMarks()
 	UpdateLearningMarks(milliseconds);
 	// The numbers floating up from things rise and fade
 	UpdateFloatingNumbers(milliseconds * 0.001f);
-}
-
-void Game::CatchUpFrame()
-{
-	// The frame steps that change the world, as the frame after a turn does them, with no draw
-	Locator::time::value().CatchUpFrame();
-	simulation::PlayCreaturePoses();
-	simulation::PlayFrameEffects(*this);
 }
 
 void Game::UpdateFrameEffects()
@@ -3962,6 +3975,11 @@ void Game::StartSimulationLogs()
 		}
 	}
 #endif
+	if (_simulation->frameGuard != sim_run::HashDetail::None)
+	{
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
+	}
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);
