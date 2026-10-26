@@ -52,8 +52,9 @@ struct NetworkSettings
 	/// The keys that sign the tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file with the same
 	/// JSON
 	std::string ticketKeys;
-	/// The game starts when this many gods joined and are ready
-	uint32_t godsToStart {1};
+	/// The fewest gods with a player that start the game. The game starts when each god in the room is ready and the room
+	/// has this many gods at least. The room has a slot for each citadel of the land, which can be more.
+	uint32_t minGods {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room

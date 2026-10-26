@@ -81,7 +81,8 @@ int main(int argc, char* argv[])
 		("tls-key", "The PEM file of the key of --tls-cert.", cxxopts::value<std::string>())
 		("server-id", "The id of the server at the lobby, which the join tickets name.", cxxopts::value<std::string>())
 		("ticket-keys", "The keys that sign the join tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file of the same JSON.", cxxopts::value<std::string>())
-		("gods", "The game starts when this many gods joined and are ready.", cxxopts::value<uint32_t>()->default_value("1"))
+		("min-gods", "The fewest gods with a player that start the game. The game starts when each god in the room is ready and the room has this many gods at least. The room has a slot for each citadel of the land.", cxxopts::value<uint32_t>()->default_value("1"))
+		("gods", "The old name of --min-gods. --min-gods comes first when the command line has both.", cxxopts::value<uint32_t>())
 		("lobby-api", "The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room every 5 seconds, so that the lobby lists it.", cxxopts::value<std::string>())
 		("client-cert", "The PEM file of the client certificate that the server shows to the lobby (mutual TLS).", cxxopts::value<std::string>())
 		("client-key", "The PEM file of the key of --client-cert.", cxxopts::value<std::string>())
@@ -212,7 +213,8 @@ int main(int argc, char* argv[])
 			{
 				network.ticketKeys = result["ticket-keys"].as<std::string>();
 			}
-			network.godsToStart = result["gods"].as<uint32_t>();
+			network.minGods = result.count("min-gods") == 0 && result.count("gods") != 0 ? result["gods"].as<uint32_t>()
+			                                                                             : result["min-gods"].as<uint32_t>();
 			network.comeBackSeconds = result["come-back-seconds"].as<uint32_t>();
 			if (result.count("lobby-api") != 0)
 			{

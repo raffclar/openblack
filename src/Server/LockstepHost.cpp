@@ -10,6 +10,8 @@
 #include "LockstepHost.h"
 
 #include <algorithm>
+#include <limits>
+#include <ranges>
 #include <utility>
 
 #include <fmt/format.h>
@@ -36,6 +38,23 @@ void Log(spdlog::level::level_enum level, std::string_view text)
 }
 
 } // namespace
+
+uint8_t GodSlotsOfLand(std::span<const bool> slotHasCitadel) noexcept
+{
+	const auto reversed = slotHasCitadel | std::views::reverse;
+	const auto last = std::ranges::find(reversed, true);
+	if (last == reversed.end())
+	{
+		return k_DefaultGodSlots;
+	}
+	const auto slots = static_cast<size_t>(std::ranges::distance(last, reversed.end()));
+	return static_cast<uint8_t>(std::min<size_t>(slots, std::numeric_limits<uint8_t>::max()));
+}
+
+bool RoomStarts(size_t godsInRoom, size_t readyGods, uint32_t minGods) noexcept
+{
+	return godsInRoom > 0 && readyGods == godsInRoom && readyGods >= minGods;
+}
 
 LockstepHost::LockstepHost(WebSocketServerInterface& sockets, CheckTicket checkTicket, Clock clock, MakeSecret makeSecret,
                            HostSettings settings)
@@ -488,9 +507,10 @@ void LockstepHost::Update()
 	const auto now = _clock();
 	if (!_started)
 	{
+		const auto inRoom = std::ranges::count(_seats, SeatState::Taken, &Seat::state);
 		const auto ready =
 		    std::ranges::count_if(_seats, [](const Seat& seat) { return seat.state == SeatState::Taken && seat.ready; });
-		if (!Starting() && ready > 0 && static_cast<uint32_t>(ready) >= _settings.godsToStart)
+		if (!Starting() && RoomStarts(static_cast<size_t>(inRoom), static_cast<size_t>(ready), _settings.minGods))
 		{
 			QueryLands();
 		}
