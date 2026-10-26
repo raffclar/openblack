@@ -63,8 +63,6 @@ LANDS = {
     "mpm_3p_1": ["--land", "Online Maps/mpm_3p_1.map"],
     "mpm_4p_1": ["--land", "Online Maps/mpm_4p_1.map"],
     "ring32": ["--gods-ring-map"],
-    # The flat testbed, for the self-test
-    "testbed": ["--testbed"],
 }
 # The lands of a night's soak. "Death Comes To Those That Wait" joins after the script fix of the plan (package S2).
 NIGHT_LANDS = ["TwoGods", "ThreeGods", "FourGods", "IslandWars", "Firestorm", "mpm_2p_1", "mpm_3p_1", "mpm_4p_1", "ring32"]
@@ -475,8 +473,8 @@ def games_of(options, parser=None):
 def self_test(options):
     """Plays a small game whose second client parts on purpose and stays apart, and checks the runner's report: the status
     part, the turn, and the rows. This proves that the harness finds parts. Gives the exit code."""
-    part_turn = 40
-    game = Game("testbed", 1, 0, "all-but-one", 0, 160)
+    part_turn = 100
+    game = Game("TwoGods", 1, 0, "all-but-one", 0, 300)
     day = os.path.join(options.out, options.date, "self-test")
     os.makedirs(day, exist_ok=True)
     row = play(game, day, options, guard=None if options.no_guard else Guard(day), inject=part_turn)

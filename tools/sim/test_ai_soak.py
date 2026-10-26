@@ -269,7 +269,7 @@ class Playing(unittest.TestCase):
         self.assertEqual(len(calls), 1)
 
     def test_the_injected_part_adds_a_second_god_that_stays_apart(self):
-        game = ai_soak.Game("testbed", 1, 0, "all-but-one", 0, 160)
+        game = ai_soak.Game("TwoGods", 1, 0, "all-but-one", 0, 160)
         with tempfile.TemporaryDirectory() as day:
             runner, calls = self.runner_of([PART, PART])
             ai_soak.play(game, day, options(), runner=runner, inject=40)

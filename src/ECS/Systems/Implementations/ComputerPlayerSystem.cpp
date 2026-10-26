@@ -160,7 +160,8 @@ public:
 
 	float GameFloatRand(float most) override { return Locator::gameRandom::value().GameFloatRand(most); }
 
-	void SetPersonality(PlayerNames player, std::string_view need, float weight) override
+	void SetPersonality([[maybe_unused]] PlayerNames player, [[maybe_unused]] std::string_view need,
+	                    [[maybe_unused]] float weight) override
 	{
 		// The weights of the decision tree have no place in the game yet: a god keeps the weight in the log until the
 		// tree reads it

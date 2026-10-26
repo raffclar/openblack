@@ -304,6 +304,7 @@ def lines_with(log, words):
 
 SESSION_COUNTS = re.compile(r"Network game: (\d+) turns compared with the server, (\d+) the same")
 RESUMES = re.compile(r"Back in the game at turn")
+PARTS_AT = re.compile(r"parts from the server's world at turn (\d+)")
 
 
 def session_counts(log):
@@ -1082,12 +1083,18 @@ def main():
         client_turns = record_checksums(os.path.join(client_dir, "record.jsonl"))
         compared = [turn for turn in sorted(client_turns) if turn in server_turns]
         different = [turn for turn in compared if client_turns[turn] != server_turns[turn]]
+        # The record keeps few turns of a client that catches up or resynchronises: the session of the client names the
+        # turn at which its world parted too
+        session_parts = [int(match.group(1)) for line in lines_with(os.path.join(client_dir, "client.log"),
+                                                                    ["parts from the server's world at turn"])
+                         if (match := PARTS_AT.search(line))]
+        different = sorted(set(different) | set(session_parts))
         parts = parted_parts(os.path.join(server_dir, "record.jsonl"), os.path.join(client_dir, "record.jsonl"),
                              different[0]) if different and options.hash_parts else None
         # A client that catches up does several turns in a frame, and its record keeps only the last of them; the
         # session compares every turn and writes its counts to the log
         counts = session_counts(os.path.join(client_dir, "client.log"))
-        parted_on_purpose = index == 1 and options.part_second_at is not None
+        parted_on_purpose = index == 1 and options.part_second_at is not None and not options.part_second_again
         recovered = lines_with(os.path.join(client_dir, "client.log"), ["The world goes on from the server's world"])
         if parted_on_purpose and recovered:
             back_at = int(re.search(r"of turn (\d+)", recovered[-1]).group(1))
@@ -1110,7 +1117,10 @@ def main():
             expected = stopped_after
             if client_stopped_after != stopped_after or max(client_turns, default=0) > stopped_after + 1:
                 different = different + [-1]
-        same = (not different and len(compared) >= expected // 2 and counts is not None
+        # An observer that loaded the world of a running game catches up in frames of several turns, and the record keeps
+        # the last turn of each frame: its session counts every turn
+        enough = counts is not None and counts[0] >= expected // 2 if is_observer else len(compared) >= expected // 2
+        same = (not different and enough and counts is not None
                 and (counts[0] - counts[1] <= (counts[2] if parted_on_purpose else 0))
                 and (left or counts[0] >= expected - 100) and bool(recovered or not parted_on_purpose))
         all_same = all_same and same
