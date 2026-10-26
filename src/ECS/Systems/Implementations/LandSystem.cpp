@@ -873,7 +873,12 @@ void LandSystem::StartPlayerAtProfileAlignment()
 	{
 		return;
 	}
-	SetPlayerAlignmentFromProfile();
+	// A network game does not use the profile of this computer, so that each computer starts the same world.
+	// TODO(raffclar): each god of a network game starts at the alignment that its player sends with the start data.
+	if (profile_alignment::StartsFromOwnProfile(Locator::time::value().IsNetworkGame()))
+	{
+		SetPlayerAlignmentFromProfile();
+	}
 	// The players' statistics note the alignments they start the game at, and the towns on the land
 	player_statistics::GameStarts(Locator::entitiesRegistry::value());
 }
@@ -893,7 +898,7 @@ void LandSystem::KeepAlignmentInProfile()
 {
 	// The player's alignment is kept with their profile every so often as they play, never the testbed's
 	if (_landPath.empty() || _landPath == k_TestbedLandPath || !Locator::playerProfileSystem::has_value() ||
-	    !Locator::playerSystem::has_value())
+	    !Locator::playerSystem::has_value() || !profile_alignment::KeptInOwnProfile(Locator::time::value().IsNetworkGame()))
 	{
 		return;
 	}
