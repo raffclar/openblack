@@ -8066,7 +8066,8 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 	constexpr bool k_CanReadBack = true;
 	// Vulkan releases the window's buffers while the window is minimised. OpenGL on the desktop reads the window's own
 	// pixels, which have no defined value where other windows cover the window. This often occurs in background runs.
-	// The other renderers keep the whole frame in the window's buffers.
+	// In a browser, WebGPU gets a new canvas texture for each frame and releases it after it shows the frame. The other
+	// renderers keep the whole frame in the window's buffers.
 	auto buffers = graphics::WindowBuffers::Kept;
 	switch (bgfx::getRendererType())
 	{
@@ -8075,6 +8076,9 @@ void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 		break;
 	case bgfx::RendererType::OpenGL:
 		buffers = graphics::WindowBuffers::UncoveredOnly;
+		break;
+	case bgfx::RendererType::WebGPU:
+		buffers = graphics::WindowBuffers::ReleasedAfterPresent;
 		break;
 	default:
 		break;
