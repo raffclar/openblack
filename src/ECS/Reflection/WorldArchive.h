@@ -173,6 +173,8 @@ struct NamedSection
 {
 	std::string name;
 	std::vector<uint8_t> bytes;
+	/// For tools: where each value that the system saved ends, when the save kept them
+	std::vector<size_t> valueEnds;
 
 	bool operator==(const NamedSection&) const = default;
 };

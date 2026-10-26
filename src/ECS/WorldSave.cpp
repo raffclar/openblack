@@ -414,7 +414,7 @@ void LogWorldReport(const reflection::WorldSaveReport& report)
 
 } // namespace
 
-std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection)
+std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt::meta_ctx& reflection, bool valueEnds)
 {
 	std::vector<reflection::NamedSection> sections;
 	for (const auto& [name, find] : k_SavedSystems)
@@ -422,9 +422,13 @@ std::vector<reflection::NamedSection> world_save::SavedSystemSections(const entt
 		if (const auto* system = find(); system != nullptr)
 		{
 			reflection::BinaryWriter out(reflection);
+			if (valueEnds)
+			{
+				out.KeepValueEnds();
+			}
 			out.SetPlace(name, "");
 			system->SaveState(out);
-			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes())});
+			sections.push_back({.name = std::string(name), .bytes = std::move(out.Bytes()), .valueEnds = out.ValueEnds()});
 		}
 	}
 	return sections;
