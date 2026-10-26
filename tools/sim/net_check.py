@@ -550,6 +550,8 @@ def main():
     parser.add_argument("--trace-draws", action="store_true",
                         help="the server and the clients write a draw trace, and the summary shows the first draw where "
                              "each client is not the same as the server")
+    parser.add_argument("--client-arg", action="append", default=[],
+                        help="one more switch for each client, such as --client-arg=--show-ping (repeat for more)")
     parser.add_argument("--hash-fields", action="store_true", help="as --hash-parts, with the hash of each field")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
@@ -630,6 +632,7 @@ def main():
                        "--inspect-lock-input", "-n", "4000000000", "--background",
                        "-l", os.path.join(client_dir, "client.log"),
                        "--join", url, "--join-ticket", ticket, "--join-test-ca", certs["ca.pem"]]
+            command += options.client_arg
             if options.trace_draws:
                 command += ["--sim-trace-draws", os.path.join(client_dir, "draws.tsv")]
             if options.row_dump:
