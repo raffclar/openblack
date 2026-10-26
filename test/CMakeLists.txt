@@ -1804,3 +1804,4 @@ openblack_setup_and_add_test(test_camera_input_steps camera/test_camera_input_st
 openblack_setup_and_add_test(
   test_creature_tattoo_change test_creature_tattoo_change.cpp
 )
+openblack_setup_and_add_test(test_entity_storage test_entity_storage.cpp)

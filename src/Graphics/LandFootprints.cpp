@@ -27,6 +27,7 @@
 #include "ECS/Components/MapCellResident.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Stream.h"
+#include "ECS/EntityStorage.h"
 #include "ECS/LandFootprintRules.h"
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
@@ -169,6 +170,12 @@ void LandFootprints::FindChangedThings()
 	registry.Each<const MapCellResident, const MeshComponent, const Transform>(
 	    [&](entt::entity entity, const MapCellResident& resident, const MeshComponent& mesh, const Transform& transform) {
 		    const auto* footprint = FootprintOf(mesh.id);
+		    // The registry can give the number of a removed thing to a new thing. The removed thing is not on the map now,
+		    // so its blocks must get their footprints again.
+		    if (const auto older = ecs::entity_storage::TakeOlder(_known, entity))
+		    {
+			    MarkBlocks(older->lowBlock, older->highBlock);
+		    }
 		    if (_known.contains(entity))
 		    {
 			    auto& known = _known.get(entity);
