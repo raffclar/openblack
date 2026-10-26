@@ -1351,6 +1351,7 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 	namespace object_detail = openblack::ecs::object_detail;
 	const auto& drawn = Locator::drawnRegistry::value();
 	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto view = camera != nullptr ? std::optional(ViewPoint::Of(*camera)) : std::nullopt;
 	const float modelDetail = Locator::config::value().detail.modelDetail;
 	const auto& meshes = entt::locator<resources::ResourcesInterface>::value().GetMeshes();
 	// A thing of the drawn registry has only its model, its place and its look: the systems of the land know nothing of
@@ -1366,13 +1367,13 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 		auto level = graphics::mesh_detail::Mesh::High;
 		bool gone = false;
 		// It is drawn in less detail the further off it is, fades out, then is not drawn, as a thing of the land is
-		if (camera != nullptr && object_detail::Banded(drawn, entity) && object_detail::BandedNow(drawn, entity))
+		if (view.has_value() && object_detail::Banded(drawn, entity) && object_detail::BandedNow(drawn, entity))
 		{
 			if (const auto& box = MeshBox(mesh.id); box.has_value())
 			{
 				const auto choice = ChooseDetail(
 				    *box, object_detail::Importance(drawn, entity), modelMatrix, transform.scale.x,
-				    [&drawn, entity] { return object_detail::Disappears(drawn, entity, false); }, *camera, modelDetail);
+				    [&drawn, entity] { return object_detail::Disappears(drawn, entity, false); }, *view, modelDetail);
 				if (!choice.mesh.has_value())
 				{
 					gone = true;
