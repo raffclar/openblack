@@ -3656,6 +3656,8 @@ void Runner::Give(const Command& command)
 	case Kind::QuickSave:
 	case Kind::ContinueGame:
 	case Kind::PlayLogoEffect:
+	case Kind::RunScript:
+	case Kind::CallNative:
 	case Kind::StopScript:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:

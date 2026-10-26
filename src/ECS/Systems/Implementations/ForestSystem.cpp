@@ -626,7 +626,7 @@ void ForestSystem::GrowForests()
 		if (pick < grown.size())
 		{
 			const auto parent = grown[pick];
-			const auto added = PlantBeside(parent);
+			[[maybe_unused]] const auto added = PlantBeside(parent);
 			SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Forest: forest {} spread from tree #{} on turn {}: {}", turns.id,
 			                    entt::to_integral(parent), turn, added.has_value() ? "planted" : "no room");
 		}

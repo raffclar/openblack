@@ -1493,9 +1493,14 @@ bool StartCatch(entt::entity creature, CreatureObjectAction& action, const Creat
 	const auto flight = action.target.has_value() ? FlightOf(*action.target) : std::nullopt;
 	const bool hasAnimations = std::ranges::all_of(creature_catch::k_CatchAnimations,
 	                                               [creature](size_t clip) { return DurationOf(creature, clip) > 0.0f; });
+	if (!hasAnimations || !flight.has_value())
+	{
+		Fail(action, "it can't catch that");
+		return false;
+	}
 	// Its speed is weighed across and up or down, not along the land's other axis, as the game does
-	if (!hasAnimations || !flight.has_value() ||
-	    flight->second.y * flight->second.y + flight->second.x * flight->second.x < creature_catch::k_LeastSpeedSquared)
+	const glm::vec3 velocity = flight->second;
+	if (velocity.y * velocity.y + velocity.x * velocity.x < creature_catch::k_LeastSpeedSquared)
 	{
 		Fail(action, "it can't catch that");
 		return false;

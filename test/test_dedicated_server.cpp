@@ -13,16 +13,22 @@
 #include <atomic>
 #include <chrono>
 #include <filesystem>
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
 
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Server/DedicatedServer.h"
 #include "TestTempFolder.h"
 
 using openblack::server::ChecksumLine;
+using openblack::server::k_RoomSeed;
 using openblack::server::ParseChecksumLine;
+using openblack::server::RoomStart;
+using openblack::server::RoomStartFor;
+using openblack::server::RoomStartLine;
 using openblack::server::ServerConfig;
 using openblack::server::ServerSettings;
 using openblack::server::SimulationFor;
@@ -78,6 +84,21 @@ TEST(DedicatedServer, AFastRunDoesNotWaitAndARunWithNoTurnsHasNoEnd)
 	EXPECT_TRUE(simulation.settings.fast);
 	EXPECT_FALSE(simulation.settings.paceToWallClock);
 	EXPECT_FALSE(simulation.settings.untilTurn.has_value());
+}
+
+TEST(DedicatedServer, ARoomWithNoSeedOfAToolReadsTheDateFromTheClockOfTheComputer)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data"});
+	EXPECT_EQ(start, (RoomStart {.seed = k_RoomSeed, .pinnedDate = std::nullopt}));
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 1, date from the clock of the computer");
+}
+
+TEST(DedicatedServer, TheSeedOfAToolAlsoPinsTheDate)
+{
+	const auto start = RoomStartFor(ServerSettings {.gamePath = "data", .seed = 7});
+	EXPECT_EQ(start.seed, 7u);
+	EXPECT_EQ(start.pinnedDate, openblack::ecs::systems::TimeSystemInterface::k_DeterministicDate);
+	EXPECT_EQ(RoomStartLine(start), "The seed of the world: 7 (from a tool), date pinned");
 }
 
 TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)

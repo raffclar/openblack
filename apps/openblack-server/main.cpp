@@ -60,7 +60,7 @@ int main(int argc, char* argv[])
 		("scenario", "Tools: start on the testbed and play the testbed scenario of this id, as the game's --scenario.", cxxopts::value<std::string>())
 		("gods-ring-map", "The network map for 32 gods in place of a land.")
 		("skip-opening", "How the new game on the first land starts, as the game's --skip-opening.", cxxopts::value<std::string>()->default_value("cow"))
-		("seed", "The seed of every random number of the world.", cxxopts::value<uint32_t>()->default_value("1"))
+		("seed", "Tools: the seed of every random number of the world, which also pins the date of the world. Without it, the world starts from the seed of a room and reads the date from the clock of the computer.", cxxopts::value<uint32_t>())
 		("n,turns", "Stop when the world gets to this turn. With none, the server runs until a signal stops it.", cxxopts::value<uint32_t>())
 		("frame-ms", "The game time of each frame in milliseconds. A turn is 100 ms.", cxxopts::value<double>()->default_value("100"))
 		("fast", "Tools: play the frames one after the other with no wait for the wall clock.")
@@ -143,7 +143,10 @@ int main(int argc, char* argv[])
 		settings.openingName = result["skip-opening"].as<std::string>();
 		settings.opening = openblack::new_game_choice::ParseNewGameStart(settings.openingName);
 		settings.godsRingMap = result.count("gods-ring-map") != 0;
-		settings.seed = result["seed"].as<uint32_t>();
+		if (result.count("seed") != 0)
+		{
+			settings.seed = result["seed"].as<uint32_t>();
+		}
 		if (result.count("turns") != 0)
 		{
 			settings.turns = result["turns"].as<uint32_t>();

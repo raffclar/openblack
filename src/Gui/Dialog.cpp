@@ -193,7 +193,7 @@ bool Dialog::MouseUp(glm::ivec2 point)
 	}
 	if (auto* picture = dynamic_cast<SymbolPicture*>(pressed); picture != nullptr && released != pressed)
 	{
-		picture->Release();
+		picture->CloseRing();
 	}
 	if (pressed == nullptr || released != pressed)
 	{
@@ -338,7 +338,7 @@ void Dialog::Reset()
 	        std::ranges::find_if(_controls, [](const auto& c) { return dynamic_cast<SymbolPicture*>(c.get()) != nullptr; });
 	    it != _controls.end())
 	{
-		static_cast<SymbolPicture&>(**it).Release();
+		static_cast<SymbolPicture&>(**it).CloseRing();
 	}
 }
 
