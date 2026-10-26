@@ -10549,6 +10549,7 @@ std::vector<Scenario> Build()
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
 	AddComputerPlayerScenarios(all);
+	AddGameEndScenarios(all);
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
