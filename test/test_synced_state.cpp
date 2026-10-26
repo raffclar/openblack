@@ -151,6 +151,111 @@ TEST(SyncedState, TheDustOfARewardChestIsNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
 }
 
+TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
+{
+	// The frames draw a chest between its turns, lift the lid of an opened chest and fade its dust
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "drawn"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "clipPlace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Reward", "dustMilliseconds"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "RewardSeed", "spin"));
+	// The turns move its clock and its state
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
+TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
+{
+	// Only the player of this computer goes into the temple, and the temple makes its rooms for that player
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "TempleInteriorPart";
+	}));
+}
+
+TEST(SyncedState, TheCopyOfTheCreatureInAFilmIsNotSynced)
+{
+	// The film shows the copy on this computer only, while the game waits
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "FilmCreature";
+	}));
+}
+
+TEST(SyncedState, TheFramesMoveTheGlowsOnACreatureButNotTheirPowers)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "motion"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "placed"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "slidePace"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "turnPace"));
+	// The turns set the powers and the scales
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CreatureHandGlows", "glows"));
+}
+
+TEST(SyncedState, TheSnowOnTheThingsThatTheFramesDrawIsNotSynced)
+{
+	EXPECT_TRUE(synced_state::IsPresentationOnly(synced_state::PresentationParts(), "SnowLevel", "level"));
+}
+
+TEST(SyncedState, ThePicturesOfTheChallengesComeFromThisComputer)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "full"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "small"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "waiting"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "taken"));
+	// The turns count the pictures that the scripts ask for
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "ChallengePicture", "asked"));
+}
+
+TEST(SyncedState, TheCopyOfTheCreatureInTheCaveOfTheTempleIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "CaveCreature";
+	}));
+}
+
+TEST(SyncedState, TheStaticOfAFizzingCreatureSlidesInTheFramesOnly)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureSpells", "staticScroll"));
+}
+
+TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
+}
+
+TEST(SyncedState, TheMarksOfTheDisciplesAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "DiscipleMark";
+	}));
+}
+
+TEST(SyncedState, TheStonesOnAPlinthAreNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "PlinthStone";
+	}));
+}
+
+TEST(SyncedState, TheSeeThroughCopyOfATotemIsNotSynced)
+{
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghostIcon"));
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "SeeThrough";
+	}));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;

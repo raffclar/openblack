@@ -163,6 +163,39 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // draw and the script camera read.
     {.component = "*", .field = "", .marker = "IntroHand"},
     {.component = "*", .field = "", .marker = "BoatFilmPart"},
+    // The rooms of the temple, their lights and the mist of the creature cave are not a part of the land. The temple
+    // makes them for the player of this computer when the player goes into it, and removes them when the player leaves.
+    {.component = "*", .field = "", .marker = "TempleInteriorPart"},
+    // The copy of the creature in the creature cave of the temple. The temple makes it for the player of this computer.
+    {.component = "*", .field = "", .marker = "CaveCreature"},
+    // The copy of the creature in the film of a falling spell. The film shows it while the game waits.
+    {.component = "*", .field = "", .marker = "FilmCreature"},
+    // The glows on a creature's body turn and slide in the frames, and the frames place them where the body is drawn.
+    // The turns set their powers and scales.
+    {.component = "CreatureHandGlows", .field = "slidePace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "turnPace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "placed", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "motion", .marker = ""},
+    // The snow on a thing comes and goes in the frames that draw the thing. Only the draw reads it.
+    {.component = "SnowLevel", .field = "", .marker = ""},
+    // The picture of a challenge comes from the screen of this computer, or from its profile's files, in the frames. The
+    // turns only count the pictures that the scripts ask for.
+    {.component = "ChallengePicture", .field = "full", .marker = ""},
+    {.component = "ChallengePicture", .field = "small", .marker = ""},
+    {.component = "ChallengePicture", .field = "waiting", .marker = ""},
+    {.component = "ChallengePicture", .field = "taken", .marker = ""},
+    // The see-through copy of a town totem and of its icon. The frames make, move and remove it.
+    {.component = "*", .field = "", .marker = "SeeThrough"},
+    {.component = "VillageTotem", .field = "ghost", .marker = ""},
+    {.component = "VillageTotem", .field = "ghostIcon", .marker = ""},
+    // The stones on a plinth. The frames make and place them as the land draws the plinth.
+    {.component = "*", .field = "", .marker = "PlinthStone"},
+    // The glows and the symbols of the disciples. The frames make, move and remove them.
+    {.component = "*", .field = "", .marker = "DiscipleMark"},
+    // The draw gives the light of the frame to a thing in the hand, and takes it away when the hand lets go
+    {.component = "HeldLight", .field = "", .marker = ""},
+    // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.
+    {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.
@@ -360,9 +393,17 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
     {.component = "SoundTag", .field = "emitter", .marker = ""},
-    // The dust of a reward chest: the C library's random numbers place it, and the frames fade it. Only the draw reads it.
+    // The frames draw a reward chest that falls between its last two turns. The turns go by its Transform and clock.
+    {.component = "Reward", .field = "drawn", .marker = ""},
+    // The lid of an opened chest lifts in the frames that draw it. The C library's random numbers place its dust, and the
+    // frames fade it.
+    {.component = "Reward", .field = "clipPlace", .marker = ""},
     {.component = "Reward", .field = "dust", .marker = ""},
     {.component = "Reward", .field = "dustMilliseconds", .marker = ""},
+    // The miracle above an opened chest spins and pulses in the frames
+    {.component = "RewardSeed", .field = "spin", .marker = ""},
+    {.component = "RewardSeed", .field = "phialFrame", .marker = ""},
+    {.component = "RewardSeed", .field = "phialPhase", .marker = ""},
 });
 
 } // namespace

@@ -849,7 +849,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::Rewards:
-		// A reward chest that fell to the ground goes into the map's cells
+		// A reward chest that fell to the ground goes into the map's cells, and the chests from the sky fall
 		if (Locator::rewardSystem::has_value())
 		{
 			Locator::rewardSystem::value().ProcessTurn();

@@ -15,6 +15,7 @@
 #include "ECS/Components/CreatureObjectAction.h"
 #include "ECS/Components/Firefly.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Registry.h"
 
@@ -60,6 +61,11 @@ components::Transform drawn_place::DrawnTransformOf(const Registry& registry, en
 	if (const auto* shark = registry.TryGet<const components::Shark>(entity); shark != nullptr && shark->drawn.has_value())
 	{
 		return {.position = shark->drawn->position, .rotation = shark->drawn->rotation, .scale = transform.scale};
+	}
+	// A reward chest that falls from the sky is drawn between the places of its last two turns
+	if (const auto* chest = registry.TryGet<const components::Reward>(entity); chest != nullptr && chest->drawn.has_value())
+	{
+		return {.position = chest->drawn->position, .rotation = chest->drawn->rotation, .scale = transform.scale};
 	}
 	// A firefly out of hiding drifts about its place, where the frames last drew it
 	if (const auto* firefly = registry.TryGet<const components::Firefly>(entity); firefly != nullptr)

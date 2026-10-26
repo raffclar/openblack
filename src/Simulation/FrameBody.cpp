@@ -138,10 +138,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::vortexSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	}
-	// The reward chests from the sky fall and thump down, and their dust fades
+	// The frame draws the reward chests from the sky between their turns, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
-		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
+		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                      clock.GetTurnFraction());
 	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())

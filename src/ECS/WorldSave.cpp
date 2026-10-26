@@ -274,6 +274,7 @@ void ForgetSavedSounds(Registry& registry)
 		    }
 		    // The loaded creature has no glows before it gets its powers
 		    glows.glows = {};
+		    glows.motion = {};
 		    creatures.emplace_back(entity, powers);
 	    });
 	for (const auto& [entity, powers] : creatures)
