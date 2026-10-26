@@ -28,8 +28,10 @@
 //   still in, the player can watch the game.
 // - When another god is out and one god is left, the end box tells the player that the game is won. The game does not
 //   look at whether the god of this computer is out (vanilla-bugs 469).
-// - When another god is out and the game goes on, a box with OK tells the player that the god is out. It opens only
-//   when no end box opened on this computer before in the game, also an end box that the player closed.
+// - When another god is out and the game goes on, a box with OK tells the player that the god is out. It does not open
+//   while the end box shows itself. The end box stops to show itself when it closes, and when the Statistics or the
+//   Multiplayer tab opens its box over it.
+// - In a network game, the player can ask to leave the game. The end box then asks the question to leave.
 //
 // An end box closes the box with OK.
 //
@@ -61,9 +63,10 @@ struct Box
 /// What the boxes of this computer keep between turns
 struct State
 {
-	/// An end box opened in the game. Nothing clears it.
-	bool endBoxOpened {false};
-	/// The game goes on for the player of this computer. Nothing but an end box of a lost game sets it.
+	/// The end box shows itself: it opened, and it did not close or show another box over it since
+	bool endBoxShowing {false};
+	/// The game goes on for the player of this computer: set by an end box of a lost game in which the player can watch
+	/// and by the question to leave, cleared by an end box of a lost game that is decided
 	bool gameGoesOn {false};
 };
 
@@ -77,6 +80,12 @@ struct Opened
 
 /// The boxes that the events of a turn open on the computer of the local god
 [[nodiscard]] Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State& state);
+
+/// The question to leave a network game: the end box asks it. The game goes on for the player.
+[[nodiscard]] Box AskToLeave(State& state);
+
+/// The end box closed, or another box shows over it
+void StoppedShowing(State& state);
 
 /// True when the box asks the game server to stop the turns of the game: an end box of a decided game, which the player
 /// cannot watch

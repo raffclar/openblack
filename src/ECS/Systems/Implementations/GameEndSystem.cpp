@@ -107,6 +107,11 @@ public:
 		return x87::Div(influence.InfluencePower(player), total);
 	}
 
+	[[nodiscard]] float InfluencePower(PlayerNames player) const override
+	{
+		return Locator::influenceSystem::value().InfluencePower(player);
+	}
+
 	void RemoveCreature(PlayerNames player) override
 	{
 		if (const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player); creature.has_value())
@@ -214,6 +219,26 @@ std::optional<PlayerNames> GameEndSystem::LastGodIn() const
 		}
 	});
 	return in.size() == 1 ? std::optional(in.front()) : std::nullopt;
+}
+
+std::vector<GameEndSystemInterface::GodStanding> GameEndSystem::Standings() const
+{
+	// The view reads the standings and adds none
+	const GameEndWorld world;
+	auto& registry = Locator::entitiesRegistry::value();
+	std::vector<GodStanding> standings;
+	for (const auto god : world.ActiveGods())
+	{
+		standings.push_back({.god = god, .standing = {}});
+	}
+	registry.Each<const components::Player>([&registry, &standings](entt::entity entity, const components::Player& player) {
+		const auto found = std::ranges::find(standings, player.name, &GodStanding::god);
+		if (const auto* standing = registry.TryGet<const GameStanding>(entity); standing != nullptr && found != standings.end())
+		{
+			found->standing = *standing;
+		}
+	});
+	return standings;
 }
 
 } // namespace openblack::ecs::systems
