@@ -10,6 +10,9 @@
 #include "ComputerPlayerStart.h"
 
 #include <algorithm>
+#include <string>
+#include <string_view>
+#include <tuple>
 
 #include "Creature/CreatureMindFileBody.h"
 #include "ECS/PlayerMiracles.h"
@@ -129,6 +132,15 @@ bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
 	return !human && !computer && citadel;
 }
 
+std::string SlotCreatureName(std::string_view speciesDebugName)
+{
+	if (speciesDebugName.ends_with(k_SpeciesNameEnd))
+	{
+		speciesDebugName.remove_suffix(k_SpeciesNameEnd.size());
+	}
+	return std::string(speciesDebugName);
+}
+
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)
 {
 	for (const auto god : gods)
@@ -138,11 +150,11 @@ void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::sp
 		{
 			continue;
 		}
-		// The game takes the name before the species
-		const auto nameText = world.GameRand(k_SlotNameChoices);
+		// The game takes the random value for the name before the species. The name does not use the value.
+		std::ignore = world.GameRand(k_SlotNameChoices);
 		const auto species = SpeciesFor(world.GameRand(k_SlotSpeciesChoices));
 		world.SwitchOn(god);
-		world.MakeSlotCreature(god, species, nameText, k_SlotCreatureStage);
+		world.MakeSlotCreature(god, species, SlotCreatureName(world.SpeciesDebugName(species)), k_SlotCreatureStage);
 	}
 }
 

@@ -49,6 +49,20 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.computer_slot_creature_name",
+	    .name = "The name of the creature of a computer god in an empty slot",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north, and no human or computer plays player two. As at the "
+	                   "start of a network game, the empty slot of player two gets a computer god and a creature.",
+	    .expected = "A fully grown creature of a random species stands at the creature home of the temple of player two. "
+	                "Its name is the name of its species, for example \"Tiger\" or \"Polar bear\", not a line of help "
+	                "text. The game.entity query shows the name, and a fight with the creature shows it above its bar.",
+	    .environment = {.dispenserGrid = false},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .fillEmptySlots = true,
+	});
+
+	all.push_back({
 	    .id = "multiplayer.land_anti_influence_ring",
 	    .name = "An anti-influence ring that a land's script makes",
 	    .facet = Facet::Multiplayer,

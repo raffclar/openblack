@@ -1200,6 +1200,9 @@ struct Scenario
 	std::optional<float> worshipShare;
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
+	/// After the land script, the start of a network game fills each slot with no player, as for a game where player
+	/// one is the only human
+	bool fillEmptySlots {false};
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
 	std::function<void(ecs::components::PlayerStatistics&)> playerStatistics;
 	/// What the first player's creature has counted of its life

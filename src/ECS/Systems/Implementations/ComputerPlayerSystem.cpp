@@ -11,14 +11,18 @@
 
 #include "ComputerPlayerSystem.h"
 
+#include <cstring>
+
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
 
 #include <spdlog/spdlog.h>
 
+#include "3D/CreatureBody.h"
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
 #include "Creature/CreatureFileLoad.h"
@@ -29,10 +33,11 @@
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
-#include "ECS/CreatureNaming.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "Gui/TextDatabase.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
@@ -191,7 +196,19 @@ public:
 
 	void SwitchOn(PlayerNames player) override { _minds.SwitchOn(player, true); }
 
-	void MakeSlotCreature(PlayerNames player, CreatureType species, uint32_t nameText, uint32_t stage) override
+	[[nodiscard]] std::string SpeciesDebugName(CreatureType species) const override
+	{
+		const auto row = creature::InfoRow(species);
+		const auto& table = Locator::infoConstants::value().creature;
+		if (row >= table.size())
+		{
+			return {};
+		}
+		const auto& debugString = table.at(row).debugString;
+		return {debugString.data(), strnlen(debugString.data(), debugString.size())};
+	}
+
+	void MakeSlotCreature(PlayerNames player, CreatureType species, std::string_view name, uint32_t stage) override
 	{
 		auto& registry = Locator::entitiesRegistry::value();
 		const auto home = ecs::creature_home::CitadelCreatureHomeOf(registry, player);
@@ -210,14 +227,14 @@ public:
 		{
 			Locator::playerSystem::value().MakePrimaryCreature(creature);
 		}
-		registry.Get<ecs::components::Creature>(creature).name = ecs::creature_naming::HelpWords(nameText);
+		registry.Get<ecs::components::Creature>(creature).name = gui::ToUtf16(name);
 		if (Locator::creatureMindSystem::has_value())
 		{
 			Locator::creatureMindSystem::value().MoveToStage(creature, stage);
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Made creature {} of species {} for the computer god {} at {:.1f}, {:.1f}",
-		                   entt::to_integral(creature), static_cast<int>(species), static_cast<int>(player), position.x,
-		                   position.z);
+		SPDLOG_LOGGER_INFO(
+		    spdlog::get("game"), "Made creature {} \"{}\" of species {} for the computer god {} at {:.1f}, {:.1f}",
+		    entt::to_integral(creature), name, static_cast<int>(species), static_cast<int>(player), position.x, position.z);
 	}
 
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }

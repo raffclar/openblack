@@ -147,6 +147,7 @@
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
 #include "ECS/Components/WorshipSite.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Dances.h"
@@ -162,6 +163,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -952,6 +954,12 @@ void Runner::Start(const Scenario& scenario)
 	{
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
+	}
+	// A network game fills its empty slots right after the land script
+	if (scenario.fillEmptySlots && Locator::computerPlayerSystem::has_value())
+	{
+		constexpr std::array k_Humans {PlayerNames::PLAYER_ONE};
+		Locator::computerPlayerSystem::value().FillEmptySlots(computer_player::k_SlotGods, k_Humans);
 	}
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
