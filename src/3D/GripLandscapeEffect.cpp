@@ -58,14 +58,14 @@ glm::vec2 FrameOrigin(float frame)
 	return glm::vec2(index % k_SheetColumns, index / k_SheetColumns) / static_cast<float>(k_SheetColumns);
 }
 
-/// A point uniformly within the unit sphere
+/// A point uniformly within the unit sphere. The braced list draws x, y and z in this order on all compilers
 glm::vec3 RandomInUnitSphere()
 {
 	auto& rng = Locator::rng::value();
 	glm::vec3 point;
 	do
 	{
-		point = glm::vec3(rng.NextValue(-1.0f, 1.0f), rng.NextValue(-1.0f, 1.0f), rng.NextValue(-1.0f, 1.0f));
+		point = glm::vec3 {rng.NextValue(-1.0f, 1.0f), rng.NextValue(-1.0f, 1.0f), rng.NextValue(-1.0f, 1.0f)};
 	} while (glm::dot(point, point) > 1.0f);
 	return point;
 }

@@ -1797,3 +1797,12 @@ openblack_setup_and_add_test(test_game_end test_game_end.cpp)
 openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
 openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
+# Two random draws in one expression can come in a different order on each compiler, so this check stops them.
+if (Python3_Interpreter_FOUND)
+  add_test(
+    NAME test_draw_order
+    COMMAND
+      ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_draw_order.py
+      --root ${CMAKE_SOURCE_DIR}
+  )
+endif ()
