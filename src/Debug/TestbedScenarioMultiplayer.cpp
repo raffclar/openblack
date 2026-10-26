@@ -71,18 +71,21 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	     "The player joins Bob's game and opens the Landscape tab. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an "
 	     "observer, on Bombardment.",
 	     "The lands of the local maps show, with \"(HOST)\" after Bombardment, which the server plays. Land Info shows "
-	     "\"Bombardment action for 2 players...\". The gods' list does not show on this tab."},
+	     "\"Bombardment action for 2 players...\". The thumbnail of Bombardment shows between the two lists, with the "
+	     "marks of its citadels and towns. The gods' list does not show on this tab."},
 	    {"multiplayer.room_clans", "The multiplayer front end: the game room's clans", Stage::RoomClans,
 	     "The player joins Bob's game, opens the Clans tab and picks The Clan. Bob's game has Bob and Alice as gods 1 and 2, "
 	     "and Eve as an observer, on Bombardment.",
 	     "\"Alice's clans:\" lists The Clan and Other Clan. \"Clan The Clan info:\" shows \"Clan Description: Our "
 	     "motto\", \"Clan Leader: Alice\", \"Clan URL: www.example.com\" and \"Credits 12.50\". \"Use This Clan\" "
-	     "shows; a click on it changes it to \"Don't use any Clan.\"."},
+	     "shows; a click on it changes it to \"Don't use any Clan.\". The clan's logo shows faintly behind the clan's "
+	     "information, in its middle."},
 	    {"multiplayer.room_player_details", "The multiplayer front end: the game room's player details",
 	     Stage::RoomPlayerDetails,
 	     "The player joins Bob's game, opens the Player Details tab and picks Bob. Bob's game has Bob and Alice as gods 1 and "
 	     "2, and Eve as an observer, on Bombardment.",
-	     "\"Player Bob information:\" shows, with \"God 1\" under it."},
+	     "\"Player Bob information:\" shows, with no lines under it: the lobby does not give the lines of the player "
+	     "database yet."},
 	    {"multiplayer.conditions", "The multiplayer front end: the winning conditions", Stage::Conditions,
 	     "The player joins Bob's game and clicks Next. Bob's game has Bob and Alice as gods 1 and 2, and Eve as an observer, "
 	     "on Bombardment.",

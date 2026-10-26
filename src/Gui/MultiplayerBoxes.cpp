@@ -11,11 +11,14 @@
 
 #include <algorithm>
 #include <array>
+#include <utility>
 
 #include <SDL_keycode.h>
+#include <bgfx/bgfx.h>
 
 #include "Controls.h"
 #include "DialogKeyRules.h"
+#include "Graphics/Texture2D.h"
 #include "TextDatabase.h"
 
 using namespace openblack::gui;
@@ -266,6 +269,10 @@ void MultiplayerBoxes::Build()
 	_chatLines = 0;
 	_shownTab.reset();
 	_shownPick.reset();
+	_thumbnailLand.reset();
+	_thumbnail.reset();
+	_thumbnailShown = false;
+	_logoShown = false;
 	if (_frontEnd == nullptr)
 	{
 		_dialog.reset();
@@ -683,12 +690,25 @@ void MultiplayerBoxes::SyncRoom()
 	{
 		_lands->SetSelection(shownLand);
 	}
+	// The thumbnail of the land picked
+	if (shownLand != _thumbnailLand)
+	{
+		_thumbnailLand = shownLand;
+		_thumbnail = shownLand.has_value() && *shownLand < maps.size() && _thumbnailSource
+		                 ? _thumbnailSource(maps[*shownLand].file)
+		                 : nullptr;
+	}
+	// The first three lands have texts of their own; the other lands show the description of their thumbnail
 	std::vector<std::u16string> info;
 	if (shownLand.has_value())
 	{
 		if (const auto text = LandInfoText(*shownLand); text.has_value())
 		{
 			info.push_back(Text(*text));
+		}
+		else if (_thumbnail != nullptr)
+		{
+			info.emplace_back(_thumbnail->description.begin(), _thumbnail->description.end());
 		}
 	}
 	SetItemsIfChanged(*_landInfo, Items(info));
@@ -733,20 +753,8 @@ void MultiplayerBoxes::SyncRoom()
 	const auto seatName = seat != nullptr ? ToUtf16(seat->account.name) : playerName;
 	const std::array<TextArgument, 1> seatArgument = {std::u16string_view(seatName)};
 	_playerLabel->text = FormatText(Text(k_PlayerInfoText), seatArgument);
-	std::vector<std::u16string> details;
-	if (seat != nullptr)
-	{
-		if (seat->god > 0)
-		{
-			const std::array<TextArgument, 1> god = {int64_t {seat->god}};
-			details.push_back(FormatText(Text(k_GodText), god));
-		}
-		else
-		{
-			details.push_back(Text(k_ObserversText));
-		}
-	}
-	SetItemsIfChanged(*_playerInfo, Items(details));
+	// The game shows only the lines of the lobby's player database under the title. The lobby has no such lines yet.
+	SetItemsIfChanged(*_playerInfo, Items(PlayerDetailLines({})));
 
 	// The conditions page: the conditions of the server's land, or "Please select a map first."
 	const auto& conditions = _frontEnd->GetConditions();
@@ -768,6 +776,65 @@ void MultiplayerBoxes::SyncRoom()
 	const auto timeLimit = _frontEnd->GetTimeLimit();
 	_timeLimit->text = timeLimit.has_value() ? TimeLimitText(*timeLimit) : std::u16string();
 	_ready->SetChecked(_frontEnd->IsReady());
+
+	SyncPictures(onTab && tab == RoomTab::Landscape, onTab && tab == RoomTab::Clans && !lan);
+}
+
+void MultiplayerBoxes::SyncPictures(bool landShown, bool clanShown)
+{
+	_thumbnailShown = landShown && _thumbnail != nullptr && _thumbnail->side > 0;
+	if (_frontEnd->TakeLogoChanged())
+	{
+		const auto& logo = _frontEnd->GetShownLogo();
+		_logoSheet = logo.has_value() ? land_thumbnail::LogoSheet(*logo) : land_thumbnail::Texels {};
+		_logoChanged = true;
+	}
+	_logoShown = clanShown && !_logoSheet.empty();
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetPictureRects() const
+{
+	std::vector<DialogRect> rects;
+	if (_thumbnailShown)
+	{
+		rects.push_back(land_thumbnail::k_Place);
+	}
+	if (_logoShown && _clanInfo != nullptr)
+	{
+		rects.push_back(land_thumbnail::LogoPlace(_clanInfo->rect));
+	}
+	return rects;
+}
+
+void MultiplayerBoxes::DrawPictures(const DialogPainter& painter) const
+{
+	if (_logoChanged)
+	{
+		_logoChanged = false;
+		_logoTexture.reset();
+		if (!_logoSheet.empty())
+		{
+			_logoTexture = std::make_unique<graphics::Texture2D>("Clan logo");
+			_logoTexture->Create(land_thumbnail::k_TextureSide, land_thumbnail::k_TextureSide, 1,
+			                     graphics::TextureFormat::BGRA4, graphics::Wrapping::Repeat, graphics::Filter::Linear,
+			                     bgfx::copy(_logoSheet.data(), static_cast<uint32_t>(_logoSheet.size() * sizeof(uint16_t))));
+		}
+	}
+	// The game draws the pictures after the controls, at the box's opacity
+	if (_thumbnailShown && _thumbnail->texture != nullptr)
+	{
+		painter.DrawPicture(land_thumbnail::k_Place, *_thumbnail->texture, glm::vec2(0.0f),
+		                    land_thumbnail::UvMax(_thumbnail->side), glm::vec4(1.0f));
+	}
+	// The logo is a faint mark behind the lines of the clan's information
+	if (_logoShown && _logoTexture != nullptr && _clanInfo != nullptr)
+	{
+		const auto alpha = painter.GetAlpha();
+		painter.SetAlpha(land_thumbnail::LogoAlpha(alpha));
+		const auto [uvMin, uvMax] = land_thumbnail::LogoCellUv();
+		painter.DrawPicture(land_thumbnail::LogoPlace(_clanInfo->rect), *_logoTexture, uvMin, uvMax, glm::vec4(1.0f));
+		painter.SetAlpha(alpha);
+	}
 }
 
 void MultiplayerBoxes::ShowMessage(Message message)
@@ -987,6 +1054,7 @@ void MultiplayerBoxes::Draw(const DialogPainter& painter) const
 		painter.SetAlpha(alpha);
 	}
 	_dialog->Draw(painter, !_message.has_value() && !_frontEnd->IsBusy());
+	DrawPictures(painter);
 	if (_message.has_value())
 	{
 		// The message's text starts as large as it fits in under 125 high

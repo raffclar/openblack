@@ -30,6 +30,7 @@
 #include <HelpDudeFile.h>
 #include <L3DFile.h>
 #include <MorphFile.h>
+#include <OnlineMapThumbnail.h>
 #include <PackFile.h>
 #include <ParticleFile.h>
 #include <PhysicsConstantsFile.h>
@@ -49,8 +50,10 @@
 #include "Common/Bitmap16B.h"
 #include "Common/StringUtils.h"
 #include "Common/Zip.h"
+#include "ECS/Components/Player.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/Texture2D.h"
+#include "Gui/LandThumbnail.h"
 #include "Help/AdvisorModel.h"
 #include "Locator.h"
 #include "Physics/Materials.h"
@@ -960,6 +963,28 @@ HandDemoLoader::result_type HandDemoLoader::operator()(FromDiskTag, const std::f
 		                         std::string(hnd::ResultToStr(result)));
 	}
 	return file;
+}
+
+LandThumbnailLoader::result_type LandThumbnailLoader::operator()(FromDiskTag, const std::filesystem::path& path) const
+{
+	const auto bytes = Locator::filesystem::value().ReadAll(path);
+	const auto file = onlinemap::ParseThumbnail(std::as_bytes(std::span(bytes)));
+	if (!file.has_value())
+	{
+		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The land thumbnail {} is not a thumbnail file", path.generic_string());
+		return nullptr;
+	}
+	auto picture = gui::land_thumbnail::Paint(*file, ecs::components::Player::k_Colours);
+	auto thumbnail = std::make_shared<gui::land_thumbnail::LandThumbnail>();
+	thumbnail->side = picture.side;
+	thumbnail->description = std::string(file->description);
+	thumbnail->texture = std::make_shared<graphics::Texture2D>("Land thumbnail " + path.stem().string());
+	// As in the game, the texture repeats at its edges and its texels blend
+	thumbnail->texture->Create(
+	    gui::land_thumbnail::k_TextureSide, gui::land_thumbnail::k_TextureSide, 1, graphics::TextureFormat::BGRA4,
+	    graphics::Wrapping::Repeat, graphics::Filter::Linear,
+	    bgfx::copy(picture.texels.data(), static_cast<uint32_t>(picture.texels.size() * sizeof(uint16_t))));
+	return thumbnail;
 }
 
 VideoLoader::result_type VideoLoader::operator()(FromDiskTag, const std::filesystem::path& path) const

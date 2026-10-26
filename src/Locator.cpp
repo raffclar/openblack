@@ -765,6 +765,8 @@ void openblack::ShutDownServices()
 		resources.GetSounds().Clear();
 		// The advisors' models hold meshes of their own
 		resources.GetAdvisorModels().Clear();
+		// The thumbnails of the network lands hold textures of their own
+		resources.GetLandThumbnails().Clear();
 	}
 	Locator::advisorSystem::reset();
 

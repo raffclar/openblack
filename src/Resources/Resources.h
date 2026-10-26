@@ -88,6 +88,7 @@ public:
 
 	void StopLoading() override { _loadQueue.Cancel(); }
 	AdvisorModelManager& GetAdvisorModels() override { return _advisorModels; }
+	LandThumbnailManager& GetLandThumbnails() override { return _landThumbnails; }
 
 private:
 	template <typename Func>
@@ -141,5 +142,6 @@ private:
 	// Last, so its threads stop before the caches they load into go
 	LoadQueue _loadQueue {LoadQueue::DefaultThreadCount()};
 	AdvisorModelManager _advisorModels;
+	LandThumbnailManager _landThumbnails;
 };
 } // namespace openblack::resources
