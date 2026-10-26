@@ -86,6 +86,7 @@
 #include "ECS/Systems/SavedStateInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SnowSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -297,7 +298,7 @@ systems::SavedStateInterface* FindGameMusic()
 /// The systems that keep running state of their own, by the names of their sections. A load gives each system its state
 /// in this order: the map's lists first, then the systems that use them.
 using SystemFinder = systems::SavedStateInterface* (*)();
-constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSystems {{
+constexpr std::array<std::pair<std::string_view, SystemFinder>, 40> k_SavedSystems {{
     {"map", &FindSystem<Locator::entitiesMap>},
     {"particles", &FindSystem<Locator::particleSystem>},
     {"towns", &FindSystem<Locator::townSystem>},
@@ -317,6 +318,7 @@ constexpr std::array<std::pair<std::string_view, SystemFinder>, 39> k_SavedSyste
     {"scriptControl", &FindSystem<Locator::scriptControlSystem>},
     {"scriptSwitches", &FindSystem<Locator::chlapi>},
     {"creatureAudio", &FindSystem<Locator::creatureAudioSystem>},
+    {"scriptMusic", &FindSystem<Locator::scriptMusicSystem>},
     {"music", &FindGameMusic},
     {"dynamics", &FindSystem<Locator::dynamicsSystem>},
     {"helpText", &FindSystem<Locator::helpTextSystem>},

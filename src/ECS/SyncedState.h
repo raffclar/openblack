@@ -84,6 +84,9 @@ private:
                           std::span<const PresentationPart> presentation, bool byField = false,
                           const ecs::reflection::RowVisitor& visit = {}, WorkerPool* pool = nullptr);
 
+/// The hash of the synced state mixed with values of the world that the systems keep outside the entities
+[[nodiscard]] uint64_t MixValues(uint64_t stateHash, std::span<const int64_t> values);
+
 /// The checksum of a turn: the hash of the synced state, mixed with the synced seed and the count of synced draws
 [[nodiscard]] uint64_t Checksum(uint64_t stateHash, uint32_t seed, uint64_t draws);
 

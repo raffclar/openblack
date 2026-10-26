@@ -106,6 +106,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
@@ -910,6 +911,11 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		// The game starts running, at the normal speed, as Black & White does
 		clock.StartGameClock(false);
 		clock.SetSpeed(1.0f / k_NormalTurnDurationMultiplier);
+	}
+	// A new land starts with no music of the scripts
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		Locator::scriptMusicSystem::value().Reset();
 	}
 	View().StartLandAudio();
 }

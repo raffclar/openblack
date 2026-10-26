@@ -47,6 +47,7 @@
 #include "ECS/Systems/CreatureHandSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SimulationSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -660,6 +661,14 @@ void SimProvider::TurnEnded(uint32_t turn)
 			}
 		}
 	}
+	// The music that the scripts start is synced too
+	auto stateHash = synced.hash;
+	if (Locator::scriptMusicSystem::has_value())
+	{
+		const auto music = Locator::scriptMusicSystem::value().GetMusic().SyncedValues();
+		value["script_music"] = music;
+		stateHash = synced_state::MixValues(stateHash, music);
+	}
 	if (Locator::gameRandom::has_value())
 	{
 		const auto& random = Locator::gameRandom::value();
@@ -667,7 +676,7 @@ void SimProvider::TurnEnded(uint32_t turn)
 		value["draws"] = random.GetSyncedDraws();
 		// The checksum that a network game compares each turn
 		value["checksum"] =
-		    fmt::format("{:016x}", synced_state::Checksum(synced.hash, random.GetSeeds().synced, random.GetSyncedDraws()));
+		    fmt::format("{:016x}", synced_state::Checksum(stateHash, random.GetSeeds().synced, random.GetSyncedDraws()));
 	}
 	if (_hashParts != sim_run::HashDetail::None)
 	{

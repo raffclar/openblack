@@ -1792,3 +1792,5 @@ add_test(NAME test_frame_time_check
 openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
 openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
 openblack_setup_and_add_test(test_join_online_entry test_join_online_entry.cpp)
+openblack_setup_and_add_test(test_script_music audio/test_script_music.cpp)
+target_link_libraries(test_script_music PRIVATE pack)

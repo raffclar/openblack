@@ -218,6 +218,7 @@
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/ScriptControlSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
+#include "ECS/Systems/ScriptMusicSystemInterface.h"
 #include "ECS/Systems/ScriptObjectsSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -3417,10 +3418,17 @@ static audio::GameMusic* ScriptGameMusic()
 	return game != nullptr ? game->GetGameMusic() : nullptr;
 }
 
-/// Without a sound device the scripts that wait on music wait on the help text instead
-static bool AudioInstalled()
+/// The music that the scripts start, as the world sees it
+static ecs::systems::ScriptMusicSystemInterface* WorldScriptMusic()
 {
-	return Locator::audio::has_value() && Locator::audio::value().IsInstalled();
+	return Locator::scriptMusicSystem::has_value() ? &Locator::scriptMusicSystem::value() : nullptr;
+}
+
+/// Without the music the scripts that wait on music wait on the help text instead
+static bool WorldHasMusic()
+{
+	const auto* music = WorldScriptMusic();
+	return music != nullptr && music->HasMusic();
 }
 
 static bool HelpTextRead()
@@ -3436,19 +3444,19 @@ void StartMusic() // 044 START_MUSIC
 		SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "START_MUSIC: no music type {}", music);
 		return;
 	}
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
 		// The sung lines start again with each piece a script starts
-		gameMusic->ResetMusicLyrics();
-		gameMusic->StartScriptMusic(static_cast<audio::MusicType>(music));
+		scriptMusic->ResetLyrics();
+		scriptMusic->Start(static_cast<audio::MusicType>(music));
 	}
 }
 
 void StopMusic() // 045 STOP_MUSIC
 {
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
-		gameMusic->StartScriptMusic(audio::MusicType::None);
+		scriptMusic->Start(audio::MusicType::None);
 	}
 }
 
@@ -5033,9 +5041,9 @@ void EndDialogue() // 121 END_DIALOGUE
 	ReleaseDialogue(task);
 	ApplySwitchChanges(script::switches::DialogueEnded());
 	// The word of the sung line goes back to none
-	if (auto* gameMusic = ScriptGameMusic())
+	if (auto* scriptMusic = WorldScriptMusic())
 	{
-		gameMusic->ResetMusicWord();
+		scriptMusic->ResetWord();
 	}
 }
 
@@ -8292,14 +8300,12 @@ void LastMusicLine() // 335 LAST_MUSIC_LINE
 {
 	// Whether the script's sung music has reached a line: the sung verses wait for each line before showing it
 	const auto line = static_cast<int32_t>(Popf());
-	if (!AudioInstalled())
+	if (!WorldHasMusic())
 	{
 		Pushb(HelpTextRead());
 		return;
 	}
-	const auto* gameMusic = ScriptGameMusic();
-	const auto lastLine = gameMusic != nullptr ? gameMusic->GetMusicLyrics().line : 0;
-	Pushb(audio::GameMusic::ReachedMusicLine(lastLine, line));
+	Pushb(audio::ReachedMusicLine(WorldScriptMusic()->GetMusic().GetLyrics().line, line));
 }
 
 void HandDemoTrigger() // 336 HAND_DEMO_TRIGGER
@@ -8519,13 +8525,12 @@ void MusicPlayed350() // 350 MUSIC_PLAYED
 {
 	// Whether the script music of a type is over
 	const auto music = Pop().intVal;
-	if (!AudioInstalled())
+	if (!WorldHasMusic())
 	{
 		Pushb(HelpTextRead());
 		return;
 	}
-	const auto* gameMusic = ScriptGameMusic();
-	Pushb(gameMusic == nullptr || gameMusic->IsScriptMusicOver(static_cast<audio::MusicType>(music)));
+	Pushb(WorldScriptMusic()->GetMusic().IsOver(static_cast<audio::MusicType>(music)));
 }
 
 void UpdateSnapshotPicture() // 351 UPDATE_SNAPSHOT_PICTURE
