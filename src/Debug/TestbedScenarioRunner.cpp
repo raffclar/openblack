@@ -3109,9 +3109,10 @@ void Runner::Give(const Command& command)
 			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
 			if (known && Locator::playerSystem::has_value())
 			{
-				script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-				                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE),
-				                                static_cast<int32_t>(command.value));
+				script::interface_levels::Apply(
+				    Locator::entitiesRegistry::value(),
+				    Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+				    static_cast<int32_t>(command.value));
 			}
 			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
 			                known ? "" : " (a level the game does not know)", help.handReach));

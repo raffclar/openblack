@@ -586,7 +586,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -1372,8 +1373,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

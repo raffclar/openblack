@@ -548,13 +548,13 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 		return;
 	}
 	const auto player = Locator::playerSystem::value().GetLocalPlayer();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(entity) || !registry.AnyOf<VirtualInfluence>(entity))
+	if (!entity.has_value() || !registry.Valid(*entity) || !registry.AnyOf<VirtualInfluence>(*entity))
 	{
 		return;
 	}
-	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
+	auto& virtualInfluence = registry.Get<VirtualInfluence>(*entity);
 	const auto& state = virtualInfluence.state;
 	auto& shown = virtualInfluence.shown;
 	auto& audio = Locator::audio::value();
