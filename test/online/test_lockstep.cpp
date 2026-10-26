@@ -641,3 +641,39 @@ TEST_F(LockstepTest, ThePlayerOfADefeatedGodComesBackAsAnObserver)
 	EXPECT_EQ(host->Seats()[1].state, LockstepHost::SeatState::Closed);
 	EXPECT_EQ(again.world.hash, serverWorld.hash);
 }
+
+// The end box of a decided game opens on one computer: the server stops the turns, and every computer stops at the same
+// turn with the same checksums
+TEST_F(LockstepTest, AStopRequestStopsTheTurnsOfEveryComputerAtTheSameTurn)
+{
+	MakeHost(2);
+	Computer alice(network, now, "god:alice");
+	Computer bob(network, now, "god:bob");
+	Frames({&alice, &bob}, 7);
+	ASSERT_TRUE(host->Started());
+	// Every computer names each god by the name of its player
+	ASSERT_TRUE(bob.session.GetStart().has_value());
+	ASSERT_GE(bob.session.GetStart()->names.size(), 2u);
+	EXPECT_EQ(bob.session.GetStart()->names[0], "alice");
+	EXPECT_EQ(bob.session.GetStart()->names[1], "bob");
+	Frames({&alice, &bob}, 50);
+	bob.session.StopGame();
+	bob.session.StopGame();
+	Frames({&alice, &bob}, 50);
+	ASSERT_TRUE(host->StoppedAfter().has_value());
+	const auto last = *host->StoppedAfter();
+	EXPECT_EQ(serverWorld.turns, last + 1);
+	EXPECT_EQ(alice.world.turns, last + 1);
+	EXPECT_EQ(bob.world.turns, last + 1);
+	EXPECT_EQ(alice.session.StoppedAfter(), last);
+	EXPECT_EQ(bob.session.StoppedAfter(), last);
+	EXPECT_EQ(alice.world.hash, serverWorld.hash);
+	EXPECT_EQ(bob.world.hash, serverWorld.hash);
+	EXPECT_EQ(alice.session.GetCompares().compared, alice.session.GetCompares().same);
+	// The game ends when the gods leave, with no turn more
+	alice.session.Leave();
+	bob.session.Leave();
+	Frames({&alice, &bob}, 5);
+	EXPECT_TRUE(host->GameOver());
+	EXPECT_EQ(serverWorld.turns, last + 1);
+}

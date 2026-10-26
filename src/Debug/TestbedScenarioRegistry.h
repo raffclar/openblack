@@ -182,6 +182,9 @@ struct Environment
 	/// The players other than the first that are in the game while the scenario runs, such as a rival god for whom a
 	/// script makes a creature. The runner removes them when the scenario stops.
 	std::vector<PlayerNames> players;
+	/// The game is a skirmish while the scenario runs: a god with no temple is out, and the last god in wins. The runner
+	/// puts the testbed back when the scenario stops.
+	bool skirmish {false};
 };
 
 /// Where the camera looks as the scenario starts
@@ -1240,6 +1243,7 @@ void AddFishScenarios(std::vector<Scenario>& all);
 void AddCreatureCastingScenarios(std::vector<Scenario>& all);
 /// A computer player's creature at the start of the computer mind
 void AddComputerPlayerScenarios(std::vector<Scenario>& all);
+void AddGameEndScenarios(std::vector<Scenario>& all);
 /// The joint actions of two friends, each close up
 void AddFriendActionScenarios(std::vector<Scenario>& all);
 /// Creature Mode's and the Creature Cave's scenarios
