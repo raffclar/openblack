@@ -169,6 +169,11 @@ Sample Guard::Take() const
 					values.push_back(Fnv(std::span(section.bytes).subspan(start, end - start), k_FnvOffset));
 					start = end;
 				}
+				// The bytes that the system wrote after its last value are one more value
+				if (start < section.bytes.size())
+				{
+					values.push_back(Fnv(std::span(section.bytes).subspan(start), k_FnvOffset));
+				}
 			}
 			sample.hash.parts.emplace_back(std::move(name), hash);
 			sample.hash.hash = Fnv(std::span(reinterpret_cast<const uint8_t*>(&hash), sizeof(hash)), sample.hash.hash);
