@@ -17,6 +17,7 @@
 #include "Commands/PlayerCommands.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "Hand/HandTrace.h"
+#include "Hand/ThrowLead.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
@@ -38,6 +39,9 @@ public:
 	[[nodiscard]] std::optional<std::array<entt::entity, static_cast<size_t>(Side::_Count)>>
 	GetHandsOf(PlayerNames player) const noexcept override;
 	std::array<entt::entity, static_cast<size_t>(Side::_Count)> MakeHandsOf(PlayerNames player) override;
+	void ReportSent(const player_commands::HandReport& report) override;
+	[[nodiscard]] uint32_t GetReportLatencyMs() const noexcept override { return _reportLatency.Milliseconds(); }
+	void FixReportLatency(std::optional<uint32_t> latencyMs) override { _reportLatency.Fix(latencyMs); }
 	void SetOwnPlayer(PlayerNames player) override { _ownPlayer = player; }
 	void ClearOwnPlayer() override { _ownPlayer.reset(); }
 	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return _ownPlayer.value_or(PlayerNames::PLAYER_ONE); }
@@ -57,6 +61,8 @@ private:
 	std::map<PlayerNames, std::array<entt::entity, 2>> _godHands;
 	/// None on the game server and on an observer's computer
 	std::optional<PlayerNames> _ownPlayer {PlayerNames::PLAYER_ONE};
+	/// The latency of the reports of this computer's hand. It is not part of the world.
+	hand_grab::throw_lead::ReportLatency _reportLatency;
 	hand_trace::HandTrace _trace;
 };
 } // namespace openblack::ecs::systems

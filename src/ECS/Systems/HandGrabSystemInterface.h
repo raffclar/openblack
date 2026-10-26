@@ -76,6 +76,9 @@ public:
 	/// Each drawn frame of some game milliseconds: what the hands of the other players of a network game hold moves
 	/// toward the place of their last report, upright and at the size that it had as the hand took it
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
+	/// Each drawn frame, after the hand poses what it holds: a thing that this computer threw and that waits for the
+	/// turn of the command shows on the flight of its lead
+	virtual void DrawThrownForFrame() {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
 	/// At the turn: a scribble of the player's hand shakes off the thing that the hand holds (see

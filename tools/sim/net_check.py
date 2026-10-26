@@ -587,6 +587,7 @@ def main():
     parser.add_argument("--game-path", default=DEFAULT_GAME_PATH)
     parser.add_argument("--out", default=os.path.join(os.getcwd(), "net-check"))
     parser.add_argument("--input", help="recorded input for the first client's hand")
+    parser.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")
     parser.add_argument("--input2", help="recorded input for the second client's hand (its god's own hand)")
     parser.add_argument("--input2-delay-frames", type=int, default=1500,
                         help="the second client's input starts this many frames later than the first's")
@@ -723,6 +724,8 @@ def main():
                     command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.temple_loss:
                 command += ["--sim-temple-loss", options.temple_loss]
+            if options.throw_lead_latency_ms is not None:
+                command += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
             if leaver == index:
                 command += ["--sim-leave-at", str(leave_turn)]
             if options.hash_fields:

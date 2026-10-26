@@ -225,6 +225,9 @@ struct Arguments
 	/// Tools: play the world as a network game does, with no network: the clock never stops for the player, and the
 	/// turns read no part of a frame
 	bool networkGame {false};
+	/// Tools: a fixed latency in milliseconds for the reports of the hand, so that the lead of each throw is the same in
+	/// each run. None measures the latency on the clock.
+	std::optional<uint32_t> throwLeadLatencyMs;
 	/// Join a game server once the land loaded: the world then turns only with the turns of the server
 	std::optional<ecs::systems::NetworkJoin> networkJoin;
 	/// How the player's mouse and keyboard are kept out while the inspector drives the game: while a client is
@@ -618,6 +621,7 @@ private:
 	std::optional<std::filesystem::path> _screenshotRoot;
 	std::optional<uint32_t> _seed;
 	bool _networkGame {false};
+	std::optional<uint32_t> _throwLeadLatencyMs;
 	std::optional<ecs::systems::NetworkJoin> _networkJoin;
 	/// The game joined a game server from the command line, and stops when that network game ends
 	bool _joinedFromCommandLine {false};

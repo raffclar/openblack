@@ -97,6 +97,13 @@ public:
 	[[nodiscard]] virtual glm::vec3 GetReportedHandVelocity() const noexcept { return glm::vec3(0.0f); }
 	/// At the turn: a player reports where the hand and the camera are (see player_commands::HandReport)
 	virtual void Report([[maybe_unused]] PlayerNames player, [[maybe_unused]] const player_commands::HandReport& report) {}
+	/// This computer sends a report of its hand (see throw_lead::ReportLatency)
+	virtual void ReportSent([[maybe_unused]] const player_commands::HandReport& report) {}
+	/// The milliseconds from the send of a report of this computer's hand to the turn that did it, from the last report
+	/// that a turn did. A throw moves its start along the flight by this latency.
+	[[nodiscard]] virtual uint32_t GetReportLatencyMs() const noexcept { return 0; }
+	/// A tool run gives a fixed report latency, so that its throws are the same each run. None measures it again.
+	virtual void FixReportLatency([[maybe_unused]] std::optional<uint32_t> latencyMs) {}
 	/// At the turn of a network game: a player reports the thing under the cursor (see player_commands::HandPick)
 	virtual void ReportPick([[maybe_unused]] PlayerNames player, [[maybe_unused]] entt::entity object) {}
 	/// The thing under the cursor of the player's hand from the last pick that a turn did. None in a single game.

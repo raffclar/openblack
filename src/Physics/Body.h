@@ -330,4 +330,16 @@ inline constexpr float k_QuarterTurnSin = 1.0f;
 [[nodiscard]] std::optional<std::pair<RayHit, float>> EllipsoidHit(std::span<const Ellipsoid> bones, glm::vec3 point,
                                                                    glm::vec3 direction);
 
+/// A place of a body on a flight that a prediction steps: its unit axes and its centre
+struct FlightPlace
+{
+	glm::mat3 axes {1.0f};
+	glm::vec3 centre {0.0f};
+};
+/// The most turns that a prediction steps
+inline constexpr int k_MostPredictedTurns = 15;
+/// Step a body alone along its flight for a number of turns, at most k_MostPredictedTurns. Each step touches only the
+/// land and the sea, and no other body. The result has the place at the start of each turn, then the last place.
+[[nodiscard]] std::vector<FlightPlace> PredictFlight(Body& body, const Ground& ground, int turns);
+
 } // namespace openblack::physics

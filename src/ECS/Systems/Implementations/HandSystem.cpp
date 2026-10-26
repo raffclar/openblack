@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/HandMorph.h"
+#include "Common/MachineClock.h"
 #include "ECS/Archetypes/HandArchetype.h"
 #include "ECS/Components/GodHand.h"
 #include "ECS/Components/Hand.h"
@@ -159,8 +160,18 @@ std::optional<glm::vec3> HandSystem::GetDrawnHandPosition() const noexcept
 	return transform->position;
 }
 
+void HandSystem::ReportSent(const player_commands::HandReport& report)
+{
+	_reportLatency.Sent(report, machine_clock::Ticks());
+}
+
 void HandSystem::Report(PlayerNames player, const player_commands::HandReport& report)
 {
+	// A report of this computer gives the latency of its reports
+	if (IsOwnPlayer(player))
+	{
+		_reportLatency.Done(report, machine_clock::Ticks());
+	}
 	// The report moves the left hand of its player. A player with no hands yet has no report.
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto hands = GetHandsOf(player);

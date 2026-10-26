@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <limits>
+#include <tuple>
 
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
@@ -842,4 +843,25 @@ glm::mat3 openblack::physics::QuarterTurnedBack(const glm::mat3& axes)
 	turned[0] = k_QuarterTurnCos * axes[0] - k_QuarterTurnSin * axes[2];
 	turned[2] = k_QuarterTurnCos * axes[2] + k_QuarterTurnSin * axes[0];
 	return turned;
+}
+
+std::vector<openblack::physics::FlightPlace> openblack::physics::PredictFlight(Body& body, const Ground& ground, int turns)
+{
+	const int count = std::clamp(turns, 0, k_MostPredictedTurns);
+	std::vector<FlightPlace> places;
+	places.reserve(static_cast<size_t>(count) + 1);
+	for (int turn = 0; turn < count; ++turn)
+	{
+		places.push_back({.axes = body.Axes(), .centre = body.Centre()});
+		// The steps do not look at the result: a body that stops can fall again in the next step
+		for (int step = 0; step < k_StepsPerTurn; ++step)
+		{
+			body.ClearForces();
+			body.TouchGround(ground);
+			body.ApplyContacts();
+			std::ignore = body.Integrate();
+		}
+	}
+	places.push_back({.axes = body.Axes(), .centre = body.Centre()});
+	return places;
 }

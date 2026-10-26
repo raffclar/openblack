@@ -39,6 +39,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -244,9 +245,24 @@ void MiracleFxSystem::UpdateGlobes(float seconds)
 		    // The dome's top faces the camera, turning about the middle of the globe where it is now, so that a globe thrown
 		    // about turns where it flies. Only the draw turns it: the world keeps the globe where the turns put it, so the
 		    // camera does not change the world.
-		    globe.middle = transform.position + transform.rotation * (centre * transform.scale);
-		    const auto facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
-		    const auto drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    // A globe that this computer threw keeps the turn of its flight and does not turn to the camera
+		    glm::mat3 facing(1.0f);
+		    glm::vec3 drawnOrigin(0.0f);
+		    if (globe.flightModel.has_value())
+		    {
+			    facing = glm::mat3(*globe.flightModel);
+			    drawnOrigin = glm::vec3((*globe.flightModel)[3]);
+			    globe.middle = drawnOrigin + facing * (centre * transform.scale);
+			    globe.flightModel.reset();
+		    }
+		    else
+		    {
+			    // A globe in a hand is drawn where the frame draws the hand, not where the turn put it
+			    const auto placed = ecs::drawn_place::DrawnTransformOf(registry, entity, transform);
+			    globe.middle = placed.position + placed.rotation * (centre * transform.scale);
+			    facing = visuals::FacingCamera(globe.middle, eye, visuals::Facing::Globe);
+			    drawnOrigin = globe.middle - facing * (centre * transform.scale);
+		    }
 		    glm::mat4 drawnModel(facing * glm::mat3(glm::scale(glm::mat4(1.0f), transform.scale)));
 		    drawnModel[3] = glm::vec4(drawnOrigin, 1.0f);
 		    globe.drawnModel = drawnModel;

@@ -982,6 +982,9 @@ struct Command
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
+		/// The reports of the player's hand get a fixed latency (value, in milliseconds), as a network game with that
+		/// latency gives them. A throw then moves its start along the flight by the latency. Needs no creature.
+		SetReportLatency,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

@@ -90,6 +90,7 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::springPending>("springPending")
 	    .Field<&components::HandGrab::recordedThrow>("recordedThrow")
 	    .Field<&components::HandGrab::lastThrow>("lastThrow")
+	    .Field<&components::HandGrab::predicted>("predicted")
 	    .Field<&components::HandGrab::lastTarget>("lastTarget")
 	    .Field<&components::HandGrab::scoopSource>("scoopSource")
 	    .Field<&components::HandGrab::scoopTurns>("scoopTurns")

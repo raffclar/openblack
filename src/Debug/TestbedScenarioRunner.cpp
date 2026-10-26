@@ -2354,6 +2354,13 @@ std::string Runner::GivePlayerCommand(const Command& command)
 			return "the hand holds nothing";
 		}
 		return command.velocity == glm::vec3(0.0f) ? "put down" : "thrown";
+	case Kind::SetReportLatency:
+		if (!Locator::handSystem::has_value())
+		{
+			return "no hands";
+		}
+		Locator::handSystem::value().FixReportLatency(static_cast<uint32_t>(command.value));
+		return fmt::format("the reports of the hand come {} ms late", command.value);
 	default:
 		return {};
 	}
@@ -2844,7 +2851,7 @@ void Runner::Give(const Command& command)
 	if (command.kind == Kind::HoldSeed || command.kind == Kind::DrawGesture || command.kind == Kind::SummonSeed ||
 	    command.kind == Kind::PressKey || command.kind == Kind::HandTakeFireBall || command.kind == Kind::HandTapObject ||
 	    command.kind == Kind::HandTake || command.kind == Kind::HandPour || command.kind == Kind::HandRelease ||
-	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
+	    command.kind == Kind::SetReportLatency || command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
@@ -3611,6 +3618,7 @@ void Runner::Give(const Command& command)
 	case Kind::HandTake:
 	case Kind::HandPour:
 	case Kind::HandRelease:
+	case Kind::SetReportLatency:
 	case Kind::AttachObjectScriptSound:
 	case Kind::SayLine:
 	case Kind::PlayGuidanceVoice:

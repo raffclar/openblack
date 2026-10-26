@@ -111,6 +111,8 @@ def game_arguments(options, record, log, until_turn, fast, driven):
             args += ["--skip-opening", options.opening]
     if getattr(options, "network_game", False):
         args.append("--sim-network-game")
+    if getattr(options, "throw_lead_latency_ms", None) is not None:
+        args += ["--throw-lead-latency-ms", str(options.throw_lead_latency_ms)]
     args += options.extra
     return args
 
@@ -531,6 +533,7 @@ def parse(argv):
                               "worlds must agree")
         sub.add_argument("--network-game", action="store_true",
                          help="play the world as a network game does: no pause, and the turns read no part of a frame")
+        sub.add_argument("--throw-lead-latency-ms", type=int, help="a fixed latency in ms for the reports of the hand, so that the lead of each throw is the same in each run")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")
     return parser.parse_args(argv)
 

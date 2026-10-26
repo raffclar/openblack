@@ -352,15 +352,18 @@ bool hand_grab::IsThrow(glm::vec3 velocity, bool byCreature)
 
 bool hand_grab::IsFastRelease(glm::vec3 velocity)
 {
-	return glm::dot(velocity, velocity) > k_FastReleaseSpeedSquared;
+	// The game adds the squares from z to x
+	return x87::DotZyx(velocity, velocity) > k_FastReleaseSpeedSquared;
 }
 
 glm::vec3 hand_grab::ThrowVelocity(std::optional<glm::vec3> recorded, bool springOn, glm::vec3 springVelocity)
 {
 	const auto velocity = recorded.value_or(springOn ? springVelocity : glm::vec3(0.0f));
-	if (const float speed = glm::length(velocity); speed > k_MaxThrowSpeed)
+	// The game compares the square of the speed, with the squares added from z to x. A velocity of none stays none.
+	const float squared = x87::DotZyx(velocity, velocity);
+	if (k_MaxThrowSpeed * k_MaxThrowSpeed < squared && velocity != glm::vec3(0.0f))
 	{
-		return velocity * (k_MaxThrowSpeed / speed);
+		return velocity * (k_MaxThrowSpeed / std::sqrt(squared));
 	}
 	return velocity;
 }

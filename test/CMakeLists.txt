@@ -1797,3 +1797,12 @@ openblack_setup_and_add_test(test_game_end test_game_end.cpp)
 openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
 openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
+openblack_setup_and_add_test(test_throw_lead hand/test_throw_lead.cpp)
+openblack_setup_and_add_test(
+  test_oracle_throw_release oracle/test_oracle_throw_release.cpp
+)
+set_tests_properties(
+  test_oracle_throw_release
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

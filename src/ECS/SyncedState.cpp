@@ -223,6 +223,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "OneOffSpellSeed", .field = "seedPlacement", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnModel", .marker = ""},
     {.component = "OneOffSpellSeed", .field = "drawnTurn", .marker = ""},
+    {.component = "OneOffSpellSeed", .field = "flightModel", .marker = ""},
     // The frames ease the drawn height of a field's crop toward the height that its food gives. Only the draw reads it.
     {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
@@ -276,6 +277,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "springPending", .marker = ""},
     {.component = "HandGrab", .field = "recordedThrow", .marker = ""},
     {.component = "HandGrab", .field = "lastThrow", .marker = ""},
+    {.component = "HandGrab", .field = "predicted", .marker = ""},
     {.component = "HandGrab", .field = "lastTarget", .marker = ""},
     {.component = "HandGrab", .field = "scoopSource", .marker = ""},
     {.component = "HandGrab", .field = "scoopTurns", .marker = ""},

@@ -554,10 +554,16 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 		    .from = grab->spring.Position(),
 		};
 		grab->state = HandGrab::State::LettingGo;
-		// The thing starts as this computer drew it last, and comes up out of the land. The command sends the start to
-		// every computer.
-		_world->SendCommand(player_commands::HandLetGo {
-		    .object = grab->object, .velocity = velocity, .start = ThrowStartOf(grab->object, velocity)});
+		// The thing starts as this computer drew it last, and comes up out of the land. Then it flies for as many turns
+		// as the reports of this hand come late. The command sends the start and the velocity after them to every
+		// computer. Until the turn of the command, the frames draw the thing along that flight.
+		auto led = ThrowStartOf(grab->object, velocity, hand_grab::throw_lead::LeadTurns(_world->ReportLatencyMs()));
+		if (led.flight.has_value())
+		{
+			led.flight->sentTurn = _world->FrameTurn();
+		}
+		grab->predicted = std::move(led.flight);
+		_world->SendCommand(player_commands::HandLetGo {.object = grab->object, .velocity = led.velocity, .start = led.start});
 		return std::nullopt;
 	}
 	case HandGrab::State::Holding:
@@ -581,11 +587,11 @@ std::optional<entt::entity> HandGrabSystem::Release(uint32_t nowMs, uint32_t tur
 	return std::nullopt;
 }
 
-player_commands::ThrowStart HandGrabSystem::ThrowStartOf(entt::entity object, glm::vec3 velocity)
+hand_grab::throw_lead::LedThrow HandGrabSystem::ThrowStartOf(entt::entity object, glm::vec3 velocity, int leadTurns)
 {
 	// It lies along the slope when the hand lets go slowly, but not a tree of any kind
 	const bool anyTree = _world->Entities().AnyOf<Tree, DeadTree>(object);
-	return _world->ThrowStartOf(object, !(anyTree || hand_grab::IsFastRelease(velocity)));
+	return _world->ThrowStartOf(object, !(anyTree || hand_grab::IsFastRelease(velocity)), velocity, leadTurns);
 }
 
 void HandGrabSystem::DoLetGo(PlayerNames player, const player_commands::HandLetGo& letGo)
@@ -1359,6 +1365,7 @@ void HandGrabSystem::Empty(HandGrab& grab)
 	grab.scoopSource = entt::null;
 	grab.scoopTurns = 0;
 	grab.locking = entt::null;
+	grab.predicted.reset();
 }
 
 glm::vec3 HandGrabSystem::UpdateFrame(const Frame& frame)
@@ -1887,6 +1894,20 @@ void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 	});
 }
 
+void HandGrabSystem::DrawThrownForFrame()
+{
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto* grab = Grab();
+	if (grab == nullptr || grab->state != HandGrab::State::LettingGo || !grab->predicted.has_value() || !Exists(grab->object))
+	{
+		return;
+	}
+	// The hand does not move the thing. The thing goes along the flight from the turn of the send.
+	_world->DrawThrownPose(
+	    grab->object, hand_grab::throw_lead::DrawnPose(*grab->predicted, _world->FrameTurn(), _world->FrameTurnFraction()));
+}
+
 void HandGrabSystem::SetRecordedThrow(glm::vec3 velocity)
 {
 	// The input and the frames of this computer act with its own hand
@@ -1933,7 +1954,9 @@ bool HandGrabSystem::LetGoAt(glm::vec3 velocity)
 	{
 		EndScoop(*grab);
 	}
-	LetGo(*grab, velocity, ThrowStartOf(grab->object, velocity));
+	// This let go does not wait for a turn, thus it has no lead
+	const auto led = ThrowStartOf(grab->object, velocity, 0);
+	LetGo(*grab, led.velocity, led.start);
 	return true;
 }
 
