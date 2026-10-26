@@ -133,7 +133,8 @@ bool ScriptHoldsCamera(const Camera& camera)
 
 std::string_view PageName(gui::GameMenu::Page page)
 {
-	constexpr std::array<std::string_view, 6> k_Pages {"main", "options", "players", "advanced", "controls", "statistics"};
+	constexpr std::array<std::string_view, 7> k_Pages {"main",     "options",    "players",   "advanced",
+	                                                   "controls", "statistics", "conditions"};
 	const auto index = static_cast<size_t>(page);
 	return index < k_Pages.size() ? k_Pages.at(index) : "unknown";
 }
@@ -488,7 +489,9 @@ std::vector<WindowInfo> GameGui::Windows() const
 		// The end box of a skirmish or a network game: its title, and its controls
 		const auto& endBox = game->GetInterface()->GetEndGameBox();
 		WindowInfo end {.name = std::string(k_EndBox), .kind = "game", .open = endBox.IsOpen()};
-		end.page = endBox.ShowsStatistics() ? "statistics" : gui::ToUtf8(endBox.GetContents().title);
+		end.page = endBox.ShowsStatistics()   ? "statistics"
+		           : endBox.ShowsConditions() ? "conditions"
+		                                      : gui::ToUtf8(endBox.GetContents().title);
 		for (const auto& control : DialogControls(endBox.GetNamedControls()))
 		{
 			end.buttons.push_back(control.name);

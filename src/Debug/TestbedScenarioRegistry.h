@@ -967,13 +967,17 @@ struct Command
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
 		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
-		/// takes the scenario's object (object). Then the player reports its hand at the point (point), so high above
-		/// the land (radius), and its camera 30 m above the hand. This computer does not move these hands. Needs no
-		/// creature.
+		/// takes the scenario's object (object), or holds a miracle seed (heldSeed) in place of the object. Then the
+		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the
+		/// hand. This computer does not move these hands. Needs no creature.
 		OtherGodHand,
 		/// A press of the Join Online Game button of the browser page: the game opens the multiplayer front end at the
 		/// next frame that it may open in, also while a cut scene has the cinema bars in. Needs no creature.
 		JoinOnline,
+		/// The end box: the question to leave a network game opens (value 0), as Exit Online Game opens it, or the open
+		/// end box opens the box of one of its tabs (value 1 Multiplayer, 2 Statistics), as a click on the tab does.
+		/// Value 3 opens the main menu as it shows in a network game. Needs no creature.
+		EndBox,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
@@ -996,6 +1000,8 @@ struct Command
 	float hour {12.0f};
 	/// The object picked up, knocked down or tied to, by its place in the scenario's objects
 	size_t object {0};
+	/// The miracle seed that another god's hand holds in place of the object
+	std::optional<SpellSeedType> heldSeed;
 	/// The action a script tells it to do, by its name in the game's table, and the object it does it with
 	std::string_view action;
 	std::optional<size_t> with;

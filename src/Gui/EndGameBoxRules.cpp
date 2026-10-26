@@ -22,7 +22,7 @@ void OpenEndBox(Opened& opened, State& state, Box box)
 {
 	opened.godOut.reset();
 	opened.endBox = box;
-	state.endBoxOpened = true;
+	state.endBoxShowing = true;
 }
 } // namespace
 
@@ -45,7 +45,7 @@ Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State&
 				state.gameGoesOn = true;
 				OpenEndBox(opened, state, {.kind = Kind::Lost, .watch = true});
 			}
-			else if (!state.endBoxOpened)
+			else if (!state.endBoxShowing)
 			{
 				opened.godOut = event.god;
 			}
@@ -65,6 +65,18 @@ Opened Follow(std::span<const game_end::Event> events, PlayerNames local, State&
 		}
 	}
 	return opened;
+}
+
+Box AskToLeave(State& state)
+{
+	state.gameGoesOn = true;
+	state.endBoxShowing = true;
+	return {.kind = Kind::LeaveQuestion, .watch = false};
+}
+
+void StoppedShowing(State& state)
+{
+	state.endBoxShowing = false;
 }
 
 bool StopsTheGame(const Box& box, const State& state)
