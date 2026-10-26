@@ -96,6 +96,13 @@ std::filesystem::path DanceFilePath(const std::string& name)
 	return path;
 }
 
+/// The name of the file of a row of the dances' table
+std::string FileNameOf(const GDanceInfo& info)
+{
+	const std::string_view field(info.fileName.data(), info.fileName.size());
+	return std::string(field.substr(0, field.find('\0')));
+}
+
 /// A dance's file, read once
 std::shared_ptr<const dance::DanceFile> LoadDanceFile(const std::string& name)
 {
@@ -164,9 +171,7 @@ entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::e
 		return entt::null;
 	}
 	const auto& info = table.at(row);
-	const std::string_view field(info.fileName.data(), info.fileName.size());
-	const std::string fileName(field.substr(0, field.find('\0')));
-	auto file = LoadDanceFile(fileName);
+	auto file = LoadDanceFile(FileNameOf(info));
 	if (file == nullptr)
 	{
 		return entt::null;
@@ -184,6 +189,23 @@ entt::entity DanceSystem::Create(DanceInfo type, const glm::vec3& place, entt::e
 		Locator::footpathSystem::value().DanceMade(dance, town);
 	}
 	return dance;
+}
+
+void DanceSystem::FindFilesAgain()
+{
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& table = Locator::infoConstants::value().dance;
+	for (auto&& [entity, dance] : Locator::entitiesRegistry::value().Underlying().view<Dance>().each())
+	{
+		const auto row = static_cast<std::size_t>(dance.type);
+		if (dance.file == nullptr && dance.type != DanceInfo::None && row < table.size())
+		{
+			dance.file = LoadDanceFile(FileNameOf(table.at(row)));
+		}
+	}
 }
 
 void DanceSystem::Destroy(entt::entity dance)

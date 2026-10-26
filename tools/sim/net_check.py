@@ -679,10 +679,13 @@ def main():
         "--come-back-seconds", str(options.come_back_seconds)]
     if options.server_frame_ms is not None:
         server_command += ["--frame-ms", str(options.server_frame_ms)]
-    if options.trace_draws:
-        server_command += ["--trace-draws", server_trace]
     if options.temple_loss:
         server_command += ["--temple-loss", options.temple_loss]
+    # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+    land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map}
+    server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
+    if options.trace_draws:
+        server_command += ["--trace-draws", server_trace]
     if options.hash_parts:
         server_command += ["--record", os.path.join(server_dir, "record.jsonl")]
         if options.hash_fields:
@@ -723,6 +726,7 @@ def main():
                     command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.temple_loss:
                 command += ["--sim-temple-loss", options.temple_loss]
+            command += sim_report.gods_need_no_temple_args(False, **land_kind)
             if leaver == index:
                 command += ["--sim-leave-at", str(leave_turn)]
             if options.hash_fields:

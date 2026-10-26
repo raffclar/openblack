@@ -229,6 +229,10 @@ def main():
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
     server_command += options.server_args.split()
+    # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+    land_kind = {"land": options.land, "testbed": options.testbed, "gods_ring_map": options.gods_ring_map,
+                 "scenario": options.scenario}
+    server_command += sim_report.gods_need_no_temple_args(True, **land_kind)
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
@@ -246,6 +250,7 @@ def main():
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
                     "-l", game_log, "--sim-network-game"] + where
+    game_command += sim_report.gods_need_no_temple_args(False, **land_kind)
     if events is None:
         game_command.append("--sim-still-hand")
     else:

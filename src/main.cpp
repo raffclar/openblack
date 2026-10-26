@@ -154,6 +154,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("join-creature", "Tests: with --join, send this creature file before the start in place of the creature of the player's profile.", cxxopts::value<std::string>())
 		("join-part-again", "Tests: with --join-part-at, the world parts again after each load of the server's world, so that the resyncs do not work and the game shows the out-of-sync box.")
 		("sim-network-game", "Tools: play the world as a network game does, with no network: the P key, the menu, the temple and the films do not stop the game's clock, and the turns read no part of a frame.")
+		("sim-gods-need-no-temple", "Tests: a god with no temple stays in a network game, for a land that makes no temple at its start (a story land). Each computer of a network game needs the same switch.")
 		("sim-temple-loss", "Tests: at a turn, the temple of a player starts its destruction, as PLAYER:TURN (for example 1:300, the player from 0). Each computer of a network game needs the same switch.", cxxopts::value<std::string>())
 		("sim-leave-at", "Tests: at this turn the player of a network game leaves it as a player does, by Escape, Exit Online Game and Leave Game.", cxxopts::value<uint32_t>())
 		("sim-still-hand", "Tools: the hand stays where it starts and does not follow the pointer, so that runs at other frame rates get the same input from the hand.")
@@ -388,6 +389,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				simulation.settings.untilTurn = result["sim-until-turn"].as<uint32_t>();
 			}
 			simulation.settings.stillHand = result.count("sim-still-hand") != 0;
+			simulation.settings.godsNeedNoTemple = result.count("sim-gods-need-no-temple") != 0;
 			if (result.count("sim-temple-loss") != 0)
 			{
 				simulation.settings.templeLoss =

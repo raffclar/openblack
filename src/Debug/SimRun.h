@@ -67,6 +67,9 @@ struct Settings
 	bool stillHand {false};
 	/// Tests: the loss of a temple at a turn
 	std::optional<TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in a network game. For tool runs of a land that makes no temple at its start,
+	/// such as a story land. Each computer of a network game must have the same switch.
+	bool godsNeedNoTemple {false};
 	/// Tests: at this turn the player of a network game leaves it as a player does: Escape, Exit Online Game, Leave Game
 	std::optional<uint32_t> leaveAt;
 };

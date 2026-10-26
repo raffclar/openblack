@@ -92,6 +92,8 @@ struct ServerSettings
 	std::optional<uint32_t> turns;
 	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
 	std::optional<sim_run::TempleLoss> templeLoss;
+	/// Tests: a god with no temple stays in the game, which every client of the network game must also have
+	bool godsNeedNoTemple {false};
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock

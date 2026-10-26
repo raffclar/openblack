@@ -118,6 +118,9 @@ struct Facts
 	std::optional<uint32_t> timeLimitTurn;
 	/// The number of the winning conditions of the network game
 	size_t conditionCount {0};
+	/// A god with no temple is out. Tests set it to false for a land that makes no temple at its start, such as a story
+	/// land that a tool plays as a network game. Every network game of the game lands makes each temple at the start.
+	bool templeRule {true};
 };
 
 /// What the end of the game keeps between turns

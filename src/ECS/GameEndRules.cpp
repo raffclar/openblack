@@ -235,7 +235,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 				continue;
 			}
 			auto& standing = world.Standing(god);
-			if (!world.HasTemple(god) && !standing.out)
+			if (facts.templeRule && !world.HasTemple(god) && !standing.out)
 			{
 				templesLost = true;
 			}
@@ -280,7 +280,7 @@ std::vector<Event> ProcessTurn(World& world, const Facts& facts, State& state)
 	for (const auto god : gods)
 	{
 		auto& standing = world.Standing(god);
-		if (CanLose(god) && !world.HasTemple(god) && !standing.out)
+		if (facts.templeRule && CanLose(god) && !world.HasTemple(god) && !standing.out)
 		{
 			standing.out = true;
 			world.RemoveCreature(god);

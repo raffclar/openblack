@@ -111,6 +111,10 @@ def game_arguments(options, record, log, until_turn, fast, driven):
             args += ["--skip-opening", options.opening]
     if getattr(options, "network_game", False):
         args.append("--sim-network-game")
+        # A land with no temple at the start (a story land, the testbed) would end the game at its first turn
+        args += sim_report.gods_need_no_temple_args(False, land=getattr(options, "land", ""),
+                                                    testbed=getattr(options, "testbed", False),
+                                                    scenario=getattr(options, "scenario", None))
     args += options.extra
     return args
 

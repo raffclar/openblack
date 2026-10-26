@@ -28,6 +28,7 @@ public:
 	                    entt::entity town) override;
 	void Destroy(entt::entity dance) override;
 	void ProcessTurn() override;
+	void FindFilesAgain() override;
 	void ProcessCameraKeys(bool gripsLand) override;
 	void CheckCamera() override;
 	[[nodiscard]] const std::array<dance_shapes::Shape, dance_shapes::k_ShapeCount>& Shapes() override;
