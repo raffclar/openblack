@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
@@ -429,5 +430,36 @@ void PlayCreaturesTurn(Do&& step)
 static_assert(k_Turn.size() + k_CreaturesTurn.size() == static_cast<size_t>(Step::_Count),
               "Each step has one place in the turn or in the creatures' turn");
 static_assert(InGameOrder(k_Turn), "The steps of the turn follow the game's stages");
+
+/// The step that starts the part of the turn that measures the influence from where the hands were at the turn. The
+/// game measures so for its full turn, the players' commands too. Then all computers get the same result.
+inline constexpr Step k_TurnHandsInfluenceStart = Step::DrawnPlaces;
+/// The step that ends that part. From this step on, the influence comes from where this computer shows its hand.
+inline constexpr Step k_TurnHandsInfluenceEnd = Step::InfluenceTurnEnd;
+
+/// True when the step measures the influence from where the hands were at the turn. The steps of a creature's own
+/// turn are in the turn of the living, so they measure so too.
+[[nodiscard]] constexpr bool MeasuresInfluenceFromTurnHands(Step step) noexcept
+{
+	bool measures = false;
+	for (const auto& place : k_Turn)
+	{
+		if (place.step == k_TurnHandsInfluenceStart)
+		{
+			measures = true;
+		}
+		if (place.step == k_TurnHandsInfluenceEnd)
+		{
+			measures = false;
+		}
+		if (place.step == step)
+		{
+			return measures;
+		}
+	}
+	return std::ranges::find(k_CreaturesTurn, step) != k_CreaturesTurn.end();
+}
+
+static_assert(k_Turn.front().step == k_TurnHandsInfluenceStart, "The influence comes from the turn hands for the full turn");
 
 } // namespace openblack::game_turn
