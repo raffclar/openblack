@@ -352,7 +352,7 @@ void TempleDestructionSystem::EndTurn()
 		return;
 	}
 	// The local player whose temple is being destroyed has lost: the game's end is played out by its script, once, and
-	// never in a skirmish
+	// never in a skirmish or a network game
 	auto& context = registry->Context();
 	bool destroying = false;
 	registry->Each<const Temple>([&local, &destroying](entt::entity, const Temple& temple) {
@@ -361,7 +361,7 @@ void TempleDestructionSystem::EndTurn()
 	if (temple_destruction::GameOverStarts({
 	        .over = context.gameOver,
 	        .skirmish = context.skirmish,
-	        .multiplayer = false,
+	        .multiplayer = _world->NetworkGame(),
 	        .localTempleDestroying = destroying,
 	    }))
 	{
