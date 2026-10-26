@@ -20,6 +20,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include <LobbyApiJson.h>
@@ -30,6 +31,7 @@
 #include "Gui/MultiplayerBoxes.h"
 #include "Gui/MultiplayerFrontEnd.h"
 #include "Gui/MultiplayerFrontEndRules.h"
+#include "Gui/ScreenFit.h"
 #include "Gui/TextDatabase.h"
 #include "Online/LanDiscoveryInterface.h"
 #include "Online/NetworkSession.h"
@@ -1298,4 +1300,42 @@ TEST_F(FrontEndTest, EveryControlOfEachBoxIsInTheFrameOfTheBox)
 	boxes.Update(0.0f);
 	EXPECT_EQ(boxes.GetFrontEnd()->GetBox(), Box::Conditions);
 	EXPECT_EQ(ControlsOutOfTheFrame(boxes), std::vector<std::u16string> {});
+}
+
+TEST_F(FrontEndTest, NoControlOfTheGameListGoesUnderRefreshList)
+{
+	const auto texts = ButtonTexts();
+	const auto font = gui::test::LoadFont();
+	MultiplayerBoxes boxes {texts, font};
+	ToGameList();
+	boxes.Open(std::move(frontEnd));
+	const auto check = [&boxes](std::string_view when) {
+		const auto controls = boxes.GetNamedControls();
+		const auto refresh = std::ranges::find(controls, std::u16string(u"APATCH_09"), &Dialog::NamedControl::name);
+		ASSERT_NE(refresh, controls.end()) << when;
+		const auto crosses = [](const DialogRect& a, const DialogRect& b) {
+			return a.min.x < b.max.x && b.min.x < a.max.x && a.min.y < b.max.y && b.min.y < a.max.y;
+		};
+		const auto rects = boxes.GetVisibleRects();
+		// Only the button itself is in its place, on the default screen and on the screens of the looks
+		EXPECT_EQ(std::ranges::count_if(rects, [&](const DialogRect& rect) { return crosses(rect, refresh->rect); }), 1)
+		    << when;
+		for (const auto& [width, height] : {std::pair {1280, 1024}, std::pair {1920, 1080}})
+		{
+			const auto space = FrontEndSpace(width, height);
+			const auto onScreen = [&space](const DialogRect& rect) {
+				return std::pair {space.ToScreen(glm::vec2(rect.min)), space.ToScreen(glm::vec2(rect.max))};
+			};
+			const auto [buttonMin, buttonMax] = onScreen(refresh->rect);
+			const auto count = std::ranges::count_if(rects, [&](const DialogRect& rect) {
+				const auto [min, max] = onScreen(rect);
+				return min.x < buttonMax.x && buttonMin.x < max.x && min.y < buttonMax.y && buttonMin.y < max.y;
+			});
+			EXPECT_EQ(count, 1) << when << " " << width << "x" << height;
+		}
+	};
+	check("no game picked");
+	boxes.GetFrontEnd()->SelectGame(0);
+	boxes.Update(0.0f);
+	check("a game picked");
 }

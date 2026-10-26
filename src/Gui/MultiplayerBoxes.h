@@ -80,6 +80,8 @@ public:
 
 	/// The controls that act, for tools that press them by name
 	[[nodiscard]] std::vector<Dialog::NamedControl> GetNamedControls() const;
+	/// The places of all the visible controls of the box, for tools
+	[[nodiscard]] std::vector<DialogRect> GetVisibleRects() const;
 	/// The box shows the text of a message, for tools; empty when there is none
 	[[nodiscard]] std::u16string_view GetMessageText() const;
 
