@@ -23,7 +23,6 @@ class GameVillageTotemWorld final: public village_totem::WorldInterface
 {
 public:
 	[[nodiscard]] Registry& Entities() override;
-	[[nodiscard]] Registry& DrawnThings() override;
 	[[nodiscard]] entt::id_type IconMeshFor(PlayerNames player) const override;
 	[[nodiscard]] Size SizeOf(entt::entity object) const override;
 	[[nodiscard]] float LandHeightAt(glm::vec2 point) const override;

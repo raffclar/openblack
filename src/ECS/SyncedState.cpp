@@ -175,10 +175,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "ChallengePicture", .field = "small", .marker = ""},
     {.component = "ChallengePicture", .field = "waiting", .marker = ""},
     {.component = "ChallengePicture", .field = "taken", .marker = ""},
-    // The see-through copy of a town totem and of its icon is a thing of the drawn registry. The frames make, move and
-    // remove it, and the totem keeps its entities.
-    {.component = "VillageTotem", .field = "ghost", .marker = ""},
-    {.component = "VillageTotem", .field = "ghostIcon", .marker = ""},
+    // The turn makes the see-through copy of a town totem and of its icon. The frames move, show and hide it.
+    {.component = "*", .field = "", .marker = "VillageTotemGhost"},
     // The draw gives the light of the frame to a thing in the hand, and takes it away when the hand lets go
     {.component = "HeldLight", .field = "", .marker = ""},
     // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.

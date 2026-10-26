@@ -526,8 +526,8 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::alignmentSystem::value().UpdatePlayersTurn();
 		break;
 	case Step::VillageTotems:
-		// A town totem that arrives at its share rings the village bell. The totems ease by the clock of this computer, as
-		// the game does. The ease and the bell are only for the look and the sound, so the synced world does not read them.
+		// A town totem goes with its town centre, and a totem that arrives at its share rings the village bell. The totems
+		// ease by the clock of this computer, as the game does. The ease and the bell are only for the look and the sound.
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:

@@ -26,6 +26,7 @@
 #include "ECS/Components/Forest.h"
 #include "ECS/Components/HandClicked.h"
 #include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandHeldSeed.h"
 #include "ECS/Components/HeldDrawTrack.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/Mobile.h"
@@ -1893,6 +1894,24 @@ void HandGrabSystem::PlaceOthersHeldForFrame(int32_t frameMs)
 		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
 		// Only the draw reads this place. The turns keep the thing at the reported place of the hand.
 		inHand.drawn = InHand::Drawn {.position = _world->AsMapPlace(point), .rotation = glm::mat3(1.0f)};
+	});
+	// A miracle seed in the hand of another god moves the same way. Its model shows only for a miracle that shows one
+	// in the hand; this computer draws no effect of it, as the hand of another god is not drawn.
+	registry.Each<const HandHeldSeed>([this, &registry, frameMs](entt::entity hand, const HandHeldSeed& held) {
+		if (!registry.Valid(held.seed) || !_world->IsOtherPlayersHand(hand))
+		{
+			return;
+		}
+		auto* transform = registry.TryGet<Transform>(held.seed);
+		if (transform == nullptr)
+		{
+			return;
+		}
+		const auto reported = _world->ReportedPlaceOf(hand);
+		auto* track = registry.TryGet<HeldDrawTrack>(hand);
+		const auto point = track != nullptr ? hand_grab::other_held::Step(*track, reported, frameMs) : reported;
+		transform->position = _world->AsMapPlace(point);
+		transform->rotation = glm::mat3(1.0f);
 	});
 }
 

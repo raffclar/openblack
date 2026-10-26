@@ -34,17 +34,6 @@ using namespace openblack;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 
-namespace
-{
-/// Whether a thing of the drawn registry is the see-through copy of a thing of the land. The entity that a totem keeps
-/// for its copy can be one that went with the drawn registry.
-bool CopyOf(const openblack::ecs::Registry& drawn, entt::entity copy, entt::entity of)
-{
-	const auto* seeThrough = drawn.Valid(copy) ? drawn.TryGet<const SeeThrough>(copy) : nullptr;
-	return seeThrough != nullptr && seeThrough->of == of;
-}
-} // namespace
-
 VillageTotemSystem::VillageTotemSystem()
     : VillageTotemSystem(std::make_unique<GameVillageTotemWorld>())
 {
@@ -75,14 +64,53 @@ entt::entity VillageTotemSystem::TownOf(entt::entity totem) const
 	return found != towns.end() && registry.Valid(found->second) ? found->second : entt::null;
 }
 
+void VillageTotemSystem::MakeParts(entt::entity totem)
+{
+	// The turn makes the see-through second plinth and icon with the totem, so that every computer has them. The frames
+	// only move them, and show them while the totem's two shares stand apart.
+	auto& registry = _world->Entities();
+	const auto makeGhost = [&registry](entt::entity& ghost, entt::entity of) {
+		if (registry.Valid(ghost) || !registry.Valid(of))
+		{
+			return;
+		}
+		// Copied out first: adding to a pool may move what is in it
+		const Transform transform = registry.Get<const Transform>(of);
+		const auto* mesh = registry.TryGet<const Mesh>(of);
+		const std::optional<Mesh> drawn = mesh != nullptr ? std::optional(*mesh) : std::nullopt;
+		ghost = registry.Create();
+		registry.Assign<Transform>(ghost, transform);
+		if (drawn.has_value())
+		{
+			registry.Assign<Mesh>(ghost, *drawn);
+		}
+		registry.Assign<SeeThrough>(ghost, village_totem::k_GhostAlpha);
+		registry.Assign<VillageTotemGhost>(ghost);
+		registry.Assign<VillageTotemGhostHidden>(ghost);
+	};
+	auto ghost = registry.Get<const VillageTotem>(totem).ghost;
+	const auto icon = registry.Get<const VillageTotem>(totem).icon;
+	makeGhost(ghost, totem);
+	auto ghostIcon = registry.Get<const VillageTotem>(totem).ghostIcon;
+	makeGhost(ghostIcon, icon);
+	auto& totemComponent = registry.Get<VillageTotem>(totem);
+	totemComponent.ghost = ghost;
+	totemComponent.ghostIcon = ghostIcon;
+	if (registry.Valid(icon) && !registry.AllOf<VillageTotemIcon>(icon))
+	{
+		registry.Assign<VillageTotemIcon>(icon);
+	}
+}
+
 void VillageTotemSystem::AddToPlayer(entt::entity totem)
 {
 	auto& registry = _world->Entities();
-	auto* totemComponent = registry.TryGet<VillageTotem>(totem);
-	if (totemComponent == nullptr)
+	if (!registry.AllOf<VillageTotem>(totem))
 	{
 		return;
 	}
+	MakeParts(totem);
+	auto* totemComponent = registry.TryGet<VillageTotem>(totem);
 	const auto town = TownOf(totem);
 	if (town == entt::null)
 	{
@@ -116,14 +144,12 @@ void VillageTotemSystem::ShowIcon(const VillageTotem& totem, entt::id_type iconM
 	// The player's creature stands on top, or the hand, on the second totem too. It is drawn afresh where it stands,
 	// which shows no tooltip.
 	auto& registry = _world->Entities();
-	auto& drawn = _world->DrawnThings();
-	if (auto* mesh = registry.Valid(totem.icon) ? registry.TryGet<Mesh>(totem.icon) : nullptr)
+	for (const auto icon : {totem.icon, totem.ghostIcon})
 	{
-		mesh->id = iconMesh;
-	}
-	if (auto* mesh = CopyOf(drawn, totem.ghostIcon, totem.icon) ? drawn.TryGet<Mesh>(totem.ghostIcon) : nullptr)
-	{
-		mesh->id = iconMesh;
+		if (auto* mesh = registry.Valid(icon) ? registry.TryGet<Mesh>(icon) : nullptr)
+		{
+			mesh->id = iconMesh;
+		}
 	}
 }
 
@@ -201,45 +227,44 @@ void VillageTotemSystem::Place(entt::entity totem)
 
 void VillageTotemSystem::PlaceGhost(entt::entity totem, std::optional<float> share)
 {
+	// The frames only move and show the second plinth and its icon, which the turn made with the totem. They make and
+	// remove no entity.
 	auto& registry = _world->Entities();
-	// The second totem is a thing of the drawn registry: only the frames make, place and remove it
-	auto& drawn = _world->DrawnThings();
-	auto& totemComponent = registry.Get<VillageTotem>(totem);
-	if (!share.has_value())
-	{
-		for (const auto& [ghost, of] :
-		     {std::pair {&totemComponent.ghost, totem}, std::pair {&totemComponent.ghostIcon, totemComponent.icon}})
+	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
+	const auto show = [&registry, &share](entt::entity ghost) {
+		if (!registry.Valid(ghost))
 		{
-			if (CopyOf(drawn, *ghost, of))
-			{
-				drawn.Destroy(*ghost);
-			}
-			*ghost = entt::null;
+			return false;
 		}
+		const bool hidden = registry.AllOf<VillageTotemGhostHidden>(ghost);
+		if (share.has_value() && hidden)
+		{
+			registry.Remove<VillageTotemGhostHidden>(ghost);
+		}
+		else if (!share.has_value() && !hidden)
+		{
+			registry.Assign<VillageTotemGhostHidden>(ghost);
+		}
+		return share.has_value();
+	};
+	if (!show(totemComponent.ghost))
+	{
+		show(totemComponent.ghostIcon);
 		return;
 	}
-	// A copy of the plinth and of its icon, drawn half see-through
-	const auto copy = [&registry, &drawn](entt::entity& ghost, entt::entity of) {
-		if (CopyOf(drawn, ghost, of) || !registry.Valid(of))
-		{
-			return;
-		}
-		const auto* mesh = registry.TryGet<const Mesh>(of);
-		ghost = drawn.Create();
-		drawn.Assign<Transform>(ghost, registry.Get<const Transform>(of));
-		if (mesh != nullptr)
-		{
-			drawn.Assign<Mesh>(ghost, *mesh);
-		}
-		drawn.Assign<SeeThrough>(ghost, village_totem::k_GhostAlpha, of);
-	};
-	copy(totemComponent.ghost, totem);
-	copy(totemComponent.ghostIcon, totemComponent.icon);
-	auto& transform = drawn.Get<Transform>(totemComponent.ghost);
+	auto& transform = registry.Get<Transform>(totemComponent.ghost);
+	transform = registry.Get<const Transform>(totem);
 	transform.position.y = totemComponent.restY + village_totem::RiseOf(*share);
-	if (auto* icon = drawn.Valid(totemComponent.ghostIcon) ? drawn.TryGet<Transform>(totemComponent.ghostIcon) : nullptr)
+	if (show(totemComponent.ghostIcon))
 	{
-		icon->position = transform.position + glm::vec3(0.0f, village_totem::k_IconAbovePlinth, 0.0f);
+		auto& icon = registry.Get<Transform>(totemComponent.ghostIcon);
+		const auto* solidIcon =
+		    registry.Valid(totemComponent.icon) ? registry.TryGet<const Transform>(totemComponent.icon) : nullptr;
+		if (solidIcon != nullptr)
+		{
+			icon = *solidIcon;
+		}
+		icon.position = transform.position + glm::vec3(0.0f, village_totem::k_IconAbovePlinth, 0.0f);
 	}
 }
 
@@ -265,10 +290,13 @@ void VillageTotemSystem::Remove(entt::entity totem)
 {
 	auto& registry = _world->Entities();
 	_world->SetMovingSound(totem, false);
-	PlaceGhost(totem, std::nullopt);
-	if (const auto icon = registry.Get<const VillageTotem>(totem).icon; registry.Valid(icon))
+	const auto& totemComponent = registry.Get<const VillageTotem>(totem);
+	for (const auto part : {totemComponent.icon, totemComponent.ghost, totemComponent.ghostIcon})
 	{
-		registry.Destroy(icon);
+		if (registry.Valid(part))
+		{
+			registry.Destroy(part);
+		}
 	}
 	registry.Destroy(totem);
 }
@@ -281,10 +309,9 @@ void VillageTotemSystem::Update(uint32_t realMs)
 	for (const auto totem : totems)
 	{
 		auto& totemComponent = registry.Get<VillageTotem>(totem);
-		// It goes with its town centre
+		// A totem whose town centre went goes at the next turn
 		if (!registry.Valid(totemComponent.townCentre))
 		{
-			Remove(totem);
 			continue;
 		}
 		village_totem::StepTo(totemComponent.ease, realMs);
@@ -304,9 +331,12 @@ void VillageTotemSystem::ProcessTurn(uint32_t realMs)
 {
 	auto& registry = _world->Entities();
 	std::vector<entt::entity> arrived;
-	registry.Each<VillageTotem>([&registry, &arrived, realMs](entt::entity totem, VillageTotem& totemComponent) {
+	std::vector<entt::entity> gone;
+	registry.Each<VillageTotem>([&registry, &arrived, &gone, realMs](entt::entity totem, VillageTotem& totemComponent) {
+		// It goes with its town centre
 		if (!registry.Valid(totemComponent.townCentre))
 		{
+			gone.push_back(totem);
 			return;
 		}
 		village_totem::StepTo(totemComponent.ease, realMs);
@@ -320,6 +350,14 @@ void VillageTotemSystem::ProcessTurn(uint32_t realMs)
 	{
 		_world->SetMovingSound(totem, false);
 		_world->RingBell(registry.Get<const Transform>(totem).position);
+	}
+	for (const auto totem : gone)
+	{
+		Remove(totem);
+	}
+	if (_gripped != entt::null && !registry.Valid(_gripped))
+	{
+		_gripped = entt::null;
 	}
 }
 

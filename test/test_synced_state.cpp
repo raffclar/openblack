@@ -193,11 +193,14 @@ TEST(SyncedState, TheLightOfAThingInTheHandIsNotSynced)
 	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "HeldLight", "takenAt"));
 }
 
-TEST(SyncedState, TheEntitiesOfTheSeeThroughCopyOfATotemAreNotSynced)
+TEST(SyncedState, TheFramesMoveTheSeeThroughCopyOfATotemButTheTurnMakesIt)
 {
 	const auto parts = synced_state::PresentationParts();
-	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
-	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghostIcon"));
+	EXPECT_TRUE(std::ranges::any_of(parts, [](const synced_state::PresentationPart& part) {
+		return part.component == "*" && part.marker == "VillageTotemGhost";
+	}));
+	// The totem keeps the entities that the turn made
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "VillageTotem", "ghost"));
 }
 
 TEST(SyncedState, TheHeightWhereTheFramesDrawATotemIsNotSynced)

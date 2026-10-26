@@ -74,6 +74,7 @@
 #include "ECS/Components/Translucent.h"
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Unlit.h"
+#include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/DrawnPlace.h"
@@ -217,7 +218,8 @@ void EachBySegment(const Place& place, SegmentPasses passes)
 	using namespace openblack::ecs::components;
 	do
 	{
-		passes.registry.Each<Components...>(place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState>);
+		passes.registry.Each<Components...>(
+		    place, entt::exclude<TempleInteriorPart, Tree, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	} while (passes.placed++ < passes.last);
 }
 
@@ -349,14 +351,14 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 
 	registry.Each<const Mesh, const Transform>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
-	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState>);
+	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
 		    prep(entity, mesh, true);
 	    },
 	    entt::exclude<Tree>);
-	// The things that only the frames make, as the see-through second totem and the stones on a plinth, are drawn as the
-	// things of the land of their model are. Each one that can fade has room among those fading out too.
+	// The things that only the frames make, as the stones on a plinth, are drawn as the things of the land of their model
+	// are. Each one that can fade has room among those fading out too.
 	if (Locator::drawnRegistry::has_value())
 	{
 		const auto& drawn = Locator::drawnRegistry::value();
@@ -1394,13 +1396,9 @@ void RenderingSystem::UploadDrawnThings(bool drawBoundingBox, bool& fits, std::v
 			return;
 		}
 		graphics::fizz_draw_order::NoteSegment(slots->second.segmentStarts, slots->second.filled, 0);
-		// The w is the snow that the thing shows. A see-through copy is blended by its own alpha.
+		// The w is the snow that the thing shows
 		glm::vec4 look {graphics::object_tint::PackAdded(0, 0.0f), 0.0f, 0.0f,
 		                static_cast<float>(openblack::ecs::snow_levels::LevelOf(drawn, entity))};
-		if (const auto* seeThrough = drawn.TryGet<const SeeThrough>(entity))
-		{
-			look.z = -(1.0f - static_cast<float>(seeThrough->alpha) / 255.0f);
-		}
 		if (fade.has_value())
 		{
 			look.z = -(1.0f - (static_cast<float>(*fade) / 255.0f));

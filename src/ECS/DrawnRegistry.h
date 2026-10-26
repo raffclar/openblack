@@ -15,10 +15,10 @@ namespace openblack::ecs
 {
 
 /// The registry of the things that only the frames make, move and remove, and that only the draw, the picks and the
-/// tools read: the copy of a creature in a film, the marks over the disciples, the see-through second totem and the
-/// stones on a plinth. These things take no entity numbers from the land's registry, so the synced world is the same
-/// on each computer at any frame rate. A thing of this registry can refer to a thing of the land by its entity. A field
-/// of a thing of the land that keeps the entity of a thing of this registry is not a part of the synced world.
+/// tools read: the copy of a creature in a film, the marks over the disciples and the stones on a plinth. These things take no
+/// entity numbers from the land's registry, so the synced world is the same on each computer at any frame rate. A thing of this
+/// registry can refer to a thing of the land by its entity. A field of a thing of the land that keeps the entity of a thing of
+/// this registry is not a part of the synced world.
 class DrawnRegistry final: public Registry
 {
 };
