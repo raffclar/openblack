@@ -25,7 +25,6 @@
 
 namespace openblack::graphics
 {
-class DrawWindow;
 class SamplerDefaults;
 class Texture2D;
 
@@ -41,10 +40,8 @@ public:
 
 	ShaderProgram() = delete;
 	/// The samplers are those the program's shaders declare, which it keeps bound on every submit with the defaults.
-	/// The window, when there is one, can hold back its draws.
 	ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
-	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-	              DrawWindow* window = nullptr);
+	              std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults);
 	~ShaderProgram();
 	ShaderProgram(const ShaderProgram&) = delete;
 	ShaderProgram& operator=(const ShaderProgram&) = delete;
@@ -95,7 +92,6 @@ private:
 	UniformTable _uniforms;
 	std::vector<shader_samplers::Sampler> _samplers;
 	SamplerDefaults& _samplerDefaults;
-	DrawWindow* _window;
 	/// The programs for a mesh with one bone and with a few bones; null for this program
 	const ShaderProgram* _singleBone {nullptr};
 	const ShaderProgram* _fewBones {nullptr};

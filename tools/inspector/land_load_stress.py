@@ -16,7 +16,8 @@ that fails or at the first crash report, and then stops the game that it started
     python tools/inspector/land_load_stress.py --exe E:/openblack/builds/<worktree>/bin/Debug/openblack.exe \\
         --game-path C:/projects/black --backend Vulkan --cycles 10
 
-Land names come from level.list and scenario ids from game.scenarios. A scenario is written as scenario:<id>.
+Land names come from level.list and scenario ids from game.scenarios. A scenario is written as scenario:<id>, and the
+empty testbed as testbed. The game runs with --background, so that it takes no focus.
 """
 
 import argparse
@@ -65,6 +66,8 @@ def load(pid, item):
     """Loads one land or scenario and gives the answer"""
     if item.startswith("scenario:"):
         return call(pid, "game.scenario", {"id": item.removeprefix("scenario:")})
+    if item == "testbed":
+        return call(pid, "level.testbed")
     return call(pid, "level.load", {"name": item})
 
 
@@ -84,9 +87,10 @@ def main():
     exe = Path(args.exe).resolve()
     crashes = exe.parent / "crashes"
     started = time.time()
-    command = [str(exe), "-g", args.game_path, "-b", args.backend, "--inspect-port", "0"]
+    command = [str(exe), "-g", args.game_path, "-b", args.backend, "--background", "--inspect-port", "0"]
     log = open(args.log, "w", encoding="utf-8") if args.log else subprocess.DEVNULL
-    process = subprocess.Popen(command, cwd=exe.parent, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT)
+    process = subprocess.Popen(command, cwd=exe.parent, stdin=subprocess.DEVNULL, stdout=log, stderr=subprocess.STDOUT,
+                               creationflags=getattr(subprocess, "CREATE_NO_WINDOW", 0))
     print(f"started pid {process.pid}: {' '.join(command)}", flush=True)
     failures = 0
     loads = 0

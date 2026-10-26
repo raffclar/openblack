@@ -604,8 +604,12 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 		return host.HasTurn(Locator::time::value().GetTurn()) ? ServerWorld::NetworkStep::Play : ServerWorld::NetworkStep::Wait;
 	});
 	Locator::syncChecksumSystem::value().SetTurnListener(
-	    [&host, onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-		    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+	    [&host, onTurn,
+	     logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    if (logChecksums)
+		    {
+			    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    }
 		    if (onTurn)
 		    {
 			    onTurn(turn.turn, turn.checksum);
@@ -713,13 +717,17 @@ int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The file of the row dump cannot open: {}", settings.rowDumpPath->string());
 	}
 #endif
-	checksums.SetTurnListener([&onTurn](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
-		if (onTurn)
-		{
-			onTurn(turn.turn, turn.checksum);
-		}
-	});
+	checksums.SetTurnListener(
+	    [&onTurn, logChecksums = settings.logChecksums](const ecs::systems::SyncChecksumSystemInterface::TurnChecksum& turn) {
+		    if (logChecksums)
+		    {
+			    SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", ChecksumLine(turn.turn, turn.checksum));
+		    }
+		    if (onTurn)
+		    {
+			    onTurn(turn.turn, turn.checksum);
+		    }
+	    });
 
 	int exitCode = EXIT_SUCCESS;
 #if defined(OPENBLACK_GAME_ROLE)

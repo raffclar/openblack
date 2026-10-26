@@ -1313,24 +1313,17 @@ void Game::WarmUpFirstFrame()
 		rendering.PrepareDraw(config.drawBoundingBoxes, config.drawFootpaths, config.drawStreams);
 	}
 	const auto start = std::chrono::steady_clock::now();
-	// Some renderers divide the warm-up between some frames, each with a part of the draws
-	bool shown = false;
-	bool partsLeft = true;
-	for (uint32_t part = 0; partsLeft; ++part)
-	{
-		partsLeft = false;
-		shown = RenderLoadingFrame(true, [&renderer, &config, &partsLeft, part, this]() {
-			partsLeft = renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()), part);
-			// The interface draws over the scene too, and the cinema bars are its first draw
-			gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
-			// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through things
-			// outside the temple
-			gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
-			gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
-			// The interface that the game draws over the scene, which the loading screen does not blend in each way
-			gui::Canvas::WarmUp(graphics::RenderPass::Interface);
-		});
-	}
+	const bool shown = RenderLoadingFrame(true, [&renderer, &config, this]() {
+		renderer.WarmUpScene(SceneDrawDesc(config, 0, IsHandDrawn()));
+		// The interface draws over the scene too, and the cinema bars are its first draw
+		gui::Canvas::WarmUp(graphics::RenderPass::CinemaBars);
+		// The villagers' labels and the tip bubble test the depth of the scene, sorted among its see-through things
+		// outside the temple
+		gui::Canvas::WarmUp(graphics::RenderPass::WorldLabels, gui::Canvas::DepthTest::NearerIsGreater);
+		gui::Canvas::WarmUp(graphics::RenderPass::Translucent, gui::Canvas::DepthTest::NearerIsGreater, true);
+		// The interface that the game draws over the scene, which the loading screen does not blend in each way
+		gui::Canvas::WarmUp(graphics::RenderPass::Interface);
+	});
 	// The first frame makes the draw lists again from what the game's first update changed
 	if (config.drawEntities)
 	{

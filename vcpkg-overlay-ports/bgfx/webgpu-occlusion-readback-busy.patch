@@ -1,0 +1,90 @@
+--- a/bgfx/src/renderer_webgpu.h
++++ b/bgfx/src/renderer_webgpu.h
+@@ -895,6 +895,9 @@
+ 			, m_resolve(NULL)
+ 			, m_readback(NULL)
+ 			, m_control(BX_COUNTOF(m_handle) )
++			, m_numResolved(0)
++			, m_resolved(false)
++			, m_mapPending(false)
+ 		{
+ 		}
+ 
+@@ -913,6 +916,9 @@
+ 
+ 		OcclusionQueryHandle m_handle[BGFX_CONFIG_MAX_OCCLUSION_QUERIES];
+ 		bx::RingBufferControl m_control;
++		uint32_t m_numResolved; // queries that the last copy into the readback buffer holds
++		bool m_resolved;        // a copy into the readback buffer waits for its map
++		bool m_mapPending;      // the readback buffer is mapped or waits for its map
+ 	};
+ 
+ } /* namespace bgfx */ } // namespace wgpu
+--- a/bgfx/src/renderer_webgpu.cpp
++++ b/bgfx/src/renderer_webgpu.cpp
+@@ -6610,7 +6610,10 @@
+ 
+ 	void OcclusionQueryWGPU::resolve()
+ 	{
+-		if (0 < m_control.getNumUsed() )
++		// A buffer that is mapped, or waits for its map, is not valid in a submit. The queries wait for the next frame.
++		if (0 < m_control.getNumUsed()
++		&&  !m_mapPending
++		&&  !m_resolved)
+ 		{
+ 			WGPUCommandEncoder commandEncoder = s_renderWGPU->m_cmd.m_commandEncoder;
+ 
+@@ -6633,6 +6636,9 @@
+ 				, 0
+ 				, kOcclusionQueryBufferSize
+ 				) );
++
++			m_numResolved = m_control.getNumUsed();
++			m_resolved    = true;
+ 		}
+ 	}
+ 
+@@ -6645,9 +6651,13 @@
+ 
+ 	void OcclusionQueryWGPU::readResultsAsync(Frame* _frame)
+ 	{
+-		if (0 < m_control.getNumUsed() )
++		if (m_resolved
++		&&  !m_mapPending)
+ 		{
+ 			constexpr uint64_t kOcclusionQueryBufferSize = BGFX_CONFIG_MAX_OCCLUSION_QUERIES * sizeof(uint64_t);
++
++			m_resolved   = false;
++			m_mapPending = true;
+ 
+ 			WGPU_CHECK(wgpuBufferMapAsync(
+ 				  m_readback
+@@ -6674,10 +6684,12 @@
+ 			, kOcclusionQueryBufferSize
+ 			) );
+ 
+-		while (0 < m_control.getNumUsed() )
++		// Only the queries that the copy holds. Queries of later frames wait for their own copy.
++		for (; 0 < m_numResolved; --m_numResolved)
+ 		{
+ 			OcclusionQueryHandle handle = m_handle[m_control.m_read];
+-			if (isValid(handle) )
++			if (NULL != result
++			&&  isValid(handle) )
+ 			{
+ 				_frame->m_occlusion[handle.idx] = int32_t(result[handle.idx]);
+ 			}
+@@ -6685,7 +6697,12 @@
+ 			m_control.consume(1);
+ 		}
+ 
+-		WGPU_CHECK(wgpuBufferUnmap(m_readback) );
++		if (NULL != result)
++		{
++			WGPU_CHECK(wgpuBufferUnmap(m_readback) );
++		}
++
++		m_mapPending = false;
+ 	}
+ 
+ 	void OcclusionQueryWGPU::invalidate(OcclusionQueryHandle _handle)

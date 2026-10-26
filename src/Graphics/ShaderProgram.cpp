@@ -12,7 +12,6 @@
 #include <spdlog/spdlog.h>
 
 #include "BoneBudget.h"
-#include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "SamplerDefaults.h"
@@ -24,13 +23,11 @@ namespace openblack::graphics
 static_assert(ShaderProgram::k_DiscardAll == BGFX_DISCARD_ALL);
 
 ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
-                             std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-                             DrawWindow* window)
+                             std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults)
     : _name(name)
     , _program(BGFX_INVALID_HANDLE)
     , _samplers(std::move(samplers))
     , _samplerDefaults(samplerDefaults)
-    , _window(window)
 {
 	uint16_t numShaderUniforms = 0;
 	bgfx::UniformInfo info = {};
@@ -135,13 +132,6 @@ void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags
 			// Kept for the next draw as well when this one keeps its bindings
 			Bind(sampler.stage, *_uniforms.Find(sampler.name), texture);
 		}
-	}
-	if (_window != nullptr && !_window->Admit(viewId))
-	{
-		// The draw goes in a later frame. Its state stays or goes as the draw would keep or drop it.
-		bgfx::discard(discardFlags);
-		_samplerDefaults.Discarded(discardFlags);
-		return;
 	}
 	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
 	_samplerDefaults.Discarded(discardFlags);
