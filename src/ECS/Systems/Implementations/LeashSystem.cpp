@@ -1448,10 +1448,20 @@ void LeashSystem::ProcessTurn()
 
 void LeashSystem::BeginTurn()
 {
-	if (!_postsPlaced)
+	if (_postsPlaced)
 	{
-		PlacePostsAtTemples();
+		return;
 	}
+	// A loaded world (a save, or the world state of the game server) keeps the posts that its temples got. Do not
+	// make them again.
+	bool loaded = false;
+	Locator::entitiesRegistry::value().Each<const LeashPost>([&loaded](const LeashPost& /*post*/) { loaded = true; });
+	if (loaded)
+	{
+		_postsPlaced = true;
+		return;
+	}
+	PlacePostsAtTemples();
 }
 
 void LeashSystem::CreatureTurn(entt::entity entity)

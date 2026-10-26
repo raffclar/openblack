@@ -775,6 +775,24 @@ TEST_F(FrontEndTest, AFullRoomIsJoinedAsAnObserver)
 	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
 }
 
+TEST_F(FrontEndTest, AStartedGameIsJoinedAsAnObserverWhenTheAccountHasNoGodInIt)
+{
+	ToGameList();
+	frontEnd->SelectGame(0);
+	frontEnd->Join(u"");
+	auto started = std::move(lobby.ticket);
+	started({.value = std::nullopt,
+	         .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
+	// The front end asks again, for an observer's ticket, with no message
+	EXPECT_EQ(frontEnd->GetMessage(), Message::None);
+	EXPECT_EQ(lobby.ticketRoles, (std::vector<game_socket::Role> {game_socket::Role::God, game_socket::Role::Observer}));
+	// The lobby also refuses the observer: the join fails, with no loop
+	auto again = std::move(lobby.ticket);
+	again({.value = std::nullopt,
+	       .error = {.kind = LobbyErrorKind::Refused, .status = 409, .detail = {}, .code = "game_started"}});
+	EXPECT_EQ(frontEnd->GetMessage(), Message::ConnectionFailed);
+}
+
 TEST_F(FrontEndTest, TheServerRefusesAnAccountThatIsInTheRoom)
 {
 	ToGameList();
