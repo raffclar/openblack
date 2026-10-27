@@ -242,6 +242,10 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
+		// The fire reaction has a reach, as every reaction of the game's data: a zero reach divides by zero
+		auto& fireRow = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFire));
+		fireRow.maxReactionDistance = 60.0f;
+		fireRow.howImportantIsDistance = 0.25f;
 		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
 		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed,
 		                        Reaction::ReactToNewBuilding, Reaction::LookAtObject, Reaction::ReactToFood})
@@ -265,6 +269,9 @@ protected:
 			ReactToEverything(villager);
 			// The town needs share divides by this: zero is not a value of the game's data
 			villager.divisorForTownNeedsSpeedMod = 1.0f;
+			// What a villager carries is a share of its most: a zero most divides by zero
+			villager.maxFoodCarried = villager.maxTraderFoodCarried = 10;
+			villager.maxWoodCarried = villager.maxTraderWoodCarried = 10;
 			// As every kind of villager in the game's data, they walk in the plain walking state
 			villager.moveState = LivingStates::LivingMoveToPos;
 		}
@@ -724,10 +731,6 @@ TEST_F(Reactions, AFiremanWhoseFireCoolsOnTheWayIsNotLeftAmongTheBlazesFiremen)
 		row.isReactionState = 1;
 		row.resumeState = static_cast<int>(state);
 	}
-	// The fire reaction has a reach, as every reaction of the game's data: a zero reach divides by zero
-	auto& fireRow = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFire));
-	fireRow.maxReactionDistance = 60.0f;
-	fireRow.howImportantIsDistance = 0.25f;
 	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
