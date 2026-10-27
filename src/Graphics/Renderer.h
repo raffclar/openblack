@@ -40,6 +40,7 @@
 #include "Graphics/HandReflection.h"
 #include "Graphics/HandShadow.h"
 #include "Graphics/LandDetail.h"
+#include "Graphics/PaintedSkinStamp.h"
 #include "Graphics/PartialBuildCap.h"
 #include "Graphics/RenderPass.h"
 #include "Graphics/RendererInterface.h"
@@ -655,8 +656,8 @@ private:
 	/// A creature's skins as painted (see components::CreatureSkin), one texture each
 	struct CreatureSkins
 	{
-		/// The painting the textures hold
-		uint32_t revision {0};
+		/// The painting the textures hold, none before the first upload
+		std::optional<painted_skin::Stamp> stamp;
 		std::vector<std::unique_ptr<Texture2D>> textures;
 		/// The painted skins the body is drawn with in place of its base mesh's, by skin id
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
@@ -688,7 +689,7 @@ private:
 	/// The hand's skins as blended for its player's alignment, one texture each, and the blending they hold
 	mutable std::vector<std::unique_ptr<Texture2D>> _handSkinTextures;
 	mutable std::vector<std::pair<uint32_t, const Texture2D*>> _handSkins;
-	mutable std::optional<uint32_t> _handSkinRevision;
+	mutable std::optional<painted_skin::Stamp> _handSkinStamp;
 	/// The creatures drawn this frame: all of them, or the nearest the camera when there are more than the backend can
 	/// upload the bones of
 	struct DrawnCreature

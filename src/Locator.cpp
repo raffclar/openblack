@@ -59,6 +59,7 @@
 #include "ECS/Systems/Implementations/CinematicDirectorSystem.h"
 #include "ECS/Systems/Implementations/CloudSystem.h"
 #include "ECS/Systems/Implementations/ComputerSettingsSystem.h"
+#include "ECS/Systems/Implementations/CreatureAnimationLogSystem.h"
 #include "ECS/Systems/Implementations/CreatureAnimationSystem.h"
 #include "ECS/Systems/Implementations/CreatureAudioSystem.h"
 #include "ECS/Systems/Implementations/CreatureCarryOverSystem.h"
@@ -787,6 +788,7 @@ void openblack::ShutDownServices()
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
+	Locator::creatureAnimationLog::reset();
 	Locator::rendereringSystem::reset();
 	Locator::dynamicsSystem::reset();
 	Locator::templeDestructionSystem::reset();
@@ -929,6 +931,8 @@ bool openblack::StartInspector([[maybe_unused]] uint16_t port)
 	}
 	// The fights keep a transcript for the inspector's tools
 	Locator::fightTranscript::emplace<ecs::systems::FightTranscriptSystem>();
+	// The creatures' bodies keep a log of their clips for the inspector's tools
+	Locator::creatureAnimationLog::emplace<ecs::systems::CreatureAnimationLogSystem>();
 	Locator::inspector::emplace<ecs::systems::InspectorSystem>(std::move(server));
 	return true;
 #else
