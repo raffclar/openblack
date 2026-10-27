@@ -47,6 +47,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -429,6 +430,17 @@ bool InfluenceSystem::Shielded(PlayerNames player, const map_coords::MapCoords& 
 	return shielded;
 }
 
+float InfluenceSystem::CitadelReachOf(PlayerNames player) const
+{
+	const auto index = static_cast<size_t>(player);
+	const auto citadels = Citadels();
+	if (index >= citadels.size() || citadels.at(index) == entt::null)
+	{
+		return 0.0f;
+	}
+	return CitadelReach(citadels.at(index));
+}
+
 float InfluenceSystem::InfluencePower(PlayerNames player) const
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -549,13 +561,13 @@ void InfluenceSystem::ShowHandInfluence(std::chrono::duration<float, std::milli>
 		return;
 	}
 	const auto player = Locator::playerSystem::value().GetLocalPlayer();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
 	auto& registry = Locator::entitiesRegistry::value();
-	if (!registry.Valid(entity) || !registry.AnyOf<VirtualInfluence>(entity))
+	if (!entity.has_value() || !registry.Valid(*entity) || !registry.AnyOf<VirtualInfluence>(*entity))
 	{
 		return;
 	}
-	auto& virtualInfluence = registry.Get<VirtualInfluence>(entity);
+	auto& virtualInfluence = registry.Get<VirtualInfluence>(*entity);
 	const auto& state = virtualInfluence.state;
 	auto& shown = virtualInfluence.shown;
 	auto& audio = Locator::audio::value();
@@ -734,10 +746,12 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// In a network game a player with no temple has no influence at all
+	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
+	// which has no temples, is the exception: its hands could do nothing else.
 	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
-	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
-	                                                  hasTemple))
+	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
+	if (!openblack::influence_rules::CanHaveInfluence(
+	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
 	}

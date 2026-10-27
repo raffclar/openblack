@@ -1213,6 +1213,9 @@ struct Scenario
 	/// A testbed set-up step: the scenario's town has its worship site put up built, as a land's script can, and its
 	/// totem asks for this share of its people at worship, which sends them there as the game does
 	std::optional<float> worshipShare;
+	/// The things are made after the lines of the land script run, so that a thing of the scenario's town joins the town
+	/// that the script made
+	bool objectsAfterLandScript {false};
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls

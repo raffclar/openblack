@@ -6006,6 +6006,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
+	// The camera looks at a conifer from 25 m, 20 degrees down, the pointer on its crown. A press of a fifth of a second
+	// is shorter than a tap, but the pull starts after the 0.13 s fade and the hand is far from its grip on the trunk.
+	// Thus the conifer comes free on the first frame of the pull and the hand takes it. The same press does the same in
+	// a network game.
+	all.push_back({
+	    .id = "hand.tree_short_press",
+	    .name = "A short press on a conifer",
+	    .facet = Facet::Hand,
+	    .description = "Seen from 25 m, 20 degrees down, the hand presses on the crown of a conifer for a fifth of a "
+	                   "second and lets go.",
+	    .expected = "The conifer comes out of the ground on the first frame of the pull and leaves its roots hole. The "
+	                "hand holds it after the button comes up. The conifer does not stay leaning in the ground.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.55f, -3.49f}, .look = {0.0f, 4.0f, 20.0f}},
+	    .objects = {{.type = TreeInfo::ConiferA, .offset = {0.0f, 20.0f}, .scale = 1.03f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.35f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	});
+
 	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
 	// distances, two more walk to and fro, two stand by an oak, and a cow, a sheep, a horse and a pig graze to the left
 	all.push_back({

@@ -933,7 +933,10 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
 		                                          glm::vec3(1.0f));
 	}
-	PlaceObjects(scenario, _middle);
+	if (!scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
+	}
 	for (const auto& offset : scenario.sharks)
 	{
 		const auto at = MapPoint(_middle, offset);
@@ -954,6 +957,10 @@ void Runner::Start(const Scenario& scenario)
 	{
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
+	}
+	if (scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
 	}
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
@@ -3197,9 +3204,10 @@ void Runner::Give(const Command& command)
 			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
 			if (known && Locator::playerSystem::has_value())
 			{
-				script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-				                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE),
-				                                static_cast<int32_t>(command.value));
+				script::interface_levels::Apply(
+				    Locator::entitiesRegistry::value(),
+				    Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+				    static_cast<int32_t>(command.value));
 			}
 			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
 			                known ? "" : " (a level the game does not know)", help.handReach));

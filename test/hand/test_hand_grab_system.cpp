@@ -131,9 +131,10 @@ public:
 	{
 		return reportedCollide.has_value() ? reportedCollide : pickedPoint;
 	}
-	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3 point) const override
+	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override
 	{
-		return influence && (!borderX.has_value() || point.x < *borderX);
+		return influence && (!influenceOnlyOf.has_value() || player == *influenceOnlyOf) &&
+		       (!borderX.has_value() || point.x < *borderX);
 	}
 	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
@@ -463,6 +464,8 @@ public:
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
+	/// When set, only this player has influence anywhere
+	std::optional<PlayerNames> influenceOnlyOf;
 	/// The point picked under the cursor, and with a border the influence reaches only west of it
 	std::optional<glm::vec3> pickedPoint {glm::vec3(0.0f)};
 	/// The point that the last report of the hand's player picked; the picked point of this computer when none
@@ -1321,6 +1324,80 @@ TEST_F(HandGrabSystemWithWorld, ATreeThatThePullFreedIsTakenWhenTheButtonIsLetGo
 	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, tree);
 	RunWaiting();
 	EXPECT_EQ(system->GetHeld(), std::optional(tree));
+}
+
+class HandGrabShortTreePress: public HandGrabSystemWithWorld
+{
+protected:
+	/// A press of eight frames of 20 ms on a light tree, with the hand far above its grip. Gives the thing that the hand
+	/// holds after the turn that does the commands.
+	std::optional<entt::entity> PressEightFrames(entt::entity tree)
+	{
+		deferCommands = true;
+		world->underCursor = tree;
+		EXPECT_TRUE(Press());
+		// The hand fades into its pull for 0.13 s, and the pull starts on the frame after the fade
+		for (int i = 0; i < 7; ++i)
+		{
+			Frame(20, {0.0f, 50.0f, 0.0f});
+			EXPECT_TRUE(world->holes.empty()) << "frame " << i;
+		}
+		// The first frame of the pull pulls harder than the tree weighs, thus the tree comes free at once
+		Frame(20, {0.0f, 50.0f, 0.0f});
+		EXPECT_EQ(world->holes, std::vector<entt::entity> {tree});
+		// The button comes up after the pull freed the tree: the hand sends the take, not a tap
+		EXPECT_FALSE(Release().has_value());
+		EXPECT_EQ(world->sent.size(), 1u);
+		RunWaiting();
+		return system->GetHeld();
+	}
+};
+
+TEST_F(HandGrabShortTreePress, InASinglePlayerGameAShortPressTakesALightTree)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, InANetworkGameTheSameShortPressTakesTheTreeAtTheSameFrame)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, APressOnATreeOutsideTheInfluenceIsAClickAndDoesNotPull)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	for (int i = 0; i < 8; ++i)
+	{
+		Frame(20, {0.0f, 50.0f, 0.0f});
+	}
+	EXPECT_FALSE(system->GetPullPose().has_value());
+	EXPECT_FALSE(world->registry.AllOf<HandPulled>(tree));
+	EXPECT_TRUE(world->holes.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheInterfaceAsksTheInfluenceOfItsOwnHand)
+{
+	world->networkGame = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	world->influenceOnlyOf = PlayerNames::PLAYER_TWO;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	// What the hand offers and why it would not take a thing are of the hand of this computer, not of the first player
+	EXPECT_TRUE(system->IsInInfluence());
+	EXPECT_EQ(system->WhyNotTake(tree), "");
+	EXPECT_FALSE(system->IsInInfluenceOf(PlayerNames::PLAYER_ONE));
+	world->influenceOnlyOf = PlayerNames::PLAYER_ONE;
+	EXPECT_FALSE(system->IsInInfluence());
+	EXPECT_NE(system->WhyNotTake(tree), "");
 }
 
 TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)

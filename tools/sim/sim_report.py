@@ -80,17 +80,21 @@ def unregistered_line(names):
 
 
 # The log line of each thing that a turn does with the hand of a player, and the short name of each deed
-HAND_DEED = re.compile(r"Hand deed: the hand of player (\d+) (.+?) thing (\d+)")
+HAND_DEED = re.compile(r"Hand deed: the hand of player (\d+) (.+?) thing (\d+)(?: at turn (\d+))?")
 HAND_DEED_NAMES = {"takes": "takes", "scoops from": "scoops", "throws": "throws", "puts down": "puts_down",
                    "pours": "pours", "uses what it holds on": "uses"}
 
 
-def hand_deeds_in_text(lines):
-    """The count of each deed of the hand of each player that the log lines tell of, as {player: {deed: count}}"""
+def hand_deeds_in_text(lines, until_turn=None):
+    """The count of each deed of the hand of each player that the log lines tell of, as {player: {deed: count}}. With
+    until_turn, a deed that a line tells to be after that turn is not counted: the server and a client can end on
+    different turns, and a deed of the last turn of one is not a difference."""
     deeds = {}
     for line in lines:
         match = HAND_DEED.search(line)
         if match is None:
+            continue
+        if until_turn is not None and match.group(4) is not None and int(match.group(4)) > until_turn:
             continue
         name = HAND_DEED_NAMES.get(match.group(2), match.group(2))
         counts = deeds.setdefault(int(match.group(1)), {})
@@ -98,11 +102,11 @@ def hand_deeds_in_text(lines):
     return deeds
 
 
-def hand_deeds_in_file(path):
+def hand_deeds_in_file(path, until_turn=None):
     """As hand_deeds_in_text, for a log file; a missing file tells of none"""
     try:
         with open(path, encoding="utf-8", errors="replace") as file:
-            return hand_deeds_in_text(file)
+            return hand_deeds_in_text(file, until_turn)
     except OSError:
         return {}
 
