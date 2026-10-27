@@ -1764,6 +1764,15 @@ openblack_setup_and_add_test(test_system_pointer test_system_pointer.cpp)
     COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_system_pointer.py
             ${CMAKE_SOURCE_DIR}
   )
+  add_test(
+    NAME test_text_encoding
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py
+            ${CMAKE_SOURCE_DIR}
+  )
+  add_test(
+    NAME test_text_encoding_self
+    COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/build/check_text_encoding.py --test
+  )
 target_link_libraries(test_challenge_pictures PRIVATE ScriptLibrary)
 openblack_setup_and_add_test(
   test_challenge_picture_files test_challenge_picture_files.cpp
