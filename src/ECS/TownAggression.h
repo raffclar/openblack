@@ -39,8 +39,6 @@ struct Record
 	/// The aggression held against each player, and the turn each last attacked
 	std::array<float, static_cast<size_t>(PlayerNames::_COUNT)> aggression {};
 	std::array<uint32_t, static_cast<size_t>(PlayerNames::_COUNT)> lastTurns {};
-	/// The harm of the last attack of each player
-	std::array<Harm, static_cast<size_t>(PlayerNames::_COUNT)> lastHarms {};
 	/// The last attacker, and the turn it attacked; none before any attack
 	PlayerNames lastAggressor {PlayerNames::NEUTRAL};
 	uint32_t lastTurn {0};
@@ -50,6 +48,9 @@ struct Record
 	/// This turn's wants, the sums of the aggression
 	float protection {0.0f};
 	float mercy {0.0f};
+	/// The harm of the last attack of each player. Last in the record so that a save of an older build still reads the
+	/// fields before it.
+	std::array<Harm, static_cast<size_t>(PlayerNames::_COUNT)> lastHarms {};
 };
 
 /// The town is attacked by a player with an amount of harm: the first harm a player does adds a bonus; it counts by

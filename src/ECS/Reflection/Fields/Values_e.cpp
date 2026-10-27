@@ -352,13 +352,13 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
-	    .Field<&openblack::ecs::town_aggression::Record::lastHarms>("lastHarms", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastAggressor>("lastAggressor")
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurn>("lastTurn")
 	    .Field<&openblack::ecs::town_aggression::Record::protectionMultiplier>("protectionMultiplier")
 	    .Field<&openblack::ecs::town_aggression::Record::mercyMultiplier>("mercyMultiplier")
 	    .Field<&openblack::ecs::town_aggression::Record::protection>("protection")
-	    .Field<&openblack::ecs::town_aggression::Record::mercy>("mercy");
+	    .Field<&openblack::ecs::town_aggression::Record::mercy>("mercy")
+	    .Field<&openblack::ecs::town_aggression::Record::lastHarms>("lastHarms", {k_PlayerNamesNames});
 	Reflect<openblack::ecs::village_totem::Ease>(context, ValueOnly {})
 	    .Field<&openblack::ecs::village_totem::Ease::share>("share")
 	    .Field<&openblack::ecs::village_totem::Ease::speed>("speed")
