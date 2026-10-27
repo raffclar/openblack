@@ -5624,6 +5624,12 @@ void Game::CloseMenuForNewLand()
 	{
 		_interface->GetMenu().Close();
 	}
+	// The end of a game closes every box of the game. The script of the next land shows the land information box
+	// again when the land has one. This also closes the box for a land that the debug tools load.
+	if (_interface && _interface->GetLandInfoBox().IsActive())
+	{
+		_interface->GetLandInfoBox().Close();
+	}
 	// The game gets the pause that it had before the menu opened, before the next land asks for a pause of its own
 	if (const auto pause = _menuPause.Release(); pause.has_value())
 	{

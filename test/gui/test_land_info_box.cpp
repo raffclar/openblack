@@ -133,6 +133,16 @@ TEST(LandInfoBox, BackClosesTheBoxToLeaveTheLand)
 	EXPECT_EQ(fixture.box.TakeChoice(), LandInfoBox::Choice::Back);
 }
 
+TEST(LandInfoBox, ANewLandClosesTheBoxWithNoChoice)
+{
+	BoxFixture fixture;
+	fixture.Show(u"Two Gods");
+	fixture.box.Close();
+	EXPECT_FALSE(fixture.box.IsActive());
+	// The game does not go on to the land or leave it, because of the close
+	EXPECT_EQ(fixture.box.TakeChoice(), LandInfoBox::Choice::None);
+}
+
 TEST(LandInfoBox, EscapeClosesTheBoxOnlyWithNoModifierKey)
 {
 	BoxFixture fixture;

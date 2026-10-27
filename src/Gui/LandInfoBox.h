@@ -82,6 +82,8 @@ public:
 
 	/// What the player chose, once
 	[[nodiscard]] Choice TakeChoice() noexcept { return std::exchange(_choice, Choice::None); }
+	/// Closes the box with no choice, as the change to a new land closes every box of the game
+	void Close() { Hide(Choice::None); }
 	[[nodiscard]] const StaticText& GetTitle() const noexcept { return *_title; }
 	[[nodiscard]] const List& GetList() const noexcept { return *_list; }
 

@@ -3943,6 +3943,40 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "multiplayer.skirmish_load_creature_again",
+	    .name = "A loaded skirmish brings the player's creature again",
+	    .facet = Facet::Multiplayer,
+	    .description =
+	        "A temple of the player stands to the north, and the testbed plays as a skirmish. After a second, "
+	        "the god of the player brings the creature that the profile keeps, and the profile keeps it in its file. "
+	        "The game saves at 3 seconds into slot 0 and loads the slot at 5 seconds. The mind file "
+	        "LethysCreature of the game takes the place of the creature file of the profile.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple. After the load, a second ape named "
+	                "Matey comes at the same place, at once and with no sparkle. The first ape stays where the save kept "
+	                "it, and it still belongs to the player.",
+	    .environment = {.dispenserGrid = false, .skirmish = true},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 6, .mindFile = "LethysCreature"},
+	                 {.kind = Kind::SaveGame, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 5.0f, .value = 0}},
+	});
+
+	all.push_back({
+	    .id = "interface.land_info_box_new_land",
+	    .name = "A new land closes the land information box",
+	    .facet = Facet::Interface,
+	    .description = "The game saves into slot 0 after half a second. After a second the land information box of Two Gods "
+	                   "shows. At 3 seconds the game loads the slot, which loads the land again.",
+	    .expected = "The land information box fades in. As the land loads again, the box closes, and it does not show "
+	                "again after the load. The hand shows again.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SaveGame, .delaySeconds = 0.5f, .value = 0},
+	                 {.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
+	all.push_back({
 	    .id = "interface.pause_text",
 	    .name = "The words of the pause",
 	    .facet = Facet::Interface,

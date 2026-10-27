@@ -164,6 +164,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
+#include "ECS/Systems/CreatureCarryOverSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/CreatureFizzSystemInterface.h"
@@ -2959,7 +2960,7 @@ void Runner::Give(const Command& command)
 			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
 			return;
 		}
-		if (command.value == 5)
+		if (command.value == 5 || command.value == 6)
 		{
 			// The game's own mind file takes the place of the creature that the profile keeps
 			const auto path =
@@ -2967,6 +2968,11 @@ void Runner::Give(const Command& command)
 			auto mind = std::make_shared<creaturemind::MindFileData>();
 			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
 			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			// With 6, the profile also keeps the new creature in its file. Thus a load of a saved skirmish brings it again.
+			if (command.value == 6 && brought.creature.has_value() && Locator::creatureCarryOverSystem::has_value())
+			{
+				Locator::creatureCarryOverSystem::value().KeepCreature(*brought.creature);
+			}
 			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
 			                brought.creature.has_value()
 			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))

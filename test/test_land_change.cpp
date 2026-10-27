@@ -122,3 +122,13 @@ TEST(LandChange, OnlyASkirmishBringsTheCreatureOfTheProfile)
 		EXPECT_FALSE(RulesFor(kind).profileCreatureBrought) << static_cast<int>(kind);
 	}
 }
+
+TEST(LandChange, ALoadedSkirmishBringsTheCreatureOfTheProfileAgain)
+{
+	// A saved skirmish loads as a skirmish, and the god of the player brings the creature from the profile again
+	EXPECT_TRUE(LoadBringsProfileCreature(true, false));
+	// A saved game that is not a skirmish brings no creature, and a network game saves no game
+	EXPECT_FALSE(LoadBringsProfileCreature(false, false));
+	EXPECT_FALSE(LoadBringsProfileCreature(true, true));
+	EXPECT_FALSE(LoadBringsProfileCreature(false, true));
+}
