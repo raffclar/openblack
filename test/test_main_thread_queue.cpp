@@ -7,6 +7,9 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+// The fake audio is a kind of the audio that does nothing, which only the services of the game and the tests make
+#define LOCATOR_IMPLEMENTATIONS
+
 #include <cstdint>
 
 #include <memory>
