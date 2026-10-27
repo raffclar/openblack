@@ -112,6 +112,7 @@ public:
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}
 	void HumansJoined(std::span<const PlayerNames> humans) override { joins.emplace_back(humans.begin(), humans.end()); }
+	void SetAiSeed(std::optional<uint32_t> /*seed*/) override {}
 	std::vector<std::vector<PlayerNames>> joins;
 };
 

@@ -169,6 +169,9 @@ def main():
     parser.add_argument("--scenario", help="a testbed scenario that the server and the game both play from the first "
                                            "frame, so that the recorded input gets to what it sets up")
     parser.add_argument("--opening", default="cow")
+    parser.add_argument("--all-computer-gods", action="store_true",
+                        help="the AI soak: the server and the game both give a computer god to every god with a citadel")
+    parser.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods, on both")
     parser.add_argument("--frame-ms", type=float, default=100.0)
     parser.add_argument("--config", default="Debug")
     parser.add_argument("--bin", help="the folder of openblack.exe and openblack-server.exe")
@@ -232,6 +235,10 @@ def main():
         server_command = ["wsl", "-d", options.wsl_distro, "--", options.wsl_server, "-g",
                           local(options.game_path)] + server_command[3:]
     server_command += options.server_args.split()
+    if options.all_computer_gods:
+        server_command.append("--all-computer-gods")
+    if options.ai_seed is not None:
+        server_command += ["--ai-seed", str(options.ai_seed)]
     if options.server_fast:
         server_command.append("--fast")
     if options.hash_parts or options.hash_fields:
@@ -249,6 +256,10 @@ def main():
                     "--sim-until-turn", str(options.turns + 1), "--sim-record", record,
                     "--sim-record-every", "1", "--inspect-lock-input", "-n", "4000000000", "--background",
                     "-l", game_log, "--sim-network-game"] + where
+    if options.all_computer_gods:
+        game_command.append("--sim-all-computer-gods")
+    if options.ai_seed is not None:
+        game_command += ["--sim-ai-seed", str(options.ai_seed)]
     if events is None:
         game_command.append("--sim-still-hand")
     else:
