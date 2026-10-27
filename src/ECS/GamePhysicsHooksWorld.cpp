@@ -80,13 +80,10 @@ GameRandomInterface* GamePhysicsHooksWorld::Random()
 	return Locator::gameRandom::has_value() ? &Locator::gameRandom::value() : nullptr;
 }
 
-std::optional<PlayerNames> GamePhysicsHooksWorld::LocalPlayer() const
+bool GamePhysicsHooksWorld::PersonPlays(PlayerNames player) const
 {
-	if (!Locator::playerSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	return Locator::playerSystem::value().GetLocalPlayer();
+	return Locator::playerSystem::has_value() && player != PlayerNames::NEUTRAL &&
+	       !Locator::playerSystem::value().IsComputerPlayer(player);
 }
 
 std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const

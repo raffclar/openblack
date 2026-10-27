@@ -159,8 +159,9 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 		world.KickSway(creature, entry.forceSum, hitter->body->Centre());
 	}
 	const auto& body = registry.Get<const Creature>(creature);
-	// The creature of the player at this computer is not hurt at all while a script controls it
-	if (registry.AllOf<ScriptControlled>(creature) && world.LocalPlayer() == body.owner)
+	// A script keeps the creature of a person from all harm. Every computer finds the same person, the owner of the
+	// creature. In a game alone, this is only the creature of the first player.
+	if (registry.AllOf<ScriptControlled>(creature) && world.PersonPlays(body.owner))
 	{
 		return;
 	}

@@ -252,7 +252,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	}
 	const auto contents = ContentsOf(reward->type);
 	GameRewardOpeningWorld world(chest);
-	reward::Open(contents, world);
+	reward::Open(contents, player, world);
 	return true;
 }
 
