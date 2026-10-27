@@ -88,7 +88,7 @@ StartFacts FactsOf(const World& world, PlayerNames player)
 	    .pen = world.Pen(player).has_value(),
 	    .creature = world.Creature(player).has_value(),
 	    .skirmish = world.Skirmish(),
-	    .network = false,
+	    .network = world.NetworkGame(),
 	    .localCreature = world.Creature(local).has_value(),
 	};
 }
@@ -127,6 +127,11 @@ void Start(World& world, PlayerNames player, ecs::components::ComputerPlayer& st
 bool SlotHasNoPlayer(bool human, bool computer, bool citadel)
 {
 	return !human && !computer && citadel;
+}
+
+bool LandScriptSwitchesMind(bool networkMapScript)
+{
+	return !networkMapScript;
 }
 
 void FillEmptySlots(SlotWorld& world, std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)

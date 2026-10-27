@@ -76,7 +76,6 @@ void openblack::ecs::reflection::RegisterFields_Components_h(entt::meta_ctx& con
 	    .Field<&components::HandGrab::pulling>("pulling")
 	    .Field<&components::HandGrab::grips>("grips")
 	    .Field<&components::HandGrab::tug>("tug")
-	    .Field<&components::HandGrab::pullPosition>("pullPosition")
 	    .Field<&components::HandGrab::pullRotation>("pullRotation")
 	    .Field<&components::HandGrab::pullScale>("pullScale")
 	    .Field<&components::HandGrab::stretch>("stretch")

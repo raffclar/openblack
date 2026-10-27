@@ -140,6 +140,27 @@ void testbed_scenarios::AddMultiplayerFrontEndScenarios(std::vector<Scenario>& a
 	}
 }
 
+void testbed_scenarios::AddJoinOnlineScenarios(std::vector<Scenario>& all)
+{
+	using Kind = Command::Kind;
+	// The page's Join Online Game button, pressed while a script's cut scene has the cinema bars in
+	all.push_back({
+	    .id = "multiplayer.page_join_online",
+	    .name = "The page's Join Online Game button in a cut scene",
+	    .facet = Facet::Interface,
+	    .description = "A script's cinema bars slide in after half a second. One second later the player presses the Join "
+	                   "Online Game button of the browser page, which the scenario does for the page. Escape does not "
+	                   "open the menu while the bars are in.",
+	    .expected = "The multiplayer front end opens in the temple's future room with the box \"Choose a connection from "
+	                "the list below.\". The land behind stops. Click Back: the front end closes, the land shows again "
+	                "with the cinema bars in, and the land continues.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Kind::JoinOnline, .delaySeconds = 1.0f}},
+	});
+}
+
 void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 {
 	using Kind = Command::Kind;
@@ -185,5 +206,23 @@ void testbed_scenarios::AddOtherGodScenarios(std::vector<Scenario>& all)
 	                  .point = {-20.0f, 0.0f},
 	                  .heldSeed = SpellSeedType::Food,
 	                  .radius = 5.0f}},
+	});
+	// The second god brings its player's creature at the start of a network game
+	all.push_back({
+	    .id = "multiplayer.brought_creature",
+	    .name = "A god brings its player's creature into a network game",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of player two stands to the north. After a second, the god of player two brings a creature "
+	                   "as at the start of a network game. The mind file LethysCreature of the game takes the place of the "
+	                   "creature file that the player of that god sends before the start.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple of player two, at once and with no "
+	                "sparkle. It belongs to player two, it knows every leash, and its mind and body come from the file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
+	    .commands = {{.kind = Kind::BringCreature,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .delaySeconds = 1.0f,
+	                  .mindFile = "LethysCreature"}},
 	});
 }

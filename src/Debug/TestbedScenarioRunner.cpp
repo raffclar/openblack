@@ -118,6 +118,7 @@
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/GameStanding.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -931,7 +932,10 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
 		                                          glm::vec3(1.0f));
 	}
-	PlaceObjects(scenario, _middle);
+	if (!scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
+	}
 	for (const auto& offset : scenario.sharks)
 	{
 		const auto at = MapPoint(_middle, offset);
@@ -952,6 +956,10 @@ void Runner::Start(const Scenario& scenario)
 	{
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
+	}
+	if (scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
 	}
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
@@ -1088,6 +1096,21 @@ void Runner::Stop()
 		Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber = *_landNumberBefore;
 	}
 	_landNumberBefore.reset();
+	if (_skirmishBefore.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		// The end of the skirmish goes too, so that the world turns again
+		auto& registry = Locator::entitiesRegistry::value();
+		registry.Context().skirmish = *_skirmishBefore;
+		registry.Context().gameEnd = {};
+		std::vector<entt::entity> standings;
+		registry.Each<const ecs::components::GameStanding>(
+		    [&standings](entt::entity entity, const ecs::components::GameStanding&) { standings.push_back(entity); });
+		for (const auto entity : standings)
+		{
+			registry.Remove<ecs::components::GameStanding>(entity);
+		}
+	}
+	_skirmishBefore.reset();
 	// The players that the scenario added go
 	if (Locator::entitiesRegistry::has_value())
 	{
@@ -1276,6 +1299,15 @@ void Runner::SetUpEnvironment(const Environment& environment)
 			_landNumberBefore = landNumber;
 		}
 		landNumber = *environment.landNumber;
+	}
+	if (environment.skirmish && Locator::entitiesRegistry::has_value())
+	{
+		auto& skirmish = Locator::entitiesRegistry::value().Context().skirmish;
+		if (!_skirmishBefore.has_value())
+		{
+			_skirmishBefore = skirmish;
+		}
+		skirmish = true;
 	}
 	// The other players that the scenario puts in the game
 	if (Locator::entitiesRegistry::has_value() && Locator::playerSystem::has_value())
@@ -2087,6 +2119,20 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::BringCreature:
+	{
+		if (!Locator::filesystem::has_value())
+		{
+			return "no files";
+		}
+		// The game's own mind file takes the place of the file that the god's player sends before the start
+		auto& fileSystem = Locator::filesystem::value();
+		const auto path = fileSystem.GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+		const auto bytes = creaturemind::ReadFileBytes(path).value_or(std::vector<uint8_t> {});
+		const auto brought = ecs::creature_from_file::Bring(command.player, bytes);
+		return brought.creature.has_value() ? fmt::format("creature {}", entt::to_integral(*brought.creature))
+		                                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal));
+	}
 	case Kind::RemoveTeleportStone:
 	{
 		if (!Locator::teleportSystem::has_value())
@@ -2810,7 +2856,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
 	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand)
+	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
+	    command.kind == Kind::BringCreature)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -2854,9 +2901,45 @@ void Runner::Give(const Command& command)
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenControlsBox(command.value)));
 		return;
 	}
+	if (command.kind == Kind::JoinOnline)
+	{
+		auto* game = Game::Instance();
+		if (game != nullptr)
+		{
+			game->RequestJoinOnline();
+		}
+		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), game != nullptr ? "asked" : "failed: no game"));
+		return;
+	}
 	if (command.kind == Kind::OpenMultiplayerBox)
 	{
 		Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind), OpenMultiplayerBox(command.value)));
+		return;
+	}
+	if (command.kind == Kind::EndBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr)
+		{
+			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 3)
+		{
+			game->GetInterface()->GetMenu().SetNetworkGame(true);
+			game->GetInterface()->OpenMenu();
+			Log(fmt::format("{:.1f}s: {}: the main menu of a network game opens", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 0)
+		{
+			game->AskToLeaveNetworkGame();
+			Log(fmt::format("{:.1f}s: {}: the question to leave opens", _seconds, Name(command.kind)));
+			return;
+		}
+		const bool opened = game->GetInterface()->GetEndGameBox().OpenTab(command.value);
+		Log(fmt::format("{:.1f}s: {}: tab {} {}", _seconds, Name(command.kind), command.value,
+		                opened ? "opens its box" : "does not open"));
 		return;
 	}
 	if (command.kind == Kind::OpenMenuPage)
@@ -3114,9 +3197,10 @@ void Runner::Give(const Command& command)
 			const bool known = help.SetInterfaceLevel(static_cast<int32_t>(command.value));
 			if (known && Locator::playerSystem::has_value())
 			{
-				script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-				                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE),
-				                                static_cast<int32_t>(command.value));
+				script::interface_levels::Apply(
+				    Locator::entitiesRegistry::value(),
+				    Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+				    static_cast<int32_t>(command.value));
 			}
 			Log(fmt::format("{:.1f}s: the interface level is {}{}, the hand reaches {:.0f}", _seconds, command.value,
 			                known ? "" : " (a level the game does not know)", help.handReach));
@@ -3549,7 +3633,10 @@ void Runner::Give(const Command& command)
 	case Kind::RemoveTeleportStone:
 	case Kind::MakeDance:
 	case Kind::OpenMultiplayerBox:
+	case Kind::EndBox:
 	case Kind::OtherGodHand:
+	case Kind::JoinOnline:
+	case Kind::BringCreature:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:
@@ -3578,6 +3665,8 @@ void Runner::Give(const Command& command)
 	case Kind::ContinueGame:
 	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
+	case Kind::RunScript:
+	case Kind::CallNative:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:
 	case Kind::ReadTip:

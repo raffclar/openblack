@@ -852,6 +852,16 @@ float CreatureLandLightScale(RenderPass viewId)
 	           : 1.0f;
 }
 
+/// Whether the ring of an order is of the player of this computer, who holds the leash of the creature. Only that player
+/// sees the ring.
+bool IsOwnLeashMarker(const ecs::Registry& registry, const ecs::components::LeashMarker& marker)
+{
+	const auto* leashes =
+	    registry.Valid(marker.creature) ? registry.TryGet<const ecs::components::CreatureLeash>(marker.creature) : nullptr;
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == own;
+}
+
 /// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
 /// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
 bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
@@ -862,7 +872,9 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 	}
 	const auto& players = Locator::playerSystem::value();
 	creature_reflection::Situation situation {
-	    .primaryCreature = players.GetPrimaryCreature(players.GetLocalPlayer()) == entity,
+	    .primaryCreature =
+	        players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
 	    .height = position.y,
 	    .fizz = fizz,
 	};
@@ -3095,6 +3107,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
+	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
+	vertices.reserve(ground_blobs::k_Indices.size() *
+	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -3140,7 +3157,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
-	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	for (const auto& [entity, meshId, model] : animalDraws)
 	{
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
 		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
@@ -7817,7 +7834,8 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 						    {
 							    return;
 						    }
-						    if (!leashMarkersShown && from.AllOf<LeashMarker>(entity))
+						    if (const auto* marker = from.TryGet<const LeashMarker>(entity);
+						        marker != nullptr && (!leashMarkersShown || !IsOwnLeashMarker(from, *marker)))
 						    {
 							    return;
 						    }

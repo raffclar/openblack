@@ -70,7 +70,7 @@ entt::entity PlayerHand()
 	{
 		return entt::null;
 	}
-	return openblack::Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	return openblack::Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 }
 } // namespace
 

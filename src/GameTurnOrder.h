@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <optional>
 #include <span>
@@ -112,6 +113,8 @@ enum class Step : uint8_t
 	TempleLooks,
 	WorshipSiteLooks,
 	PlayerAlignment,
+	/// The end of a skirmish or a network game
+	GameEnd,
 	VillageTotems,
 	/// The flags over the towns' stores, and the apple barrel at the player's store. The game draws them and keeps no
 	/// object for them: openblack makes their entities in the turn, so that no frame makes an entity of the world.
@@ -277,6 +280,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     // The temples' looks follow their players' alignments as they were at the end of the last turn
     {.step = Step::TempleLooks, .stage = Stage::Players},
     {.step = Step::WorshipSiteLooks, .stage = Stage::Players},
+    // After the players' turns, a god with no temple is out, and the game is decided when one god is left
+    {.step = Step::GameEnd, .stage = Stage::Players},
     // At the end of the players' turns: their alignments, then the alignment at the camera's eye
     {.step = Step::PlayerAlignment, .stage = Stage::Players},
     {.step = Step::Dances, .stage = Stage::Dances},
@@ -410,13 +415,38 @@ inline constexpr std::array k_CreaturesTurn = std::to_array<Step>({
 	return true;
 }
 
-/// Does each step of the turn, in the order of the turn
-template <typename Do>
-void PlayTurn(Do&& step)
+/// True when the step of the turn at the index plays after the game is decided. Then the game does only the input of the
+/// players and the steps after the turn. The turn count of the game does not move on. In openblack the turn count moves
+/// on, because the turns of a network game come by that count. A step with no stage follows the stage of the last step
+/// before it that has a stage.
+[[nodiscard]] constexpr bool PlaysOnceDecided(std::span<const Place> turn, size_t index) noexcept
 {
-	for (const auto& place : k_Turn)
+	if (turn[index].step == Step::Clock)
 	{
-		step(place.step);
+		return true;
+	}
+	std::optional<Stage> stage;
+	for (size_t i = 0; i <= index; ++i)
+	{
+		if (turn[i].stage.has_value())
+		{
+			stage = turn[i].stage;
+		}
+	}
+	return !stage.has_value() || *stage == Stage::Input || *stage == Stage::AfterTurn;
+}
+
+/// Does each step of the turn, in the order of the turn. After the game is decided, the turn does only the steps that
+/// PlaysOnceDecided gives.
+template <typename Do>
+void PlayTurn(Do&& step, bool decided = false)
+{
+	for (size_t index = 0; index < k_Turn.size(); ++index)
+	{
+		if (!decided || PlaysOnceDecided(k_Turn, index))
+		{
+			step(k_Turn[index].step);
+		}
 	}
 }
 
@@ -433,5 +463,36 @@ void PlayCreaturesTurn(Do&& step)
 static_assert(k_Turn.size() + k_CreaturesTurn.size() == static_cast<size_t>(Step::_Count),
               "Each step has one place in the turn or in the creatures' turn");
 static_assert(InGameOrder(k_Turn), "The steps of the turn follow the game's stages");
+
+/// The step that starts the part of the turn that measures the influence from where the hands were at the turn. The
+/// game measures so for its full turn, the players' commands too. Then all computers get the same result.
+inline constexpr Step k_TurnHandsInfluenceStart = Step::DrawnPlaces;
+/// The step that ends that part. From this step on, the influence comes from where this computer shows its hand.
+inline constexpr Step k_TurnHandsInfluenceEnd = Step::InfluenceTurnEnd;
+
+/// True when the step measures the influence from where the hands were at the turn. The steps of a creature's own
+/// turn are in the turn of the living, so they measure so too.
+[[nodiscard]] constexpr bool MeasuresInfluenceFromTurnHands(Step step) noexcept
+{
+	bool measures = false;
+	for (const auto& place : k_Turn)
+	{
+		if (place.step == k_TurnHandsInfluenceStart)
+		{
+			measures = true;
+		}
+		if (place.step == k_TurnHandsInfluenceEnd)
+		{
+			measures = false;
+		}
+		if (place.step == step)
+		{
+			return measures;
+		}
+	}
+	return std::ranges::find(k_CreaturesTurn, step) != k_CreaturesTurn.end();
+}
+
+static_assert(k_Turn.front().step == k_TurnHandsInfluenceStart, "The influence comes from the turn hands for the full turn");
 
 } // namespace openblack::game_turn

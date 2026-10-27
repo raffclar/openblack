@@ -106,6 +106,10 @@ public:
 	}
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity of) const override { return otherHands.contains(of); }
+	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity of) const override
+	{
+		return of == secondHand ? std::optional(PlayerNames::PLAYER_TWO) : std::nullopt;
+	}
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
 	{
 		const auto found = reportedPlaces.find(of);
@@ -121,9 +125,10 @@ public:
 	{
 		return reportedCollide.has_value() ? reportedCollide : pickedPoint;
 	}
-	[[nodiscard]] bool InInfluence(PlayerNames, glm::vec3 point) const override
+	[[nodiscard]] bool InInfluence(PlayerNames player, glm::vec3 point) const override
 	{
-		return influence && (!borderX.has_value() || point.x < *borderX);
+		return influence && (!influenceOnlyOf.has_value() || player == *influenceOnlyOf) &&
+		       (!borderX.has_value() || point.x < *borderX);
 	}
 	void HeldThingUsedOnLand(PlayerNames player) override { usedOnLand.push_back(player); }
 	[[nodiscard]] bool InBounds(glm::vec3) const override { return true; }
@@ -255,6 +260,25 @@ public:
 			transform.scale[column] = length;
 		}
 		transform.position = pose.origin;
+	}
+	// As the game's world: the frames draw the pulled pose apart from the world's Transform
+	void DrawPulledPose(entt::entity object, const Pose& pose) override
+	{
+		HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+		for (glm::length_t column = 0; column < 3; ++column)
+		{
+			const float length = glm::length(pose.axes[column]);
+			pulled.rotation[column] = pose.axes[column] / length;
+			pulled.scale[column] = length;
+		}
+		registry.AssignOrReplace<HandPulled>(object, pulled);
+	}
+	void ForgetPulledPose(entt::entity object) override
+	{
+		if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+		{
+			registry.Remove<HandPulled>(object);
+		}
 	}
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity, const glm::mat3& axes) const override
 	{
@@ -433,6 +457,8 @@ public:
 	std::optional<entt::entity> underCursor;
 	std::optional<entt::entity> nearHand;
 	bool influence {true};
+	/// When set, only this player has influence anywhere
+	std::optional<PlayerNames> influenceOnlyOf;
 	/// The point picked under the cursor, and with a border the influence reaches only west of it
 	std::optional<glm::vec3> pickedPoint {glm::vec3(0.0f)};
 	/// The point that the last report of the hand's player picked; the picked point of this computer when none
@@ -1161,7 +1187,7 @@ TEST_F(HandGrabSystemWithWorld, AHeavyTreeIsNeverPulledFree)
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
 }
 
-TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPulled)
+TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeIsDrawnLeaningAndKeepsItsPlaceInTheWorld)
 {
 	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
 	const auto before = world->registry.Get<const Transform>(tree);
@@ -1171,35 +1197,41 @@ TEST_F(HandGrabSystemWithWorld, ATreeLetGoBeforeItComesFreeStaysLeaningAsItWasPu
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
+	// The frames draw the lean and the stretch; the world keeps the tree as it stood
+	const auto* pulled = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(pulled, nullptr);
+	EXPECT_TRUE(pulled->rotation != before.rotation || pulled->scale != before.scale);
 	EXPECT_FALSE(Release().has_value());
-	// Alone, the thing keeps the lean and the stretch of the pull
-	const auto& after = world->registry.Get<const Transform>(tree);
-	EXPECT_EQ(after.position, pulled.position);
-	EXPECT_EQ(after.rotation, pulled.rotation);
-	EXPECT_EQ(after.scale, pulled.scale);
-}
-
-TEST_F(HandGrabSystemWithWorld, InANetworkGameATreeLetGoBeforeItComesFreeStandsAsBeforeThePull)
-{
-	world->networkGame = true;
-	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
-	const auto before = world->registry.Get<const Transform>(tree);
-	world->underCursor = tree;
-	EXPECT_TRUE(Press());
-	for (int i = 0; i < 100; ++i)
-	{
-		Frame(10, {20.0f, 30.0f, 0.0f});
-	}
-	const auto pulled = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(pulled.rotation != before.rotation || pulled.scale != before.scale);
-	EXPECT_FALSE(Release().has_value());
-	// The other computers never saw the lean, so the thing stands as it stood before the pull
 	const auto& after = world->registry.Get<const Transform>(tree);
 	EXPECT_EQ(after.position, before.position);
 	EXPECT_EQ(after.rotation, before.rotation);
 	EXPECT_EQ(after.scale, before.scale);
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameAPulledThingKeepsThePlaceThatTheTurnsGaveIt)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 1.0e6f);
+	world->underCursor = tree;
+	EXPECT_TRUE(Press());
+	for (int i = 0; i < 100; ++i)
+	{
+		Frame(10, {20.0f, 30.0f, 0.0f});
+	}
+	// The turns of every computer move the thing while this hand pulls at it, as they move a villager that walks
+	auto& transform = world->registry.Get<Transform>(tree);
+	transform.position = {4.0f, 0.5f, -3.0f};
+	const auto walked = transform;
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
+	// The let go does not put it back where the pull started
+	EXPECT_FALSE(Release().has_value());
+	system->PlaceHeldForTurn();
+	EXPECT_EQ(transform.position, walked.position);
+	EXPECT_EQ(transform.rotation, walked.rotation);
+	EXPECT_EQ(transform.scale, walked.scale);
 	EXPECT_FALSE(world->registry.AllOf<InHand>(tree));
 }
 
@@ -1217,8 +1249,9 @@ TEST_F(HandGrabSystemWithWorld, TheRootsHoleHasThePlaceOfTheTreeBeforeThePullNot
 	{
 		Frame(10, {20.0f, 30.0f, 0.0f});
 	}
-	const auto leaned = world->registry.Get<const Transform>(tree);
-	ASSERT_TRUE(leaned.rotation != before.rotation || leaned.scale != before.scale);
+	const auto* leaned = world->registry.TryGet<const HandPulled>(tree);
+	ASSERT_NE(leaned, nullptr);
+	ASSERT_TRUE(leaned->rotation != before.rotation || leaned->scale != before.scale);
 	ASSERT_TRUE(world->holes.empty());
 	// Light again, it comes free and leaves its hole where it stood before the pull
 	world->weights[tree] = 10.0f;
@@ -1252,6 +1285,80 @@ TEST_F(HandGrabSystemWithWorld, ATreeThatThePullFreedIsTakenWhenTheButtonIsLetGo
 	EXPECT_EQ(std::get<player_commands::HandTake>(world->sent.front()).object, tree);
 	RunWaiting();
 	EXPECT_EQ(system->GetHeld(), std::optional(tree));
+}
+
+class HandGrabShortTreePress: public HandGrabSystemWithWorld
+{
+protected:
+	/// A press of eight frames of 20 ms on a light tree, with the hand far above its grip. Gives the thing that the hand
+	/// holds after the turn that does the commands.
+	std::optional<entt::entity> PressEightFrames(entt::entity tree)
+	{
+		deferCommands = true;
+		world->underCursor = tree;
+		EXPECT_TRUE(Press());
+		// The hand fades into its pull for 0.13 s, and the pull starts on the frame after the fade
+		for (int i = 0; i < 7; ++i)
+		{
+			Frame(20, {0.0f, 50.0f, 0.0f});
+			EXPECT_TRUE(world->holes.empty()) << "frame " << i;
+		}
+		// The first frame of the pull pulls harder than the tree weighs, thus the tree comes free at once
+		Frame(20, {0.0f, 50.0f, 0.0f});
+		EXPECT_EQ(world->holes, std::vector<entt::entity> {tree});
+		// The button comes up after the pull freed the tree: the hand sends the take, not a tap
+		EXPECT_FALSE(Release().has_value());
+		EXPECT_EQ(world->sent.size(), 1u);
+		RunWaiting();
+		return system->GetHeld();
+	}
+};
+
+TEST_F(HandGrabShortTreePress, InASinglePlayerGameAShortPressTakesALightTree)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, InANetworkGameTheSameShortPressTakesTheTreeAtTheSameFrame)
+{
+	world->networkGame = true;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	EXPECT_EQ(PressEightFrames(tree), std::optional(tree));
+	EXPECT_TRUE(world->registry.AllOf<InHand>(tree));
+}
+
+TEST_F(HandGrabShortTreePress, APressOnATreeOutsideTheInfluenceIsAClickAndDoesNotPull)
+{
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	world->influence = false;
+	EXPECT_FALSE(Press());
+	for (int i = 0; i < 8; ++i)
+	{
+		Frame(20, {0.0f, 50.0f, 0.0f});
+	}
+	EXPECT_FALSE(system->GetPullPose().has_value());
+	EXPECT_FALSE(world->registry.AllOf<HandPulled>(tree));
+	EXPECT_TRUE(world->holes.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, InANetworkGameTheInterfaceAsksTheInfluenceOfItsOwnHand)
+{
+	world->networkGame = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	world->influenceOnlyOf = PlayerNames::PLAYER_TWO;
+	const auto tree = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->underCursor = tree;
+	// What the hand offers and why it would not take a thing are of the hand of this computer, not of the first player
+	EXPECT_TRUE(system->IsInInfluence());
+	EXPECT_EQ(system->WhyNotTake(tree), "");
+	EXPECT_FALSE(system->IsInInfluenceOf(PlayerNames::PLAYER_ONE));
+	world->influenceOnlyOf = PlayerNames::PLAYER_ONE;
+	EXPECT_FALSE(system->IsInInfluence());
+	EXPECT_NE(system->WhyNotTake(tree), "");
 }
 
 TEST_F(HandGrabSystemWithWorld, ALightTreeIsUprootedAndCreaks)
@@ -2443,6 +2550,40 @@ TEST_F(HandGrabSystemWithWorld, TheLockAndItsEndOfAnotherPlayerScoopWithThatPlay
 	EXPECT_EQ(world->registry.Get<const HandGrab>(world->secondHand).scoopSource, pile);
 	system->DoUnlock(PlayerNames::PLAYER_TWO, pile);
 	EXPECT_TRUE(world->registry.Get<const HandGrab>(world->secondHand).scoopSource == entt::null);
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// The questions of this computer are about the hand of its own god; the turn asks about the hand of a player by name
+TEST_F(HandGrabSystemWithWorld, ThisComputerAsksAboutTheHandOfItsOwnGod)
+{
+	world->networkGame = true;
+	world->secondPlayerHasHands = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	const auto first = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_ONE, first);
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	system->DoLock(PlayerNames::PLAYER_TWO, pile);
+	const auto handful = world->registry.Get<const HandGrab>(world->secondHand).object;
+	EXPECT_EQ(system->GetHeld(), std::optional(handful));
+	EXPECT_EQ(system->GetLockedOn(), std::optional(pile));
+	EXPECT_EQ(system->GetHeldOf(PlayerNames::PLAYER_ONE), std::optional(first));
+	EXPECT_FALSE(system->GetLockedOnOf(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_EQ(system->GetLockedOnOf(PlayerNames::PLAYER_TWO), std::optional(pile));
+	// The questions leave no acting player behind them
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// A creature takes a gift from the hand that holds it, whichever god's hand that is
+TEST_F(HandGrabSystemWithWorld, ACreatureTakesTheGiftFromTheHandOfTheGodThatHoldsIt)
+{
+	world->secondPlayerHasHands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_TWO, rock);
+	ASSERT_EQ(system->GetHeldOf(PlayerNames::PLAYER_TWO), std::optional(rock));
+	EXPECT_TRUE(system->HandOver(rock));
+	EXPECT_FALSE(system->GetHeldOf(PlayerNames::PLAYER_TWO).has_value());
 	EXPECT_FALSE(world->acting.has_value());
 }
 

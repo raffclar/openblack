@@ -52,8 +52,9 @@ struct NetworkSettings
 	/// The keys that sign the tickets: the https:// address of the lobby's /api/v1/ticket-keys, or a file with the same
 	/// JSON
 	std::string ticketKeys;
-	/// The game starts when this many gods joined and are ready
-	uint32_t godsToStart {1};
+	/// The fewest gods with a player that start the game. The game starts when each god in the room is ready and the room
+	/// has this many gods at least. The room has a slot for each citadel of the land, which can be more.
+	uint32_t minGods {1};
 	/// How long a god's player can be away before the god is defeated
 	uint32_t comeBackSeconds {300};
 	/// The game servers' API of the lobby, such as https://srv.example.org/api/v1. With it, the server reports its room
@@ -90,12 +91,14 @@ struct ServerSettings
 	uint32_t seed {1};
 	/// The server stops when the world gets to this turn. None for a server that runs until a signal stops it.
 	std::optional<uint32_t> turns;
+	/// Tests: the loss of a temple at a turn, which every client of the network game must also have
+	std::optional<sim_run::TempleLoss> templeLoss;
 	/// The game time of each frame in milliseconds
 	double frameMilliseconds {k_DefaultFrameMilliseconds};
 	/// Tools: play the frames one after the other with no wait for the wall clock
 	bool fast {false};
-	/// The folder of the server's own profile. It is never a folder of a player. With none, the server plays as the
-	/// profile of a tool's run, in the Profiles folder of its working folder.
+	/// A folder for the server's profile. The server does not use it: it plays as a profile in memory and writes no
+	/// profile, no saved game and no player data. The server only says in its log that it did not use the folder.
 	std::optional<std::filesystem::path> profileFolder;
 	/// Tools: the server writes the run record of each turn to this file, as the game's --sim-record does, with the hash
 	/// of each component. It starts the inspector on a free port of 127.0.0.1.
@@ -109,6 +112,12 @@ struct ServerSettings
 	std::optional<std::filesystem::path> commandsPath;
 	/// Tools: at this turn the server takes its whole world as a world state and loads it again
 	std::optional<uint32_t> reloadAt;
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	/// Tools: the file of the row dump (row_dump::RowDump). The server writes the rows of a turn at which the world of a
+	/// client parts from the server's world, and at the turn of the settings.
+	std::optional<std::filesystem::path> rowDumpPath;
+	row_dump::Settings rowDump;
+#endif
 	/// The file of the log, or "stdout"
 	/// The game role. With none, the server plays the world alone, as the tools use it.
 	std::optional<NetworkSettings> network;

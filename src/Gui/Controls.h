@@ -260,6 +260,10 @@ public:
 	bool KeyDown(int key) override;
 
 	void SetItems(std::vector<Item> items);
+	/// The scroll bar of the list shows only while its items do not fit the box: the items take more than the height of
+	/// the box less 8. The items are measured again without the width of the scroll bar.
+	void ShowScrollBarWhenNeeded() noexcept { _scrollBarWhenNeeded = true; }
+	[[nodiscard]] bool ShowsScrollBar() const noexcept { return _scrollBar && _scrollBarShown; }
 	void SetMouseCell(size_t index, int cell)
 	{
 		if (index < _items.size())
@@ -292,17 +296,23 @@ public:
 		int shownBottom {0};
 	};
 	std::function<void(const DialogPainter&, const ItemPlace&)> drawOver;
+	/// Drawn under each item the list shows, before its text, with the same places as drawOver
+	std::function<void(const DialogPainter&, const ItemPlace&)> drawUnder;
 	/// The item at a height of the dialog space, as the list is scrolled
 	[[nodiscard]] std::optional<size_t> ItemAt(int y) const;
 
 private:
 	[[nodiscard]] int GetContentHeight() const;
 	void ScrollTo(float scroll);
+	/// The height of each item at the width of the box
+	void MeasureItems();
 
 	const GameFont& _font;
 	int _size;
 	bool _centred;
 	bool _scrollBar;
+	bool _scrollBarWhenNeeded {false};
+	bool _scrollBarShown {true};
 	bool _showSelection;
 	std::vector<Item> _items;
 	std::vector<int> _heights;
@@ -441,6 +451,7 @@ public:
 	[[nodiscard]] bool IsRingOpen() const noexcept { return _ringOpen; }
 	/// How far the ring has come up, 0 to 1
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }
+	using Control::Release;
 	/// The mouse button was let go, wherever it was: the ring goes
 	void Release();
 	std::function<void(int)> onChange;

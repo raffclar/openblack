@@ -135,6 +135,7 @@ TEST(DeveloperTools, TheServerFilterKeepsTheOptionsOfADeployedServer)
 	                                               "--client-key=/c.key",
 	                                               "--room-name=Game",
 	                                               "--gods=2",
+	                                               "--min-gods=1",
 	                                               "--profile-folder=/p",
 	                                               "--log-file=stdout",
 	                                               "--come-back-seconds",

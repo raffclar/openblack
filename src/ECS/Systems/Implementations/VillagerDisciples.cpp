@@ -52,12 +52,14 @@
 #include "ECS/DiscipleRules.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpSpeechSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
@@ -449,9 +451,22 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 	return ordered;
 }
 
-std::optional<PlayerNames> LocalPlayer()
+/// The player of this computer, who hears the guidance about the disciples that its hand makes
+std::optional<PlayerNames> OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? std::optional(Locator::playerSystem::value().GetLocalPlayer()) : std::nullopt;
+	if (!Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
+
+/// The player whose hand holds a villager, none when no hand holds it
+std::optional<PlayerNames> HolderOf(entt::entity villager)
+{
+	const auto& registry = Entities();
+	const auto* held = registry.TryGet<const InHand>(villager);
+	return held != nullptr ? std::optional(ecs::HandPlayer(registry, held->hand)) : std::nullopt;
 }
 
 /// Making a disciple moves the player's alignment by what its town wants of the work
@@ -757,7 +772,7 @@ void villager_disciple::LetGo(entt::entity villager, std::optional<PlayerNames> 
 void villager_disciple::PutDown(entt::entity villager, std::optional<PlayerNames> player)
 {
 	const auto* held = Entities().TryGet<const DiscipleHeld>(villager);
-	const auto local = LocalPlayer();
+	const auto local = OwnPlayer();
 	if (held == nullptr || !player.has_value() || player != local || held->atPickUp == TypeOf(villager))
 	{
 		return;
@@ -798,7 +813,7 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	{
 		facts.push_back(NearFactsOf(thing, villager));
 	}
-	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, LocalPlayer()), held->atPickUp);
+	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, HolderOf(villager)), held->atPickUp);
 	// When the hand shows a trader a thing of a town, the trader trades with that town. Other work keeps the trade town.
 	if (choice.type == Trader && choice.from.has_value())
 	{

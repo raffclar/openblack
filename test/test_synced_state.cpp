@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstring>
+
 #include <algorithm>
 #include <array>
 #include <string>
@@ -20,6 +22,7 @@
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
 #include "ECS/DrawnRegistry.h"
+#include "ECS/Components/SnowLevel.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
 #include "ECS/SyncedState.h"
@@ -226,6 +229,16 @@ TEST(SyncedState, TheThingsThatOnlyTheFramesMakeTakeNoEntityOfTheLand)
 	// A thing that the turn makes on the land changes the synced world
 	land.Create();
 	EXPECT_NE(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+TEST(SyncedState, WhatOnlyThePlayerAtThisComputerHearsAndSeesIsNotSynced)
+{
+	// Each computer keeps these for its own player, so two computers have different values at the same turn
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHelpMemory", "memory"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Heartbeat", "state"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "strainSound"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreaturePictures", "pictures"));
+	// The turn reads the sites of the temple
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "sites"));
 }
 
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
@@ -416,3 +429,69 @@ TEST(SyncedStateUnregistered, TheGamesOwnRegistrationCoversACameraPoint)
 	registry.emplace<CameraPoint>(entity);
 	EXPECT_TRUE(UnregisteredStorages(registry, context).empty());
 }
+
+TEST(SyncedState, TheSnowThatAThingShowsDoesNotChangeTheHash)
+{
+	entt::meta_ctx context;
+	Register(context);
+	Reflect<ecs::components::SnowLevel>(context).Field<&ecs::components::SnowLevel::level>("level");
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 1.0f});
+	const auto tree = registry.create();
+	registry.emplace<FakeBody>(tree, FakeBody {.place = 3.0f});
+	registry.emplace<ecs::components::SnowLevel>(tree, ecs::components::SnowLevel {.level = 10});
+	const auto parts = synced_state::PresentationParts();
+	const auto before = synced_state::HashOf(registry, context, parts).hash;
+	// The frames of one computer draw the two things in the snow: the snow eases on the tree and starts on the body
+	registry.get<ecs::components::SnowLevel>(tree).level = 40;
+	registry.emplace<ecs::components::SnowLevel>(body, ecs::components::SnowLevel {.level = 5});
+	EXPECT_EQ(synced_state::HashOf(registry, context, parts).hash, before);
+	// The turn moves the tree: the synced state changes
+	registry.get<FakeBody>(tree).place = 4.0f;
+	EXPECT_NE(synced_state::HashOf(registry, context, parts).hash, before);
+}
+
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+TEST(SyncedState, TheRowsHaveEachFieldThatTheHashTakes)
+{
+	entt::meta_ctx context;
+	Register(context);
+	entt::registry registry;
+	const auto body = registry.create();
+	registry.emplace<FakeBody>(body, FakeBody {.place = 2.0f, .drawnPlace = 5.0f});
+	const auto glow = registry.create();
+	registry.emplace<FakeGlowMark>(glow);
+	registry.emplace<FakeGlow>(glow, FakeGlow {.shine = 0.5f});
+	WorkerPool pool(2);
+	ecs::reflection::WorldRows rows;
+	const auto hash = synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &rows);
+	// The rows do not change the hash
+	EXPECT_EQ(hash.hash, synced_state::HashOf(registry, context, k_Presentation).hash);
+	// The hash keeps the place of the body only: the drawn place and the marked glow are presentation parts, which the
+	// rows mark
+	const auto synced = std::ranges::count(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	ASSERT_EQ(synced, 1);
+	const auto shown = std::ranges::count(rows.rows, true, &ecs::reflection::WorldRows::Row::presentation);
+	// The drawn place, the glow and the glow mark
+	EXPECT_EQ(shown, 3);
+	// A mark with no values is a row of no bytes
+	registry.emplace<FakeHidden>(body);
+	ecs::reflection::WorldRows marked;
+	static_cast<void>(synced_state::HashOf(registry, context, k_Presentation, false, {}, &pool, &marked));
+	const auto hidden = std::ranges::find_if(marked.rows, [&marked](const ecs::reflection::WorldRows::Row& each) {
+		return marked.fields.at(each.field) == "FakeHidden.*";
+	});
+	ASSERT_NE(hidden, marked.rows.end());
+	EXPECT_EQ(hidden->entity, body);
+	EXPECT_EQ(hidden->size, 0u);
+	EXPECT_FALSE(hidden->presentation);
+	const auto& row = *std::ranges::find(rows.rows, false, &ecs::reflection::WorldRows::Row::presentation);
+	EXPECT_EQ(row.entity, body);
+	EXPECT_EQ(rows.fields.at(row.field), "FakeBody.place");
+	ASSERT_EQ(row.size, sizeof(float));
+	float place = 0.0f;
+	std::memcpy(&place, rows.bytes.data() + row.offset, sizeof(place));
+	EXPECT_EQ(place, 2.0f);
+}
+#endif

@@ -40,6 +40,7 @@ public:
 	bool LoadSavedLand(const std::filesystem::path& landPath, const std::filesystem::path& landscape,
 	                   const std::function<bool()>& restore, SavedLandUse use) override;
 	void LoadLandscape(const std::filesystem::path& path) override;
+	void SetStartCameraPlace(glm::ivec2 place) override { _startCameraPlace = place; }
 
 	[[nodiscard]] bool IsPlaygroundLand(const std::filesystem::path& path) const override;
 	[[nodiscard]] const std::filesystem::path& GetLandPath() const override { return _landPath; }
@@ -48,6 +49,7 @@ public:
 
 	void SetNewGameStart(std::optional<new_game_choice::NewGameStart> start) override { _newGameStart = start; }
 	void SetHumansFromSession(bool fromSession) override { _humansFromSession = fromSession; }
+	[[nodiscard]] bool RunsNetworkMapScript() const override { return _runsNetworkMapScript; }
 	bool StartChallengeScripts(bool startStory) override;
 	void StartStoryScripts() override;
 
@@ -84,9 +86,13 @@ private:
 	std::filesystem::path _landscapePath;
 	/// The landscape of the land of a network game whose script runs now, empty for any other land
 	std::vector<uint8_t> _mapLandscape;
+	/// The start place of the camera that the map script of the land gave, in map units
+	std::optional<glm::ivec2> _startCameraPlace;
 	std::optional<new_game_choice::NewGameStart> _newGameStart;
 	/// The humans of a land of a network game come from the network session
 	bool _humansFromSession {false};
+	/// The map script of a land of a network game runs now
+	bool _runsNetworkMapScript {false};
 	/// The ticks of the machine at the last turn, as the game reads them
 	uint32_t _lastGameLoopTime {0};
 	/// When the scripts last took a turn in the temple, in real time

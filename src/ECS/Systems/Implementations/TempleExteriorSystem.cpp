@@ -115,13 +115,12 @@ void TempleExteriorSystem::UpdateTurn()
 void TempleExteriorSystem::FindAfterLoad()
 {
 	// The save keeps the look that each temple's mesh was blended for, but not the blended mesh. The mesh is made again
-	// before the first frame is drawn, with no step toward the targets.
+	// before the first frame is drawn, with no step toward the targets. A mesh in the cache does not prevent this,
+	// because this computer can have blended it for the world before the load.
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto& meshes = Locator::resources::value().GetMeshes();
 	registry.Each<const Temple, const TempleExterior, Mesh>(
-	    [&meshes](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
-		    if (exterior.morphed.has_value() &&
-		        TempleExteriorMorph::NeedsBlend(exterior.morphed, *exterior.morphed, meshes.Contains(mesh.id)))
+	    [](const entt::entity entity, const Temple& temple, const TempleExterior& exterior, Mesh& mesh) {
+		    if (TempleExteriorMorph::BlendsAfterLoad(exterior.morphed))
 		    {
 			    Morph(entity, mesh, exterior, temple.owner);
 		    }

@@ -7,6 +7,10 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstdint>
+
+#include <bit>
+#include <initializer_list>
 #include <optional>
 #include <string>
 #include <variant>
@@ -156,6 +160,25 @@ TEST(GameSocket, TheFramesOfTheStartGoToJsonAndBack)
 	const auto toClient = RoundTrip(StartCreature {.slot = 31, .file = {}});
 	EXPECT_EQ(toClient.slot, 31);
 	EXPECT_TRUE(toClient.file.empty());
+	EXPECT_EQ(toClient.alignment, 0.0f);
+}
+
+// The alignment of the start reads back as the same float, and only from -1 to 1
+TEST(GameSocket, TheAlignmentOfTheStartReadsBackAsTheSameFloat)
+{
+	for (const float alignment : {0.7f, -0.5f, 0.002555664f, 1.0f, -1.0f, -0.0f, 1.0e-30f})
+	{
+		const auto creature = RoundTrip(StartCreature {.slot = 2, .file = {1}, .alignment = alignment});
+		EXPECT_EQ(std::bit_cast<uint32_t>(creature.alignment), std::bit_cast<uint32_t>(alignment));
+	}
+	// A frame with no alignment is a god at 0
+	const auto none = Parse(R"({"type":"start.creature","file":""})");
+	ASSERT_TRUE(none.has_value());
+	EXPECT_EQ(std::get<StartCreature>(*none).alignment, 0.0f);
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":1.5})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":-1.0001})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","alignment":"0.5"})").has_value());
+	EXPECT_TRUE(Parse(R"({"type":"start.creature","file":"","alignment":-1})").has_value());
 }
 
 TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
@@ -168,4 +191,21 @@ TEST(GameSocket, ACreatureFileThatIsTooLargeDoesNotRead)
 	EXPECT_FALSE(Parse(R"({"type":"start.creature","file":"","slot":32})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.reply"})").has_value());
 	EXPECT_FALSE(Parse(R"({"type":"start.query","land":"Land1.txt"})").has_value());
+}
+
+// The start names the players of the gods by slot, and the server tells the clients that the turns of the game stopped
+TEST(GameSocket, TheNamesOfTheGodsAndTheStopOfTheGameGoToJsonAndBack)
+{
+	const auto start = RoundTrip(Start {.land = "Online Maps/mpm_2p_1.map",
+	                                    .testbed = false,
+	                                    .seed = 3,
+	                                    .turn = 0,
+	                                    .opening = {},
+	                                    .godsRingMap = false,
+	                                    .names = {"Alice", "", "Bob"}});
+	EXPECT_EQ(start.names, (std::vector<std::string> {"Alice", "", "Bob"}));
+	RoundTrip(StopRequest {});
+	EXPECT_EQ(RoundTrip(GameStop {.turn = 1254}).turn, 1254u);
+	EXPECT_FALSE(Parse(R"({"type":"game.stop"})").has_value());
+	EXPECT_FALSE(Parse(R"({"type":"game.start","seed":1,"names":[1]})").has_value());
 }

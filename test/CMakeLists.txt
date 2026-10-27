@@ -6,6 +6,27 @@ include(CTest)
 add_executable(openblack_tests test_runner_main.cpp)
 target_link_libraries(openblack_tests PRIVATE GTest::gtest openblack_lib)
 set_property(TARGET openblack_tests PROPERTY FOLDER "tests")
+
+# The test program resets each service of the locator after each test suite. A suite then never sees what an earlier
+# suite left. The list comes from the declarations in the locator, so a new service is in it with no change here.
+file(STRINGS ${CMAKE_SOURCE_DIR}/src/Locator.h openblack_locator_lines
+     REGEX "^[^u]*using [A-Za-z0-9_]+ = entt::locator<"
+)
+set(openblack_locator_resets "")
+foreach (line IN LISTS openblack_locator_lines)
+  string(REGEX REPLACE "^[^u]*using ([A-Za-z0-9_]+) = .*$" "\\1" service "${line}")
+  string(APPEND openblack_locator_resets "Locator::${service}::reset();\n")
+endforeach ()
+file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/locator_resets.inc
+     "${openblack_locator_resets}"
+)
+set_property(
+  DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+                            ${CMAKE_SOURCE_DIR}/src/Locator.h
+)
+target_include_directories(
+  openblack_tests PRIVATE ${CMAKE_CURRENT_BINARY_DIR}
+)
 # Its Debug link only references the objects' debug information, which is quicker (the game keeps full debug information)
 if (MSVC)
   target_link_options(
@@ -1612,6 +1633,7 @@ openblack_setup_and_add_test(
 )
 openblack_setup_and_add_test(test_game_turn_order test_game_turn_order.cpp)
 openblack_setup_and_add_test(test_world_save_clock test_world_save_clock.cpp)
+openblack_setup_and_add_test(test_save_date_label test_save_date_label.cpp)
 openblack_setup_and_add_test(test_script_interface_levels test_script_interface_levels.cpp)
 openblack_setup_and_add_test(test_camera_keys camera/test_camera_keys.cpp)
 openblack_setup_and_add_test(test_clear_view camera/test_clear_view.cpp)
@@ -1771,14 +1793,6 @@ target_link_libraries(test_hand_cast_commands PRIVATE edt psys)
 openblack_setup_and_add_test(test_roots_pile test_roots_pile.cpp)
 openblack_setup_and_add_test(test_script_start test_script_start.cpp)
 target_link_libraries(test_script_start PRIVATE ScriptLibrary)
-openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
-add_test(NAME test_frame_time_check
-         COMMAND ${Python3_EXECUTABLE}
-                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
-)
-openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
-openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
-openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp)
 openblack_setup_and_add_test(test_local_input_player test_local_input_player.cpp)
 openblack_setup_and_add_test(test_draw_trace test_draw_trace.cpp)
 add_test(NAME test_draw_trace_compare
@@ -1787,3 +1801,27 @@ add_test(NAME test_draw_trace_compare
 )
 openblack_setup_and_add_test(test_hand_held_seeds test_hand_held_seeds.cpp)
 target_link_libraries(test_hand_held_seeds PRIVATE edt psys)
+openblack_setup_and_add_test(test_frame_write_guard test_frame_write_guard.cpp)
+add_test(NAME test_frame_time_check
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_frame_time_check.py
+)
+openblack_setup_and_add_test(test_creature_drawn_walk test_creature_drawn_walk.cpp)
+openblack_setup_and_add_test(test_living_drawn_places test_living_drawn_places.cpp)
+openblack_setup_and_add_test(test_world_drawn_places test_world_drawn_places.cpp)
+openblack_setup_and_add_test(test_join_online_entry test_join_online_entry.cpp)
+openblack_setup_and_add_test(test_row_dump test_row_dump.cpp)
+add_test(NAME test_row_dump_compare
+         COMMAND ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tools/sim/test_row_dump.py
+)
+openblack_setup_and_add_test(test_start_camera test_start_camera.cpp)
+openblack_setup_and_add_test(test_game_end test_game_end.cpp)
+openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
+openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
+openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
+openblack_setup_and_add_test(test_start_alignment test_start_alignment.cpp)
+openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
+openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
+openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)
+openblack_setup_and_add_test(test_player_kind test_player_kind.cpp)

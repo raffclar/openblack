@@ -215,6 +215,12 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The number of the spot visual that a temple's heart fires its beams from, as the particles of this computer
     // numbered it
     {.component = "Temple", .field = "beamSource", .marker = ""},
+    // The same for the glow and the beams of a temple that the enemy destroys, and the sound loops of its destruction,
+    // which only a computer with audio plays. The turns read them only to stop the sounds and to show the glow and the
+    // beams.
+    {.component = "Temple", .field = "destructionGlow", .marker = ""},
+    {.component = "Temple", .field = "destructionBeamSource", .marker = ""},
+    {.component = "Temple", .field = "destructionLoops", .marker = ""},
     {.component = "ScriptHighlight", .field = "centre", .marker = ""},
     {.component = "HiddenByState", .field = "", .marker = "ScriptHighlight"},
     {.component = "ScriptHighlight", .field = "radius", .marker = ""},
@@ -242,6 +248,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Field", .field = "height", .marker = ""},
     // The roots that the frames show on a tree out of the land. Only the draw reads them.
     {.component = "ShownRoots", .field = "", .marker = ""},
+    // The snow that a thing shows eases only while this computer draws the thing. Only the draw reads it.
+    {.component = "SnowLevel", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
@@ -275,7 +283,6 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "pulling", .marker = ""},
     {.component = "HandGrab", .field = "grips", .marker = ""},
     {.component = "HandGrab", .field = "tug", .marker = ""},
-    {.component = "HandGrab", .field = "pullPosition", .marker = ""},
     {.component = "HandGrab", .field = "pullRotation", .marker = ""},
     {.component = "HandGrab", .field = "pullScale", .marker = ""},
     {.component = "HandGrab", .field = "hold", .marker = ""},
@@ -298,6 +305,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandOnCreature", .field = "", .marker = ""},
     // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
     {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The help of the creature is for the player at this machine only. Each computer keeps it for the creature of its
+    // own player, from its own dialogue. Only the help reads it.
+    {.component = "CreatureHelpMemory", .field = "", .marker = ""},
     // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
     {.component = "VillageTotem", .field = "gripped", .marker = ""},
     {.component = "VillageTotem", .field = "held", .marker = ""},
@@ -316,6 +326,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend
     {.component = "Tree", .field = "bendSlot", .marker = ""},
+    // The heart of the player at this machine beats faster while its temple goes. Only the sound of the heart reads the
+    // beat.
+    {.component = "Heartbeat", .field = "", .marker = ""},
+    // The strain that the player at this machine hears from the worship sites of its temple. Only the guidance reads it.
+    {.component = "CitadelWorship", .field = "strainSound", .marker = ""},
+    // The pictures of the web page of the creature of the player at this machine, from this machine's camera
+    {.component = "CreaturePictures", .field = "", .marker = ""},
+    // The copy of the creature of the player at this machine that a film shows
+    {.component = "*", .field = "", .marker = "FilmCreature"},
     // A field's crop sways as one of the trees' sways, which each computer picks with its own local random number. Only
     // the frames read it.
     {.component = "Swayable", .field = "swaySlot", .marker = "Field"},
@@ -375,7 +394,7 @@ bool IsPresentationOnly(std::span<const PresentationPart> parts, std::string_vie
 }
 
 Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::span<const PresentationPart> presentation,
-            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool)
+            bool byField, const ecs::reflection::RowVisitor& visit, WorkerPool* pool, ecs::reflection::WorldRows* rows)
 {
 	// The hash does not include the presentation parts. A part that only some entities have uses the storage of its marker
 	// component. When the registry has no such storage, no entity has the marker, and the hash keeps the part.
@@ -392,7 +411,7 @@ Hash HashOf(const entt::registry& registry, const entt::meta_ctx& context, std::
 			leaveOut.push_back({.component = part.component, .field = part.field, .marker = marker});
 		}
 	}
-	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool);
+	const auto hashes = ecs::reflection::HashWorld(registry, context, leaveOut, byField, visit, pool, rows);
 	Hash result {.hash = k_HashOffset, .parts = {}};
 	Mix(result.hash, &hashes.entities, sizeof(hashes.entities));
 	result.parts.emplace_back("entities", hashes.entities);

@@ -67,6 +67,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
@@ -264,8 +265,7 @@ TempleScrolls::Facts GatherScrollFacts()
 		facts.bindings.assign(bindings.begin(), bindings.end());
 	}
 	// The world scroll tells the player at this machine of the world and their people
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto world = player_statistics::World(local);
 	facts.population = world.population;
 	facts.believersPercent = world.believersPercent;
@@ -473,11 +473,11 @@ void TempleInterior::ListSavedGames()
 
 temple::save_game_room::View TempleInterior::SaveGameRoomView() const
 {
-	// openblack has no network game: the player is never in one
+	// A network game never saves
 	return {.closeUp = _cameraModel != nullptr && _cameraModel->GetSubMeshZoom() == 1.0f,
 	        .pictureLookedAt = _saveGameRoom != nullptr && _saveGameRoom->IsPictureLookedAt(),
 	        .keptInRoom = _lock.GetRoom().has_value(),
-	        .multiplayer = false};
+	        .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame()};
 }
 
 void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t slot)
@@ -526,7 +526,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	// The empty pictures show the half for the player's alignment
 	if (Locator::playerSystem::has_value() && Locator::alignmentSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
 	auto& boxes = _interface->GetSaveGameBoxes();
@@ -946,7 +947,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	        (inChallengeRoom && _challengeRoom->IsPictureLookedAt()) || (inSaveGameRoom && _saveGameRoom->IsPictureLookedAt()),
 	    .savedGames = savedGames,
 	    .savedGameHighDetail = inSaveGameRoom ? _saveGameRoom->GetHighDetailSlot() : std::nullopt,
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	std::u16string savedGameName;
 	UpdateTempleToolTip(_toolTip, input, &savedGameName);
