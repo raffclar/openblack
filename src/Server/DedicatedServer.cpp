@@ -489,7 +489,16 @@ bool ServerWorld::Frame()
 	}
 	// The turn of the world when it is due, with no view, and the commands that the players sent
 	land.PlayTurns(*this);
-	Locator::playerCommandSystem::value().SendOpenBlock();
+	// As the game that plays the commands of a file, the server then does no command of its own player
+	switch (OwnCommandsOf(_settings))
+	{
+	case OwnCommands::Send:
+		Locator::playerCommandSystem::value().SendOpenBlock();
+		break;
+	case OwnCommands::Drop:
+		Locator::playerCommandSystem::value().Reset();
+		break;
+	}
 	clock.UpdateFrame();
 	// The real time since the last frame, as the game's draw measures it. The storms' clouds and other frame effects step
 	// by it.
@@ -663,6 +672,11 @@ EngineConfig ServerConfig(const ServerSettings& settings)
 	config.vsync = false;
 	config.clockedAudio = sim_run::FrameTimeFromMs(settings.frameMilliseconds).has_value();
 	return config;
+}
+
+OwnCommands OwnCommandsOf(const ServerSettings& settings)
+{
+	return settings.commandsPath.has_value() ? OwnCommands::Drop : OwnCommands::Send;
 }
 
 sim_run::Request SimulationFor(const ServerSettings& settings)
