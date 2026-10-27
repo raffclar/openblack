@@ -383,5 +383,5 @@ TEST(FlockMembers, AnEmptiedRegistryHasNoFlocksOrLivings)
 	}
 	registry.Reset();
 	EXPECT_EQ(registry.Underlying().view<const components::Flock>().size(), 0u);
-	EXPECT_EQ(registry.Underlying().storage<components::Animal>()->size(), 0u);
+	EXPECT_EQ(registry.Underlying().view<const components::Animal>().size(), 0u);
 }
