@@ -46,6 +46,23 @@ void RegisterFields_Components_s(entt::meta_ctx& context);
 
 void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& context)
 {
+	Reflect<components::ScaffoldOffer>(context)
+	    .Field<&components::ScaffoldOffer::info>("info")
+	    .Field<&components::ScaffoldOffer::number>("number")
+	    .Field<&components::ScaffoldOffer::mesh>("mesh")
+	    .Field<&components::ScaffoldOffer::yAngle>("yAngle")
+	    .Field<&components::ScaffoldOffer::scale>("scale");
+	Reflect<components::ScaffoldPhantom>(context)
+	    .Field<&components::ScaffoldPhantom::shown>("shown")
+	    .Field<&components::ScaffoldPhantom::next>("next")
+	    .Field<&components::ScaffoldPhantom::changeMs>("changeMs")
+	    .Field<&components::ScaffoldPhantom::grows>("grows")
+	    .Field<&components::ScaffoldPhantom::yAngle>("yAngle")
+	    .Field<&components::ScaffoldPhantom::scale>("scale")
+	    .Field<&components::ScaffoldPhantom::looked>("looked")
+	    .Field<&components::ScaffoldPhantom::noOfferTurns>("noOfferTurns")
+	    .Field<&components::ScaffoldPhantom::foundsTown>("foundsTown")
+	    .Field<&components::ScaffoldPhantom::fixedAngle>("fixedAngle");
 	Reflect<components::Scaffold>(context)
 	    .Field<&components::Scaffold::town>("town")
 	    .Field<&components::Scaffold::workshop>("workshop")
@@ -53,7 +70,9 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Scaffold::putDownTurn>("putDownTurn")
 	    .Field<&components::Scaffold::scriptBuilding>("scriptBuilding")
 	    .Field<&components::Scaffold::gentle>("gentle")
-	    .Field<&components::Scaffold::handPlayer>("handPlayer");
+	    .Field<&components::Scaffold::handPlayer>("handPlayer")
+	    .Field<&components::Scaffold::phantom>("phantom")
+	    .Field<&components::Scaffold::site>("site");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
 	    .Field<&components::ScriptAnimation::playsLeft>("playsLeft");
