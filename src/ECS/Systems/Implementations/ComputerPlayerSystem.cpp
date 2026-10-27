@@ -575,6 +575,11 @@ void ComputerPlayerSystem::ProcessTurn()
 			{
 				const auto fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
 				_times.Add(static_cast<int>(name), turn, _seeMs, _handMs, fullMs);
+				if (fullMs >= computer_god_times::k_SlowTurnMs)
+				{
+					SPDLOG_LOGGER_INFO(spdlog::get("game"), "Computer god {} slow turn {}: {:.3f} ms, see {:.3f} hand {:.3f}",
+					                   static_cast<int>(name), turn, fullMs, _seeMs, _handMs);
+				}
 			}
 		}
 		if (auto* power = registry.TryGet<PlayerInfluencePower>(entity); power != nullptr)

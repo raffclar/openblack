@@ -17,6 +17,9 @@
 namespace openblack::computer_god_times
 {
 
+/// The log gives each turn of a god that takes this long or longer, in milliseconds
+constexpr double k_SlowTurnMs = 1.0;
+
 /// The time of one part of the turns of a computer god: the sum, the longest and the turn of the longest
 struct Part
 {
