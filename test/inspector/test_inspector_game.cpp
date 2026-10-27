@@ -412,6 +412,29 @@ struct Holder
 };
 } // namespace
 
+namespace
+{
+enum class Mood : int32_t
+{
+	Calm = 0,
+	Angry = 3,
+};
+} // namespace
+
+// A component that is one enumeration or one number has no fields: it is written as its value, not as null
+TEST(InspectorReflection, ComponentsThatAreOneValueAreWrittenAsThatValue)
+{
+	entt::meta_ctx context;
+	reflection::Reflect<Mood>(context);
+	reflection::Reflect<int32_t>(context);
+	const Mood mood = Mood::Angry;
+	const int32_t count = 7;
+	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<Mood>(), &mood), Json(3));
+	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<int32_t>(), &count), Json(7));
+	// A type that is not registered stays null
+	EXPECT_EQ(reflection::ComponentToJson(context, entt::type_id<Cell>(), &mood), Json(nullptr));
+}
+
 // Containers are written as what they hold, briefly: lists as arrays, maps as their first entries, plain numbers as
 // numbers, floats in their shortest form; never as a type's name
 TEST(InspectorReflection, ContainersAreWrittenAsWhatTheyHold)
