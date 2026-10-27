@@ -4565,6 +4565,22 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.stomp_lost_villager",
+	    .name = "Stomping on a villager that the hand takes away",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager in front of it. A script tells it to stomp on the villager. As "
+	                   "the foot starts to come down, the player's hand takes the villager.",
+	    .expected = "The foot stops and goes back up along the same path, to where the stomp started. Then the tiger "
+	                "stands, and the stomp fails. The villager stays alive in the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"},
+	                 {.kind = Kind::HandTake, .delaySeconds = 3.7f, .object = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.stomp_and_eat",
 	    .name = "Stomping on a sheep and eating it",
 	    .facet = Facet::Objects,

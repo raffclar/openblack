@@ -2915,7 +2915,8 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
 			const auto reach =
 			    creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
-			if (!reach.inRange)
+			// A thing that is no longer on the map, for example in the player's hand, is out of reach too
+			if (!OnTheMap(registry, *action.target) || !reach.inRange)
 			{
 				// The reach keeps the weights of the last turn. Its time is one step less than its time before this turn.
 				action.withdraws = true;
