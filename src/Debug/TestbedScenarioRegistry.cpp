@@ -5195,6 +5195,12 @@ void AddObjects(std::vector<Scenario>& all)
 	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	curious.hold = false;
 	curious.pauseMind = false;
+	// A creature that moves far from the hand while the hand takes the villager cannot take her. Its mind starts a short
+	// time before the hand gives her.
+	constexpr float k_ThinksBeforeTheGive = 2.0f;
+	auto curiousAtTheGive = curious;
+	curiousAtTheGive.pauseMind = true;
+	curiousAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
 	all.push_back({
 	    .id = "creature.give_villager",
 	    .name = "Giving a villager from the hand",
@@ -5205,24 +5211,66 @@ void AddObjects(std::vector<Scenario>& all)
 	                "wants nothing much, eats her if hungry, or throws her at the camera if it wants to play.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
-	    .creatures = {curious},
+	    .creatures = {curiousAtTheGive},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	// It wants to play with the player and nothing else, so it throws what it is given at the camera
+	auto playful = curiousAtTheGive;
+	playful.desires = {{.desire = Desire::PlayWithPlayer, .fraction = 1.0f}};
+	playful.hold = true;
+	all.push_back({
+	    .id = "creature.throws_villager",
+	    .name = "A creature throws a villager it is given",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a tiger that wants to play with the "
+	                   "player, gives her to it.",
+	    .expected = "The tiger takes her with its take clip and throws her at the camera with its throw clip, looking at "
+	                "the camera. She leaves its hand at the moment of the throw and flies with her thrown clip, then "
+	                "lands and gets up.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {playful},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	    .commands = giving,
 	    .hand = offering,
 	});
 
 	all.push_back({
+	    .id = "creature.picks_up_villager",
+	    .name = "A creature picks up, puts down and throws a villager",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up the villager in front of it and puts her down. Then it picks her up again and "
+	                   "throws her to the west.",
+	    .expected = "The tiger reaches down with its pick-up clips and takes her at the moment of the pick-up; in its "
+	                "hand she plays her scared stiff clip. It puts her down with its put-down clip. Then it picks her up "
+	                "and throws her with its throw clip: she leaves its hand at the moment of the throw, flies with her "
+	                "thrown clip, lands and gets up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::PutDown, 0, 1.5f, true), OnObject(Kind::PickUp, 0, 0, 1.5f),
+	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.5f)},
+	});
+
+	auto hungryAtTheGive = hungryThinking;
+	hungryAtTheGive.pauseMind = true;
+	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
+	all.push_back({
 	    .id = "creature.give_villager_eaten",
 	    .name = "Giving a villager to a hungry creature",
 	    .facet = Facet::Objects,
 	    .description = "The player's hand takes a villager and, held in front of a hungry tiger, gives her to it.",
 	    .expected = "The tiger reaches out with its take clip and takes her; in its hand she plays her scared stiff clip. "
-	                "It looks her over the first time it is given a villager, then plays its eat clip: at the moment of "
+	                "Its hunger is its strongest desire, so it plays its eat clip at once: at the moment of "
 	                "the bite she is gone from its hand, and it swallows her as the clip ends. Then she dies and its "
 	                "hunger falls.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
-	    .creatures = {hungryThinking},
+	    .creatures = {hungryAtTheGive},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	    .commands = giving,
 	    .hand = offering,
