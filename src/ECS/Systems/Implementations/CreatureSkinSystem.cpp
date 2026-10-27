@@ -31,6 +31,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
@@ -148,8 +149,7 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
 std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames owner)
 {
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto wanted = owner == PlayerNames::NEUTRAL ? local : owner;
 	std::optional<entt::entity> found;
 	registry.Each<const Player>([&found, wanted](entt::entity entity, const Player& player) {
@@ -180,7 +180,8 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 	if (Locator::playerSystem::has_value())
 	{
 		const auto& players = Locator::playerSystem::value();
-		const auto local = players.GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		if (owner == local || inTemple)
 		{

@@ -68,8 +68,11 @@ public:
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// The game's synchronised random numbers, none when there are none
 	[[nodiscard]] virtual GameRandomInterface* Random() = 0;
-	/// The player at this machine, none when there are no players
+	/// The first player, whose creature a script keeps from harm, none when there are no players. It is the same on every
+	/// computer.
 	[[nodiscard]] virtual std::optional<PlayerNames> LocalPlayer() const = 0;
+	/// The player of this computer, whose help counts what its hand throws, none when there are no players
+	[[nodiscard]] virtual std::optional<PlayerNames> OwnPlayer() const { return LocalPlayer(); }
 
 	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
 	/// An object's height as the game measures it

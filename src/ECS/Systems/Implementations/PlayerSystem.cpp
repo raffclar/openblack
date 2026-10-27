@@ -13,6 +13,7 @@
 
 #include "Creature/PrimaryCreature.h"
 #include "ECS/Components/Alignment.h"
+#include "ECS/Components/ComputerPlayer.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Influence.h"
 #include "ECS/Components/Player.h"
@@ -21,6 +22,7 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
 
@@ -48,6 +50,20 @@ std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) con
 {
 	const auto player = _players.find(playerName);
 	return player != _players.end() ? std::optional(player->second) : std::nullopt;
+}
+
+bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+{
+	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	// A computer mind that a land script or the start of a network game switched on marks its player
+	bool computerMind = false;
+	if (const auto player = FindPlayer(name); player.has_value() && Locator::entitiesRegistry::has_value())
+	{
+		const auto& registry = Locator::entitiesRegistry::value();
+		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
+		computerMind = mind != nullptr && mind->marked;
+	}
+	return player_kind::IsComputer({.player = name, .networkGame = networkGame, .computerMind = computerMind});
 }
 
 void PlayerSystem::AddCreature(entt::entity creature)
