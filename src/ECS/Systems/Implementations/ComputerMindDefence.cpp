@@ -170,7 +170,7 @@ float FreedomOf(PlayerNames player, entt::entity creature)
 	    mind != nullptr && mind->planner.current.has_value() && mind->planner.current->desire == Desire::RestoreHealth;
 	return computer_mind_rules::CreatureFreedom({
 	    .leashed = leashed,
-	    .turnsSinceTied = leashed ? Turn() - leash->worn->tiedTurn : 0,
+	    .turnsSinceTied = leashed ? Turn() - leash->lastTiedTurn : 0,
 	    .fighting = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature),
 	    .life = body.life,
 	    .exhaustion = body.exhaustion,
