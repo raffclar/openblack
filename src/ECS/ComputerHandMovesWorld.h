@@ -18,7 +18,7 @@
 namespace openblack::computer_hand
 {
 
-/// What the moves of the hand read in the game: the places and the heights of things and of the land
+/// What the moves of the hand read in the game: the places and the heights of things and of the land, and the influence
 class MovesWorld
 {
 public:
@@ -29,6 +29,8 @@ public:
 	[[nodiscard]] virtual float HeightOf(entt::entity thing) const = 0;
 	/// The height of the land under a map position, in metres
 	[[nodiscard]] virtual float LandHeight(const map_coords::MapCoords& coords) const = 0;
+	/// The influence of the god at a map position, with the influence of its allies. 0 is no influence.
+	[[nodiscard]] virtual float InfluenceAt(const map_coords::MapCoords& coords) const = 0;
 };
 
 } // namespace openblack::computer_hand
