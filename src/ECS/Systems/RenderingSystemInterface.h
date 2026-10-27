@@ -17,6 +17,7 @@
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -273,6 +274,8 @@ struct RenderContext
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
 	bool handMirrored {false};
+	/// The hand that the draw lists draw. When another hand becomes the drawn hand, the lists change.
+	entt::entity drawnHand {entt::null};
 
 	/// Not an actual vertex buffer, but a dynamic general purpose buffer which
 	/// stores uniform data as a GPU-side copy of \ref _instanceUniforms and
