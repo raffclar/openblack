@@ -62,7 +62,7 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Core,         // TopWorldInteract
     MindDomain::Attitudes,    // NeedGiveToPlayer
     MindDomain::Attitudes,    // NeedTalktoPlayer
-    MindDomain::Core,         // NeedExpandInfluence
+    MindDomain::Conquest,     // NeedExpandInfluence
     MindDomain::Core,         // NeedLookaftercreature
     MindDomain::Core,         // NeedTeachCreature
     MindDomain::Core,         // NeedPlayWithCreature
