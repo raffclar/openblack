@@ -1383,7 +1383,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// for a nasty one the neutral player's
 	auto& minds = Locator::creatureMindSystem::value();
 	const bool byCreature = source.casterCreature != entt::null;
-	const bool computer = source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(source.player)
+	                          : source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
 	// A shield, either kind, teaches the spiritual shield
 	const auto magic = shield                                ? std::optional(static_cast<size_t>(MagicType::Shield))
 	                   : source.magicType != MagicType::None ? std::optional(static_cast<size_t>(source.magicType))

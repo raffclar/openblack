@@ -29,6 +29,7 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpProfileSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicShieldSystemInterface.h"
@@ -87,6 +88,15 @@ std::optional<PlayerNames> GamePhysicsHooksWorld::LocalPlayer() const
 		return std::nullopt;
 	}
 	return Locator::playerSystem::value().GetLocalPlayer();
+}
+
+std::optional<PlayerNames> GamePhysicsHooksWorld::OwnPlayer() const
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return std::nullopt;
+	}
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 float GamePhysicsHooksWorld::LifeOf(entt::entity object) const

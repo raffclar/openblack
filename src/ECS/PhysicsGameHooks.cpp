@@ -716,7 +716,7 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 			{
 				// A storage pit that takes a thing thrown by this computer's player counts for the player's help
 				const bool helpCounts =
-				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.LocalPlayer();
+				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.OwnPlayer();
 				const bool taken = world.TakeObject(hitter, object, impact.player);
 				if (taken && helpCounts)
 				{

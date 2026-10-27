@@ -34,6 +34,7 @@
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHairSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LiquidParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Locator.h"
@@ -78,7 +79,8 @@ void FilmCreatureSystem::Start()
 		return;
 	}
 	const auto& players = Locator::playerSystem::value();
-	const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+	const auto creature = players.GetPrimaryCreature(
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	auto& registry = Locator::entitiesRegistry::value();
 	if (!creature.has_value() || !registry.Valid(*creature) || !registry.AllOf<Creature, Mesh, CreatureMorph>(*creature))
 	{

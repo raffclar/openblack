@@ -659,26 +659,6 @@ TEST(PhysicsGameHooks, TheDropperIsTheFirstPlayerOfTheHandsThatLetTheThingGoLast
 	EXPECT_EQ(villager_physics::DropperOf(registry, thing), PlayerNames::PLAYER_ONE);
 }
 
-TEST(PhysicsGameHooks, TheHolderIsThePlayerOfTheHandThatHoldsTheThing)
-{
-	Registry registry;
-	const auto villager = registry.Create();
-	const auto own = registry.Create();
-	auto& ownGrab = registry.Assign<HandGrab>(own);
-	ownGrab.object = villager;
-	// A hand that holds nothing does not hold the thing that it named last
-	EXPECT_FALSE(villager_physics::HolderOf(registry, villager).has_value());
-	ownGrab.state = HandGrab::State::Holding;
-	EXPECT_EQ(villager_physics::HolderOf(registry, villager), PlayerNames::PLAYER_ONE);
-	ownGrab = HandGrab {};
-	const auto god = registry.Create();
-	auto& godGrab = registry.Assign<HandGrab>(god);
-	godGrab.state = HandGrab::State::Holding;
-	godGrab.object = villager;
-	registry.Assign<GodHand>(god, PlayerNames::PLAYER_TWO);
-	EXPECT_EQ(villager_physics::HolderOf(registry, villager), PlayerNames::PLAYER_TWO);
-}
-
 TEST(PhysicsGameHooks, ThePlayersCreatureLearnsFromWhatTheHandThrewOnlyWhenItIsAliveOrARock)
 {
 	Fixture f;

@@ -133,6 +133,18 @@ TEST(SyncedState, TheNumbersOfTheCastEffectsOfEachComputerAreNotSynced)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "FlockSpell", "castEffectStarted"));
 }
 
+TEST(SyncedState, WhatOnlyThePlayerAtThisComputerHearsAndSeesIsNotSynced)
+{
+	// Each computer keeps these for its own player, so two computers have different values at the same turn
+	const auto parts = synced_state::PresentationParts();
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreatureHelpMemory", "memory"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "Heartbeat", "state"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "strainSound"));
+	EXPECT_TRUE(synced_state::IsPresentationOnly(parts, "CreaturePictures", "pictures"));
+	// The turn reads the sites of the temple
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "CitadelWorship", "sites"));
+}
+
 TEST(SyncedState, AMarkThatOnlyThePresentationHasDoesNotChangeTheHash)
 {
 	entt::meta_ctx context;
