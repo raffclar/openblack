@@ -10551,6 +10551,22 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                .velocity = {0.0f, -1.0f, 0.0f},
 	                .delaySeconds = 1.0f}},
 	});
+
+	all.push_back({
+	    .id = "objects.workshop_wood_by_hand",
+	    .name = "The hand takes wood from a workshop's pile and gives it back",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 1000 wood, less "
+	                   "than the wood of one scaffold, so the workshop makes no scaffold. The pile of logs of the "
+	                   "workshop faces the camera. The input tools/sim/hand_inputs/workshop_wood.json moves the hand.",
+	    .expected = "With a held press on the pile, the hand takes logs from it, and the pile becomes smaller. The "
+	                "tooltip of the workshop shows less wood. When the hand lets the logs go on the workshop, the "
+	                "workshop takes them into its pile again, and the tooltip shows the wood that it had at the start.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
+	});
 }
 
 std::vector<Scenario> Build()
