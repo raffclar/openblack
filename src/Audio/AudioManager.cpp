@@ -190,8 +190,9 @@ void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const g
 	std::array<char, 12> number {};
 	const auto* written = std::to_chars(number.data(), number.data() + number.size(), sample).ptr;
 	std::string name;
-	name.reserve(bankName.size() + 1 + static_cast<size_t>(written - number.data()));
-	name.append(bankName).append(1, '/').append(number.data(), written);
+	const auto digits = static_cast<size_t>(written - number.data());
+	name.reserve(bankName.size() + 1 + digits);
+	name.append(bankName).append(1, '/').append(number.data(), digits);
 	return entt::hashed_string::value(name.data(), name.size());
 }
 
