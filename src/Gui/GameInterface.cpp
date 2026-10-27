@@ -82,6 +82,14 @@ namespace
 constexpr std::array k_TextScripts = {"InfoScript2.txt", "InfoScriptPatch2.txt", "InfoScriptMultiplayer2.txt"};
 /// What the game tells the player when a save did not write its world files completely
 constexpr std::string_view k_SaveProblemText = "HELP_TEXT_DIALOG_ERRORHASOCCURED";
+/// "Warning. The game may not be synchronised on your machine. Continue?" The game's text has this name.
+constexpr std::string_view k_OutOfSyncText = "HELP_TEXT_SINGING_STONE_CURSE_03";
+// "%s is out of the game."
+constexpr std::string_view k_GodOutText = "HELP_TEXT_WIN_GAME_03";
+/// The words of a resynchronisation (user decision MI-4). The game has no text for them.
+constexpr std::u16string_view k_ResyncText = u"Resynchronising...";
+/// The words stand in the middle of the top of the dialog space, in the dialogs' middle text size
+constexpr int k_ResyncTop = 20;
 /// The tooltip "Zoom In (%s)" of the save game room, which shows the name of a saved game
 constexpr uint32_t k_NamedZoomToolTip = 0xEE6 - 0xE73;
 /// The dialogs' font, the first of the game's fonts
@@ -375,6 +383,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
+    , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
     , _musicControls(std::make_unique<CustomMusicControls>(_font, _atmos.get()))
     , _toolTips(ReadToolTipsInfo())
@@ -448,6 +457,54 @@ bool GameInterface::ProcessNewPlayerBoxEvent(const SDL_Event& event, glm::u16vec
 void GameInterface::ShowSaveProblem()
 {
 	_saveGameBoxes->Tell(std::u16string(_texts.Get(k_SaveProblemText)));
+}
+
+void GameInterface::OpenEndGameBox(EndGameBox::Contents contents)
+{
+	// The end box closes the other boxes of the game
+	_menu->Close();
+	_saveGameBoxes->WithdrawMessage();
+	_endGameBox->Open(std::move(contents));
+}
+
+void GameInterface::ShowGodOut(std::u16string_view name)
+{
+	const std::array words {name};
+	_saveGameBoxes->Tell(end_game_box::Format(_texts.Get(k_GodOutText), words));
+}
+
+bool GameInterface::ProcessEndGameBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_endGameBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_endGameBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT && _endGameBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_KEYDOWN:
+	case SDL_TEXTINPUT:
+		// The end box takes the keys, and Escape does not close it
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::AskOutOfSync()
+{
+	_saveGameBoxes->Ask(std::u16string(_texts.Get(k_OutOfSyncText)));
+	_outOfSyncAsked = true;
 }
 
 void GameInterface::OpenMultiplayer(std::unique_ptr<MultiplayerFrontEnd> frontEnd)
@@ -861,6 +918,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return true;
 	}
+	if (_endGameBox->IsOpen())
+	{
+		return ProcessEndGameBoxEvent(event);
+	}
 	if (_saveGameBoxes->IsActive())
 	{
 		return ProcessSaveGameBoxesEvent(event);
@@ -1031,6 +1092,16 @@ void GameInterface::Update(float deltaSeconds)
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
+	_endGameBox->Update(deltaSeconds);
+	// The answer to the out-of-sync box: Yes plays on, No leaves the game
+	if (_outOfSyncAsked && !_saveGameBoxes->IsActive())
+	{
+		if (const auto answer = _saveGameBoxes->TakeAnswer(); answer.has_value())
+		{
+			_outOfSyncAsked = false;
+			_outOfSyncAnswer = *answer == SaveGameBoxes::Answer::Yes;
+		}
+	}
 	_multiplayerBoxes->Update(deltaSeconds);
 	UpdateTattooEditor(deltaSeconds);
 	_toolTips.Update(deltaSeconds);
@@ -1088,7 +1159,8 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// The gestures' hints are drawn with the world too, over all of it
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
-	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive();
+	                      _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() || _multiplayerBoxes->IsActive() ||
+	                      _endGameBox->IsOpen();
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
@@ -1162,8 +1234,15 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_musicControls->Draw(_painter);
 		_canvas.SetOrigin(glm::vec2(0.0f));
 		_storyHistoryBox->Draw(_painter);
+		if (_resyncShown)
+		{
+			_painter.DrawText({DialogPainter::k_Size.x / 2, k_ResyncTop}, DialogPainter::k_Size.x,
+			                  DialogPainter::Justify::Centre, k_ResyncText, DialogPainter::k_MidTextSize,
+			                  DialogPainter::k_TextColour);
+		}
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
+		_endGameBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);
@@ -1177,8 +1256,10 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	// A video on a screen wider than its picture has black bars at its sides, which go with the cinema bars
 	const auto sides = static_cast<float>(DrawVideo(resolution));
 	// The scripts' fade covers the picture between the cinema bars, which are black
+	// The multiplayer front end can open over a cut scene from the browser page. Its room shows with no cinema bars.
 	const auto& director = Locator::cinematicDirectorSystem::value();
-	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, director.GetWideScreenFraction()));
+	const auto barFraction = _multiplayerBoxes->IsActive() ? 0.0f : director.GetWideScreenFraction();
+	const auto bars = static_cast<float>(CinemaBars::BarHeight(resolution.x, resolution.y, barFraction));
 	const auto screen = glm::vec2(resolution);
 	const auto drawBars = [&screen, bars, sides](Canvas& canvas) {
 		const auto black = glm::vec4(0.0f, 0.0f, 0.0f, 1.0f);

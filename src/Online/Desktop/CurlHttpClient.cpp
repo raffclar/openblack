@@ -134,11 +134,23 @@ struct CurlHttpClient::Transfer
 	}
 };
 
-CurlHttpClient::CurlHttpClient(std::optional<std::string> extraAuthorities)
-    : _extraAuthorities(std::move(extraAuthorities))
+CurlHttpClient::CurlHttpClient()
 {
 	tls_settings::StartLibrary();
 	_multi = std::make_unique<Multi>();
+}
+
+CurlHttpClient::CurlHttpClient(ClientIdentity identity)
+    : CurlHttpClient()
+{
+	_identity = std::move(identity);
+}
+
+CurlHttpClient::CurlHttpClient(std::optional<ClientIdentity> identity, std::filesystem::path testAuthorities)
+    : CurlHttpClient()
+{
+	_identity = std::move(identity);
+	_testAuthorities = testAuthorities.string();
 }
 
 CurlHttpClient::~CurlHttpClient()
@@ -183,7 +195,15 @@ HttpRequestId CurlHttpClient::Send(HttpRequest request, HttpCallback callback)
 	curl_easy_setopt(easy, CURLOPT_REDIR_PROTOCOLS_STR, "https");
 	curl_easy_setopt(easy, CURLOPT_FOLLOWLOCATION, 0L);
 	// The TLS rules: TLS 1.2 at the oldest, AEAD cipher suites only, and a check of the certificate and the host name
-	tls_settings::Apply(easy, _extraAuthorities.has_value() ? _extraAuthorities->c_str() : nullptr);
+	tls_settings::Apply(easy, _testAuthorities.has_value() ? _testAuthorities->c_str() : nullptr);
+	if (_identity.has_value())
+	{
+		// The libcurl handle keeps its own copy of each text
+		curl_easy_setopt(easy, CURLOPT_SSLCERTTYPE, "PEM");
+		curl_easy_setopt(easy, CURLOPT_SSLCERT, _identity->certificate.string().c_str());
+		curl_easy_setopt(easy, CURLOPT_SSLKEYTYPE, "PEM");
+		curl_easy_setopt(easy, CURLOPT_SSLKEY, _identity->key.string().c_str());
+	}
 	curl_easy_setopt(easy, CURLOPT_CONNECTTIMEOUT_MS, tls_settings::k_ConnectTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_TIMEOUT_MS, tls_settings::k_RequestTimeoutMs);
 	curl_easy_setopt(easy, CURLOPT_NOSIGNAL, 1L);

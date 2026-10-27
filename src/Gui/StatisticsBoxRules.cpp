@@ -16,6 +16,8 @@
 #include <functional>
 #include <string>
 
+#include "ECS/PlayerColour.h"
+
 namespace openblack::gui::statistics_box
 {
 
@@ -442,27 +444,7 @@ glm::vec4 GuideColour(int64_t index, bool zeroWhite)
 
 glm::vec4 PlayerColour(PlayerNames player, int32_t landNumber)
 {
-	constexpr std::array<uint32_t, 8> k_Colours {
-	    0xFF4646, 0x47FF54, 0xE347FF, 0x47F9FF, 0xFFFD47, 0x4777FF, 0xFFA247, 0x000000,
-	};
-	auto index = static_cast<size_t>(player);
-	// Some lands give their second and third players the colours of others
-	constexpr size_t k_Yellow = 4;
-	constexpr size_t k_Blue = 5;
-	constexpr size_t k_Orange = 6;
-	if (index == 1 && (landNumber == 1 || landNumber == 4 || landNumber == 5))
-	{
-		index = k_Orange;
-	}
-	else if (index == 1 && landNumber == 2)
-	{
-		index = k_Yellow;
-	}
-	else if ((index == 2 && landNumber == 2) || (index == 1 && landNumber == 3))
-	{
-		index = k_Blue;
-	}
-	const auto colour = k_Colours.at(std::min(index, k_Colours.size() - 1));
+	const auto colour = player_colour::OnLand(player, landNumber);
 	constexpr float k_Channel = 255.0f;
 	return {static_cast<float>((colour >> 16u) & 0xFFu) / k_Channel, static_cast<float>((colour >> 8u) & 0xFFu) / k_Channel,
 	        static_cast<float>(colour & 0xFFu) / k_Channel, 1.0f};

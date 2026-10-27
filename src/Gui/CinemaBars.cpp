@@ -22,11 +22,13 @@ void CinemaBars::Set(bool on, float transitionSeconds)
 	{
 		return;
 	}
-	// Turning round partway goes back from where the bars are
+	// Turning round partway goes back from where the bars are, on each clock
 	_transitionSeconds = transitionSeconds;
-	const float fraction = Fraction();
+	const float fraction = Fraction(_timer);
+	const float drawnFraction = Fraction(_drawnTimer);
 	_on = on;
 	_timer = (on ? fraction : 1.0f - fraction) * transitionSeconds * 1000.0f;
+	_drawnTimer = (on ? drawnFraction : 1.0f - drawnFraction) * transitionSeconds * 1000.0f;
 }
 
 void CinemaBars::Snap()
@@ -34,19 +36,33 @@ void CinemaBars::Snap()
 	_on = true;
 	// So far along that the bars stay all the way in until they are next turned off
 	_timer = -std::numeric_limits<float>::max();
-	_fraction = Fraction();
+	_fraction = Fraction(_timer);
+	DrawFromTurns();
 }
 
 void CinemaBars::Update(float gameMilliseconds, float transitionSeconds)
 {
 	_transitionSeconds = transitionSeconds;
-	_timer += gameMilliseconds;
-	_fraction = Fraction();
+	_drawnTimer += gameMilliseconds;
+	_drawnFraction = Fraction(_drawnTimer);
 }
 
-float CinemaBars::Fraction() const
+void CinemaBars::ProcessTurn(float turnMilliseconds, float transitionSeconds)
 {
-	const float slid = _transitionSeconds > 0.0f ? std::abs(_timer * 0.001f / _transitionSeconds) : 1.0f;
+	_transitionSeconds = transitionSeconds;
+	_timer += turnMilliseconds;
+	_fraction = Fraction(_timer);
+}
+
+void CinemaBars::DrawFromTurns()
+{
+	_drawnTimer = _timer;
+	_drawnFraction = _fraction;
+}
+
+float CinemaBars::Fraction(float timer) const
+{
+	const float slid = _transitionSeconds > 0.0f ? std::abs(timer * 0.001f / _transitionSeconds) : 1.0f;
 	return std::clamp(_on ? slid : 1.0f - slid, 0.0f, 1.0f);
 }
 

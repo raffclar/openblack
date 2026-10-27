@@ -26,6 +26,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/AbodeDoor.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -184,11 +185,6 @@ bool IsAtHome(entt::entity villager)
 	return WorldRegistry().AnyOf<AtHome>(villager);
 }
 
-float LifeOf(entt::entity villager)
-{
-	return WorldRegistry().Get<const Villager>(villager).life;
-}
-
 glm::vec2 PositionOf(entt::entity entity)
 {
 	return glm::xz(WorldRegistry().Get<const Transform>(entity).position);
@@ -219,7 +215,7 @@ bool IsAvailable(entt::entity villager)
 float FacingOf(entt::entity villager)
 {
 	const auto x = WorldRegistry().Get<const Transform>(villager).rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	return -std::atan2(-x.z, x.x) - glm::radians(90.0f);
+	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
 /// Turns the villager towards a point, by at most a step of the game's angles
@@ -235,7 +231,7 @@ void LookAtPos(entt::entity villager, glm::vec2 point, int32_t step)
 		const bool forwards = difference < 1 ? std::abs(difference) > 0x3FF : difference < 0x400;
 		angle = (facing + (forwards ? step : -step)) & gutils::k_GameAngleMask;
 	}
-	transform.rotation = glm::eulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
+	transform.rotation = portable_math::EulerAngleY(-gutils::ConvertGameAngleTo3D(angle) - glm::radians(90.0f));
 	WorldRegistry().SetDirty();
 }
 

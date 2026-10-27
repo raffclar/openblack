@@ -92,7 +92,7 @@ public:
 	static void CreateFurniture(glm::vec3 position, int32_t, float);
 	static void CreateBigForest(glm::vec3 position, BigForestInfo type, float rotation, float scale);
 	static void CreateNewBigForest(glm::vec3 position, BigForestInfo type, int32_t unknown, float rotation, float scale);
-	static void CreateInfluenceRing(glm::vec3 position, int32_t, float, int32_t);
+	static void CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti);
 	static void CreateWeatherClimate(int32_t, int32_t, glm::vec3, float, float);
 	static void CreateWeatherClimateRain(int32_t, float, int32_t, int32_t, int32_t);
 	static void CreateWeatherClimateTemp(int32_t, float, float);

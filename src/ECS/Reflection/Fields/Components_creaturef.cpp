@@ -36,6 +36,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturef(entt::meta_
 	    .Field<&components::CreatureFighting::arenaEntity>("arenaEntity")
 	    .Field<&components::CreatureFighting::planned>("planned")
 	    .Field<&components::CreatureFighting::fighter>("fighter")
+	    .Field<&components::CreatureFighting::marks>("marks")
 	    .Field<&components::CreatureFighting::reaches>("reaches")
 	    .Field<&components::CreatureFighting::hitTimesMs>("hitTimesMs")
 	    .Field<&components::CreatureFighting::measured>("measured")

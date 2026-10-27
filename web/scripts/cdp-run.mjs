@@ -9,14 +9,21 @@
 //   --shots <count>          the number of screenshots (default 1, at the end)
 //   --shots-from <seconds>   the time of the first screenshot, after the click (default: the end)
 //   --shot-every <ms>        the time between two screenshots (default 500)
-//   --virtual-pointer-lock   give the page a pointer lock that only the page knows. Chrome on Windows confines the real
-//                            cursor of the user to the page while a page has the real lock, and a Chrome that is
-//                            stopped can leave the confinement set. Tests that run on a desktop where somebody works
-//                            must use this flag. The page and the game free the virtual lock as they free the real one
-//                            (a key sent by this script does not make Chrome free a real lock by itself either).
+//   --virtual-pointer-lock   (the default, the flag is accepted and does nothing) the page gets a pointer lock that
+//                            only the page knows. Chrome on Windows confines the real cursor of the user to the page
+//                            while a page has the real lock, and a Chrome that is stopped can leave the confinement
+//                            set. The page and the game free the virtual lock as they free the real one (a key sent
+//                            by this script does not make Chrome free a real lock by itself either).
+//   --real-pointer-lock      the page gets Chrome's real pointer lock. Only for a run by hand on a computer where
+//                            nobody works. No merge script and no check may pass it.
 //   --gpu                    use the graphics card through Direct3D 11 (default: the SwiftShader software renderer)
 //   --size <width>x<height>  the size of the window (default 1280x1024)
+//   --trust-spki <hash>      tests on this computer only: trust the certificate of a test server with this key (the
+//                            base64 SHA-256 of its public key), as for a test lobby on 127.0.0.1
 //   --eval <expression>      at the end, print the value of this expression on the page
+//   --checksums <file>       write the checksum line of each turn of the game (--sim-checksums - in the game's
+//                            arguments) to this file, as the game makes them
+//   --checksum-turns <count> with --checksums, stop once the game made the lines of this many turns (before the time)
 //   --actions <file.json>    after the click, send these steps of input to the page, as of a user. The file is a list of
 //                            steps, each with "at" (the seconds after the click) and "do":
 //                            {"do": "mouse", "type": "mouseMoved" | "mousePressed" | "mouseReleased", "x", "y", "button"}
@@ -76,7 +83,9 @@ const chrome = spawn(chromePath, [
   '--headless=new', `--remote-debugging-port=${port}`, `--user-data-dir=${profile}`, '--no-first-run',
   '--no-default-browser-check', '--disable-extensions', '--disable-background-networking', '--disable-sync',
   '--metrics-recording-only', '--disable-component-update', `--window-size=${width},${height}`,
-  '--autoplay-policy=user-gesture-required', ...graphics, 'about:blank',
+  '--autoplay-policy=user-gesture-required', ...graphics,
+  ...(option('--trust-spki', '') ? [`--ignore-certificate-errors-spki-list=${option('--trust-spki', '')}`] : []),
+  'about:blank',
 ], { stdio: 'ignore' });
 console.log(`chrome pid ${chrome.pid} port ${port}`);
 
@@ -137,7 +146,7 @@ await send('Emulation.setDeviceMetricsOverride', { width, height, deviceScaleFac
 // A headless page has no focus of its own. The pointer lock and the keyboard lock need a page with the focus.
 await send('Emulation.setFocusEmulationEnabled', { enabled: true });
 await send('Page.bringToFront');
-if (flag('--virtual-pointer-lock')) {
+if (!flag('--real-pointer-lock')) {
   await send('Page.addScriptToEvaluateOnNewDocument', { source: `(() => {
     let locked = null;
     Object.defineProperty(Document.prototype, 'pointerLockElement', { configurable: true, get: () => locked });
@@ -348,6 +357,25 @@ const runStep = async (step) => {
 const steps = option('--actions') ? JSON.parse(readFileSync(option('--actions'), 'utf8')) : [];
 steps.sort((a, b) => a.at - b.at);
 
+// The checksum lines of the game, which the page keeps (see openblackChecksums in launcher.js)
+const checksumsFile = option('--checksums');
+const checksumTurns = Number(option('--checksum-turns', '0'));
+let checksumCount = 0;
+let checksumTurnLines = 0;
+let checksumPoll = 0;
+if (checksumsFile) {
+  writeFileSync(checksumsFile, '');
+}
+const takeChecksums = async () => {
+  const got = await evaluate(`globalThis.openblackChecksums?.(${checksumCount})`);
+  if (got && got.lines.length > 0) {
+    appendFileSync(checksumsFile, got.lines.map((line) => `${line}\n`).join(''));
+    checksumCount += got.lines.length;
+    checksumTurnLines += got.lines.filter((line) => line.startsWith('{"turn":')).length;
+  }
+  return checksumTurns > 0 && checksumTurnLines >= checksumTurns;
+};
+
 let taken = 0;
 let end = clicked + seconds * 1000;
 let next = clicked + shotsFrom * 1000;
@@ -366,11 +394,22 @@ while (Date.now() < end || taken < Math.min(shots, 1) || (flag('--run-all-steps'
     await runStep(steps.shift());
     continue;
   }
+  if (checksumsFile && Date.now() >= checksumPoll) {
+    checksumPoll = Date.now() + 1000;
+    if (await takeChecksums()) {
+      end = Date.now();
+      record(`[checksums] ${checksumCount} lines`);
+    }
+  }
   if (Date.now() >= end) {
     next = 0;
     continue;
   }
   await sleep(10);
+}
+if (checksumsFile) {
+  await takeChecksums();
+  console.log(`checksums ${checksumCount} in ${checksumsFile}`);
 }
 if (option('--eval')) {
   console.log(`eval: ${JSON.stringify(await evaluate(option('--eval')))}`);

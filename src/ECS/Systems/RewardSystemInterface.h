@@ -39,11 +39,11 @@ public:
 	virtual bool Tap(entt::entity chest, PlayerNames player) = 0;
 	/// Whether a chest has been tapped open
 	[[nodiscard]] virtual bool IsOpened(entt::entity chest) const = 0;
-	/// Every frame, by the game's time: the chests from the sky fall and turn, and thump down; their dust fades; an
-	/// opened chest's lid lifts
-	virtual void Update(float milliseconds) = 0;
+	/// Every frame, by the game's time: the frame draws the chests that fall between their last two turns, their dust
+	/// fades, and the lid of an opened chest lifts. The frame changes only what the draw reads.
+	virtual void Update(float milliseconds, float turnFraction) = 0;
 	/// Every game turn: a chest that has just landed goes into the map's cells, and an opened chest goes once its time is
-	/// up
+	/// up. Then the chests from the sky fall and turn by the turn's time, and thump down on the land.
 	virtual void ProcessTurn() = 0;
 	/// The chests' dust drawn this frame, added to the particles' frame
 	virtual void CollectDrawFrame(particles::draw::Frame& frame) const = 0;

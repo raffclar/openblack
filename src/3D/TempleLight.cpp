@@ -15,6 +15,8 @@
 
 #include <glm/common.hpp>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 
 namespace
@@ -31,7 +33,7 @@ constexpr std::array<int32_t, 3> k_Evil {0xFF, 0xAF, 0xA0};
 
 int32_t Pulse(float angle)
 {
-	return static_cast<int32_t>(std::sin(angle) * k_PulseReach + k_PulseMiddle);
+	return static_cast<int32_t>(portable_math::Sin(angle) * k_PulseReach + k_PulseMiddle);
 }
 } // namespace
 
@@ -43,7 +45,7 @@ TempleLight TempleLight::At(float alignment, uint32_t milliseconds)
 	if (alignment < 0.0f)
 	{
 		multiply = k_Evil;
-		add[0] = static_cast<int32_t>((std::sin(angle + k_TwoThirds) + 1.0) * k_PulseReach);
+		add[0] = static_cast<int32_t>((portable_math::Sin(angle + k_TwoThirds) + 1.0) * k_PulseReach);
 	}
 	else
 	{

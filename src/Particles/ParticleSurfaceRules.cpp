@@ -22,6 +22,7 @@
 #include <glm/geometric.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Matrix.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSurfaces.h"
@@ -114,9 +115,9 @@ public:
 			Make(effect, collection);
 		}
 		const bool sways = !_creator.drapeOverLand && (_creator.maxTwist != 0.0f || _creator.maxSlide != 0.0f);
-		const float sway =
-		    sways ? static_cast<float>(std::sin(std::fmod(effect.CollectionAge(collection) * k_SwaySpeed, k_SwayPeriod)))
-		          : 0.0f;
+		const float sway = sways ? static_cast<float>(openblack::portable_math::Sin(
+		                               std::fmod(effect.CollectionAge(collection) * k_SwaySpeed, k_SwayPeriod)))
+		                         : 0.0f;
 		for (auto& atom : collection.atoms)
 		{
 			auto* instance = atom->creator == &_creator ? atom->surface.get() : nullptr;

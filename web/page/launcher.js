@@ -12,8 +12,9 @@ const k_FolderKey = 'game-folder';
 const k_CopyFolder = 'game-copy';
 const k_CopyComplete = '.openblack-copy-complete';
 
-// The top folders of the install that the game reads. The page gives no other folder to the game.
-const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins']);
+// The top folders of the install that the game reads. The page gives no other folder to the game. A network game plays
+// a land of the folder "Online Maps".
+const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins', 'online maps']);
 
 // The parts of an install that the game needs, without letter case. A name with a slash at the end is a folder.
 const k_Needed = [
@@ -40,6 +41,14 @@ function parseVersion(text) {
   const dirty = match[2] ? '-dirty' : '';
   return { file: text, text: hash + dirty, short: hash.slice(0, k_ShortHash) + dirty, address: k_CommitAddress + hash };
 }
+
+// A build with the developer tools puts developer-tools.txt next to the page. Only then does the page take its
+// developer parameters: "args" (more arguments for the game) and "tool-file". The builds that players get do not have
+// the file, thus their page ignores these parameters.
+const k_DeveloperToolsFile = 'developer-tools.txt';
+const developerTools = fetch(k_DeveloperToolsFile, { cache: 'no-cache' })
+  .then((response) => response.ok)
+  .catch(() => false);
 
 const buildVersion = fetch(k_VersionFile, { cache: 'no-cache' })
   .then((response) => (response.ok ? response.text() : undefined))
@@ -82,7 +91,15 @@ function showLog() {
   logElement.scrollTop = logElement.scrollHeight;
 }
 
+// The checksum lines of a tool's run (--sim-checksums -), which the page keeps all of, for the cross-play check
+const k_ChecksumTag = 'openblack-checksum ';
+const checksumLines = [];
+
 function log(text) {
+  if (text.startsWith(k_ChecksumTag)) {
+    checksumLines.push(text.slice(k_ChecksumTag.length));
+    return;
+  }
   logLines.push(text);
   if (logLines.length > 2 * k_LogLines) {
     logLines.splice(0, logLines.length - k_LogLines);
@@ -97,6 +114,8 @@ function log(text) {
 
 /** All the lines of the game log that the page keeps, for the test scripts */
 globalThis.openblackLogText = () => logLines.join('\n');
+/** The checksum lines of the turns from a first line on, and the count of all of them, for the test scripts */
+globalThis.openblackChecksums = (from = 0) => ({ count: checksumLines.length, lines: checksumLines.slice(from) });
 logElement.parentElement.addEventListener('toggle', showLog);
 
 /** Show a message on the page. The game calls this too, for an error that stops it. */
@@ -317,15 +336,22 @@ async function choose(entries, source) {
   }
   element('check-version').textContent = check.version;
   element('check').hidden = false;
-  element('play').disabled = true;
+  setPlayEnabled(false);
   log(`The page has ${entries.length} files from ${source}. Missing: ${check.missing.join(', ') || 'none'}.`);
   if (check.missing.length === 0 && element('keep-copy').checked && source !== 'the copy in this browser') {
     await copyToStorage(entries);
   }
-  element('play').disabled = check.missing.length > 0;
+  setPlayEnabled(check.missing.length === 0);
   if (check.missing.length === 0 && new URLSearchParams(location.search).has('autoplay')) {
     start();
   }
+}
+
+// The Play button starts the game as the desktop game starts. The Join Online Game button starts the game at the
+// multiplayer front end. The page parameter "multiplayer" shows only the second button.
+function setPlayEnabled(enabled) {
+  element('play').disabled = !enabled;
+  element('play-online').disabled = !enabled;
 }
 
 // The game draws with WebGPU, and with WebGL 2 when the browser has no WebGPU. The page asks the browser for a WebGPU
@@ -358,7 +384,27 @@ async function chooseRenderer(parameters, gameArguments) {
   return { backend: 'OpenGLES', reason: 'the browser gives no WebGPU adapter' };
 }
 
-async function start() {
+// A test script can give the game more files: each page parameter "tool-file" names a file on the page's own server.
+// The game reads it at /game/tool-files/<name>, beside the game folder. For example the commands of a tool's run.
+async function addToolFiles(parameters) {
+  for (const name of parameters.getAll('tool-file')) {
+    if (!/^[\w.-]+$/.test(name)) {
+      log(`The page does not take the tool file "${name}": use letters, digits, ".", "-" and "_" only.`);
+      continue;
+    }
+    const response = await fetch(name, { cache: 'no-store' });
+    if (!response.ok) {
+      log(`The page cannot get the tool file ${name}: ${response.status}`);
+      continue;
+    }
+    const file = new File([await response.blob()], name);
+    chosen = chosen.filter((entry) => entry.path !== `tool-files/${name}`);
+    chosen.push({ file, path: `tool-files/${name}` });
+    log(`The game gets the tool file ${name} at /game/tool-files/${name} (${file.size} bytes).`);
+  }
+}
+
+async function start(online = false) {
   if (!chosen) {
     return;
   }
@@ -367,15 +413,28 @@ async function start() {
       'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs.');
     return;
   }
-  element('play').disabled = true;
+  setPlayEnabled(false);
   const storage = (await storageRoot()) !== undefined;
   if (storage && navigator.storage.persist) {
     // Ask the browser to keep the saves when it needs space
     navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
   }
-  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
   const parameters = new URLSearchParams(location.search);
-  const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
+  const developer = await developerTools;
+  if (developer) {
+    await addToolFiles(parameters);
+  } else if (parameters.has('args') || parameters.has('tool-file')) {
+    log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
+  }
+  const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
+  const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
+  // The Join Online Game button and the page parameter "multiplayer" give the game the -MULTIPLAYER switch, as the
+  // shortcut of the desktop game does: the multiplayer front end opens in place of the menu. With no profile, the game
+  // asks for the new player's name first. Every build takes the switch.
+  const multiplayer = online || parameters.has('multiplayer');
+  if (multiplayer && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
+    gameArguments.push('-MULTIPLAYER');
+  }
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);
@@ -401,6 +460,15 @@ async function start() {
     canvas.style.width = `${width}px`;
     canvas.style.height = `${height}px`;
   }
+  // The Join Online Game button over the game asks the game for the multiplayer front end. The game takes the request
+  // at its next frame, also while a cut scene has the cinema bars in.
+  const requests = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  element('join-online').addEventListener('click', (event) => {
+    Atomics.store(requests, 0, 1);
+    log('Join Online Game: the page asks the game for the multiplayer front end.');
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
@@ -408,6 +476,7 @@ async function start() {
     printErr: log,
     openblackWeb: {
       folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
+      requests,
     },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
@@ -497,7 +566,11 @@ async function main() {
     element('keep-copy-label').hidden = true;
   }
 
-  element('play').addEventListener('click', start);
+  element('play').addEventListener('click', () => start(false));
+  element('play-online').addEventListener('click', () => start(true));
+  if (new URLSearchParams(location.search).has('multiplayer')) {
+    element('play').hidden = true;
+  }
 }
 
 main();

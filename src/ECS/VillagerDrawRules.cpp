@@ -18,6 +18,7 @@
 #include <glm/matrix.hpp>
 
 #include "Animals/AnimalRules.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -117,13 +118,13 @@ std::optional<float> villager_draw::HeadingOf(const glm::mat3& rotation)
 		return std::nullopt;
 	}
 	// The model is turned by the heading negated, less a quarter turn
-	const float turn = std::atan2(rotation[2][0], rotation[0][0]);
+	const float turn = portable_math::Atan2(rotation[2][0], rotation[0][0]);
 	return Wrapped(-turn - k_ModelOffset);
 }
 
 glm::mat3 villager_draw::RotationOf(float heading)
 {
-	return glm::mat3(glm::eulerAngleY(-heading - k_ModelOffset));
+	return glm::mat3(portable_math::EulerAngleY(-heading - k_ModelOffset));
 }
 
 glm::mat3 villager_draw::SlopeLeanedRotation(float easedHeading, float drawnHeading, glm::vec2 lift)

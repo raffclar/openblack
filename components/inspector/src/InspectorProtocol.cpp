@@ -381,3 +381,17 @@ std::string openblack::inspector::EncodeError(const Json& id, std::string_view e
 {
 	return Dump(WithExtra({{"id", id}, {"ok", false}, {"error", error}}, extra));
 }
+
+Request openblack::inspector::ForTheLog(const Request& request)
+{
+	auto logged = request;
+	// The letters that input.text types can be a password: the log keeps only their size
+	if (request.query == "input.text" && logged.params.is_object())
+	{
+		if (const auto text = logged.params.find("text"); text != logged.params.end() && text->is_string())
+		{
+			*text = "(" + std::to_string(text->get_ref<const std::string&>().size()) + " bytes)";
+		}
+	}
+	return logged;
+}

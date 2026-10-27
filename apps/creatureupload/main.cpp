@@ -287,9 +287,17 @@ int main(int argc, char** argv)
 		}
 		const dialog::Texts texts(std::move(fileTexts));
 
-		online::CurlHttpClient http(result.count("extra-authorities") != 0
-		                                ? std::optional(result["extra-authorities"].as<std::string>())
-		                                : std::nullopt);
+		// A file of more certificate authorities is for the tests on this computer only
+		std::optional<online::CurlHttpClient> client;
+		if (result.count("extra-authorities") != 0)
+		{
+			client.emplace(std::nullopt, PathOf(result["extra-authorities"].as<std::string>()));
+		}
+		else
+		{
+			client.emplace();
+		}
+		auto& http = *client;
 		const auto seed = static_cast<uint64_t>(std::chrono::system_clock::now().time_since_epoch().count());
 		dialog::UploadFlow flow(http, setup.origin, texts, seed);
 

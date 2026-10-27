@@ -1,4 +1,4 @@
-{"camera": {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35},
+{"camera": {"focus": [2199.33, 88.44, 2406.03], "yaw": 30, "pitch": 40, "distance": 35}, "expect": {"scoops": 1, "uses": 1},
 "events": [
 {"frame": 10, "event": {"kind": "pointer", "timing": "mouse", "position": [644, 508]}},
 {"frame": 11, "event": {"kind": "pointer", "timing": "mouse", "position": [647, 504]}},
