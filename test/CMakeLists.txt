@@ -1884,6 +1884,7 @@ openblack_setup_and_add_test(
   test_computer_player_state test_computer_player_state.cpp
 )
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)
 openblack_setup_and_add_test(
   test_oracle_computer_creature_care oracle/test_oracle_computer_creature_care.cpp
 )

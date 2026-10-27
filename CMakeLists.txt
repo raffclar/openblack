@@ -65,6 +65,25 @@ set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Build everything of openblack with sanitizers, for example -DOPENBLACK_SANITIZE=address,undefined. Off by default.
+# Use a Debug build in a separate build folder. MSVC supports only "address".
+set(OPENBLACK_SANITIZE
+    ""
+    CACHE STRING "Sanitizers to build with (address, undefined; comma separated), empty for none"
+)
+if (OPENBLACK_SANITIZE)
+  if (MSVC)
+    if (NOT OPENBLACK_SANITIZE STREQUAL "address")
+      message(FATAL_ERROR "OPENBLACK_SANITIZE supports only \"address\" with MSVC")
+    endif ()
+    add_compile_options(/fsanitize=address)
+  else ()
+    add_compile_options(-fsanitize=${OPENBLACK_SANITIZE} -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${OPENBLACK_SANITIZE})
+  endif ()
+  message(STATUS "Sanitizers on: ${OPENBLACK_SANITIZE}")
+endif ()
+
 # don't allow in source builds
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
