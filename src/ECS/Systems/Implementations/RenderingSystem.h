@@ -14,9 +14,9 @@
 #include <map>
 #include <optional>
 #include <unordered_map>
-#include <unordered_set>
 #include <vector>
 
+#include <entt/entity/sparse_set.hpp>
 #include <glm/mat4x4.hpp>
 
 #include "3D/AllMeshes.h"
@@ -50,6 +50,9 @@ private:
 	void PrepareTreeDrawDescs(bool drawBoundingBox);
 	/// Each returns false when an instance had no room left in its mesh's draw list, which must then be made again
 	bool UploadInstances(bool drawBoundingBox);
+	/// Places the instances of the things of the drawn registry. `fits` goes false when the draw lists have no room.
+	/// `picks` gets the gate stones that the cursor finds, each as its plinth.
+	void UploadDrawnThings(bool drawBoundingBox, bool& fits, std::vector<RenderContext::DrawnObject>& picks);
 	/// The broken and unfinished buildings drawn as far up as they stand
 	void UploadPartialBuilds();
 	/// What the villagers drawn this frame hold, a draw for each model, from the held things gathered with the instances
@@ -136,7 +139,7 @@ private:
 	/// The things drawn by the distance bands that are fading out this frame, by how opaque, and those too far off to be
 	/// drawn at all: their other draws (a building's part built, a graveyard's graves) follow them
 	std::unordered_map<entt::entity, uint8_t> _fadingThings;
-	std::unordered_set<entt::entity> _goneThings;
+	entt::sparse_set _goneThings;
 	/// The detail the explorers' boat was last drawn at, which the sea mirrors it at the frame after (kept while it is
 	/// too far off to be drawn)
 	std::unordered_map<entt::entity, uint8_t> _filmReflectionLevels;

@@ -183,7 +183,11 @@ public:
 			reactions.push_back(onCast);
 		}
 	}
-	void StartCastEffect(Spell& /*spell*/, ParticleType type) override { castEffects.push_back(type); }
+	void StartCastEffect(Spell& /*spell*/, ParticleType type, bool synced) override
+	{
+		castEffects.push_back(type);
+		syncedCastEffects.push_back(synced);
+	}
 	void ShieldStruck(const Spell& struckShield, bool destroyed) override
 	{
 		for (const auto& [entity, spell] : spells)
@@ -215,6 +219,7 @@ public:
 	std::map<entt::entity, Spell*> spells;
 	std::vector<bool> reactions;
 	std::vector<ParticleType> castEffects;
+	std::vector<bool> syncedCastEffects;
 	std::vector<std::pair<entt::entity, bool>> struck;
 	bool worldObjects {false};
 	int planted {0};
@@ -820,6 +825,9 @@ TEST(SpellBehaviours, AStormIsAsWideAsItsCircleWithinItsLimitsAndCostsByItsArea)
 	EXPECT_TRUE(spells::Start(services, spell));
 	ASSERT_EQ(services.castEffects.size(), 1u);
 	EXPECT_EQ(services.castEffects.front(), ParticleType::StormCast);
+	// The swirl only shows the storm: it takes the random numbers of this computer, not the shared seed
+	ASSERT_EQ(services.syncedCastEffects.size(), 1u);
+	EXPECT_FALSE(services.syncedCastEffects.front());
 }
 
 TEST(SpellBehaviours, TheWaterRainsADropEachTurnAndLeavesRingsEveryTenthOfASecond)

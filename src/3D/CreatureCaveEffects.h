@@ -20,6 +20,10 @@
 
 namespace openblack
 {
+namespace ecs
+{
+class Registry;
+}
 namespace graphics
 {
 struct BeamMesh;
@@ -59,8 +63,8 @@ public:
 		std::array<Particle, k_SmokeParticles> particles;
 	};
 
-	/// The flames on the fire, the place the room plays its sound at
-	explicit CreatureCaveEffects(glm::vec3 fire);
+	/// The flames on the fire, the place the room plays its sound at. The effects are things of the temple's rooms.
+	CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire);
 	~CreatureCaveEffects();
 	CreatureCaveEffects(const CreatureCaveEffects&) = delete;
 	CreatureCaveEffects& operator=(const CreatureCaveEffects&) = delete;
@@ -78,6 +82,7 @@ public:
 private:
 	void ShowSmoke(const Smoke& smoke) const;
 
+	ecs::Registry& _rooms;
 	std::vector<entt::entity> _flames;
 	std::vector<Smoke> _fireSmoke;
 	std::vector<Smoke> _spray;

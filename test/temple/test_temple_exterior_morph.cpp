@@ -124,3 +124,12 @@ TEST(TempleExteriorMorph, TheMeshIsBlendedAgainWhenItIsNotLoaded)
 	EXPECT_FALSE(NeedsBlend(look, look, true));
 	EXPECT_TRUE(NeedsBlend(look, look, false));
 }
+
+// After a load each temple with a kept look gets a new blend, also when the cache has a mesh of the same name. A network
+// game loads the server's world over a world that this computer blended for another look.
+TEST(TempleExteriorMorph, EveryTempleWithALookIsBlendedAgainAfterALoad)
+{
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.2f, 0.5f}));
+	EXPECT_TRUE(BlendsAfterLoad(glm::vec2 {0.0f, 0.0f}));
+	EXPECT_FALSE(BlendsAfterLoad(std::nullopt));
+}

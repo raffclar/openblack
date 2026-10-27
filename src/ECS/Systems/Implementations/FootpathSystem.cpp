@@ -63,14 +63,9 @@ namespace route = openblack::creature_route;
 namespace obstacles = openblack::creature_obstacles;
 namespace planning = openblack::ecs::footpath_planning;
 namespace obstacle_rules = openblack::ecs::footpath_obstacles;
-using footpath_world::RouteSearchInterface;
+using footpath_world::Plan;
+using footpath_world::RouteStatus;
 using footpath_world::WorldInterface;
-
-/// The search for a path's way, kept from turn to turn while the path is found
-struct components::FootpathFinder::Plan
-{
-	std::unique_ptr<RouteSearchInterface> search;
-};
 
 namespace
 {
@@ -82,53 +77,6 @@ constexpr auto k_FirstTempleDance = DanceInfo::CitadelDance_1;
 constexpr auto k_LastTempleDance = DanceInfo::CitadelDance_6;
 /// A site already has the path from a pit when one of its paths ends this near the site's gate
 constexpr float k_SitePathReach = 0.001f;
-
-/// The creatures' route search for a route that no one walks, with what it goes round, added as the search reaches each
-/// block of the map
-class GameRouteSearch final: public RouteSearchInterface
-{
-public:
-	GameRouteSearch(glm::vec2 start, glm::vec2 goal, route::Obstacles::Gatherer gatherer)
-	    : _start(start)
-	    , _goal(goal)
-	{
-		_obstacles.ResetWithoutWalker(k_RouteMargin, std::move(gatherer));
-		// Nothing that holds either end is gone round
-		_obstacles.LeaveOutCirclesHolding(goal, start);
-		_search.emplace(_obstacles, route::Search::Start {.point = start},
-		                route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
-	}
-
-	void Step() override { _search->Step(_obstacles); }
-
-	[[nodiscard]] Status GetStatus() const override
-	{
-		switch (_search->GetStatus())
-		{
-		case route::Search::Status::Searching:
-			return Status::Searching;
-		case route::Search::Status::Found:
-			return Status::Found;
-		default:
-			return Status::Failed;
-		}
-	}
-
-	[[nodiscard]] std::optional<std::vector<glm::ivec2>> Route() const override
-	{
-		if (_search->GetStatus() != route::Search::Status::Found)
-		{
-			return std::nullopt;
-		}
-		return planning::RoutePlaces(_search->GetBest(), _obstacles.All(), _start, _goal);
-	}
-
-private:
-	route::Obstacles _obstacles;
-	std::optional<route::Search> _search;
-	glm::vec2 _start;
-	glm::vec2 _goal;
-};
 
 /// The game's own world, through the game's systems
 class GameWorld final: public WorldInterface
@@ -219,9 +167,47 @@ public:
 		return look;
 	}
 
-	[[nodiscard]] std::unique_ptr<RouteSearchInterface> StartRoute(glm::vec2 start, glm::vec2 goal) const override
+	[[nodiscard]] Plan StartRoute(glm::vec2 start, glm::vec2 goal) const override
 	{
-		return std::make_unique<GameRouteSearch>(start, goal, Gatherer());
+		Plan plan {.obstacles = {}, .search = std::nullopt, .start = start, .goal = goal, .live = false};
+		plan.obstacles.ResetWithoutWalker(k_RouteMargin);
+		MakeLive(plan);
+		plan.search.emplace(plan.obstacles, route::Search::Start {.point = start},
+		                    route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
+		return plan;
+	}
+
+	/// Lets the obstacles of a plan fill each block that the search reaches, and leave out the circles that hold either end
+	void MakeLive(Plan& plan) const override
+	{
+		plan.obstacles.SetGatherer(Gatherer());
+		// Nothing that holds either end is gone round
+		plan.obstacles.LeaveOutCirclesHolding(plan.goal, plan.start);
+		plan.live = true;
+	}
+
+	void StepRoute(Plan& plan) const override { plan.search->Step(plan.obstacles); }
+
+	[[nodiscard]] RouteStatus StatusOfRoute(const Plan& plan) const override
+	{
+		switch (plan.search->GetStatus())
+		{
+		case route::Search::Status::Searching:
+			return RouteStatus::Searching;
+		case route::Search::Status::Found:
+			return RouteStatus::Found;
+		default:
+			return RouteStatus::Failed;
+		}
+	}
+
+	[[nodiscard]] std::optional<std::vector<glm::ivec2>> RouteOf(const Plan& plan) const override
+	{
+		if (plan.search->GetStatus() != route::Search::Status::Found)
+		{
+			return std::nullopt;
+		}
+		return planning::RoutePlaces(plan.search->GetBest(), plan.obstacles.All(), plan.start, plan.goal);
 	}
 
 	[[nodiscard]] entt::entity TownOf(entt::entity building) const override
@@ -324,19 +310,12 @@ private:
 	}
 };
 
-std::shared_ptr<FootpathFinder::Plan> StartPlan(const WorldInterface& world, glm::vec2 start, glm::vec2 goal)
-{
-	auto plan = std::make_shared<FootpathFinder::Plan>();
-	plan->search = world.StartRoute(start, goal);
-	return plan;
-}
-
 /// Takes the search up to a number of steps further, stopping once it ends
-void StepPlan(FootpathFinder::Plan& plan, int32_t steps)
+void StepPlan(const WorldInterface& world, FootpathFinder::Plan& plan, int32_t steps)
 {
-	for (int32_t i = 0; i < steps && plan.search->GetStatus() == RouteSearchInterface::Status::Searching; ++i)
+	for (int32_t i = 0; i < steps && world.StatusOfRoute(plan) == RouteStatus::Searching; ++i)
 	{
-		plan.search->Step();
+		world.StepRoute(plan);
 	}
 }
 
@@ -569,7 +548,7 @@ void FootpathSystem::TownJoinedSite(entt::entity site, entt::entity town)
 	const auto [start, goal] = _world->PlannedEnds(*pit, site);
 	const auto finder = registry.Create();
 	registry.Assign<FootpathFinder>(finder, *pit, site, MakeFootpath(_world->ArrivePlace(*pit), _world->ArrivePlace(site)),
-	                                StartPlan(*_world, start, goal));
+	                                _world->StartRoute(start, goal));
 	ecs::list_order::Join(registry, finder);
 }
 
@@ -594,9 +573,9 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	CatchUpWithMap();
 	// The path is planned from the dance to the pit, and laid at once
 	const auto [start, goal] = _world->PlannedEnds(dance, *pit);
-	auto plan = StartPlan(*_world, start, goal);
-	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	const auto route = plan->search->Route();
+	auto plan = _world->StartRoute(start, goal);
+	StepPlan(*_world, plan, planning::k_MostStepsAtOnce);
+	const auto route = _world->RouteOf(plan);
 	if (!route.has_value())
 	{
 		return;
@@ -807,23 +786,41 @@ void FootpathSystem::CatchUpWithMap()
 
 void FootpathSystem::ProcessTurn()
 {
-	ProcessObstacleChanges();
 	auto& registry = _world->Entities();
+	// A search that a load brought back continues. After the load of a saved game, the search starts again from its two
+	// ends, as the game does when it loads a path that it still looks for.
+	for (auto&& [entity, finder] : registry.Underlying().view<FootpathFinder>().each())
+	{
+		if (!finder.plan.has_value())
+		{
+			if (registry.Valid(finder.from) && registry.Valid(finder.to))
+			{
+				const auto [start, goal] = _world->PlannedEnds(finder.from, finder.to);
+				finder.plan = _world->StartRoute(start, goal);
+			}
+		}
+		else if (!finder.plan->live)
+		{
+			_world->MakeLive(*finder.plan);
+		}
+	}
+	ProcessObstacleChanges();
 	// The finders in the order of the game's list, the newest first
 	for (const auto entity : ecs::list_order::Walk<FootpathFinder>(registry))
 	{
 		auto& finder = registry.Get<FootpathFinder>(entity);
-		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath);
-		const auto status = finder.plan->search->GetStatus();
-		if (alive && status == RouteSearchInterface::Status::Searching)
+		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath) &&
+		                   finder.plan.has_value();
+		const auto status = alive ? _world->StatusOfRoute(*finder.plan) : RouteStatus::Failed;
+		if (alive && status == RouteStatus::Searching)
 		{
-			StepPlan(*finder.plan, planning::k_StepsPerTurn);
+			StepPlan(*_world, *finder.plan, planning::k_StepsPerTurn);
 			continue;
 		}
-		if (alive && status == RouteSearchInterface::Status::Found)
+		if (alive && status == RouteStatus::Found)
 		{
 			// The way is found: the path is laid along it and both things keep it
-			LayRoute(finder.footpath, *finder.plan->search->Route(), true);
+			LayRoute(finder.footpath, *_world->RouteOf(*finder.plan), true);
 			AddFootpath(finder.from, finder.footpath);
 			AddFootpath(finder.to, finder.footpath);
 		}
@@ -837,7 +834,7 @@ void FootpathSystem::ProcessTurn()
 
 std::optional<std::vector<glm::ivec2>> FootpathSystem::PlanBetween(glm::ivec2 from, glm::ivec2 to) const
 {
-	auto plan = StartPlan(*_world, planning::ToPoint(from), planning::ToPoint(to));
-	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	return plan->search->Route();
+	auto plan = _world->StartRoute(planning::ToPoint(from), planning::ToPoint(to));
+	StepPlan(*_world, plan, planning::k_MostStepsAtOnce);
+	return _world->RouteOf(plan);
 }

@@ -15,6 +15,7 @@
 #define LOCATOR_IMPLEMENTATIONS
 
 #include <algorithm>
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -44,7 +45,7 @@ using namespace openblack::ecs;
 using namespace openblack::ecs::components;
 using namespace openblack::ecs::systems;
 namespace planning = openblack::ecs::footpath_planning;
-using footpath_world::RouteSearchInterface;
+using footpath_world::RouteStatus;
 
 namespace
 {
@@ -92,7 +93,7 @@ std::vector<glm::ivec2> PlanRound(glm::vec2 start, glm::vec2 goal, const std::ve
 }
 
 /// A search that finds its way after a number of steps, round what the map holds when it starts, or finds none
-class FakeRouteSearch final: public RouteSearchInterface
+class FakeRouteSearch final
 {
 public:
 	FakeRouteSearch(int32_t stepsToFind, std::optional<std::vector<glm::ivec2>> route)
@@ -101,25 +102,19 @@ public:
 	{
 	}
 
-	void Step() override
-	{
-		++steps;
-		--_stepsLeft;
-	}
-	[[nodiscard]] Status GetStatus() const override
+	void Step() { --_stepsLeft; }
+	[[nodiscard]] RouteStatus GetStatus() const
 	{
 		if (_stepsLeft > 0)
 		{
-			return Status::Searching;
+			return RouteStatus::Searching;
 		}
-		return _route.has_value() ? Status::Found : Status::Failed;
+		return _route.has_value() ? RouteStatus::Found : RouteStatus::Failed;
 	}
-	[[nodiscard]] std::optional<std::vector<glm::ivec2>> Route() const override
+	[[nodiscard]] std::optional<std::vector<glm::ivec2>> Route() const
 	{
-		return GetStatus() == Status::Found ? _route : std::nullopt;
+		return GetStatus() == RouteStatus::Found ? _route : std::nullopt;
 	}
-
-	int32_t steps {0};
 
 private:
 	int32_t _stepsLeft;
@@ -166,7 +161,7 @@ public:
 		}
 		return look;
 	}
-	[[nodiscard]] std::unique_ptr<RouteSearchInterface> StartRoute(glm::vec2 start, glm::vec2 goal) const override
+	[[nodiscard]] footpath_world::Plan StartRoute(glm::vec2 start, glm::vec2 goal) const override
 	{
 		++searches;
 		std::optional<std::vector<glm::ivec2>> route;
@@ -183,7 +178,22 @@ public:
 			}
 			route = PlanRound(start, goal, circles);
 		}
-		return std::make_unique<FakeRouteSearch>(stepsToFind, std::move(route));
+		footpath_world::Plan plan;
+		plan.start = start;
+		plan.goal = goal;
+		plan.live = true;
+		fakeSearches.insert_or_assign(KeyOf(plan), FakeRouteSearch(stepsToFind, std::move(route)));
+		return plan;
+	}
+	void MakeLive(footpath_world::Plan& plan) const override { plan.live = true; }
+	void StepRoute(footpath_world::Plan& plan) const override { fakeSearches.at(KeyOf(plan)).Step(); }
+	[[nodiscard]] RouteStatus StatusOfRoute(const footpath_world::Plan& plan) const override
+	{
+		return fakeSearches.at(KeyOf(plan)).GetStatus();
+	}
+	[[nodiscard]] std::optional<std::vector<glm::ivec2>> RouteOf(const footpath_world::Plan& plan) const override
+	{
+		return fakeSearches.at(KeyOf(plan)).Route();
 	}
 	[[nodiscard]] entt::entity TownOf(entt::entity building) const override
 	{
@@ -200,6 +210,11 @@ public:
 	[[nodiscard]] float AltitudeAt(glm::ivec2 /*place*/) const override { return 0.0f; }
 	void LookAgain(entt::entity walker) override { lookedAgain.push_back(walker); }
 	void WalkTo(entt::entity walker, glm::ivec2 place) override { walkedTo.emplace_back(walker, place); }
+
+	[[nodiscard]] static std::array<float, 4> KeyOf(const footpath_world::Plan& plan)
+	{
+		return {plan.start.x, plan.start.y, plan.goal.x, plan.goal.y};
+	}
 
 	/// A thing made at a position, waiting for the map; with a radius when the paths go round it
 	entt::entity Make(glm::vec3 position, std::optional<float> radius = std::nullopt)
@@ -227,6 +242,8 @@ public:
 	bool findsWay {true};
 	int32_t stepsToFind {1};
 	mutable int searches {0};
+	/// The fake searches, found by the two ends of the plan that they belong to
+	mutable std::map<std::array<float, 4>, FakeRouteSearch> fakeSearches;
 	std::vector<entt::entity> waiting;
 	std::set<entt::entity> filed;
 	std::map<entt::entity, float> radii;

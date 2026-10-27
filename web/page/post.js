@@ -2,7 +2,8 @@
 //
 // On the page's main thread, it gives the game folder from the page (Module.openblackWeb) to each worker thread of the
 // game: to the workers that are there now, and to each worker that starts later, before the worker loads the game.
-// It also shows each frame that the game thread sends as an image, and it changes between the image and the game
+// The game threads also get the requests array, where the page's Join Online Game button asks for the multiplayer front
+// end. It also shows each frame that the game thread sends as an image, and it changes between the image and the game
 // canvas when the game thread asks (see the frame present code of the web platform).
 if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalScope)) {
   const openblackWeb = Module['openblackWeb'];
@@ -15,7 +16,12 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
     }
   };
   const give = (worker) => {
-    worker.postMessage({ openblackWeb: { folder: openblackWeb.folder, storage: openblackWeb.storage } });
+    worker.postMessage({
+      openblackWeb: {
+        folder: openblackWeb.folder, storage: openblackWeb.storage, version: openblackWeb.version,
+        requests: openblackWeb.requests,
+      },
+    });
     worker.addEventListener('message', show);
   };
   PThread.unusedWorkers.forEach(give);

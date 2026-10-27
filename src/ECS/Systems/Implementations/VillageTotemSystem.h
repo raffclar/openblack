@@ -60,11 +60,14 @@ private:
 	[[nodiscard]] entt::entity TownOf(entt::entity totem) const;
 	/// The plinth and its icon are put where the share stands them
 	void Place(entt::entity totem);
-	/// The see-through second totem is put at the other share, made as the two come apart and taken away as they meet
+	/// At the turn: the totem's see-through second plinth and icon are made, hidden, if it has none, and its icon is
+	/// marked as its icon
+	void MakeParts(entt::entity totem);
+	/// The see-through second totem is put at the other share and shown as the two come apart, and hidden as they meet
 	void PlaceGhost(entt::entity totem, std::optional<float> share);
 	/// The totem's player sees the share it is drawn at by the hand's tooltip as it moves
 	void NoteToolTip(entt::entity totem, const village_totem::Shown& shown);
-	/// Takes the totem and its second totem away
+	/// Takes the totem, its icon and its second totem away
 	void Remove(entt::entity totem);
 	/// Where the totem stands, its rise aside: where the living react to it and its numbers float from
 	[[nodiscard]] glm::vec3 StandingAt(entt::entity totem) const;

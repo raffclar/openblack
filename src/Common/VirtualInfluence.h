@@ -36,12 +36,18 @@ struct State
 	uint32_t lastInsideTurn {0};
 	/// The strength left, 0 to 1
 	float fraction {1.0f};
+	/// Turned off by a script: it neither changes nor sounds
+	bool disabled {false};
+};
+
+/// What the frames of this computer show of the strength: the hum and the mana path. Only the frames read it, and each
+/// computer has its own, because each computer draws its own hand.
+struct Shown
+{
 	/// The strength when the hum began
 	float soundFraction {1.0f};
 	/// The hum has been started and not stopped
 	bool soundStarted {false};
-	/// Turned off by a script: it neither changes nor sounds
-	bool disabled {false};
 	/// Where the mana path the hand lets out leads back to, worked out on the first frame it shows after the hand was
 	/// last in influence
 	std::optional<map_coords::MapCoords> manaPathStart;
@@ -59,6 +65,10 @@ struct Settings
 	/// Chants of worship that make the strength last twice as long
 	float chantsToDouble;
 };
+
+/// How far past the border the hand keeps its player's influence before it is all gone: the citadel's distance, made
+/// longer by a fifth of the player's influence power
+[[nodiscard]] float MaximumDistance(float influencePower, const Settings& settings);
 
 /// What a turn finds about the hand
 struct TurnInputs
@@ -86,6 +96,9 @@ struct TurnInputs
 /// shield it has none.
 void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& settings);
 
+/// True when the turn puts the hand back in influence, so the next trip out works out a new mana path
+[[nodiscard]] bool ManaPathEnds(const State& state, const TurnInputs& inputs);
+
 /// Whether the hum plays this frame: the hand has strength left and is out of its player's influence, unshielded, while
 /// the last place it was in is still in influence and unshielded
 [[nodiscard]] bool HumPlays(const State& state, bool handShielded, bool handInInfluence, bool anchorShielded,
@@ -97,12 +110,12 @@ void ProcessTurn(State& state, const TurnInputs& inputs, const Settings& setting
 
 /// A frame shown: its milliseconds weighed by the strength count towards a spark, one once they pass ten. When one is
 /// due, the share of 256 its colour is scaled by: the strength out of 255.
-[[nodiscard]] std::optional<uint8_t> EmitManaPath(State& state, float frameMilliseconds);
+[[nodiscard]] std::optional<uint8_t> EmitManaPath(Shown& shown, const State& state, float frameMilliseconds);
 
 /// A colour 0xAARRGGBB with each of its four channels scaled by a share of 256
 [[nodiscard]] uint32_t ScaleColour(uint32_t argb, uint8_t scale);
 
 /// The hum's pitch in percent: its strength's share of its normal pitch, held to what it began at
-[[nodiscard]] uint32_t HumPitchPercent(const State& state);
+[[nodiscard]] uint32_t HumPitchPercent(const State& state, const Shown& shown);
 
 } // namespace openblack::virtual_influence

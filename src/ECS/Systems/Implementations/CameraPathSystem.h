@@ -43,7 +43,7 @@ public:
 	void Stop() override;
 	void Play() override { _state = CameraPathState::PLAYING; }
 	void Pause() override { _state = CameraPathState::PAUSED; }
-	void Update(const std::chrono::microseconds& dt) override;
+	void Update(const std::chrono::microseconds& dt, std::chrono::milliseconds frameGameTime) override;
 	bool IsPathing() override
 	{
 		return _placed.has_value() || _state == CameraPathState::PLAYING || _state == CameraPathState::PAUSED;
@@ -67,7 +67,7 @@ private:
 		float animationMs;
 		/// The miracle whose effect placed it, which it goes with
 		entt::entity spell {entt::null};
-		/// Seconds since it began
+		/// Seconds of game time since it began
 		float seconds {0.0f};
 		/// The camera's origin and focus, each coordinate gliding
 		std::array<camera::Zoomer, 3> origin;
@@ -77,7 +77,7 @@ private:
 		glm::vec3 returnOrigin {0.0f};
 		glm::vec3 returnFocus {0.0f};
 	};
-	void UpdatePlaced(float seconds);
+	void UpdatePlaced(float seconds, float gameSeconds);
 	/// The path ends by itself: the player's camera takes the camera again and flies back to where it was going
 	void EndPlaced();
 	std::optional<Placed> _placed;

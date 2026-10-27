@@ -205,7 +205,8 @@ void MagicSystem::ReceiveCreatureSpell(entt::entity creature, entt::entity mirac
 
 void MagicSystem::StartHandGrain(const Spell& spell, entt::entity creature)
 {
-	if (!spell.fromLocalHand)
+	// Only the hand of this computer pours
+	if (!spell.fromLocalHand || spell.caster.player != OwnPlayer())
 	{
 		return;
 	}
@@ -219,8 +220,8 @@ void MagicSystem::StartHandGrain(const Spell& spell, entt::entity creature)
 
 void MagicSystem::StopHandGrain(const Spell& spell)
 {
-	// Any miracle the local hand cast stops the hand's pour as it closes down, whatever is pouring
-	if (spell.fromLocalHand && _pour.active)
+	// Any miracle the hand of this computer cast stops the hand's pour as it closes down, whatever is pouring
+	if (spell.fromLocalHand && spell.caster.player == OwnPlayer() && _pour.active)
 	{
 		magic::StopPour(_pour);
 	}

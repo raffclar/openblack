@@ -19,6 +19,7 @@
 #include <glm/trigonometric.hpp>
 
 #include "3D/FlatLand.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
@@ -70,7 +71,7 @@ size_t WeightedRole(CrowdRandom& random)
 
 glm::vec2 OnCircle(float radius, float angle)
 {
-	return radius * glm::vec2(std::cos(angle), std::sin(angle));
+	return radius * glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle));
 }
 } // namespace
 

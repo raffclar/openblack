@@ -11,7 +11,6 @@
 
 #include <cstdint>
 
-#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -19,6 +18,8 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
+
+#include "ECS/Components/Footpath.h"
 
 namespace openblack::ecs
 {
@@ -31,24 +32,14 @@ class Registry;
 namespace openblack::ecs::footpath_world
 {
 
-/// A search for the way between two points, over a few steps
-class RouteSearchInterface
+using Plan = components::FootpathFinder::Plan;
+
+/// How far the search for a way has come
+enum class RouteStatus
 {
-public:
-	enum class Status
-	{
-		Searching,
-		Found,
-		Failed,
-	};
-
-	virtual ~RouteSearchInterface() = default;
-
-	/// Takes the search one step further
-	virtual void Step() = 0;
-	[[nodiscard]] virtual Status GetStatus() const = 0;
-	/// The places of the route from the start to the goal, once the search found it
-	[[nodiscard]] virtual std::optional<std::vector<glm::ivec2>> Route() const = 0;
+	Searching,
+	Found,
+	Failed,
 };
 
 /// What the paths go round of a thing at a position
@@ -79,7 +70,15 @@ public:
 	[[nodiscard]] virtual ObstacleLook ObstacleOf(entt::entity thing, glm::vec3 position) const = 0;
 	/// A search for a way that no one walks between two points, round what stands on the map now. Nothing that holds
 	/// either end is gone round.
-	[[nodiscard]] virtual std::unique_ptr<RouteSearchInterface> StartRoute(glm::vec2 start, glm::vec2 goal) const = 0;
+	[[nodiscard]] virtual Plan StartRoute(glm::vec2 start, glm::vec2 goal) const = 0;
+	/// A plan that a load brought back gets again what it does not keep, so that its next step goes round what stands on
+	/// the map
+	virtual void MakeLive(Plan& plan) const = 0;
+	/// Takes the search of the plan one step further
+	virtual void StepRoute(Plan& plan) const = 0;
+	[[nodiscard]] virtual RouteStatus StatusOfRoute(const Plan& plan) const = 0;
+	/// The places of the route from the start to the goal, once the search of the plan found it
+	[[nodiscard]] virtual std::optional<std::vector<glm::ivec2>> RouteOf(const Plan& plan) const = 0;
 	/// The town a building belongs to, none if there is none
 	[[nodiscard]] virtual entt::entity TownOf(entt::entity building) const = 0;
 	/// The town's storage pit, built or not

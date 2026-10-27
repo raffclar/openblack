@@ -33,6 +33,7 @@
 #include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -41,8 +42,6 @@ namespace messages = openblack::help_messages;
 
 namespace
 {
-/// The kinds of script a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 constexpr size_t k_StartedKept = 16;
 
 uint32_t Turn()
@@ -140,7 +139,7 @@ bool HelpMessageSystem::RunMessage(uint32_t first, uint32_t last, messages::Scri
 	vm.Pushf(static_cast<float>(first));
 	vm.Pushf(static_cast<float>(last));
 	const auto name = std::string(messages::ScriptName(script));
-	vm.StartScript(name, k_SinglePlayerScripts);
+	vm.StartScript(name, script::start::StartableScripts());
 	Remember({.script = name,
 	          .first = first,
 	          .last = last,
@@ -176,7 +175,7 @@ bool HelpMessageSystem::RunMessageSet(size_t set, std::optional<messages::Texts>
 	{
 		// The script alone
 		const auto name = std::string(messages::ScriptName(row.script));
-		Locator::vm::value().StartScript(name, k_SinglePlayerScripts);
+		Locator::vm::value().StartScript(name, script::start::StartableScripts());
 		Remember({.script = name, .first = 0, .last = 0, .turn = turn});
 		return true;
 	}

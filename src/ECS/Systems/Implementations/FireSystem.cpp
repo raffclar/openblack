@@ -65,7 +65,9 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureScars.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/GamePhysicsHooksWorld.h"
+#include "ECS/HandPlayer.h"
 #include "ECS/Map.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Reflection/BinaryArchive.h"
@@ -236,8 +238,9 @@ bool SpreadsFrom(entt::entity object, const glm::vec3& position)
 	{
 		return false;
 	}
-	// The hands on the screen are the local player's
-	const auto holder = Locator::playerSystem::value().GetLocalPlayer();
+	// The player of the hand that holds it
+	const auto& registry = Entities();
+	const auto holder = ecs::HandPlayer(registry, registry.Get<const InHand>(object).hand);
 	return fire::SpreadsFrom(true, Locator::influenceSystem::value().PlayerInfluence(holder, position));
 }
 
@@ -375,8 +378,15 @@ std::optional<fire::graphic::Anchor> RandomPointOn(entt::entity object)
 
 glm::vec3 ToWorld(entt::entity object, const glm::vec3& local)
 {
-	const auto* transform = Entities().TryGet<const Transform>(object);
-	return transform != nullptr ? transform->position + transform->rotation * (transform->scale * local) : local;
+	const auto& registry = Entities();
+	const auto* transform = registry.TryGet<const Transform>(object);
+	if (transform == nullptr)
+	{
+		return local;
+	}
+	// The flames go with the thing where the frame draws it: in a hand, or an animal between its last two turns
+	const auto drawn = ecs::drawn_place::DrawnTransformOf(registry, object, *transform);
+	return drawn.position + drawn.rotation * (drawn.scale * local);
 }
 
 /// Where a point of an object's model is in the world now. A point that a bone carries is at that bone of the body as
@@ -390,7 +400,8 @@ glm::vec3 ToWorld(entt::entity object, const fire::graphic::Anchor& anchor)
 		const auto* animation = registry.TryGet<const CreatureAnimation>(object);
 		if (transform != nullptr && animation != nullptr && *anchor.bone < animation->boneMatrices.size())
 		{
-			const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+			const auto drawn = DrawnTransform(*transform, animation);
+			const auto placement = creature::PlacementMatrix(drawn.position, drawn.rotation, drawn.scale);
 			return glm::vec3(creature::PosedBone(*anchor.bone, animation->boneMatrices, placement)[3]);
 		}
 	}

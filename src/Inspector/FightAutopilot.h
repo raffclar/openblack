@@ -11,11 +11,13 @@
 
 #include <cstdint>
 
+#include <functional>
 #include <optional>
 #include <random>
 #include <span>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/fwd.hpp>
@@ -44,6 +46,8 @@ public:
 
 	/// Once a frame, before the game reads its input
 	void Frame(uint64_t frame);
+	/// Tools: each input that the autopilot gives also goes to this, with its frame, for a recording of the input
+	void SetRecorder(std::function<void(uint64_t frame, const InputEvent& event)> recorder) { _recorder = std::move(recorder); }
 
 private:
 	enum class Phase : uint8_t
@@ -70,6 +74,7 @@ private:
 	void CheckLesson(entt::entity own);
 
 	InputTargetInterface& _input;
+	std::function<void(uint64_t frame, const InputEvent& event)> _recorder;
 	bool _active {false};
 	fight_autopilot::Settings _settings;
 	fight_autopilot::LessonStage _stage {fight_autopilot::LessonStage::Hit};

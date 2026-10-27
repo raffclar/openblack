@@ -31,17 +31,13 @@
 #include <glm/vec3.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/GameRandom.h"
 #include "ManaPathMaths.h"
 #include "ParticleMaths.h"
 #include "ParticleSpellLink.h"
 #include "PlasmaCommand.h"
 #include "RisingSparks.h"
 #include "StormMaths.h"
-
-namespace openblack
-{
-class GameRandomInterface;
-}
 
 /// The particle effects of the miracles and spot visuals, as their files describe them.
 ///
@@ -883,12 +879,13 @@ public:
 	[[nodiscard]] bool IsHidden() const { return _hidden; }
 
 	// For the rules
-	/// Random numbers on the effect's stream; 0 outside a step, as the game draws them
-	[[nodiscard]] float Random(float max);
-	[[nodiscard]] float Random(float min, float max);
-	[[nodiscard]] int32_t Rand(int32_t n);
+	/// Random numbers on the effect's stream; 0 outside a step, as the game draws them. The site is the place of the
+	/// call, for the draw trace
+	[[nodiscard]] float Random(float max, DrawSite site = DrawSite::current());
+	[[nodiscard]] float Random(float min, float max, DrawSite site = DrawSite::current());
+	[[nodiscard]] int32_t Rand(int32_t n, DrawSite site = DrawSite::current());
 	/// A point in the unit ball
-	[[nodiscard]] glm::vec3 RandomInBall();
+	[[nodiscard]] glm::vec3 RandomInBall(DrawSite site = DrawSite::current());
 	/// The value of a float provider object this step, or the fallback for none
 	[[nodiscard]] float FloatProvider(const std::string& name, float fallback) const;
 	[[nodiscard]] bool ConditionForCollection(const std::string& name, const Collection& collection) const;

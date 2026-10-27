@@ -188,6 +188,12 @@ public:
 	/// its end and leaves the mind's plan as it was. Returns whether it played.
 	virtual bool ForceAction(entt::entity creature, size_t animation, bool mirrored, std::optional<creature_face::Request> face,
 	                         float interruptsAfter) = 0;
+	/// Whether ForceAction would play the action now, with no change to the creature
+	[[nodiscard]] virtual bool CanForceAction(entt::entity /*creature*/, size_t /*animation*/, bool /*mirrored*/,
+	                                          float /*interruptsAfter*/) const
+	{
+		return false;
+	}
 
 	/// Sees to a need now, in place of whatever it was doing: sleeps until rested, eats something (the nearest food when
 	/// none is given), goes and drinks at the nearest water, has a poo, is sick, or faints. Returns whether it could.
