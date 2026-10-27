@@ -6313,6 +6313,33 @@ void AddLeash(std::vector<Scenario>& all)
 	    .repeatFrom = 0,
 	});
 
+	// A man held by a script out in the lake, as the drowning men of Land 1's silver scroll, and a tiger that shrinks
+	// in its temple's pen first, so that it grows again on its way out to him
+	constexpr glm::vec2 k_RescueTemple {-150.0f, 150.0f};
+	constexpr glm::vec2 k_DrowningMan {-30.0f, k_NearShallows + 8.0f};
+	constexpr glm::vec2 k_Bank {-30.0f, k_NearShallows - 20.0f};
+	all.push_back({
+	    .id = "leash.rescue_from_water",
+	    .name = "A man carried out of the water on the leash",
+	    .facet = Facet::Leash,
+	    .description = "A tiger of size 0.5 walks home into its temple's pen, where it shrinks, and then goes on the "
+	                   "learning leash. The Action button of the leash orders it onto a man that a script holds still out "
+	                   "in the lake, as the drowning men of Land 1, and some time later onto the bank.",
+	    .expected = "It grows back to its own size as it leaves the pen, wades out, picks the man up and holds him, "
+	                "facing the player. Told onto the bank, it carries him there and puts him down gently on his feet, "
+	                "with no toss: he stays where its hand sets him.",
+	    .framing = {.shot = Shot::Overview, .include = {k_RescueTemple, k_DrowningMan, k_Bank}},
+	    .creatures = {[&] {
+		    auto tiger = Content(CreatureType::Tiger, k_RescueTemple + glm::vec2(60.0f, -40.0f));
+		    tiger.size = 0.5f;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = k_DrowningMan, .inScript = true}},
+	    .temples = {{.offset = k_RescueTemple, .angle = 36.0f}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f), Leash(0, LeashType::Rope, 25.0f),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 1.0f, false), Go(Kind::LeashOrderAt, 0, k_Bank, 45.0f, false)},
+	});
+
 	// Worn out and wanting to sleep more than anything, far from its player's temple
 	CreatureSetup tired {.species = CreatureType::Tiger,
 	                     .offset = {0.0f, 20.0f},
