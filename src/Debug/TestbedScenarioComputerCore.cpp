@@ -50,9 +50,9 @@ void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Mind,
 	    .description = "The land of the food miracle scenario. The cinema bars slide in after half a second and slide out "
 	                   "after 30 seconds, as the help and the land scripts do.",
-	    .expected = "While the bars are in, the mind of player two does nothing: the hand of the god stays at its "
-	                "temple, and the players.list query shows no steps. When the bars slide out, the hand moves to the "
-	                "food icon of the site as in the food miracle scenario.",
+	    .expected = "The god of player two starts its first action before the bars slide in. While the bars are in, "
+	                "its mind does nothing and its hand stops where it is. When the bars slide out, the hand "
+	                "continues as in the food miracle scenario.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
 	    .landScript = k_ComputerGodTownScript,
 	    .commands = {{.kind = Command::Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
