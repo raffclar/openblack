@@ -837,6 +837,8 @@ def main():
                         "Escape, Exit Online Game and Leave Game")
     parser.add_argument("--hash-parts", action="store_true",
                         help="the clients' records keep the hash of each component, to find what parted")
+    parser.add_argument("--client-args", default="",
+                        help="more arguments of each client game, divided by spaces, such as --turn-beside-draw")
     parser.add_argument("--server-profile",
                         help="the profile folder of the server (--profile-folder), as the live server keeps its profile "
                              "from game to game; with none, the server keeps no profile")
@@ -981,6 +983,7 @@ def main():
                     command += ["--sim-row-dump-turn", str(options.row_dump_turn)]
             if options.temple_loss:
                 command += ["--sim-temple-loss", options.temple_loss]
+            command += options.client_args.split()
             if leaver == index:
                 command += ["--sim-leave-at", str(leave_turn)]
             if options.hash_fields:

@@ -213,6 +213,9 @@ struct Arguments
 	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
 	/// MainThreadQueue). Off by default.
 	TurnApiCheck turnApiCheck {};
+	/// For developers: the turns of the next frame play on another thread beside the end of the draw of this frame
+	/// (deviation row 153). Off by default.
+	bool turnBesideDraw {false};
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
@@ -566,6 +569,11 @@ private:
 	void SaveHelpRecord();
 	/// The log gets each place where turn code used the graphics, the renderer or the audio directly, when the check is on
 	void ReportTurnApiCheck() const;
+	/// The turns of the next frame start on another thread, beside the end of the draw of this frame, when nothing that
+	/// the end of the frame does changes what they read. Gives true when they started.
+	bool StartTurnsBesideDraw();
+	/// The main thread waits for the turns that started beside the draw, and does the work that they gave it
+	void FinishTurnsBesideDraw();
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
@@ -900,6 +908,8 @@ private:
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
 	/// What the check of the turn's calls does
 	TurnApiCheck _turnApiCheck {};
+	/// The turns of the next frame play beside the draw of this frame (deviation row 153)
+	bool _turnBesideDraw {false};
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
 	/// A frame drawn without the debug windows though no picture is taken of it

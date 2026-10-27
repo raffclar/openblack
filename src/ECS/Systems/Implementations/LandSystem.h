@@ -55,6 +55,9 @@ public:
 	void StartStoryScripts() override;
 
 	void PlayTurns(simulation::TurnViewInterface& view) override;
+	void PlayTurnSteps(simulation::TurnViewInterface& view) override;
+	void FinishTurns(uint32_t turnBefore, std::chrono::steady_clock::time_point start,
+	                 std::optional<std::chrono::steady_clock::time_point> end) override;
 	[[nodiscard]] std::chrono::steady_clock::duration GetTurnDeltaTime() const override { return _turnDeltaTime; }
 	void KeepAlignmentInProfile() override;
 
@@ -80,6 +83,8 @@ private:
 	bool AskNewGameChoice();
 	/// The turn of the world when it is due, and the temple's own turns
 	void GameLogicLoop(simulation::TurnViewInterface& view);
+	/// The turns that are due, with the queue of the main thread told that this thread does them
+	void PlayDueTurns(simulation::TurnViewInterface& view);
 
 	LandViewInterface* _view {nullptr};
 	NoLandView _noView;

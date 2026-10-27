@@ -98,6 +98,7 @@
 #include "Common/MachineClock.h"
 #include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
+#include "Common/SideThread.h"
 #include "Common/StringUtils.h"
 #include "Common/UserData.h"
 #include "Common/X87Vector.h"
@@ -687,6 +688,18 @@ struct Game::FrameLoop
 	std::chrono::high_resolution_clock::time_point lastTime;
 	std::optional<debug::FrameStatsLog> frameStats;
 	std::chrono::steady_clock::time_point frameStart;
+	/// The thread of the turns that play beside the draw (deviation row 153), made the first time it is used
+	std::unique_ptr<SideThread> turnThread;
+	/// The turns that play beside the draw: the turn count before them and their start
+	uint32_t turnBefore {0};
+	std::chrono::steady_clock::time_point turnsStart;
+	std::chrono::steady_clock::time_point turnsEnd;
+	/// The clock of the next frame moved on already, and its turns played beside the draw of this frame
+	bool turnsPlayedBeside {false};
+	/// The clock of the machine for the statistics of this frame, read before the clock of the next frame moved on
+	std::optional<uint32_t> statisticsTicks;
+	/// Open while the turns play beside the draw: the main thread then does not use the services that the turns hold
+	std::optional<MainThreadQueue::TurnElsewhere> turnsElsewhere;
 };
 
 Game::Game(Arguments&& args) noexcept
@@ -723,6 +736,7 @@ Game::Game(Arguments&& args) noexcept
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
     , _turnApiCheck(args.turnApiCheck)
+    , _turnBesideDraw(args.turnBesideDraw)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The log of each part of the game
@@ -2389,6 +2403,11 @@ bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
 		{
 			_scenarioStager();
 		}
+		// The turns of this frame played beside the draw of the last frame (deviation row 153)
+		if (_frameLoop != nullptr && std::exchange(_frameLoop->turnsPlayedBeside, false))
+		{
+			return true;
+		}
 		return PlayTurns();
 	}
 	case Step::SendCommands:
@@ -2658,7 +2677,11 @@ void Game::StartFrame(FrameState& frame)
 	frame.deltaTime = std::chrono::duration_cast<std::chrono::microseconds>(current - previous);
 
 	Locator::debugGui::value().SetScale(config.guiScale);
-	Locator::time::value().Update();
+	// The clock of this frame moved on at the end of the last frame, when this frame's turns played beside its draw
+	if (_frameLoop == nullptr || !_frameLoop->turnsPlayedBeside)
+	{
+		Locator::time::value().Update();
+	}
 	// The debug inspector answers what was asked since the last frame, and holds or releases the game for stepping,
 	// before the frame's input and turn
 	if (Locator::inspector::has_value())
@@ -3000,6 +3023,71 @@ bool Game::PlayTurns()
 	// The game is the view of the turns
 	Locator::landSystem::value().PlayTurns(*this);
 	return true;
+}
+
+bool Game::StartTurnsBesideDraw()
+{
+	if (!_turnBesideDraw || _frameLoop == nullptr || !Locator::mainThreadQueue::has_value())
+	{
+		return false;
+	}
+	// The turns start early only when the end of this frame changes nothing that they read: no scenario waits to be laid
+	// out, the player does not go into the temple after this frame, no picture waits for its screen and the game does not
+	// close. Else they play in the next frame, as usual.
+	const bool templeEntry = Locator::temple::has_value() && Locator::temple::value().GoesInAfterFrame();
+	const bool pictureWaits =
+	    ecs::challenge_pictures::AnyWaiting(Locator::entitiesRegistry::value()) ||
+	    (Locator::creatureWebPageSystem::has_value() && Locator::creatureWebPageSystem::value().AnyPictureWaiting()) ||
+	    (Locator::saveGameSystem::has_value() && Locator::saveGameSystem::value().AnyPictureWaiting());
+	if (_scenarioRequest.has_value() || templeEntry || pictureWaits || _closeAsked)
+	{
+		return false;
+	}
+	auto& loop = *_frameLoop;
+	if (!loop.turnThread)
+	{
+		loop.turnThread = std::make_unique<SideThread>();
+	}
+	// The turns read the camera of the game, not the camera that the inspector shows
+	ShowInspectorCamera(false);
+	// The clock of the next frame moves on now, so that the turns that are due in the next frame play now. The statistics
+	// of this frame keep the clock of this frame.
+	loop.statisticsTicks = machine_clock::Ticks();
+	auto& time = Locator::time::value();
+	time.Update();
+	loop.turnsPlayedBeside = true;
+	loop.turnBefore = time.GetTurn();
+	loop.turnsStart = std::chrono::steady_clock::now();
+	auto& queue = Locator::mainThreadQueue::value();
+	loop.turnsElsewhere.emplace(queue);
+	loop.turnThread->Start(
+	    [this, &loop] {
+		    Locator::landSystem::value().PlayTurnSteps(*this);
+		    loop.turnsEnd = std::chrono::steady_clock::now();
+	    },
+	    [&queue] { queue.Wake(); });
+	return true;
+}
+
+void Game::FinishTurnsBesideDraw()
+{
+	auto& loop = *_frameLoop;
+	auto& queue = Locator::mainThreadQueue::value();
+	// Meanwhile the main thread does the calls that the turns wait for, such as the load of the next land
+	queue.ServeUntil([&loop] { return loop.turnThread->Done(); });
+	loop.turnsElsewhere.reset();
+	try
+	{
+		loop.turnThread->Wait();
+	}
+	catch (const std::exception& e)
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The turns beside the draw stopped: {}", e.what());
+		std::abort();
+	}
+	Locator::landSystem::value().FinishTurns(loop.turnBefore, loop.turnsStart, loop.turnsEnd);
+	// The scopes of the turns go into this frame's entry of the profiler
+	Locator::profiler::value().MergeThreads();
 }
 
 void Game::UpdateCreaturePoses()
@@ -4675,9 +4763,15 @@ bool Game::RunFrame() noexcept
 			}
 		}
 
+		// The turns of the next frame may play beside the end of the draw (deviation row 153)
+		const bool turnsBeside = StartTurnsBesideDraw();
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::RendererFrame);
 			Locator::rendererInterface::value().Frame();
+		}
+		if (turnsBeside)
+		{
+			FinishTurnsBesideDraw();
 		}
 		// The challenges' pictures whose screens are back
 		auto& renderer = Locator::rendererInterface::value();
@@ -4707,7 +4801,11 @@ bool Game::RunFrame() noexcept
 			    {.take = [&renderer](const std::string& name) { return renderer.TakeScreenPicture(name); },
 			     .failed = [&renderer](const std::string& name) { return renderer.TakeScreenshotFailure(name).has_value(); }});
 		}
-		ShowInspectorCamera(false);
+		// The turns beside the draw had the camera of the game back before they started
+		if (!turnsBeside)
+		{
+			ShowInspectorCamera(false);
+		}
 
 		// Clear the stale screenshot request
 		if (_requestScreenshot.has_value())
@@ -4721,7 +4819,8 @@ bool Game::RunFrame() noexcept
 		_frameCount++;
 		// The frame rate of the statistics uses the machine clock of the game. When each frame has a fixed time, each run
 		// gets the same rate.
-		_statisticsFrameRate.Frame(machine_clock::Ticks(), _frameCount);
+		_statisticsFrameRate.Frame(std::exchange(_frameLoop->statisticsTicks, std::nullopt).value_or(machine_clock::Ticks()),
+		                           _frameCount);
 		// The game is playable from its first frame drawn
 		if (_startupTimer.has_value())
 		{

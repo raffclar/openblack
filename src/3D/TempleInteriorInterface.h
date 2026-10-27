@@ -246,6 +246,8 @@ public:
 	virtual void ActivateAfterFrame(TempleRoom room) = 0;
 	/// The frame is drawn: the player goes into the temple if they asked to during the frame
 	virtual void FrameDrawn() = 0;
+	/// The player goes into the temple when the frame that is drawn now ends
+	[[nodiscard]] virtual bool GoesInAfterFrame() const = 0;
 	/// Takes the player to a room of the temple, from outside or from another room, and keeps them there, as the game
 	/// does with the save game room once the game is over: going to another room or out of the temple ends the game
 	virtual void EnterLockedRoom(TempleRoom room) = 0;

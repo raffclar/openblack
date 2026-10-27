@@ -193,10 +193,11 @@ void FrameStatsLog::Report()
 	++_reports;
 	SPDLOG_LOGGER_INFO(logger,
 	                   "Frame stats #{}: {} frames, frame avg {:.2f} ms p95 {:.2f} max {:.2f} ({:.1f} FPS); GPU avg {:.2f} "
-	                   "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws; {} new pipelines",
+	                   "p95 {:.2f}; render submit {:.2f} wait {:.2f}; {:.0f} draws; {} new pipelines; frame p50 {:.2f} p99 "
+	                   "{:.2f}",
 	                   _reports, frames.count, frames.average, frames.p95, frames.max, 1000.0f / frames.average, gpu.average,
 	                   gpu.p95, _submitTotal / count, _waitRenderTotal / count, static_cast<double>(_drawCallTotal) / count,
-	                   std::exchange(_pipelinesSinceReport, 0u));
+	                   std::exchange(_pipelinesSinceReport, 0u), frames.p50, frames.p99);
 
 	// How much memory the game holds, and the graphics memory that the renderer knows of
 	const auto* stats = bgfx::getStats();

@@ -175,7 +175,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
 		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
-		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>());
+		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>())
+		("turn-beside-draw", "Developers: the turns of the next frame play on another thread beside the end of the draw of this frame (deviation row 153). A pause, a speed change, an inspector edit or a hand click then acts one turn later.");
 #endif
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
@@ -479,6 +480,7 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 				throw cxxopts::exceptions::parsing("--turn-api-check is off, report or fail");
 			}
 		}
+		args.turnBesideDraw = result.count("turn-beside-draw") != 0;
 #endif
 		if (result.count("screenshot-frame") != 0)
 		{

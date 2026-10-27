@@ -22,8 +22,12 @@ struct Summary
 {
 	size_t count {0};
 	float average {0.0f};
+	/// Half of the frames took this long or less
+	float p50 {0.0f};
 	/// 95 frames in 100 took this long or less
 	float p95 {0.0f};
+	/// 99 frames in 100 took this long or less
+	float p99 {0.0f};
 	float max {0.0f};
 };
 
