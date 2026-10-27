@@ -136,6 +136,7 @@ public:
 		weather = std::move(callback);
 	}
 	void UploadCreature(lobby_api::CreatureUpload, LobbyCallback<lobby_api::CreatureUploadReply>) override {}
+	void SendSkirmishPing(LobbyCallback<LobbyDone>) override {}
 	uint32_t AddEventListener(LobbyEventListener) override { return 0; }
 	void RemoveEventListener(uint32_t) override {}
 

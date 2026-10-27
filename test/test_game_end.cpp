@@ -9,6 +9,7 @@
 
 #include <array>
 #include <map>
+#include <span>
 #include <tuple>
 #include <vector>
 
@@ -334,4 +335,23 @@ TEST(GameEnd, ASkirmishKeepsTheShareOfTheInfluenceEachTenTurns)
 	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.75f);
 	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 25}, state);
 	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+}
+
+// The lobby hears one time for each event that decides the game: a win by the conditions, or the last god out
+TEST(GameEnd, OnlyTheEventsThatDecideTheGameCount)
+{
+	const std::array events {
+	    Event {.kind = Event::Kind::GodOut, .god = k_Three},
+	    Event {.kind = Event::Kind::GodOutAndDecided, .god = k_Two},
+	    Event {.kind = Event::Kind::Won, .god = k_One},
+	};
+	EXPECT_EQ(DecidingEvents(events), 2u);
+	EXPECT_EQ(DecidingEvents(std::span(events).first(1)), 0u);
+	EXPECT_EQ(DecidingEvents({}), 0u);
+	// A skirmish that the last god out decides counts one time
+	auto world = TwoHumans();
+	world.gods[k_Two].temple = false;
+	State state;
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 1u);
+	EXPECT_EQ(DecidingEvents(ProcessTurn(world, k_Skirmish, state)), 0u);
 }

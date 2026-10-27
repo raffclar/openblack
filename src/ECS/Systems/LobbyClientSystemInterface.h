@@ -168,6 +168,9 @@ public:
 	virtual void GetWeather(lobby_api::Date date, LobbyCallback<lobby_api::RealWeather> callback) = 0;
 	/// Sends the files of the player's creature to the lobby, which gives the address of the creature's web page
 	virtual void UploadCreature(lobby_api::CreatureUpload upload, LobbyCallback<lobby_api::CreatureUploadReply> callback) = 0;
+	/// Tells the lobby that a skirmish of the player is decided. The call sends no data: the session tells the lobby
+	/// which account sends it.
+	virtual void SendSkirmishPing(LobbyCallback<LobbyDone> callback) = 0;
 
 	/// A listener gets each event of the push channel, after the client used it. Returns the id of the listener.
 	virtual uint32_t AddEventListener(LobbyEventListener listener) = 0;

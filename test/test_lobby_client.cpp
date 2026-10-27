@@ -741,3 +741,29 @@ TEST_F(LobbyClientTest, CallsWithNoSessionFailWithoutACall)
 	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
 	EXPECT_TRUE(_http.sent.empty());
 }
+
+TEST_F(LobbyClientTest, TheSkirmishMessageSendsNoDataWithTheAccessToken)
+{
+	Make();
+	LogIn();
+	std::optional<bool> ok;
+	_client->SendSkirmishPing([&](auto&& result) { ok = result.Ok(); });
+	EXPECT_EQ(_http.Next().method, HttpMethod::Post);
+	EXPECT_EQ(_http.Next().url, "https://bw.example/api/v1/me/skirmish-pings");
+	EXPECT_EQ(_http.NextHeader("Authorization"), "Bearer access1");
+	EXPECT_TRUE(_http.Next().body.empty());
+	_http.Answer(204, "");
+	EXPECT_EQ(ok, true);
+}
+
+TEST_F(LobbyClientTest, TheSkirmishMessageNeedsALobbyAndASession)
+{
+	Make(lobby_api::ClientKind::Desktop, false);
+	std::optional<LobbyErrorKind> kind;
+	_client->SendSkirmishPing([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotConfigured);
+	Make();
+	_client->SendSkirmishPing([&](auto&& result) { kind = result.error.kind; });
+	EXPECT_EQ(kind, LobbyErrorKind::NotLoggedIn);
+	EXPECT_TRUE(_http.sent.empty());
+}
