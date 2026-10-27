@@ -37,6 +37,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
@@ -170,7 +171,8 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 	if (Locator::playerSystem::has_value())
 	{
 		auto& players = Locator::playerSystem::value();
-		if (const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+		if (const auto creature = players.GetPrimaryCreature(
+		        (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 		    creature.has_value() && registry.Valid(*creature))
 		{
 			if (const auto* transform = registry.TryGet<const Transform>(*creature))

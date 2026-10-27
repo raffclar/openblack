@@ -38,6 +38,7 @@
 #include "ECS/RewardOpening.h"
 #include "ECS/RewardRules.h"
 #include "ECS/Systems/ExplosionSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "GameRewardOpeningWorld.h"
@@ -83,9 +84,10 @@ float LandHeight(glm::vec3 point)
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({point.x, point.z}) : 0.0f;
 }
 
-PlayerNames LocalPlayer()
+/// The player of this computer, who hears the tap on a chest
+PlayerNames OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// What a kind of chest holds, from the game's reward table
@@ -218,7 +220,7 @@ bool RewardSystem::Tap(entt::entity chest, PlayerNames player)
 	{
 		return false;
 	}
-	if (player == LocalPlayer() && Locator::audio::has_value())
+	if (player == OwnPlayer() && Locator::audio::has_value())
 	{
 		audio::PlayGameSoundEffect(k_TapSound.value(), std::nullopt);
 	}

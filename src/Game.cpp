@@ -645,7 +645,8 @@ gui::conditions_box::Figures ConditionsFigures()
 	{
 		return figures;
 	}
-	const auto local = Locator::playerSystem::value().GetLocalPlayer();
+	const auto local =
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 	const auto landNumber = Locator::entitiesRegistry::value().Context().mapScriptGlobals.landNumber;
 	for (const auto& [god, standing] : Locator::gameEndSystem::value().Standings())
 	{
@@ -2175,7 +2176,8 @@ void Game::ProcessMusicTurn(glm::vec3 cameraPosition, bool inCitadel)
 	    .groundHeight = Locator::terrainSystem::value().GetHeightAt(glm::xz(cameraPosition)),
 	    .inCitadel = inCitadel,
 	    .alignment = alignment.GetCameraAlignment(),
-	    .playerAlignment = alignment.GetPlayerAlignment(Locator::playerSystem::value().GetLocalPlayer()),
+	    .playerAlignment = alignment.GetPlayerAlignment(
+	        (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE)),
 	    .cinema = cinema,
 	    .towns = {},
 	    .thingPosition = [](uint32_t thing) -> std::optional<glm::vec3> {
@@ -4085,7 +4087,7 @@ const gui::TextDatabase* Game::MakeInterface()
 		// The Game Statistics box takes the players' figures as it opens, from the menu and from the end box
 		const auto statistics = [] {
 			const auto local =
-			    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+			    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 			return std::pair(player_statistics::Box(), local);
 		};
 		_interface->GetMenu().SetStatisticsSource(statistics);
@@ -5727,7 +5729,7 @@ void Game::MakePlayersSymbols(std::optional<uint32_t> symbolInPlace)
 		}
 	}
 	const auto localPlayer =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	auto players = players_symbols::MakeSheet(std::move(file), designs, symbol, static_cast<uint32_t>(localPlayer), ownPicture);
 	// The sheet takes the place of the file's, kept as the game keeps a texture with an alpha
 	auto& textureManager = Locator::resources::value().GetTextures();
