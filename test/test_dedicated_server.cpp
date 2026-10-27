@@ -23,8 +23,6 @@
 
 using openblack::server::ChecksumLine;
 using openblack::server::ParseChecksumLine;
-using openblack::server::ScenarioStep;
-using openblack::server::ScenarioStepOf;
 using openblack::server::ServerConfig;
 using openblack::server::ServerSettings;
 using openblack::server::SimulationFor;
@@ -92,16 +90,6 @@ TEST(DedicatedServer, TheToolsReadTheTurnAndTheChecksumFromTheLineOfTheLog)
 	EXPECT_EQ(read->second, 0x0123456789abcdefull);
 	EXPECT_FALSE(ParseChecksumLine("turn 42 hash 0123").has_value());
 	EXPECT_FALSE(ParseChecksumLine("the land loaded").has_value());
-}
-
-// The game starts a scenario in the turns of its first frame, after its debug windows. The server starts the scenario
-// in its first frame too, and the scenario gives its first commands in the second frame.
-TEST(DedicatedServer, AScenarioGivesNoCommandsInTheFrameThatItStarts)
-{
-	EXPECT_EQ(ScenarioStepOf(true, true), ScenarioStep::Start);
-	EXPECT_EQ(ScenarioStepOf(true, false), ScenarioStep::Update);
-	EXPECT_EQ(ScenarioStepOf(false, false), ScenarioStep::None);
-	EXPECT_EQ(ScenarioStepOf(false, true), ScenarioStep::None);
 }
 
 TEST(DedicatedServer, TheServerLogsTheChecksumOfEachTurnUntilItsLastTurn)

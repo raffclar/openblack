@@ -5521,6 +5521,18 @@ bool Game::StartNetworkLand(const game_socket::Start& start)
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
 		return false;
 	}
+	// The testbed scenario of the tools comes from the server too. The scenarios' window lays it out before the first turn,
+	// as the server does. A build for players has no such window and refuses it.
+	if (start.scenario.has_value())
+	{
+		if (const auto refusal = developer_tools::ScenarioRefusalOf(developer_tools::k_Built); refusal.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The game server asks for a game this build cannot play: {}", *refusal);
+			return false;
+		}
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game plays the testbed scenario {}", *start.scenario);
+		_scenarioRequest = ScenarioRequest {.id = *start.scenario, .hideWindow = true, .benchmark = false};
+	}
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The network game starts: seed {}, date pinned", start.seed);
 	_startTestbed = start.testbed;
 	_startGodsRingMap = start.godsRingMap;

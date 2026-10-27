@@ -58,6 +58,14 @@ runs many such games.
 
     python tools/sim/net_check.py --land Playgrounds/TwoGods.txt --all-computer-gods --observers 2 --turns 2000 --ai-seed 1
 
+With --scenario (developer builds) the server plays a testbed scenario: it lays the scenario out before the first turn,
+and each client gets the scenario with the start and lays it out before the same turn. In a network game a scenario
+gives its commands before the turns, not in the frames, so every computer gives them before the same turn. The state of
+a scenario is not in the world, so the observers join the room before the start, and the server refuses a join to the
+game as it turns:
+
+    python tools/sim/net_check.py --scenario mind.computer_god_rivals --observers 1 --turns 2000
+
 The game reads its vanilla switches anywhere in its command line, as the original game did, so a path with "-multiplayer"
 or "/multiplayer" in it opens the multiplayer front end (the -MULTIPLAYER switch). The script copies the programs into
 its output folder and refuses an output folder with such a name.
@@ -749,6 +757,13 @@ def web_checksums(folder):
     return turns
 
 
+def join_order(gods, clients, scenario):
+    """The order in which the clients join: by their number, or the observers first for a scenario. The state of a
+    scenario is not in the world, so its observers must be in the room before the start."""
+    order = list(range(clients))
+    return order[gods:] + order[:gods] if scenario else order
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument("--turns", type=int, default=600, help="the turns that each client plays")
@@ -756,6 +771,9 @@ def main():
     parser.add_argument("--land", default="Land1.txt")
     parser.add_argument("--gods-ring-map", action="store_true", help="the network map for 32 gods")
     parser.add_argument("--testbed", action="store_true")
+    parser.add_argument("--scenario", help="a testbed scenario (developer builds): the server lays it out before the first "
+                                           "turn and gives it to each client with the start; every computer gives its "
+                                           "commands before the same turns. The observers join the room before the start.")
     parser.add_argument("--opening", default="cow")
     parser.add_argument("--frame-ms", type=float, default=20.0,
                         help="the frame time of the clients; 0 for their real frame time")
@@ -868,6 +886,10 @@ def main():
         parser.error("--all-computer-gods needs --observers or --web-client: the clients watch the game")
     if not options.all_computer_gods and options.clients == 0:
         parser.error("a room with no human god needs --all-computer-gods")
+    if options.scenario and (options.all_computer_gods or options.web_client or options.testbed or options.gods_ring_map):
+        # The state of a scenario is not in the world, so nobody can join its game as it turns: the room of computer gods
+        # starts at once and the web client joins late. The scenario chooses its own land.
+        parser.error("--scenario does not go with --all-computer-gods, --web-client, --testbed or --gods-ring-map")
     if options.web_client and not os.path.isfile(os.path.join(web_page_of(options), "openblack.wasm")):
         parser.error(f"--web-client needs the web build: no openblack.wasm in {web_page_of(options)}")
     desktop_clients = options.clients + options.observers
@@ -889,8 +911,8 @@ def main():
     os.makedirs(keys_dir, exist_ok=True)
     key, kid, keys_file = make_ticket_key(keys_dir)
     certs = make_certificates(keys_dir)
-    where = (["--gods-ring-map"] if options.gods_ring_map else ["--testbed"] if options.testbed
-             else ["-s", options.land, "--skip-opening", options.opening])
+    where = (["--scenario", options.scenario] if options.scenario else ["--gods-ring-map"] if options.gods_ring_map
+             else ["--testbed"] if options.testbed else ["-s", options.land, "--skip-opening", options.opening])
 
     server_dir = os.path.join(out, "server")
     server_log = os.path.join(server_dir, "server.log")
@@ -953,12 +975,14 @@ def main():
             time.sleep(options.room_wait)
         if options.leave_room_first and not leave_room(game_exe, options, url, key, kid, certs, out, server_log):
             return 1
-        clients = []
-        for index, client_dir in enumerate(client_dirs):
+        clients = [None] * desktop_clients
+        for index in join_order(options.clients, desktop_clients, bool(options.scenario)):
+            client_dir = client_dirs[index]
             os.makedirs(client_dir, exist_ok=True)
             is_observer = index >= options.clients
-            if is_observer and not options.all_computer_gods and not wait_for_line(server_log, "The network game starts",
-                                                                                   server):
+            # The observers of a scenario are in the room before the start; other observers join the game as it turns
+            if (is_observer and not options.all_computer_gods and not options.scenario
+                    and not wait_for_line(server_log, "The network game starts", server)):
                 print(f"the game did not start, so observer {index + 1} cannot join it; see {server_dir}")
                 return 1
             # The test tickets live longer than the lobby's 60 seconds, because the clients load the land first
@@ -1011,11 +1035,11 @@ def main():
                     command.append("--join-part-again")
             if options.frame_guard:
                 command.append("--sim-frame-guard")
-            clients.append(start(command, client_dir))
-            processes.append(clients[-1])
+            clients[index] = start(command, client_dir)
+            processes.append(clients[index])
             # The server gives the god slots in join order: client N must join before client N + 1 starts,
             # so that client N gets slot N - 1 and its input and camera play at that god
-            if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[-1]):
+            if not wait_for_line(os.path.join(client_dir, "client.log"), "Joined the game server", clients[index]):
                 print(f"client {index + 1} did not join; see {client_dir}")
                 return 1
             joins = lines_with(os.path.join(client_dir, "client.log"), ["Joined the game server"])
@@ -1162,6 +1186,8 @@ def main():
     summary["all_computer_gods"] = options.all_computer_gods
     summary["ai_seed"] = options.ai_seed
     summary["observers"] = options.observers
+    if options.scenario:
+        summary["scenario"] = options.scenario
     # What the computer gods did, as the server's log tells. Each client's log must tell the same gods.
     ai = sim_report.ai_actions_in_file(server_log)
     summary["ai"] = ai

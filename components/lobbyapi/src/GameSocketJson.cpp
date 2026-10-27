@@ -181,6 +181,14 @@ bool ReadStart(const Json& object, Start& start)
 		}
 		start.aiSeed = static_cast<uint32_t>(value);
 	}
+	if (const auto* scenario = Member(object, "scenario"); scenario != nullptr && !scenario->is_null())
+	{
+		if (!scenario->is_string() || scenario->get<std::string>().empty())
+		{
+			return false;
+		}
+		start.scenario = scenario->get<std::string>();
+	}
 	if (const auto* names = Member(object, "names"); names != nullptr && !names->is_null())
 	{
 		if (!names->is_array() || names->size() > k_MostSlots)
@@ -222,6 +230,10 @@ void WriteStart(const Start& start, Json& object)
 	if (start.aiSeed.has_value())
 	{
 		object["ai_seed"] = *start.aiSeed;
+	}
+	if (start.scenario.has_value())
+	{
+		object["scenario"] = *start.scenario;
 	}
 	if (!start.names.empty())
 	{
