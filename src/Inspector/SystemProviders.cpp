@@ -230,6 +230,14 @@ std::string_view StepKindName(creature_mind::Step::Kind kind)
 		return "teleport";
 	case Kind::Transported:
 		return "transported";
+	case Kind::CoolDown:
+		return "cool_down";
+	case Kind::HealItself:
+		return "heal_itself";
+	case Kind::FollowHand:
+		return "follow_hand";
+	case Kind::WatchPlayer:
+		return "watch_player";
 	case Kind::StopTeleportControl:
 		return "stop_teleport_control";
 	}
