@@ -638,7 +638,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
-	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	if (const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
 	{
 		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
@@ -3787,7 +3787,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	// The totals of the alignment changes count the change before the alignment takes it
 	if (Locator::playerSystem::has_value())
 	{
-		const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+		const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 		if (registry.Valid(playerEntity))
 		{
 			auto* history = registry.TryGet<ecs::components::AlignmentHistory>(playerEntity);
@@ -3906,7 +3906,7 @@ void GetInfluence() // 062 GET_INFLUENCE
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
 	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
-	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().GetPlayer(player)))
+	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
 		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
 	}
@@ -3928,7 +3928,8 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 	if (Locator::playerSystem::has_value())
 	{
 		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-		                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE), level);
+		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+		                                level);
 	}
 }
 
@@ -7083,7 +7084,7 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	{
 		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
-		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPlayer(name) != entt::null))
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().FindPlayer(name).has_value()))
 		{
 			inGame.push_back(name);
 		}
@@ -7119,7 +7120,7 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	if (!registry.Valid(entity))
 	{
 		return;
@@ -9094,7 +9095,7 @@ ecs::components::Player* ScriptPlayer(float number)
 	{
 		return nullptr;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(name);
+	const auto entity = Locator::playerSystem::value().FindPlayer(name).value_or(entt::null);
 	auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(entity) ? registry.TryGet<ecs::components::Player>(entity) : nullptr;
 }
