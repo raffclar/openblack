@@ -1830,3 +1830,4 @@ set_tests_properties(
 )
 openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
 openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
+openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
