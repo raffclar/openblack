@@ -26,6 +26,8 @@
 #include "3D/MapCoords.h"
 #include "Animals/GrazerRules.h"
 #include "Camera/Camera.h"
+#include "Camera/StartCamera.h"
+#include "Camera/ZoomToPlaces.h"
 #include "Common/StringUtils.h"
 #include "ECS/Archetypes/AbodeArchetype.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
@@ -50,11 +52,13 @@
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Footpath.h"
+#include "ECS/Components/Influence.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/ComputerPlayerStart.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/FootpathRules.h"
 #include "ECS/Registry.h"
@@ -76,6 +80,7 @@
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
+#include "ECS/TownAreaRules.h"
 #include "ECS/TownDesire.h"
 #include "ECS/VillageTotem.h"
 #include "ECS/WorldObjects.h"
@@ -385,8 +390,15 @@ void FeatureScriptCommands::SetTownUninhabitable(int32_t townId)
 
 void FeatureScriptCommands::SetTownCongregationPos(int32_t townId, glm::vec3 position)
 {
-	SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {}({}, {}) not implemented.", __FILE__, __LINE__,
-	                    __func__, townId, glm::to_string(position));
+	// The town with the number gets its gathering place at the map position of the text
+	const auto town = TownWithId(townId);
+	if (town == entt::null)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	registry.Get<Town>(town).congregationPos =
+	    ecs::town_area::GatheringPlaceFromScript(map_coords::ScriptPlace(position.x, position.z));
 }
 
 void FeatureScriptCommands::CreateAbode(int32_t townId, glm::vec3 position, const std::string& abodeInfo, int32_t rotation,
@@ -837,12 +849,10 @@ void FeatureScriptCommands::CreateArea([[maybe_unused]] glm::vec3 position, floa
 
 void FeatureScriptCommands::StartCameraPos(glm::vec3 focus)
 {
-	static constexpr auto k_DefaultCameraOriginOffset = 120.0f;
-	static constexpr auto k_DefaultCameraOriginOffsetAngles = glm::radians(glm::vec2(12.8571f, 157.51f));
-
 	auto& camera = Locator::camera::value();
-	const auto offset = k_DefaultCameraOriginOffset * glm::euclidean(k_DefaultCameraOriginOffsetAngles);
-	camera.SetFocus(focus).SetOrigin(focus + offset);
+	camera.SetFocus(focus).SetOrigin(start_camera::OriginOver(focus));
+	// The land keeps the place, because a game that starts at the origin of the map starts at the player's temple
+	Locator::landSystem::value().SetStartCameraPlace({zoom_to::MapCoordOf(focus.x), zoom_to::MapCoordOf(focus.z)});
 }
 
 void FeatureScriptCommands::FlyByFile([[maybe_unused]] const std::string& path)
@@ -874,10 +884,19 @@ void FeatureScriptCommands::CreateNewBigForest(glm::vec3 position, BigForestInfo
 	BigForestArchetype::Create(position, type, unknown, rotation, scale);
 }
 
-void FeatureScriptCommands::CreateInfluenceRing([[maybe_unused]] glm::vec3 position, int32_t, float, int32_t)
+void FeatureScriptCommands::CreateInfluenceRing(glm::vec3 position, int32_t player, float radius, int32_t anti)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// A ring of influence that stays at the place, for the player of the number, as a script makes one. A last value
+	// other than 0 makes it an anti-influence: the player then has no influence at all within it.
+	if (player < 0 || player >= static_cast<int32_t>(PlayerNames::_COUNT))
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto ring = registry.Create();
+	registry.Assign<Transform>(ring, position, glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<InfluenceSource>(ring, static_cast<PlayerNames>(player), radius, anti != 0, entt::null);
+	LastObject() = ring;
 }
 
 void FeatureScriptCommands::CreateWeatherClimate(int32_t index, int32_t type, glm::vec3 position, float radius1, float radius2)
@@ -1040,8 +1059,10 @@ void FeatureScriptCommands::SetInteractDesire(float)
 
 void FeatureScriptCommands::ToggleComputerPlayer(const std::string& affiliation, int32_t toggle)
 {
-	// Any value but 0 switches the computer mind of the player on, and 0 switches it off
-	if (Locator::computerPlayerSystem::has_value())
+	// Any value but 0 switches the computer mind of the player on, and 0 switches it off. The map script of a network
+	// game does not do this, so that a human's god gets no computer mind.
+	const bool networkMapScript = Locator::landSystem::has_value() && Locator::landSystem::value().RunsNetworkMapScript();
+	if (Locator::computerPlayerSystem::has_value() && computer_player::LandScriptSwitchesMind(networkMapScript))
 	{
 		Locator::computerPlayerSystem::value().SwitchOn(GetPlayerName(affiliation), toggle != 0);
 	}

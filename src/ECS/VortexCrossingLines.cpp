@@ -17,6 +17,7 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "Common/PortableMath.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/CarriedByTornado.h"
 #include "ECS/Components/DeadTree.h"
@@ -53,7 +54,7 @@ int32_t TownNumber(const ecs::Registry& registry, entt::entity town)
 float YAngleOf(const glm::mat3& rotation)
 {
 	// Taken from 0 so that no turn reads as -0
-	return 0.0f - std::atan2(rotation[2][0], rotation[0][0]);
+	return 0.0f - portable_math::Atan2(rotation[2][0], rotation[0][0]);
 }
 
 /// Turned about x, then y, then z: the three angles back

@@ -14,6 +14,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtx/euler_angles.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Stream.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
@@ -29,9 +30,9 @@ entt::entity StreamSegmentArchetype::Create(const glm::vec3& from, const glm::ve
 	const auto entity = registry.Create();
 
 	// The meshes' x turns to point from one point to the next across the ground, and stretches to reach it
-	const float angle = std::atan2(to.z - from.z, to.x - from.x);
+	const float angle = portable_math::Atan2(to.z - from.z, to.x - from.x);
 	const float stretch = glm::distance(from, to) / StreamSegment::k_MeshLength;
-	registry.Assign<Transform>(entity, from, glm::eulerAngleY(-angle), glm::vec3(stretch, 1.0f, 1.0f));
+	registry.Assign<Transform>(entity, from, portable_math::EulerAngleY(-angle), glm::vec3(stretch, 1.0f, 1.0f));
 	registry.Assign<StreamSegment>(entity);
 
 	return entity;

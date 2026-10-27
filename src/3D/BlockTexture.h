@@ -117,11 +117,13 @@ void PaintCells(std::span<const lnd::LNDCell> cells, const Sources& sources, glm
 
 /// The cells of a block by its index
 using CellsOfBlock = std::function<std::span<const lnd::LNDCell>(size_t block)>;
-/// Takes the texture of a block, BlockBytesOf(sources.resolution) RGBA8 bytes, as BuildBlock paints it
-using TakeBlock = std::function<void(size_t block, std::span<const uint8_t> rgba)>;
+/// The memory of a block's texture, BlockBytesOf(sources.resolution) long, that BuildBlocks paints into. The lanes of the pool call it, so it
+/// must only give memory that is ready for the block.
+using MemoryOfBlock = std::function<std::span<uint8_t>(size_t block)>;
 
-/// Paints the blocks as BuildBlock does, and shares the work among the pool's lanes. The calling thread takes each
-/// block's texture in the order of the blocks.
-void BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool, const TakeBlock& take);
+/// Paints the blocks as BuildBlock does, each into its own memory, and shares the work among the pool's lanes. It
+/// returns when it painted all the blocks.
+void BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool,
+                 const MemoryOfBlock& into);
 } // namespace block_texture
 } // namespace openblack

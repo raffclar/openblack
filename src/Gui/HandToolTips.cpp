@@ -38,6 +38,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
@@ -53,7 +54,11 @@ namespace
 {
 using namespace ecs::components;
 
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
+/// The player of this computer, whose buildings the tool tips tell of
+PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 
 /// Whether a building of the world belongs to the local player or to no player, none for a thing that is not a
 /// building that the player can build or repair
@@ -64,21 +69,21 @@ std::optional<bool> OwnOrNoPlayer(const ecs::Registry& registry, entt::entity ob
 		// A building belongs to the player of its town. A neutral town has the neutral player.
 		const auto town = ecs::town_homes::TownOfAbode(registry, object);
 		const auto* data = town != entt::null && registry.Valid(town) ? registry.TryGet<const Town>(town) : nullptr;
-		return data == nullptr || data->owner == k_LocalPlayer;
+		return data == nullptr || data->owner == OwnPlayer();
 	}
 	// A miracle dispenser is a building of its town in the same way
 	if (const auto* dispenser = registry.TryGet<const SpellDispenser>(object))
 	{
 		const auto* data = registry.Valid(dispenser->town) ? registry.TryGet<const Town>(dispenser->town) : nullptr;
-		return data == nullptr || data->owner == k_LocalPlayer;
+		return data == nullptr || data->owner == OwnPlayer();
 	}
 	if (const auto* temple = registry.TryGet<const Temple>(object))
 	{
-		return temple->owner == k_LocalPlayer;
+		return temple->owner == OwnPlayer();
 	}
 	if (const auto* site = registry.TryGet<const WorshipSite>(object))
 	{
-		return site->player == k_LocalPlayer;
+		return site->player == OwnPlayer();
 	}
 	return std::nullopt;
 }
@@ -181,7 +186,7 @@ std::optional<Offer> TapOf(entt::entity object)
 	}
 	// The player's own reward chest opens once
 	if (const auto* reward = registry.TryGet<const Reward>(object);
-	    reward != nullptr && reward->player == k_LocalPlayer && reward->state != Reward::State::Opened)
+	    reward != nullptr && reward->player == OwnPlayer() && reward->state != Reward::State::Opened)
 	{
 		return TapOffer(TapKind::Open);
 	}

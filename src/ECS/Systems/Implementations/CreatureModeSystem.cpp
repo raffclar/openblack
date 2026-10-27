@@ -20,9 +20,11 @@
 #include "Camera/DanceCameraModel.h"
 #include "Camera/DefaultWorldCameraModel.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "Input/GameActionMapInterface.h"
@@ -34,9 +36,6 @@ namespace openblack::ecs::systems
 
 namespace
 {
-/// The local player, whose creature C locks onto
-constexpr PlayerNames k_LocalPlayer = PlayerNames::PLAYER_ONE;
-
 bool TempleActive()
 {
 	return Locator::temple::has_value() && Locator::temple::value().Active();
@@ -53,7 +52,10 @@ std::optional<entt::entity> CreatureModeSystem::PlayersCreature() const
 	{
 		return std::nullopt;
 	}
-	return Locator::playerSystem::value().GetPrimaryCreature(k_LocalPlayer);
+	// C locks onto the creature of the player whose hand this computer moves
+	const auto player =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::playerSystem::value().GetPrimaryCreature(player);
 }
 
 std::optional<creature_follow::View> CreatureModeSystem::GetView() const
@@ -124,7 +126,9 @@ bool CreatureModeSystem::Enter(entt::entity creature)
 		return false;
 	}
 	const auto& body = registry.Get<const components::Creature>(creature);
-	const auto& transform = registry.Get<const components::Transform>(creature);
+	// The camera follows the body where the frame draws it
+	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(creature),
+	                                                  registry.TryGet<const components::CreatureAnimation>(creature));
 	auto model = std::make_unique<CreatureCameraModel>(camera.GetOrigin(), camera.GetFocus(), transform.position,
 	                                                   creature_mode::CreatureHeight(ShownSize(body)));
 	_model = model.get();
@@ -258,7 +262,8 @@ void CreatureModeSystem::Update(std::chrono::microseconds dt, const Frame& frame
 
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto& body = registry.Get<const components::Creature>(*_creature);
-	const auto& transform = registry.Get<const components::Transform>(*_creature);
+	const auto transform = components::DrawnTransform(registry.Get<const components::Transform>(*_creature),
+	                                                  registry.TryGet<const components::CreatureAnimation>(*_creature));
 	_model->SetTarget(transform.position, creature_mode::CreatureHeight(ShownSize(body)));
 
 	if (_held.seconds > 0.0f)

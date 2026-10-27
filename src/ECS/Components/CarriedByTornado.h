@@ -10,6 +10,10 @@
 #pragma once
 
 #include <memory>
+#include <optional>
+
+#include <glm/mat3x3.hpp>
+#include <glm/vec3.hpp>
 
 namespace openblack::particles
 {
@@ -25,6 +29,14 @@ namespace openblack::ecs::components
 struct CarriedByTornado
 {
 	std::shared_ptr<particles::CarriedObject> carried;
+	/// Where the frame draws the thing, between the last two steps of its particle. Only the draw reads it.
+	struct Drawn
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+	};
+	/// Empty: the thing is drawn where its Transform puts it
+	std::optional<Drawn> drawn;
 };
 
 /// A creature a tornado has caught: too big to be picked up, it stands helpless and is let off the leash, once

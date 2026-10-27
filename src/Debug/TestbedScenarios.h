@@ -31,6 +31,11 @@ class TestbedScenarios final: public Window
 {
 public:
 	explicit TestbedScenarios(CreatureSpawner& spawner) noexcept;
+	~TestbedScenarios() override;
+	TestbedScenarios(const TestbedScenarios&) = delete;
+	TestbedScenarios& operator=(const TestbedScenarios&) = delete;
+	TestbedScenarios(TestbedScenarios&&) = delete;
+	TestbedScenarios& operator=(TestbedScenarios&&) = delete;
 
 protected:
 	void Draw() noexcept override;
@@ -59,6 +64,8 @@ private:
 	size_t _focus {0};
 	/// Where the last benchmark's results were written
 	std::string _savedTo;
+	/// Whether the game lays out the scenarios that are asked for through this window
+	bool _stagerSet {false};
 };
 
 } // namespace openblack::debug::gui

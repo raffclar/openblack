@@ -9,6 +9,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <cstring>
 
 #include <gtest/gtest.h>
 
@@ -89,4 +90,44 @@ TEST(GodsRingLand, ABlockOfOnlySeaHasNoLand)
 	ASSERT_EQ(data.materials.size(), 1u);
 	EXPECT_EQ(data.materials.front().type, flat_land::k_GrassMaterial);
 	EXPECT_EQ(data.countries.size(), 1u);
+}
+
+TEST(GodsRingLand, TheBuildHasTheCellsOfCellAtAndEachBlockWithLand)
+{
+	const auto data = Build();
+	constexpr int k_Cells = 16;
+	constexpr int k_Corners = k_Cells + 1;
+	size_t withLand = 0;
+	for (int x = 0; x < LandData::k_BlocksPerSide; ++x)
+	{
+		for (int z = 0; z < LandData::k_BlocksPerSide; ++z)
+		{
+			bool land = false;
+			for (int cx = 0; cx < k_Cells && !land; ++cx)
+			{
+				for (int cz = 0; cz < k_Cells && !land; ++cz)
+				{
+					land = KindOf((x * k_Cells) + cx, (z * k_Cells) + cz) != flat_land::CellKind::OpenWater;
+				}
+			}
+			const auto index = data.blockIndexLookup.at(static_cast<size_t>((x * LandData::k_BlocksPerSide) + z));
+			EXPECT_EQ(index != 0, land) << "block " << x << " " << z;
+			if (index == 0)
+			{
+				continue;
+			}
+			++withLand;
+			const auto& block = data.blocks.at(index - 1u);
+			for (int cx = 0; cx < k_Corners; ++cx)
+			{
+				for (int cz = 0; cz < k_Corners; ++cz)
+				{
+					const auto expected = CellAt((x * k_Cells) + cx, (z * k_Cells) + cz);
+					const auto& cell = block.cells.at(static_cast<size_t>((cx * k_Corners) + cz));
+					ASSERT_EQ(std::memcmp(&cell, &expected, sizeof(cell)), 0) << "block " << x << " " << z;
+				}
+			}
+		}
+	}
+	EXPECT_EQ(withLand, data.blocks.size());
 }

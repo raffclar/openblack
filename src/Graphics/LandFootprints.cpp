@@ -150,10 +150,19 @@ void LandFootprints::MarkBlocks(glm::ivec2 lowBlock, glm::ivec2 highBlock)
 void LandFootprints::FindChangedThings()
 {
 	const auto& registry = Locator::entitiesRegistry::value();
-	for (auto& known : _known)
+	// A thing that went while the land was not drawn, as in the temple of a network game where the world goes on, can
+	// leave its number to a new thing. The footprint of the thing that went comes off first.
+	std::vector<entt::entity> gone;
+	for (const auto [entity, known] : _known.each())
 	{
 		known.seen = false;
+		if (!registry.Valid(entity))
+		{
+			MarkBlocks(known.lowBlock, known.highBlock);
+			gone.push_back(entity);
+		}
 	}
+	_known.erase(gone.begin(), gone.end());
 	// Only a thing filed in the map's cells counts: the game paints a footprint when its thing goes into the cells, and
 	// paints it no more once the thing comes out of them. A known thing that is not in the cells now is not seen, and the
 	// loop after this one removes it.

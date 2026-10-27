@@ -115,7 +115,7 @@ uint16_t block_texture::CountryTexel(const lnd::LNDCountry& country, int32_t h, 
 	}
 	// The country's materials for the height, lifted by the noise
 	const auto level = static_cast<size_t>(std::min((h >> 8) + static_cast<int32_t>(noise), 255));
-	const auto& entry = country.materials.at(level);
+	const auto& entry = country.materials[level];
 	const uint32_t b = bump;
 	const uint32_t first = MaterialTexel(materials, entry.indices[0], texelIndex);
 	uint32_t red = 0;
@@ -172,8 +172,10 @@ void block_texture::PaintCells(std::span<const lnd::LNDCell> cells, const Source
 	const auto perCell = TexelsPerCellOf(sources.resolution);
 	std::vector<uint16_t> texels(static_cast<size_t>(std::max(cellCount.x, 0) * std::max(cellCount.y, 0)) * perCell * perCell);
 	PaintCellTexels(cells, sources, firstCell, cellCount, texels);
-	std::ranges::fill(rgba, uint8_t {0});
-	ToRgba(texels, rgba.first(std::min(rgba.size(), texels.size() * 4)));
+	// The texels fill the start of rgba, and what is left after them is clear
+	const auto painted = std::min(rgba.size(), texels.size() * 4);
+	ToRgba(texels, rgba.first(painted));
+	std::ranges::fill(rgba.subspan(painted), uint8_t {0});
 }
 
 void block_texture::BuildBlockTexels(std::span<const lnd::LNDCell> cells, const Sources& sources, std::span<uint16_t> texels)
@@ -184,14 +186,14 @@ void block_texture::BuildBlockTexels(std::span<const lnd::LNDCell> cells, const 
 void block_texture::ToRgba(std::span<const uint16_t> texels, std::span<uint8_t> rgba)
 {
 	const auto count = std::min(texels.size(), rgba.size() / 4);
-	for (size_t i = 0; i < count; ++i)
+	auto* out = rgba.data();
+	for (const auto texel : texels.first(count))
 	{
-		const auto texel = texels[i];
-		const auto out = rgba.subspan(i * 4, 4);
 		out[0] = static_cast<uint8_t>(((texel >> 8) & 0xF) * 17);
 		out[1] = static_cast<uint8_t>(((texel >> 4) & 0xF) * 17);
 		out[2] = static_cast<uint8_t>((texel & 0xF) * 17);
 		out[3] = static_cast<uint8_t>(((texel >> 12) & 0xF) * 17);
+		out += 4;
 	}
 }
 
@@ -217,15 +219,12 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 	const auto countryOf = [&sources](const lnd::LNDCell& cell) -> const lnd::LNDCountry& {
 		return sources.countries[std::min<size_t>(cell.properties.country, sources.countries.size() - 1)];
 	};
-	const auto firstX = firstCell.x * k_TexelsPerCell;
-	const auto firstZ = firstCell.y * k_TexelsPerCell;
-	for (int row = 0; row < rows; ++row)
+	// Cell by cell: the corners and their countries are the same for all the texels of a cell
+	for (int cellX = firstCell.x; cellX < firstCell.x + cellCount.x; ++cellX)
 	{
-		const auto x = firstX + (row * step);
-		for (int column = 0; column < columns; ++column)
+		for (int cellZ = firstCell.y; cellZ < firstCell.y + cellCount.y; ++cellZ)
 		{
-			const auto z = firstZ + (column * step);
-			const auto cellIndex = static_cast<size_t>(((x / k_TexelsPerCell) * k_CellsPerSide) + (z / k_TexelsPerCell));
+			const auto cellIndex = static_cast<size_t>((cellX * k_CellsPerSide) + cellZ);
 			const auto& cell = cells[cellIndex];
 			if ((cell.flags & k_OpenSeaFlag) != 0)
 			{
@@ -233,52 +232,54 @@ void block_texture::PaintCellTexels(std::span<const lnd::LNDCell> cells, const S
 			}
 			const std::array<const lnd::LNDCell*, 4> corners = {
 			    &cell, &cells[cellIndex + 1], &cells[cellIndex + k_CellsPerSide + 1], &cells[cellIndex + k_CellsPerSide]};
-			const auto& weights =
-			    coneWeights.at(static_cast<size_t>(((x % k_TexelsPerCell) * k_TexelsPerCell) + (z % k_TexelsPerCell)));
-			int32_t h = 0;
-			for (size_t k = 0; k < corners.size(); ++k)
-			{
-				h += static_cast<int32_t>(weights.at(k)) * corners.at(k)->altitude;
-			}
-			const auto index = static_cast<size_t>((x * k_Side) + z);
-			const uint8_t noise = index < sources.noise.size() ? sources.noise[index] : uint8_t {0};
-			const uint8_t bump = index < sources.bump.size() ? sources.bump[index] : uint8_t {0x80};
-
-			uint16_t texel = 0;
 			const auto country = cell.properties.country;
-			if (std::ranges::all_of(corners, [country](const auto* c) { return c->properties.country == country; }))
+			const bool oneCountry =
+			    std::ranges::all_of(corners, [country](const auto* c) { return c->properties.country == country; });
+			const std::array<const lnd::LNDCountry*, 4> countries = {&countryOf(*corners[0]), &countryOf(*corners[1]),
+			                                                         &countryOf(*corners[2]), &countryOf(*corners[3])};
+			const std::array<int32_t, 4> altitudes = {corners[0]->altitude, corners[1]->altitude, corners[2]->altitude,
+			                                          corners[3]->altitude};
+			for (int i = 0; i < k_TexelsPerCell; i += step)
 			{
-				texel = CountryTexel(countryOf(cell), h, noise, bump, sources.materials, index);
-			}
-			else
-			{
-				std::array<uint16_t, 4> painted {};
-				for (size_t k = 0; k < corners.size(); ++k)
+				const int x = (cellX * k_TexelsPerCell) + i;
+				for (int j = 0; j < k_TexelsPerCell; j += step)
 				{
-					painted.at(k) = CountryTexel(countryOf(*corners.at(k)), h, noise, bump, sources.materials, index);
-				}
-				texel = BlendCorners(painted, weights);
-			}
+					const int z = (cellZ * k_TexelsPerCell) + j;
+					const auto& weights = coneWeights[static_cast<size_t>((i * k_TexelsPerCell) + j)];
+					const int32_t h =
+					    (static_cast<int32_t>(weights[0]) * altitudes[0]) + (static_cast<int32_t>(weights[1]) * altitudes[1]) +
+					    (static_cast<int32_t>(weights[2]) * altitudes[2]) + (static_cast<int32_t>(weights[3]) * altitudes[3]);
+					const auto index = static_cast<size_t>((x * k_Side) + z);
+					const uint8_t noise = index < sources.noise.size() ? sources.noise[index] : uint8_t {0};
+					const uint8_t bump = index < sources.bump.size() ? sources.bump[index] : uint8_t {0x80};
 
-			texels[static_cast<size_t>((row * columns) + column)] = texel;
+					uint16_t texel = 0;
+					if (oneCountry)
+					{
+						texel = CountryTexel(*countries[0], h, noise, bump, sources.materials, index);
+					}
+					else
+					{
+						const std::array<uint16_t, 4> painted = {
+						    CountryTexel(*countries[0], h, noise, bump, sources.materials, index),
+						    CountryTexel(*countries[1], h, noise, bump, sources.materials, index),
+						    CountryTexel(*countries[2], h, noise, bump, sources.materials, index),
+						    CountryTexel(*countries[3], h, noise, bump, sources.materials, index)};
+						texel = BlendCorners(painted, weights);
+					}
+
+					const auto row = ((cellX - firstCell.x) * perCell) + (i / step);
+					const auto column = ((cellZ - firstCell.y) * perCell) + (j / step);
+					texels[static_cast<size_t>((row * columns) + column)] = texel;
+				}
+			}
 		}
 	}
 }
 
 void block_texture::BuildBlocks(size_t count, const CellsOfBlock& cellsOf, const Sources& sources, WorkerPool& pool,
-                                const TakeBlock& take)
+                                const MemoryOfBlock& into)
 {
-	// The lanes paint a few blocks each into their own memory. Then the calling thread takes them in order.
-	const size_t batch = pool.GetLaneCount() * 2;
-	std::vector<std::vector<uint8_t>> painted(std::min(batch, count), std::vector<uint8_t>(BlockBytesOf(sources.resolution)));
-	for (size_t first = 0; first < count; first += batch)
-	{
-		const size_t inBatch = std::min(batch, count - first);
-		pool.ForEach(inBatch,
-		             [&](size_t index, size_t /*lane*/) { BuildBlock(cellsOf(first + index), sources, painted[index]); });
-		for (size_t index = 0; index < inBatch; ++index)
-		{
-			take(first + index, painted[index]);
-		}
-	}
+	// Each lane paints whole blocks straight into their own memory, so the function copies nothing after
+	pool.ForEach(count, [&](size_t block, size_t /*lane*/) { BuildBlock(cellsOf(block), sources, into(block)); });
 }

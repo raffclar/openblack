@@ -121,6 +121,8 @@ public:
 	void SaveState(ecs::reflection::BinaryWriter& out) const override;
 	/// A load gives the temple the kept dialogue back, to give back to the world in ShowHelpAfterLoad
 	bool LoadState(ecs::reflection::BinaryReader& in) override;
+	[[nodiscard]] ecs::Registry& GetRooms() override { return *_rooms; }
+	[[nodiscard]] const ecs::Registry& GetRooms() const override { return *_rooms; }
 
 private:
 	/// Takes down what the temple made for the visit and gives the camera and drawing back to the island
@@ -131,6 +133,8 @@ private:
 	void BringBackDialogue();
 
 	bool _active {false};
+	/// The things of the rooms, made as the player goes in and taken down as the player leaves
+	std::unique_ptr<ecs::Registry> _rooms;
 	/// The room that the player goes into after the frame that is drawn now
 	std::optional<TempleRoom> _activateAfterFrame;
 	/// The room the player last came into on this visit, whose help was asked for then

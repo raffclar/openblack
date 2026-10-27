@@ -313,6 +313,24 @@ TEST(InspectorCamera, AnglesRoundTrip)
 	EXPECT_NEAR(origin.z, pose.origin.z, 1e-3);
 }
 
+TEST(InspectorCamera, ADifferentShownCameraAsksForTheDrawListAgain)
+{
+	ShownCameraCuts cuts;
+	const CameraPose picture {.origin = {2485.0f, 70.0f, 2528.0f}, .focus = {2485.0f, 52.0f, 2550.0f}};
+	const CameraPose other {.origin = {100.0f, 70.0f, 100.0f}, .focus = picture.focus};
+	// The game's own camera on each frame is not a change
+	EXPECT_FALSE(cuts.Next(std::nullopt));
+	EXPECT_FALSE(cuts.Next(std::nullopt));
+	// A picture's camera that comes, stays for its frames, then goes
+	EXPECT_TRUE(cuts.Next(picture));
+	EXPECT_FALSE(cuts.Next(picture));
+	EXPECT_TRUE(cuts.Next(std::nullopt));
+	// The next picture after the game's camera, then a different pose without a frame between them
+	EXPECT_TRUE(cuts.Next(picture));
+	EXPECT_TRUE(cuts.Next(other));
+	EXPECT_FALSE(cuts.Next(other));
+}
+
 namespace
 {
 

@@ -14,6 +14,7 @@
 #include <algorithm>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 
 using namespace openblack;
@@ -50,8 +51,8 @@ void Mirror(glm::mat4& m)
 /// A turn about the vertical, the first axis towards +z by the angle's sine
 glm::mat4 TurnedBy(double angle)
 {
-	const auto c = static_cast<float>(std::cos(angle));
-	const auto s = static_cast<float>(std::sin(angle));
+	const auto c = static_cast<float>(portable_math::Cos(angle));
+	const auto s = static_cast<float>(portable_math::Sin(angle));
 	glm::mat4 m(1.0f);
 	m[0] = glm::vec4(c, 0.0f, s, 0.0f);
 	m[2] = glm::vec4(-s, 0.0f, c, 0.0f);

@@ -15,6 +15,7 @@
 #include <algorithm>
 
 #include "3D/MapCoords.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 
@@ -38,8 +39,8 @@ bool temple_pen::BetweenWalls(glm::vec2 heart, float heartYAngle, glm::vec2 poin
 	bool inside = true;
 	for (int wall = 0; wall < 2; ++wall)
 	{
-		const double sine = std::sin(angle);
-		const auto cosine = static_cast<double>(static_cast<float>(std::cos(angle)));
+		const double sine = portable_math::Sin(angle);
+		const auto cosine = static_cast<double>(static_cast<float>(portable_math::Cos(angle)));
 		// Each wall runs out from the heart along its turn; the point must be on the pen's side of both
 		const double side = wall == 0 ? (cosine * dz) + (-sine * dx) : (-cosine * dz) + (sine * dx);
 		if (side < 0.0)
