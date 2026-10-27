@@ -1169,8 +1169,8 @@ std::unique_ptr<ProviderInterface> LivingProvider()
 	provider->Add(
 	    Query(
 	        "animal",
-	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, clip, flock "
-	        "and town, its kind's radius, where it moves to, whether "
+	        "An animal: its kind, state (and the game's number of the state it is in for itself), count of turns, "
+	        "whether a kill made it start to die, clip, flock and town, its kind's radius, where it moves to, whether "
 	        "a creature fears it, and a grazer's needs",
 	        {IdParameter("The animal's entity id")}),
 	    Serve<Locator::animalSystem>(
