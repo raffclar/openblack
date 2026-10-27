@@ -12,6 +12,9 @@
 #include "ComputerPlayerSystem.h"
 
 #include <algorithm>
+#include <exception>
+#include <filesystem>
+#include <optional>
 #include <span>
 #include <string>
 #include <tuple>
@@ -40,7 +43,9 @@
 #include "ECS/Systems/CreatureMindSystemInterface.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ProfileFolderSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
+#include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
 #include "ScriptHeaders/ScriptPropertyRules.h"
 
@@ -251,6 +256,35 @@ private:
 	ComputerPlayerSystemInterface& _minds;
 };
 
+/// The places of a personality file, in the order that a load looks at them. A full path is the only place. A relative
+/// name is in the profile folder, then in the game folder. A save writes only to the first place.
+std::vector<std::filesystem::path> PersonalityPlaces(std::string_view file)
+{
+	std::vector<std::filesystem::path> places;
+	const std::filesystem::path name(file);
+	if (name.empty())
+	{
+		return places;
+	}
+	if (name.is_absolute())
+	{
+		places.push_back(name);
+		return places;
+	}
+	if (Locator::profileFolderSystem::has_value())
+	{
+		if (const auto folder = Locator::profileFolderSystem::value().GetFolder(); folder.has_value())
+		{
+			places.push_back(*folder / name);
+		}
+	}
+	if (Locator::filesystem::has_value())
+	{
+		places.push_back(Locator::filesystem::value().GetGamePath() / name);
+	}
+	return places;
+}
+
 } // namespace
 
 ComputerPlayerSystem::ComputerPlayerSystem()
@@ -457,6 +491,49 @@ float ComputerPlayerSystem::Attitude(PlayerNames player, PlayerNames other) cons
 	}
 	const auto* attitudes = PlayerComponent<const ComputerAttitudes>(player);
 	return player_relations::ReadAttitude(attitudes != nullptr ? attitudes->kept.at(index) : ComputerAttitudes::k_StartValue);
+}
+
+bool ComputerPlayerSystem::SavePersonality(PlayerNames player, std::string_view file)
+{
+	const auto places = PersonalityPlaces(file);
+	if (places.empty() || !Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	// A player with no mind yet has the first weights of each node
+	const auto* found = FindMind(player);
+	const auto bytes = computer_mind::PersonalityFile(found != nullptr ? found->mind : computer_mind::MakeMind());
+	return Locator::filesystem::value().WriteAll(places.front(), bytes);
+}
+
+bool ComputerPlayerSystem::LoadPersonality(PlayerNames player, std::string_view file)
+{
+	if (!Locator::filesystem::has_value())
+	{
+		return false;
+	}
+	auto& files = Locator::filesystem::value();
+	for (const auto& place : PersonalityPlaces(file))
+	{
+		if (!files.Exists(place))
+		{
+			continue;
+		}
+		std::vector<uint8_t> bytes;
+		try
+		{
+			bytes = files.ReadAll(place);
+		}
+		catch (const std::exception& error)
+		{
+			// The game cannot open a folder or a locked file, so the load looks at the next place
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The personality file {} did not open: {}", place.string(), error.what());
+			continue;
+		}
+		computer_mind::ReadPersonalityFile(MindOf(player).mind, bytes);
+		return true;
+	}
+	return false;
 }
 
 void ComputerPlayerSystem::ProcessTurn()

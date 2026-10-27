@@ -184,6 +184,8 @@ struct NodeInfo
 {
 	/// The name that the land scripts use for the node
 	std::string_view name;
+	/// The number of the text of the node. A personality file writes it after the name. The root has no number.
+	std::optional<uint16_t> text;
 	Layer layer {Layer::Root};
 	/// The weight that the node starts with: its personality
 	float weight {1.0f};
@@ -374,5 +376,18 @@ bool SetPersonality(Mind& mind, std::string_view name, float weight);
 bool SetSuppression(Mind& mind, std::string_view name, float suppression);
 /// The nodes that a name finds, in the order that the game finds them
 [[nodiscard]] std::vector<uint16_t> FindNodes(const Mind& mind, std::string_view name);
+
+/// The name of a kind of node in a personality file: the name for the land scripts, then a colon, the number of its
+/// text and a space. The root has only its name.
+[[nodiscard]] std::string PersonalityName(NodeKind kind);
+/// The personality file of a god, as a land script saves it. For each node, root first and then each branch of a child
+/// in turn, the file has the name of the node with a zero byte after it, then the weight in four bytes, low byte first.
+[[nodiscard]] std::vector<uint8_t> PersonalityFile(const Mind& mind);
+/// A land script loads the weights of a personality file into the god. The load reads the nodes in the order of the
+/// save, and does not compare the names in the file with the names of the nodes:
+/// - For each node, it skips the bytes of the name of the node and its zero byte.
+/// - Then it reads the four bytes of the weight.
+/// - When the file ends, the load stops. A weight that the file cuts keeps the bytes that the file does not give.
+void ReadPersonalityFile(Mind& mind, std::span<const uint8_t> bytes);
 
 } // namespace openblack::computer_mind
