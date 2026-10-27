@@ -85,4 +85,27 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
 	});
+	all.push_back({
+	    .id = "mind.computer_god_defend_after_fire",
+	    .name = "A computer god whose town burns, then defends it with the shield miracle",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town to the north that offers the shield miracle. A hut of the town burns from the "
+	                   "start, so that the town keeps a record of the attack. After 30 seconds, a testbed tool puts the "
+	                   "action DefendtownWithSpells in the queue of the god, with the town and the shield icon, as a land "
+	                   "script does.",
+	    .expected = "The hut burns and the town keeps the record of the fire. The hand of the god moves to the "
+	                "shield icon of the site, and the worshippers chant for the miracle. When the charge is full, the "
+	                "hand flies to the middle of the town and casts the shield there. The record of the attack stays "
+	                "in a saved and loaded game.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = {0.0f, 70.0f}, .life = 0.5f, .alight = true}},
+	    .landScript = k_ComputerGodDefenceScript,
+	    .worshipShare = 0.5f,
+	    .objectsAfterLandScript = true,
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "DefendtownWithSpells",
+	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
+	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
+	});
 }
