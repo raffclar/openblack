@@ -63,10 +63,10 @@ void AlignmentHistory::Draw() noexcept
 	if (Locator::playerSystem::has_value() && Locator::entitiesRegistry::has_value())
 	{
 		const auto& registry = Locator::entitiesRegistry::value();
-		const auto player = Locator::playerSystem::value().GetPlayer(Locator::playerSystem::value().GetLocalPlayer());
-		if (registry.Valid(player))
+		const auto player = Locator::playerSystem::value().FindPlayer(Locator::playerSystem::value().GetLocalPlayer());
+		if (player.has_value() && registry.Valid(*player))
 		{
-			history = registry.TryGet<ecs::components::AlignmentHistory>(player);
+			history = registry.TryGet<ecs::components::AlignmentHistory>(*player);
 		}
 	}
 	const ecs::components::AlignmentHistory none {};
