@@ -42,7 +42,7 @@ CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
 /// The lines of a land that give player two a computer mind, a temple and a Celtic town that offers the heal miracle,
-/// with a full storage pit and two abodes of people
+/// with a full storage pit and eight abodes of people, so that enough dancers charge the miracle
 constexpr std::string_view k_HealMiracleTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
 CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
@@ -56,15 +56,45 @@ CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
 CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "40.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,82.0", "40.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,82.0", "40.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,82.0", "40.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,82.0", "40.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "60.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("56.0,82.0", "60.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,82.0", "60.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("56.0,82.0", "60.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,82.0", "60.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,82.0", "-40.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,82.0", "-40.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,82.0", "-40.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,82.0", "-40.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-60.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,82.0", "-60.0,80.0", "CELTIC_FORESTER", 20)
 )";
 
 /// The lines of a land that give player two a computer mind, a temple and a Celtic town that offers the wood miracle,
-/// with a storage pit full of food but with no wood, and two abodes of people
+/// with a full storage pit and two abodes of people
 constexpr std::string_view k_WoodMiracleTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
 CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
 CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
@@ -72,7 +102,7 @@ SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
 CREATE_NEW_TOWN_SPELL(900, "WOOD")
 SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
 CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
-CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 3000, 3000)
 CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
@@ -185,9 +215,9 @@ void testbed_scenarios::AddComputerGodWorshipScenarios(std::vector<Scenario>& al
 	    .name = "A computer god that casts the wood miracle at a building site of its town",
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
-	                   "and a Celtic town to the north that offers the wood miracle. The storage pit of the town has no "
-	                   "wood. A hut of the town stands a fifth built north of the town, with a site for its builders. Half "
-	                   "of the people go to worship at the site, which stands built.",
+	                   "and a Celtic town to the north that offers the wood miracle. The storage pit of the town is full. A "
+	                   "hut of the town stands a fifth built north of the town, with a site for its builders. Half of the "
+	                   "people go to worship at the site, which stands built.",
 	    .expected = "The god wants wood for the hut. The hand moves to the wood icon of the site, and the worshippers "
 	                "chant for the miracle. When the charge is full, the hand casts the wood miracle at the hut. Then the "
 	                "hand moves there and casts the wood miracle again, as a shield cast (see docs/vanilla-bugs.md). The "
