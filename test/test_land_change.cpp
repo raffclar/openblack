@@ -112,3 +112,13 @@ TEST(ProfileAlignment, TheAlignmentIsKeptEverySixHundredTurnsAndAtOnceOnANewLand
 	// The turns start again from nothing on the next land
 	EXPECT_TRUE(DueToKeep(0, 1200));
 }
+
+TEST(LandChange, OnlyASkirmishBringsTheCreatureOfTheProfile)
+{
+	// The god of the player brings the creature that the profile keeps in the first turn of a skirmish only
+	EXPECT_TRUE(RulesFor(Kind::Skirmish).profileCreatureBrought);
+	for (const auto kind : {Kind::Story, Kind::FreshScripts, Kind::NewGame, Kind::Testbed, Kind::SavedGame})
+	{
+		EXPECT_FALSE(RulesFor(kind).profileCreatureBrought) << static_cast<int>(kind);
+	}
+}

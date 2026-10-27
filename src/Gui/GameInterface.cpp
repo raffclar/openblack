@@ -383,6 +383,7 @@ GameInterface::GameInterface(TextDatabase texts, GameFont font, std::unique_ptr<
     , _tattooEditor(std::make_unique<TattooEditorDialog>(_texts, _font))
     , _newPlayerBox(std::make_unique<NewPlayerBox>(_texts, _font))
     , _skirmishBox(std::make_unique<SkirmishBox>(_texts, _font))
+    , _landInfoBox(std::make_unique<LandInfoBox>(_texts, _font))
     , _saveGameBoxes(std::make_unique<SaveGameBoxes>(_texts, _font))
     , _endGameBox(std::make_unique<EndGameBox>(_texts, _font))
     , _multiplayerBoxes(std::make_unique<MultiplayerBoxes>(_texts, _font))
@@ -465,6 +466,55 @@ bool GameInterface::ProcessSkirmishBoxEvent(const SDL_Event& event, glm::u16vec2
 	}
 	case SDL_KEYDOWN:
 		_skirmishBox->KeyDown(event.key.keysym.sym, (event.key.keysym.mod & KMOD_SHIFT) != 0);
+		return true;
+	case SDL_TEXTINPUT:
+		return true;
+	default:
+		return false;
+	}
+}
+
+void GameInterface::ApplyLandMessage(std::u16string text, bool starts)
+{
+	if (starts)
+	{
+		// The box shows with the title and an empty list. The land loads with the menu closed.
+		_landInfoBox->Show(std::move(text));
+		const auto mouse = input::WindowPointer();
+		_landInfoBox->MouseMove(_painter.ToDialog(mouse));
+		return;
+	}
+	_landInfoBox->AddLine(std::move(text));
+}
+
+bool GameInterface::ProcessLandInfoBoxEvent(const SDL_Event& event)
+{
+	switch (event.type)
+	{
+	case SDL_MOUSEMOTION:
+		_landInfoBox->MouseMove(_painter.ToDialog({event.motion.x, event.motion.y}));
+		return true;
+	case SDL_MOUSEBUTTONDOWN:
+		if (event.button.button == SDL_BUTTON_LEFT)
+		{
+			_landInfoBox->MouseDown(_painter.ToDialog({event.button.x, event.button.y}));
+		}
+		return true;
+	case SDL_MOUSEBUTTONUP:
+		if (event.button.button == SDL_BUTTON_LEFT &&
+		    _landInfoBox->MouseUp(_painter.ToDialog({event.button.x, event.button.y})))
+		{
+			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_MenuButton), std::nullopt);
+		}
+		return true;
+	case SDL_MOUSEWHEEL:
+	{
+		const auto mouse = input::WindowPointer();
+		_landInfoBox->Wheel(_painter.ToDialog(mouse), event.wheel.y);
+		return true;
+	}
+	case SDL_KEYDOWN:
+		_landInfoBox->KeyDown(event.key.keysym.sym, static_cast<uint16_t>(event.key.keysym.mod));
 		return true;
 	case SDL_TEXTINPUT:
 		return true;
@@ -980,6 +1030,10 @@ bool GameInterface::ProcessEvent(const SDL_Event& event, glm::u16vec2 resolution
 	{
 		return ProcessEndGameBoxEvent(event);
 	}
+	if (_landInfoBox->IsActive())
+	{
+		return ProcessLandInfoBoxEvent(event);
+	}
 	if (_saveGameBoxes->IsActive())
 	{
 		return ProcessSaveGameBoxesEvent(event);
@@ -1150,6 +1204,7 @@ void GameInterface::Update(float deltaSeconds)
 	_storyHistoryBox->Update(deltaSeconds);
 	_newPlayerBox->Update(deltaSeconds);
 	_skirmishBox->Update(deltaSeconds);
+	_landInfoBox->Update(deltaSeconds);
 	_saveGameBoxes->Update(deltaSeconds);
 	_endGameBox->Update(deltaSeconds);
 	// The answer to the out-of-sync box: Yes plays on, No leaves the game
@@ -1219,7 +1274,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 	DrawGestureHints(resolution);
 	const bool menuOpen = (_menu->IsVisible() && _menu->IsOpen()) || _skipBox->IsActive() || _tattooEditor->IsOpen() ||
 	                      _newPlayerBox->IsActive() || _skirmishBox->IsActive() || _saveGameBoxes->IsActive() ||
-	                      _multiplayerBoxes->IsActive() || _endGameBox->IsOpen();
+	                      _multiplayerBoxes->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	UpdateMusicControls(menuOpen || _boxOverGameFade.has_value());
 	// A cut scene leaves some of the interface off the screen
 	const auto& cinema = Locator::cinematicDirectorSystem::value();
@@ -1304,6 +1359,7 @@ void GameInterface::Draw(glm::u16vec2 resolution, glm::ivec2 mouse, uint32_t mil
 		_saveGameBoxes->Draw(_painter);
 		_multiplayerBoxes->Draw(_painter);
 		_endGameBox->Draw(_painter);
+		_landInfoBox->Draw(_painter);
 		if (_menu->IsVisible())
 		{
 			_menu->Draw(_painter);

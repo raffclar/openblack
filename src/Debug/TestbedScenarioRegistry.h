@@ -983,8 +983,11 @@ struct Command
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
 		/// The skirmish box shows over the game with the lands of the playground folder, as after Start Skirmish Game
-		/// (value 0). Value 1 opens the main menu as it shows in a skirmish. Value 2 shows the box and picks its second land, as
-		/// a click on it does. Needs no creature.
+		/// (value 0). Value 1 opens the main menu as it shows in a skirmish. Value 2 shows the box and picks its second land,
+		/// as a click on it does. Value 3 shows the land information box with the lines of the script of Two Gods. Value 4
+		/// opens the main menu of a skirmish and presses Leave Skirmish Game, so that the menu asks its question. Value 5
+		/// makes the god of the player bring the creature of the mind file (mindFile) of the creature mind folder, as a
+		/// skirmish starts with the creature that the profile keeps. Needs no creature.
 		SkirmishBox,
 	};
 	Kind kind {Kind::Stop};

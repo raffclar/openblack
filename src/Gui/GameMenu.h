@@ -86,7 +86,7 @@ public:
 		None,
 		Continue,
 		StartSkirmish,
-		/// Leave Skirmish Game, in a skirmish
+		/// The player said yes to the question of Leave Skirmish Game, in a skirmish
 		LeaveSkirmish,
 		JoinOnline,
 		/// Exit Online Game, in a network game: the game asks the question to leave, or leaves at once when the god of
@@ -357,6 +357,8 @@ private:
 	/// HELP_TEXT_DIALOG_QUIT_QUESTION, asked by the first page, and HELP_TEXT_DIALOG_AREYOUSUREQUIT by the options
 	std::u16string _quitQuestion;
 	std::u16string _quitGameQuestion;
+	/// HELP_TEXT_DIALOG_ADDITION_167, asked by Leave Skirmish Game in a skirmish
+	std::u16string _leaveSkirmishQuestion;
 	/// HELP_TEXT_DIALOG_VIDEOCHANGE, told as the player leaves the Options page after a change of the detail
 	std::u16string _videoChange;
 	std::array<std::u16string, 7> _detailLabels;

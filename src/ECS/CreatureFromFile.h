@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <memory>
 #include <optional>
 #include <span>
 #include <string>
@@ -20,6 +21,11 @@
 
 #include "Creature/CreatureFileLoad.h"
 #include "Enums.h"
+
+namespace openblack::creaturemind
+{
+struct MindFileData;
+}
 
 /// A creature that a script makes for a player from a mind file in the creature mind folder of the game
 namespace openblack::ecs::creature_from_file
@@ -57,5 +63,10 @@ Result Make(const Order& order);
 /// start. The creature comes at the creature home of the god's citadel, as a creature that a script makes from a mind
 /// file: the file gives its species too. A god with no citadel or no file brings no creature.
 Result Bring(PlayerNames owner, std::span<const uint8_t> file);
+
+/// At the start of a skirmish, the god of the player brings the creature that the player's profile keeps. The creature
+/// comes at the creature home of the god's citadel, as Bring makes it. A god with no citadel or no creature kept brings
+/// no creature.
+Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind);
 
 } // namespace openblack::ecs::creature_from_file

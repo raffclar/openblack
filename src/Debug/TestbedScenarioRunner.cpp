@@ -2924,11 +2924,53 @@ void Runner::Give(const Command& command)
 			Log(fmt::format("{:.1f}s: {}: failed: no interface", _seconds, Name(command.kind)));
 			return;
 		}
-		if (command.value == 1)
+		if (command.value == 1 || command.value == 4)
 		{
-			game->GetInterface()->GetMenu().SetSkirmish(true);
+			auto& menu = game->GetInterface()->GetMenu();
+			menu.SetSkirmish(true);
 			game->GetInterface()->OpenMenu();
+			if (command.value == 4)
+			{
+				// A click on Leave Skirmish Game: the menu asks whether to leave
+				const auto controls = menu.GetNamedControls();
+				const auto leave = std::ranges::find_if(controls, [&game](const gui::Dialog::NamedControl& control) {
+					return control.name == game->GetInterface()->GetTexts().Get("HELP_TEXT_DIALOG_ADDITION_170");
+				});
+				if (leave != controls.end())
+				{
+					const auto middle = (leave->rect.min + leave->rect.max) / 2;
+					menu.MouseDown(middle);
+					[[maybe_unused]] const auto action = menu.MouseUp(middle);
+				}
+				Log(fmt::format("{:.1f}s: {}: the main menu of a skirmish {}", _seconds, Name(command.kind),
+				                menu.IsAskingToQuit() ? "asks to leave the skirmish" : "did not ask"));
+				return;
+			}
 			Log(fmt::format("{:.1f}s: {}: the main menu of a skirmish opens", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 3)
+		{
+			// The two lines of the script of Two Gods
+			auto& lands = Locator::landSystem::value();
+			lands.ShowLandMessage({.kind = land_message::Message::Kind::Start, .text = "Two Gods", .number = 2});
+			lands.ShowLandMessage(
+			    {.kind = land_message::Message::Kind::AddLine, .text = "Battle another god for this realm", .number = 2});
+			Log(fmt::format("{:.1f}s: {}: the land information box shows", _seconds, Name(command.kind)));
+			return;
+		}
+		if (command.value == 5)
+		{
+			// The game's own mind file takes the place of the creature that the profile keeps
+			const auto path =
+			    Locator::filesystem::value().GetPath<filesystem::Path::CreatureMind>(true) / std::string(command.mindFile);
+			auto mind = std::make_shared<creaturemind::MindFileData>();
+			const bool read = creaturemind::ReadFile(path, *mind) == creaturemind::MindResult::Success;
+			const auto brought = ecs::creature_from_file::BringKept(PlayerNames::PLAYER_ONE, read ? mind : nullptr);
+			Log(fmt::format("{:.1f}s: {}: {}", _seconds, Name(command.kind),
+			                brought.creature.has_value()
+			                    ? fmt::format("the player's god brings creature {}", entt::to_integral(*brought.creature))
+			                    : fmt::format("no creature, reason {}", static_cast<int>(brought.refusal))));
 			return;
 		}
 		// The box holds the game, so that the scenario's clock stops while it is up

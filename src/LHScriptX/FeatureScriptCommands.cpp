@@ -1278,16 +1278,18 @@ void FeatureScriptCommands::SetTownBalanceBeliefScale([[maybe_unused]] int32_t t
 	// __func__);
 }
 
-void FeatureScriptCommands::StartGameMessage([[maybe_unused]] const std::string& message, [[maybe_unused]] int32_t landNumber)
+void FeatureScriptCommands::StartGameMessage(const std::string& message, int32_t landNumber)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The land information box shows with this title and an empty list
+	Locator::landSystem::value().ShowLandMessage(
+	    {.kind = land_message::Message::Kind::Start, .text = message, .number = landNumber});
 }
 
-void FeatureScriptCommands::AddGameMessageLine([[maybe_unused]] const std::string& message, [[maybe_unused]] int32_t landNumber)
+void FeatureScriptCommands::AddGameMessageLine(const std::string& message, int32_t landNumber)
 {
-	// SPDLOG_LOGGER_ERROR(spdlog::get("scripting"), "LHScriptX: {}:{}: Function {} not implemented.", __FILE__, __LINE__,
-	// __func__);
+	// The list of the land information box gets the line at its end
+	Locator::landSystem::value().ShowLandMessage(
+	    {.kind = land_message::Message::Kind::AddLine, .text = message, .number = landNumber});
 }
 
 void FeatureScriptCommands::EditLevel()

@@ -43,6 +43,9 @@ public:
 	virtual void Keep(std::shared_ptr<const creaturemind::MindFileData> file) = 0;
 	/// The creature kept, if any
 	[[nodiscard]] virtual std::shared_ptr<const creaturemind::MindFileData> Kept() const = 0;
+	/// The creature kept. With none kept, the creature that the profile's file keeps, which is then the creature kept.
+	/// None when the file is not there or cannot be read.
+	[[nodiscard]] virtual std::shared_ptr<const creaturemind::MindFileData> KeptOrRead() { return Kept(); }
 	/// The physique file of the profile picked now, from which the main menu's tattoo editor shows the body of the
 	/// profile's creature. None without a profile or a folder for the files. The files that the system wrote before are
 	/// on the disk when it returns.

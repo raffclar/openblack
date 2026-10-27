@@ -798,8 +798,9 @@ void LandSystem::PrepareNewLand(land_change::Kind change)
 	Locator::scriptHighlightSystem::value().Reset();
 	Locator::tipBubbleSystem::value().Reset();
 	Locator::handDemoSystem::value().Reset();
-	// The commands that the players made on the old land do nothing on the new land
+	// The commands that the players made on the old land do nothing on the new land, and no creature of a skirmish is due
 	Locator::playerCommandSystem::value().Reset();
+	Locator::playerCommandSystem::value().SetPlayersCreatureDue(false);
 	Locator::creatureFightSystem::value().Reset();
 	Locator::explosionSystem::value().Reset();
 	Locator::floatingNumberSystem::value().Reset();
@@ -933,6 +934,12 @@ void LandSystem::StartNewLand(land_change::Kind change)
 		clock.SetSpeed(1.0f / k_NormalTurnDurationMultiplier);
 	}
 	View().StartLandAudio();
+	// A skirmish starts: in the first turn the god of the player brings the creature that the profile keeps. The commands
+	// of that turn come first, and the computer gods start after it.
+	if (land_change::RulesFor(change).profileCreatureBrought && !clock.IsNetworkGame())
+	{
+		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
+	}
 }
 
 void LandSystem::LoadLandscape(const std::filesystem::path& path)

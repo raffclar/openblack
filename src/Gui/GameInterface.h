@@ -33,6 +33,7 @@
 #include "GameMenu.h"
 #include "Hand/HandTricons.h"
 #include "Help/SingAlong.h"
+#include "LandInfoBox.h"
 #include "LogoEffect.h"
 #include "MenuBackdrop.h"
 #include "MultiplayerBoxes.h"
@@ -139,14 +140,15 @@ public:
 	/// Whether a dialog is up taking the mouse: the menu, or the start-of-game question
 	[[nodiscard]] bool IsDialogOpen() const noexcept
 	{
-		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen();
+		return _menu->IsOpen() || _skipBox->IsActive() || _endGameBox->IsOpen() || _landInfoBox->IsActive();
 	}
 	/// Whether the active box has a background: the menu and its questions, the start-of-game question, the new
 	/// player's box, the save game room's boxes, or the tattoo editor in its own frame
 	[[nodiscard]] bool IsBoxWithBackgroundActive() const noexcept
 	{
 		return _menu->IsOpen() || _skipBox->IsActive() || _newPlayerBox->IsActive() || _saveGameBoxes->IsActive() ||
-		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
+		       _endGameBox->IsOpen() || _multiplayerBoxes->IsActive() || _landInfoBox->IsActive() ||
+		       (_tattooEditor->IsOpen() && _tattooEditor->IsFramed());
 	}
 	/// The boxes of the multiplayer front end over the temple's future room
 	[[nodiscard]] MultiplayerBoxes& GetMultiplayerBoxes() noexcept { return *_multiplayerBoxes; }
@@ -180,6 +182,13 @@ public:
 	[[nodiscard]] SaveGameBoxes& GetSaveGameBoxes() noexcept { return *_saveGameBoxes; }
 	/// A save did not write its world files completely: the box tells the player "An error has occurred!" with an OK
 	void ShowSaveProblem();
+	/// The script of the land gives a command for the land information box: a title that shows the box with an empty
+	/// list, or a line at the end of its list
+	void ApplyLandMessage(std::u16string text, bool starts);
+	/// The land information box takes the mouse and the keyboard while it shows; true when it took the event
+	bool ProcessLandInfoBoxEvent(const SDL_Event& event);
+	[[nodiscard]] LandInfoBox& GetLandInfoBox() noexcept { return *_landInfoBox; }
+	[[nodiscard]] const LandInfoBox& GetLandInfoBox() const noexcept { return *_landInfoBox; }
 	/// The end box of a skirmish or a network game opens. It closes the game's menu and a message with an OK.
 	void OpenEndGameBox(EndGameBox::Contents contents);
 	/// The end box of a skirmish or a network game
@@ -464,6 +473,7 @@ private:
 	std::unique_ptr<TattooEditorDialog> _tattooEditor;
 	std::unique_ptr<NewPlayerBox> _newPlayerBox;
 	std::unique_ptr<SkirmishBox> _skirmishBox;
+	std::unique_ptr<LandInfoBox> _landInfoBox;
 	std::unique_ptr<SaveGameBoxes> _saveGameBoxes;
 	std::unique_ptr<EndGameBox> _endGameBox;
 	bool _resyncShown {false};

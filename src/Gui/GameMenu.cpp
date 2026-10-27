@@ -221,6 +221,7 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _newGameQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_20"))
     , _quitQuestion(texts.Get("HELP_TEXT_DIALOG_QUIT_QUESTION"))
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
+    , _leaveSkirmishQuestion(texts.Get("HELP_TEXT_DIALOG_ADDITION_167"))
     , _videoChange(texts.Get("HELP_TEXT_DIALOG_VIDEOCHANGE"))
     , _settings(std::move(settings))
     , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
@@ -311,7 +312,16 @@ void GameMenu::BuildMain(const TextDatabase& texts)
 	// (HELP_TEXT_FRONT_END_03) during a network game (SetNetworkGame).
 	const std::array<std::pair<const char*, std::function<void()>>, k_ButtonCount> buttons = {{
 	    {"HELP_TEXT_DIALOG_CONTINUEGAME", [this] { Settle(Action::Continue); }},
-	    {"HELP_TEXT_DIALOG_ADDITION_169", [this] { Settle(_skirmish ? Action::LeaveSkirmish : Action::StartSkirmish); }},
+	    {"HELP_TEXT_DIALOG_ADDITION_169",
+	     [this] {
+		     // In a skirmish the menu asks first. Out of a skirmish the game ends at once.
+		     if (_skirmish)
+		     {
+			     Ask(_leaveSkirmishQuestion, Action::LeaveSkirmish);
+			     return;
+		     }
+		     Settle(Action::StartSkirmish);
+	     }},
 	    {"HELP_TEXT_DIALOG_JOINGONLINE", [this] { Settle(_networkGame ? Action::ExitOnlineGame : Action::JoinOnline); }},
 	    {"HELP_TEXT_DIALOG_OPTIONS", [this] { ShowPage(Page::Options); }},
 	    {"HELP_TEXT_DIALOG_QUIT", [this] { Ask(_quitQuestion, Action::Quit); }},

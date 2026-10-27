@@ -80,6 +80,7 @@ constexpr std::string_view k_TattooEditor = "tattoo_editor";
 constexpr std::string_view k_MusicPlayer = "music_player";
 constexpr std::string_view k_Multiplayer = "multiplayer";
 constexpr std::string_view k_SkirmishBox = "skirmish_box";
+constexpr std::string_view k_LandInfoBox = "land_info_box";
 
 /// The names of the multiplayer front end's boxes, for gui.windows
 constexpr std::array<std::string_view, 6> k_MultiplayerBoxes = {"choose_connection", "find_games", "login",
@@ -514,6 +515,19 @@ std::vector<WindowInfo> GameGui::Windows() const
 			skirmishInfo.selected = gui::ToUtf8(skirmish.GetList().GetItems().at(*picked).text);
 		}
 		windows.push_back(std::move(skirmishInfo));
+		// The land information box: its title as the page, its arrows, and the lines of its list
+		const auto& landInfo = game->GetInterface()->GetLandInfoBox();
+		WindowInfo landInfoWindow {.name = std::string(k_LandInfoBox), .kind = "game", .open = landInfo.IsActive()};
+		landInfoWindow.page = gui::ToUtf8(landInfo.GetTitle().text);
+		for (const auto& control : DialogControls(landInfo.GetNamedControls()))
+		{
+			landInfoWindow.buttons.push_back(control.name);
+		}
+		for (const auto& item : landInfo.GetList().GetItems())
+		{
+			landInfoWindow.lines.push_back(gui::ToUtf8(item.text));
+		}
+		windows.push_back(std::move(landInfoWindow));
 		// The multiplayer front end over the temple's future room: its box, and the controls of the box or its message
 		const auto& boxes = game->GetInterface()->GetMultiplayerBoxes();
 		WindowInfo multiplayer {.name = std::string(k_Multiplayer), .kind = "game", .open = boxes.IsActive()};
@@ -777,6 +791,21 @@ std::string GameGui::Press(std::string_view window, const std::vector<ButtonPath
 		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
 		{
 			return "the skirmish box: " + *why + "; gui.windows lists them";
+		}
+		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
+	}
+	if (lower == k_LandInfoBox)
+	{
+		auto* game = Game::Instance();
+		if (game == nullptr || game->GetInterface() == nullptr || !game->GetInterface()->GetLandInfoBox().IsActive())
+		{
+			return "the land information box isn't open: the script of a playground land opens it as the land loads";
+		}
+		const auto controls = DialogControls(game->GetInterface()->GetLandInfoBox().GetNamedControls());
+		const auto found = FindDialogControl(controls, path);
+		if (const auto* why = std::get_if<std::string>(&found); why != nullptr)
+		{
+			return "the land information box: " + *why + "; gui.windows lists them";
 		}
 		return Send(ClickAt(DialogPointOnScreen(std::get<glm::ivec2>(found))));
 	}

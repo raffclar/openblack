@@ -21,6 +21,7 @@
 
 #include "Gui/LoadingScreenRules.h"
 #include "LandChange.h"
+#include "LandMessage.h"
 #include "Simulation/TurnBody.h"
 #include "Story/NewGameChoice.h"
 
@@ -60,6 +61,8 @@ public:
 	virtual bool AskStartQuestion(bool hasCreature) = 0;
 	/// The challenge file of the scripts. None for the file in its usual folder.
 	[[nodiscard]] virtual std::optional<std::filesystem::path> ChallengeFile() = 0;
+	/// The script of the land gives a command for the land information box
+	virtual void ShowLandMessage(const land_message::Message& /*message*/) {}
 };
 
 /// A view that does nothing, for a world with no player in front of it
@@ -116,6 +119,8 @@ public:
 	virtual void LoadLandscape(const std::filesystem::path& path) = 0;
 	/// The map script of the land gives the start place of the camera, in map units
 	virtual void SetStartCameraPlace(glm::ivec2 place) = 0;
+	/// The map script of the land gives a command for the land information box. The view of the player shows it.
+	virtual void ShowLandMessage(const land_message::Message& message) = 0;
 
 	/// Whether the script of a land is one of the playground lands, which the game plays as a skirmish
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;

@@ -2563,7 +2563,8 @@ void Game::FollowGameEnd()
 	{
 		end_game_box::StoppedShowing(_endGameBoxState);
 	}
-	// The player's choice in the end box: Leave Game leaves the network game. A skirmish has no front end to go back to yet.
+	// The player's choice in the end box: Leave Game leaves the network game. In a skirmish it ends the skirmish, and the
+	// skirmish box shows again.
 	if (_interface->GetEndGameBox().TakeAction() == gui::EndGameBox::Action::Leave)
 	{
 		if (session != nullptr)
@@ -2571,7 +2572,8 @@ void Game::FollowGameEnd()
 			LeaveNetworkGame();
 			return;
 		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The skirmish front end is not available yet");
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The end box: Leave Game ends the skirmish");
+		_gameEndAsked = game_session::End::Skirmish;
 	}
 	const auto events = gameEnd.TakeEventsToShow();
 	if (events.empty())
@@ -2889,6 +2891,7 @@ void Game::UpdateInterfaceFrame(std::chrono::microseconds deltaTime)
 		{
 			EndGame(*end);
 		}
+		FollowLandInfoBox();
 		StartNextGameWhenSaved();
 		FollowSkirmishBox();
 	}
@@ -5135,7 +5138,9 @@ void Game::HandleInterfaceAction()
 		_gameEndAsked = game_session::End::Skirmish;
 		break;
 	case Action::LeaveSkirmish:
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The question to leave a skirmish is not available yet");
+		// Yes to the question ends the skirmish, and the skirmish box shows again. A skirmish keeps no save on exit.
+		_interface->GetMenu().Close();
+		_gameEndAsked = game_session::End::Skirmish;
 		break;
 	case Action::ExitOnlineGame:
 		ExitOnlineGame();

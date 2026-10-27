@@ -297,6 +297,7 @@ public:
 	void StartCameraAtTemple() override;
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
+	void ShowLandMessage(const land_message::Message& message) override;
 	/// The parts of the effects of a frame that the view of the player does
 	void UpdateAdvisors() override;
 	[[nodiscard]] bool TakeDialogueClick() override;
@@ -567,6 +568,8 @@ private:
 	[[nodiscard]] static std::vector<gui::skirmish_box::Land> ReadSkirmishLands();
 	/// The answer of the skirmish box over the game: Start Game starts the skirmish, Back continues the story
 	void FollowSkirmishBox();
+	/// The choice in the land information box: Back ends the skirmish, and the skirmish box shows again
+	void FollowLandInfoBox();
 	/// The menu shows the buttons of the game that plays: a network game, a skirmish or the story
 	void TellMenuTheGame();
 	/// The name of the profile played, for the files that the game keeps for its player. There is no name on a run of a

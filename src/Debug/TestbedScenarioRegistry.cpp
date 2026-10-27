@@ -3902,6 +3902,47 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.land_info_box",
+	    .name = "The land information box of a skirmish",
+	    .facet = Facet::Interface,
+	    .description = "After a second the land information box shows, as the script of Two Gods shows it while the land "
+	                   "loads. The game goes on under the box. Click Go! or press Escape to close it. Back ends a skirmish.",
+	    .expected = "A box of 780 by 580 fades in. \"Defeat another god to control this realm.\" is across its top on a light "
+	                "grey band. The list under it has one line, \"Defeat another god to control this realm.\" again, and "
+	                "shows no selection. Back is an arrow at the bottom left, and Go! a button in the middle of the bottom. "
+	                "The hand does not show while the box is up.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 3}},
+	});
+
+	all.push_back({
+	    .id = "interface.leave_skirmish_question",
+	    .name = "The question of Leave Skirmish Game",
+	    .facet = Facet::Interface,
+	    .description = "After a second the main menu of a skirmish opens, and Leave Skirmish Game is pressed. Yes ends the "
+	                   "skirmish, and the skirmish box shows again. No goes back to the menu.",
+	    .expected = "A box of 500 by 200 over the menu asks \"This will leave the current Skirmish game.\" and \"Do you "
+	                "wish to do this?\" on two lines, with a Yes arrow and a No arrow.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 4}},
+	});
+
+	all.push_back({
+	    .id = "multiplayer.skirmish_profile_creature",
+	    .name = "The player's creature comes to the temple as a skirmish starts",
+	    .facet = Facet::Multiplayer,
+	    .description = "A temple of the player stands to the north. After a second, the god of the player brings the "
+	                   "creature that the profile keeps, as in the first turn of a skirmish. The mind file LethysCreature "
+	                   "of the game takes the place of the creature file of the profile.",
+	    .expected = "A grown ape named Matey comes at the creature home of the player's temple, at once and with no "
+	                "sparkle. It belongs to the player, it knows every leash, and its mind and body come from the file.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
+	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_ONE}},
+	    .commands = {{.kind = Kind::SkirmishBox, .delaySeconds = 1.0f, .value = 5, .mindFile = "LethysCreature"}},
+	});
+
+	all.push_back({
 	    .id = "interface.pause_text",
 	    .name = "The words of the pause",
 	    .facet = Facet::Interface,

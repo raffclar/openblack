@@ -174,32 +174,51 @@ Result Make(const Order& order)
 	return result;
 }
 
-Result Bring(PlayerNames owner, std::span<const uint8_t> file)
+namespace
+{
+
+/// The god brings the creature of the mind file to the creature home of its citadel, or gives why it brings none
+Result BringMind(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind, bool file, bool readable,
+                 std::string_view source)
 {
 	Result result;
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto home = creature_home::CitadelCreatureHomeOf(registry, owner);
-	// The bytes came from the player before the start, as the game reads the file of a creature
-	auto mind = std::make_shared<creaturemind::MindFileData>();
-	const auto readable = !file.empty() && creaturemind::Read(file, *mind) == creaturemind::MindResult::Success;
 	const auto species = readable ? script::property_rules::CreatureTypeFromScript(mind->speciesRow) : std::nullopt;
 	result.refusal = creature_file_load::WhyNotBrought(
 	    {.citadel = home.has_value(),
-	     .file = !file.empty(),
+	     .file = file,
 	     .readable = readable,
 	     .onMap = home.has_value() && map_coords::InBounds(*home) && Locator::terrainSystem::has_value(),
 	     .species = species});
 	if (result.refusal != creature_file_load::Refusal::None)
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} brings no creature into the network game: reason {}",
-		                   static_cast<int>(owner), static_cast<int>(result.refusal));
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} brings no creature from {}: reason {}", static_cast<int>(owner),
+		                   source, static_cast<int>(result.refusal));
 		return result;
 	}
 	result.replaced =
 	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
-	result.creature = MakeFromMind(owner, *species, *home, std::move(mind), 0,
-	                               fmt::format("the creature file of {} bytes that its player sent", file.size()));
+	result.creature = MakeFromMind(owner, *species, *home, std::move(mind), 0, source);
 	return result;
+}
+
+} // namespace
+
+Result Bring(PlayerNames owner, std::span<const uint8_t> file)
+{
+	// The bytes came from the player before the start, as the game reads the file of a creature
+	auto mind = std::make_shared<creaturemind::MindFileData>();
+	const auto readable = !file.empty() && creaturemind::Read(file, *mind) == creaturemind::MindResult::Success;
+	return BringMind(owner, std::move(mind), !file.empty(), readable,
+	                 fmt::format("the creature file of {} bytes that its player sent", file.size()));
+}
+
+Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind)
+{
+	// The profile keeps the creature in its files, which the game read when it kept none in memory
+	const bool kept = mind != nullptr;
+	return BringMind(owner, std::move(mind), kept, kept, "the creature that the profile keeps");
 }
 
 } // namespace openblack::ecs::creature_from_file

@@ -101,3 +101,40 @@ void Game::FollowSkirmishBox()
 		SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The skirmish land {} did not load", path.generic_string());
 	}
 }
+
+void Game::ShowLandMessage(const land_message::Message& message)
+{
+	if (!_interface)
+	{
+		return;
+	}
+	// A number other than 0 names a help text that the box shows in place of the text of the script line
+	const auto helpText = land_message::HelpTextOf(message.number);
+	auto text = helpText.has_value() ? std::u16string(_interface->GetTexts().Get(*helpText)) : gui::ToUtf16(message.text);
+	_interface->ApplyLandMessage(std::move(text), message.kind == land_message::Message::Kind::Start);
+}
+
+void Game::FollowLandInfoBox()
+{
+	if (!_interface)
+	{
+		return;
+	}
+	switch (_interface->GetLandInfoBox().TakeChoice())
+	{
+	case gui::LandInfoBox::Choice::None:
+	case gui::LandInfoBox::Choice::Go:
+		return;
+	case gui::LandInfoBox::Choice::Back:
+		break;
+	}
+	// Back ends the skirmish, and the skirmish box shows again. A tool can play a playground land as a network game:
+	// there Back only closes the box.
+	if (Locator::time::value().IsNetworkGame())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back in a network game only closes the box");
+		return;
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The land information box: Back ends the skirmish");
+	_gameEndAsked = game_session::End::Skirmish;
+}
