@@ -36,6 +36,11 @@ public:
 	[[nodiscard]] virtual bool Angry(MagicType type) const = 0;
 	/// The god casts the miracle of the icon at the thing, from the hand. False when the miracle is not made.
 	virtual bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) = 0;
+	/// The god casts the miracle of the icon at the place, from the hand, with the magnitude. A shield's magnitude is
+	/// its radius. False when the miracle is not made.
+	virtual bool CastAt(MagicType type, glm::vec3 place, entt::entity icon, glm::vec3 hand, float magnitude) = 0;
+	/// A miracle acts on the creature now
+	[[nodiscard]] virtual bool UnderSpell(entt::entity creature) const = 0;
 	/// The seconds that the god keeps its hand over a miracle that it cast
 	[[nodiscard]] virtual float CastSeconds(MagicType type) const = 0;
 	/// The gesture of the seed of a miracle: for stage 0 the gesture that opens the choice of miracles, for stage 1 the
