@@ -50,8 +50,9 @@ constexpr size_t k_DeadTree = 11;
 constexpr glm::vec2 k_Watcher {10.0f, 15.0f};
 /// Where the altar of the town's worship site stands
 constexpr glm::vec2 k_Altar {0.0f, -1.0f};
-/// Where a man of the town stands near the worship site: 12 m from the middle of the site, inside its reach
-constexpr glm::vec2 k_NearSite {4.0f, 10.0f};
+/// Where a man of the town stands near the worship site: 10 m from the middle of the site, inside its reach. He stands
+/// between the parts of the site, so the hand puts him down on the land.
+constexpr glm::vec2 k_NearSite {0.0f, 9.0f};
 /// The Action button is the mouse's right button
 constexpr size_t k_ActionButton = 3;
 
@@ -173,13 +174,13 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .name = "A villager put down at its worship site",
 	    .facet = Facet::Hand,
 	    .description = "The same town and temple, the town's worship site built, with no share of the town sent to worship. "
-	                   "A man of the town stands 12 m from the middle of the site, between the site and the town. The hand "
+	                   "A man of the town stands 10 m from the middle of the site, between the site and the town. The hand "
 	                   "takes him and puts him down again at the same place.",
 	    .expected = "When the man is on the land, he walks to the gate of the site and starts to dance there. He stays at "
 	                "the site as a worshipper. As in the original game, the site measures his distance from its own middle, "
 	                "not from the temple.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
-	    .framing = {.shot = Shot::Overview, .include = {k_Temple - glm::vec2(40.0f), k_Centre + glm::vec2(20.0f)}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 24.0f, 26.0f}, .look = {1.0f, 0.0f, 5.0f}},
 	    .objects = nearSite,
 	    .temples = {{.offset = k_Temple}},
 	    .commands = {{.kind = Command::Kind::BuildWorshipSites, .delaySeconds = 0.5f},
