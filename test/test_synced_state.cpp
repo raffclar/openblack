@@ -12,6 +12,7 @@
 #include <algorithm>
 #include <array>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -22,7 +23,6 @@
 #include "3D/CameraPath.h"
 #include "Common/WorkerPool.h"
 #include "ECS/Components/SnowLevel.h"
-
 #include "ECS/DrawnRegistry.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Reflection/WorldArchive.h"
@@ -159,6 +159,20 @@ TEST(SyncedState, TheFramesOfAFallingRewardChestChangeOnlyWhatTheyDraw)
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "seconds"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "Reward", "state"));
 	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "RewardSeed", "seed"));
+}
+
+TEST(SyncedState, TheFramesCarryThePickedLeashInTheHandOfThisComputerOnly)
+{
+	// Each computer puts the picked leash of its own player in its own hand, so the place of a post is not synced
+	const auto parts = synced_state::PresentationParts();
+	for (const std::string_view field : {"position", "rotation", "scale"})
+	{
+		EXPECT_TRUE(std::ranges::any_of(parts, [field](const synced_state::PresentationPart& part) {
+			return part.component == "Transform" && part.field == field && part.marker == "LeashPost";
+		})) << field;
+	}
+	// The turns read the point where the post hangs
+	EXPECT_FALSE(synced_state::IsPresentationOnly(parts, "LeashPost", "point"));
 }
 
 TEST(SyncedState, TheRoomsOfTheTempleAreNotSynced)
