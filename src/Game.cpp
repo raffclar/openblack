@@ -712,8 +712,8 @@ Game::Game(Arguments&& args) noexcept
     , _networkLandPending(args.networkJoin.has_value())
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
-    , _requestScreenshot(args.requestScreenshot)
     , _profileFolder(args.profileFolder)
+    , _requestScreenshot(args.requestScreenshot)
     // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
     // backend, detail and logging chosen, is the player's
     , _automatedRun(args.startLevel != k_DefaultStartLevel || args.startTestbed || args.scenario.has_value() ||
