@@ -334,6 +334,13 @@ class NetCheckHelpers(unittest.TestCase):
             self.assertEqual(first, net_check.spki_hash(certs["server.pem"]))
             self.assertNotEqual(first, net_check.spki_hash(certs["ca.pem"]))
 
+    def test_the_observers_of_a_scenario_join_before_the_gods(self):
+        # The state of a scenario is not in the world, so its observers must be in the room before the start
+        self.assertEqual(net_check.join_order(2, 3, True), [2, 0, 1])
+        self.assertEqual(net_check.join_order(2, 4, True), [2, 3, 0, 1])
+        self.assertEqual(net_check.join_order(2, 2, True), [0, 1])
+        self.assertEqual(net_check.join_order(2, 3, False), [0, 1, 2])
+
     def test_the_web_page_defaults_to_the_web_build_of_the_tree(self):
         page = net_check.web_page_of(argparse.Namespace(web_page=None))
         self.assertTrue(page.replace("\\", "/").endswith("-web/bin/Release"))

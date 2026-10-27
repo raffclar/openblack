@@ -339,8 +339,9 @@ bool LockstepHost::SendWorld(ConnectionId connection)
 
 void LockstepHost::JoinRunning(ConnectionId connection, Peer& peer, const join_ticket::Claims& claims)
 {
-	// A player who joins the game that turns needs the server's world
-	if (!_worldState)
+	// A player who joins the game that turns needs the server's world. The testbed scenario of the tools keeps its state
+	// out of the world and plays from the first turn, so nobody can join its game as it turns.
+	if (!_worldState || _settings.start.scenario.has_value())
 	{
 		Refuse(connection, "started");
 		return;

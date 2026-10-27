@@ -216,6 +216,17 @@ struct SoakTools
 	return std::nullopt;
 }
 
+/// Why a build cannot play a network game in which the game server plays a testbed scenario, or none when it can. Only a
+/// build with the developer tools has the testbed scenarios.
+[[nodiscard]] constexpr std::optional<std::string_view> ScenarioRefusalOf(bool built) noexcept
+{
+	if (!built)
+	{
+		return "the build has no developer tools, so it cannot play a testbed scenario";
+	}
+	return std::nullopt;
+}
+
 /// Whether an option of the command line, by its long name, is one of the developer options
 [[nodiscard]] bool IsDeveloperOption(std::string_view name, std::span<const DeveloperOption> options) noexcept;
 

@@ -141,21 +141,6 @@ struct ServerSettings
 /// Reads the turn and the checksum from a line of the log, when the line has them
 [[nodiscard]] std::optional<std::pair<uint32_t, uint64_t>> ParseChecksumLine(std::string_view line);
 
-/// What the server does with its testbed scenario in one frame
-enum class ScenarioStep
-{
-	/// The server has no scenario
-	None,
-	/// The scenario starts. It gives no commands in this frame.
-	Start,
-	/// The scenario gives the commands that are due
-	Update,
-};
-
-/// The step of the scenario in a frame. The game starts a scenario in the turns of its first frame, after its debug
-/// windows. Thus the scenario gives its first commands in the second frame. The server does the same.
-[[nodiscard]] ScenarioStep ScenarioStepOf(bool hasScenario, bool waitsToStart);
-
 /// Runs the world of the server until it gets to its last turn, or until the stop flag goes on. The function gets the
 /// checksum of each turn. Gives the exit code of the program.
 int Run(const ServerSettings& settings, const std::atomic<bool>& stop,
