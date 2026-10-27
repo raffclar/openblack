@@ -410,15 +410,18 @@ bool ServerWorld::Frame()
 	{
 		Locator::handDemoSystem::value().Update();
 	}
-	// The scenario starts in the first frame and gives its commands in the frames before the turns, at the time of the
-	// game's debug windows
-	if (_scenarioRunner != nullptr)
+	// The scenario starts in the first frame. From the second frame, it gives its commands in the frames before the
+	// turns, at the time of the game's debug windows.
+	switch (ScenarioStepOf(_scenarioRunner != nullptr, _scenario != nullptr))
 	{
-		if (_scenario != nullptr)
-		{
-			_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
-		}
+	case ScenarioStep::None:
+		break;
+	case ScenarioStep::Start:
+		_scenarioRunner->Start(*std::exchange(_scenario, nullptr));
+		break;
+	case ScenarioStep::Update:
 		_scenarioRunner->Update(std::chrono::duration<float>(clock.GetFrameGameTime()).count());
+		break;
 	}
 	// The tools check that a world state loads into the same world: the server loads its own world once
 	if (_settings.reloadAt.has_value() && clock.GetTurn() == *_settings.reloadAt && !_reloaded &&
@@ -683,6 +686,15 @@ sim_run::Request SimulationFor(const ServerSettings& settings)
 		simulation.hashParts = settings.recordFields ? sim_run::HashDetail::Fields : sim_run::HashDetail::Components;
 	}
 	return simulation;
+}
+
+ScenarioStep ScenarioStepOf(bool hasScenario, bool waitsToStart)
+{
+	if (!hasScenario)
+	{
+		return ScenarioStep::None;
+	}
+	return waitsToStart ? ScenarioStep::Start : ScenarioStep::Update;
 }
 
 std::string ChecksumLine(uint32_t turn, uint64_t checksum)
