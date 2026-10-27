@@ -102,8 +102,8 @@ void MiracleFxSystem::UpdateTribalPower(float gameSeconds)
 		frame.camera = Locator::camera::value().GetOrigin();
 		frame.cameraFocus = Locator::camera::value().GetFocus();
 	}
-	// The hand as it is drawn: where it is, and its model's z axis with its size
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// The hand of this computer as it is drawn: where it is, and its model's z axis with its size
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (const auto* transform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(hand))
 	{
 		frame.handPosition = transform->position;

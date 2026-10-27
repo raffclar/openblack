@@ -620,7 +620,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	const auto seedType = static_cast<SpellSeedType>(subtype);
 	// The hand takes the miracle only when it is ready for an object
 	const bool holdsSomething =
-	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
+	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldOf(player).has_value()) ||
 	    Locator::magicSystem::value().IsHandBusyOf(player);
 	const bool holdsCreature =
 	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(player).has_value();
@@ -1130,7 +1130,9 @@ void NotImplemented(std::optional<int32_t> detail = std::nullopt)
 
 } // namespace
 
-/// What the player at this computer last clicked, kept on their hand; none without a hand
+/// What the player last clicked, kept on their hand; none without a hand. A game on one computer has the click of its
+/// own player, the first player. In a network game the turn writes the clicks, and the scripts read the clicks of the
+/// first player on every computer.
 ecs::components::HandClicked* LocalHandClicked()
 {
 	if (!Locator::handSystem::has_value())
@@ -3331,7 +3333,8 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 		PushVec(reported.value_or(glm::vec3(0.0f)));
 		return;
 	}
-	const auto handEntity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// A game on one computer reads the hand of this computer where the frames draw it
+	const auto handEntity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
 
 	PushVec(handTransform.position);
@@ -6197,12 +6200,13 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// What the player's hand holds, if anything: a thing it took hold of, else the miracle in it
+	// What the hand of this computer holds, if anything: a thing it took hold of, else the miracle in it. In a network
+	// game each computer reads the hand of its own god, thus a script that acts on the answer can part the game
+	// (vanilla-bugs row 497).
 	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
 	if (!held.has_value() && Locator::magicSystem::has_value())
 	{
-		held = Locator::magicSystem::value().GetHeldSeedOf(
-		    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE);
+		held = Locator::magicSystem::value().GetHeldSeed();
 	}
 	if (!held.has_value() || !Locator::entitiesRegistry::value().Valid(*held))
 	{
@@ -8405,8 +8409,10 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 	const bool heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object);
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	const bool scooped =
-	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOnOf(player) == std::optional(object);
 	Pushb(heldCreature || grippedTotem || scooped);
 }
 
