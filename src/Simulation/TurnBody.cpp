@@ -488,7 +488,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::livingActionSystem::value().StartTurnPlaces();
 		break;
 	case Step::InfluenceTurnStart:
-		// The frames of the hand fix the reaches of the citadels. With no frames of the hand, the turn fixes them.
+		// The turn fixes the reach of each citadel that has no reach yet, on every computer in the same order
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::MapCells:
@@ -924,7 +924,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		Locator::entitiesMap::value().FileMade();
 		break;
 	case Step::InfluenceTurnEnd:
-		// The view's steps fix the reach of a citadel that the turn made. With no view, the end of the turn fixes it.
+		// The end of the turn fixes the reach of a citadel that the turn made
 		Locator::influenceSystem::value().FixCitadelReaches();
 		break;
 	case Step::SyncChecksum:
