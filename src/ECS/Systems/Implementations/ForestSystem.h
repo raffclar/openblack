@@ -31,6 +31,7 @@ public:
 	[[nodiscard]] std::vector<entt::entity> LandForests() const override;
 	[[nodiscard]] std::vector<entt::entity> TreesOf(entt::entity forest, bool growing) const override;
 	[[nodiscard]] float WoodOf(entt::entity forest) const override;
+	[[nodiscard]] float TreeWoodOf(entt::entity tree) const override;
 	[[nodiscard]] glm::vec3 NearestPointOf(entt::entity forest, glm::vec3 to) const override;
 	uint32_t TakeBigForestWood(entt::entity bigForest, uint32_t amount) override;
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;

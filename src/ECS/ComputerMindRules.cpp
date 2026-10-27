@@ -16,6 +16,7 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::computer_mind_rules;
@@ -182,4 +183,85 @@ float computer_mind_rules::OutsidePlacePull(float distanceToEdge, float reach)
 {
 	const float pull = gutils::GetDistanceModifier(distanceToEdge, reach);
 	return static_cast<double>(pull) >= k_LeastPlacePull ? pull * pull : 0.0f;
+}
+
+float computer_mind_rules::FishFarmWish(float distanceFromHand, float placePull)
+{
+	constexpr float k_FishFarmShare = 1.0f;
+	const float near = gutils::GetDistanceModifier(distanceFromHand, k_FieldReach) * k_FishFarmShare;
+	return placePull * near;
+}
+
+float computer_mind_rules::SeenWoodWish(const SeenWood& seen, float influencePower)
+{
+	const float near = gutils::DistanceChangeToBelief(seen.distanceToEdge, influencePower);
+	if (!seen.forest)
+	{
+		return near * static_cast<float>(seen.kindWood);
+	}
+	// The order of the products is the order of the game
+	float wish = seen.treeWood * seen.pull;
+	wish = wish * static_cast<float>(seen.grownTrees);
+	wish = near * wish;
+	return seen.pull * wish;
+}
+
+float computer_mind_rules::ChosenTreeWish(float distanceFromHand, float influencePower)
+{
+	return gutils::DistanceChangeToBelief(distanceFromHand, influencePower);
+}
+
+int32_t computer_mind_rules::FoodShortfall(float wanted, uint32_t held)
+{
+	// The whole number of food held is exact in the subtraction, which rounds one time
+	return map_coords::FtoL(x87::Sub(wanted, static_cast<double>(held)));
+}
+
+float computer_mind_rules::OtherTownAsk(float need)
+{
+	return need * k_AskPerNeed;
+}
+
+std::optional<GivingChoice> computer_mind_rules::ChooseGivingTown(std::span<const GivingTown> towns, float need)
+{
+	const float ask = OtherTownAsk(need);
+	if (!(ask > k_LeastAsk))
+	{
+		return std::nullopt;
+	}
+	const auto least = static_cast<uint32_t>(map_coords::FtoL(ask));
+	std::optional<GivingChoice> best;
+	float most = 0.0f;
+	for (size_t i = 0; i < towns.size(); ++i)
+	{
+		const auto& town = towns[i];
+		if (town.stock <= least)
+		{
+			continue;
+		}
+		const float desire = town.rawDesire < 1.0f ? town.rawDesire : 1.0f;
+		const float keep = town.pull * desire;
+		if (!(keep < need))
+		{
+			continue;
+		}
+		const float give = 1.0f - keep;
+		if (give > most)
+		{
+			most = give;
+			best = GivingChoice {.index = i, .value = give};
+		}
+	}
+	return best;
+}
+
+int32_t computer_mind_rules::ContainerTake(int32_t wanted, std::optional<uint32_t> inPot, uint32_t inContainer)
+{
+	auto take = wanted;
+	if (inPot.has_value())
+	{
+		take -= static_cast<int32_t>(*inPot);
+	}
+	const auto have = static_cast<int32_t>(inContainer);
+	return take < have ? take : have;
 }

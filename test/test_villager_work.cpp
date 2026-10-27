@@ -7,6 +7,8 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cmath>
+
 #include <array>
 #include <optional>
 
@@ -152,7 +154,9 @@ TEST(VillagerWork, ATownSendsItsPeopleToAnOrdinaryForestBeforeItsLoneTrees)
 TEST(VillagerWork, TheCentreTreeIsTheNearerOfTheGrownAndGrowing)
 {
 	EXPECT_EQ(work::CentreTree(1.0f, 2.0f), std::optional<size_t>(0));
-	EXPECT_EQ(work::CentreTree(2.0f, 2.0f), std::optional<size_t>(1));
+	EXPECT_EQ(work::CentreTree(2.0f, 2.0f), std::optional<size_t>(0));
+	EXPECT_EQ(work::CentreTree(3.0f, 2.0f), std::optional<size_t>(1));
+	EXPECT_EQ(work::CentreTree(std::nanf(""), 2.0f), std::optional<size_t>(0));
 	EXPECT_EQ(work::CentreTree(std::nullopt, 2.0f), std::optional<size_t>(1));
 	EXPECT_FALSE(work::CentreTree(std::nullopt, std::nullopt).has_value());
 }

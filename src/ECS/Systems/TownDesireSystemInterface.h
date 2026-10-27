@@ -45,6 +45,13 @@ public:
 	virtual float RecomputeDesire(entt::entity town, TownDesireInfo desire) = 0;
 	/// How short of food a town is, from 0 to 1: as its people judge whether to carry food they found to its store
 	[[nodiscard]] virtual float FoodShortage(entt::entity town) const = 0;
+	/// The food that a town wants and the food that it has, as a computer god sees them. Nothing without a town.
+	struct FoodNeed
+	{
+		float wanted {0.0f};
+		uint32_t held {0};
+	};
+	[[nodiscard]] virtual FoodNeed FoodWantedAndHeld(entt::entity town) const = 0;
 	/// The desire a town wants most this turn, None without a town
 	[[nodiscard]] virtual TownDesireInfo GetMostWanted(entt::entity town) const = 0;
 	/// The scripts' boost to a desire; `resort` puts the town's order right at once
