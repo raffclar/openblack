@@ -232,6 +232,7 @@ public:
 	void SetLearningMarks(std::vector<particles::draw::LearningMark> marks) override { _learningMarks = std::move(marks); }
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
+	void SetLiveHand(EffectId id, glm::vec3 hand) override;
 	void SetInTemple(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
@@ -299,6 +300,9 @@ private:
 		particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
 		/// Everything it draws is moved by this, as the miracle in the hand follows the hand between turns
 		glm::vec3 drawOffset {0.0f};
+		/// The point where this computer draws its hand this frame, when it casts the miracle from the hand. The frame sets it
+		/// again before each draw, so a save does not keep it.
+		std::optional<glm::vec3> liveHand;
 	};
 
 	std::deque<Running>::iterator FindRunning(EffectId id);

@@ -1185,6 +1185,14 @@ void ParticleSystem::SetDrawOffset(EffectId id, glm::vec3 offset)
 	}
 }
 
+void ParticleSystem::SetLiveHand(EffectId id, glm::vec3 hand)
+{
+	if (const auto it = FindRunning(id); it != _effects.end())
+	{
+		it->liveHand = hand;
+	}
+}
+
 void ParticleSystem::AddHandManaPathSpark(const particles::mana_path::Spark& spark)
 {
 	// Only this computer's hand shows it, so its random numbers are this computer's own
@@ -1475,6 +1483,18 @@ void ParticleSystem::CollectDrawFrame(float turnFraction, particles::draw::Frame
 			{
 				joint.position += running.drawOffset * joint.offsetWeight;
 			}
+		}
+		// Move each atom that follows the hand of this computer's cast by the move of the hand since the step
+		if (running.liveHand.has_value())
+		{
+			const auto followHand = [&hand = *running.liveHand](particles::Effect::DrawAtom& atom) {
+				if (atom.handOffset.has_value())
+				{
+					atom.position += particles::LiveHandShift(*atom.handOffset, hand);
+				}
+			};
+			std::ranges::for_each(_walk.atoms, followHand);
+			std::ranges::for_each(_walk.joints, followHand);
 		}
 		particles::draw::AddEffect(frame, _walk, running.path, running.effect->GetOrigin(), running.effect->GetPlayer(),
 		                           sources);

@@ -1715,7 +1715,8 @@ void MagicSystem::Update(float /*seconds*/)
 			particles.SetDrawOffset(seed.handEffect, glm::vec3(0.0f));
 		}
 	}
-	// A miracle held from this computer's hand, such as the lightning, keeps up with the hand between turns
+	// A miracle held from this computer's hand, such as the lightning or the rain cloud, keeps up with the hand between
+	// turns. The draw shows its particles that follow the hand at the live hand, with no limit of height.
 	if (Locator::particleSystem::has_value())
 	{
 		for (const auto entity : _spells)
@@ -1724,18 +1725,7 @@ void MagicSystem::Update(float /*seconds*/)
 			                                           spell->caster.player == OwnPlayer() &&
 			                                           spell->effect != ParticleSystemInterface::k_NoEffect)
 			{
-				// The rain cloud, or the grains and logs, of a sprinkled miracle keep to their limit above the land
-				const bool sprinkles =
-				    spell->spellClass == magic::SpellClass::Water || spell->spellClass == magic::SpellClass::Resource;
-				const auto clamped = [this, sprinkles](glm::vec3 point) {
-					if (sprinkles)
-					{
-						point.y = std::min(point.y, _world.LandHeight({point.x, point.z}) + particles::k_MaximumSprinkleHeight);
-					}
-					return point;
-				};
-				Locator::particleSystem::value().SetDrawOffset(spell->effect, clamped(_hand.handPosition) -
-				                                                                  clamped(spell->processInfo.handPosition));
+				Locator::particleSystem::value().SetLiveHand(spell->effect, _hand.handPosition);
 			}
 		}
 	}
