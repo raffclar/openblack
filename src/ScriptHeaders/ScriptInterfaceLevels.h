@@ -11,6 +11,8 @@
 
 #include <cstdint>
 
+#include <optional>
+
 #include <entt/entity/entity.hpp>
 
 #include "ECS/Components/InterfaceLimits.h"
@@ -38,5 +40,9 @@ namespace openblack::script::interface_levels
 
 /// Gives the player the limits after a script sets the interface level. A player with no limits yet starts with none.
 void Apply(ecs::Registry& registry, entt::entity player, int32_t level);
+
+/// The limits of the player. A player with no limits yet has none. A player who is not in the game yet, as before the
+/// first turn of a network game, also has none.
+[[nodiscard]] ecs::components::InterfaceLimits LimitsOf(const ecs::Registry& registry, std::optional<entt::entity> player);
 
 } // namespace openblack::script::interface_levels
