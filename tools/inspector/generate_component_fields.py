@@ -1,13 +1,20 @@
 #!/usr/bin/env python3
-"""Writes src/ECS/Reflection/ComponentFields.cpp: every component of src/ECS/Components and its data members registered
-with the inspector's reflection, so that the inspector writes them out as JSON and sets them by name.
+"""Writes src/ECS/Reflection/ComponentFields.cpp and the parts in src/ECS/Reflection/Fields/: every component of
+src/ECS/Components and its data members registered with the inspector's reflection, so that the inspector writes them out as JSON and sets them by name.
 
 Run it again after adding or changing a component (with clang-format on the PATH, it formats the file too):
 
     python tools/inspector/generate_component_fields.py
 
-With --check it writes nothing and fails if the file is out of date (spaces aside), as ctest's
+With --check it writes nothing and fails if a file is out of date (spaces aside), as ctest's
 test_inspector_component_fields does, so that a branch adding a component without registering it is told so.
+
+One file with every component took about 11 GB of memory to compile, so the registration is written in parts, one file
+each in src/ECS/Reflection/Fields/, and ComponentFields.cpp only calls them in order. The order of the registration is the
+same as for one file: components by the names of their headers, then the values by name. Units that follow each other
+share a part when the start of their names is the same; a part is split by longer starts of names while it is longer
+than MAX_PART_LINES. A new component so changes one part only. A new part is a new file: run `ob-build configure`
+again so that the build finds it.
 
 Only plain structs in openblack::ecs::components are read. Members that are functions, static, references or C arrays
 are left out, as are templates. A struct with no members is still registered, so that it can be added to an entity.
@@ -31,6 +38,10 @@ import sys
 ROOT = pathlib.Path(__file__).resolve().parents[2]
 COMPONENTS = ROOT / "src" / "ECS" / "Components"
 OUTPUT = ROOT / "src" / "ECS" / "Reflection" / "ComponentFields.cpp"
+PARTS = ROOT / "src" / "ECS" / "Reflection" / "Fields"
+# The most lines of registration in one part, which sets the memory that its compile needs: with 400 lines, the biggest
+# part needs 0.7 GB with MSVC and 1.2 GB with GCC 13 (one file with all lines: 4.4 GB and 11.2 GB)
+MAX_PART_LINES = 400
 NAMESPACE = "openblack::ecs::components"
 
 # Types that aren't components, though they are declared beside them
@@ -486,6 +497,93 @@ def components_of(path):
     return found
 
 
+def count_components(components):
+    return len(components)
+
+
+class Unit:
+    """A component's or a value's registration: the text, the headers it needs and the enumerations whose names it uses.
+    The start of the name decides which part holds it."""
+
+    def __init__(self, stem, text, includes, enums):
+        self.stem = stem
+        self.text = text
+        self.includes = includes
+        self.enums = enums
+        self.lines = text.count("\n")
+
+
+class Part:
+    def __init__(self, key, units):
+        self.key = key
+        self.units = units
+        self.name = ""
+        self.function = ""
+
+
+def split_into_parts(units):
+    """Splits the units, which keep their order, into parts by the start of their names: the first letter, and longer
+    starts while a part is longer than MAX_PART_LINES"""
+    parts = []
+
+    def split(group, length):
+        runs = []
+        for unit in group:
+            key = unit.stem[:length].lower()
+            if runs and runs[-1][0] == key:
+                runs[-1][1].append(unit)
+            else:
+                runs.append((key, [unit]))
+        for key, run in runs:
+            too_long = sum(unit.lines for unit in run) > MAX_PART_LINES
+            if too_long and len(run) > 1 and any(len(unit.stem) > length for unit in run):
+                split(run, length + 1)
+            else:
+                parts.append(Part(key, run))
+
+    split(units, 1)
+    seen = {}
+    for part in parts:
+        kind = "Values" if part.units[0].stem.startswith("~") else "Components"
+        words = re.sub(r"[^0-9A-Za-z]+", "", part.key)
+        name = f"{kind}_{words}"
+        seen[name] = seen.get(name, 0) + 1
+        if seen[name] > 1:
+            name += f"_{seen[name]}"
+        part.name = name
+        part.function = f"RegisterFields_{name}"
+    return parts
+
+
+def part_text(index, part):
+    used = sorted({level for unit in part.units for level in unit.enums})
+    includes = {"ECS/Reflection/ComponentReflection.h"}
+    for unit in part.units:
+        includes |= unit.includes
+    lines = [HEADER]
+    for include in sorted(includes):
+        lines.append(f'#include "{include}"\n')
+    lines.append("\n")
+    if any(unit.stem[0] != "~" for unit in part.units):
+        lines.append("namespace components = openblack::ecs::components;\n\n")
+    lines.append(f"namespace openblack::ecs::reflection\n{{\nvoid {part.function}(entt::meta_ctx& context);\n}}\n\n")
+    if used:
+        lines.append("namespace\n{\n\n")
+        lines.append("// The names of the enumerations indexing lists, which the lists' elements are read and set by\n")
+        for enum in used:
+            names = [name for name in index.types[enum].enumerators if not name.startswith("_")]
+            quoted = ", ".join(f'"{name}"' for name in names)
+            lines.append(f"constexpr std::array<std::string_view, {len(names)}> {names_array(enum)} {{{quoted}}};\n")
+            if len(names) != len(index.types[enum].enumerators):
+                lines.append(f"static_assert(static_cast<size_t>({enum}::{index.types[enum].enumerators[-1]}) == "
+                             f"{names_array(enum)}.size());\n")
+        lines.append("\n} // namespace\n\n")
+    lines.append(f"void openblack::ecs::reflection::{part.function}(entt::meta_ctx& context)\n{{\n")
+    lines.extend(unit.text for unit in part.units)
+    lines.append("}\n")
+    return "".join(lines)
+
+
 def main():
     check = "--check" in sys.argv[1:]
     report = "--report" in sys.argv[1:]
@@ -554,63 +652,72 @@ def main():
             print(f"{name}: {why} (held by {holder})")
         return 0
 
-    includes = {"ComponentReflection.h"} | {f"ECS/Components/{header.name}" for header in headers}
-    for name in list(values) + sorted(enums):
-        header = index.types[name].header
-        includes.add(header.relative_to(SOURCES).as_posix() if header.is_relative_to(SOURCES) else header.name)
-    lines = [HEADER]
-    for include in sorted(includes):
-        lines.append(f'#include "{include}"\n')
-    lines.append("\nnamespace components = openblack::ecs::components;\n\n")
-    if enums:
-        lines.append("namespace\n{\n\n")
-        lines.append("// The names of the enumerations indexing lists, which the lists' elements are read and set by\n")
-        for enum in sorted(enums):
-            names = [name for name in index.types[enum].enumerators if not name.startswith("_")]
-            quoted = ", ".join(f'"{name}"' for name in names)
-            lines.append(f"constexpr std::array<std::string_view, {len(names)}> {names_array(enum)} {{{quoted}}};\n")
-            if len(names) != len(index.types[enum].enumerators):
-                lines.append(f"static_assert(static_cast<size_t>({enum}::{index.types[enum].enumerators[-1]}) == "
-                             f"{names_array(enum)}.size());\n")
-        lines.append("\n} // namespace\n\n")
-    lines.append("void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n")
-    count = 0
+    # The units of the registration in their order: each component, then each value
+    units = []
     for header, name, members in components:
-        count += 1
         if not members:
-            lines.append(f"\tReflect<components::{name}> {{context}};\n")
-            continue
-        lines.append(f"\tReflect<components::{name}>(context)")
-        for member, levels in component_fields[name]:
-            lines.append(field_line(f"components::{name}", member, levels, member in RUN_ONLY.get(name, set())))
-        lines.append(";\n")
-    if values:
-        lines.append("\n\t// The values the components' fields hold\n")
+            text = f"\tReflect<components::{name}> {{context}};\n"
+            used = set()
+        else:
+            text = f"\tReflect<components::{name}>(context)"
+            used = set()
+            for member, levels in component_fields[name]:
+                text += field_line(f"components::{name}", member, levels, member in RUN_ONLY.get(name, set()))
+                used.update(level for level in levels if level is not None)
+            text += ";\n"
+        units.append(Unit(header.stem, text, {f"ECS/Components/{header.name}"}, used))
     for name in sorted(values):
         definition = values[name]
-        lines.append(f"\tReflect<{name}>(context, ValueOnly {{}})")
+        text = f"\tReflect<{name}>(context, ValueOnly {{}})"
+        used = set()
         for member, levels in registered_members(definition, [member for member, _ in definition.members]):
-            lines.append(field_line(name, member, levels))
-        lines.append(";\n")
-    lines.append("}\n")
+            text += field_line(name, member, levels)
+            used.update(level for level in levels if level is not None)
+        text += ";\n"
+        header = definition.header
+        include = header.relative_to(SOURCES).as_posix() if header.is_relative_to(SOURCES) else header.name
+        units.append(Unit("~" + name.removeprefix("openblack::").replace("::", "_"), text, {include}, used))
+    for unit in units:
+        for level in unit.enums:
+            header = index.types[level].header
+            unit.includes.add(header.relative_to(SOURCES).as_posix() if header.is_relative_to(SOURCES) else header.name)
+
+    parts = split_into_parts(units)
+    files = {}
+    for part in parts:
+        files[PARTS / f"{part.name}.cpp"] = part_text(index, part)
+    calls = "".join(f"\t{part.function}(context);\n" for part in parts)
+    declarations = "".join(f"void {part.function}(entt::meta_ctx& context);\n" for part in parts)
+    files[OUTPUT] = (HEADER + '#include "ComponentReflection.h"\n\nnamespace openblack::ecs::reflection\n{\n\n' +
+                     declarations + "\n} // namespace openblack::ecs::reflection\n\n" +
+                     "void openblack::ecs::reflection::RegisterComponentFields(entt::meta_ctx& context)\n{\n" + calls + "}\n")
     if check:
         def squeezed(text):
             return re.sub(r"\s+", "", text)
-        current = OUTPUT.read_text(encoding="utf-8") if OUTPUT.exists() else ""
-        if squeezed(current) != squeezed("".join(lines)):
-            print(f"{OUTPUT.relative_to(ROOT)} is out of date with src/ECS/Components: run "
+        stale = sorted(path.name for path in PARTS.glob("*.cpp") if path not in files) if PARTS.exists() else []
+        wrong = [path for path, text in files.items()
+                 if not path.exists() or squeezed(path.read_text(encoding="utf-8")) != squeezed(text)]
+        if wrong or stale:
+            print(f"{', '.join(path.relative_to(ROOT).as_posix() for path in wrong) or 'no file'} is out of date with "
+                  f"src/ECS/Components (stale: {', '.join(stale) or 'none'}): run "
                   f"python tools/inspector/generate_component_fields.py", file=sys.stderr)
             return 1
-        print(f"{OUTPUT.relative_to(ROOT)} is up to date ({count} components, {len(values)} values)")
+        print(f"{OUTPUT.relative_to(ROOT)} and {len(parts)} parts are up to date ({count_components(components)} "
+              f"components, {len(values)} values)")
         return 0
-    OUTPUT.write_text("".join(lines), encoding="utf-8", newline="\n")
+    PARTS.mkdir(parents=True, exist_ok=True)
+    for path in PARTS.glob("*.cpp"):
+        if path not in files:
+            path.unlink()
+    for path, text in files.items():
+        path.write_text(text, encoding="utf-8", newline="\n")
     # Formatted as the rest of the code is, when clang-format is there
     clang_format = shutil.which("clang-format")
     if clang_format is not None:
-        subprocess.run([clang_format, "-i", str(OUTPUT)], check=True)
-    print(f"{count} components and {len(values)} values written to {OUTPUT.relative_to(ROOT)}")
+        subprocess.run([clang_format, "-i", *[str(path) for path in files]], check=True)
+    print(f"{count_components(components)} components and {len(values)} values written to {len(parts)} parts in "
+          f"{PARTS.relative_to(ROOT)}")
     return 0
-
 
 if __name__ == "__main__":
     sys.exit(main())

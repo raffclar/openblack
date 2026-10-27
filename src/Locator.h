@@ -98,6 +98,7 @@ class WindowingInterface;
 namespace ecs
 {
 class Registry;
+class DrawnRegistry;
 class MapInterface;
 } // namespace ecs
 
@@ -119,6 +120,7 @@ class VillageTotemSystemInterface;
 class SpellIconSystemInterface;
 class ArtefactSystemInterface;
 class HeartbeatSystemInterface;
+class GameEndSystemInterface;
 class FieldSystemInterface;
 class FishFarmSystemInterface;
 class AnimalSystemInterface;
@@ -211,6 +213,7 @@ class CreatureCarryOverSystemInterface;
 class SaveGameSystemInterface;
 class CreatureWebPageSystemInterface;
 class LobbyClientSystemInterface;
+class NetworkGameSystemInterface;
 class RealWeatherSystemInterface;
 class TornadoSystemInterface;
 class MagicShieldSystemInterface;
@@ -290,6 +293,8 @@ struct Locator
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
+	/// The things that only the frames make and draw, out of the synced world
+	using drawnRegistry = entt::locator<ecs::DrawnRegistry>;
 	using entitiesMap = entt::locator<ecs::MapInterface>;
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;
@@ -315,6 +320,7 @@ struct Locator
 	using spellIconSystem = entt::locator<ecs::systems::SpellIconSystemInterface>;
 	using artefactSystem = entt::locator<ecs::systems::ArtefactSystemInterface>;
 	using heartbeatSystem = entt::locator<ecs::systems::HeartbeatSystemInterface>;
+	using gameEndSystem = entt::locator<ecs::systems::GameEndSystemInterface>;
 	using fieldSystem = entt::locator<ecs::systems::FieldSystemInterface>;
 	using fishFarmSystem = entt::locator<ecs::systems::FishFarmSystemInterface>;
 	using animalSystem = entt::locator<ecs::systems::AnimalSystemInterface>;
@@ -390,6 +396,8 @@ struct Locator
 	using webSocketClient = entt::locator<online::WebSocketClientInterface>;
 	/// The client of the lobby (bwgame-service)
 	using lobbyClient = entt::locator<ecs::systems::LobbyClientSystemInterface>;
+	/// The network game of this computer: the session with a game server, which gives the turns of the world
+	using networkGame = entt::locator<ecs::systems::NetworkGameSystemInterface>;
 	/// The real-world weather of a single-player game, off unless the player turns it on
 	using realWeatherSystem = entt::locator<ecs::systems::RealWeatherSystemInterface>;
 	using tornadoSystem = entt::locator<ecs::systems::TornadoSystemInterface>;

@@ -105,6 +105,10 @@ struct Request
 	QueryOptions options;
 };
 
+/// The request as the logs and the list of writes keep it: the letters of input.text are not kept, because they can be
+/// a password
+[[nodiscard]] Request ForTheLog(const Request& request);
+
 /// The members of a request that shape its answer rather than go to its query, the same for every query
 inline constexpr std::array<std::string_view, 9> k_ShapingMembers {
     "fields", "where", "near", "radius", "limit", "cursor", "count", "summary", "max_bytes",

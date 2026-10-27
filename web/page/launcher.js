@@ -12,8 +12,9 @@ const k_FolderKey = 'game-folder';
 const k_CopyFolder = 'game-copy';
 const k_CopyComplete = '.openblack-copy-complete';
 
-// The top folders of the install that the game reads. The page gives no other folder to the game.
-const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins']);
+// The top folders of the install that the game reads. The page gives no other folder to the game. A network game plays
+// a land of the folder "Online Maps".
+const k_GameFolders = new Set(['audio', 'data', 'scripts', 'plug ins', 'online maps']);
 
 // The parts of an install that the game needs, without letter case. A name with a slash at the end is a folder.
 const k_Needed = [
@@ -22,6 +23,50 @@ const k_Needed = [
 ];
 
 const element = (id) => document.getElementById(id);
+
+// The build writes the openblack commit that it comes from into version.txt next to the page: the full git commit hash,
+// with "-dirty" when the source tree had changes, or "unknown". The page shows the short hash with a link to the
+// commit, and gives the text of the file to the game, which shows it on its loading screen.
+const k_VersionFile = 'version.txt';
+const k_CommitAddress = 'https://github.com/raffclar/openblack/commit/';
+const k_ShortHash = 7;
+
+/** The build version in the text of the version file */
+function parseVersion(text) {
+  const match = /^([0-9a-f]{40})(-dirty)?$/i.exec((text ?? '').trim());
+  if (!match) {
+    return { file: text, text: 'unknown', short: 'unknown', address: null };
+  }
+  const hash = match[1].toLowerCase();
+  const dirty = match[2] ? '-dirty' : '';
+  return { file: text, text: hash + dirty, short: hash.slice(0, k_ShortHash) + dirty, address: k_CommitAddress + hash };
+}
+
+// A build with the developer tools puts developer-tools.txt next to the page. Only then does the page take its
+// developer parameters: "args" (more arguments for the game) and "tool-file". The builds that players get do not have
+// the file, thus their page ignores these parameters.
+const k_DeveloperToolsFile = 'developer-tools.txt';
+const developerTools = fetch(k_DeveloperToolsFile, { cache: 'no-cache' })
+  .then((response) => response.ok)
+  .catch(() => false);
+
+const buildVersion = fetch(k_VersionFile, { cache: 'no-cache' })
+  .then((response) => (response.ok ? response.text() : undefined))
+  .catch(() => undefined)
+  .then(parseVersion);
+
+/** Show the build on the launcher and on the badge that the page shows while the game plays */
+function showVersion(version) {
+  for (const link of document.querySelectorAll('.build-link')) {
+    link.textContent = version.short;
+    link.title = `openblack build ${version.text}`;
+    if (version.address) {
+      link.href = version.address;
+    } else {
+      link.removeAttribute('href');
+    }
+  }
+}
 const logElement = element('log');
 
 // The page keeps the last lines of the game log. It writes them into the log box only while the box is open, and at most
@@ -266,9 +311,6 @@ function showFrame(frame) {
   if (screen.width !== frame.width || screen.height !== frame.height) {
     screen.width = frame.width;
     screen.height = frame.height;
-    const canvas = element('canvas');
-    canvas.style.width = `${frame.width}px`;
-    canvas.style.height = `${frame.height}px`;
   }
   screenContext ??= screen.getContext('bitmaprenderer');
   screenContext.transferFromImageBitmap(frame);
@@ -294,15 +336,22 @@ async function choose(entries, source) {
   }
   element('check-version').textContent = check.version;
   element('check').hidden = false;
-  element('play').disabled = true;
+  setPlayEnabled(false);
   log(`The page has ${entries.length} files from ${source}. Missing: ${check.missing.join(', ') || 'none'}.`);
   if (check.missing.length === 0 && element('keep-copy').checked && source !== 'the copy in this browser') {
     await copyToStorage(entries);
   }
-  element('play').disabled = check.missing.length > 0;
+  setPlayEnabled(check.missing.length === 0);
   if (check.missing.length === 0 && new URLSearchParams(location.search).has('autoplay')) {
     start();
   }
+}
+
+// The Play button starts the game as the desktop game starts. The Join Online Game button starts the game at the
+// multiplayer front end. The page parameter "multiplayer" shows only the second button.
+function setPlayEnabled(enabled) {
+  element('play').disabled = !enabled;
+  element('play-online').disabled = !enabled;
 }
 
 // The game draws with WebGPU, and with WebGL 2 when the browser has no WebGPU. The page asks the browser for a WebGPU
@@ -355,7 +404,7 @@ async function addToolFiles(parameters) {
   }
 }
 
-async function start() {
+async function start(online = false) {
   if (!chosen) {
     return;
   }
@@ -364,41 +413,71 @@ async function start() {
       'This browser does not have JSPI (WebAssembly JavaScript Promise Integration), which the game needs.');
     return;
   }
-  element('play').disabled = true;
+  setPlayEnabled(false);
   const storage = (await storageRoot()) !== undefined;
   if (storage && navigator.storage.persist) {
     // Ask the browser to keep the saves when it needs space
     navigator.storage.persist().then((kept) => log(`The browser keeps the saves when it needs space: ${kept}`));
   }
   const parameters = new URLSearchParams(location.search);
-  await addToolFiles(parameters);
+  const developer = await developerTools;
+  if (developer) {
+    await addToolFiles(parameters);
+  } else if (parameters.has('args') || parameters.has('tool-file')) {
+    log('This build has no developer tools: the page ignores the parameters "args" and "tool-file".');
+  }
   const list = chosen.map((entry, index) => `${index}\t${entry.file.size}\t${entry.path}`).join('\n');
-  const gameArguments = (parameters.get('args') || '').split(' ').filter(Boolean);
+  const gameArguments = developer ? (parameters.get('args') || '').split(' ').filter(Boolean) : [];
+  // The Join Online Game button and the page parameter "multiplayer" give the game the -MULTIPLAYER switch, as the
+  // shortcut of the desktop game does: the multiplayer front end opens in place of the menu. With no profile, the game
+  // asks for the new player's name first. Every build takes the switch.
+  const multiplayer = online || parameters.has('multiplayer');
+  if (multiplayer && !gameArguments.some((argument) => argument.toUpperCase() === '-MULTIPLAYER')) {
+    gameArguments.push('-MULTIPLAYER');
+  }
   const renderer = await chooseRenderer(parameters, gameArguments);
   if (renderer.backend) {
     gameArguments.push('--backend-type', renderer.backend);
   }
   log(`Renderer: ${renderer.backend === 'OpenGLES' ? 'WebGL 2' : renderer.backend ?? 'from the game arguments'}, ` +
     `because ${renderer.reason}.`);
+  const version = await buildVersion;
   element('chooser').hidden = true;
   element('game').hidden = false;
+  element('build-badge').hidden = false;
   document.body.classList.add('playing');
   const canvas = element('canvas');
   canvas.addEventListener('contextmenu', (event) => event.preventDefault());
-  // SDL takes the size of a window that the player can change from the size of the canvas on the page. Thus the canvas
-  // starts with the window size that the game asks for: the game's default, or the size on the command line.
-  const size = (short, long, fallback) => {
+  // SDL takes the size of a window that the player can change from the size of the canvas on the page. The canvas fills
+  // the page (page.css). A size on the command line gives the canvas that fixed size, for the tests.
+  const size = (short, long) => {
     const at = gameArguments.findIndex((argument) => argument === short || argument === long);
-    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : fallback;
+    return at >= 0 && at + 1 < gameArguments.length ? Number(gameArguments[at + 1]) : undefined;
   };
-  canvas.style.width = `${size('-W', '--width', 1280)}px`;
-  canvas.style.height = `${size('-H', '--height', 1024)}px`;
+  const width = size('-W', '--width');
+  const height = size('-H', '--height');
+  if (width && height) {
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+  }
+  // The Join Online Game button over the game asks the game for the multiplayer front end. The game takes the request
+  // at its next frame, also while a cut scene has the cinema bars in.
+  const requests = new Int32Array(new SharedArrayBuffer(Int32Array.BYTES_PER_ELEMENT));
+  element('join-online').addEventListener('click', (event) => {
+    Atomics.store(requests, 0, 1);
+    log('Join Online Game: the page asks the game for the multiplayer front end.');
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
   globalThis.Module = {
     canvas,
     arguments: gameArguments,
     print: log,
     printErr: log,
-    openblackWeb: { folder: { list, files: chosen.map((entry) => entry.file) }, storage, showFrame, setPresent },
+    openblackWeb: {
+      folder: { list, files: chosen.map((entry) => entry.file) }, storage, version: version.file, showFrame, setPresent,
+      requests,
+    },
     onExit: (code) => log(`The game stopped with the code ${code}.`),
   };
   const script = document.createElement('script');
@@ -407,6 +486,18 @@ async function start() {
 }
 
 async function main() {
+  buildVersion.then((version) => {
+    showVersion(version);
+    log(`openblack build ${version.text}`);
+  });
+  // While the game plays, the log is a panel over the game, which the badge opens and closes
+  element('log-toggle').addEventListener('click', (event) => {
+    const open = document.body.classList.toggle('log-open');
+    logElement.parentElement.open = open;
+    // The keys go to the game again, not to the button
+    event.currentTarget.blur();
+  });
+
   if (!globalThis.crossOriginIsolated) {
     showMessage('The page cannot start the game',
       'The site does not send the headers that the game threads need (COOP and COEP).');
@@ -475,7 +566,11 @@ async function main() {
     element('keep-copy-label').hidden = true;
   }
 
-  element('play').addEventListener('click', start);
+  element('play').addEventListener('click', () => start(false));
+  element('play-online').addEventListener('click', () => start(true));
+  if (new URLSearchParams(location.search).has('multiplayer')) {
+    element('play').hidden = true;
+  }
 }
 
 main();

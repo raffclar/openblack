@@ -57,6 +57,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
 #include "ECS/ScriptSpotVisuals.h"
@@ -169,17 +170,18 @@ std::optional<particles::TownCentreBelief> GameParticleWorld::TownCentreBeliefOf
 	{
 		return std::nullopt;
 	}
-	// Its totem's top, over the icon on the plinth, where it stands as it rises with the worship
+	// Its totem's top, over the icon on the plinth, where the frames draw it as it rises with the worship
 	std::optional<glm::vec3> totemTop;
 	registry.Each<const VillageTotem, const Transform>(
-	    [&registry, &totemTop, centre](const VillageTotem& standing, const Transform& plinth) {
+	    [&registry, &totemTop, centre](entt::entity totem, const VillageTotem& standing, const Transform& plinth) {
 		    if (totemTop.has_value() || standing.townCentre != centre)
 		    {
 			    return;
 		    }
 		    const auto* icon = registry.Valid(standing.icon) ? registry.TryGet<const Transform>(standing.icon) : nullptr;
-		    auto top = icon != nullptr ? icon->position
-		                               : plinth.position + glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
+		    auto top = icon != nullptr ? ecs::drawn_place::DrawnTransformOf(registry, standing.icon, *icon).position
+		                               : ecs::drawn_place::DrawnTransformOf(registry, totem, plinth).position +
+		                                     glm::vec3(0.0f, ecs::village_totem::k_IconAbovePlinth, 0.0f);
 		    const float iconHeight = icon != nullptr ? ecs::world_objects::SizeOf(standing.icon).height : 0.0f;
 		    top.y = ecs::village_totem::TopY(top.y, iconHeight);
 		    totemTop = top;
@@ -271,7 +273,7 @@ std::optional<particles::ParticleWorldInterface::TargetInfo> GameParticleWorld::
 
 bool GameParticleWorld::IsTargetHeld(entt::entity target) const
 {
-	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == target;
+	return Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(target);
 }
 
 void GameParticleWorld::ClaimTarget(entt::entity target, bool claimed)
@@ -1384,6 +1386,10 @@ void ParticleSystem::Reset()
 	_gestureChain = k_NoEffect;
 	_selectionEffect = k_NoEffect;
 	_world.Reset();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 }
 
 void ParticleSystem::FindTextureStems()

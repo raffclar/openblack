@@ -32,6 +32,12 @@ namespace openblack::magic
 struct EffectSource;
 } // namespace openblack::magic
 
+namespace openblack::player_commands
+{
+struct SeedGesture;
+struct HandCast;
+} // namespace openblack::player_commands
+
 namespace openblack::ecs::systems
 {
 class ObjectDrawListSystemInterface;
@@ -255,7 +261,7 @@ public:
 	virtual bool TapFireBall(entt::entity ball) = 0;
 	/// A one-shot globe tapped by the empty hand: its miracle goes into the hand, charged in full, and the globe pops.
 	/// Whether the hand took the miracle.
-	virtual bool TapGlobe(entt::entity globe) = 0;
+	virtual bool TapGlobe(entt::entity globe, PlayerNames player) = 0;
 	/// The action button went down with an empty hand: a fireball under the hand, within the player's influence, takes
 	/// the press. Whether one did, so nothing behind it is taken.
 	virtual bool PressFireBall(uint32_t nowMs, uint32_t turn) = 0;
@@ -267,6 +273,17 @@ public:
 	/// At the turn: the tap or the take of a fireball that the hand sent (player_commands::HandTap, HandTake). Another
 	/// player's ball is caught into the empty hand; the player's own slips through.
 	virtual void DoCatchFireBall(PlayerNames /*player*/, entt::entity /*ball*/) {}
+	/// At the turn: the use of the miracle in the hand on a thing that the hand sent (player_commands::HandApply). A ready
+	/// fire seed takes in a fireball. Whether the miracle in the hand took the command.
+	virtual bool DoApplySeed(PlayerNames /*player*/, entt::entity /*target*/) { return false; }
+	/// At the turn: a gesture on the miracle in the hand that the hand sent (player_commands::SeedGesture)
+	virtual void DoSeedGesture(PlayerNames /*player*/, const player_commands::SeedGesture& /*gesture*/) {}
+	/// At the turn: the cast of the miracle in the hand that the hand sent (player_commands::HandCast)
+	virtual void DoCast(PlayerNames /*player*/, const player_commands::HandCast& /*cast*/) {}
+	/// At the turn: the let go of a miracle locked on in the hand that the hand sent (player_commands::HandCastUnlock)
+	virtual void DoCastUnlock(PlayerNames /*player*/, entt::entity /*seed*/) {}
+	/// The hand's own work of each turn, before the turn: a miracle locked on in the hand sends its cast again
+	virtual void InterfaceTurn() {}
 	/// The one-shot bubble under the hand now, if any
 	[[nodiscard]] virtual std::optional<entt::entity> OrbUnderHand() const = 0;
 	/// The action button went down with a miracle in the hand: it is armed, locked on or cast. Whether the miracles took
@@ -274,12 +291,17 @@ public:
 	virtual bool PressAction() = 0;
 	/// The action button came up: an armed miracle is cast, a locked one let go
 	virtual void ReleaseAction() = 0;
-	/// Whether the hand holds a miracle, so it doesn't take hold of creatures or things
+	/// Whether the hand of this computer holds a miracle, so it doesn't take hold of creatures or things
 	[[nodiscard]] virtual bool IsHandBusy() const = 0;
+	/// Whether the hand of a player holds a miracle. The turns read this, because it is the same on every computer.
+	[[nodiscard]] virtual bool IsHandBusyOf(PlayerNames player) const = 0;
 	/// How a pour of food or wood lifts and tips the hand now, a fraction of the way from the last turn to the next
 	[[nodiscard]] virtual magic::PourPose GetHandPour(float fraction) const = 0;
 	[[nodiscard]] virtual HandCastState GetHandCastState() const = 0;
+	/// The miracle seed in the hand of this computer
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeed() const = 0;
+	/// The miracle seed in the hand of a player. The turns read this, because it is the same on every computer.
+	[[nodiscard]] virtual std::optional<entt::entity> GetHeldSeedOf(PlayerNames player) const = 0;
 	[[nodiscard]] virtual HandResult GetLastHandResult() const = 0;
 	/// Once a frame, once the hand is posed: where the held miracle's in-hand effect sits, and how large the hand is
 	/// drawn, which is how large the effect is

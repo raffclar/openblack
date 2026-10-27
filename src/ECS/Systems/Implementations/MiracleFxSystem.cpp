@@ -101,7 +101,7 @@ HandMiracleFx* HandFx()
 		return nullptr;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (!registry.Valid(hand) || !registry.AllOf<Hand>(hand))
 	{
 		return nullptr;

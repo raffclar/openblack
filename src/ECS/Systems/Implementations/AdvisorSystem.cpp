@@ -44,6 +44,10 @@ namespace
 {
 /// The advisors' files, the good one's first
 constexpr std::array<std::string_view, k_Dudes> k_Files {"MarkGood.Hd", "MarkEvil.Hd"};
+/// The owner of the anim sounds of each advisor, so that each advisor ends only its own sounds. The advisors are not
+/// things of the world, and only this computer shows them. Thus their sounds do not add an entity to the world. The
+/// owners have numbers at the top of the range of entities, which no thing of the world gets.
+constexpr std::array<entt::entity, k_Dudes> k_SoundOwners {entt::entity {0xFFFFEu}, entt::entity {0xFFFFDu}};
 
 /// The camera as the advisors see it this frame
 SpiritView ViewOf(const Camera& camera, Screen screen)
@@ -276,7 +280,6 @@ void AdvisorSystem::PlayAnimSounds()
 		return;
 	}
 	auto& audio = Locator::audio::value();
-	auto& registry = Locator::entitiesRegistry::value();
 	const auto bank = std::string(k_AnimSoundBank);
 	for (int i = 0; i < k_Dudes; ++i)
 	{
@@ -285,11 +288,7 @@ void AdvisorSystem::PlayAnimSounds()
 		{
 			continue;
 		}
-		auto& owner = _soundOwners.at(static_cast<size_t>(i));
-		if (owner == entt::null || !registry.Valid(owner))
-		{
-			owner = registry.Create();
-		}
+		const auto owner = k_SoundOwners.at(static_cast<size_t>(i));
 		for (const auto& sound : sounds)
 		{
 			// The sound stays where the advisor was. A sound that starts obeys the rules of its sample.

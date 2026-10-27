@@ -9,6 +9,8 @@
 
 #include "TempleHeartLook.h"
 
+#include <cstddef>
+
 #include <array>
 
 #include "Temple/TempleDestruction.h"
@@ -53,7 +55,7 @@ float Table(const std::array<float, 4>& values, float clock)
 	{
 		return values.back();
 	}
-	for (size_t i = 0; i + 1 < k_ShellTimes.size(); ++i)
+	for (std::size_t i = 0; i + 1 < k_ShellTimes.size(); ++i)
 	{
 		if (clock < k_ShellTimes.at(i + 1))
 		{

@@ -118,6 +118,7 @@ LobbyError LobbyErrorOf(const online::HttpResponse& response)
 	if (const auto problem = lobby_api::ParseProblem(TextOf(response)); problem.has_value())
 	{
 		error.detail = !problem->detail.empty() ? problem->detail : problem->title;
+		error.code = problem->code;
 	}
 	if (response.status == 401)
 	{
@@ -367,6 +368,7 @@ void LobbyClientSystem::ApplySession(const lobby_api::Session& session)
 	_accessToken = session.accessToken;
 	_accessExpiry = std::chrono::system_clock::time_point(std::chrono::milliseconds(session.accessTokenExpires));
 	_account = session.account;
+	_emailRequired = session.emailRequired;
 	_state = LobbySessionState::LoggedIn;
 	if (session.refreshToken.has_value())
 	{
@@ -381,6 +383,7 @@ void LobbyClientSystem::EndSession()
 	++_generation;
 	_state = LobbySessionState::LoggedOut;
 	_account.reset();
+	_emailRequired = false;
 	_accessToken.clear();
 	_accessExpiry = {};
 	_refreshToken.reset();
@@ -602,17 +605,20 @@ void LobbyClientSystem::WatchChannel(std::string channel, bool watch)
 	}
 }
 
-void LobbyClientSystem::RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback)
+void LobbyClientSystem::RequestJoinTicket(std::string serverId, game_socket::Role role,
+                                          LobbyCallback<lobby_api::JoinTicket> callback)
 {
 	if (!_config.has_value())
 	{
 		Fail(callback, ErrorOfKind(LobbyErrorKind::NotConfigured));
 		return;
 	}
+	const lobby_api::TicketRequest ticketRequest {.role = std::string(game_socket::RoleName(role))};
 	Authorized(Call {
 	    .method = HttpMethod::Post,
 	    .path = fmt::format("/servers/{}/tickets", serverId),
-	    .headers = {{"Accept", std::string(k_JsonType)}},
+	    .headers = {{"Content-Type", std::string(k_JsonType)}, {"Accept", std::string(k_JsonType)}},
+	    .body = BytesOf(lobby_api::ToJson(ticketRequest)),
 	    .done =
 	        [callback = std::move(callback)](HttpResponse&& response) {
 		        if (auto error = LobbyErrorOf(response); error.kind != LobbyErrorKind::None)

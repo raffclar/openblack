@@ -63,6 +63,7 @@
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -1115,7 +1116,8 @@ void TownSystem::ClaimTown(entt::entity town, PlayerNames player)
 	// The player at this machine hears a town won from someone else
 	if (Locator::playerSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		if (player == local && previous != local)
 		{
 			audio::PlayGameSoundEffect(static_cast<entt::id_type>(audio::SoundId::G_TakeOverTown_01), std::nullopt);

@@ -170,7 +170,7 @@ struct Trs
 Trs Decompose(const glm::mat4& m)
 {
 	const glm::vec3 scale(glm::length(glm::vec3(m[0])), glm::length(glm::vec3(m[1])), glm::length(glm::vec3(m[2])));
-	glm::mat3 rotation(glm::vec3(m[0]) / scale.x, glm::vec3(m[1]) / scale.y, glm::vec3(m[2]) / scale.z);
+	const glm::mat3 rotation {glm::vec3(m[0]) / scale.x, glm::vec3(m[1]) / scale.y, glm::vec3(m[2]) / scale.z};
 	return {.translation = glm::vec3(m[3]), .rotation = glm::normalize(glm::quat_cast(rotation)), .scale = scale};
 }
 

@@ -97,8 +97,10 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(0.5f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f}, cube);
+		// A material that keeps part of its spin: a zero share is not a material of the game
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->velocity = velocity;
 	}
 	[[nodiscard]] PhysicsEntry* Find(entt::entity object) override { return object == entry.entity ? &entry : nullptr; }
@@ -136,8 +138,8 @@ public:
 class AlwaysLowGameRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t) override { return 0; }
-	float GameFloatRand(float) override { return 0.0f; }
+	uint32_t SyncedRand(uint32_t, DrawSite) override { return 0; }
+	float SyncedFloatRand(float, DrawSite) override { return 0.0f; }
 	uint32_t LocalRand(int32_t) override { return 0; }
 	float LocalFloatRand(float) override { return 0.0f; }
 	int32_t CrtRand() override { return 0; }
@@ -240,6 +242,10 @@ protected:
 		Locator::entitiesMap::emplace<MapProduction>();
 		Locator::livingActionSystem::emplace<ecs::systems::LivingActionSystem>();
 		_info = std::make_unique<InfoConstants>();
+		// The fire reaction has a reach, as every reaction of the game's data: a zero reach divides by zero
+		auto& fireRow = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFire));
+		fireRow.maxReactionDistance = 60.0f;
+		fireRow.howImportantIsDistance = 0.25f;
 		for (const auto type : {Reaction::LookAtNiceSpell, Reaction::FleeFromSpell, Reaction::ReactToMagicShield,
 		                        Reaction::FleeFromObject, Reaction::ReactToHandPickUp, Reaction::ReactToObjectCrushed,
 		                        Reaction::ReactToNewBuilding, Reaction::LookAtObject, Reaction::ReactToFood})
@@ -261,6 +267,11 @@ protected:
 		for (auto& villager : _info->villager)
 		{
 			ReactToEverything(villager);
+			// The town needs share divides by this: zero is not a value of the game's data
+			villager.divisorForTownNeedsSpeedMod = 1.0f;
+			// What a villager carries is a share of its most: a zero most divides by zero
+			villager.maxFoodCarried = villager.maxTraderFoodCarried = 10;
+			villager.maxWoodCarried = villager.maxTraderWoodCarried = 10;
 			// As every kind of villager in the game's data, they walk in the plain walking state
 			villager.moveState = LivingStates::LivingMoveToPos;
 		}
@@ -1967,4 +1978,21 @@ TEST_F(Reactions, AnAnimalGoesOnlyToFoodThatInterestsIt)
 	_reactions.Create(Miracle(Reaction::ReactToFood));
 	EXPECT_EQ(animals.wentTo, std::vector<entt::entity> {static_cast<entt::entity>(1000)});
 	Locator::animalSystem::reset();
+}
+
+TEST_F(Reactions, ANetworkLandStartsTheIdsOfTheReactionsAgain)
+{
+	const auto first = _reactions.Create(Miracle());
+	const auto second = _reactions.Create(Miracle());
+	EXPECT_NE(first, second);
+	// A plain new land keeps the count of the ids
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
+	// A network land starts them again, so that each computer gives the same ids
+	_reactions.SetFreshIdsAtNextReset();
+	_reactions.Reset();
+	EXPECT_EQ(_reactions.Create(Miracle()), first);
+	// Only the next reset does it
+	_reactions.Reset();
+	EXPECT_NE(_reactions.Create(Miracle()), first);
 }

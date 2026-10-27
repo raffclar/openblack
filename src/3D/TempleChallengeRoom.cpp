@@ -11,7 +11,9 @@
 
 #include <algorithm>
 #include <span>
+#include <vector>
 
+#include <SavePictureMaker.h>
 #include <bgfx/bgfx.h>
 #include <fmt/format.h>
 
@@ -34,30 +36,46 @@ constexpr uint16_t k_FullHeight = 128;
 constexpr uint16_t k_SmallWidth = 128;
 constexpr uint16_t k_SmallHeight = 64;
 
-/// Writes a picture, RGB with its top row first, to its texture, made the first time
-void Upload(std::optional<graphics::TextureHandle>& texture, std::span<const uint8_t> rgb, uint16_t width, uint16_t height,
+/// Makes the texture of a picture again. The picture is the compressed blocks of the picture files, which the display
+/// card draws as they are, as the game draws them. A save of an older openblack holds RGB, top row first.
+void Upload(std::optional<graphics::TextureHandle>& texture, std::span<const uint8_t> picture, uint16_t width, uint16_t height,
             std::string_view name)
 {
 	const size_t texels = static_cast<size_t>(width) * height;
-	if (rgb.size() < texels * 3)
+	const bool compressed = picture.size() == texels / 2;
+	if (!compressed && picture.size() < texels * 3)
 	{
 		return;
 	}
-	if (!texture.has_value())
+	if (texture.has_value())
 	{
-		texture = graphics::fromBgfx(bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::RGBA8,
-		                                                   BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP));
-		bgfx::setName(graphics::toBgfx(*texture), name.data(), static_cast<int32_t>(name.size()));
+		bgfx::destroy(graphics::toBgfx(*texture));
+		texture.reset();
 	}
-	const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels * 4));
-	for (size_t i = 0; i < texels; ++i)
+	constexpr uint64_t k_Sampler = BGFX_SAMPLER_U_CLAMP | BGFX_SAMPLER_V_CLAMP;
+	const auto* caps = bgfx::getCaps();
+	if (compressed && (caps->formats[bgfx::TextureFormat::BC1] & BGFX_CAPS_FORMAT_TEXTURE_2D) != 0)
 	{
-		memory->data[(i * 4) + 0] = rgb[(i * 3) + 0];
-		memory->data[(i * 4) + 1] = rgb[(i * 3) + 1];
-		memory->data[(i * 4) + 2] = rgb[(i * 3) + 2];
-		memory->data[(i * 4) + 3] = 0xFF;
+		texture = graphics::fromBgfx(bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::BC1, k_Sampler,
+		                                                   bgfx::copy(picture.data(), static_cast<uint32_t>(picture.size()))));
 	}
-	bgfx::updateTexture2D(graphics::toBgfx(*texture), 0, 0, 0, 0, width, height, memory);
+	else
+	{
+		// A display card that cannot draw the blocks gets their texels, decoded in the same way
+		const auto rgb =
+		    compressed ? gamesave::DecodeBlocks(picture, width, height) : std::vector<uint8_t>(picture.begin(), picture.end());
+		const auto* memory = bgfx::alloc(static_cast<uint32_t>(texels * 4));
+		for (size_t i = 0; i < texels; ++i)
+		{
+			memory->data[(i * 4) + 0] = rgb[(i * 3) + 0];
+			memory->data[(i * 4) + 1] = rgb[(i * 3) + 1];
+			memory->data[(i * 4) + 2] = rgb[(i * 3) + 2];
+			memory->data[(i * 4) + 3] = 0xFF;
+		}
+		texture =
+		    graphics::fromBgfx(bgfx::createTexture2D(width, height, false, 1, bgfx::TextureFormat::RGBA8, k_Sampler, memory));
+	}
+	bgfx::setName(graphics::toBgfx(*texture), name.data(), static_cast<int32_t>(name.size()));
 }
 } // namespace
 

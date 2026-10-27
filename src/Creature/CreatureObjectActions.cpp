@@ -95,6 +95,11 @@ bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 	return true;
 }
 
+bool creature_object_actions::PosesBody(bool playing, Status status)
+{
+	return playing && (status == Status::Running || status == Status::Contact);
+}
+
 Hands creature_object_actions::HandsFor(Kind kind)
 {
 	switch (kind)

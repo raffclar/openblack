@@ -197,7 +197,7 @@ void MagicShieldSystem::Strip(entt::entity object, MagicShield& shieldObject)
 			ids.push_back(id);
 		}
 	}
-	// In the order that the reactions were made, the same on every computer
+	// In the order of their numbers: the order of the map is different on each C++ library
 	std::ranges::sort(ids);
 	for (const auto id : ids)
 	{

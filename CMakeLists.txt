@@ -65,6 +65,25 @@ set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Build everything of openblack with sanitizers, for example -DOPENBLACK_SANITIZE=address,undefined. Off by default.
+# Use a Debug build in a separate build folder. MSVC supports only "address".
+set(OPENBLACK_SANITIZE
+    ""
+    CACHE STRING "Sanitizers to build with (address, undefined; comma separated), empty for none"
+)
+if (OPENBLACK_SANITIZE)
+  if (MSVC)
+    if (NOT OPENBLACK_SANITIZE STREQUAL "address")
+      message(FATAL_ERROR "OPENBLACK_SANITIZE supports only \"address\" with MSVC")
+    endif ()
+    add_compile_options(/fsanitize=address)
+  else ()
+    add_compile_options(-fsanitize=${OPENBLACK_SANITIZE} -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${OPENBLACK_SANITIZE})
+  endif ()
+  message(STATUS "Sanitizers on: ${OPENBLACK_SANITIZE}")
+endif ()
+
 # don't allow in source builds
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
@@ -105,6 +124,26 @@ option(OPENBLACK_INSPECTOR
        "Build the debug inspector into the game (debug and development builds)"
        ${OPENBLACK_INSPECTOR_DEFAULT}
 )
+# The developer tools: the debug windows and the editor, the inspector, the testbed scenarios, the debug keys, and the
+# options of the command line and the web page that only developers and tools use. The builds that players get (the
+# *-shipping presets) set it off. Then the program does not have these tools, and it ignores their options.
+option(
+  OPENBLACK_DEVELOPER_TOOLS
+  "Build the developer tools into the game (off for the builds that players get)"
+  ON
+)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  add_compile_definitions(OPENBLACK_DEVELOPER_TOOLS)
+elseif (OPENBLACK_INSPECTOR)
+  message(STATUS "OPENBLACK_DEVELOPER_TOOLS is off: the build has no inspector")
+  set(OPENBLACK_INSPECTOR
+      OFF
+      CACHE
+        BOOL
+        "Build the debug inspector into the game (debug and development builds)"
+        FORCE
+  )
+endif ()
 # The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)

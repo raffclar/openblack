@@ -505,8 +505,7 @@ bool Available(const ecs::Registry& registry, entt::entity entity, Reaction type
 	}
 	// Nor does one with no life left, one that the hand holds, or one that a teleport stone carries
 	const auto* needs = registry.TryGet<const CreatureNeeds>(entity);
-	const bool held =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == std::optional(entity);
+	const bool held = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(entity);
 	// A stone controls the creature only while its plan still has a step of the teleport to do
 	const auto* plans = registry.TryGet<const CreatureMindState>(entity);
 	const bool teleporting =
@@ -1380,7 +1379,9 @@ void ReactionSystem::Start(Active& reaction, entt::entity living, LivingReaction
 	// for a nasty one the neutral player's
 	auto& minds = Locator::creatureMindSystem::value();
 	const bool byCreature = source.casterCreature != entt::null;
-	const bool computer = source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
+	const bool computer = Locator::playerSystem::has_value()
+	                          ? Locator::playerSystem::value().IsComputerPlayer(source.player)
+	                          : source.player != PlayerNames::PLAYER_ONE && source.player != PlayerNames::NEUTRAL;
 	// A shield, either kind, teaches the spiritual shield
 	const auto magic = shield                                ? std::optional(static_cast<size_t>(MagicType::Shield))
 	                   : source.magicType != MagicType::None ? std::optional(static_cast<size_t>(source.magicType))
@@ -1940,6 +1941,10 @@ bool ReactionSystem::LoadState(reflection::BinaryReader& in)
 void ReactionSystem::Reset()
 {
 	_reactions.clear();
+	if (std::exchange(_freshIdsAtNextReset, false))
+	{
+		_nextId = 1;
+	}
 	_cursor = 0;
 	_turn = 0;
 	_joins = 0;

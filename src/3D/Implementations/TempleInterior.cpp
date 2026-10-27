@@ -68,6 +68,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
@@ -152,10 +153,9 @@ const std::unordered_map<Indoors, std::string_view> k_TempleInteriorGlows {
     {Indoors::SaveGame, "savegame"},     //
 };
 
-inline void addRoomToRegistry(std::string_view assetName, Indoors templeRoom, glm::vec3 position, glm::mat3 rotation,
-                              glm::vec3 scale)
+inline void addRoomToRegistry(ecs::Registry& registry, std::string_view assetName, Indoors templeRoom, glm::vec3 position,
+                              glm::mat3 rotation, glm::vec3 scale)
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	auto meshId = entt::hashed_string(fmt::format("temple/interior/{}", assetName).c_str());
 	// "<room>_l3d" is the room itself and "<room>floor_l3d" its floor
 	const auto roomName = k_TempleInteriorGlows.at(templeRoom);
@@ -182,7 +182,7 @@ inline void addRoomToRegistry(std::string_view assetName, Indoors templeRoom, gl
 	registry.Assign<ecs::components::Mesh>(entity, meshId, static_cast<int8_t>(0), static_cast<int8_t>(0));
 }
 
-inline void addGlowsToRegistry(Indoors templeRoom)
+inline void addGlowsToRegistry(ecs::Registry& registry, Indoors templeRoom)
 {
 	const auto& glowManager = Locator::resources::value().GetGlows();
 	const auto glowId =
@@ -190,7 +190,7 @@ inline void addGlowsToRegistry(Indoors templeRoom)
 	const auto glows = glowManager.Handle(glowId);
 	for (const auto& glow : glows->emitters)
 	{
-		ecs::archetypes::GlowArchetype::Create(glow, templeRoom);
+		ecs::archetypes::GlowArchetype::Create(registry, glow, templeRoom);
 	}
 }
 
@@ -242,7 +242,8 @@ void PlayToggleSound(entt::id_type sound, uint32_t pitchPercent)
 } // namespace
 
 TempleInterior::TempleInterior()
-    : _doors(PlayDoorSound)
+    : _rooms(std::make_unique<ecs::Registry>())
+    , _doors(PlayDoorSound)
     , _toggles(PlayToggleSound)
 {
 }
@@ -266,8 +267,7 @@ TempleScrolls::Facts GatherScrollFacts()
 		facts.bindings.assign(bindings.begin(), bindings.end());
 	}
 	// The world scroll tells the player at this machine of the world and their people
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto world = player_statistics::World(local);
 	facts.population = world.population;
 	facts.believersPercent = world.believersPercent;
@@ -475,11 +475,11 @@ void TempleInterior::ListSavedGames()
 
 temple::save_game_room::View TempleInterior::SaveGameRoomView() const
 {
-	// openblack has no network game: the player is never in one
+	// A network game never saves
 	return {.closeUp = _cameraModel != nullptr && _cameraModel->GetSubMeshZoom() == 1.0f,
 	        .pictureLookedAt = _saveGameRoom != nullptr && _saveGameRoom->IsPictureLookedAt(),
 	        .keptInRoom = _lock.GetRoom().has_value(),
-	        .multiplayer = false};
+	        .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame()};
 }
 
 void TempleInterior::AskAboutSlot(temple::save_game_room::Click click, uint32_t slot)
@@ -528,7 +528,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	// The empty pictures show the half for the player's alignment
 	if (Locator::playerSystem::has_value() && Locator::alignmentSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
 	auto& boxes = _interface->GetSaveGameBoxes();
@@ -948,7 +949,7 @@ void TempleInterior::UpdateToolTips(float milliseconds)
 	        (inChallengeRoom && _challengeRoom->IsPictureLookedAt()) || (inSaveGameRoom && _saveGameRoom->IsPictureLookedAt()),
 	    .savedGames = savedGames,
 	    .savedGameHighDetail = inSaveGameRoom ? _saveGameRoom->GetHighDetailSlot() : std::nullopt,
-	    .multiplayer = false,
+	    .multiplayer = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	std::u16string savedGameName;
 	UpdateTempleToolTip(_toolTip, input, &savedGameName);
@@ -1835,11 +1836,11 @@ void TempleInterior::Activate(TempleRoom room)
 
 	for (const auto& [roomType, assetName] : k_TempleInteriorParts)
 	{
-		addRoomToRegistry(assetName, roomType, _templePosition, rotation, scale);
+		addRoomToRegistry(*_rooms, assetName, roomType, _templePosition, rotation, scale);
 	}
 	for (const auto& [roomType, assetName] : k_TempleInteriorGlows)
 	{
-		addGlowsToRegistry(roomType);
+		addGlowsToRegistry(*_rooms, roomType);
 	}
 
 	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystemTemple>();
@@ -1861,7 +1862,7 @@ void TempleInterior::Activate(TempleRoom room)
 	// The creature's room's effects start around its fire
 	if (const auto fire = CreatureCaveFire(); fire.has_value())
 	{
-		_creatureCaveEffects = std::make_unique<CreatureCaveEffects>(*fire);
+		_creatureCaveEffects = std::make_unique<CreatureCaveEffects>(*_rooms, *fire);
 	}
 	// The player's worshippers come in with the player, set down about the floors
 	_people = TemplePeople::Gather();
@@ -2088,12 +2089,11 @@ void TempleInterior::Close()
 	}
 	_optionsShown = false;
 
-	auto& registry = Locator::entitiesRegistry::value();
 	auto& config = Locator::config::value();
 	config.drawIsland = true;
 	config.drawWater = true;
-	registry.Each<const ecs::components::TempleInteriorPart>(
-	    [&registry](const entt::entity entity, auto&&...) { registry.Destroy(entity); });
+	_rooms->Each<const ecs::components::TempleInteriorPart>(
+	    [this](const entt::entity entity, auto&&...) { _rooms->Destroy(entity); });
 
 	auto& camera = Locator::camera::value();
 	Locator::rendereringSystem::emplace<ecs::systems::RenderingSystem>();

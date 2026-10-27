@@ -64,6 +64,13 @@ struct TutorialSkip
 	return choice != Choice::KeepOldCreature || currentProfileHasCreature;
 }
 
+/// Whether the start-of-game question shows a choice. The question shows the debug answer (start with the Cow) only in
+/// a build with the developer tools, so that the question of a player has only the answers of the original game.
+[[nodiscard]] constexpr bool IsShown(Choice choice, bool currentProfileHasCreature, bool developerTools) noexcept
+{
+	return IsAvailable(choice, currentProfileHasCreature) && (developerTools || choice != Choice::DebugStartWithCow);
+}
+
 /// A choice brought to one that can be taken. Keeping the old creature with none kept becomes skipping all of the
 /// creature tutorial, which is what the first land's scripts do with that answer when there is no creature to keep.
 [[nodiscard]] constexpr Choice AvailableChoice(Choice choice, bool currentProfileHasCreature) noexcept
@@ -101,10 +108,11 @@ struct NewGameStart
 }
 
 /// Whether the game's first land starts the story: its scripts and the start-of-game question. A playground is started
-/// as the playground menu starts one, with the scripts made ready but none of the story begun and nothing asked.
-[[nodiscard]] constexpr bool FirstLandStartsStory(bool playground) noexcept
+/// as the playground menu starts one, with the scripts made ready but none of the story begun and nothing asked. A
+/// network game also starts no story and asks nothing.
+[[nodiscard]] constexpr bool FirstLandStartsStory(bool playground, bool networkGame) noexcept
 {
-	return !playground;
+	return !playground && !networkGame;
 }
 
 /// "ask", "normal", "creature" (straight to choosing a creature), "story" (skip all of the creature's tutorial too)
@@ -113,7 +121,7 @@ struct NewGameStart
 {
 	if (text == "ask")
 	{
-		return NewGameStart {.ask = true};
+		return NewGameStart {.ask = true, .answer = std::nullopt};
 	}
 	if (text == "normal")
 	{

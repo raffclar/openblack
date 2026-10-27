@@ -239,7 +239,7 @@ void MapProduction::OnResidentGone(entt::registry& /*registry*/, entt::entity en
 	TakeOut(entity);
 }
 
-void MapProduction::FileMade() const
+void MapProduction::FileMadeBeforeLook() const
 {
 	if (_made.empty() || _registry == nullptr)
 	{
@@ -369,7 +369,7 @@ void MapProduction::TakeOut(entt::entity entity) const
 
 std::span<const entt::entity> MapProduction::GetFixedInGridCell(const CellId& cellId) const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	const auto index = _lists.IndexOf({cellId.x, cellId.y});
 	return index.has_value() ? _lists.Fixed(*index) : std::span<const entt::entity> {};
 }
@@ -393,7 +393,7 @@ std::span<const entt::entity> MapProduction::GetFiledMobileInGridCell(const Cell
 
 std::span<const entt::entity> MapProduction::GetMobileInGridCell(const CellId& cellId) const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	const auto index = _lists.IndexOf({cellId.x, cellId.y});
 	return index.has_value() ? _lists.Mobile(*index) : std::span<const entt::entity> {};
 }
@@ -405,20 +405,20 @@ std::span<const entt::entity> MapProduction::GetMobileInGridCell(const glm::vec3
 
 std::vector<entt::entity> MapProduction::GetAllInCell(glm::ivec2 cell) const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	const auto index = _lists.IndexOf(cell);
 	return index.has_value() ? _lists.All(*index) : std::vector<entt::entity> {};
 }
 
 std::span<const entt::entity> MapProduction::GetOnBlock(glm::ivec2 block) const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	return _lists.Blocks().OnBlock(block);
 }
 
 std::span<const entt::entity> MapProduction::GetOffBlocks() const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	return _lists.Blocks().OffBlocks();
 }
 
@@ -428,7 +428,7 @@ void MapProduction::Sync()
 	{
 		return;
 	}
-	FileMade();
+	FileMadeBeforeLook();
 	// What can move goes into its new cell: a building as soon as it is anywhere else, anything else once it is in
 	// another cell
 	std::vector<entt::entity> moved;
@@ -446,6 +446,11 @@ void MapProduction::Sync()
 	{
 		Refile(entity);
 	}
+}
+
+void MapProduction::FileMade()
+{
+	FileMadeBeforeLook();
 }
 
 void MapProduction::SaveState(reflection::BinaryWriter& out) const
@@ -491,7 +496,7 @@ void MapProduction::FileResidents()
 
 bool MapProduction::InMap(entt::entity entity) const
 {
-	FileMade();
+	FileMadeBeforeLook();
 	if (_registry == nullptr || !_registry->Valid(entity))
 	{
 		return false;

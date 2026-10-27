@@ -85,5 +85,7 @@ private:
 	Sdl2WindowingSystem& Close();
 
 	std::unique_ptr<SDL_Window, SDLDestroyer> _window;
+	/// A background run never touches the pointer of the system
+	bool _background {false};
 };
 } // namespace openblack::windowing

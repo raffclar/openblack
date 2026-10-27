@@ -56,12 +56,12 @@ public:
 /// the screen or hides the world.
 [[nodiscard]] bool LandDrawn();
 
-/// The draw starts: the creatures get their poses before the hand moves. The fights and the walks of the creatures
-/// move on with their animations.
+/// The draw starts: the creatures get their drawn poses before the hand moves. The frame changes only what the draw
+/// reads: the fights, the walks and the animations of the creatures move on only in the game turns.
 void PlayCreaturePoses();
 
 /// The effects of the frame move on by the game time of the frame, after the hand moved. Some of them change the world:
-/// the things that the creatures hold, the animals and the villagers between their turns, and the words of the scripts.
+/// the animals and the villagers between their turns, and the words of the scripts.
 void PlayFrameEffects(FrameViewInterface& view);
 
 } // namespace openblack::simulation

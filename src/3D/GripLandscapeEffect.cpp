@@ -9,6 +9,7 @@
 
 #include "GripLandscapeEffect.h"
 
+#include <chrono>
 #include <numbers>
 #include <vector>
 
@@ -22,9 +23,8 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "Graphics/Texture2D.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
-#include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
 using namespace openblack::ecs::components;
@@ -42,8 +42,9 @@ constexpr auto k_GrowTime = 1.01f;
 constexpr auto k_StartAlpha = 78.0f / 255.0f;
 constexpr auto k_EndAlpha = 2.0f / 255.0f;
 constexpr auto k_FadeTime = 0.865714f;
-// The centre dies of old age, and its sprites with it
-constexpr auto k_DieAge = 2.65752f;
+// The centre dies of old age, and its sprites with it. The turns count its age.
+constexpr auto k_TurnSeconds = std::chrono::duration<float>(ecs::systems::TimeSystemInterface::k_TurnDuration).count();
+constexpr auto k_LifeTurns = GripLandscapeEffect::LifeTurns(GripLandscapeEffect::k_DieSeconds, k_TurnSeconds);
 // The sprites: the first 32 frames of the 8 by 8 sheet are dust, played looping from a random frame
 constexpr auto k_FrameRate = 20.7611f;
 constexpr auto k_FrameCount = 32;
@@ -72,37 +73,43 @@ glm::vec3 RandomInUnitSphere()
 
 void GripLandscapeEffect::Spawn(glm::vec3 groundPosition)
 {
-	if (!Locator::resources::value().GetTextures().Contains(k_SpriteSheetId.value()))
-	{
-		return;
-	}
-
+	// The game server and the tools without pictures make the puff too, because it is part of the synced world
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto centre = groundPosition + glm::vec3(0.0f, k_CentreHeight, 0.0f);
 	for (int i = 0; i < k_SpriteCount; ++i)
 	{
 		const auto frame = static_cast<float>(Locator::rng::value().NextValue(0, k_FrameCount - 1));
 		const auto entity = registry.Create();
-		registry.Assign<GripLandscapeParticle>(entity, centre, RandomInUnitSphere() * k_SphereRadius, 0.0f, frame);
+		registry.Assign<GripLandscapeParticle>(entity, centre, RandomInUnitSphere() * k_SphereRadius, 0.0f, frame, k_LifeTurns);
 		registry.Assign<Sprite>(entity, k_SpriteSheetId.value(), FrameOrigin(frame),
 		                        glm::vec2(1.0f / static_cast<float>(k_SheetColumns)), glm::vec4(k_Colour, k_StartAlpha), false);
 		registry.Assign<Transform>(entity, centre, glm::mat3(1.0f), glm::vec3(0.0f));
 	}
 }
 
-void GripLandscapeEffect::Update(float deltaSeconds)
+void GripLandscapeEffect::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	std::vector<entt::entity> dead;
+	registry.Each<GripLandscapeParticle>([&dead](entt::entity entity, GripLandscapeParticle& particle) {
+		if (--particle.turnsLeft <= 0)
+		{
+			dead.push_back(entity);
+		}
+	});
+	for (const auto entity : dead)
+	{
+		registry.Destroy(entity);
+	}
+}
+
+void GripLandscapeEffect::Update(float gameSeconds)
+{
+	auto& registry = Locator::entitiesRegistry::value();
 	registry.Each<GripLandscapeParticle, Sprite, Transform>(
-	    [&dead, deltaSeconds](entt::entity entity, GripLandscapeParticle& particle, Sprite& sprite, Transform& transform) {
-		    particle.age += deltaSeconds;
-		    if (particle.age >= k_DieAge)
-		    {
-			    dead.push_back(entity);
-			    return;
-		    }
-		    particle.frame = glm::mod(particle.frame + (k_FrameRate * deltaSeconds), static_cast<float>(k_FrameCount));
+	    [gameSeconds](GripLandscapeParticle& particle, Sprite& sprite, Transform& transform) {
+		    particle.age += gameSeconds;
+		    particle.frame = glm::mod(particle.frame + (k_FrameRate * gameSeconds), static_cast<float>(k_FrameCount));
 
 		    const auto scale = k_FinalScale * glm::min(particle.age / k_GrowTime, 1.0f);
 		    const auto alpha = glm::mix(k_StartAlpha, k_EndAlpha, glm::min(particle.age / k_FadeTime, 1.0f));
@@ -113,8 +120,4 @@ void GripLandscapeEffect::Update(float deltaSeconds)
 		    sprite.uvMin = FrameOrigin(particle.frame);
 		    sprite.tint.a = alpha;
 	    });
-	for (const auto entity : dead)
-	{
-		registry.Destroy(entity);
-	}
 }

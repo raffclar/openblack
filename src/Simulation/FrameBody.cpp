@@ -30,6 +30,7 @@
 #include "ECS/Systems/CreatureObjectActionSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
+#include "ECS/Systems/ExplosionSystemInterface.h"
 #include "ECS/Systems/FieldSystemInterface.h"
 #include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/FireflySystemInterface.h"
@@ -83,17 +84,18 @@ void PlayCreaturePoses()
 	// The static that the eyes of all the creatures fizz through continues to slide as the draw starts
 	Locator::creatureFizzSystem::value().UpdateFrame(std::chrono::duration<float>(gameTime).count());
 	{
-		// The fight animations play, blows land and the fighters move as their animations carry them
+		// The fight's camera follows the fighters. The fights themselves move on only in the game turns.
 		auto creatureCombat = profiler.BeginScoped(Profiler::Stage::CreatureCombatUpdate);
 		Locator::creatureFightSystem::value().Update(gameTime);
 	}
 	{
-		// The creatures are drawn moving between the last two turns
+		// The walking creatures are drawn between the places of their last two turns. The frame changes only their drawn
+		// places.
 		auto creatureLocomotion = profiler.BeginScoped(Profiler::Stage::CreatureLocomotionUpdate);
 		Locator::creatureLocomotionSystem::value().Update(clock.GetTurnFraction());
 	}
 	{
-		// The creatures breathe, act, pull faces and look about
+		// The bodies are drawn between the poses of their last two turns, and their eyes blink and look about
 		auto creatureAnimation = profiler.BeginScoped(Profiler::Stage::CreatureAnimationUpdate);
 		Locator::creatureAnimationSystem::value().Update(gameTime);
 	}
@@ -144,10 +146,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 	{
 		Locator::vortexSystem::value().UpdateFrame(clock.GetFrameRealTime(), clock.GetFrameGameTime(), LandDrawn());
 	}
-	// The reward chests from the sky fall and thump down, and their dust fades
+	// The frame draws the reward chests from the sky between their turns, and their dust fades
 	if (Locator::rewardSystem::has_value())
 	{
-		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count());
+		Locator::rewardSystem::value().Update(std::chrono::duration<float, std::milli>(gameTime).count(),
+		                                      clock.GetTurnFraction());
 	}
 	// The fireflies out drift about where they are between their last two turns
 	if (Locator::fireflySystem::has_value())
@@ -175,7 +178,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		    std::chrono::duration<float, std::milli>(clock.GetFrameRealTime()).count(), camera.GetOrigin());
 	}
 	{
-		// What the creatures hold is drawn in their hands as the frame poses them
+		// What the creatures hold is drawn in their drawn hands. The turns place it in the world.
 		auto creatureObjectActions = profiler.BeginScoped(Profiler::Stage::CreatureObjectActionUpdate);
 		Locator::creatureObjectActionSystem::value().UpdateHeld();
 	}
@@ -201,6 +204,11 @@ void PlayFrameEffects(FrameViewInterface& view)
 		const bool landHidden = Locator::videoSystem::has_value() &&
 		                        (Locator::videoSystem::value().CoversScreen() || Locator::videoSystem::value().HidesWorld());
 		Locator::footprintSystem::value().Update(gameTime, !inTemple && !landHidden);
+		// The piles of roots fade and go only on a frame that draws the land, before the draw
+		if (!inTemple && !landHidden)
+		{
+			Locator::explosionSystem::value().AgeRootsPiles(clock.GetFrameGameTime());
+		}
 	}
 	{
 		// Their skins are painted again where their alignment, tattoos or marks have changed
@@ -224,6 +232,7 @@ void PlayFrameEffects(FrameViewInterface& view)
 		Locator::influenceSystem::value().ShowHandInfluence(gameTime);
 	}
 	Locator::mistSystem::value().Update(gameTime);
+	Locator::cloudSystem::value().AnimateStormClouds(gameTime);
 	Locator::villageLightSystem::value().Update(gameTime);
 	// The disciples glow, and the one in or under the hand shows the symbol of its work
 	ecs::villager_disciple::UpdateMarks();
