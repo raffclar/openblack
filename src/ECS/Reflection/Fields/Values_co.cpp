@@ -70,6 +70,7 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Node::value>("value")
 	    .Field<&openblack::computer_mind::Node::bestLeaf>("bestLeaf")
 	    .Field<&openblack::computer_mind::Node::object>("object")
+	    .Field<&openblack::computer_mind::Node::siteTown>("siteTown")
 	    .Field<&openblack::computer_mind::Node::amount>("amount")
 	    .Field<&openblack::computer_mind::Node::argument>("argument")
 	    .Field<&openblack::computer_mind::Node::place>("place");

@@ -54,6 +54,7 @@
 #include "GameWorshipSiteWorld.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/SpellIcons.h"
 #include "Magic/WorshipBattery.h"
 
 using namespace openblack;
@@ -858,12 +859,30 @@ std::optional<glm::vec2> WorshipSiteSystem::PlaceAt(entt::entity site, SitePlace
 	case SitePlace::Centre:
 		point = ws::k_CentrePoint;
 		break;
+	case SitePlace::Standing:
+		point = _world->SitePoint(magic::spell_icons::k_FirstSitePoint);
+		break;
 	}
 	if (!point.has_value())
 	{
 		return std::nullopt;
 	}
 	return ws::TurnedPoint(at, component.facing, *point);
+}
+
+std::optional<float> WorshipSiteSystem::StandingHeight(entt::entity site) const
+{
+	auto& registry = _world->Entities();
+	if (!registry.Valid(site) || !registry.AllOf<WorshipSite, Transform>(site))
+	{
+		return std::nullopt;
+	}
+	const auto point = _world->SitePoint(magic::spell_icons::k_FirstSitePoint);
+	if (!point.has_value())
+	{
+		return std::nullopt;
+	}
+	return registry.Get<const Transform>(site).position.y + point->y;
 }
 
 void WorshipSiteSystem::AddWorshipper(entt::entity site, entt::entity villager)
