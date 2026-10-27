@@ -4159,6 +4159,35 @@ void AddAudio(std::vector<Scenario>& all)
 	                 Go(Kind::ThrowAt, 0, k_CryHut, 0.5f)},
 	    .repeatFrom = 3,
 	});
+
+	// The hand strikes the hut of a town with people with a lightning bolt, again and again
+	all.push_back({
+	    .id = "audio.town_lightning_cry",
+	    .name = "A town cries out about lightning when a lightning bolt harms it",
+	    .facet = Facet::Audio,
+	    .description = "The hand casts a lightning bolt at a hut of a town with three people, every ten seconds. The "
+	                   "guidance waits end first. The audio log gives each cry of the town and its sample.",
+	    .expected = "When the bolt harms the hut or a villager, the town sometimes cries out from the town centre: a "
+	                "villager voice of the guidance bank, about an attack or about lightning. The cries come at least "
+	                "four seconds apart.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, k_CryHut + glm::vec2(10.0f, 10.0f)}},
+	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_CryHut},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-6.0f, 6.0f), .joinTown = true},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_CryHut + glm::vec2(-6.0f, -6.0f),
+	                 .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(6.0f, 8.0f), .joinTown = true}},
+	    .miracles = {{.type = MagicType::LightningBolt,
+	                  .point = k_CryHut,
+	                  .handOffset = k_CryHut,
+	                  .handHeight = 15.0f,
+	                  .delaySeconds = 2.0f,
+	                  .holdSeconds = 3.0f,
+	                  .repeatSeconds = 10.0f,
+	                  .byHand = true}},
+	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
+	});
 }
 
 void AddObjects(std::vector<Scenario>& all)
