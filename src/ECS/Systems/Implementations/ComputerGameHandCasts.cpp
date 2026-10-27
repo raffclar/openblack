@@ -26,6 +26,7 @@
 #include "Audio/Sound.h"
 #include "ComputerMindCommon.h"
 #include "Creature/CreatureGesture.h"
+#include "ECS/Components/CreatureSpells.h"
 #include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
@@ -100,6 +101,42 @@ bool GameHandCasts::Angry(MagicType type) const
 
 bool GameHandCasts::Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand)
 {
+	const auto targetCoords = CoordsOfThing(target);
+	if (!targetCoords.has_value())
+	{
+		return false;
+	}
+	return CastFrom(type, target, *targetCoords, icon, hand, 1.0f);
+}
+
+bool GameHandCasts::CastAt(MagicType type, glm::vec3 place, entt::entity icon, glm::vec3 hand, float magnitude)
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return false;
+	}
+	// The miracle goes on the land at the place
+	map_coords::MapCoords coords {.x = map_coords::ToFixed(place.x), .z = map_coords::ToFixed(place.z), .altitude = 0.0f};
+	coords.altitude = Locator::terrainSystem::value().GetAltitude(coords.x, coords.z);
+	return CastFrom(type, entt::null, coords, icon, hand, magnitude);
+}
+
+bool GameHandCasts::UnderSpell(entt::entity creature) const
+{
+	auto& registry = Entities();
+	if (creature == entt::null || !registry.Valid(creature))
+	{
+		return false;
+	}
+	const auto* spells = registry.TryGet<const CreatureSpells>(creature);
+	return spells != nullptr && std::ranges::any_of(spells->spells.slots, [](const creature_spells::Slot& slot) {
+		       return slot.phase != creature_spells::Phase::Off;
+	       });
+}
+
+bool GameHandCasts::CastFrom(MagicType type, entt::entity target, const map_coords::MapCoords& targetCoords, entt::entity icon,
+                             glm::vec3 hand, float magnitude)
+{
 	if (!Locator::infoConstants::has_value() || !Locator::magicSystem::has_value())
 	{
 		return false;
@@ -109,15 +146,10 @@ bool GameHandCasts::Cast(MagicType type, entt::entity target, entt::entity icon,
 	{
 		return false;
 	}
-	const auto targetCoords = CoordsOfThing(target);
-	if (!targetCoords.has_value())
-	{
-		return false;
-	}
 	// A food or wood miracle lands only on land
 	if (type == MagicType::Food || type == MagicType::Wood)
 	{
-		const auto* cell = Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::Cell(*targetCoords)));
+		const auto* cell = Locator::terrainSystem::value().FindCell(glm::u16vec2(map_coords::Cell(targetCoords)));
 		if (cell == nullptr || cell->properties.hasWater != 0)
 		{
 			return false;
@@ -129,8 +161,8 @@ bool GameHandCasts::Cast(MagicType type, entt::entity target, entt::entity icon,
 	    .x = map_coords::ToFixed(hand.x), .z = map_coords::ToFixed(hand.z), .altitude = hand.y};
 	const auto from = glm::vec3(map_coords::ToMetres(handCoords.x), handCoords.altitude, map_coords::ToMetres(handCoords.z));
 	const auto at =
-	    glm::vec3(map_coords::ToMetres(targetCoords->x), targetCoords->altitude, map_coords::ToMetres(targetCoords->z));
-	const magic::SpellCastData cast {.magnitude = 1.0f,
+	    glm::vec3(map_coords::ToMetres(targetCoords.x), targetCoords.altitude, map_coords::ToMetres(targetCoords.z));
+	const magic::SpellCastData cast {.magnitude = magnitude,
 	                                 .chants = effect.initialChants,
 	                                 .duration = effect.timerWhenComputerPlayerCasting,
 	                                 .maxObjectsToCreate = -1};
@@ -141,7 +173,7 @@ bool GameHandCasts::Cast(MagicType type, entt::entity target, entt::entity icon,
 	                                      .enabled = true,
 	                                      .spin = 0.0f};
 	const auto seed = magic::FindFirstSpellSeedForMagicType(info, type);
-	const bool onObject = seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
+	const bool onObject = target != entt::null && seed.has_value() && magic::GetSpellSeedInfo(info, *seed).castOnObject != 0;
 	auto& magicSystem = Locator::magicSystem::value();
 	const auto spell = onObject ? magicSystem.CastOnObject(type, _player, target, cast, process)
 	                            : magicSystem.CastAtPoint(type, _player, at, cast, process);

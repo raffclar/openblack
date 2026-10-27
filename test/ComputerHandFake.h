@@ -65,6 +65,14 @@ public:
 		cast.push_back(type);
 		return castWorks;
 	}
+	bool CastAt(MagicType type, glm::vec3 place, entt::entity /*icon*/, glm::vec3 /*hand*/, float magnitude) override
+	{
+		cast.push_back(type);
+		castAt.push_back(place);
+		magnitudes.push_back(magnitude);
+		return castWorks;
+	}
+	[[nodiscard]] bool UnderSpell(entt::entity creature) const override { return creature == underSpell; }
 	[[nodiscard]] float CastSeconds(MagicType /*type*/) const override { return 0.5f; }
 	[[nodiscard]] uint32_t SeedGesture(MagicType /*type*/, int32_t stage) const override { return stage == 0 ? 1 : 9; }
 	[[nodiscard]] float GestureLength(uint32_t gesture) const override { return gesture == k_GestureCircle ? 2.0f : 1.0f; }
@@ -177,6 +185,9 @@ public:
 	std::map<entt::entity, float> required;
 
 	std::map<entt::entity, glm::vec2> places;
+	std::vector<glm::vec3> castAt;
+	std::vector<float> magnitudes;
+	entt::entity underSpell {entt::null};
 	float influenceBorder {1.0e9f};
 	std::vector<glm::vec3> thrownFrom;
 	std::vector<glm::vec3> thrownAt;
