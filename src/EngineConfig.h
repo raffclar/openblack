@@ -170,8 +170,9 @@ struct EngineConfig
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
 	/// A developer switch: encode some of the draws on worker threads at the same time as the game's thread. The
-	/// picture and the order of the draws are the same with it off.
-	bool parallelDrawEncode {true};
+	/// picture and the order of the draws are the same with it on. It is off by default: on a busy computer, the
+	/// threads took more time to start than they saved.
+	bool parallelDrawEncode {false};
 
 	/// The https:// origin of the lobby (bwgame-service). With none, the game has no online services. The web build
 	/// uses the origin of the page for any value.
