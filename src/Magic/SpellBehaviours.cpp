@@ -15,6 +15,7 @@
 #include <numbers>
 
 #include "AreaEffect.h"
+#include "Common/PortableMath.h"
 #include "ECS/Components/Spell.h"
 #include "ForestRules.h"
 #include "InfoConstants.h"
@@ -260,10 +261,10 @@ void spells::Prepare(SpellServicesInterface& services, Spell& spell)
 
 bool spells::Start(SpellServicesInterface& services, Spell& spell)
 {
-	// A storm's swirl plays where it was cast
+	// A storm's swirl plays where it was cast. It shows the storm only, so it uses the random numbers of this computer.
 	if (spell.spellClass == SpellClass::StormAndTornado)
 	{
-		services.StartCastEffect(spell, ParticleType::StormCast);
+		services.StartCastEffect(spell, ParticleType::StormCast, false);
 	}
 	if (IsFlock(spell.spellClass))
 	{
@@ -447,7 +448,8 @@ void spells::ProcessTurn(SpellServicesInterface& services, Spell& spell)
 	auto& world = services.World();
 	const float distance = DropDistance(services.GameRandom(RainRadius(spell.magicType)));
 	const float angle = services.GameRandom(k_TwoPi);
-	glm::vec3 drop(spell.castPosition.x + distance * std::cos(angle), 0.0f, spell.castPosition.z + distance * std::sin(angle));
+	glm::vec3 drop(spell.castPosition.x + distance * portable_math::Cos(angle), 0.0f,
+	               spell.castPosition.z + distance * portable_math::Sin(angle));
 	drop.y = world.LandHeight({drop.x, drop.z}) + k_DropHeight;
 	ApplyDefaultEffect(services, spell,
 	                   {.type = SpellEventInfo::Type::Point,

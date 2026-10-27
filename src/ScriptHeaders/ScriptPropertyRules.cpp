@@ -15,6 +15,7 @@
 #include <numbers>
 
 #include "3D/MapCoords.h"
+#include "Common/PortableMath.h"
 #include "Common/X87Angle.h"
 
 namespace openblack::script::property_rules
@@ -84,8 +85,8 @@ float AngleFromScript(float degrees)
 float FacingAngle(glm::vec2 from, glm::vec2 to)
 {
 	// Worked out at the wider precision before it is kept as a float
-	double angle = std::atan2(static_cast<double>(to.y) - static_cast<double>(from.y),
-	                          static_cast<double>(to.x) - static_cast<double>(from.x));
+	double angle = portable_math::Atan2(static_cast<double>(to.y) - static_cast<double>(from.y),
+	                                    static_cast<double>(to.x) - static_cast<double>(from.x));
 	if (angle < 0.0)
 	{
 		angle += static_cast<double>(k_WholeTurnRadians);

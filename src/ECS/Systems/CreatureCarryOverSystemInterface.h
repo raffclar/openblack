@@ -77,6 +77,9 @@ public:
 	/// The creature's files go to the disk on a thread of their own, so that a write does not delay the frames of the
 	/// game. This waits until every file that the system wrote before is on the disk. Call it before a read of the files.
 	virtual void FinishWrites() const = 0;
+	/// In a network game, the god of this computer brought this creature from the player's creature file. In a network
+	/// game, this computer writes only this creature to the player's files. The land clear forgets it.
+	virtual void SetBroughtCreature(entt::entity /*creature*/) {}
 };
 
 } // namespace openblack::ecs::systems

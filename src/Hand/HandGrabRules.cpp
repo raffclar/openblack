@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/PortableRotations.h"
 #include "Common/X87Vector.h"
 #include "Physics/Body.h"
 
@@ -328,7 +329,7 @@ TugResult hand_grab::PullAt(Tug& tug, const TugFrame& frame)
 	const auto turn = tug.spin * frame.seconds;
 	if (const float angle = glm::length(turn); angle > 0.0f)
 	{
-		tug.axes = glm::mat3(glm::rotate(glm::mat4(1.0f), angle, turn / angle)) * tug.axes;
+		tug.axes = glm::mat3(portable_math::Rotate(glm::mat4(1.0f), angle, turn / angle)) * tug.axes;
 	}
 	// How fast its middle moves as it leans, the speed it has when it comes free
 	const auto halfAfter = tug.base + tug.axes[1] * (0.5f * frame.height);

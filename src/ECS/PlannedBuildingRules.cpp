@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 using namespace openblack::ecs::planned_building;
 namespace planned_building = openblack::ecs::planned_building;
@@ -244,6 +246,6 @@ std::optional<planned_building::MendChoice> planned_building::ChooseToMend(std::
 float planned_building::YAngleOf(const glm::mat3& rotation)
 {
 	// Read back from where the building's own east side points, as it was turned when placed
-	const float angle = std::atan2(rotation[0][2], rotation[0][0]);
+	const float angle = portable_math::Atan2(rotation[0][2], rotation[0][0]);
 	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }

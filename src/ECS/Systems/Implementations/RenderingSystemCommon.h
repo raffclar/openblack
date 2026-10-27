@@ -46,6 +46,8 @@ protected:
 	void UploadBonePalette();
 	/// Each thing in a hand keeps the light at its point, which the sea mirrors it in on the next frame
 	void KeepHeldLights();
+	/// The piles of roots of this frame into their instances, every frame: there are few, and they fade every frame
+	void UploadRootsPiles();
 
 	RenderContext _renderContext;
 };

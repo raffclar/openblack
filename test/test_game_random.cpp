@@ -96,3 +96,21 @@ TEST(GameRandom, ParticlePointsAreInTheUnitBall)
 		EXPECT_LE((p.z * p.z + p.y * p.y) + p.x * p.x, 1.0f);
 	}
 }
+
+TEST(GameRandom, ARestartIsTheStateOfANewProgram)
+{
+	GameRandomProduction fresh;
+	GameRandomProduction used;
+	used.SetSeeds({.synced = 5, .local = 6});
+	used.SetParticleStream(ParticleRandomStream::Local);
+	static_cast<void>(used.GameRand(10));
+	used.CrtSrand(77);
+	static_cast<void>(used.CrtRand());
+	used.Restart();
+	EXPECT_EQ(used.GetSeeds(), fresh.GetSeeds());
+	EXPECT_EQ(used.GetParticleStream(), fresh.GetParticleStream());
+	EXPECT_EQ(used.GetCrtSeed(), fresh.GetCrtSeed());
+	EXPECT_EQ(used.GetSyncedDraws(), 0u);
+	EXPECT_EQ(used.CrtRand(), fresh.CrtRand());
+	EXPECT_EQ(used.GameRand(1000), fresh.GameRand(1000));
+}

@@ -111,14 +111,15 @@ protected:
 		_paths.FollowPlaced(TwoPointPath(), glm::translate(glm::mat4(1.0f), k_PathPlace), 1.0f, 0.6f, 10000.0f, _spell);
 	}
 
-	/// Frames of the game: the path, else the player's camera, moves the camera
-	void RunFrames(int frames)
+	/// Frames of the game: the path, else the player's camera, moves the camera. Each frame takes so much game time:
+	/// none while the game is paused.
+	void RunFrames(int frames, std::chrono::milliseconds gameTime = k_Frame)
 	{
 		auto& camera = Locator::camera::value();
 		for (int frame = 0; frame < frames; ++frame)
 		{
 			const bool held = _paths.HoldsCamera();
-			_paths.Update(k_Frame);
+			_paths.Update(k_Frame, gameTime);
 			if (!held)
 			{
 				camera.HandleActions(k_Frame);
@@ -172,4 +173,21 @@ TEST_F(CameraPathStart, TakingThePathsCameraBackStartsTheWorldCameraWhereItIs)
 	EXPECT_FALSE(_paths.HoldsCamera());
 	RunFrames(300);
 	EXPECT_LT(glm::distance(camera.GetOrigin(), left), 1.0f);
+}
+
+TEST_F(CameraPathStart, WhileTheGameIsPausedTheCameraStaysWhereThePathStopped)
+{
+	FollowAPath();
+	// Past the pause before the path plays
+	RunFrames(70);
+	const auto& camera = Locator::camera::value();
+	// Paused: the path stands still, and the camera comes to it in a moment and stays there
+	RunFrames(50, 0ms);
+	const auto stopped = camera.GetOrigin();
+	RunFrames(100, 0ms);
+	EXPECT_LT(glm::distance(camera.GetOrigin(), stopped), 0.01f);
+	EXPECT_TRUE(_paths.HoldsCamera());
+	// The game goes on, and the path with it
+	RunFrames(20);
+	EXPECT_GT(glm::distance(camera.GetOrigin(), stopped), 0.1f);
 }

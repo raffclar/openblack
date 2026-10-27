@@ -18,6 +18,7 @@
 #include <unordered_map>
 #include <utility>
 
+#include "Commands/PlayerCommands.h"
 #include "Common/GameRandom.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/PosedModel.h"
@@ -76,6 +77,9 @@ public:
 	bool Press(const glm::vec3& rayOrigin, const glm::vec3& rayDirection, creature_fight::Button button, uint32_t milliseconds,
 	           uint32_t turn) override;
 	void Release(uint32_t milliseconds, uint32_t turn) override;
+	void DoGroundPress(PlayerNames player, entt::entity creature, const glm::vec3& point, bool replace) override;
+	void DoMove(PlayerNames player, entt::entity target, const creature_fight::Move& move, bool replace) override;
+	void DoCharge(PlayerNames player, float heldMs) override;
 	[[nodiscard]] bool IsPressed() const override { return _pressed.has_value(); }
 	[[nodiscard]] std::optional<creature_fight::Tip> HandTip(std::optional<entt::entity> under) const override;
 	bool GestureSpecialMove() override;
@@ -177,6 +181,9 @@ private:
 	[[nodiscard]] std::optional<ecs::posed_model::SkinHit> SeesOpponent(entt::entity creature) const;
 	/// A move called by a gesture, queued with its sparkle when the fighter sees its opponent
 	bool GestureMove(const creature_fight::Move& move);
+	/// A fight command of the player goes to the next turn. With no queue of commands (the tests), the world does it at
+	/// once.
+	void Send(const player_commands::Action& action);
 
 	/// The transcript of the fights, when the inspector keeps one. A record for each state that a fighter is in at the end
 	/// of a frame or a game turn, when it is new.

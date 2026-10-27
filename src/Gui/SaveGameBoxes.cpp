@@ -137,6 +137,16 @@ void SaveGameBoxes::Answered(Answer answer)
 	_answer = answer;
 }
 
+void SaveGameBoxes::WithdrawMessage()
+{
+	if (_question.has_value() && _question->message)
+	{
+		_question.reset();
+		_holdingFade.Reset(0.0f);
+		_questionFade.Reset(0.0f);
+	}
+}
+
 void SaveGameBoxes::SubmitName()
 {
 	_nameActive = false;

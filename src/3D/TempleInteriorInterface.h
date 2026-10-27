@@ -31,6 +31,10 @@
 
 namespace openblack
 {
+namespace ecs
+{
+class Registry;
+}
 namespace graphics
 {
 class Texture2D;
@@ -211,6 +215,10 @@ public:
 	/// The player's worshippers walking about the temple and the floors they walk, while the player is inside; null
 	/// when nobody came in
 	[[nodiscard]] virtual const TemplePeople* GetWalkingPeople() const = 0;
+	/// The things of the rooms: their meshes, glows, light beams and mists. They are not a part of the land, and only the
+	/// computer of the player in the temple has them, so they are kept out of the land's entities.
+	[[nodiscard]] virtual ecs::Registry& GetRooms() = 0;
+	[[nodiscard]] virtual const ecs::Registry& GetRooms() const = 0;
 	/// Where the temple's rooms stand in the world: their place and turn, which carry a point in the temple out to it
 	[[nodiscard]] virtual glm::mat4 GetPlacement() const = 0;
 	/// How far the markers have turned, in radians

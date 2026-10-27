@@ -44,6 +44,12 @@ TEST(InjectedInput, TheGamesOwnEventsAreToldFromThePlayers)
 	SDL_Event text {};
 	text.type = SDL_TEXTINPUT;
 	EXPECT_TRUE(input::IsPlayerDeviceEvent(text));
+	// The letters that the game types are its own: the mark is the last byte, after the end of the letters
+	EXPECT_FALSE(input::IsInjected(text));
+	text.text.text[0] = 'a';
+	input::MarkInjected(text);
+	EXPECT_TRUE(input::IsInjected(text));
+	EXPECT_STREQ(text.text.text, "a");
 }
 
 namespace

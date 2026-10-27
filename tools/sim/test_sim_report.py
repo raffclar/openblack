@@ -12,6 +12,7 @@
 import json
 import os
 import sys
+import tempfile
 import unittest
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -160,6 +161,97 @@ class CompareSavesTests(unittest.TestCase):
 
     def test_saves_of_other_sizes_say_so(self):
         self.assertEqual(sim_report.compare_saves(b"ECSW12", b"ECSW123"), {"size": [6, 7]})
+
+
+class UnregisteredTests(unittest.TestCase):
+    def test_a_log_line_gives_its_names(self):
+        line = "[2026-10-25 12:00:00] [game] [error] unregistered component storage: Alpha, Beta"
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha", "Beta"})
+
+    def test_a_record_gives_the_names_of_its_synced_part(self):
+        line = json.dumps({"type": "record", "turn": 5, "synced": {"hash": "a", "unregistered": ["Alpha"]}})
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha"})
+
+    def test_a_checksum_line_gives_its_names(self):
+        line = '{"turn":1,"checksum":"0000000000000002","unregistered":["Alpha","Beta"]}'
+        self.assertEqual(sim_report.unregistered_in_text([line]), {"Alpha", "Beta"})
+
+    def test_a_flag_that_quotes_the_message_is_not_read_as_names(self):
+        flag = {"kind": "Log", "what": "unregistered component storage: Alpha", "detail": "x"}
+        line = json.dumps({"type": "record", "turn": 5, "flags": [flag]})
+        self.assertEqual(sim_report.unregistered_in_text([line]), set())
+
+    def test_a_clean_run_has_none(self):
+        self.assertEqual(sim_report.unregistered_in_text(["[info] nothing", json.dumps(record(1))]), set())
+
+    def test_a_missing_file_has_none(self):
+        self.assertEqual(sim_report.unregistered_in_files("no/such/file.log", None), set())
+
+    def test_the_summary_is_a_problem_when_a_log_has_a_name(self):
+        result = sim_report.summary({}, [record(10)], {"turn": 10}, ["[error] unregistered component storage: Alpha"], 0)
+        self.assertEqual(result["unregistered"], ["Alpha"])
+        self.assertEqual(result["verdict"], "problems")
+        self.assertIn("unregistered component storage: Alpha", sim_report.markdown(result))
+
+    def test_the_line_has_the_sorted_names(self):
+        self.assertEqual(sim_report.unregistered_line({"Beta", "Alpha"}), "unregistered component storage: Alpha, Beta")
+
+
+
+class HandDeeds(unittest.TestCase):
+    LINES = [
+        "[game] [info] Hand deed: the hand of player 0 scoops from thing 140",
+        "[game] [info] Hand deed: the hand of player 0 throws thing 900",
+        "[game] [info] Hand deed: the hand of player 1 takes thing 77",
+        "[game] [info] Hand deed: the hand of player 0 throws thing 901",
+        "[game] [info] Network game: 100 turns compared with the server, 100 the same",
+    ]
+
+    def test_counts_each_deed_of_each_player(self):
+        self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
+                         {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
+
+    def test_a_deed_after_the_last_common_turn_is_not_counted(self):
+        lines = [
+            "[game] [info] Hand deed: the hand of player 1 takes thing 77 at turn 1990",
+            "[game] [info] Hand deed: the hand of player 1 puts down thing 77 at turn 1995",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 78 at turn 2000",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 79",
+        ]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 1999), {1: {"takes": 2, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 2000), {1: {"takes": 3, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {1: {"takes": 3, "puts_down": 1}})
+
+    def test_logs_that_part_only_after_the_last_turn_are_the_same(self):
+        # The game plays on one turn after the last compared turn, and gods 2 to 4 put down at turn 101 there
+        game = [
+            "Hand deed: the hand of player 5 puts down thing 451 at turn 100",
+            "Hand deed: the hand of player 2 puts down thing 259 at turn 101",
+            "Hand deed: the hand of player 12 puts down thing 900 at turn 101",
+        ]
+        server = ["Hand deed: the hand of player 5 puts down thing 451 at turn 100"]
+        with tempfile.TemporaryDirectory() as folder:
+            paths = []
+            for name, lines in (("game.log", game), ("server.log", server)):
+                paths.append(os.path.join(folder, name))
+                with open(paths[-1], "w", encoding="utf-8") as file:
+                    file.write(chr(10).join(lines) + chr(10))
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 100)
+            self.assertTrue(same)
+            self.assertEqual(first, {5: {"puts_down": 1}})
+            self.assertEqual(second, first)
+            # Up to the later turn, the logs do part, also for a slot above 9
+            first, second, same = sim_report.hand_deeds_of_both(paths[0], paths[1], 101)
+            self.assertFalse(same)
+            self.assertEqual(first[12], {"puts_down": 1})
+
+    def test_a_missing_file_tells_of_no_deed(self):
+        self.assertEqual(sim_report.hand_deeds_in_file(os.path.join(os.path.dirname(__file__), "no-such.log")), {})
+
+    def test_missing_deeds_are_those_done_fewer_times_than_expected(self):
+        deeds = {"scoops": 1, "throws": 2}
+        self.assertEqual(sim_report.missing_deeds(deeds, {"scoops": 1, "throws": 1}), {})
+        self.assertEqual(sim_report.missing_deeds(deeds, {"takes": 1, "throws": 3}), {"takes": [0, 1], "throws": [2, 3]})
 
 
 if __name__ == "__main__":

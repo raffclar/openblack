@@ -84,13 +84,14 @@ public:
 	void Charge(float elapsedMs);
 	/// One drawing: every blow's sparkle on the opponent moves on through the sheet by its charge
 	void Animate();
-	[[nodiscard]] size_t Size() const { return _count; }
+	[[nodiscard]] size_t Size() const { return static_cast<size_t>(_count); }
 	[[nodiscard]] bool Full() const { return _count >= k_Capacity; }
-	[[nodiscard]] std::span<const Mark> Marks() const { return {_marks.data(), _count}; }
+	[[nodiscard]] std::span<const Mark> Marks() const { return {_marks.data(), static_cast<size_t>(_count)}; }
 
 private:
 	std::array<Mark, k_Capacity> _marks {};
-	size_t _count {0};
+	/// 64 bits on every build, so that the saved bytes of the whole value are the same on each build
+	uint64_t _count {0};
 
 public:
 	/// Gives each field to a visitor, so that a save writes zero into the gaps between the fields

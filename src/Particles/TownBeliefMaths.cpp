@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::particles::town_belief
 {
 
@@ -118,13 +120,14 @@ Look Step(Symbol& symbol, const Params& params, float belief, int rank, float dt
 	}
 	const float level = static_cast<float>(rank) * params.heightPerLevel;
 	symbol.sway = Wrapped(symbol.sway + dt * params.angleSpeedPhaseSpeed);
-	const float swayed = (std::cos(symbol.sway) + 1.0f) * 0.25f + 0.5f;
+	const float swayed = (portable_math::Cos(symbol.sway) + 1.0f) * 0.25f + 0.5f;
 	symbol.tilt = Wrapped(symbol.tilt + swayed * speed * dt * k_TiltShare);
 	symbol.around = Wrapped(symbol.around + speed * dt);
-	const float flat = std::cos(symbol.tilt) * radius;
+	const float flat = portable_math::Cos(symbol.tilt) * radius;
 	// Fighting, it comes down to the first's level
-	look.offset = glm::vec3(std::cos(symbol.around) * flat, (1.0f - look.fight) * level + std::sin(symbol.tilt) * radius,
-	                        std::sin(symbol.around) * flat) *
+	look.offset = glm::vec3(portable_math::Cos(symbol.around) * flat,
+	                        (1.0f - look.fight) * level + portable_math::Sin(symbol.tilt) * radius,
+	                        portable_math::Sin(symbol.around) * flat) *
 	              distanceScale;
 	return look;
 }

@@ -73,6 +73,9 @@ struct WorshipIconCharge
 /// What is left to draw this turn
 [[nodiscard]] float WorshipAvailable(const WorshipBattery& site);
 
+/// All that can be drawn this turn, with what was drawn already
+[[nodiscard]] float WorshipTotalAvailable(const WorshipBattery& site);
+
 /// What the site can give its spell icons this turn: what is left, less the reserve for miracles while any icon's seed
 /// is out, never below 0
 [[nodiscard]] float WorshipAvailableForIcons(const WorshipBattery& site, const WorshipBatteryRules& rules, bool seedsOut);
