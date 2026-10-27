@@ -33,7 +33,7 @@ void openblack::ecs::reflection::RegisterFields_Components_creaturea(entt::meta_
 	    .Field<&components::CreatureArena::fightOn>("fightOn")
 	    .Field<&components::CreatureArena::first>("first")
 	    .Field<&components::CreatureArena::second>("second")
-	    .Field<&components::CreatureArena::ring>("ring");
+	    .RunField<&components::CreatureArena::ring>("ring");
 	Reflect<components::CreatureAudio>(context)
 	    .Field<&components::CreatureAudio::last>("last")
 	    .Field<&components::CreatureAudio::recent>("recent")

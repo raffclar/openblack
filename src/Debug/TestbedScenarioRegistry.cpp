@@ -7049,6 +7049,22 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	all.push_back({
+	    .id = "saves.arena_ring_back",
+	    .name = "Save and load: the ring of the arena shows again",
+	    .facet = Facet::Combat,
+	    .description = "Two tigers are told to fight, and both fight by themselves. 5 seconds later the game saves into "
+	                   "slot 0. 3 seconds after the save the game loads slot 0.",
+	    .expected = "Before the save the ring of light stands round the arena. After the load the ring stands round the "
+	                "arena again while the fight continues, as before the save.",
+	    .framing = ringside,
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.9f, -0.45f), blue(PlayerNames::PLAYER_TWO, 0.3f, -0.45f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f),
+	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+	                 {.kind = Kind::SaveGame, .delaySeconds = 5.0f, .value = 0},
+	                 {.kind = Kind::LoadGame, .delaySeconds = 3.0f, .value = 0}},
+	});
+
 	{
 		// A lion against a tiger, so that two species show their heads
 		auto lion = red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f);

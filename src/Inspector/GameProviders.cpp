@@ -3787,6 +3787,31 @@ std::unique_ptr<ProviderInterface> SavesProvider()
 		const bool loaded = Locator::saveGameSystem::value().Load(static_cast<uint32_t>(*slot));
 		return QueryResult::Value({{"loaded", loaded}, {"slot", static_cast<uint32_t>(*slot)}});
 	});
+	auto loadAndSave =
+	    Query("load_and_save",
+	          "Loads a slot and then saves the game into a second slot in the same call, with no frame and no turn between. A "
+	          "save of a loaded world must have the same bytes as the save that the game loaded (tools/sim/save_diff.py "
+	          "compares the two files)",
+	          {slotParameter,
+	           {.name = "into", .type = "integer", .description = "The slot of the second save, 0 to 20", .required = true},
+	           {.name = "name", .type = "string", .description = "The name of the second save", .required = false}});
+	loadAndSave.writes = true;
+	provider->Add(std::move(loadAndSave), [](const QueryContext& context) {
+		const auto slot = NumberMember(context.params, "slot");
+		const auto into = NumberMember(context.params, "into");
+		if (!Locator::saveGameSystem::has_value() || !slot.has_value() || *slot < 0.0 || !into.has_value() || *into < 0.0)
+		{
+			return QueryResult::Error("saves.load_and_save needs a game, a slot and an into slot from 0 to 20");
+		}
+		auto& saves = Locator::saveGameSystem::value();
+		const bool loaded = saves.Load(static_cast<uint32_t>(*slot));
+		const auto name = gui::ToUtf16(StringMember(context.params, "name").value_or(""));
+		const bool saved = loaded && saves.Save(static_cast<uint32_t>(*into), name);
+		return QueryResult::Value({{"loaded", loaded},
+		                           {"saved", saved},
+		                           {"slot", static_cast<uint32_t>(*slot)},
+		                           {"into", static_cast<uint32_t>(*into)}});
+	});
 	provider->Add(Query("vanilla_check",
 	                    "After a load of a slot of the game itself: each creature of the game's file, and whether the record "
 	                    "that a save writes for it now has the same bytes as the file's record",

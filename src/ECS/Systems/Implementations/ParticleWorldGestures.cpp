@@ -52,14 +52,25 @@ void GameParticleWorld::AddLightSheet(const std::shared_ptr<particles::LightShee
 	_lightSheets.push_back(sheet);
 }
 
+void GameParticleWorld::AddOwnedSheet(const std::shared_ptr<particles::LightSheet>& sheet)
+{
+	const bool listed = std::ranges::any_of(_ownedSheets, [&sheet](const auto& owned) { return owned.lock() == sheet; });
+	if (sheet != nullptr && !listed)
+	{
+		_ownedSheets.push_back(sheet);
+	}
+}
+
 std::vector<std::shared_ptr<particles::LightSheet>> GameParticleWorld::LightSheets() const
 {
-	std::erase_if(_lightSheets, [](const auto& sheet) { return sheet.expired(); });
 	std::vector<std::shared_ptr<particles::LightSheet>> sheets;
-	sheets.reserve(_lightSheets.size());
-	for (const auto& sheet : _lightSheets)
+	for (auto* list : {&_lightSheets, &_ownedSheets})
 	{
-		sheets.push_back(sheet.lock());
+		std::erase_if(*list, [](const auto& sheet) { return sheet.expired(); });
+		for (const auto& sheet : *list)
+		{
+			sheets.push_back(sheet.lock());
+		}
 	}
 	return sheets;
 }

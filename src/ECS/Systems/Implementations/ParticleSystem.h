@@ -96,6 +96,10 @@ public:
 	[[nodiscard]] bool TakeArcsWanted();
 	[[nodiscard]] std::shared_ptr<particles::GestureTrail> TakeGestureTrail() override;
 	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override;
+	/// A sheet of light that a system or an entity keeps, such as the ring of an arena. A save of the particles does not
+	/// keep it: its owner keeps it and makes it again after a load. A sheet that is in the list already is not added
+	/// again.
+	void AddOwnedSheet(const std::shared_ptr<particles::LightSheet>& sheet);
 	void SetHandGlow(uint32_t rgb) override;
 	void QueueGestureTrail(std::shared_ptr<particles::GestureTrail> trail);
 	/// The sheets of light still standing; those gone are forgotten
@@ -134,10 +138,12 @@ public:
 	void ProcessGlows();
 	[[nodiscard]] size_t SoundCount() const { return _sounds.size(); }
 	void Reset();
+	/// The sounds of the particles of effects that a save does not keep, which the save leaves out too
+	using LeftOutSounds = std::set<const particles::ParticleSoundLink*>;
 	/// The things that the world shares with the effects go first in the tables of a save, in the order of the world
-	void NumberShared(particles::SharedTables& tables) const;
+	void NumberShared(particles::SharedTables& tables, const LeftOutSounds& leftOut) const;
 	/// The running state of the world: its lists, and the sounds that the particles keep
-	void SaveState(particles::EffectWriter& out) const;
+	void SaveState(particles::EffectWriter& out, const LeftOutSounds& leftOut) const;
 	bool LoadState(particles::EffectReader& in);
 
 private:
@@ -155,6 +161,11 @@ private:
 		/// Seconds before it is heard, while it travels to the listener
 		float wait {0.0f};
 	};
+	/// A sound that its particle let go of was dying away, and a sound whose particle is gone and that does not wait to
+	/// be heard is over: a load ends them
+	[[nodiscard]] static bool EndsWithLoad(const PlayingSound& sound);
+	/// Whether a save keeps the sound
+	[[nodiscard]] static bool Saved(const PlayingSound& sound, const LeftOutSounds& leftOut);
 	void Play(PlayingSound& sound) const;
 	/// The particle let go of the sound: stopped at once, or, when its effect file soft-releases it, its loop released
 	/// and its first step quieter taken
@@ -177,6 +188,8 @@ private:
 	/// The recognised gestures' trails waiting to be shown, and the sheets of light the trails raised
 	std::vector<std::shared_ptr<particles::GestureTrail>> _gestureTrails;
 	mutable std::vector<std::weak_ptr<particles::LightSheet>> _lightSheets;
+	/// The sheets of light that systems and entities keep
+	mutable std::vector<std::weak_ptr<particles::LightSheet>> _ownedSheets;
 	bool _arcsWanted {false};
 	/// The bolts from hands, and how many there have been
 	std::vector<std::weak_ptr<particles::BoltShare>> _bolts;
@@ -231,6 +244,8 @@ public:
 	void SetFightMarks(std::vector<particles::draw::FightMark> marks) override { _fightMarks = std::move(marks); }
 	void SetLearningMarks(std::vector<particles::draw::LearningMark> marks) override { _learningMarks = std::move(marks); }
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
+	bool Renumber(EffectId from, EffectId to) override;
+	void KeepOutOfSaves(EffectId id) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetInTemple(EffectId id) override;
 	void SetDrawnAlone(EffectId id) override;
@@ -243,7 +258,7 @@ public:
 	void AddHandManaPathSpark(const particles::mana_path::Spark& spark) override;
 	void AddStormBolt(glm::vec3 cloudPoint) override;
 	void AddGestureTrail(std::shared_ptr<particles::GestureTrail> trail) override;
-	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddLightSheet(sheet); }
+	void AddLightSheet(const std::shared_ptr<particles::LightSheet>& sheet) override { _world.AddOwnedSheet(sheet); }
 	void UpdateFrame(float gameSeconds, const HandFrame& hand) override;
 	void ScrollChains(std::chrono::milliseconds frameRealTime, std::chrono::milliseconds frameGameTime) override;
 	void CloseDown(EffectId id) override;
@@ -303,6 +318,8 @@ private:
 		particles::draw::DrawPath path {particles::draw::DrawPath::Sorted};
 		/// Everything it draws is moved by this, as the miracle in the hand follows the hand between turns
 		glm::vec3 drawOffset {0.0f};
+		/// A save keeps it, unless its owner starts it again after a load
+		bool saved {true};
 	};
 
 	/// What the draw of the effects reads from the world

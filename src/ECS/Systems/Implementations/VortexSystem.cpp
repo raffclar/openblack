@@ -12,6 +12,7 @@
 #include "VortexSystem.h"
 
 #include <algorithm>
+#include <array>
 #include <chrono>
 #include <filesystem>
 #include <fstream>
@@ -154,6 +155,7 @@ entt::entity VortexSystem::Create(glm::vec3 position, VortexType type, float alt
 	// Until a script says otherwise, the animals that come out gather at the vortex itself
 	vortex.arrival.gatheringPlace = centre;
 	StartEffects(vortex);
+	KeepEffectsOutOfSaves(vortex);
 	if (type == VortexType::In)
 	{
 		StartCrossingFile(entity);
@@ -199,6 +201,19 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
 	{
 		particles.SetDrawPath(vortex.beforeLandEffect, particles::draw::DrawPath::BeforeLand);
+	}
+}
+
+void VortexSystem::KeepEffectsOutOfSaves(const Vortex& vortex)
+{
+	if (!Locator::particleSystem::has_value())
+	{
+		return;
+	}
+	auto& particles = Locator::particleSystem::value();
+	for (const auto effect : {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect})
+	{
+		particles.KeepOutOfSaves(effect);
 	}
 }
 
@@ -807,7 +822,8 @@ void VortexSystem::StartAgainAfterLoad()
 			return;
 		}
 		// The swirl, the effect over the land and the glow start again from their start, as at the vortex's creation.
-		// The new effects make the hum again.
+		// The new effects make the hum again. A save of an older build kept the effects, which go first.
+		const std::array saved {vortex.beforeLandEffect, vortex.afterLandEffect, vortex.lightMapEffect};
 		for (auto* effect : {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect})
 		{
 			if (*effect != ParticleSystemInterface::k_NoEffect)
@@ -821,6 +837,17 @@ void VortexSystem::StartAgainAfterLoad()
 			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
 		StartEffects(vortex);
+		KeepEffectsOutOfSaves(vortex);
+		// Each new effect takes the number that the save has for it, the last one made first, so that the numbers of
+		// the next effects are as before the load
+		const std::array made {&vortex.beforeLandEffect, &vortex.afterLandEffect, &vortex.lightMapEffect};
+		for (size_t i = made.size(); i-- > 0;)
+		{
+			if (*made.at(i) != ParticleSystemInterface::k_NoEffect && particles->Renumber(*made.at(i), saved.at(i)))
+			{
+				*made.at(i) = saved.at(i);
+			}
+		}
 	});
 	if (levelled)
 	{

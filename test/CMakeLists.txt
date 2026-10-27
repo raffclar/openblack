@@ -1886,3 +1886,7 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(test_creature_animation_log test_creature_animation_log.cpp)
 openblack_setup_and_add_test(test_painted_skin_stamp test_painted_skin_stamp.cpp)
 openblack_setup_and_add_test(test_window_pixels windowing/test_window_pixels.cpp)
+add_test(NAME test_save_diff
+         COMMAND ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
+)
