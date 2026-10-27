@@ -119,4 +119,53 @@ bool RemoveScaffold(components::Workshop& workshop, entt::entity scaffold, uint8
 /// Whether a thing is the wood pile of a workshop. Such a pile is part of its workshop, as a pile of a storage pit is.
 [[nodiscard]] bool IsWoodPile(const Registry& registry, entt::entity pile);
 
+/// What the game knows of a held scaffold and of a scaffold under the hand, when the hand can join the two
+struct JoinFacts
+{
+	/// The number of scaffolds that each scaffold is worth
+	uint32_t heldValue {0};
+	uint32_t targetValue {0};
+	/// The most scaffolds that a joined scaffold can be worth, from the scaffolds' table row
+	uint16_t mostForCombining {0};
+	/// The hidden football feature is on: then a joined scaffold can be worth one more
+	bool football {false};
+	/// A script gave the scaffold its building
+	bool heldScriptBuilding {false};
+	bool targetScriptBuilding {false};
+	/// The scaffold under the hand is in the physics
+	bool targetInPhysics {false};
+	/// The scaffold under the hand is on a building site, and the share of the building that is built
+	bool targetOnSite {false};
+	float targetSiteBuilt {0.0f};
+};
+
+/// Whether the hand can join a held scaffold to a scaffold under it. The two scaffolds together must be worth less than
+/// the most for a joined scaffold (or as much, with the football feature). No script gave either scaffold its
+/// building. The scaffold under the hand is not in the physics, and its building site has no part built.
+[[nodiscard]] bool CanJoin(const JoinFacts& facts);
+
+/// The scaffold whose town a joined scaffold builds for
+enum class JoinedTown : uint8_t
+{
+	Held,
+	Target,
+};
+
+/// What the game knows of the towns of two scaffolds that the hand joins
+struct JoinedTownFacts
+{
+	/// The scaffold has a town
+	bool heldHasTown {false};
+	bool targetHasTown {false};
+	uint32_t heldValue {0};
+	uint32_t targetValue {0};
+	/// The player whose hand holds the held scaffold has the town of the held scaffold
+	bool holderOwnsHeldTown {false};
+};
+
+/// The town of a joined scaffold. When only one scaffold has a town, that town. Else the town of the scaffold that is
+/// worth more. When the two are worth the same, the town of the held scaffold only when the player who holds it has
+/// that town.
+[[nodiscard]] JoinedTown TownOfJoined(const JoinedTownFacts& facts);
+
 } // namespace openblack::ecs::workshop

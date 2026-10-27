@@ -17,6 +17,7 @@
 #include <utility>
 #include <vector>
 
+#include <fmt/format.h>
 #include <glm/gtc/type_ptr.hpp>
 #include <spdlog/spdlog.h>
 
@@ -37,6 +38,7 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Town.h"
@@ -45,8 +47,10 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
+#include "ECS/NearestSearch.h"
 #include "ECS/NeedFlagRules.h"
 #include "ECS/PlacedTurn.h"
+#include "ECS/PlannedBuildingRules.h"
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldGhostRules.h"
 #include "ECS/ScaffoldImpressionRules.h"
@@ -175,6 +179,15 @@ void MarkDesiresChanged(entt::entity town)
 		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
 }
+
+/// A held scaffold looks for a scaffold under it within this reach, in metres
+constexpr float k_UnderReach = 15.0f;
+/// Two scaffolds touch when the distance between their edges is at most this gap, in metres
+constexpr float k_TouchGap = 0.001f;
+
+/// The sounds of a join of scaffolds: four samples, one after the other
+constexpr uint32_t k_FirstJoinSound = 201;
+constexpr uint32_t k_JoinSounds = 4;
 
 /// A puff at a scaffold shows that it starts no building
 void Puff(glm::vec3 position)
@@ -703,8 +716,15 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 	{
 		return std::nullopt;
 	}
-	// TODO(scaffolds): a scaffold held above another scaffold adds the value of that scaffold
-	const auto value = workshop::ValueOfScale(transform.scale.x);
+	// A scaffold under the held scaffold adds its value. The fit check then ignores the building of the site of that
+	// scaffold.
+	auto value = workshop::ValueOfScale(transform.scale.x);
+	entt::entity ignored = entt::null;
+	if (const auto under = ScaffoldUnder(scaffold); under != entt::null)
+	{
+		value += workshop::ValueOfScale(registry.Get<const Transform>(under).scale.x);
+		ignored = registry.Get<const Scaffold>(under).site;
+	}
 	const auto fits = [place](const ScaffoldOffer& offer, float yAngle) {
 		return ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale);
 	};
@@ -734,25 +754,183 @@ std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity sc
 		}
 		return scaffold_offer::Found {.offer = *offer, .foundsTown = true};
 	}
-	const auto tribe = TribeOf(town);
-	if (!tribe.has_value())
-	{
-		return std::nullopt;
-	}
 	// A scaffold that a script gave a building offers only a building of that abode number
 	std::optional<AbodeNumber> only;
 	if (data.scriptBuilding.has_value())
 	{
 		only = rows.at(static_cast<size_t>(*data.scriptBuilding)).abodeNumber;
 	}
-	const auto candidates = ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only);
-	const float startYAngle = Locator::gameRandom::value().GameFloatRand(scaffold_offer::k_FullTurn);
-	const auto offer = scaffold_offer::SearchTown(candidates, value, startYAngle, fits);
+	const auto offer = SearchTownAt(town, place, value, only, ignored);
 	if (!offer.has_value())
 	{
 		return std::nullopt;
 	}
 	return scaffold_offer::Found {.offer = *offer};
+}
+
+std::optional<ScaffoldOffer> WorkshopSystem::SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
+                                                          std::optional<AbodeNumber> only, entt::entity ignored)
+{
+	const auto tribe = TribeOf(town);
+	if (!tribe.has_value())
+	{
+		return std::nullopt;
+	}
+	const auto fits = [place, ignored](const ScaffoldOffer& offer, float yAngle) {
+		return ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale, ignored);
+	};
+	const auto candidates = ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only);
+	const float startYAngle = Locator::gameRandom::value().GameFloatRand(scaffold_offer::k_FullTurn);
+	return scaffold_offer::SearchTown(candidates, value, startYAngle, fits);
+}
+
+std::optional<ScaffoldOffer> WorkshopSystem::OfferAt(entt::entity town, glm::vec3 place, uint32_t value)
+{
+	if (!Locator::infoConstants::has_value() || !Locator::gameRandom::has_value())
+	{
+		return std::nullopt;
+	}
+	return SearchTownAt(town, place, value, std::nullopt);
+}
+
+entt::entity WorkshopSystem::ScaffoldUnder(entt::entity scaffold) const
+{
+	const auto& registry = Entities();
+	const auto& data = registry.Get<const Scaffold>(scaffold);
+	if (!data.handPlayer.has_value() || !Locator::entitiesMap::has_value())
+	{
+		return entt::null;
+	}
+	// The nearest other scaffold within 15 m, found as the game finds the nearest thing of a kind
+	const auto& map = Locator::entitiesMap::value();
+	const auto& place = registry.Get<const Transform>(scaffold).position;
+	const auto from = map_coords::FromMetres({place.x, place.z});
+	const auto under = ecs::nearest_search::FindNearest(from, k_UnderReach, [&](glm::ivec2 cell) {
+		std::vector<ecs::nearest_search::Candidate> found;
+		for (const auto thing : map.GetAllInCell(cell))
+		{
+			if (thing == scaffold || !registry.Valid(thing) || !registry.AllOf<Scaffold, Transform>(thing))
+			{
+				continue;
+			}
+			const auto& at = registry.Get<const Transform>(thing).position;
+			found.push_back({.entity = thing, .at = map_coords::FromMetres({at.x, at.z})});
+		}
+		return found;
+	});
+	if (under == entt::null)
+	{
+		return entt::null;
+	}
+	// The two scaffolds touch: the distance between them, less their two radii, is at most a small gap
+	const auto& underPlace = registry.Get<const Transform>(under).position;
+	const float gap = gutils::GetDistanceInMetres(from, map_coords::FromMetres({underPlace.x, underPlace.z})) -
+	                  (ecs::systems::object_measures::TwoDRadius(registry, scaffold) +
+	                   ecs::systems::object_measures::TwoDRadius(registry, under));
+	if (gap > k_TouchGap)
+	{
+		return entt::null;
+	}
+	// No script gave either scaffold its building
+	if (data.scriptBuilding.has_value() || registry.Get<const Scaffold>(under).scriptBuilding.has_value())
+	{
+		return entt::null;
+	}
+	// The held scaffold has no site, or it can still leave a site with no part built
+	if (!registry.Valid(data.site))
+	{
+		return under;
+	}
+	const auto& info = Locator::infoConstants::value().scaffold;
+	const bool keeps = workshop::KeepsScaffold(data.putDownTurn, Turn(), info.gameTurnsAfterPlacingCanStillPickUp,
+	                                           data.scriptBuilding.has_value());
+	return keeps && ecs::construction::BuiltOf(data.site) == 0.0f ? under : entt::null;
+}
+
+bool WorkshopSystem::CanJoin(entt::entity held, entt::entity target) const
+{
+	const auto& registry = Entities();
+	if (held == target || !registry.Valid(held) || !registry.Valid(target) || !registry.AllOf<Scaffold, Transform>(held) ||
+	    !registry.AllOf<Scaffold, Transform>(target) || registry.AllOf<InHand>(target) || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto& heldData = registry.Get<const Scaffold>(held);
+	const auto& targetData = registry.Get<const Scaffold>(target);
+	const bool onSite = registry.Valid(targetData.site);
+	return workshop::CanJoin({
+	    .heldValue = workshop::ValueOfScale(registry.Get<const Transform>(held).scale.x),
+	    .targetValue = workshop::ValueOfScale(registry.Get<const Transform>(target).scale.x),
+	    .mostForCombining = Locator::infoConstants::value().scaffold.maxNumberForCombining,
+	    .football = ecs::planned_building::k_FootballEnabled,
+	    .heldScriptBuilding = heldData.scriptBuilding.has_value(),
+	    .targetScriptBuilding = targetData.scriptBuilding.has_value(),
+	    .targetInPhysics = registry.AllOf<InPhysics>(target),
+	    .targetOnSite = onSite,
+	    .targetSiteBuilt = onSite ? ecs::construction::BuiltOf(targetData.site) : 0.0f,
+	});
+}
+
+void WorkshopSystem::Join(entt::entity held, entt::entity target, std::optional<glm::vec3> hand)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(held) || !registry.Valid(target) || !registry.AllOf<Scaffold, Transform>(held) ||
+	    !registry.AllOf<Scaffold, Transform>(target))
+	{
+		return;
+	}
+	const auto heldData = registry.Get<const Scaffold>(held);
+	const uint32_t heldValue = workshop::ValueOfScale(registry.Get<const Transform>(held).scale.x);
+	const uint32_t targetValue = workshop::ValueOfScale(registry.Get<const Transform>(target).scale.x);
+	// The two scaffolds build for one town
+	{
+		const auto heldTown = registry.Valid(heldData.town) ? heldData.town : entt::null;
+		const auto targetTown = registry.Get<const Scaffold>(target).town;
+		const auto* owned = heldTown != entt::null ? registry.TryGet<const Town>(heldTown) : nullptr;
+		const auto side = workshop::TownOfJoined({
+		    .heldHasTown = heldTown != entt::null,
+		    .targetHasTown = registry.Valid(targetTown),
+		    .heldValue = heldValue,
+		    .targetValue = targetValue,
+		    .holderOwnsHeldTown = owned != nullptr && heldData.handPlayer.has_value() && *heldData.handPlayer == owned->owner,
+		});
+		registry.Get<Scaffold>(target).town = side == workshop::JoinedTown::Held ? heldTown : targetTown;
+	}
+	// The scaffold under the hand leaves its building site. It is not in the physics, because CanJoin refuses that.
+	LeaveSite(target);
+	// It becomes worth the two, and takes the offer of the held scaffold with the turn and the size of its phantom
+	registry.Get<Transform>(target).scale = glm::vec3(workshop::ScaleOfValue(heldValue + targetValue));
+	{
+		auto& phantom = registry.Get<Scaffold>(target).phantom;
+		phantom.shown = heldData.phantom.shown;
+		if (phantom.shown.has_value())
+		{
+			phantom.shown->yAngle = heldData.phantom.yAngle;
+			phantom.shown->scale = heldData.phantom.scale;
+		}
+		phantom.yAngle = heldData.phantom.yAngle;
+		phantom.scale = heldData.phantom.scale;
+	}
+	ecs::world_objects::Remove(held);
+	registry.SetDirty();
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Scaffold: scaffold {} joins scaffold {}, worth {} at turn {}", entt::to_integral(held),
+		                   entt::to_integral(target), heldValue + targetValue, Turn());
+	}
+	BuildBuilding(target, heldData.handPlayer);
+	// A puff shows at the joined scaffold, and one of four sounds plays where the hand is
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().StartSpotVisual(
+		    SpotVisualType::ObjectAppear, registry.Get<const Transform>(target).position, std::nullopt, entt::null, 1.0f);
+	}
+	if (hand.has_value())
+	{
+		const auto name = fmt::format("InGame.sad/{}", k_FirstJoinSound + _joinSound);
+		audio::StartGameSoundEffect(entt::hashed_string(name.c_str()).value(), {.position = *hand});
+	}
+	_joinSound = (_joinSound + 1) % k_JoinSounds;
 }
 
 bool WorkshopSystem::SearchAndTakeOffer(entt::entity scaffold, entt::entity town)

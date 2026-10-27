@@ -147,4 +147,36 @@ bool workshop::IsWoodPile(const Registry& registry, entt::entity pile)
 	return found;
 }
 
+bool workshop::CanJoin(const JoinFacts& facts)
+{
+	// The sum and the most are words: a row with no most lets any sum through, as in the game
+	const uint32_t most = facts.football ? facts.mostForCombining : static_cast<uint32_t>(facts.mostForCombining) - 1u;
+	if (facts.targetInPhysics || facts.heldValue + facts.targetValue > most)
+	{
+		return false;
+	}
+	if (facts.heldScriptBuilding || facts.targetScriptBuilding)
+	{
+		return false;
+	}
+	return !facts.targetOnSite || facts.targetSiteBuilt == 0.0f;
+}
+
+workshop::JoinedTown workshop::TownOfJoined(const JoinedTownFacts& facts)
+{
+	if (!facts.heldHasTown)
+	{
+		return JoinedTown::Target;
+	}
+	if (!facts.targetHasTown)
+	{
+		return JoinedTown::Held;
+	}
+	if (facts.heldValue == facts.targetValue)
+	{
+		return facts.holderOwnsHeldTown ? JoinedTown::Held : JoinedTown::Target;
+	}
+	return facts.heldValue > facts.targetValue ? JoinedTown::Held : JoinedTown::Target;
+}
+
 } // namespace openblack::ecs

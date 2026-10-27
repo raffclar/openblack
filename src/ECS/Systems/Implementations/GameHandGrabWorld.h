@@ -127,6 +127,8 @@ public:
 	bool TakeIntoStore(entt::entity store, entt::entity object) override;
 	[[nodiscard]] bool TakesWhole(entt::entity target, entt::entity held) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override;
+	void JoinScaffold(entt::entity target, entt::entity held) override;
 	void PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned) override;
 	void UseUp(entt::entity object) override;
 	altar_offering::Answer OfferAtAltar(entt::entity altar, entt::entity held) override;

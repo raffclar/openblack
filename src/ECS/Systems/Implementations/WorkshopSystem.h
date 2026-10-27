@@ -42,6 +42,9 @@ public:
 	void CameToRest(entt::entity scaffold, bool fromHand, bool inMap) override;
 	[[nodiscard]] bool CanMove(entt::entity scaffold) const override;
 	[[nodiscard]] entt::entity TownForBuilding(glm::vec3 place) const override;
+	[[nodiscard]] bool CanJoin(entt::entity held, entt::entity target) const override;
+	void Join(entt::entity held, entt::entity target, std::optional<glm::vec3> hand) override;
+	[[nodiscard]] std::optional<components::ScaffoldOffer> OfferAt(entt::entity town, glm::vec3 place, uint32_t value) override;
 	void ProcessHeld(entt::entity scaffold) override;
 	void SiteClosed(entt::entity building) override;
 	void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) override;
@@ -53,6 +56,13 @@ private:
 	/// The building that a scaffold offers to the town near it, none when it offers none. A search of a town turns
 	/// from a random angle.
 	std::optional<scaffold_offer::Found> SearchOffer(entt::entity scaffold, entt::entity town);
+	/// The building that a town offers at a place for scaffolds of a value, only of the abode number when one is given.
+	/// The fit check ignores the building `ignored`, when it is given.
+	std::optional<components::ScaffoldOffer> SearchTownAt(entt::entity town, glm::vec3 place, uint32_t value,
+	                                                      std::optional<AbodeNumber> only, entt::entity ignored = entt::null);
+	/// The scaffold under a scaffold that a hand holds or let go, which the held scaffold can join, none when there is
+	/// none. See the definition for the conditions.
+	[[nodiscard]] entt::entity ScaffoldUnder(entt::entity scaffold) const;
 	/// The search for an offer, then the phantom takes the offer
 	bool SearchAndTakeOffer(entt::entity scaffold, entt::entity town);
 	/// A scaffold that a hand put down gently starts the building that it offers. Whether it started the building.
@@ -88,6 +98,8 @@ private:
 	void OnWorkshopGone(entt::registry& registry, entt::entity workshop);
 
 	std::vector<entt::scoped_connection> _connections;
+	/// The next of the four sounds that a join of scaffolds plays. It changes each join and only selects the sound.
+	uint32_t _joinSound {0};
 	/// The sounds of the phantom in the hand that played. Only the frames change them.
 	scaffold_ghost::SoundsPlayed _ghostSounds;
 };

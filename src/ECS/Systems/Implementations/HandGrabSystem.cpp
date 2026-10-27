@@ -966,6 +966,11 @@ bool HandGrabSystem::AppliesTo(const HandGrab& grab, entt::entity target) const
 	{
 		return false;
 	}
+	// A scaffold joins a scaffold under it
+	if (_world->JoinsScaffold(target, held))
+	{
+		return true;
+	}
 	// A pot goes to a store of what it holds, or into a pile or pot of the same. Anything else goes whole to an altar, a
 	// gate stone plinth or a store.
 	const auto pot = _world->PotFactsOf(held);
@@ -1018,6 +1023,15 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 	case altar_offering::Answer::NotAnAltar:
 		break;
 	}
+	// A held scaffold joins the scaffold under it and is gone from the hand
+	if (_world->JoinsScaffold(target, held))
+	{
+		_world->Entities().Remove<InHand>(held);
+		_world->JoinScaffold(target, held);
+		_world->HelpEvent(altar_sacrifice::k_UsedOnThingHelpEvent);
+		Empty(grab);
+		return true;
+	}
 	// A pot is given to a store of what it holds, or poured into a pile or pot of the same
 	const auto pot = _world->PotFactsOf(held);
 	if (!pot.has_value())
@@ -1032,7 +1046,7 @@ bool HandGrabSystem::ApplyTo(HandGrab& grab, entt::entity target)
 			return true;
 		}
 		// A tree, a dead tree, a fence, a mushroom or an animal goes whole into a store of what it is worth
-		// TODO(stores): onto a teleport or a scaffold; openblack has none of those yet
+		// TODO(stores): onto a teleport, or a scaffold into a store of wood; openblack has none of those yet
 		if (!_world->TakeIntoStore(target, held))
 		{
 			return false;

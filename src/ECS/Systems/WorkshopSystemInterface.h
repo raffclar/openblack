@@ -16,6 +16,7 @@
 #include <entt/entity/entity.hpp>
 #include <glm/vec3.hpp>
 
+#include "ECS/Components/Scaffold.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -73,6 +74,19 @@ public:
 	/// workshop needs, over `seconds` of game time, and turns to face the camera.
 	virtual void UpdateFlagsForFrame(float seconds) = 0;
 
+	/// Whether the hand can join a held scaffold to a scaffold under it (see workshop::CanJoin). False when either thing is
+	/// not a scaffold, or when a hand holds the scaffold under it.
+	[[nodiscard]] virtual bool CanJoin(entt::entity held, entt::entity target) const = 0;
+	/// The hand joins the held scaffold to the scaffold under it. The scaffold under the hand becomes worth the two and
+	/// takes the offer of the held scaffold. The held scaffold goes, and the joined scaffold tries to start its building.
+	/// A puff shows at the joined scaffold, and a sound plays at `hand` when it is given. The caller removes the held
+	/// scaffold from the hand first.
+	virtual void Join(entt::entity held, entt::entity target, std::optional<glm::vec3> hand) = 0;
+	/// The building that a town offers for scaffolds of a value at a place on the land, none when it offers none. The
+	/// search turns from a random angle (see scaffold_offer::SearchTown). A computer god looks for a place to use a
+	/// scaffold in this way.
+	[[nodiscard]] virtual std::optional<components::ScaffoldOffer> OfferAt(entt::entity town, glm::vec3 place,
+	                                                                       uint32_t value) = 0;
 	/// The town that a scaffold at a place builds for: the town of the nearest building, else the nearest town or
 	/// planned building of a town nearer than 50 metres; none when there is none
 	[[nodiscard]] virtual entt::entity TownForBuilding(glm::vec3 place) const = 0;

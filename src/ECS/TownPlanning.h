@@ -62,8 +62,8 @@ void PlanAgain(entt::entity building);
 
 /// Whether a building that a scaffold offers fits on the land at a place, turned by an angle and at a scale. The land at
 /// the place must be dry and not on the coast. No building may stand in the cells of its outline nearer than their radii
-/// together. An outline that covers no cell fits.
-[[nodiscard]] bool FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale);
+/// together. An outline that covers no cell fits. The check ignores the building `ignored`, when it is given.
+[[nodiscard]] bool FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored = entt::null);
 
 /// A town starts a building that a held scaffold offered, at a place on the land, turned by an angle and at a scale. The
 /// building stands with nothing of it built, and its site wants builders. The building, none when it did not go up.

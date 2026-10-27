@@ -1373,6 +1373,19 @@ bool GameHandGrabWorld::LayGateStone(entt::entity plinth, entt::entity stone)
 	return Locator::animatedStaticSystem::has_value() && Locator::animatedStaticSystem::value().LayGateStone(plinth, stone);
 }
 
+bool GameHandGrabWorld::JoinsScaffold(entt::entity target, entt::entity held) const
+{
+	return Locator::workshopSystem::has_value() && Locator::workshopSystem::value().CanJoin(held, target);
+}
+
+void GameHandGrabWorld::JoinScaffold(entt::entity target, entt::entity held)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().Join(held, target, ReportedHandPlace());
+	}
+}
+
 void GameHandGrabWorld::PourAt(ResourceType resource, glm::vec3 point, uint32_t amount, PlayerNames player, bool poisoned)
 {
 	if (Locator::resourceStoreSystem::has_value())

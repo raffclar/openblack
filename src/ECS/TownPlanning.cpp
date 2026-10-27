@@ -236,8 +236,8 @@ const lnd::LNDCell* LandCellAt(glm::vec3 position)
 }
 
 /// The buildings that stand in each cell of an outline that covers new buildings, with their distances from a place
-std::vector<std::vector<planned_building::BuildingNearby>> BuildingsInOutline(const map_cells::Outline& outline,
-                                                                              glm::vec3 place)
+std::vector<std::vector<planned_building::BuildingNearby>>
+BuildingsInOutline(const map_cells::Outline& outline, glm::vec3 place, entt::entity ignored = entt::null)
 {
 	auto& registry = Entities();
 	const auto& map = Locator::entitiesMap::value();
@@ -249,7 +249,7 @@ std::vector<std::vector<planned_building::BuildingNearby>> BuildingsInOutline(co
 		{
 			const auto* resident = registry.TryGet<const MapCellResident>(thing);
 			const auto* placed = registry.TryGet<const Transform>(thing);
-			if (resident == nullptr || !resident->coversOutline || placed == nullptr)
+			if (resident == nullptr || !resident->coversOutline || placed == nullptr || thing == ignored)
 			{
 				continue;
 			}
@@ -585,7 +585,7 @@ std::vector<scaffold_offer::Candidate> town_planning::ScaffoldCandidates(entt::e
 	return candidates;
 }
 
-bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale)
+bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, float scale, entt::entity ignored)
 {
 	const auto meshId = resources::HashIdentifier(mesh);
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -598,7 +598,7 @@ bool town_planning::FitsForScaffold(glm::vec3 place, MeshId mesh, float yAngle, 
 	const float reach = std::max(halfSize.x, halfSize.z) * scale;
 	const auto outline =
 	    map_cells::OutlineOfBox(place, glm::mat3(portable_math::EulerAngleY(-yAngle)), scale, box.Center(), halfSize);
-	const auto nearby = BuildingsInOutline(outline, place);
+	const auto nearby = BuildingsInOutline(outline, place, ignored);
 	const auto* land = LandCellAt(place);
 	const bool dry = land != nullptr && land->properties.hasWater == 0 && land->properties.coastLine == 0;
 	return planned_building::IsClearToBuild(FootprintOf(nearby), dry, reach);

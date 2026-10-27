@@ -192,3 +192,51 @@ TEST(WorkshopRules, TheSpecialPointIsThePlaceOfTheSpecialPlaceWithItsHeight)
 	// The height is the building's height and the point's height, by the building's scale
 	EXPECT_NEAR(world.y, 40.0f + (2.0f * 1.2f), 1e-4f);
 }
+
+TEST(WorkshopRules, TheHandJoinsScaffoldsOnlyWhenTheirSumIsBelowTheMost)
+{
+	const workshop::JoinFacts facts {.heldValue = 2, .targetValue = 3, .mostForCombining = 6};
+	EXPECT_TRUE(workshop::CanJoin(facts));
+	// The two together must be worth less than the most, or as much with the football feature
+	EXPECT_FALSE(workshop::CanJoin({.heldValue = 3, .targetValue = 3, .mostForCombining = 6}));
+	EXPECT_TRUE(workshop::CanJoin({.heldValue = 3, .targetValue = 3, .mostForCombining = 6, .football = true}));
+	// A table row with no most lets any sum through
+	EXPECT_TRUE(workshop::CanJoin({.heldValue = 40, .targetValue = 50, .mostForCombining = 0}));
+}
+
+TEST(WorkshopRules, TheHandDoesNotJoinScaffoldsOfScriptsOrInThePhysicsOrOnAStartedSite)
+{
+	const workshop::JoinFacts facts {.heldValue = 1, .targetValue = 1, .mostForCombining = 6};
+	auto script = facts;
+	script.heldScriptBuilding = true;
+	EXPECT_FALSE(workshop::CanJoin(script));
+	script = facts;
+	script.targetScriptBuilding = true;
+	EXPECT_FALSE(workshop::CanJoin(script));
+	auto physics = facts;
+	physics.targetInPhysics = true;
+	EXPECT_FALSE(workshop::CanJoin(physics));
+	auto site = facts;
+	site.targetOnSite = true;
+	EXPECT_TRUE(workshop::CanJoin(site));
+	site.targetSiteBuilt = 0.01f;
+	EXPECT_FALSE(workshop::CanJoin(site));
+}
+
+TEST(WorkshopRules, AJoinedScaffoldBuildsForTheTownOfTheScaffoldWorthMore)
+{
+	using workshop::JoinedTown;
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = false, .targetHasTown = true}), JoinedTown::Target);
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = false, .targetHasTown = false}), JoinedTown::Target);
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = true, .targetHasTown = false}), JoinedTown::Held);
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = true, .targetHasTown = true, .heldValue = 3, .targetValue = 2}),
+	          JoinedTown::Held);
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = true, .targetHasTown = true, .heldValue = 2, .targetValue = 3}),
+	          JoinedTown::Target);
+	// When the two are worth the same, the held town only when the player who holds it has that town
+	EXPECT_EQ(workshop::TownOfJoined(
+	              {.heldHasTown = true, .targetHasTown = true, .heldValue = 2, .targetValue = 2, .holderOwnsHeldTown = true}),
+	          JoinedTown::Held);
+	EXPECT_EQ(workshop::TownOfJoined({.heldHasTown = true, .targetHasTown = true, .heldValue = 2, .targetValue = 2}),
+	          JoinedTown::Target);
+}

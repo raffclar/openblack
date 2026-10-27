@@ -15,6 +15,7 @@
 #include <map>
 #include <numbers>
 #include <set>
+#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <variant>
@@ -417,6 +418,14 @@ public:
 	{
 		return stores.contains(target) || (plinths.contains(target) && gateStones.contains(held));
 	}
+	[[nodiscard]] bool JoinsScaffold(entt::entity target, entt::entity held) const override
+	{
+		return scaffolds.contains(target) && scaffolds.contains(held);
+	}
+	void JoinScaffold(entt::entity target, entt::entity held) override
+	{
+		joined.emplace_back(target, held, registry.AllOf<InHand>(held));
+	}
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override
 	{
 		if (!plinths.contains(plinth) || !gateStones.contains(stone))
@@ -532,6 +541,10 @@ public:
 	std::set<entt::entity> plinths;
 	std::set<entt::entity> gateStones;
 	std::vector<std::pair<entt::entity, entt::entity>> laidStones;
+	/// The scaffolds that the hand can join, and each join: the target, the held scaffold, and whether the hand still
+	/// held it then
+	std::set<entt::entity> scaffolds;
+	std::vector<std::tuple<entt::entity, entt::entity, bool>> joined;
 	std::map<entt::entity, uint32_t> stored;
 	std::vector<uint32_t> pouredAmounts;
 	std::vector<entt::entity> usedUp;
@@ -1912,6 +1925,31 @@ TEST_F(HandGrabSystemWithWorld, AGateStonePressedOntoThePlinthIsLaidInIt)
 	EXPECT_EQ(world->laidStones.front().second, stone);
 	// The stone is used up, leaving its ghost, and the hand is empty
 	EXPECT_EQ(world->usedUp, std::vector<entt::entity> {stone});
+	EXPECT_TRUE(world->takenWhole.empty());
+	EXPECT_FALSE(system->GetHeld().has_value());
+}
+
+TEST_F(HandGrabSystemWithWorld, AScaffoldPressedOntoAScaffoldJoinsIt)
+{
+	const auto held = world->AddTree({0.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(held);
+	world->underCursor = held;
+	Press();
+	for (int i = 0; i < 40 && !system->GetHeld().has_value(); ++i)
+	{
+		Frame(10);
+	}
+	ASSERT_TRUE(system->GetHeld().has_value());
+	Release();
+	const auto target = world->AddTree({20.0f, 0.0f, 0.0f}, 10.0f);
+	world->scaffolds.insert(target);
+	world->underCursor = target;
+	EXPECT_TRUE(Press());
+	// The hand lets go of the held scaffold before the join, and is empty after it
+	ASSERT_EQ(world->joined.size(), 1u);
+	EXPECT_EQ(std::get<0>(world->joined.front()), target);
+	EXPECT_EQ(std::get<1>(world->joined.front()), held);
+	EXPECT_FALSE(std::get<2>(world->joined.front()));
 	EXPECT_TRUE(world->takenWhole.empty());
 	EXPECT_FALSE(system->GetHeld().has_value());
 }
