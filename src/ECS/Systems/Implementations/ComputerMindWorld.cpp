@@ -204,6 +204,28 @@ bool GameMindWorld::HeldByHelp() const
 	return computer_world::HeldByHelp(_state);
 }
 
+const computer_mind::NodeNames& GameMindWorld::Names() const
+{
+	return SharedNodeNames();
+}
+
+const computer_mind::NodeNames& computer_world::SharedNodeNames()
+{
+	auto& registry = Entities().Underlying();
+	const auto view = registry.view<const ComputerNodeNames>();
+	return view.empty() ? computer_mind::FirstNodeNames() : view.get<const ComputerNodeNames>(view.front()).names;
+}
+
+computer_mind::NodeNames& computer_world::SharedNodeNamesToChange()
+{
+	auto& registry = Entities();
+	if (const auto view = registry.Underlying().view<ComputerNodeNames>(); !view.empty())
+	{
+		return view.get<ComputerNodeNames>(view.front()).names;
+	}
+	return registry.Assign<ComputerNodeNames>(registry.Create(), computer_mind::MakeNodeNames()).names;
+}
+
 bool computer_world::Available(entt::entity thing)
 {
 	auto& registry = Entities();

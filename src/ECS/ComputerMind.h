@@ -306,6 +306,22 @@ struct Mind
 /// The tree of a new mind, with each node at its first weight
 [[nodiscard]] Mind MakeMind();
 
+/// The mind after the load of a saved game. The save keeps these parts of the mind:
+/// - The suppression and the weight of each node.
+/// - The pause, the hold of a script, the miracle requests and the queue of script actions.
+/// The other parts start again as in a new mind. Thus the turn stamps of the nodes go to 0, and the mind waits one turn.
+[[nodiscard]] Mind StartAgain(const Mind& saved);
+
+/// The names of the kinds of node, in the order of NodeKind. All the gods of a game share them. Each entry has the
+/// bytes of one name, with room for the first name and its zero byte. A personality load can change the bytes.
+using NodeNames = std::vector<std::string>;
+/// The names that a game starts with
+[[nodiscard]] NodeNames MakeNodeNames();
+/// The names that a game starts with, made one time
+[[nodiscard]] const NodeNames& FirstNodeNames();
+/// The name of a kind of node: the bytes before the first zero byte. A name with no zero byte fills all of its entry.
+[[nodiscard]] std::string_view NameOf(const NodeNames& names, NodeKind kind);
+
 /// What the mind reads and changes in the game
 class World
 {
@@ -330,6 +346,8 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> MarkerPlace(entt::entity thing) const = 0;
 	/// The help of the game holds the mind
 	[[nodiscard]] virtual bool HeldByHelp() const = 0;
+	/// The names of the kinds of node that a land script uses to find a node
+	[[nodiscard]] virtual const NodeNames& Names() const { return FirstNodeNames(); }
 };
 
 /// Looks at the node and the tree below it, and gives how much the node is wanted
@@ -371,23 +389,28 @@ void QueueAction(Mind& mind, std::string_view name, entt::entity first, entt::en
 bool ForceNext(Mind& mind, World& world, uint32_t turn);
 
 /// A land script sets the weight of each node that has the name. False when no node has it.
-bool SetPersonality(Mind& mind, std::string_view name, float weight);
+bool SetPersonality(Mind& mind, std::string_view name, float weight, const NodeNames& names = FirstNodeNames());
 /// A land script sets the suppression of each node that has the name. False when no node has it.
-bool SetSuppression(Mind& mind, std::string_view name, float suppression);
-/// The nodes that a name finds, in the order that the game finds them
-[[nodiscard]] std::vector<uint16_t> FindNodes(const Mind& mind, std::string_view name);
+bool SetSuppression(Mind& mind, std::string_view name, float suppression, const NodeNames& names = FirstNodeNames());
+/// The nodes that a name finds, in the order that the game finds them. The name of a node ends at its last colon. A
+/// longer name that starts with the name of a node also finds the node.
+[[nodiscard]] std::vector<uint16_t> FindNodes(const Mind& mind, std::string_view name,
+                                              const NodeNames& names = FirstNodeNames());
 
 /// The name of a kind of node in a personality file: the name for the land scripts, then a colon, the number of its
 /// text and a space. The root has only its name.
 [[nodiscard]] std::string PersonalityName(NodeKind kind);
 /// The personality file of a god, as a land script saves it. For each node, root first and then each branch of a child
 /// in turn, the file has the name of the node with a zero byte after it, then the weight in four bytes, low byte first.
-[[nodiscard]] std::vector<uint8_t> PersonalityFile(const Mind& mind);
-/// A land script loads the weights of a personality file into the god. The load reads the nodes in the order of the
-/// save, and does not compare the names in the file with the names of the nodes:
-/// - For each node, it skips the bytes of the name of the node and its zero byte.
+/// A name with no zero byte in its entry goes into the file without a zero byte.
+[[nodiscard]] std::vector<uint8_t> PersonalityFile(const Mind& mind, const NodeNames& names = FirstNodeNames());
+/// A land script loads a personality file into the god. The load reads the nodes in the order of the save, and does
+/// not compare the names in the file with the names of the nodes:
+/// - For each node, it reads as many bytes as the name of the node has now, with its zero byte. These bytes become the
+///   name of the kind of node for all the gods.
 /// - Then it reads the four bytes of the weight.
-/// - When the file ends, the load stops. A weight that the file cuts keeps the bytes that the file does not give.
-void ReadPersonalityFile(Mind& mind, std::span<const uint8_t> bytes);
+/// - When the file ends, the load stops. A name or a weight that the file cuts keeps the bytes that the file does not
+///   give.
+void ReadPersonalityFile(Mind& mind, NodeNames& names, std::span<const uint8_t> bytes);
 
 } // namespace openblack::computer_mind

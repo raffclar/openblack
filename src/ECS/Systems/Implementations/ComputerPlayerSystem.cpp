@@ -455,12 +455,12 @@ std::optional<glm::vec3> ComputerPlayerSystem::HandPosition(PlayerNames player)
 
 void ComputerPlayerSystem::SetPersonality(PlayerNames player, std::string_view name, float weight)
 {
-	computer_mind::SetPersonality(MindOf(player).mind, name, weight);
+	computer_mind::SetPersonality(MindOf(player).mind, name, weight, computer_world::SharedNodeNames());
 }
 
 void ComputerPlayerSystem::SetSuppression(PlayerNames player, std::string_view name, float suppression)
 {
-	computer_mind::SetSuppression(MindOf(player).mind, name, suppression);
+	computer_mind::SetSuppression(MindOf(player).mind, name, suppression, computer_world::SharedNodeNames());
 }
 
 bool ComputerPlayerSystem::Ready(PlayerNames player)
@@ -502,7 +502,8 @@ bool ComputerPlayerSystem::SavePersonality(PlayerNames player, std::string_view 
 	}
 	// A player with no mind yet has the first weights of each node
 	const auto* found = FindMind(player);
-	const auto bytes = computer_mind::PersonalityFile(found != nullptr ? found->mind : computer_mind::MakeMind());
+	const auto bytes = computer_mind::PersonalityFile(found != nullptr ? found->mind : computer_mind::MakeMind(),
+	                                                  computer_world::SharedNodeNames());
 	return Locator::filesystem::value().WriteAll(places.front(), bytes);
 }
 
@@ -530,7 +531,9 @@ bool ComputerPlayerSystem::LoadPersonality(PlayerNames player, std::string_view 
 			SPDLOG_LOGGER_WARN(spdlog::get("game"), "The personality file {} did not open: {}", place.string(), error.what());
 			continue;
 		}
-		computer_mind::ReadPersonalityFile(MindOf(player).mind, bytes);
+		// The names in the file become the names of the nodes for all the gods
+		auto& names = computer_world::SharedNodeNamesToChange();
+		computer_mind::ReadPersonalityFile(MindOf(player).mind, names, bytes);
 		return true;
 	}
 	return false;

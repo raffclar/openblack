@@ -29,6 +29,7 @@
 using namespace openblack;
 using namespace openblack::ecs::reflection;
 using openblack::ecs::components::ComputerAttitudes;
+using openblack::ecs::components::ComputerNodeNames;
 using openblack::ecs::components::ComputerPlayer;
 using openblack::ecs::components::PlayerAllies;
 using openblack::ecs::components::PlayerInfluencePower;
@@ -291,4 +292,29 @@ TEST(ComputerPlayerState, TheAttitudesTheAlliesAndTheInfluencePowerComeBackFromA
 	EXPECT_EQ(loaded.get<PlayerAllies>(player).strength, allies.strength);
 	EXPECT_EQ(loaded.get<PlayerInfluencePower>(player).power, 812.5f);
 	EXPECT_EQ(loaded.get<PlayerInfluencePower>(player).average, 640.25f);
+}
+
+// The names of the nodes that a personality load changed are in the world file and in the synced state, so a load and
+// each computer of a network game have the same names
+TEST(ComputerPlayerState, TheSharedNodeNamesAreSavedAndSynced)
+{
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	entt::registry registry;
+	auto names = computer_mind::MakeNodeNames();
+	names.at(1).at(6) = 'X';
+	names.at(0).at(4) = '\0';
+	const auto holder = registry.create();
+	registry.emplace<ComputerNodeNames>(holder, names);
+	const auto before = synced_state::HashOf(registry, context, synced_state::PresentationParts(), true);
+	EXPECT_TRUE(before.unregistered.empty());
+	EXPECT_TRUE(PartOf(before, "ComputerNodeNames").has_value());
+
+	const auto loaded = SavedAndLoaded(registry, context);
+	ASSERT_TRUE(loaded.all_of<ComputerNodeNames>(holder));
+	EXPECT_EQ(loaded.get<ComputerNodeNames>(holder).names, names);
+	EXPECT_EQ(computer_mind::NameOf(loaded.get<ComputerNodeNames>(holder).names, computer_mind::NodeKind::Root), "Mast");
+
+	registry.get<ComputerNodeNames>(holder).names.at(2).at(0) = 'Q';
+	EXPECT_NE(synced_state::HashOf(registry, context, synced_state::PresentationParts(), true).hash, before.hash);
 }

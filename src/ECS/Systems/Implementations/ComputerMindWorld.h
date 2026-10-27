@@ -56,6 +56,7 @@ public:
 	void UnlockAction() override;
 	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override;
 	[[nodiscard]] bool HeldByHelp() const override;
+	[[nodiscard]] const computer_mind::NodeNames& Names() const override;
 
 private:
 	PlayerNames _player;
@@ -78,6 +79,10 @@ void Validate(components::ComputerPlayer& state);
 [[nodiscard]] bool HeldByHelp(const components::ComputerPlayer& state);
 /// The god adds the forests and the seeds of miracles near its hand to its list of seen things
 void SeeNearHand(components::ComputerPlayer& state, uint32_t turn);
+/// The names of the kinds of node that all the gods of the land share
+[[nodiscard]] const computer_mind::NodeNames& SharedNodeNames();
+/// The shared names of the kinds of node, to change them. The first change makes the entity that keeps them.
+[[nodiscard]] computer_mind::NodeNames& SharedNodeNamesToChange();
 /// Where the hand of the god starts on the land: at its temple
 [[nodiscard]] std::optional<glm::vec3> StartingHand(PlayerNames player);
 

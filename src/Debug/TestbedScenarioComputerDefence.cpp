@@ -108,4 +108,25 @@ void testbed_scenarios::AddComputerGodDefenceScenarios(std::vector<Scenario>& al
 	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
 	});
+	all.push_back({
+	    .id = "saves.computer_god_mind",
+	    .name = "A computer god whose mind starts again after the load of a saved game",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two, with a temple and a Celtic town. After "
+	                   "30 seconds, a testbed tool puts the action DefendtownWithSpells in the queue of the god. Three "
+	                   "seconds later the game saves into slot 0, and two seconds after that it loads slot 0.",
+	    .expected = "Before the save, the players.list query shows the turns at which the nodes of the god were last "
+	                "looked at and acted on. After the load these turns are 0, and the lowered nodes come back at the "
+	                "first look. The weights and the suppressions stay. The hand keeps its steps and goes on with the "
+	                "shield miracle.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .landScript = k_ComputerGodDefenceScript,
+	    .commands = {{.kind = Command::Kind::SaveGame, .delaySeconds = 33.0f, .value = 0},
+	                 {.kind = Command::Kind::LoadGame, .delaySeconds = 2.0f, .value = 0}},
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "DefendtownWithSpells",
+	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
+	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
+	});
 }
