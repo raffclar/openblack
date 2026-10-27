@@ -569,8 +569,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		break;
 	case Step::VillageTotems:
 		// A town totem goes with its town centre, and a totem that arrives at its share rings the village bell. The totems
-		// ease by the clock of this computer, as the game does. The ease and the bell are only for the look and the sound, so
-		// the synced world does not read them.
+		// ease by the clock of this computer, as the game does. The ease and the bell are only for the look and the sound.
 		Locator::villageTotemSystem::value().ProcessTurn(static_cast<uint32_t>(clock.GetElapsedTime().count()));
 		break;
 	case Step::TownFlags:
@@ -834,7 +833,7 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 		view.PlayViewStep(step, cameraPosition);
 		break;
 	case Step::Rewards:
-		// A reward chest that fell to the ground goes into the map's cells
+		// A reward chest that fell to the ground goes into the map's cells, and the chests from the sky fall
 		if (Locator::rewardSystem::has_value())
 		{
 			Locator::rewardSystem::value().ProcessTurn();

@@ -25,6 +25,43 @@ TEST(Reward, AChestFromTheSkyFallsAHundredAndFiftyMetresInThreeSecondsTurningHal
 	EXPECT_FLOAT_EQ(reward::FallYaw(1.0f), std::numbers::pi_v<float>);
 }
 
+TEST(Reward, TheTurnsAloneMoveAChestThatFallsAndItLandsAtItsThirtySecondTurn)
+{
+	float seconds = 0.0f;
+	int turns = 0;
+	reward::FallTurn step;
+	do
+	{
+		step = reward::StepFall(seconds);
+		seconds = step.seconds;
+		++turns;
+	} while (!step.lands && turns < 100);
+	// The clock adds a tenth of a second in each turn. In floats, thirty tenths give a little less than three seconds,
+	// so the chest is still a little above the land at the thirty-first turn.
+	EXPECT_EQ(turns, 32);
+	EXPECT_LE(step.height, 0.0f);
+	// The first turn puts it where its clock starts: at the top, not turned
+	const auto first = reward::StepFall(0.0f);
+	EXPECT_FLOAT_EQ(first.height, 150.0f);
+	EXPECT_FLOAT_EQ(first.yaw, 0.0f);
+	EXPECT_FLOAT_EQ(first.seconds, 0.1f);
+	EXPECT_FALSE(first.lands);
+}
+
+TEST(Reward, TheFramesDrawAChestThatFallsBetweenThePlacesOfItsLastTwoTurns)
+{
+	// After the turn that put it at a clock of 1 second, its clock is 1.1 seconds
+	const auto turn = reward::StepFall(1.0f);
+	EXPECT_FLOAT_EQ(reward::DrawnFallClock(turn.seconds, 0.0f), 1.0f);
+	EXPECT_FLOAT_EQ(reward::DrawnFallClock(turn.seconds, 0.5f), 1.05f);
+	EXPECT_FLOAT_EQ(reward::DrawnFallClock(turn.seconds, 1.0f), 1.1f);
+	// Before its first turn the frames draw it at the top
+	EXPECT_FLOAT_EQ(reward::DrawnFallClock(0.0f, 0.7f), 0.0f);
+	// Just before the turn that lands it, the frames draw it on the land, never under it
+	EXPECT_FLOAT_EQ(reward::DrawnFallHeight(3.05f), 0.0f);
+	EXPECT_FLOAT_EQ(reward::DrawnFallHeight(2.95f), 2.5f);
+}
+
 TEST(Reward, ItsDustSpreadsAboutItInSandColoursAndGrowsAsItFades)
 {
 	const auto dust = reward::MakeDust([](float a, float b) { return b + 0.0f * a; });
