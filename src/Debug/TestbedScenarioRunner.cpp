@@ -1205,6 +1205,7 @@ void Runner::Stop()
 	{
 		Locator::footprintSystem::value().SetAprilFoolsOverride(std::nullopt);
 	}
+	SetUpDate(std::nullopt);
 	if (Locator::skySystem::has_value())
 	{
 		Locator::skySystem::value().GetClock().SetRunning(true);
@@ -1212,8 +1213,42 @@ void Runner::Stop()
 	Log("Stopped");
 }
 
+void Runner::SetUpDate(const std::optional<RealDate>& date)
+{
+	if (!Locator::time::has_value())
+	{
+		return;
+	}
+	auto& time = Locator::time::value();
+	if (!date.has_value())
+	{
+		if (_pinnedDateBefore.has_value())
+		{
+			time.PinDate(*_pinnedDateBefore);
+			_pinnedDateBefore.reset();
+		}
+		return;
+	}
+	if (!_pinnedDateBefore.has_value())
+	{
+		_pinnedDateBefore = time.GetPinnedDate();
+	}
+	std::tm local {};
+	local.tm_year = date->year - 1900;
+	local.tm_mon = date->month - 1;
+	local.tm_mday = date->day;
+	local.tm_hour = date->hour;
+	local.tm_min = date->minute;
+	// The computer's time zone tells whether summer time applies on that date
+	local.tm_isdst = -1;
+	const auto unixTime = static_cast<int64_t>(std::mktime(&local));
+	time.PinDate(ecs::systems::PinForDateNow(unixTime, time.GetTicks()));
+	Log(fmt::format("Date set to {:04}-{:02}-{:02} {:02}:{:02}", date->year, date->month, date->day, date->hour, date->minute));
+}
+
 void Runner::SetUpEnvironment(const Environment& environment)
 {
+	SetUpDate(environment.realDate);
 	if (Locator::skySystem::has_value())
 	{
 		auto& sky = Locator::skySystem::value();

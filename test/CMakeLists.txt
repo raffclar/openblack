@@ -1891,3 +1891,4 @@ add_test(NAME test_save_diff
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
 )
 openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)
+openblack_setup_and_add_test(test_real_clock test_real_clock.cpp)

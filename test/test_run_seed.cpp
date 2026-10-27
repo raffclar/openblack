@@ -202,3 +202,21 @@ TEST(RunSeed, APinnedDateMovesOnWithTheTicks)
 	// The wall clock's date: well after the pinned one
 	EXPECT_GT(clock.time.GetUnixTime(), 1'600'000'000);
 }
+
+// A date set while the clock runs gives that date at once and then moves with the ticks, which do not change
+TEST(RunSeed, ADateSetNowKeepsTheTicks)
+{
+	Clock clock;
+	clock.time.Start();
+	clock.now += 2500;
+	const auto ticks = clock.time.GetTicks();
+	clock.time.PinDate(ecs::systems::PinForDateNow(1775043000, ticks));
+	EXPECT_EQ(clock.time.GetTicks(), ticks);
+	EXPECT_EQ(clock.time.GetUnixTime(), 1775043000);
+	clock.now += 1000;
+	EXPECT_EQ(clock.time.GetUnixTime(), 1775043001);
+	// The clock gives the wall clock's date again
+	clock.time.PinDate(std::nullopt);
+	EXPECT_FALSE(clock.time.GetPinnedDate().has_value());
+	EXPECT_GT(clock.time.GetUnixTime(), 1'600'000'000);
+}

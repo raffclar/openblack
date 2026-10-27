@@ -138,6 +138,18 @@ enum class Land : uint8_t
 	GodsRingMap,
 };
 
+/// A date and time on the player's computer, by its own time zone
+struct RealDate
+{
+	int year {2001};
+	/// 1 for January to 12 for December
+	int month {1};
+	/// 1 to 31
+	int day {1};
+	int hour {12};
+	int minute {0};
+};
+
 struct Environment
 {
 	Land land {Land::Testbed};
@@ -154,6 +166,9 @@ struct Environment
 	bool fainting {true};
 	/// Smiley faces for footprints as on the first of April, or by the date when not given
 	std::optional<bool> aprilFools;
+	/// The date and time that the machine's clock gives while the scenario runs, as if the computer's clock were set to
+	/// it; the clock continues from it. When not given, the clock is as it was before the scenario.
+	std::optional<RealDate> realDate;
 	/// The grid of every miracle's dispenser the testbed lays out in front of the camera stays, or is cleared away
 	bool dispenserGrid {true};
 	/// The footpaths are drawn as lines, as the debug menu's Footpaths box draws them
