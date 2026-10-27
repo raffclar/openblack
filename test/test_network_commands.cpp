@@ -89,6 +89,11 @@ class FakeMinds final: public ecs::systems::ComputerPlayerSystemInterface
 public:
 	void SwitchOn(PlayerNames /*player*/, bool /*on*/) override {}
 	void SetCreatureLike(PlayerNames /*player*/, PlayerNames /*like*/) override {}
+	void SetActive(PlayerNames /*player*/, bool /*on*/) override {}
+	void SetPaused(PlayerNames /*player*/, bool /*paused*/) override {}
+	void SetPersonality(PlayerNames /*player*/, std::string_view /*name*/, float /*weight*/) override {}
+	void SetSuppression(PlayerNames /*player*/, std::string_view /*name*/, float /*suppression*/) override {}
+	[[nodiscard]] bool Ready(PlayerNames /*player*/) override { return true; }
 	void ProcessTurn() override {}
 	void FillEmptySlots(std::span<const PlayerNames> /*gods*/, std::span<const PlayerNames> /*humans*/) override {}
 	void WaitForHumans() override {}

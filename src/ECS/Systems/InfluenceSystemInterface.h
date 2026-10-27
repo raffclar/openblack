@@ -114,6 +114,8 @@ public:
 	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
 	/// and of their other sources of influence
 	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
+	/// How far a player's citadel reaches with the land's multiplier, 0 when the player has no citadel
+	[[nodiscard]] virtual float CitadelReachOf(PlayerNames /*player*/) const { return 0.0f; }
 	[[nodiscard]] virtual glm::vec2 GetScrollOffset() const = 0;
 	[[nodiscard]] virtual std::span<const influence::Ripple> GetRipples() const = 0;
 };

@@ -171,6 +171,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -7965,10 +7966,12 @@ void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetActive(player, enable);
+	}
 }
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
@@ -8428,18 +8431,18 @@ void SetCreatureName() // 343 SET_CREATURE_NAME
 
 void ComputerPlayerReady() // 344 COMPUTER_PLAYER_READY
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(Locator::computerPlayerSystem::has_value() && Locator::computerPlayerSystem::value().Ready(player));
 }
 
 void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto pause = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto pause = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, pause);
+	}
 }
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
@@ -8696,20 +8699,24 @@ void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto probability = Popf();
-	// const auto aspect = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto weight = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPersonality(player, aspect, weight);
+	}
 }
 
 void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto suppression = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSuppression(player, aspect, suppression);
+	}
 }
 
 void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION

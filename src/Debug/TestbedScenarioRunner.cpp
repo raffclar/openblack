@@ -932,7 +932,10 @@ void Runner::Start(const Scenario& scenario)
 		ecs::archetypes::CitadelArchetype::Create({at.x, land.GetHeightAt(at), at.y}, PlayerNames::PLAYER_ONE, 0.0f,
 		                                          glm::vec3(1.0f));
 	}
-	PlaceObjects(scenario, _middle);
+	if (!scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
+	}
 	for (const auto& offset : scenario.sharks)
 	{
 		const auto at = MapPoint(_middle, offset);
@@ -953,6 +956,10 @@ void Runner::Start(const Scenario& scenario)
 	{
 		lhscriptx::Script landScript({_middle.x, 0.0f, _middle.y}, map_coords::FromMetres(_middle));
 		landScript.Load(std::string(scenario.landScript));
+	}
+	if (scenario.objectsAfterLandScript)
+	{
+		PlaceObjects(scenario, _middle);
 	}
 	PlaceBirds(scenario, _middle);
 	PlaceCreatures(scenario, _middle);
