@@ -1240,6 +1240,9 @@ openblack_setup_and_add_test(test_oracle_walk_lead oracle/test_oracle_walk_lead.
 openblack_setup_and_add_test(
   test_oracle_villager_food oracle/test_oracle_villager_food.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_computer_hand_moves oracle/test_oracle_computer_hand_moves.cpp
+)
 # The data folder is found at run time (see oracle/OracleData.h), never compiled into an object: ctest sets the
 # environment variable for each test, and the file in the build folder serves a program started by hand from there
 file(WRITE ${CMAKE_CURRENT_BINARY_DIR}/oracle_data_folder.txt
@@ -1266,6 +1269,7 @@ foreach (oracle_test test_oracle_catch test_oracle_sigmoid
                      test_oracle_logo_effect
                      test_oracle_walk_lead
                      test_oracle_villager_food
+                     test_oracle_computer_hand_moves
 )
   set_tests_properties(
     ${oracle_test}

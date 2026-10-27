@@ -16,6 +16,7 @@
 #include "3D/LandIslandInterface.h"
 #include "ComputerMindCommon.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/WorldObjects.h"
 #include "Locator.h"
 
@@ -43,4 +44,10 @@ float GameHandMoves::HeightOf(entt::entity thing) const
 float GameHandMoves::LandHeight(const map_coords::MapCoords& coords) const
 {
 	return Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetAltitude(coords.x, coords.z) : 0.0f;
+}
+
+float GameHandMoves::InfluenceAt(const map_coords::MapCoords& coords) const
+{
+	// The game has no alliances yet, so the influence of the allies is not in the sum
+	return Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().PlayerInfluence(_player, coords) : 0.0f;
 }
