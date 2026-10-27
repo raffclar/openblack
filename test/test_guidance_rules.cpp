@@ -154,3 +154,13 @@ TEST(GuidanceRules, MoonLook)
 	// A waxing moon is looked at again at once
 	EXPECT_LT(LookAtMoon(full - 1.0f, true).wait, 1);
 }
+
+// Only the first land of a story played alone keeps most remarks quiet: a skirmish and a network game never do
+TEST(GuidanceRules, OnlyTheStorysFirstLandIsQuiet)
+{
+	EXPECT_TRUE(QuietFirstLand(1, false, false));
+	EXPECT_FALSE(QuietFirstLand(0, false, false));
+	EXPECT_FALSE(QuietFirstLand(2, false, false));
+	EXPECT_FALSE(QuietFirstLand(1, false, true));
+	EXPECT_FALSE(QuietFirstLand(1, true, false));
+}

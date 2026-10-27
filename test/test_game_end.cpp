@@ -320,3 +320,18 @@ TEST(GameEnd, AFullScoreHistoryDropsItsOldestValue)
 	EXPECT_EQ(standing.scoreHistory[499], 500.0f);
 	EXPECT_EQ(ShownScores(standing).size(), 499u);
 }
+
+// A skirmish has no conditions, so each tenth turn each god keeps its share of the influence, the computer gods too
+TEST(GameEnd, ASkirmishKeepsTheShareOfTheInfluenceEachTenTurns)
+{
+	FakeWorld world;
+	world.gods[k_One] = {.human = true, .power = 100.0f};
+	world.gods[k_Two] = {.computer = true, .mind = true, .power = 300.0f};
+	State state;
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 20}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistory[1], 0.25f);
+	EXPECT_EQ(world.gods[k_Two].standing.scoreHistory[1], 0.75f);
+	std::ignore = ProcessTurn(world, {.networkGame = false, .skirmish = true, .turn = 25}, state);
+	EXPECT_EQ(world.gods[k_One].standing.scoreHistoryIndex, 1);
+}
