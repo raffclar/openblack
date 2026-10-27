@@ -58,6 +58,7 @@
 #include "Creature/CreatureMarks.h"
 #include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMode.h"
+#include "Creature/CreatureMorph.h"
 #include "Creature/CreatureObstacles.h"
 #include "Creature/CreaturePlanner.h"
 #include "Creature/CreatureRestAndHome.h"
@@ -65,6 +66,7 @@
 #include "Creature/CreatureWalkPlanner.h"
 #include "Creature/FightMarks.h"
 #include "ECS/Archetypes/ArenaArchetype.h"
+#include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
@@ -143,7 +145,6 @@ using Pace = CreatureLocomotionSystemInterface::Pace;
 namespace
 {
 constexpr float k_TurnSeconds = std::chrono::duration<float>(TimeSystemInterface::k_TurnDuration).count();
-constexpr float k_TurnMs = k_TurnSeconds * 1000.0f;
 constexpr auto k_TurnMilliseconds =
     static_cast<uint32_t>(std::chrono::duration_cast<std::chrono::milliseconds>(TimeSystemInterface::k_TurnDuration).count());
 
@@ -153,6 +154,13 @@ int32_t TurnMsOf(const CreatureAnimation* animation)
 {
 	const float pace = animation != nullptr ? animation->playbackScale : 1.0f;
 	return creature_walk_planner::TurnMs(pace, static_cast<int32_t>(k_TurnMilliseconds));
+}
+
+/// The strength that the creature's body shows, from -1 (weak) to 1 (strong). The blows compare these strengths.
+float ShownStrength(const Creature& creature)
+{
+	return creature_morph::StrengthLook(creature.strength,
+	                                    ecs::archetypes::CreatureArchetype::SpeciesStrength(creature.species));
 }
 
 /// A face is due again once its wait is within this much of over
@@ -2912,21 +2920,16 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		auto& fighter = fighting->fighter;
 		const auto& other = registry.Get<const CreatureFighting>(opponent).fighter;
 
-		if (fighter.state == fight::State::Stance && fighter.control == fight::Control::Player)
+		// Left alone long enough, the computer takes over the player's creature. A frozen creature waits longer.
+		if (fight::CountComputerWait(fighter, TurnMsOf(registry.TryGet<const CreatureAnimation>(entity))))
 		{
-			// Left alone long enough, the computer takes over the player's creature
-			fighter.computerWaitMs -= k_TurnMs;
-			if (fighter.computerWaitMs < 0.0f)
-			{
-				fighter.control = fight::Control::Computer;
-				fight_transcript::Note(entity, "control", [&] {
-					return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
-					                                 {"from", "player"},
-					                                 {"to", "computer"},
-					                                 {"why", "player_idle"},
-					                                 {"computer_wait_ms", fighter.computerWaitMs}};
-				});
-			}
+			fight_transcript::Note(entity, "control", [&] {
+				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)},
+				                                 {"from", "player"},
+				                                 {"to", "computer"},
+				                                 {"why", "player_idle"},
+				                                 {"computer_wait_ms", fighter.computerWaitMs}};
+			});
 		}
 		const bool computer = fighter.control == fight::Control::Computer;
 		const bool stance = fighter.state == fight::State::Stance;
@@ -2946,11 +2949,15 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 		{
 			// It keeps inside the arena
 		}
-		else if (!fighter.queue.Empty())
+		else if (!computer)
 		{
-			CheckQueue(entity);
+			// The computer does not look at the queue: it chooses its own moves
+			if (!fighter.queue.Empty())
+			{
+				CheckQueue(entity);
+			}
 		}
-		else if (computer && fighter.state == fight::State::Stance)
+		else if (fighter.state == fight::State::Stance)
 		{
 			const auto tier = fight::TierOf(fighter.tendency);
 			const auto seen = fight::OpponentOf(other.state, other.animation);
@@ -2990,7 +2997,7 @@ void CreatureFightSystem::DuelTurn(entt::entity entity)
 				break;
 			}
 		}
-		else if (computer && fighter.state == fight::State::Block && fight::ComputerEndsBlock(random))
+		else if (fighter.state == fight::State::Block && fight::ComputerEndsBlock(random))
 		{
 			const auto index = fight_transcript::Note(entity, "ai_choice", [&] {
 				return fight_transcript::Fields {{"creature", fight_transcript::Id(entity)}, {"choice", "end_block"}};
@@ -3623,12 +3630,15 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 	const auto heightShare =
 	    fight::HeightShareOf(found->height, HeadHeightOf(registry, opponent).value_or(HeightOf(ShownSize(opponentBody))));
 	const auto direction = fight::RecoilDirectionOf(found->swing);
+	// The blows compare the strengths that the two bodies show
+	const auto bodyLook = ShownStrength(body);
+	const auto opponentLook = ShownStrength(opponentBody);
 	const auto result = fight::ResolveBlow(
 	    {
 	        .attackerSize = ShownSize(body),
 	        .defenderSize = ShownSize(opponentBody),
-	        .attackerStrength = body.strength,
-	        .defenderStrength = opponentBody.strength,
+	        .attackerStrength = bodyLook,
+	        .defenderStrength = opponentLook,
 	        .speed = attacker.speed,
 	        .special = special,
 	        .heightShare = heightShare,
@@ -3654,15 +3664,15 @@ void CreatureFightSystem::LandBlow(entt::entity creature, const glm::vec3& point
 		                                     {"vector_z", vector.z},
 		                                     {"attacker_size", ShownSize(body)},
 		                                     {"defender_size", ShownSize(opponentBody)},
-		                                     {"attacker_strength", body.strength},
-		                                     {"defender_strength", opponentBody.strength},
+		                                     {"attacker_strength", bodyLook},
+		                                     {"defender_strength", opponentLook},
 		                                     {"speed", attacker.speed},
 		                                     {"special", special},
 		                                     {"blocked", blocked},
 		                                     {"damage_factor", fight::DamageFactor({.attackerSize = ShownSize(body),
 		                                                                            .defenderSize = ShownSize(opponentBody),
-		                                                                            .attackerStrength = body.strength,
-		                                                                            .defenderStrength = opponentBody.strength,
+		                                                                            .attackerStrength = bodyLook,
+		                                                                            .defenderStrength = opponentLook,
 		                                                                            .speed = attacker.speed,
 		                                                                            .special = special,
 		                                                                            .heightShare = heightShare,
