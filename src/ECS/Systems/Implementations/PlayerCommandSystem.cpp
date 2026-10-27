@@ -332,14 +332,11 @@ void Run(const Command& command, uint32_t turn)
 		    }
 		    else if constexpr (std::is_same_v<Kind, LeashPick>)
 		    {
-			    // The creature of the player changes to the leash that the picker chose, if it knows that leash
+			    // The creature of the player changes to the leash that the picker chose, if it knows that leash and no
+			    // nice or nasty spell is on it
 			    if (openblack::Locator::leashSystem::has_value())
 			    {
-				    auto& leashes = openblack::Locator::leashSystem::value();
-				    if (const auto creature = leashes.PlayersCreature(command.player); creature.has_value())
-				    {
-					    leashes.ChangeType(*creature, action.type);
-				    }
+				    openblack::Locator::leashSystem::value().PickType(command.player, action.type);
 			    }
 		    }
 		    else if constexpr (std::is_same_v<Kind, HandShakeOff>)
