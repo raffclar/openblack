@@ -115,6 +115,10 @@ private:
 	void PlaceBirds(const Scenario& scenario, glm::vec2 middle);
 	/// The scenario's town's worship site is put up built and its totem raised to the share
 	static void SetUpWorship(float share);
+	/// The testbed tool forces the actions of the computer gods that the scenario gives
+	void ForceComputerActions(const Scenario& scenario) const;
+	/// The thing that a forced action of a computer god gets, or none when the scenario has no such thing
+	[[nodiscard]] entt::entity ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const;
 	/// The first player's statistics and their creature's tallies, as the scenario gives them
 	static void SetUpStatistics(const Scenario& scenario);
 	void PlaceCreatures(const Scenario& scenario, glm::vec2 middle);
