@@ -9,6 +9,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include "ComputerMindTowns.h"
+
 #include <algorithm>
 #include <optional>
 #include <vector>
@@ -602,6 +604,16 @@ bool CastOnThing(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 }
 
 } // namespace
+
+bool computer_world::DropOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return PickUpForTown(context, mind, node);
+}
+
+bool computer_world::CastIconOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return CastFromIcon(context, mind, node);
+}
 
 void computer_world::RegisterTownsRules(RuleTable& table)
 {
