@@ -229,6 +229,8 @@ TEST(SyncedState, TheThingsThatOnlyTheFramesMakeTakeNoEntityOfTheLand)
 	// A thing that the turn makes on the land changes the synced world
 	land.Create();
 	EXPECT_NE(synced_state::HashOf(land.Underlying(), context, k_Presentation).hash, before);
+}
+
 TEST(SyncedState, WhatOnlyThePlayerAtThisComputerHearsAndSeesIsNotSynced)
 {
 	// Each computer keeps these for its own player, so two computers have different values at the same turn
