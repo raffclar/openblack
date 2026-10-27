@@ -726,6 +726,12 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 	component->powerUp = magic::k_BasePowerUpLevel;
 	component->charger = player;
 	component->chargeStartTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	// An icon that is full already gives its miracle to the hand of the god. Only the hand of a human player takes it,
+	// so the hand of a computer god never holds the seed: the god casts from the store of the icon.
+	if (icons::ReadyForHand(ChargeOf(*component, player), HandReady(player)))
+	{
+		GiveSeed(icon);
+	}
 	return true;
 }
 
