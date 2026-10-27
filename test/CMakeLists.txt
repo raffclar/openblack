@@ -1890,3 +1890,4 @@ add_test(NAME test_save_diff
          COMMAND ${Python3_EXECUTABLE}
                  ${CMAKE_SOURCE_DIR}/tools/sim/test_save_diff.py
 )
+openblack_setup_and_add_test(test_scroll_pictures temple/test_scroll_pictures.cpp)

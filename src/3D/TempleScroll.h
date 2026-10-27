@@ -89,10 +89,21 @@ public:
 	/// the parchment.
 	static uint32_t Draw(std::span<uint16_t> texels, std::span<const uint8_t> parchment, std::u16string_view text,
 	                     uint32_t position, const gui::GameFont& font, bool writeText = true);
+	/// A line that holds a gesture's or a control's picture: its marker (k_Gesture or k_Control) and number, where its
+	/// top is on the texture, and the place across the texture of the last line of words before it (0 when there is
+	/// none)
+	struct PictureLine
+	{
+		char16_t marker;
+		int32_t number;
+		float lastX;
+		float y;
+	};
 	/// The texture's lines: each line of the text from the line at position, where it goes on the texture,
-	/// centred across it. Gives the height of the text.
+	/// centred across it, and each line that holds a picture. Gives the height of the text.
 	static uint32_t LayOut(std::u16string_view text, uint32_t position, const gui::GameFont& font,
-	                       const std::function<void(std::u16string_view line, float x, float y)>& line);
+	                       const std::function<void(std::u16string_view line, float x, float y)>& line,
+	                       const std::function<void(const PictureLine& picture)>& picture = {});
 	/// A position the scroll can be turned to, from its top to where its last line is at the bottom
 	[[nodiscard]] static int32_t ClampPosition(int32_t position, uint32_t textHeight);
 	/// Writes text into the texels from x and y, its letters size texels high and

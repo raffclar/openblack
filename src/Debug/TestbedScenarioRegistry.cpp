@@ -4066,6 +4066,28 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.scroll_pictures",
+	    .name = "The pictures of a gesture and of controls on the library's did you know scroll",
+	    .facet = Facet::Story,
+	    .description = "The player reads three did you know tips on signs: one with the picture of a gesture, two with the "
+	                   "picture of a control. Then the player goes through the temple's main room into the library. After "
+	                   "four seconds the camera looks at the did you know scroll, as a press on it does.",
+	    .expected = "Far from the scroll, the lines of the pictures are blank. Close to the scroll, its text is in front of "
+	                "it, and under each tip is its picture, two lines high: the gesture in white over a black shadow, "
+	                "and the mouse button or the key of each control. The pictures move with the scroll when it turns. "
+	                "A gesture is cut at the top and the bottom of the scroll. A control shows only while all of it is "
+	                "on the scroll.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ReadTip, .delaySeconds = 0.5f, .value = 4131, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4138, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4153, .amount = 4.0f},
+	                 // The other rooms open after the temple draws the main room. Thus the player enters through it.
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5}},
+	});
+
+	all.push_back({
 	    .id = "temple.map_markers",
 	    .name = "The temple's map showing the miracles cast and the influence",
 	    .facet = Facet::Story,

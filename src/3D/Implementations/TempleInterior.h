@@ -79,6 +79,10 @@ public:
 	[[nodiscard]] std::vector<uint32_t> GetHiddenSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] std::span<const uint32_t> GetControlSubMeshes(TempleRoom room) const override;
 	[[nodiscard]] const std::vector<OrientedTextVertex>& GetText() const override { return _text; }
+	[[nodiscard]] const std::vector<temple::scroll_pictures::WorldPicture>& GetScrollPictures() const override
+	{
+		return _scrollPictures;
+	}
 	[[nodiscard]] std::vector<TempleSubMeshGlow> GetControlGlows(TempleRoom room) const override;
 	[[nodiscard]] std::vector<TempleSubMeshOffset> GetControlOffsets(TempleRoom room) const override;
 	[[nodiscard]] const graphics::Texture2D* GetTextTexture() const override;
@@ -256,6 +260,7 @@ private:
 	void SaveIntoSlot(uint32_t slot, std::u16string_view name, gamesave::RoomSave why);
 	/// This frame's text in the rooms
 	std::vector<OrientedTextVertex> _text;
+	std::vector<temple::scroll_pictures::WorldPicture> _scrollPictures;
 	/// Whether the options room has opened the game's options
 	bool _optionsShown {false};
 	/// The multiplayer front end is up over the future room
