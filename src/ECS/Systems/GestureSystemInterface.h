@@ -115,8 +115,6 @@ public:
 	/// A miracle seed in the hand does its first turn there: the hand forgets its path. From then on this land, the chain
 	/// follows the hand while it holds any miracle.
 	virtual void SeedFirstTurnInHand() { ForgetPath(); }
-	/// Whether the hand shows the effect of a selection, round the hand: while the leash picker is open
-	[[nodiscard]] virtual bool IsSelecting() const { return false; }
 
 	/// The templates the paths are matched against, empty until the game's file is loaded
 	[[nodiscard]] virtual std::span<const gestures::GestureTemplate> GetTemplates() const = 0;
@@ -128,10 +126,23 @@ public:
 	[[nodiscard]] virtual std::optional<Recognised> GetLastRecognised() const = 0;
 	/// Whether the leash picker is open, offering the creature's other leashes as gestures
 	[[nodiscard]] virtual bool IsLeashPickerOpen() const = 0;
+	/// Whether the miracle selection is open, offering the miracles of the player's worship site icons as gestures
+	[[nodiscard]] virtual bool IsSelectionOpen() const { return false; }
+	/// The key that opens the miracle selection: with the hand ready and the selection closed, the selection opens for
+	/// the player's own miracles. Whether it opened.
+	virtual bool OpenSelectionByKey(PlayerNames /*player*/) { return false; }
+	/// The key that calls the last miracle again: with the hand ready and the selection closed, the icon of the last
+	/// miracle that came into the hand gives it again. Whether the icon did something.
+	virtual bool RepeatMiracleByKey(PlayerNames /*player*/) { return false; }
+	/// Whether the hand shows the effect of a selection, round the hand: while the miracle selection or the leash picker
+	/// is open
+	[[nodiscard]] virtual bool IsSelecting() const { return false; }
 	/// Whether a circle drawn for the storm or shield in the hand is remembered, and for how much longer
 	[[nodiscard]] virtual float GetCircleSecondsLeft() const = 0;
-	/// Whether the hand is drawing a gesture that the chain behind it shows: while it holds a miracle that it can power up,
-	/// a miracle that a circle sizes, or any miracle once a miracle did its first turn in the hand on this land
+	/// Whether the hand is drawing a gesture that the chain behind it shows: while it holds a miracle that it can power up
+	/// or a miracle that a circle sizes, or while it draws a gesture of the open miracle selection. Once a miracle did its
+	/// first turn in the hand on this land, or the selection opened once on this land, the chain follows every miracle in
+	/// the hand.
 	[[nodiscard]] virtual bool IsGesturing() const = 0;
 	/// The row of hints of the gestures the hand waits for, at the bottom right of the screen
 	[[nodiscard]] virtual const gesture_hints::Row& GetHints() const = 0;

@@ -95,6 +95,11 @@ enum class Status : uint8_t
 	Failed,
 };
 
+/// Whether the animations of an action make the pose of the body for the turn, in place of the clips of the walk. This
+/// is true only while the action plays its animations and has not ended. While the creature walks or turns to the
+/// thing, the walk makes the pose.
+[[nodiscard]] bool PosesBody(bool playing, Status status);
+
 /// Why an action failed, to the extent that the mind must know
 enum class Failure : uint8_t
 {

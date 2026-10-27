@@ -329,7 +329,20 @@ void TornadoSystem::ProcessTurn()
 	{
 		LetGo(entity, carried);
 	}
-	Update(1.0f);
+	// The world has each carried thing where its particle is at the end of the step
+	registry.Each<CarriedByTornado, Transform>([](CarriedByTornado& carried, Transform& transform) {
+		const auto* atom = carried.carried != nullptr ? carried.carried->atom : nullptr;
+		if (atom == nullptr || !atom->drawn)
+		{
+			return;
+		}
+		// The same sum as the frames draw it at the end of the step
+		const auto& a = atom->previous;
+		const auto& b = atom->current;
+		transform.position = a.position + (b.position - a.position) * 1.0f;
+		transform.rotation = particles::maths::LerpRotation(a.rotation, b.rotation, 1.0f);
+		carried.drawn.reset();
+	});
 }
 
 void TornadoSystem::LetGo(entt::entity object, const particles::CarriedObject& carried)
@@ -371,19 +384,18 @@ void TornadoSystem::LetGo(entt::entity object, const particles::CarriedObject& c
 void TornadoSystem::Update(float turnFraction)
 {
 	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
-	Locator::entitiesRegistry::value().Each<const CarriedByTornado, Transform>(
-	    [t](const CarriedByTornado& carried, Transform& transform) {
-		    const auto* atom = carried.carried != nullptr ? carried.carried->atom : nullptr;
-		    if (atom == nullptr || !atom->drawn)
-		    {
-			    return;
-		    }
-		    // Where its particle is drawn between its last two steps
-		    const auto& a = atom->previous;
-		    const auto& b = atom->current;
-		    transform.position = a.position + (b.position - a.position) * t;
-		    transform.rotation = particles::maths::LerpRotation(a.rotation, b.rotation, t);
-	    });
+	Locator::entitiesRegistry::value().Each<CarriedByTornado>([t](CarriedByTornado& carried) {
+		const auto* atom = carried.carried != nullptr ? carried.carried->atom : nullptr;
+		if (atom == nullptr || !atom->drawn)
+		{
+			return;
+		}
+		// Where its particle is drawn between its last two steps. The world keeps it at the end of the step.
+		const auto& a = atom->previous;
+		const auto& b = atom->current;
+		carried.drawn = CarriedByTornado::Drawn {.position = a.position + (b.position - a.position) * t,
+		                                         .rotation = particles::maths::LerpRotation(a.rotation, b.rotation, t)};
+	});
 }
 
 size_t TornadoSystem::CarriedCount() const

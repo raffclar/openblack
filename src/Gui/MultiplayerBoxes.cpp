@@ -52,7 +52,6 @@ constexpr glm::ivec2 k_YesPosition {200, 338};
 constexpr glm::ivec2 k_NoPosition {568, 338};
 constexpr int k_AnswerArrowSize = 32;
 constexpr DialogRect k_MessageOk {.min = {325, 338}, .max = {475, 370}};
-constexpr DialogRect k_MessageCancel {.min = {340, 338}, .max = {460, 370}};
 
 /// The texts of the boxes
 constexpr std::string_view k_BackText = "HELP_TEXT_DIALOG_BACK";
@@ -69,8 +68,9 @@ constexpr std::string_view k_UserNameText = "HELP_TEXT_MPFE_USERNAME_LABEL";
 constexpr std::string_view k_PasswordText = "HELP_TEXT_MPFE_PASSWORD_LABEL";
 constexpr std::string_view k_InternetListTitle = "HELP_TEXT_DIALOG_ADDITION_57";
 constexpr std::string_view k_LanListTitle = "HELP_TEXT_DIALOG_ADDITION_55";
-constexpr std::string_view k_InternetHelp = "HELP_TEXT_DIALOG_ADDITION_13";
-constexpr std::string_view k_LanHelp = "HELP_TEXT_DIALOG_ADDITION_12";
+/// The help of the game list. The internet's own text also tells the player to click Create Game, which does not show
+/// (each game server is a game), so both lists show the text without it.
+constexpr std::string_view k_GameListHelp = "HELP_TEXT_DIALOG_ADDITION_12";
 constexpr std::string_view k_CurrentGamesText = "HELP_TEXT_DIALOG_ADDITION_47";
 constexpr std::string_view k_PlayersInGameText = "HELP_TEXT_DIALOG_ADDITION_112";
 constexpr std::string_view k_GameNameText = "HELP_TEXT_MPFE_CS_GAME_LABEL";
@@ -112,7 +112,6 @@ constexpr std::string_view k_ReadyText = "HELP_TEXT_MULTIPLAYER_READY";
 constexpr std::string_view k_SelectMapText = "HELP_TEXT_MULTIPLAYER_SELECT_CONDITION";
 constexpr std::string_view k_YesText = "HELP_TEXT_REQUESTER_BOXES_01";
 constexpr std::string_view k_NoText = "HELP_TEXT_REQUESTER_BOXES_02";
-constexpr std::string_view k_CancelText = "HELP_TEXT_REQUESTER_BOXES_03";
 constexpr std::string_view k_OkText = "HELP_TEXT_REQUESTER_BOXES_04";
 constexpr std::string_view k_YesKeyText = "HELP_TEXT_PAUSE_STATS_145";
 constexpr std::string_view k_NoKeyText = "HELP_TEXT_PAUSE_STATS_144";
@@ -127,6 +126,7 @@ std::string_view MessageTextName(Message message)
 	case Message::IncorrectPassword:
 		return "HELP_TEXT_DIALOG_ADDITION_171";
 	case Message::NotRegistered:
+	case Message::EmailRequired:
 		return "HELP_TEXT_DIALOG_YOUARENOTREGISTERED";
 	case Message::InvalidDetails:
 		return "HELP_TEXT_DIALOG_INVALIDDETAILS";
@@ -136,16 +136,23 @@ std::string_view MessageTextName(Message message)
 		return "HELP_TEXT_DIALOG_ADDITION_41";
 	case Message::HostLeft:
 		return "HELP_TEXT_DIALOG_ADDITION_127";
-	case Message::WaitingForStart:
+	case Message::AlreadyInRoom:
+		return "HELP_TEXT_MPFE_ERROR_ALREADY_IN_ROOM";
+	case Message::WaitingForTransfer:
+		return "HELP_TEXT_DIALOG_ADDITION_144";
+	case Message::SendingStartData:
+		return "HELP_TEXT_DIALOG_ADDITION_121";
+	case Message::StillDownloading:
+		return "HELP_TEXT_DIALOG_ADDITION_132";
+	case Message::OthersDownloading:
+		return "HELP_TEXT_DIALOG_ADDITION_130";
+	case Message::KickedFromGame:
+		return "HELP_TEXT_MPFER_KICKEDYOUGAME";
 	case Message::None:
 		return {};
 	}
 	return {};
 }
-
-/// The start of a network game is not made yet. The game has no text for this wait, so the box shows this one until
-/// the start comes from the game server.
-constexpr std::u16string_view k_WaitingForStart = u"You are in the game. Wait for the start of the game.";
 
 bool IsReturn(int key)
 {
@@ -359,8 +366,8 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_next = &dialog.Add<BigButton>(_font, k_NextPosition, k_ArrowSize, Text(k_JoinGameText), LabelSide::Left, Look::RightArrow);
 	_next->onClick = [this] { Join(); };
 	dialog.Add<StaticText>(k_Title, Text(lan ? k_LanListTitle : k_InternetListTitle), Layout::Centre, k_Big);
-	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(lan ? k_LanHelp : k_InternetHelp),
-	                                Layout::Wrapped, k_Big);
+	_help = &dialog.Add<StaticText>(DialogRect {.min = {420, 175}, .max = {690, 485}}, Text(k_GameListHelp), Layout::Wrapped,
+	                                k_Big);
 	dialog.Add<StaticText>(DialogRect {.min = {110, 130}, .max = {380, 170}}, Text(k_CurrentGamesText), Layout::Left, k_Mid);
 	_list = &dialog.Add<List>(_font, DialogRect {.min = {110, 175}, .max = {380, 485}}, k_Mid, false, true, true);
 	_list->onClick = [this] {
@@ -380,9 +387,13 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
 	                                        Layout::Right, k_Mid);
 	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
-	dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
+	auto& nameLabel =
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
 	                             lobby_api::k_MostNameCharacters, k_Mid);
+	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
 	                                         Layout::Right, k_Mid);
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
@@ -768,7 +779,13 @@ void MultiplayerBoxes::ShowMessage(Message message)
 	}
 	auto& shown = _message.emplace();
 	shown.message = message;
-	shown.text = message == Message::WaitingForStart ? std::u16string(k_WaitingForStart) : Text(MessageTextName(message));
+	shown.text = Text(MessageTextName(message));
+	if (message == Message::KickedFromGame)
+	{
+		const auto name = _frontEnd->GetMessageName();
+		const std::array<TextArgument, 1> nameArgument = {std::u16string_view(name)};
+		shown.text = FormatText(shown.text, nameArgument);
+	}
 	shown.textControl = &shown.answers.Add<StaticText>(k_MessageText, shown.text, Layout::Wrapped);
 	shown.textControl->takesClicks = true;
 	switch (ButtonsOf(message))
@@ -785,11 +802,6 @@ void MultiplayerBoxes::ShowMessage(Message message)
 		shown.answers.Add<BigButton>(_font, k_NoPosition, k_AnswerArrowSize, Text(k_NoText), LabelSide::Left, Look::RightArrow)
 		    .onClick = [this] { _frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::No); };
 		break;
-	case MessageButtons::Cancel:
-		shown.answers.Add<Button>(k_MessageCancel, Text(k_CancelText), k_Mid).onClick = [this] {
-			_frontEnd->AnswerMessage(MultiplayerFrontEnd::Answer::Cancel);
-		};
-		break;
 	case MessageButtons::None:
 		break;
 	}
@@ -803,7 +815,11 @@ void MultiplayerBoxes::SendChat()
 	{
 		return;
 	}
-	_frontEnd->SendChat(_chatEdit->GetText());
+	// The box first holds its prompt: a click on it clears the prompt and sends nothing, as the game's box does
+	if (_chatEdit->GetText() != Text(k_TypeChatText))
+	{
+		_frontEnd->SendChat(_chatEdit->GetText());
+	}
 	_chatEdit->SetText(std::u16string());
 	// The chat's box keeps the keyboard for the next line
 	_dialog->SetFocus(_chatEdit);
@@ -811,7 +827,7 @@ void MultiplayerBoxes::SendChat()
 
 void MultiplayerBoxes::Join()
 {
-	// A name typed in the name's box picks the game of that name
+	// The name's box holds the name of the game that the player picked, and that name picks the game
 	const auto games = _frontEnd->GetGames();
 	const auto typed = ToUtf8(_name->GetText());
 	if (const auto found = std::ranges::find(games, typed, &lobby_api::ServerEntry::hostname); found != games.end())
@@ -996,6 +1012,11 @@ std::vector<Dialog::NamedControl> MultiplayerBoxes::GetNamedControls() const
 		return _message->answers.GetNamedControls();
 	}
 	return _dialog != nullptr ? _dialog->GetNamedControls() : std::vector<Dialog::NamedControl> {};
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetVisibleRects() const
+{
+	return _dialog != nullptr ? _dialog->GetVisibleRects() : std::vector<DialogRect> {};
 }
 
 std::u16string_view MultiplayerBoxes::GetMessageText() const

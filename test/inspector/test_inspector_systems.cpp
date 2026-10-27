@@ -35,6 +35,7 @@
 #include <ECS/CreatureReactionNotice.h>
 #include <ECS/Map.h>
 #include <ECS/Registry.h>
+#include <ECS/Systems/HandSystemInterface.h>
 #include <Inspector.h>
 #include <Inspector/ComponentReflection.h>
 #include <Inspector/EntityDescription.h>
@@ -295,6 +296,73 @@ TEST(InspectorInfluence, TheHandsShare)
 	EXPECT_FLOAT_EQ(Ask(inspector, R"({"query": "influence.at", "params": {"position": [7, 9]}})")["influence"].get<float>(),
 	                7.0f);
 	EXPECT_EQ(Ask(inspector, R"({"query": "influence.state"})")["circles"], 3);
+}
+
+namespace
+{
+/// Hands of two gods: the first player's and the second god's, which is the god of this computer
+class TwoGodsHands final: public ecs::systems::HandSystemInterface
+{
+public:
+	bool Initialize() noexcept override { return true; }
+	[[nodiscard]] std::array<entt::entity, 2> GetPlayerHands() const noexcept override { return first; }
+	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetPlayerHandPositions() const noexcept override
+	{
+		return {glm::vec3(1.0f, 0.0f, 1.0f), std::nullopt};
+	}
+	[[nodiscard]] std::optional<std::array<entt::entity, 2>> GetHandsOf(PlayerNames player) const noexcept override
+	{
+		if (player == PlayerNames::PLAYER_TWO)
+		{
+			return second;
+		}
+		return player == PlayerNames::PLAYER_ONE ? std::optional(first) : std::nullopt;
+	}
+	[[nodiscard]] std::array<std::optional<glm::vec3>, 2> GetOwnHandPositions() const noexcept override
+	{
+		return {glm::vec3(2.0f, 0.0f, 2.0f), std::nullopt};
+	}
+	[[nodiscard]] PlayerNames GetOwnPlayer() const noexcept override { return PlayerNames::PLAYER_TWO; }
+	void UpdateAlignmentMorph(std::optional<map_coords::MapCoords> /*picked*/, bool /*holdPoint*/) override {}
+
+	std::array<entt::entity, 2> first {static_cast<entt::entity>(3), static_cast<entt::entity>(4)};
+	std::array<entt::entity, 2> second {static_cast<entt::entity>(9), static_cast<entt::entity>(10)};
+};
+} // namespace
+
+// On the computer of the second god the hand query gives the hands of that god, not the first player's
+TEST(InspectorHand, TheHandQueryGivesTheHandsOfTheGodOfThisComputer)
+{
+	const TwoGodsHands hands;
+	const auto result = OwnHandsJson(hands);
+	EXPECT_EQ(result["player"], 1);
+	EXPECT_EQ(result["left"]["id"], 9);
+	EXPECT_EQ(result["right"]["id"], 10);
+	EXPECT_EQ(result["left"]["position"], Json({2.0, 0.0, 2.0}));
+	EXPECT_TRUE(result["right"]["position"].is_null());
+}
+
+// With no player named, the hand's share is of the player of this computer
+TEST(InspectorInfluence, TheHandsShareIsOfThePlayerOfThisComputerByDefault)
+{
+	Inspector inspector;
+	inspector.Add(MakeInfluenceProvider({
+	    .hand = [](int player) -> std::optional<glm::vec3> {
+		    return player == 1 ? std::optional(glm::vec3(4.0f, 0.0f, 6.0f)) : std::optional(glm::vec3(1.0f, 0.0f, 1.0f));
+	    },
+	    .ownPlayer = []() { return 1; },
+	    .at = [](int /*player*/, glm::vec3 point) -> std::optional<InfluenceAt> {
+		    return InfluenceAt {.influence = point.x, .handPoint = 0.5f, .raw = 0.0f};
+	    },
+	    .borderShown = [](int /*player*/) { return false; },
+	    .circles = []() -> size_t { return 0; },
+	}));
+	const auto own = Ask(inspector, R"({"query": "influence.hand"})");
+	EXPECT_EQ(own["player"], 1);
+	EXPECT_EQ(own["hand"], Json({4.0, 0.0, 6.0}));
+	const auto first = Ask(inspector, R"({"query": "influence.hand", "params": {"player": 0}})");
+	EXPECT_EQ(first["player"], 0);
+	EXPECT_EQ(first["hand"], Json({1.0, 0.0, 1.0}));
 }
 
 TEST(InspectorAudio, SoundsNearAPoint)

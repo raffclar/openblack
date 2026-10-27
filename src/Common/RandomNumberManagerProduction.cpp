@@ -13,6 +13,13 @@
 
 using namespace openblack;
 
+namespace
+{
+/// Counts the seedings of every manager, so that a seeding number is never the same for two seedings. The general
+/// generator of a thread outlives the manager it drew from, and must start again when another manager takes its place.
+std::atomic<uint32_t> g_Seedings {0};
+} // namespace
+
 RandomNumberManagerProduction::RandomNumberManagerProduction()
 {
 	SetRunSeed(std::random_device {}());
@@ -21,9 +28,7 @@ RandomNumberManagerProduction::RandomNumberManagerProduction()
 void RandomNumberManagerProduction::SetRunSeed(uint32_t seed)
 {
 	_runSeed = seed;
-	// The count is shared by every manager, so a thread that drew from another manager sees it must start again
-	static std::atomic<uint32_t> seedings {0};
-	_seeding = seedings.fetch_add(1) + 1;
+	_seeding = ++g_Seedings;
 	for (size_t i = 0; i < _streams.size(); ++i)
 	{
 		_streams.at(i).seed(run_seed::StreamSeed(seed, static_cast<RandomStream>(i)));

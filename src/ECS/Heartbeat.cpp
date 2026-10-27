@@ -16,6 +16,8 @@
 #include <array>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::ecs::heartbeat
 {
 
@@ -86,7 +88,7 @@ void Step(State& state, float secondsPerTurn)
 		state.phase -= 1.0f;
 	}
 	state.previousPulse = state.pulse;
-	state.pulse = (1.0f - std::cos(state.phase * 2.0f * std::numbers::pi_v<float>)) * 0.5f;
+	state.pulse = (1.0f - portable_math::Cos(state.phase * 2.0f * std::numbers::pi_v<float>)) * 0.5f;
 }
 
 float Pulse(const State& state, float turnFraction)

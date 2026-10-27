@@ -104,8 +104,8 @@ public:
 	virtual void HeldThingUsedOnLand(PlayerNames player) = 0;
 	/// Whether the game turn is being played: questions asked then measure from where the hands were at the turn
 	virtual void SetInGameTurn(bool inGameTurn) = 0;
-	/// Fixes the reach of each citadel that no question fixed yet. The frames of the hand ask for the reaches in each frame,
-	/// so a world with no frames of the hand, as the dedicated server, fixes them at the same time.
+	/// Fixes the reach of each citadel that has no fixed reach yet, in the order of the players. Only the game turn fixes
+	/// the reaches, so every computer and the dedicated server keep them in the same order. A question does not fix them.
 	virtual void FixCitadelReaches() = 0;
 
 	[[nodiscard]] virtual std::span<const influence::Circle> GetCircles() const = 0;
@@ -114,6 +114,8 @@ public:
 	/// A player's whole power of influence: their citadel's reach, while it stands, with the reach of each of their towns
 	/// and of their other sources of influence
 	[[nodiscard]] virtual float InfluencePower(PlayerNames /*player*/) const { return 0.0f; }
+	/// How far a player's citadel reaches with the land's multiplier, 0 when the player has no citadel
+	[[nodiscard]] virtual float CitadelReachOf(PlayerNames /*player*/) const { return 0.0f; }
 	[[nodiscard]] virtual glm::vec2 GetScrollOffset() const = 0;
 	[[nodiscard]] virtual std::span<const influence::Ripple> GetRipples() const = 0;
 };

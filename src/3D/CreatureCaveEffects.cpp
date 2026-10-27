@@ -18,6 +18,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/TempleInteriorInterface.h"
+#include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/MistDome.h"
 #include "ECS/Components/Sprite.h"
@@ -118,9 +119,8 @@ std::shared_ptr<graphics::BeamMesh> LoadMistDome()
 	return dome;
 }
 
-entt::entity CreateSprite(const char* texture, const char* alpha, bool additive, glm::vec3 position)
+entt::entity CreateSprite(ecs::Registry& registry, const char* texture, const char* alpha, bool additive, glm::vec3 position)
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	auto entity = registry.Create();
 	registry.Assign<TempleInteriorPart>(entity, TempleRoom::CreatureCave);
 	registry.Assign<Sprite>(entity, entt::hashed_string(texture).value(), glm::vec2(0.0f), glm::vec2(k_Cell), glm::vec4(1.0f),
@@ -130,7 +130,7 @@ entt::entity CreateSprite(const char* texture, const char* alpha, bool additive,
 }
 
 /// A new smoke: its particles start on their way up from the world's origin, unseen until they first start over
-CreatureCaveEffects::Smoke CreateSmoke()
+CreatureCaveEffects::Smoke CreateSmoke(ecs::Registry& registry)
 {
 	CreatureCaveEffects::Smoke smoke;
 	for (size_t i = 0; i < smoke.particles.size(); ++i)
@@ -141,20 +141,21 @@ CreatureCaveEffects::Smoke CreateSmoke()
 		particle.angle = Random(0.0f, glm::pi<float>());
 		particle.spinsBack = (static_cast<int32_t>(Random(1.0f, 100.0f)) & 1) != 0;
 		particle.hidden = true;
-		particle.sprite = CreateSprite("raw/smoke", "raw/smokea", false, particle.position);
+		particle.sprite = CreateSprite(registry, "raw/smoke", "raw/smokea", false, particle.position);
 	}
 	return smoke;
 }
 } // namespace
 
-CreatureCaveEffects::CreatureCaveEffects(glm::vec3 fire)
+CreatureCaveEffects::CreatureCaveEffects(ecs::Registry& rooms, glm::vec3 fire)
+    : _rooms(rooms)
 {
 	// As the creature's room sets up its effects
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _rooms;
 	for (size_t i = 0; i < k_Flames; ++i)
 	{
 		const glm::vec3 place = fire + glm::vec3(Random(-1.0f, 1.0f), Random(1.0f, 2.0f), Random(-1.0f, 1.0f));
-		const auto flame = CreateSprite("raw/S_Fire", "raw/S_Firea", true, place);
+		const auto flame = CreateSprite(registry, "raw/S_Fire", "raw/S_Firea", true, place);
 		const float size = std::max(static_cast<float>(i) * 0.5f + Random(0.8f, 1.2f) + 2.0f, k_SmallestSize);
 		registry.Get<Transform>(flame).scale = glm::vec3(size, size, 1.0f);
 		registry.Get<Sprite>(flame).tint = k_FlameColour;
@@ -163,7 +164,7 @@ CreatureCaveEffects::CreatureCaveEffects(glm::vec3 fire)
 
 	for (size_t i = 0; i < k_Sprays; ++i)
 	{
-		auto spray = CreateSmoke();
+		auto spray = CreateSmoke(registry);
 		// From blue to white across the sixteen, as their colours' bytes wrap
 		const auto step = static_cast<int32_t>(i * 0xff) / 16;
 		const auto colour = ((static_cast<uint32_t>((step << 12) >> 8) - 0x1100U) & 0xff00U) |
@@ -177,7 +178,7 @@ CreatureCaveEffects::CreatureCaveEffects(glm::vec3 fire)
 
 	for (size_t i = 0; i < k_FireSmokes; ++i)
 	{
-		auto smoke = CreateSmoke();
+		auto smoke = CreateSmoke(registry);
 		smoke.place = fire + glm::vec3(Random(-1.0f, 1.0f), Random(-1.0f, 1.0f) + 2.0f, Random(-1.0f, 1.0f));
 		smoke.colour = k_FireSmokeColour;
 		smoke.size = k_FireSmokeSize;
@@ -200,12 +201,7 @@ CreatureCaveEffects::CreatureCaveEffects(glm::vec3 fire)
 
 CreatureCaveEffects::~CreatureCaveEffects()
 {
-	// The registry may have gone before the temple, as the game closes
-	if (!Locator::entitiesRegistry::has_value())
-	{
-		return;
-	}
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _rooms;
 	for (const auto entity : _flames)
 	{
 		registry.Destroy(entity);
@@ -283,7 +279,7 @@ void CreatureCaveEffects::StepSmoke(Smoke& smoke, uint32_t milliseconds)
 
 void CreatureCaveEffects::ShowSmoke(const Smoke& smoke) const
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _rooms;
 	for (const auto& particle : smoke.particles)
 	{
 		auto& sprite = registry.Get<Sprite>(particle.sprite);
@@ -294,14 +290,14 @@ void CreatureCaveEffects::ShowSmoke(const Smoke& smoke) const
 		const float alpha = particle.hidden ? 0.0f : static_cast<float>(SmokeAlpha(particle.age, smoke.rising)) / 255.0f;
 		sprite.tint = glm::vec4(smoke.colour, alpha);
 		transform.position = particle.position;
-		transform.rotation = glm::mat3(glm::rotate(particle.angle, glm::vec3(0.0f, 0.0f, 1.0f)));
+		transform.rotation = glm::mat3(portable_math::Rotate(particle.angle, glm::vec3(0.0f, 0.0f, 1.0f)));
 		transform.scale = glm::vec3(size, size, 1.0f);
 	}
 }
 
 void CreatureCaveEffects::Update(uint32_t milliseconds, uint32_t tickCount)
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	auto& registry = _rooms;
 
 	// Each frame: the spray from new places about the waterfall's foot, and the fire's smoke
 	for (auto& spray : _spray)

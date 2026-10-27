@@ -237,6 +237,8 @@ TEST(LeashOrders, Agendas)
 	const auto put = PutDownAt({1.0f, 2.0f}, 5.0f);
 	ASSERT_EQ(put.size(), 2u);
 	EXPECT_EQ(put[1].order.kind, ObjectOrder::Kind::Discard);
+	// The put-down animation, which lets go of the thing at rest, not the toss
+	EXPECT_EQ(put[1].order.animation, 97u);
 	const auto thrown = ThrowAt({1.0f, 2.0f}, 5.0f);
 	ASSERT_EQ(thrown.size(), 2u);
 	EXPECT_NEAR(thrown[0].movement.maxDistance, 40.0f, k_Tolerance);

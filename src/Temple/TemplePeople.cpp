@@ -27,6 +27,7 @@
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "Locator.h"
 #include "Resources/ResourceManager.h"
@@ -39,8 +40,11 @@ namespace
 {
 /// The floors the worshippers walk, laid over the temple's rooms
 constexpr auto k_WalkMeshId = entt::hashed_string("temple/interior/movement_l3d");
-/// The player whose temple the player is in
-constexpr auto k_Player = PlayerNames::PLAYER_ONE;
+/// The player whose temple the player is in: the player of this computer
+PlayerNames TemplePlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+}
 
 /// The game's own random numbers, from this machine's seed
 class GameDice final: public temple_people::Dice
@@ -89,7 +93,7 @@ std::vector<std::vector<entt::entity>> PlayersWorshippers(const ecs::Registry& r
 {
 	std::vector<std::vector<entt::entity>> bySite;
 	registry.Each<const Temple, const CitadelWorship>([&](const Temple& temple, const CitadelWorship& worship) {
-		if (temple.owner != k_Player || !bySite.empty())
+		if (temple.owner != TemplePlayer() || !bySite.empty())
 		{
 			return;
 		}

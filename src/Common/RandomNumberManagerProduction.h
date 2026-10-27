@@ -39,7 +39,7 @@ private:
 	std::optional<std::reference_wrapper<std::mutex>> LockAccess() override;
 
 	std::atomic<uint32_t> _runSeed {0};
-	/// The number of the last seeding, for the general generators of other threads to see they must start again
+	/// The seeding of this manager that the general generators of other threads must follow (see SetRunSeed)
 	std::atomic<uint32_t> _seeding {0};
 	std::array<std::mt19937, static_cast<size_t>(RandomStream::Count)> _streams;
 };

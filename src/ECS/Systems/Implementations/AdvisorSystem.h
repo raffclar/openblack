@@ -59,8 +59,6 @@ private:
 	void PlayAnimSounds();
 
 	bool _loaded {false};
-	/// The owner of the anim sounds of each advisor, so that each advisor ends only its own sounds
-	std::array<entt::entity, help::spirits::k_Dudes> _soundOwners {entt::null, entt::null};
 	std::array<std::shared_ptr<const help::spirits::AdvisorModel>, help::spirits::k_Dudes> _models;
 	/// Without the files, the logic runs on empty data
 	std::array<help::spirits::DudeData, help::spirits::k_Dudes> _emptyData;

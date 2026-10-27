@@ -18,15 +18,13 @@
 #include "ECS/Components/Sprite.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
-#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs::archetypes;
 using namespace openblack::ecs::components;
 
-std::array<entt::entity, 2> GlowArchetype::Create(const LightEmitter& emitter, TempleRoom room)
+std::array<entt::entity, 2> GlowArchetype::Create(Registry& registry, const LightEmitter& emitter, TempleRoom room)
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	if (emitter.cone.has_value())
 	{
 		auto beam = registry.Create();

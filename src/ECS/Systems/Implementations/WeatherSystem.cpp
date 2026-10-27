@@ -24,6 +24,7 @@
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/X87.h"
 #include "ECS/Components/ScriptControl.h"
@@ -889,11 +890,11 @@ void WeatherSystem::ProcessWind(Climate& climate) const
 	const auto maximum = WindMax(info, _season);
 	const auto spread = (climate.rainDesire - 0.5) * k_WindSpread;
 	// Only exactly halfway to rain does this reach 1: the wind is otherwise the sum of the season's extremes
-	const auto weight = static_cast<float>(Ftol(std::exp(-(spread * spread))));
+	const auto weight = static_cast<float>(Ftol(portable_math::Exp(-(spread * spread))));
 
 	const auto blend = [weight](float low, float high) { return high - ((high - low) * weight) + low; };
-	climate.windX = blend(minimum * std::cos(climate.windAngle), maximum * std::cos(climate.windAngle));
-	climate.windZ = blend(minimum * std::sin(climate.windAngle), maximum * std::sin(climate.windAngle));
+	climate.windX = blend(minimum * portable_math::Cos(climate.windAngle), maximum * portable_math::Cos(climate.windAngle));
+	climate.windZ = blend(minimum * portable_math::Sin(climate.windAngle), maximum * portable_math::Sin(climate.windAngle));
 }
 
 // A cell for a new storm: near the middle of a local climate, anywhere for the global one
@@ -908,8 +909,8 @@ glm::ivec2 WeatherSystem::FindWhereToCreateStorm(const Climate& climate)
 			const auto angle = RandomFloat(2.0f * std::numbers::pi_v<float>);
 			const auto random = RandomFloat(1.0f);
 			const auto distance = random * random * climate.innerRadius * 0.1f;
-			cell.x = static_cast<int16_t>(Ftol((std::cos(angle) * distance) + climate.cellX));
-			cell.y = static_cast<int16_t>(Ftol((std::sin(angle) * distance) + climate.cellZ));
+			cell.x = static_cast<int16_t>(Ftol((portable_math::Cos(angle) * distance) + climate.cellX));
+			cell.y = static_cast<int16_t>(Ftol((portable_math::Sin(angle) * distance) + climate.cellZ));
 		}
 		else
 		{
@@ -980,7 +981,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 
 	const auto temperature = static_cast<int8_t>(Ftol(climate.temperature));
 	const auto heat = (static_cast<double>(temperature) - 30.0) * (1.0 / 15.0);
-	auto cloud = static_cast<float>(std::exp(-(heat * heat)));
+	auto cloud = static_cast<float>(portable_math::Exp(-(heat * heat)));
 	// Hot or overcast storms bring lightning
 	glm::vec2 thunderWait {0.0f};
 	glm::vec2 boltWait {0.0f};
@@ -1003,7 +1004,7 @@ void WeatherSystem::CreateStorm(entt::entity climateEntity)
 	{
 		// Cold storms snow: the snow share falls away above freezing
 		const auto cold = static_cast<double>(temperature) * 0.2;
-		effect.snow = static_cast<int8_t>(Ftol(std::exp(-(cold * cold)) * 100.0));
+		effect.snow = static_cast<int8_t>(Ftol(portable_math::Exp(-(cold * cold)) * 100.0));
 		effect.rain = static_cast<int8_t>(100 - effect.snow);
 	}
 	effect.windX = static_cast<int8_t>(Ftol(climate.windX));

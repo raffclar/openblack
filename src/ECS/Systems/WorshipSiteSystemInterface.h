@@ -81,6 +81,9 @@ public:
 	virtual void ReturnChants(entt::entity site, float amount) = 0;
 	/// What can still be drawn from a site this turn
 	[[nodiscard]] virtual float ChantsAvailable(entt::entity site) const = 0;
+	/// All the prayer power of a site this turn, with what it gave already: a request for a miracle by gesture asks
+	/// for this
+	[[nodiscard]] virtual float TotalChantsAvailable(entt::entity site) const = 0;
 	/// The hand acting outside its player's influence takes from each of the player's sites what it may this turn,
 	/// shared among the player's hands. Returns all it asked for.
 	virtual float TakeChantsForVirtualInfluence(PlayerNames player, uint32_t interfaces) = 0;

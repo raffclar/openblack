@@ -59,12 +59,18 @@ void SmoothLargePicture(std::span<uint8_t> texels);
 /// Puts the small picture into a whole picture, in the cell of the fifth small picture (the left of the third row). Each
 /// texel of the small picture is the mean of two texels next to each other on an even row of the large picture.
 void PutSmallPicture(std::span<uint8_t> texels, std::span<const uint8_t> largePicture);
+/// Puts the small picture into a whole picture, in the cell of a small picture (SmallPictureCell), as PutSmallPicture
+/// does
+void PutSmallPictureInCell(std::span<uint8_t> texels, std::span<const uint8_t> largePicture, uint32_t cell);
 
 /// Compresses a whole picture into the blocks of a file. The texels first lose the three low bits of each colour, as
 /// the game keeps them with five bits for each colour before it compresses them.
 [[nodiscard]] std::vector<uint8_t> EncodePicture(std::span<const uint8_t> texels);
 /// The texels of the blocks of a file, with five bits for each colour as the game reads them back
 [[nodiscard]] std::vector<uint8_t> DecodePicture(std::span<const uint8_t> blocks);
+/// The texels of compressed blocks with all the bits of each colour, as a display card draws them: RGB, top row first.
+/// The blocks are in rows from the top, width / 4 blocks in a row. Empty when there are too few blocks.
+[[nodiscard]] std::vector<uint8_t> DecodeBlocks(std::span<const uint8_t> blocks, uint32_t width, uint32_t height);
 
 /// A file of pictures with the compressed blocks
 [[nodiscard]] std::vector<uint8_t> WritePictureFile(std::span<const uint8_t> blocks);

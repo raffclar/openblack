@@ -88,8 +88,8 @@ public:
 class FakeRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
-	float GameFloatRand(float x) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override { return n == 0 ? 0 : game_random::LHRand(n, _seeds.synced); }
+	float SyncedFloatRand(float x, DrawSite /*site*/) override { return game_random::FloatRand(x, _seeds.synced); }
 	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
 	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
 	int32_t CrtRand() override { return game_random::CrtRand(_crt); }
@@ -938,4 +938,77 @@ TEST_F(ParticleEffectTest, AGustyWindPushesAnAtomAcrossTheGroundOnly)
 	drawnTowards->Collect(1.0f, atoms);
 	ASSERT_EQ(atoms.size(), 1u);
 	EXPECT_EQ(atoms[0].position, glm::vec3(3.0f, 10.0f, 7.0f));
+}
+
+namespace
+{
+/// The game's generator on seeds of its own, which keeps each synced draw in order
+class RecordingRandom final: public GameRandomInterface
+{
+public:
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override
+	{
+		const uint32_t drawn = n == 0 ? 0 : game_random::LHRand(n, _seeds.synced);
+		draws.push_back(drawn);
+		return drawn;
+	}
+	float SyncedFloatRand(float x, DrawSite /*site*/) override { return game_random::FloatRand(x, _seeds.synced); }
+	uint32_t LocalRand(int32_t n) override { return n == 0 ? 0 : game_random::LHRand(static_cast<uint32_t>(n), _seeds.local); }
+	float LocalFloatRand(float x) override { return game_random::FloatRand(x, _seeds.local); }
+	int32_t CrtRand() override { return game_random::CrtRand(_crt); }
+	void CrtSrand(uint32_t seed) override { _crt = seed; }
+	[[nodiscard]] GameRandomSeeds GetSeeds() const override { return _seeds; }
+	void SetSeeds(GameRandomSeeds seeds) override { _seeds = seeds; }
+	[[nodiscard]] ParticleRandomStream GetParticleStream() const override { return _stream; }
+	void SetParticleStream(ParticleRandomStream stream) override { _stream = stream; }
+
+	std::vector<uint32_t> draws;
+
+private:
+	GameRandomSeeds _seeds;
+	ParticleRandomStream _stream {ParticleRandomStream::None};
+	uint32_t _crt {1};
+};
+
+/// A particle's float of a draw u up to x, as the effects compute it: (u * k) * x
+float ParticleFloatOf(uint32_t u, float x)
+{
+	float r = static_cast<float>(u);
+	r = r * game_random::k_FloatRandScale;
+	return r * x;
+}
+} // namespace
+
+TEST(WillowWisp, ItDrawsThePointInTheBallBeforeTheSpeed)
+{
+	// One wisp a step, still, with its random velocity added to its place
+	const std::string text =
+	    Header() + Object("ParticleSpriteCreator", "Sprite0", k_Sprite) +
+	    Object("UR_WillowWisp", "Wisp0",
+	           "PROPERTY Group INTEGER 0\nPROPERTY PCreator PERSIS_PNTR Sprite0\nPROPERTY MaxAtoms INTEGER 20\n"
+	           "PROPERTY DieAge FLOAT 1\nPROPERTY Speed FLOAT 0\nPROPERTY RandomSpeed FLOAT 3\n"
+	           "PROPERTY AddCastVelToInitPos BOOL 1\n");
+	auto file = psys::ParticleFile::Parse(text);
+	ASSERT_TRUE(file.has_value());
+	const ParticleClassRegistry classes {ParticleClassRegistry::WithAllClasses()};
+	FakeWorld world;
+	RecordingRandom random;
+	maths::ValueNoise noise;
+	const glm::vec3 origin {10.0f, 2.0f, 20.0f};
+	Effect effect(std::make_shared<const psys::ParticleFile>(std::move(*file)), EffectServices {classes, world, random, noise},
+	              origin, 1.0f, true);
+	effect.Step(k_Step);
+	std::vector<Effect::DrawAtom> atoms;
+	effect.Collect(1.0f, atoms);
+	ASSERT_EQ(atoms.size(), 1u);
+	// The step ends with the wisp's draws: the three of the point that the ball takes, then the speed
+	ASSERT_GE(random.draws.size(), 4u);
+	const auto last = random.draws.end();
+	glm::vec3 ball {ParticleFloatOf(*(last - 4), 2.0f) - 1.0f, ParticleFloatOf(*(last - 3), 2.0f) - 1.0f,
+	                ParticleFloatOf(*(last - 2), 2.0f) - 1.0f};
+	const float speed = ParticleFloatOf(*(last - 1), 3.0f);
+	ASSERT_LE((ball.z * ball.z + ball.y * ball.y) + ball.x * ball.x, 1.0f);
+	ball *= speed;
+	const glm::vec3 expected = origin + ball * k_Step;
+	EXPECT_EQ(atoms[0].position, expected);
 }

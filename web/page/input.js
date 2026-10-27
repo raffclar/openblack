@@ -87,7 +87,6 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   // Full screen. The game asks for it after a key press. The browser lets the page start the full screen only soon
   // after a press or a click, thus a request that fails waits for the next press or click.
   let fullscreenWanted = false;
-  let windowSize = null;
   const startFullscreen = () => {
     fullscreenWanted = false;
     if (document.fullscreenElement === game) {
@@ -113,24 +112,16 @@ if (typeof WorkerGlobalScope === 'undefined' || !(self instanceof WorkerGlobalSc
   window.addEventListener('keyup', retryFullscreen, true);
   window.addEventListener('mouseup', retryFullscreen, true);
 
-  // In full screen the game canvas fills the screen, and SDL takes the new size from the canvas at the resize event. In
-  // Chromium the keyboard lock gives all the keys to the game: the browser then frees the pointer only when the player
-  // holds Escape down, and the game gets a short press.
+  // The game canvas fills the page, and in full screen it fills the screen (page.css). SDL takes the new size from the
+  // canvas at the resize event. In Chromium the keyboard lock gives all the keys to the game: the browser then frees the
+  // pointer only when the player holds Escape down, and the game gets a short press.
   document.addEventListener('fullscreenchange', () => {
     if (document.fullscreenElement === game) {
-      windowSize = { width: canvas.style.width, height: canvas.style.height };
-      canvas.style.width = `${window.innerWidth}px`;
-      canvas.style.height = `${window.innerHeight}px`;
       if (navigator.keyboard && navigator.keyboard.lock) {
         navigator.keyboard.lock().then(() => say('keyboard lock on'), (error) => say(`no keyboard lock: ${error.name}`));
       }
       say(`full screen ${window.innerWidth}x${window.innerHeight}`);
     } else {
-      if (windowSize) {
-        canvas.style.width = windowSize.width;
-        canvas.style.height = windowSize.height;
-        windowSize = null;
-      }
       if (navigator.keyboard && navigator.keyboard.unlock) {
         navigator.keyboard.unlock();
       }

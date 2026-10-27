@@ -50,3 +50,14 @@ TEST(HandStillness, MovesThatGoBackCancel)
 	}
 	EXPECT_EQ(stillness.stillTurns, 10u);
 }
+
+// The velocity goes six tenths of the way to the movement of each turn, made a velocity of ten turns a second
+TEST(HandStillness, TheVelocityFollowsTheMovementOfEachTurn)
+{
+	HandStillness stillness {};
+	Step(stillness, glm::vec3(1.0f, 0.0f, 0.0f));
+	EXPECT_FLOAT_EQ(stillness.velocity.x, 6.0f);
+	Step(stillness, glm::vec3(1.0f, 0.0f, 0.0f));
+	EXPECT_FLOAT_EQ(stillness.velocity.x, 2.4f);
+	EXPECT_FLOAT_EQ(stillness.velocity.y, 0.0f);
+}

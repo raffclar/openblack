@@ -20,7 +20,7 @@ using creature_spells::Spell;
 
 TEST(CreatureSaveState, AReferenceIsTheEntitysKeyAndNoneIsNoObject)
 {
-	EXPECT_TRUE(ToRef(entt::null).Empty());
+	EXPECT_TRUE(ToRef(entt::entity {entt::null}).Empty());
 	EXPECT_TRUE(ToRef(std::optional<entt::entity> {}).Empty());
 	EXPECT_EQ(ToRef(static_cast<entt::entity>(0)).key, gamesave::EntityKey(0));
 	EXPECT_EQ(FromRef(ToRef(static_cast<entt::entity>(41))), static_cast<entt::entity>(41));

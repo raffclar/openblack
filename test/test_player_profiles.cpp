@@ -418,3 +418,21 @@ TEST(PlayerProfiles, TheBindingsAreKeptWithTheProfile)
 	ASSERT_EQ(broken.profiles.size(), 1u);
 	EXPECT_TRUE(broken.profiles.front().keys.empty());
 }
+
+TEST(PlayerProfiles, AGameServerKeepsNoProfileAndNoSavedGames)
+{
+	const auto store = ServerStore();
+	EXPECT_FALSE(store.folder.has_value());
+	EXPECT_FALSE(store.creatureMinds.has_value());
+	ecs::systems::PlayerProfileSystem system(store, FakeMachine());
+	// It plays as a profile in memory, not as the profile of the computer's account
+	ASSERT_EQ(system.GetProfileCount(), 1u);
+	EXPECT_EQ(system.GetCurrentProfile()->name, k_DeveloperName);
+	// No file for the profiles, and no folder for saved games
+	EXPECT_FALSE(system.ProfilesFileJob());
+	EXPECT_FALSE(system.SavedGamesFolder().has_value());
+	system.StartPlaying(1000);
+	system.SetCurrentAlignment(0.5);
+	system.StopPlaying(2000);
+	system.CreateProfile(u"Ann", 0);
+}

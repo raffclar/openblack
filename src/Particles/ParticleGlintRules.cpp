@@ -22,6 +22,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/PortableMath.h"
 #include "ParticleClassRegistry.h"
 
 using namespace openblack::particles;
@@ -122,8 +123,10 @@ public:
 				glint->position = effect.GlobalToLocal(glints, *point);
 			}
 			const float age = effect.AtomAge(*glint);
-			const float pulse =
-			    std::max(std::cos(age * pulseSpeed * 2.0f * std::numbers::pi_v<float>) * pulseMagnitude * 0.5f + 1.0f, 0.0f);
+			const float pulse = std::max(openblack::portable_math::Cos(age * pulseSpeed * 2.0f * std::numbers::pi_v<float>) *
+			                                     pulseMagnitude * 0.5f +
+			                                 1.0f,
+			                             0.0f);
 			const float size = std::clamp(
 			    age < ageMaxSize ? age / ageMaxSize : 1.0f - (age - ageMaxSize) / (ageZeroSize - ageMaxSize), 0.0f, 1.0f);
 			glint->ruleScale = size * pulse;

@@ -18,6 +18,7 @@
 #include <glm/geometric.hpp>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 
 using namespace openblack::particles;
@@ -140,5 +141,5 @@ bool maths::SwungTooFar(glm::vec2 began, glm::vec2 now, float limit)
 	const float nowZ = nowScale * now.y;
 	const float dot = (nowX * beganX) + (nowZ * beganZ);
 	// The cosine of the limit keeps its full precision
-	return std::cos(static_cast<double>(limit)) > static_cast<double>(dot);
+	return openblack::portable_math::Cos(static_cast<double>(limit)) > static_cast<double>(dot);
 }
