@@ -75,6 +75,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveDateLabel.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -182,14 +183,12 @@ std::u16string DateNow()
 	}
 #endif
 	const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-#if defined(__EMSCRIPTEN__)
-	// The C++ library of the web build has no time zone data. The C library gives the local time of the browser.
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+	// The C++ library of the web build and of Apple has no time zone data. The C library gives the local time.
 	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
 	std::tm local {};
 	localtime_r(&seconds, &local);
-	std::array<char, 128> text {};
-	const auto length = std::strftime(text.data(), text.size(), "%H:%M:%S %A, %d %B %Y", &local);
-	return gui::ToUtf16(std::string(text.data(), length));
+	return gui::ToUtf16(ecs::save_date::FormatLabel(local));
 #else
 	try
 	{
