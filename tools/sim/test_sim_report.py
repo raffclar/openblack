@@ -210,6 +210,17 @@ class HandDeeds(unittest.TestCase):
         self.assertEqual(sim_report.hand_deeds_in_text(self.LINES),
                          {0: {"scoops": 1, "throws": 2}, 1: {"takes": 1}})
 
+    def test_a_deed_after_the_last_common_turn_is_not_counted(self):
+        lines = [
+            "[game] [info] Hand deed: the hand of player 1 takes thing 77 at turn 1990",
+            "[game] [info] Hand deed: the hand of player 1 puts down thing 77 at turn 1995",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 78 at turn 2000",
+            "[game] [info] Hand deed: the hand of player 1 takes thing 79",
+        ]
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 1999), {1: {"takes": 2, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines, 2000), {1: {"takes": 3, "puts_down": 1}})
+        self.assertEqual(sim_report.hand_deeds_in_text(lines), {1: {"takes": 3, "puts_down": 1}})
+
     def test_a_missing_file_tells_of_no_deed(self):
         self.assertEqual(sim_report.hand_deeds_in_file(os.path.join(os.path.dirname(__file__), "no-such.log")), {})
 

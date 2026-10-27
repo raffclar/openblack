@@ -54,6 +54,7 @@
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/MiracleImpression.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Spell.h"
 #include "ECS/Components/SpellSeed.h"
@@ -70,6 +71,7 @@
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
 #include "ECS/Systems/AnimalSystemInterface.h"
 #include "ECS/Systems/ArtefactSystemInterface.h"
@@ -84,6 +86,8 @@
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TownDesire.h"
+#include "ECS/TownHomes.h"
+#include "ECS/WorkshopRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/AreaEffect.h"
@@ -1816,6 +1820,11 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 	                           ? Locator::artefactSystem::value().ImpressiveModifier(source.initiator)
 	                           : 1.0f;
 	const auto value = [&](float boredom, entt::entity town) {
+		// A scaffold has its own impressiveness, as a thing in the world with the value of its scaffolds
+		if (const auto scaffold = ScaffoldImpressiveValue(reaction, at, boredom, multiplier(town), artefact))
+		{
+			return *scaffold;
+		}
 		return artefact * magic::ImpressiveValue({.landBalance = GetLandBalance(source.balance),
 		                                          .impressiveValue = source.impressiveValue,
 		                                          .reactionMultiplier = multiplier(town),
@@ -1865,10 +1874,14 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 			    source.player, magic::DampAlignmentChange(magic::ImpressionAlignment(info->alignmentModifier, desire),
 			                                              alignment.GetPlayerAlignment(source.player)));
 		}
-		// The town tires of the kind of thing, by its share of the town
+		// The town tires of the kind of thing, by its share of the town. A scaffold tires the town by its own amount.
 		if (Locator::infoConstants::has_value())
 		{
-			boredom = magic::BoredomAfterImpression(boredom, Locator::infoConstants::value().belief.defaultBoredomOfMe * share);
+			const bool scaffold = source.initiator != entt::null && registry.Valid(source.initiator) &&
+			                      registry.AllOf<Scaffold>(source.initiator);
+			const float step =
+			    scaffold ? scaffold_impression::k_BoredomStep : Locator::infoConstants::value().belief.defaultBoredomOfMe;
+			boredom = magic::BoredomAfterImpression(boredom, step * share);
 		}
 		return;
 	}
@@ -1896,6 +1909,64 @@ void ReactionSystem::Impress(const Active& reaction, entt::entity living, const 
 			impression->byOtherCreatures += base * magic::k_CreatureImpressedByOtherCreature;
 		}
 	}
+}
+
+std::optional<float> ReactionSystem::ScaffoldImpressiveValue(const Active& reaction, const glm::vec3& at, float boredom,
+                                                             float reactionMultiplier, float artefact) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto scaffold = reaction.source.initiator;
+	const auto* info = InfoOf(reaction.source.type);
+	if (info == nullptr || scaffold == entt::null || !registry.Valid(scaffold) || !Locator::infoConstants::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto* data = registry.TryGet<const Scaffold>(scaffold);
+	const auto* transform = registry.TryGet<const Transform>(scaffold);
+	if (data == nullptr || transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	// The scaffold is a thing in the world, at the distance between the watcher and the scaffold
+	const auto& scaffoldInfo = static_cast<const GObjectInfo&>(Locator::infoConstants::value().scaffold);
+	const float objectValue = magic::ObjectImpressiveValue({
+	    .landBalance = GetLandBalance(Balance::Things),
+	    .impressiveValue = scaffoldInfo.impressiveValue,
+	    .reactionMultiplier = reactionMultiplier,
+	    .distance = gutils::GetDistanceInMetres(at, transform->position),
+	    .maxDistance = info->maxReactionDistance,
+	    .boredom = boredom,
+	    .artefact = artefact,
+	});
+	// A scaffold on a site is as impressive as the town of the building wants that kind of building
+	std::optional<float> siteWant;
+	if (data->site != entt::null && registry.Valid(data->site))
+	{
+		const auto town = ecs::town_homes::TownOfAbode(registry, data->site);
+		const auto* wants = town != entt::null && registry.Valid(town) ? registry.TryGet<const TownDesire>(town) : nullptr;
+		if (wants != nullptr)
+		{
+			const auto kind = scaffold_impression::SiteWant(registry.AllOf<Abode>(data->site));
+			siteWant = town_desire::GetRawDesire(*wants, static_cast<size_t>(kind));
+		}
+	}
+	return scaffold_impression::ImpressiveValue(workshop::ValueOfScale(transform->scale.x), objectValue, siteWant);
+}
+
+void ReactionSystem::Impress(uint32_t id, entt::entity living)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto found = std::ranges::find(_reactions, id, &Active::id);
+	if (found == _reactions.end() || living == entt::null || !registry.Valid(living))
+	{
+		return;
+	}
+	const auto* transform = registry.TryGet<const Transform>(living);
+	if (transform == nullptr)
+	{
+		return;
+	}
+	Impress(*found, living, transform->position);
 }
 
 void ReactionSystem::GiveTownBelief(entt::entity town, PlayerNames player, float amount, entt::entity from,

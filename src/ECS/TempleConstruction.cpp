@@ -63,6 +63,7 @@
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
 #include "ECS/ThingMapPlace.h"
@@ -206,6 +207,11 @@ void SiteClosed(entt::entity building, const BuildingSite& site)
 	if (Locator::livingActionSystem::has_value())
 	{
 		villager_build::LetGoOfSite(building, site.workers);
+	}
+	// The scaffolds on the site go
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().SiteClosed(building);
 	}
 	for (const auto pile : site.piles)
 	{

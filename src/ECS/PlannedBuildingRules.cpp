@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <bit>
 #include <numbers>
 
 #include "Common/PortableMath.h"
@@ -32,19 +33,24 @@ constexpr float k_ShortBase = 0.6f;
 constexpr float k_LeastSpread = 10.0f;
 /// A workshop is wanted half as much once the town has one or one is going up
 constexpr float k_SecondWorkshop = 0.5f;
+/// A wonder that scaffolds of this value or more offer has a fixed want
+constexpr uint32_t k_WonderScaffoldValue = 7;
+constexpr float k_WonderScaffoldDesire = 1.0f;
+/// Each scaffold above the scaffolds that a kind needs takes this part of the want off
+constexpr float k_ExtraScaffoldShare = std::bit_cast<float>(0x3E99999AU); // 0.3
 
 bool Has(const TownForPlans& town, AbodeNumber number)
 {
 	return town.built.at(static_cast<size_t>(number)) != 0;
 }
 
-/// A house: none wanted while the town has room for a tenth of its people and more besides; more wanted the further
-/// short of room it is; then less for each house of its kind already standing
-float HouseDesire(float desire, const PlannedKind& plan, const TownForPlans& town)
+/// A house: none wanted while the town has room for a tenth of its people and more besides, unless scaffolds offer it;
+/// more wanted the further short of room it is; then less for each house of its kind already standing
+float HouseDesire(float desire, const PlannedKind& plan, const TownForPlans& town, uint32_t scaffoldValue)
 {
 	const int32_t spare = town.adultRoom - static_cast<int32_t>(town.homeless);
 	const auto needed = static_cast<int32_t>((town.adults + town.children) / 10 + 1);
-	if (spare > needed)
+	if (spare > needed && scaffoldValue == 0)
 	{
 		desire = 0.0f;
 	}
@@ -71,21 +77,16 @@ float OneOnly(float desire, bool has, uint32_t sites)
 	return has || sites != 0 ? 0.0f : desire;
 }
 
-} // namespace
-
-float planned_building::DesireToBeBuilt(const PlannedKind& plan, const TownForPlans& town)
+/// The want before the part that extra scaffolds take off
+float DesireBeforeScaffolds(const PlannedKind& plan, const TownForPlans& town, uint32_t scaffoldValue)
 {
 	const float desire = plan.desireToBeBuilt;
-	if (desire == 0.0f)
-	{
-		return desire;
-	}
 	const auto sites = plan.sitesOfSameType;
 	float wanted = desire;
 	switch (plan.type)
 	{
 	case AbodeType::LivingQuarters:
-		wanted = HouseDesire(desire, plan, town);
+		wanted = HouseDesire(desire, plan, town, scaffoldValue);
 		break;
 	case AbodeType::Totem:
 		if (town.neutral)
@@ -123,13 +124,38 @@ float planned_building::DesireToBeBuilt(const PlannedKind& plan, const TownForPl
 		             : 0.0f;
 		break;
 	case AbodeType::Wonder:
-		// Wanted by the town's want of a wonder, and not at all below the want that sets its villagers to it
-		wanted = town.wonderDesire < town.wonderTrigger ? 0.0f : town.wonderDesire * desire;
+		if (scaffoldValue >= k_WonderScaffoldValue)
+		{
+			wanted = k_WonderScaffoldDesire;
+		}
+		else
+		{
+			// Wanted by the town's want of a wonder, and not at all below the want that sets its villagers to it
+			wanted = town.wonderDesire < town.wonderTrigger ? 0.0f : town.wonderDesire * desire;
+		}
 		break;
 	default:
 		break;
 	}
 	return sites != 0 ? wanted / static_cast<float>(sites) : wanted;
+}
+
+} // namespace
+
+float planned_building::DesireToBeBuilt(const PlannedKind& plan, const TownForPlans& town, uint32_t scaffoldValue)
+{
+	if (plan.desireToBeBuilt == 0.0f)
+	{
+		return plan.desireToBeBuilt;
+	}
+	const float wanted = DesireBeforeScaffolds(plan, town, scaffoldValue);
+	if (scaffoldValue == 0)
+	{
+		return wanted;
+	}
+	// The value is never below the scaffolds that the kind needs, when a held scaffold offers the kind
+	const float extra = static_cast<float>(scaffoldValue - plan.scaffoldsRequired) * k_ExtraScaffoldShare * wanted;
+	return wanted - std::min(extra, wanted);
 }
 
 std::optional<size_t> planned_building::BestPlanned(std::span<const PlannedCandidate> planned, AbodeType wanted)

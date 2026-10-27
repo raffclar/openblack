@@ -47,6 +47,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
+#include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
@@ -761,10 +762,12 @@ float InfluenceSystem::PlayerRawInfluence(PlayerNames player, const map_coords::
 	const auto distanceTo = [&position](const glm::vec3& point) {
 		return gutils::GetDistanceInMetres(map_coords::FromMetres({point.x, point.z}), position);
 	};
-	// In a network game a player with no temple has no influence at all
+	// In a network game a player with no temple has no influence at all. A developer tool's network game on the testbed,
+	// which has no temples, is the exception: its hands could do nothing else.
 	const bool hasTemple = Citadels().at(static_cast<size_t>(player)) != entt::null;
-	if (!openblack::influence_rules::CanHaveInfluence(Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
-	                                                  hasTemple))
+	const bool testbed = Locator::landSystem::has_value() && Locator::landSystem::value().OnTestbed();
+	if (!openblack::influence_rules::CanHaveInfluence(
+	        Locator::time::has_value() && Locator::time::value().IsNetworkGame() && !testbed, hasTemple))
 	{
 		return 0.0f;
 	}

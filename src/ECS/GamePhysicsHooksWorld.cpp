@@ -38,6 +38,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VortexSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/VillagerDroppedLog.h"
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
@@ -237,6 +238,30 @@ void GamePhysicsHooksWorld::StrikeVortex(entt::entity vortex, entt::entity hitte
 	if (Locator::vortexSystem::has_value())
 	{
 		Locator::vortexSystem::value().StruckBy(vortex, hitter, flight);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldLetGo(entt::entity scaffold, bool forced)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().LetGoByHand(scaffold, forced);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldNotPutDown(entt::entity scaffold)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().NotPutDownByHand(scaffold);
+	}
+}
+
+void GamePhysicsHooksWorld::ScaffoldAtRest(entt::entity scaffold, bool fromHand, bool insert)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().CameToRest(scaffold, fromHand, insert);
 	}
 }
 

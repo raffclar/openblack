@@ -43,6 +43,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Reward.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StreetLantern.h"
@@ -107,6 +108,7 @@ void ForEachMapComponent(Func&& func)
 	func.template operator()<Creature>();
 	func.template operator()<Animal>();
 	func.template operator()<MobileObject>();
+	func.template operator()<Scaffold>();
 	func.template operator()<Ball>();
 	func.template operator()<RewardOnLand>();
 }
@@ -224,7 +226,7 @@ std::optional<MapProduction::Kind> MapProduction::KindOf(const Registry& registr
 	{
 		return Kind {.placement = Placement::FixedBack, .coversOutline = false, .moves = true};
 	}
-	if (registry.AnyOf<Villager, Creature, Animal, MobileObject, Ball, RewardOnLand>(entity))
+	if (registry.AnyOf<Villager, Creature, Animal, MobileObject, Scaffold, Ball, RewardOnLand>(entity))
 	{
 		return Kind {.placement = Placement::MobileFront, .coversOutline = false, .moves = true};
 	}

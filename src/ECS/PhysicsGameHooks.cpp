@@ -53,6 +53,7 @@
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/SpellDispenser.h"
 #include "ECS/Components/StoragePit.h"
@@ -433,10 +434,16 @@ entt::entity PhysicsGameHooks::EndPhysics(DynamicsSystemInterface& dynamics, Phy
 	{
 		object_physics::ConsiderArtefact(entry, object, insert);
 	}
+	const bool scaffold = registry.AllOf<Scaffold>(object);
 	const auto kept = PhysicsClassHooks::EndPhysics(dynamics, entry, object, insert);
 	if (kept == entt::null || !registry.Valid(kept))
 	{
 		return kept;
+	}
+	// A scaffold at rest can go into a place of a workshop's yard
+	if (scaffold)
+	{
+		_world->ScaffoldAtRest(kept, entry != nullptr && entry->Has(PhysicsEntry::k_FromHand), insert);
 	}
 	if (registry.AllOf<Villager>(kept))
 	{
@@ -558,6 +565,10 @@ void PhysicsGameHooks::LetGoByHand(entt::entity object, std::optional<PlayerName
 {
 	// A villager dropped by force by its own player's hand stops being a disciple
 	villager_disciple::LetGo(object, player, forced);
+	if (_world->Entities().AllOf<Scaffold>(object))
+	{
+		_world->ScaffoldLetGo(object, forced);
+	}
 }
 
 void PhysicsGameHooks::PutDownByHand(entt::entity object, std::optional<PlayerNames> player)
@@ -638,6 +649,10 @@ void PhysicsGameHooks::NotPutDownByHand(entt::entity object)
 {
 	// If the hand did not put a villager on the land, the villager gets back the work that it had at the pick-up
 	villager_disciple::NotPutDown(object);
+	if (_world->Entities().AllOf<Scaffold>(object))
+	{
+		_world->ScaffoldNotPutDown(object);
+	}
 }
 
 void PhysicsGameHooks::StartFlyingFromHand([[maybe_unused]] DynamicsSystemInterface& dynamics, PhysicsEntry& entry)

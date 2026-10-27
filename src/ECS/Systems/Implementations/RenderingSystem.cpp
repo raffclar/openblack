@@ -63,6 +63,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/ResourcePile.h"
 #include "ECS/Components/RisingSoul.h"
+#include "ECS/Components/Scaffold.h"
 #include "ECS/Components/ScriptHighlight.h"
 #include "ECS/Components/SeeThrough.h"
 #include "ECS/Components/StoragePit.h"
@@ -77,6 +78,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
@@ -649,7 +651,10 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 		    const auto* highDetail = registry.TryGet<const HighDetail>(entity);
 		    const auto drawnAt =
 		        highDetail != nullptr ? openblack::ecs::high_detail_rules::DrawnAt(highDetail->heldAt, standsAt) : standsAt;
-		    auto modelMatrix = PlacedMatrix(drawnAt, rotation, transform.scale);
+		    // A scaffold on a building site becomes small as the building grows
+		    const auto* drawnScale = registry.TryGet<const ScaffoldDrawnScale>(entity);
+		    auto modelMatrix =
+		        PlacedMatrix(drawnAt, rotation, drawnScale != nullptr ? glm::vec3(drawnScale->scale) : transform.scale);
 		    // A thing a film moves by a whole matrix is drawn by it
 		    if (const auto* exact = registry.TryGet<const DrawnMatrix>(entity); exact != nullptr)
 		    {
@@ -700,6 +705,14 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    }
 			    gone = true;
 			    _goneThings.push(entity);
+		    }
+		    else if (const auto* ghost = registry.TryGet<const ScaffoldGhost>(entity); ghost != nullptr)
+		    {
+			    // The phantom building of a scaffold is drawn whole at any distance, blended by its own alpha among the
+			    // things that fade out
+			    slotMap = &_fadingSlots;
+			    fade = ghost->alpha;
+			    _fadingThings.emplace(entity, ghost->alpha);
 		    }
 		    else if (openblack::ecs::high_detail_rules::DrawsHighMeshAtAnyDistance(
 		                 detail != nullptr, registry.AllOf<HighDetail>(entity), registry.AllOf<MorphWithTerrain>(entity)))
@@ -982,14 +995,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.x = graphics::object_tint::PackAdded(added, grainFlow);
 		    }
 
-		    // A flag over a town's store is not there at all while it does not show
-		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
+		    // A flag over a town's store, or the wood flag of a workshop, is not there at all while it does not show
+		    const auto* townFlag = registry.TryGet<const TownDesireFlag>(entity);
+		    const auto* woodFlag = registry.TryGet<const WorkshopFlag>(entity);
+		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown))
 		    {
-			    if (!flag->shown)
-			    {
-				    look.z = 1.0f;
-				    modelMatrix = glm::mat4(0.0f);
-			    }
+			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    // A lantern on the Norse gate shows only while the gate is in the draw list and on screen. It takes the land's

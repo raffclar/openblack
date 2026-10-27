@@ -282,6 +282,7 @@
 #include "ECS/Systems/WalkPathSystemInterface.h"
 #include "ECS/Systems/WaterRingSystemInterface.h"
 #include "ECS/Systems/WeatherSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TownDesireFlags.h"
 #include "ECS/TreeRoots.h"
@@ -3506,6 +3507,15 @@ void Game::UpdateHandFrame(std::chrono::microseconds deltaTime)
 		{
 			Locator::handGrabSystem::value().PlaceOthersHeldForFrame(
 			    static_cast<int32_t>(Locator::time::value().GetFrameGameTime().count()));
+		}
+		// The phantom buildings of the scaffolds: at the drawn hand of the player, and on the building sites
+		if (Locator::workshopSystem::has_value())
+		{
+			const auto handEntity =
+			    Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+			const auto* handTransform = Locator::entitiesRegistry::value().TryGet<const ecs::components::Transform>(handEntity);
+			Locator::workshopSystem::value().PlaceGhostsForFrame(
+			    handTransform != nullptr ? std::optional(handTransform->position) : std::nullopt);
 		}
 		{
 			// The globes show their miracles where they are now, a globe in the hand where the hand holds it, each turned

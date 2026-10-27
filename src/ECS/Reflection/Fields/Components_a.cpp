@@ -42,6 +42,7 @@ void openblack::ecs::reflection::RegisterFields_Components_a(entt::meta_ctx& con
 	    .Field<&components::Abode::presentAtHome>("presentAtHome")
 	    .Field<&components::Abode::info>("info")
 	    .Field<&components::Abode::putUpForMending>("putUpForMending")
+	    .Field<&components::Abode::notPlannedAgain>("notPlannedAgain")
 	    .Field<&components::Abode::age>("age")
 	    .Field<&components::Abode::neglect>("neglect");
 	Reflect<components::Alignment>(context)

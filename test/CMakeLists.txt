@@ -1824,6 +1824,17 @@ openblack_setup_and_add_test(test_influence_rules test_influence_rules.cpp)
 openblack_setup_and_add_test(test_end_game_box test_end_game_box.cpp)
 openblack_setup_and_add_test(test_conditions_box test_conditions_box.cpp)
 openblack_setup_and_add_test(test_start_alignment test_start_alignment.cpp)
+openblack_setup_and_add_test(test_workshop_rules test_workshop_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_offer_rules test_scaffold_offer_rules.cpp)
+openblack_setup_and_add_test(test_scaffold_ghost_rules test_scaffold_ghost_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_yard oracle/test_oracle_workshop_yard.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_yard
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
 openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
 openblack_setup_and_add_test(
@@ -1873,6 +1884,32 @@ openblack_setup_and_add_test(
   test_computer_player_state test_computer_player_state.cpp
 )
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_desire oracle/test_oracle_scaffold_desire.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_desire
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(test_scaffold_impression_rules test_scaffold_impression_rules.cpp)
+openblack_setup_and_add_test(test_need_flag_rules test_need_flag_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_workshop_wood_flag oracle/test_oracle_workshop_wood_flag.cpp
+)
+set_tests_properties(
+  test_oracle_workshop_wood_flag
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_impression oracle/test_oracle_scaffold_impression.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_impression
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
 openblack_setup_and_add_test(
   test_oracle_computer_worship oracle/test_oracle_computer_worship.cpp
 )

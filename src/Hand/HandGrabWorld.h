@@ -153,6 +153,8 @@ public:
 	virtual void ForgetGesturePath() {}
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
+	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers
+	virtual void HeldTurn(entt::entity /*object*/) {}
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap
@@ -208,6 +210,8 @@ public:
 	virtual void ArtefactTaken(entt::entity object, PlayerNames player) = 0;
 	/// A one-shot miracle's globe goes into the hand: the player has now had its miracle within reach
 	virtual void GlobeIntoHand(entt::entity /*globe*/, PlayerNames /*player*/) {}
+	/// A scaffold goes into the hand: its workshop keeps its place in the yard free for it
+	virtual void ScaffoldIntoHand(entt::entity /*scaffold*/, PlayerNames /*player*/) {}
 	/// Pulling up a tree moves the player's alignment
 	virtual void TreeUprooted(PlayerNames player, entt::entity tree) = 0;
 	/// A big forest gives a tree for the hand, taking a tree's wood from it (which may shrink it or use it up): a full

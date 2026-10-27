@@ -136,6 +136,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "Transform", .field = "position", .marker = "VillageTotem"},
     {.component = "Transform", .field = "position", .marker = "VillageTotemIcon"},
     {.component = "*", .field = "", .marker = "VillageTotemGhost"},
+    // The frames show the phantom building of a scaffold by its see-through copy, and the size of a scaffold on a site
+    {.component = "*", .field = "", .marker = "ScaffoldGhost"},
+    {.component = "ScaffoldDrawnScale", .field = "", .marker = ""},
     // The frames move the fish of a shoal near the camera of each computer, and a grip of the sea scares them only on the
     // computer of the hand. The turns read only the shoal's centre, which the land gives, and its fullness, which comes
     // from the fish of the farm.
@@ -231,6 +234,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SnowLevel", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
+    {.component = "*", .field = "", .marker = "WorkshopFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
     {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.

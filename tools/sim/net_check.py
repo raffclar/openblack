@@ -954,6 +954,7 @@ def main():
                 print(line)
         summary["clients"].append({
             "client": index + 1, "turns": len(client_turns), "compared": len(compared),
+            "last_compared": compared[-1] if compared else None,
             "stopped_after": client_stopped_after,
             "end_box": lines_with(os.path.join(client_dir, "client.log"),
                                   ["The end box opens", "The end box asks", "leaves the network game"])[-3:],
@@ -976,11 +977,15 @@ def main():
             summary["missing_deeds"][str(index)] = missing
             print(f"the hand of slot {index} did not do what its input expects: {missing}")
             all_same = False
-        client_deeds = sim_report.hand_deeds_in_file(os.path.join(client_dir, "client.log"))
-        summary["clients"][index]["hand_deeds_same"] = client_deeds == server_deeds
+        # Only the deeds up to the last turn that the server and the client both reported are compared: a deed on the
+        # last turn of one of them is not a difference
+        last_common = summary["clients"][index].get("last_compared")
+        client_deeds = sim_report.hand_deeds_in_file(os.path.join(client_dir, "client.log"), last_common)
+        server_deeds_common = sim_report.hand_deeds_in_file(server_log, last_common)
+        summary["clients"][index]["hand_deeds_same"] = client_deeds == server_deeds_common
         steady = (stopped_after is None and options.stop_second_after is None and leaver is None
                   and options.part_second_at is None)
-        if client_deeds != server_deeds and steady:
+        if client_deeds != server_deeds_common and steady:
             print(f"client {index + 1} counts other deeds of the hands than the server: {client_deeds}")
             all_same = False
     if options.slot_miracle:
