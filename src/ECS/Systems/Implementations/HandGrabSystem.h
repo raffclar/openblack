@@ -62,7 +62,7 @@ public:
 	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
-	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluence() const override;
 	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
 	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;

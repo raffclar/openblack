@@ -44,9 +44,10 @@ void PlayerSystem::AddPlayer(entt::entity playerEntity)
 	_players.insert_or_assign(player.name, playerEntity);
 }
 
-entt::entity PlayerSystem::GetPlayer(PlayerNames playerName) const
+std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) const
 {
-	return _players.at(playerName);
+	const auto player = _players.find(playerName);
+	return player != _players.end() ? std::optional(player->second) : std::nullopt;
 }
 
 void PlayerSystem::AddCreature(entt::entity creature)
