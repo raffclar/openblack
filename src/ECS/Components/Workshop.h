@@ -42,6 +42,21 @@ struct Workshop
 	std::vector<entt::entity> scaffolds;
 	/// The pile that holds its wood, made when the first wood comes
 	entt::entity woodPile {entt::null};
+	/// How much its flag shows that it wants wood, 0 to 1, from its last game turn (see workshop::WoodWant)
+	float woodWant {0.0f};
+	/// Its wood flag, made at its first game turn
+	entt::entity flag {entt::null};
+};
+
+/// The wood flag of a workshop (see need_flag). The frames move it, thus only the frames read this.
+struct WorkshopFlag
+{
+	entt::entity workshop {entt::null};
+	/// How far up it flies, as a share of its full height, and how fast it moves
+	float level {0.0f};
+	float speed {0.0f};
+	/// Whether it showed in the last frame
+	bool shown {false};
 };
 
 } // namespace openblack::ecs::components

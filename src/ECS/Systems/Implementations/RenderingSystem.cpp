@@ -78,6 +78,7 @@
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/VillagerPose.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/DrawnPlace.h"
 #include "ECS/Graveyards.h"
 #include "ECS/ObjectDetail.h"
@@ -994,14 +995,13 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 			    look.x = graphics::object_tint::PackAdded(added, grainFlow);
 		    }
 
-		    // A flag over a town's store is not there at all while it does not show
-		    if (const auto* flag = registry.TryGet<const TownDesireFlag>(entity); flag != nullptr)
+		    // A flag over a town's store, or the wood flag of a workshop, is not there at all while it does not show
+		    const auto* townFlag = registry.TryGet<const TownDesireFlag>(entity);
+		    const auto* woodFlag = registry.TryGet<const WorkshopFlag>(entity);
+		    if ((townFlag != nullptr && !townFlag->shown) || (woodFlag != nullptr && !woodFlag->shown))
 		    {
-			    if (!flag->shown)
-			    {
-				    look.z = 1.0f;
-				    modelMatrix = glm::mat4(0.0f);
-			    }
+			    look.z = 1.0f;
+			    modelMatrix = glm::mat4(0.0f);
 		    }
 
 		    // A lantern on the Norse gate shows only while the gate is in the draw list and on screen. It takes the land's

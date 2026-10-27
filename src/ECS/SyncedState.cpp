@@ -234,6 +234,7 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SnowLevel", .field = "", .marker = ""},
     // The flags over the stores and the apple barrel move in the frames
     {.component = "*", .field = "", .marker = "TownDesireFlag"},
+    {.component = "*", .field = "", .marker = "WorkshopFlag"},
     {.component = "Transform", .field = "", .marker = "AppleBarrel"},
     {.component = "Transform", .field = "", .marker = "AppleBarrelWorm"},
     // The drawn hand follows the pointer and the camera in each frame, and its size follows its distance from the camera.

@@ -112,6 +112,10 @@ bool RemoveScaffold(components::Workshop& workshop, entt::entity scaffold, uint8
 /// Whether a thing is a scaffold that stands in its place of its workshop's yard. Such a scaffold does not fly.
 [[nodiscard]] bool StandsInYard(const Registry& registry, entt::entity scaffold);
 
+/// How much the flag of a workshop shows that the workshop wants wood, 0 to 1: one less the share of the wood of a
+/// scaffold that the workshop holds. A small amount added to the two counts keeps the division safe.
+[[nodiscard]] float WoodWant(uint32_t wood, uint32_t scaffoldWood);
+
 /// Whether a thing is the wood pile of a workshop. Such a pile is part of its workshop, as a pile of a storage pit is.
 [[nodiscard]] bool IsWoodPile(const Registry& registry, entt::entity pile);
 

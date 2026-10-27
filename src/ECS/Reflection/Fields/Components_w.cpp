@@ -132,7 +132,14 @@ void openblack::ecs::reflection::RegisterFields_Components_w(entt::meta_ctx& con
 	    .Field<&components::Workshop::counted>("counted")
 	    .Field<&components::Workshop::places>("places")
 	    .Field<&components::Workshop::scaffolds>("scaffolds")
-	    .Field<&components::Workshop::woodPile>("woodPile");
+	    .Field<&components::Workshop::woodPile>("woodPile")
+	    .Field<&components::Workshop::woodWant>("woodWant")
+	    .Field<&components::Workshop::flag>("flag");
+	Reflect<components::WorkshopFlag>(context)
+	    .Field<&components::WorkshopFlag::workshop>("workshop")
+	    .Field<&components::WorkshopFlag::level>("level")
+	    .Field<&components::WorkshopFlag::speed>("speed")
+	    .Field<&components::WorkshopFlag::shown>("shown");
 	Reflect<components::WorshipChants>(context)
 	    .Field<&components::WorshipChants::battery>("battery")
 	    .Field<&components::WorshipChants::available>("available")

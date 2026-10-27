@@ -69,6 +69,9 @@ public:
 	/// shows at `drawnHand`, where the frame draws that hand. The phantom on a building site fades as the building
 	/// grows, and the scaffold on the site becomes small.
 	virtual void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) = 0;
+	/// The frame moves the wood flags of the workshops. A flag eases to the share of the wood of a scaffold that its
+	/// workshop needs, over `seconds` of game time, and turns to face the camera.
+	virtual void UpdateFlagsForFrame(float seconds) = 0;
 
 	/// The town that a scaffold at a place builds for: the town of the nearest building, else the nearest town or
 	/// planned building of a town nearer than 50 metres; none when there is none

@@ -10568,6 +10568,22 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
 	});
 
+	all.push_back({
+	    .id = "objects.workshop_wood_flag",
+	    .name = "The flag of a workshop shows the wood that the workshop needs for a scaffold",
+	    .facet = Facet::Objects,
+	    .description = "The town and the workshop of objects.workshop_wood_by_hand: the workshop holds 1000 wood, less "
+	                   "than the wood of one scaffold. The input tools/sim/hand_inputs/workshop_wood.json moves the hand: "
+	                   "it takes logs from the pile of the workshop, then gives them back.",
+	    .expected = "The wood flag flies beside the workshop and turns to face the camera. When the hand takes logs, the "
+	                "flag moves up smoothly, because the workshop needs more wood. When the hand gives the logs back, the "
+	                "flag moves down to its first height.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_Workshop - glm::vec2 {12.0f}, k_Workshop + glm::vec2 {12.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
+	});
+
 	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
 	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
 	all.push_back({

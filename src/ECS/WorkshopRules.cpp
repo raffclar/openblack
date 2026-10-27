@@ -10,6 +10,7 @@
 #include "WorkshopRules.h"
 
 #include <algorithm>
+#include <bit>
 
 #include "3D/MapCoords.h"
 #include "Common/X87Angle.h"
@@ -61,6 +62,14 @@ uint32_t workshop::ValueOfScale(float scale)
 {
 	const float value = ((scale - k_ValueScaleOffset) * k_ValuePerScale) + k_ValueRounding;
 	return static_cast<uint32_t>(map_coords::FtoL(value));
+}
+
+float workshop::WoodWant(uint32_t wood, uint32_t scaffoldWood)
+{
+	// 0.0001 as the game keeps it
+	constexpr float k_Small = std::bit_cast<float>(0x38D1B717u);
+	const float share = (static_cast<float>(wood) + k_Small) / (static_cast<float>(scaffoldWood) + k_Small);
+	return 1.0f - std::min(share, 1.0f);
 }
 
 int32_t workshop::MakingTurns(float timeToMake)

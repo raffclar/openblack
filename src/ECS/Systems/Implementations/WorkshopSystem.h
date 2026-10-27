@@ -45,6 +45,7 @@ public:
 	void ProcessHeld(entt::entity scaffold) override;
 	void SiteClosed(entt::entity building) override;
 	void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) override;
+	void UpdateFlagsForFrame(float seconds) override;
 
 private:
 	/// Whether a scaffold at a place is near a workshop of a town (see scaffold_offer::NearWorkshop)
@@ -59,6 +60,8 @@ private:
 	/// The scaffold makes its reaction for the player who put it down. The first people of the near towns are impressed
 	/// by the reaction at once.
 	void ImpressNearTowns(entt::entity scaffold, PlayerNames player);
+	/// Makes the wood flag of a workshop
+	entt::entity MakeFlag(entt::entity workshop);
 	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it.
 	bool TryToBuild(entt::entity scaffold, entt::entity town);
 	/// The scaffold leaves the building site that it is on, and the building of the site goes

@@ -20,11 +20,13 @@
 #include <glm/gtc/type_ptr.hpp>
 #include <spdlog/spdlog.h>
 
+#include "3D/FieldCrop.h"
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
+#include "Camera/Camera.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/PortableRotations.h"
@@ -43,12 +45,14 @@
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/Map.h"
+#include "ECS/NeedFlagRules.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldGhostRules.h"
 #include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/FireSystemInterface.h"
 #include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -60,6 +64,7 @@
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/TempleConstruction.h"
+#include "ECS/TownDesireFlags.h"
 #include "ECS/TownHomes.h"
 #include "ECS/TownPlanning.h"
 #include "ECS/TownTurnOrder.h"
@@ -247,7 +252,88 @@ void WorkshopSystem::ProcessWorkshop(entt::entity workshopEntity)
 			ReleaseScaffold(newest);
 		}
 	}
-	// TODO(scaffolds): the flag beside the workshop shows the wood that it still needs for a scaffold
+	// The flag of the workshop shows the wood that the workshop still needs for a scaffold. The workshop makes its flag
+	// at its first turn.
+	auto& owned = registry.Get<Workshop>(workshopEntity);
+	if (!registry.Valid(owned.flag))
+	{
+		owned.flag = MakeFlag(workshopEntity);
+	}
+	const uint32_t woodNow = Locator::resourceStoreSystem::has_value()
+	                             ? Locator::resourceStoreSystem::value().GetResource(workshopEntity, ResourceType::Wood)
+	                             : 0;
+	registry.Get<Workshop>(workshopEntity).woodWant = workshop::WoodWant(woodNow, info.scaffold.woodValue);
+}
+
+entt::entity WorkshopSystem::MakeFlag(entt::entity workshopEntity)
+{
+	auto& registry = Entities();
+	const auto& row = Locator::infoConstants::value().showNeeds.at(ecs::need_flag::k_WoodRow);
+	const auto flag = registry.Create();
+	registry.Assign<WorkshopFlag>(flag, WorkshopFlag {.workshop = workshopEntity});
+	registry.Assign<Mesh>(flag, resources::HashIdentifier(row.mesh), static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<Transform>(flag, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	return flag;
+}
+
+void WorkshopSystem::UpdateFlagsForFrame(float seconds)
+{
+	auto& registry = Entities();
+	if (!Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto& info = Locator::infoConstants::value().showNeeds.at(ecs::need_flag::k_WoodRow);
+	const ecs::need_flag::Row row {
+	    .maxNeed = info.maxNeedValue, .showsAfter = info.showNeedGreater, .maxHeight = info.maxHieght};
+	// A flag holds still while its workshop is out of view, as the game moves the flag only as it draws the workshop
+	const auto* camera = Locator::camera::has_value() ? &Locator::camera::value() : nullptr;
+	const auto viewProjection = camera != nullptr ? camera->GetViewProjectionMatrix() : glm::mat4(1.0f);
+	const auto eye = camera != nullptr ? camera->GetOrigin() : glm::vec3(0.0f);
+
+	registry.Each<WorkshopFlag, Transform>([&](WorkshopFlag& flag, Transform& transform) {
+		const auto* workshopTransform =
+		    registry.Valid(flag.workshop) ? registry.TryGet<const Transform>(flag.workshop) : nullptr;
+		const auto* data = registry.Valid(flag.workshop) ? registry.TryGet<const Workshop>(flag.workshop) : nullptr;
+		// The workshop shows its flag only while it works and does not burn
+		const bool burning = Locator::fireSystem::has_value() && Locator::fireSystem::value().IsOnFire(flag.workshop);
+		if (data == nullptr || workshopTransform == nullptr || !ecs::villager_home::IsFunctional(flag.workshop) || burning)
+		{
+			flag.shown = false;
+			return;
+		}
+		if (camera != nullptr && !ecs::town_desire_flags::InView(viewProjection * glm::vec4(workshopTransform->position, 1.0f)))
+		{
+			return;
+		}
+		// A flag that does not show starts again from the need when it shows
+		if (!ecs::need_flag::Shows(data->woodWant, row))
+		{
+			flag.level = data->woodWant;
+			flag.speed = 0.0f;
+			flag.shown = false;
+			return;
+		}
+		const auto matrices = PointAndBuilding(flag.workshop, ecs::need_flag::k_WorkshopPoint);
+		if (!matrices.has_value())
+		{
+			flag.shown = false;
+			return;
+		}
+		const float fill = ecs::need_flag::Fill(data->woodWant, row);
+		const auto next = field_crop::Advance({.position = flag.level, .speed = flag.speed}, fill, seconds);
+		flag.level = next.position;
+		flag.speed = next.speed;
+		flag.shown = true;
+		const auto place = ecs::need_flag::Place(glm::vec3(matrices->first[3]), matrices->second);
+		const float ground =
+		    Locator::terrainSystem::has_value() ? Locator::terrainSystem::value().GetHeightAt({place.x, place.y}) : 0.0f;
+		const float rise = flag.level * row.maxHeight;
+		transform.position = glm::vec3(place.x, ground + rise, place.y);
+		transform.rotation =
+		    glm::mat3(portable_math::EulerAngleY(-ecs::town_desire_flags::FacingAngle(transform.position, eye)));
+		transform.scale = glm::vec3(ecs::need_flag::DrawnScale(fill, row));
+	});
 }
 
 void WorkshopSystem::StartScaffold(entt::entity workshopEntity)
@@ -1082,9 +1168,13 @@ void WorkshopSystem::OnScaffoldGone(entt::registry& /*registry*/, entt::entity s
 
 void WorkshopSystem::OnWorkshopGone(entt::registry& /*registry*/, entt::entity workshopEntity)
 {
-	// A workshop that goes lets its scaffolds go: they stay where they are
+	// A workshop that goes lets its scaffolds go: they stay where they are. Its flag goes with it.
 	auto& registry = Entities();
 	const auto& data = registry.Get<const Workshop>(workshopEntity);
+	if (registry.Valid(data.flag))
+	{
+		registry.Destroy(data.flag);
+	}
 	for (const auto scaffold : data.scaffolds)
 	{
 		if (auto* owned = registry.Valid(scaffold) ? registry.TryGet<Scaffold>(scaffold) : nullptr;
