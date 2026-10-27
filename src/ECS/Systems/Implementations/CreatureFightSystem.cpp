@@ -2744,6 +2744,11 @@ void CreatureFightSystem::StageTurn(entt::entity entity)
 		}
 		break;
 	case CreatureFighting::Stage::Duel:
+		// An opponent with no life left loses the duel, also when its fight health is not zero
+		if (opponentHere && fight::WinsByOpponentsLife(LifeOf(registry, opponent), registry.AllOf<ScriptControlled>(entity)))
+		{
+			WinByOpponentsLife(entity, opponent);
+		}
 		break;
 	case CreatureFighting::Stage::Celebrate:
 		// Its move finished, it leaves the fight. Its mind then does what the win made it do to the loser.
@@ -3952,6 +3957,52 @@ void CreatureFightSystem::Win(entt::entity winner, entt::entity loser, bool byBl
 		                                         .position = registry.Get<const Transform>(winner).position,
 		                                         .onCast = true});
 	}
+}
+
+void CreatureFightSystem::WinByOpponentsLife(entt::entity winner, entt::entity loser)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& fighting = registry.Get<CreatureFighting>(winner);
+	const auto winRecord = fight_transcript::Note(winner, "win", [&] {
+		return fight_transcript::Fields {{"winner", fight_transcript::Id(winner)},
+		                                 {"loser", fight_transcript::Id(loser)},
+		                                 {"by_blow", false},
+		                                 {"loser_life", LifeOf(registry, loser)},
+		                                 {"winner_health", fighting.fighter.health}};
+	});
+	// The advisors can speak first, for a creature of the player here
+	if (Locator::guidanceSystem::has_value())
+	{
+		Locator::guidanceSystem::value().CreatureWonFight(winner);
+	}
+	// The living around the winner see the fight won, if the winner has a player
+	const auto owner = registry.Get<const Creature>(winner).owner;
+	if (owner != PlayerNames::NEUTRAL && Locator::reactionSystem::has_value())
+	{
+		fight_transcript::Note(
+		    winner, "reaction",
+		    [&] {
+			    return fight_transcript::Fields {{"creature", fight_transcript::Id(winner)},
+			                                     {"reaction", "react_to_fight_won"},
+			                                     {"player", static_cast<int32_t>(owner)}};
+		    },
+		    winRecord);
+		Locator::reactionSystem::value().Create({.initiator = winner,
+		                                         .type = Reaction::ReactToFightWon,
+		                                         .player = owner,
+		                                         .position = registry.Get<const Transform>(winner).position,
+		                                         .onCast = true});
+	}
+	auto& record = registry.AllOf<CreatureFightRecord>(winner) ? registry.Get<CreatureFightRecord>(winner)
+	                                                           : registry.Assign<CreatureFightRecord>(winner);
+	++record.wins;
+	// Only the winner leaves the duel. It finishes the move under way and stands, and then it responds to the fight.
+	NoteFightOver(winner, "opponent_out_of_life");
+	EndFightFor(winner, true);
+	NoteStage(winner, fighting.stage, CreatureFighting::Stage::Respond);
+	fighting.stage = CreatureFighting::Stage::Respond;
+	fighting.played = false;
+	fighting.fighter.stopping = true;
 }
 
 void CreatureFightSystem::EndFightFor(entt::entity creature, std::optional<bool> won)

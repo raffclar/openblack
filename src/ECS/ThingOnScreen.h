@@ -27,4 +27,8 @@ namespace openblack::ecs::thing_on_screen
 /// it stands at
 [[nodiscard]] bool OnScreen(const screen_pick::View& view, entt::entity thing);
 
+/// Whether the point where a thing stands shows on the screen, across the land as a map position holds it. The
+/// model of the thing has no effect.
+[[nodiscard]] bool PlaceOnScreen(const screen_pick::View& view, entt::entity thing);
+
 } // namespace openblack::ecs::thing_on_screen

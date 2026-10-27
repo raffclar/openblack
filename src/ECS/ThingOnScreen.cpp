@@ -70,6 +70,16 @@ bool ecs::thing_on_screen::OnScreen(const screen_pick::View& view, entt::entity 
 		const float radius = openblack::graphics::mesh_detail::HalfDiagonal(box.Size()) * transform->scale.x;
 		return screen_pick::SphereOnScreen(view, centre, radius, transform->position);
 	}
+	return PlaceOnScreen(view, thing);
+}
+
+bool ecs::thing_on_screen::PlaceOnScreen(const screen_pick::View& view, entt::entity thing)
+{
+	const auto* transform = Locator::entitiesRegistry::value().TryGet<const Transform>(thing);
+	if (transform == nullptr)
+	{
+		return false;
+	}
 	// Where it stands, across the land as a map position holds it
 	const auto at = glm::vec3(map_coords::Quantise(transform->position.x), transform->position.y,
 	                          map_coords::Quantise(transform->position.z));
