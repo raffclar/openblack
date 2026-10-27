@@ -105,7 +105,8 @@ void testbed_scenarios::AddComputerGodMiraclesScenarios(std::vector<Scenario>& a
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
 	                   "and a Celtic town to the north that offers the shield miracle. Half of the people go to worship "
-	                   "at the site, which stands built. A testbed tool puts the action CastShieldToProtect in the queue "
+	                   "at the site, which stands built. After 30 seconds, a testbed tool puts the action CastShieldToProtect "
+	                   "in the queue "
 	                   "of the god, with the town and the shield icon, as a land script does.",
 	    .expected = "The hand moves to the shield icon of the site, and the worshippers chant for the miracle. The hand of "
 	                "the god holds no seed. When the charge is full, the hand flies to the middle of the town and casts "
@@ -113,7 +114,8 @@ void testbed_scenarios::AddComputerGodMiraclesScenarios(std::vector<Scenario>& a
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
 	    .landScript = k_ComputerGodShieldScript,
 	    .worshipShare = 0.5f,
-	    .computerActions = {{.node = "CastShieldToProtect",
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "CastShieldToProtect",
 	                         .first = {.kind = ComputerActionThing::Kind::Town, .townId = 900},
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Shield}}},
 	});
@@ -123,9 +125,9 @@ void testbed_scenarios::AddComputerGodMiraclesScenarios(std::vector<Scenario>& a
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
 	                   "and a Celtic town to the north that offers the fireball miracle. An oak stands to the east of the "
-	                   "temple. Half of the people go to worship at the site, which stands built. A testbed tool puts the "
-	                   "action CastWaterSpell in the queue of the god, with the oak and the fireball icon, as a land script "
-	                   "does. That action casts the miracle of its icon at the thing.",
+	                   "temple. Half of the people go to worship at the site, which stands built. After 30 seconds, a "
+	                   "testbed tool puts the action CastWaterSpell in the queue of the god, with the oak and the fireball "
+	                   "icon, as a land script does. That action casts the miracle of its icon at the thing.",
 	    .expected = "The hand moves to the fireball icon of the site, and the worshippers chant for the miracle. The hand of "
 	                "the god holds no seed. When the charge is full, the hand moves toward the oak, and the god throws "
 	                "the fireball at it. The players.list query shows the steps of the hand.",
@@ -134,7 +136,8 @@ void testbed_scenarios::AddComputerGodMiraclesScenarios(std::vector<Scenario>& a
 	    .landScript = k_ComputerGodFireballScript,
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
-	    .computerActions = {{.node = "CastWaterSpell",
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "CastWaterSpell",
 	                         .first = {.kind = ComputerActionThing::Kind::Object, .object = 0},
 	                         .second = {.kind = ComputerActionThing::Kind::Icon, .type = MagicType::Fireball}}},
 	});

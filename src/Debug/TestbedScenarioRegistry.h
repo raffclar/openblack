@@ -1174,10 +1174,13 @@ struct ComputerActionThing
 };
 
 /// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool
-/// puts the action in the queue of the god, as a land script does, after the scenario is laid out.
+/// puts the action in the queue of the god, as a land script does, at a game turn after the scenario is laid out.
 struct ComputerActionSetup
 {
 	PlayerNames player {PlayerNames::PLAYER_TWO};
+	/// The game turns after the start of the scenario at which the tool puts the action in the queue. A wait lets the
+	/// worshippers come to the site first, so that they can chant for the miracle.
+	uint32_t afterTurns {0};
 	/// The name of the node, as a land script gives it
 	std::string_view node;
 	ComputerActionThing first;

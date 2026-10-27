@@ -986,7 +986,9 @@ void Runner::Start(const Scenario& scenario)
 	{
 		SetUpWorship(*scenario.worshipShare);
 	}
-	ForceComputerActions(scenario);
+	_startTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	_computerActionsDone.assign(scenario.computerActions.size(), false);
+	UpdateComputerActions();
 	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
 	{
 		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
@@ -1624,10 +1626,21 @@ void Runner::SetUpWorship(float share)
 	}
 }
 
-void Runner::ForceComputerActions(const Scenario& scenario) const
+void Runner::UpdateComputerActions()
 {
-	for (const auto& action : scenario.computerActions)
+	if (_scenario == nullptr)
 	{
+		return;
+	}
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	for (size_t i = 0; i < _scenario->computerActions.size() && i < _computerActionsDone.size(); ++i)
+	{
+		const auto& action = _scenario->computerActions[i];
+		if (_computerActionsDone[i] || turn - _startTurn < action.afterTurns)
+		{
+			continue;
+		}
+		_computerActionsDone[i] = true;
 		const auto first = ComputerActionThingOf(action.first, action.player);
 		const auto second = ComputerActionThingOf(action.second, action.player);
 		if (!debug::computer_actions::Force(action.player, action.node, first, second))
@@ -4143,6 +4156,7 @@ void Runner::Update(float seconds)
 	UpdateVillagerWalks();
 	UpdateTurnsAsked();
 	UpdateThrows();
+	UpdateComputerActions();
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();

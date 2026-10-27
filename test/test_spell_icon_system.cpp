@@ -376,3 +376,13 @@ TEST_F(GodChargeTest, AnIconThatIsNotFullOnlyStartsToCharge)
 	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 40.0f);
 	EXPECT_EQ(_system.ChantNeeded(icon), 60.0f);
 }
+
+// The cast of a god takes the cost of the miracle from the store of the icon, and never more than the store holds
+TEST_F(GodChargeTest, ACastTakesTheCostButNeverMoreThanTheStore)
+{
+	const auto icon = IdleIcon(PlayerNames::PLAYER_TWO, 150.0f);
+	_system.TakeCastCharge(icon);
+	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 50.0f);
+	_system.TakeCastCharge(icon);
+	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 0.0f);
+}
