@@ -20,6 +20,7 @@
 #include <utility>
 #include <vector>
 
+#include "Common/DeveloperTools.h"
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 #include "Debug/RowDump.h"
 #endif
@@ -75,6 +76,8 @@ struct Settings
 struct Request
 {
 	Settings settings {};
+	/// Tools: the modes of the AI soak for the first land. A game that joins a game server takes them from the server.
+	developer_tools::SoakTools soak;
 	/// The game time of each frame, none for the wall clock
 	std::optional<std::chrono::microseconds> frameTime;
 	/// The file to write the run record to, as JSON lines

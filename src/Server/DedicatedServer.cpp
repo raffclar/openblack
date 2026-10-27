@@ -321,6 +321,11 @@ bool ServerWorld::StartLand()
 	}
 	// The land starts from the state that every client of the network game starts it from
 	simulation::PrepareNetworkLand(_settings.seed);
+	if (const auto refusal = simulation::ApplySoakTools(_settings.soak); refusal.has_value())
+	{
+		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "The server cannot start: {}", *refusal);
+		return false;
+	}
 	if (_settings.godsRingMap)
 	{
 		if (!land.LoadGodsRingMap())
@@ -575,6 +580,8 @@ bool StartNetwork(const ServerSettings& settings, ServerWorld& world, std::uniqu
 	    .turn = Locator::time::value().GetTurn(),
 	    .opening = scriptLand ? settings.openingName : std::string(),
 	    .godsRingMap = settings.godsRingMap,
+	    .allComputerGods = settings.soak.allComputerGods,
+	    .aiSeed = settings.soak.aiSeed,
 	};
 	// A land of a network game has a god slot for each citadel, as the room of the land has a team for each citadel. The
 	// other lands of the tools and the testbed keep the default slots.

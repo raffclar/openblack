@@ -236,7 +236,7 @@ bool LandSystem::LoadMap(const std::filesystem::path& path, loading::LoadingCloc
 	_mapLandscape.clear();
 	// Every land of a network game fills its slots with no human after its script. Without a network session, only a
 	// land made for network play does.
-	if (_humansFromSession || online_map_land::IsOnlineMap(path.generic_string()))
+	if (_humansFromSession || _allComputerGods || online_map_land::IsOnlineMap(path.generic_string()))
 	{
 		FillSlotsOfNetworkLand(computer_player::k_SlotGods);
 	}
@@ -500,6 +500,12 @@ void LandSystem::FillSlotsOfNetworkLand(std::span<const PlayerNames> gods)
 		return;
 	}
 	auto& minds = Locator::computerPlayerSystem::value();
+	if (_allComputerGods)
+	{
+		// The AI soak: no human plays, so every god with a citadel gets a computer god as the land loads
+		minds.FillEmptySlots(gods, {});
+		return;
+	}
 	if (_humansFromSession)
 	{
 		minds.WaitForHumans();

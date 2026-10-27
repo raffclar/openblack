@@ -21,6 +21,7 @@
 
 #include <spdlog/common.h>
 
+#include "Common/DeveloperTools.h"
 #include "Debug/SimRun.h"
 #include "EngineConfig.h"
 #include "Simulation/WorldStart.h"
@@ -83,6 +84,8 @@ struct ServerSettings
 	std::optional<std::string> scenario;
 	/// The network map for 32 gods in place of a land
 	bool godsRingMap {false};
+	/// Tools: the modes of the AI soak. Every client takes them from the start of the game.
+	developer_tools::SoakTools soak;
 	/// How the new game on the first land starts, as the game's --skip-opening gives it
 	std::optional<new_game_choice::NewGameStart> opening;
 	/// The text of --skip-opening, which the game server sends to the clients in the start of the game

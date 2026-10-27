@@ -14,6 +14,7 @@
 #include <algorithm>
 #include <span>
 #include <string>
+#include <string_view>
 #include <tuple>
 #include <utility>
 #include <vector>
@@ -169,6 +170,15 @@ public:
 	uint32_t GameRand(uint32_t range) override { return Locator::gameRandom::value().GameRand(range); }
 
 	float GameFloatRand(float most) override { return Locator::gameRandom::value().GameFloatRand(most); }
+
+	void SetPersonality([[maybe_unused]] PlayerNames player, [[maybe_unused]] std::string_view need,
+	                    [[maybe_unused]] float weight) override
+	{
+		// The weights of the decision tree have no place in the game yet: a god keeps the weight in the log until the
+		// tree reads it
+		SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "AI seed: the computer god {} weighs {} at {:.3f}", static_cast<int>(player),
+		                    need, weight);
+	}
 };
 
 /// The game's own world for the start of a network game
@@ -334,7 +344,12 @@ void ComputerPlayerSystem::ProcessTurn()
 			// The hand starts at the temple, or at a fixed place when the god has none
 			mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
 			// A start can make a creature, so the mind is found again after it
-			computer_player::Start(*_world, name, *mind);
+			if (_aiSeed.has_value())
+			{
+				SPDLOG_LOGGER_INFO(spdlog::get("game"), "The computer god {} starts with the personality of AI seed {}",
+				                   static_cast<int>(name), *_aiSeed);
+			}
+			computer_player::Start(*_world, name, *mind, _aiSeed);
 			mind = registry.TryGet<ComputerPlayer>(entity);
 			if (mind == nullptr)
 			{
