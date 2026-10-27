@@ -204,3 +204,49 @@ TEST_F(MapProductionFiling, AThingIsInTheMapUntilItLeavesTheCells)
 	registry.Destroy(other);
 	EXPECT_FALSE(map.InMap(other));
 }
+
+TEST_F(MapProductionFiling, ALoadKeepsAPersonInACreaturesHandOutOfTheCells)
+{
+	// Two villagers stand in one cell. A creature takes one of them in its hand, which takes that villager out of the
+	// cells. A load of the saved world must give the same cells and keep the held villager out of them.
+	namespace reflection = openblack::ecs::reflection;
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& map = Locator::entitiesMap::value();
+	const glm::vec3 place {500.0f, 0.0f, 500.0f};
+	std::vector<entt::entity> villagers;
+	for (int i = 0; i < 2; ++i)
+	{
+		const auto villager = registry.Create();
+		registry.Assign<Transform>(villager, place, glm::mat3(1.0f), glm::vec3(1.0f));
+		registry.Assign<Mobile>(villager);
+		registry.Assign<Villager>(villager);
+		map.Sync();
+		villagers.push_back(villager);
+	}
+	const auto held = villagers.back();
+	registry.Remove<MapCellResident, MapCellMover>(held);
+	const auto cell = map_coords::CellOf(place);
+	const auto before = map.GetAllInCell(cell);
+	ASSERT_EQ(before, std::vector<entt::entity> {villagers.front()});
+	const entt::meta_ctx context;
+	reflection::BinaryWriter out(context);
+	map.SaveState(out);
+
+	// The load makes each entity again, and so the map gets the held villager as a new thing
+	registry.Remove<Villager>(held);
+	registry.Assign<Villager>(held);
+	map.FileResidents();
+	// A system that looks in the cells before the map state loads must not put the held villager in them
+	EXPECT_EQ(map.GetAllInCell(cell), before);
+	EXPECT_FALSE(registry.AnyOf<MapCellResident, MapCellMover>(held));
+	const reflection::EntityRemap identity;
+	reflection::BinaryReader in(context, out.Bytes(), identity);
+	ASSERT_TRUE(map.LoadState(in));
+	EXPECT_EQ(in.Remaining(), 0u);
+	map.Sync();
+	EXPECT_EQ(map.GetAllInCell(cell), before);
+	EXPECT_FALSE(registry.AnyOf<MapCellResident, MapCellMover>(held));
+	reflection::BinaryWriter again(context);
+	map.SaveState(again);
+	EXPECT_EQ(again.Bytes(), out.Bytes());
+}

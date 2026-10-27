@@ -496,6 +496,10 @@ void MapProduction::FileResidents()
 		return;
 	}
 	_lists.Clear();
+	// The load made every entity again, and so put each one in the list of the things to file. But the saved world
+	// keeps which things are in the cells, and its map state gives back the things that waited to be filed. A thing out
+	// of the cells, such as a person in a creature's hand, must stay out.
+	_made.clear();
 	KnowLandBlocks();
 	_registry->Each<const MapCellResident>([this](entt::entity entity, const MapCellResident& resident) {
 		for (const auto cell : resident.cells)
