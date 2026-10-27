@@ -1872,3 +1872,6 @@ openblack_setup_and_add_test(
   test_computer_player_state test_computer_player_state.cpp
 )
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(
+  test_oracle_computer_town_threat oracle/test_oracle_computer_town_threat.cpp
+)
