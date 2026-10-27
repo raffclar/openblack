@@ -2206,6 +2206,10 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		}
 		Locator::computerPlayerSystem::value().SetPersonality(command.player, command.action, command.amount);
 		return fmt::format("{} weighs {}", command.action, command.amount);
+	case Kind::ComputerUntaughtSends:
+		return debug::computer_actions::SetUntaughtSends(command.player, command.value, static_cast<uint32_t>(command.amount))
+		           ? fmt::format("{} sends for kind {}", command.amount, command.value)
+		           : "no computer mind";
 	case Kind::BringCreature:
 	{
 		if (!Locator::filesystem::has_value())
@@ -2944,7 +2948,8 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
 	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality)
+	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality ||
+	    command.kind == Kind::ComputerUntaughtSends)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3725,6 +3730,7 @@ void Runner::Give(const Command& command)
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
 	case Kind::ComputerPersonality:
+	case Kind::ComputerUntaughtSends:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

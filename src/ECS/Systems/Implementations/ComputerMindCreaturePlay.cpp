@@ -260,4 +260,5 @@ void computer_world::RegisterCreaturePlayRules(RuleTable& table)
 	AddRule(table, k_Play, NodeKind::ObjectObjectToLeashTo, {.intensity = NoWish});
 	AddRule(table, k_Play, NodeKind::ActionCastSpellOnMyCreatureForALaugh, {.intensity = LaughWish});
 	AddRule(table, k_Play, NodeKind::ObjectCastSpellOnMyCreatureForALaugh, {.intensity = LaughSpell, .perform = Laugh});
+	RegisterCreatureTeachRules(table);
 }

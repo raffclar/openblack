@@ -10725,7 +10725,7 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
 	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       kind == Kind::ComputerPersonality || IsPointerCommand(kind);
+	       kind == Kind::ComputerPersonality || kind == Kind::ComputerUntaughtSends || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -10753,7 +10753,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 183> k_Names {
+	constexpr std::array<std::string_view, 184> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10937,6 +10937,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "end box",
 	    "bring a creature into a network game",
 	    "computer personality",
+	    "computer sends with no lesson",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }

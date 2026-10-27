@@ -9,6 +9,7 @@
 
 #include <cstdint>
 
+#include <array>
 #include <optional>
 #include <vector>
 
@@ -84,4 +85,13 @@ TEST(DebugComputerActions, AnUnknownNameMakesNothingReady)
 	const auto nodes = mind.nodes.size();
 	EXPECT_FALSE(debug::computer_actions::MakeReady(mind, "NoNodeHasThisName"));
 	EXPECT_EQ(mind.nodes.size(), nodes);
+}
+
+TEST(DebugComputerActions, TheToolCountsTheSendsOfAKindOfMiracle)
+{
+	openblack::computer_mind::Mind mind;
+	EXPECT_TRUE(openblack::debug::computer_actions::SetUntaughtSends(mind, 1, 2));
+	EXPECT_EQ(mind.untaughtSends, (std::array<uint32_t, 3> {0, 2, 0}));
+	EXPECT_FALSE(openblack::debug::computer_actions::SetUntaughtSends(mind, 3, 1));
+	EXPECT_EQ(mind.untaughtSends, (std::array<uint32_t, 3> {0, 2, 0}));
 }

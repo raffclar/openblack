@@ -123,6 +123,8 @@ public:
 	bool TryMiracle(entt::entity creature, MagicType type, entt::entity target) override;
 	void KnowMiracle(entt::entity creature, size_t miracle) override;
 	void SetKnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action, bool knows) override;
+	void LearnAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) override;
+	[[nodiscard]] bool KnowsAction(entt::entity creature, CreatureActionLearningType type, uint32_t action) const override;
 	bool TellCast(entt::entity creature, MagicType type, entt::entity target) override;
 	bool ForcePlan(entt::entity creature, const ForcedPlan& plan) override;
 	void AteMagicMushroom(entt::entity creature) override;

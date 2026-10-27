@@ -985,6 +985,9 @@ struct Command
 		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
 		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.
 		ComputerPersonality,
+		/// The god of the player (player) counts sends (amount) of its creature for a kind of miracle (value: 0 to
+		/// impress, 1 kind, 2 angry). The god then wants to teach the creature that kind. Needs no creature.
+		ComputerUntaughtSends,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures
