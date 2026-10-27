@@ -33,6 +33,7 @@
 #include "Common/CrashHandler.h"
 #include "Common/DeveloperTools.h"
 #include "Common/FatalMessage.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/SystemLibraries.h"
 #include "Creature/BonusCreatures.h"
@@ -173,7 +174,8 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 	options.add_options("Developer")
 		("sim-row-dump", "Tools: keep each field of each row of the synced world of the last turns, and write the rows of a turn to this file when the world parts from the server's world (tools/sim/row_dump.py compares two files).", cxxopts::value<std::string>())
 		("sim-row-dump-turn", "Tools: with --sim-row-dump, also write the rows of this turn.", cxxopts::value<uint32_t>())
-		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"));
+		("sim-row-dump-keep", "Tools: with --sim-row-dump, the count of the last turns of which the dump keeps the rows.", cxxopts::value<uint32_t>()->default_value("8"))
+		("turn-api-check", "Developers: find the turn code that uses the graphics, the renderer or the audio directly, not through the queue of the main thread. report: the log gets each place and its count as the game ends. fail: the first such call stops the game.", cxxopts::value<std::string>());
 #endif
 #if defined(OPENBLACK_INSPECTOR)
 	options.add_options("Developer")
@@ -460,6 +462,24 @@ bool parseOptions(int argc, char** argv, openblack::Arguments& args, int& return
 			args.simulation = simulation;
 		}
 
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+		if (result.count("turn-api-check") != 0)
+		{
+			const auto check = result["turn-api-check"].as<std::string>();
+			if (check == "report")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Report;
+			}
+			else if (check == "fail")
+			{
+				args.turnApiCheck = openblack::TurnApiCheck::Fail;
+			}
+			else if (check != "off")
+			{
+				throw cxxopts::exceptions::parsing("--turn-api-check is off, report or fail");
+			}
+		}
+#endif
 		if (result.count("screenshot-frame") != 0)
 		{
 			args.requestScreenshot = std::make_pair(result["screenshot-frame"].as<uint32_t>(),

@@ -16,6 +16,7 @@
 #include <spdlog/spdlog.h>
 #include <stb_image_write.h>
 
+#include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
 #include "UploadPacer.h"
 
@@ -30,6 +31,7 @@ Texture2D::Texture2D(std::string name)
 
 Texture2D::~Texture2D()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::~Texture2D");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
 		bgfx::destroy(toBgfx(_handle));
@@ -39,12 +41,14 @@ Texture2D::~Texture2D()
 void Texture2D::Create(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping, Filter filter,
                        const void* memory) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::Create");
 	CreateWithinFrame(width, height, layers, format, wrapping, filter, memory);
 }
 
 void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t layers, TextureFormat format, Wrapping wrapping,
                                   Filter filter, const void* memory) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::CreateWithinFrame");
 	uint64_t flags = BGFX_TEXTURE_NONE;
 	switch (wrapping)
 	{
@@ -93,6 +97,7 @@ void Texture2D::CreateWithinFrame(uint16_t width, uint16_t height, uint16_t laye
 
 void Texture2D::Update(const void* data, uint32_t size) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::Update");
 	UploadPacer::Pace(size);
 	bgfx::updateTexture2D(toBgfx(_handle), 0, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
 }
@@ -100,16 +105,19 @@ void Texture2D::Update(const void* data, uint32_t size) const
 void Texture2D::UpdateLayerRegion(uint16_t layer, glm::u16vec2 origin, glm::u16vec2 size, const void* data,
                                   uint32_t bytes) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::UpdateLayerRegion");
 	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, origin.x, origin.y, size.x, size.y, bgfx::copy(data, bytes));
 }
 
 void Texture2D::UpdateLayer(uint16_t layer, const void* data, uint32_t size) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::UpdateLayer");
 	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y, bgfx::copy(data, size));
 }
 
 void Texture2D::UpdateLayerFromMemory(uint16_t layer, const void* memory) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::UpdateLayerFromMemory");
 	bgfx::updateTexture2D(toBgfx(_handle), layer, 0, 0, 0, _resolution.x, _resolution.y,
 	                      static_cast<const bgfx::Memory*>(memory));
 }

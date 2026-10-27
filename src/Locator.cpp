@@ -31,10 +31,12 @@
 #include "Audio/AudioManager.h"
 #include "Audio/AudioManagerNoOp.h"
 #include "Audio/ClockedAudioPlayer.h"
+#include "Audio/QueuedAudioManager.h"
 #include "CHLApi.h"
 #include "Common/EventManager.h"
 #include "Common/GameRandomProduction.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/PlayerProfiles.h"
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
@@ -345,6 +347,7 @@ void openblack::InitializeSimulationCore()
 	SPDLOG_LOGGER_INFO(spdlog::get("game"), GLM_VERSION_COMPLETE);
 
 	Locator::profiler::emplace();
+	Locator::mainThreadQueue::emplace();
 	Locator::events::emplace<EventManager>();
 #if __ANDROID__
 	Locator::filesystem::emplace<AndroidFileSystem>();
@@ -371,24 +374,27 @@ bool openblack::InitializeEngine(GraphicsBackend backend, bool vsync) noexcept
 		Locator::audio::emplace<AudioManagerNoOp>();
 		return true;
 	}
+	std::unique_ptr<audio::AudioManagerInterface> machineAudio;
 	try
 	{
 		// A simulation run with a fixed frame time times its sounds by the game's clock
 		if (Locator::config::has_value() && Locator::config::value().clockedAudio)
 		{
-			Locator::audio::emplace<AudioManager>(
+			machineAudio = std::make_unique<AudioManager>(
 			    std::make_unique<audio::ClockedAudioPlayer>([] { return machine_clock::Ticks(); }));
 		}
 		else
 		{
-			Locator::audio::emplace<AudioManager>();
+			machineAudio = std::make_unique<AudioManager>();
 		}
 	}
 	catch (std::runtime_error& error)
 	{
 		SPDLOG_LOGGER_ERROR(spdlog::get("audio"), "Falling back to no-op audio: {}", error.what());
-		Locator::audio::emplace<AudioManagerNoOp>();
+		machineAudio = std::make_unique<AudioManagerNoOp>();
 	}
+	// The game's calls go to the audio through the queue of the main thread
+	Locator::audio::emplace<audio::QueuedAudioManager>(std::move(machineAudio), Locator::mainThreadQueue::value());
 	return true;
 }
 
@@ -913,6 +919,7 @@ void openblack::ShutDownServices()
 	Locator::config::reset();
 	Locator::infoConstants::reset();
 	Locator::profiler::reset();
+	Locator::mainThreadQueue::reset();
 
 	Locator::vm::reset();
 }

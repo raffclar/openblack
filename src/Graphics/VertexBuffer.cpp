@@ -15,6 +15,7 @@
 
 #include <spdlog/spdlog.h>
 
+#include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
 #include "UploadPacer.h"
 
@@ -48,6 +49,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
     , _dynamic(dynamic)
     , _layoutHandle(BGFX_INVALID_HANDLE)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::VertexBuffer");
 	// assert(vertices != nullptr);
 	assert(!_vertexDecl.empty());
 
@@ -99,6 +101,7 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 
 VertexBuffer::~VertexBuffer() noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::~VertexBuffer");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
 		bgfx::destroy(toBgfx(_handle));
@@ -135,6 +138,7 @@ bool VertexBuffer::IsValid() const noexcept
 
 void VertexBuffer::Bind() const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Bind");
 	if (!IsValid())
 	{
 		return;
@@ -151,6 +155,7 @@ void VertexBuffer::Bind() const
 
 void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Bind");
 	if (!IsValid())
 	{
 		return;
@@ -167,6 +172,7 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 
 void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::BindStream");
 	if (!IsValid())
 	{
 		return;
@@ -183,6 +189,7 @@ void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
 
 void VertexBuffer::Update(const void* memory) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Update");
 	assert(_dynamic);
 	if (!IsValid())
 	{
@@ -193,6 +200,7 @@ void VertexBuffer::Update(const void* memory) const
 
 void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Update");
 	assert(_dynamic);
 	if (!IsValid())
 	{

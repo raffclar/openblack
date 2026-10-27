@@ -265,6 +265,7 @@
 #include "Magic/MagicTables.h"
 #include "Magic/ScriptCast.h"
 #include "Magic/TownBelief.h"
+#include "MainThreadWork.h"
 #include "Physics/Body.h"
 #include "Resources/ResourcesInterface.h"
 #include "ScriptHeaders/ScriptCameraLookups.h"
@@ -3774,8 +3775,10 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 		{
 			picture = &registry.Assign<ecs::components::ChallengePicture>(outcome.record);
 		}
-		Locator::rendererInterface::value().RequestScreenPicture(ecs::challenge_pictures::Ask(*picture, outcome.record),
-		                                                         &ecs::challenge_pictures::Take);
+		// The renderer takes the picture at the end of a draw, so the request goes to the main thread
+		PostToMainThread(MainThreadApi::Renderer, [name = ecs::challenge_pictures::Ask(*picture, outcome.record)] {
+			Locator::rendererInterface::value().RequestScreenPicture(name, &ecs::challenge_pictures::Take);
+		});
 	}
 	if (!outcome.alignment.has_value() || !Locator::alignmentSystem::has_value() || !Locator::infoConstants::has_value())
 	{

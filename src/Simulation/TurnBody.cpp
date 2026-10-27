@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <optional>
 #include <span>
 #include <vector>
 
@@ -27,6 +28,7 @@
 #include "Common/DrawTrace.h"
 #endif
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/LivingListPlace.h"
@@ -951,7 +953,21 @@ void PlayTurn(TurnViewInterface& view)
 #endif
 	// After the game is decided, the world does not change: the turn does only the input and the steps after the turn
 	const bool decided = Locator::gameEndSystem::has_value() && Locator::gameEndSystem::value().IsDecided();
-	game_turn::PlayTurn([&view](game_turn::Step step) { PlayTurnStep(step, view); }, decided);
+	// The queue of the main thread knows the step, so that the check of the turn's calls can name it
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	game_turn::PlayTurn(
+	    [&view, queue](game_turn::Step step) {
+		    if (queue != nullptr)
+		    {
+			    queue->SetTurnStep(static_cast<uint32_t>(step));
+		    }
+		    PlayTurnStep(step, view);
+	    },
+	    decided);
+	if (queue != nullptr)
+	{
+		queue->SetTurnStep(std::nullopt);
+	}
 }
 
 } // namespace openblack::simulation

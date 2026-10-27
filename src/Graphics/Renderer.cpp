@@ -69,6 +69,7 @@
 #include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/CrashHandler.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/Platform.h"
 #include "Common/UserData.h"
 #include "Common/WorkerPool.h"
@@ -5858,6 +5859,7 @@ void Renderer::UpdateLandDetail(const DrawSceneDesc& drawDesc) const
 
 bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::WarmUpScene");
 	// The draws into the window keep to one pixel. The renderer makes a pipeline for each draw that has pixels.
 	for (const auto view : warm_up::k_WindowSceneViews)
 	{
@@ -5896,6 +5898,7 @@ bool Renderer::WarmUpScene(const DrawSceneDesc& drawDesc, uint32_t part) const n
 
 void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
 	SelectDrawnCreatures(drawDesc);
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
@@ -7948,6 +7951,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 
 void Renderer::BakeLandShadows(bool drawVegetation) const noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::BakeLandShadows");
 	// The game bakes the shadows of the buildings, rocks and other things, and of the trees and big forests, into the
 	// land as it paints it. The trees' shadows that move with them are drawn each frame, not baked.
 	const bool movingTrees = drawVegetation && Locator::config::value().dynamicTreeShadows;
@@ -7978,6 +7982,7 @@ void Renderer::ReleaseGpuWorkMemory() noexcept
 
 void Renderer::Frame() noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
 	// In a warm-up's frame the loading screen's view first clears all of the window as the main view clears it. This is
 	// set after every draw of the frame, as the loading screen sets its view too.
 	const bool warmUp = std::exchange(_warmUpInFrame, false);
@@ -8079,6 +8084,7 @@ void Renderer::WatchDescriptorSets(const FrameDescriptorSets& sets) noexcept
 
 void Renderer::RequestScreenshot(const std::filesystem::path& filepath) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenshot");
 	const bool minimised = Locator::windowing::has_value() && Locator::windowing::value().IsMinimised();
 	const auto size = Locator::windowing::has_value() ? glm::u16vec2(Locator::windowing::value().GetSize()) : glm::u16vec2(0);
 	// All the renderers of bgfx can copy and read back textures
@@ -8129,6 +8135,7 @@ std::optional<std::string> Renderer::TakeScreenshotFailure(const std::filesystem
 
 void Renderer::RequestScreenPicture(const std::string& name, graphics::ScreenPicturer picturer) noexcept
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::RequestScreenPicture");
 	_bgfxCallback->pictures.Ask(name, std::move(picturer));
 	RequestScreenshot(name);
 }

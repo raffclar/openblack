@@ -69,6 +69,7 @@ union SDL_Event;
 
 namespace openblack
 {
+enum class TurnApiCheck : uint8_t;
 
 namespace audio
 {
@@ -209,6 +210,9 @@ struct Arguments
 	/// A testbed scenario to run as the game starts, by its id, and how to measure its crowd if it has one
 	std::optional<ScenarioRequest> scenario;
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> requestScreenshot;
+	/// For developers: what the check does when turn code uses the graphics, the renderer or the audio directly (see
+	/// MainThreadQueue). Off by default.
+	TurnApiCheck turnApiCheck {};
 	/// The port of 127.0.0.1 the debug inspector's server listens on, in builds with it; none to not start it
 	std::optional<uint16_t> inspectPort;
 	/// The fight autopilot to start with the inspector, and the folder for the files of the fight transcript
@@ -560,6 +564,8 @@ private:
 	void LoadHelpRecord();
 	/// The game writes the help record of the player to their folder in the profile folder
 	void SaveHelpRecord();
+	/// The log gets each place where turn code used the graphics, the renderer or the audio directly, when the check is on
+	void ReportTurnApiCheck() const;
 
 	/// When the game was launched
 	const LoadTimer::Clock::time_point _launchTime {LoadTimer::Clock::now()};
@@ -892,6 +898,8 @@ private:
 	void PlaceScreenLabels();
 
 	std::optional<std::pair</* frame number */ uint32_t, /* output */ std::filesystem::path>> _requestScreenshot;
+	/// What the check of the turn's calls does
+	TurnApiCheck _turnApiCheck {};
 	/// The requested screenshot leaves the debug windows out
 	bool _screenshotHidesDebugGui {false};
 	/// A frame drawn without the debug windows though no picture is taken of it

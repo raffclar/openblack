@@ -96,6 +96,7 @@
 #include "Common/FatalMessage.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Common/UserData.h"
@@ -721,6 +722,7 @@ Game::Game(Arguments&& args) noexcept
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
+    , _turnApiCheck(args.turnApiCheck)
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The log of each part of the game
@@ -809,6 +811,7 @@ Game::~Game() noexcept
 	{
 		Locator::landSystem::value().SetView(nullptr);
 	}
+	ReportTurnApiCheck();
 	ShutDownServices();
 	// A later caller of Instance must not get this game once it is gone
 	if (sInstance == this)
@@ -2975,6 +2978,23 @@ void Game::ReportHand()
 	});
 }
 
+void Game::ReportTurnApiCheck() const
+{
+	if (!Locator::mainThreadQueue::has_value() || _turnApiCheck == TurnApiCheck::Off)
+	{
+		return;
+	}
+	const auto calls = Locator::mainThreadQueue::value().GetDirectCalls();
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "The check of the turn's calls found {} places that use a service directly",
+	                   calls.size());
+	for (const auto& call : calls)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Turn check: step {} {} {} {} calls ({})",
+		                   call.turnStep.has_value() ? std::to_string(*call.turnStep) : std::string("?"), Name(call.api),
+		                   call.what, call.count, call.where);
+	}
+}
+
 bool Game::PlayTurns()
 {
 	// The game is the view of the turns
@@ -3868,6 +3888,7 @@ bool Game::Initialize() noexcept
 	using filesystem::Path;
 	// The services that the game shares with the dedicated server come first, then the services that show the world
 	InitializeSimulationCore();
+	Locator::mainThreadQueue::value().SetCheck(_turnApiCheck);
 	if (!InitializeEngine(config.graphicsBackend, config.vsync))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize engine services.");

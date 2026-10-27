@@ -17,6 +17,7 @@
 #include <bgfx/bgfx.h>
 #include <spdlog/spdlog.h>
 
+#include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
 #include "UploadPacer.h"
 
@@ -29,6 +30,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* indices, uint32_t indexCo
     , _handle(BGFX_INVALID_HANDLE)
     , _sharedHandle(BGFX_INVALID_HANDLE)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::IndexBuffer");
 	assert(indices != nullptr);
 	assert(indexCount > 0);
 
@@ -51,6 +53,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage s
     , _sharedHandle(BGFX_INVALID_HANDLE)
     , _storage(storage)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::IndexBuffer");
 	const auto* memBgfx = static_cast<const bgfx::Memory*>(mem);
 	_count = memBgfx->size / sizeof(uint16_t);
 	UploadPacer::Pace(memBgfx->size);
@@ -78,6 +81,7 @@ IndexBuffer::IndexBuffer(std::string name, const void* mem, Type type, Storage s
 
 IndexBuffer::~IndexBuffer()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::~IndexBuffer");
 	if (bgfx::isValid(toBgfx(_handle)))
 	{
 		bgfx::destroy(toBgfx(_handle));
@@ -120,6 +124,7 @@ bool IndexBuffer::IsValid() const noexcept
 
 void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "IndexBuffer::Bind");
 	if (!IsValid())
 	{
 		return;

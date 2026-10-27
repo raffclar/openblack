@@ -43,6 +43,7 @@
 #include "Camera/StartCamera.h"
 #include "Common/LoadTimer.h"
 #include "Common/MachineClock.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/StringUtils.h"
 #include "Debug/TestbedDispenserGrid.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
@@ -1195,7 +1196,23 @@ void LandSystem::PlayTurns(simulation::TurnViewInterface& view)
 	auto gameLogic = profiler.BeginScoped(Profiler::Stage::GameLogic);
 	const auto turnBefore = Locator::time::value().GetTurn();
 	const auto logicStart = std::chrono::steady_clock::now();
-	GameLogicLoop(view);
+	auto* queue = Locator::mainThreadQueue::has_value() ? &Locator::mainThreadQueue::value() : nullptr;
+	{
+		// The queue knows that this thread does the turns, so that the check can find turn code that uses the services of
+		// the main thread directly
+		std::optional<MainThreadQueue::TurnScope> turnScope;
+		if (queue != nullptr)
+		{
+			turnScope.emplace(*queue);
+		}
+		GameLogicLoop(view);
+	}
+	// The main thread does the work that the turns gave it. Turns on the main thread do their work at once, so then no
+	// work waits here.
+	if (queue != nullptr)
+	{
+		queue->RunPending();
+	}
 	// The run record keeps the time of each turn
 	if (Locator::time::value().GetTurn() != turnBefore)
 	{

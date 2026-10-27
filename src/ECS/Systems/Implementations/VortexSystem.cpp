@@ -77,6 +77,7 @@
 #include "Magic/VortexCrossingRules.h"
 #include "Magic/VortexPullRules.h"
 #include "Magic/VortexRules.h"
+#include "MainThreadWork.h"
 #include "Particles/ParticleEffect.h"
 #include "Particles/ParticleSpellLink.h"
 #include "Resources/ResourceManager.h"
@@ -395,7 +396,8 @@ void VortexSystem::ProcessTurn()
 	RemoveTheTaken();
 	if (levelled)
 	{
-		Locator::terrainSystem::value().CommitAltitudeChanges();
+		// The new heights are in the land at once. Only their draw goes to the main thread.
+		PostToMainThread(MainThreadApi::Graphics, [] { Locator::terrainSystem::value().CommitAltitudeChanges(); });
 		ecs::land_followers::Follow(registry, Locator::terrainSystem::value(), followers);
 	}
 }
@@ -824,7 +826,8 @@ void VortexSystem::StartAgainAfterLoad()
 	});
 	if (levelled)
 	{
-		Locator::terrainSystem::value().CommitAltitudeChanges();
+		// The new heights are in the land at once. Only their draw goes to the main thread.
+		PostToMainThread(MainThreadApi::Graphics, [] { Locator::terrainSystem::value().CommitAltitudeChanges(); });
 	}
 }
 

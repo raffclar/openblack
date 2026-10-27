@@ -18,6 +18,7 @@
 
 #include "3D/L3DMesh.h"
 #include "Camera/Camera.h"
+#include "Common/MainThreadQueue.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
@@ -122,11 +123,13 @@ RenderingSystemCommon::~RenderingSystemCommon() = default;
 
 void RenderingSystemCommon::SetDirty()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::SetDirty");
 	_renderContext.dirty = true;
 }
 
 void RenderingSystemCommon::SetLayoutDirty()
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::SetLayoutDirty");
 	_renderContext.dirty = true;
 	_renderContext.layoutDirty = true;
 }
@@ -189,6 +192,7 @@ void RenderingSystemCommon::UploadRootsPiles()
 
 void RenderingSystemCommon::PrepareDraw(bool drawBoundingBox, bool drawFootpaths, bool drawStreams)
 {
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::PrepareDraw");
 	const auto& registry = Locator::entitiesRegistry::value();
 
 	_renderContext.animatedBoneMatrices.clear();

@@ -15,7 +15,11 @@
 #include <array>
 #include <chrono>
 #include <map>
+#include <memory>
+#include <mutex>
 #include <string_view>
+#include <thread>
+#include <vector>
 
 namespace openblack
 {
@@ -203,10 +207,23 @@ public:
 		std::array<Scope, static_cast<uint8_t>(Stage::_count)> stages;
 	};
 
+	/// The thread that makes the profiler is its main thread, whose scopes go into the entries at once
+	Profiler();
+	Profiler(const Profiler&) = delete;
+	Profiler& operator=(const Profiler&) = delete;
+	~Profiler();
+
+	/// The scopes of the other threads go into the entry of the frame that ends, and a new entry starts. Only the main
+	/// thread calls it.
 	void Frame();
+	/// Any thread may open and close scopes. The scopes of a thread other than the main thread wait in its own list,
+	/// until the main thread merges them.
 	void Begin(Stage stage);
 	void End(Stage stage);
 	inline ScopedSection BeginScoped(Stage stage) { return ScopedSection(this, stage); }
+	/// The main thread puts the scopes that the other threads closed into the current entry, one level below its own
+	/// open scopes. A scope that is still open stays with its thread.
+	void MergeThreads();
 
 	[[nodiscard]] uint8_t GetEntryIndex(int8_t offset) const { return (_currentEntry + k_BufferSize + offset) % k_BufferSize; }
 
@@ -215,9 +232,35 @@ public:
 	[[nodiscard]] const std::array<Entry, k_BufferSize>& GetEntries() const { return _entries; }
 
 private:
+	/// A scope of another thread: open while it has no end
+	struct ThreadScope
+	{
+		Stage stage;
+		uint8_t level;
+		std::chrono::system_clock::time_point start;
+		std::chrono::system_clock::time_point end;
+	};
+
+	/// The scopes of one thread other than the main thread. Only that thread opens and closes them; the main thread takes
+	/// the closed ones.
+	struct ThreadScopes
+	{
+		std::thread::id thread;
+		std::mutex mutex;
+		std::vector<ThreadScope> open;
+		std::vector<ThreadScope> closed;
+	};
+
+	[[nodiscard]] bool IsMainThread() const { return std::this_thread::get_id() == _mainThread; }
+	ThreadScopes& ScopesOfThisThread();
+	void MergeInto(Entry& entry);
+
 	std::array<Entry, k_BufferSize> _entries;
 	uint8_t _currentEntry = k_BufferSize - 1;
 	uint8_t _currentLevel = 0;
+	const std::thread::id _mainThread;
+	std::mutex _threadsMutex;
+	std::vector<std::unique_ptr<ThreadScopes>> _threads;
 };
 
 } // namespace openblack
