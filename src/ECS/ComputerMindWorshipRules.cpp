@@ -73,6 +73,22 @@ float TiredWorshipperUrge(float mostLifeDesire)
 	return static_cast<double>(mostLifeDesire) > k_TiredWorshipper ? 1.0f : mostLifeDesire;
 }
 
+std::optional<size_t> LeastLife(std::span<const float> lives)
+{
+	// Only a life below full counts
+	float least = 1.0f;
+	std::optional<size_t> found;
+	for (size_t i = 0; i < lives.size(); ++i)
+	{
+		if (lives[i] < least)
+		{
+			least = lives[i];
+			found = i;
+		}
+	}
+	return found;
+}
+
 std::optional<TownDesireInfo> DesireServedBy(VillagerDisciple work)
 {
 	const auto index = static_cast<size_t>(work);
