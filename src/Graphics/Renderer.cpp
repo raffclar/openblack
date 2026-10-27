@@ -1406,7 +1406,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				bindings.diffuse = UINT16_MAX;
 				if (subMeshTexture != nullptr)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *subMeshTexture);
+					setSampler(MeshUniform::Diffuse, 0, *subMeshTexture);
 					bindings.diffuse = toBgfx(*subMeshTexture).idx;
 				}
 				else if (desc.skinTexture != nullptr && prim.skinID != 0xFFFFFFFF)
@@ -1432,7 +1432,7 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				}
 				else if (!desc.isSky && _whiteTexture)
 				{
-					program->SetTextureSampler("s_diffuse", 0, *_whiteTexture);
+					setSampler(MeshUniform::Diffuse, 0, *_whiteTexture);
 					bindings.diffuse = toBgfx(*_whiteTexture).idx;
 				}
 			}
@@ -1476,17 +1476,17 @@ void Renderer::DrawSubMesh(const graphics::L3DMesh& mesh, const graphics::L3DSub
 				const bool before = desc.heldMirror.has_value() && _before.texturesKept;
 				if (before)
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosityBefore());
-					program->SetTextureSampler("s_landColour", 8, *_before.colour);
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosityBefore());
+					setSampler(MeshUniform::LandColour, 8, *_before.colour);
 				}
 				else
 				{
-					program->SetTextureSampler("s_landLuminosity", 6, GetLandLuminosity());
-					program->SetTextureSampler("s_landColour", 8, GetLandColour());
+					setSampler(MeshUniform::LandLuminosity, 6, GetLandLuminosity());
+					setSampler(MeshUniform::LandColour, 8, GetLandColour());
 				}
-				program->SetTextureSampler(
-				    "s_landLight", 7,
-				    desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight : GetLandLightTexture());
+				setSampler(MeshUniform::LandLightTexture, 7,
+				           desc.heldMirror.has_value() && _before.landLight.has_value() ? *_before.landLight
+				                                                                        : GetLandLightTexture());
 				setUniform(MeshUniform::LandLight, &u_landLight);
 			}
 			if (has(MeshUniform::Haze))
