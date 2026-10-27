@@ -25,6 +25,7 @@
 
 #include "3D/MapCoords.h"
 #include "3D/ModelSurface.h"
+#include "Animals/AnimalRules.h"
 #include "Animals/GrazerRules.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -299,11 +300,11 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 	animal->landingPose = pose;
 	if (animal->Dead())
 	{
-		// Killed in the air it starts dying where it lands; one already dying lies dead
-		const bool wasDying = animal->state == AnimalState::Dying || animal->state == AnimalState::Dead;
+		// Killed in the air it starts dying where it lands; one that a kill made dying before lies dead
+		const bool wasDying = animal->dying;
 		world.SetDying(entity);
 		animal->landingPose = pose;
-		if (wasDying)
+		if (animals::LandsAs(false, wasDying) == animals::LandedAs::Dead)
 		{
 			animal->state = AnimalState::Dead;
 			animal->turnsInState = 0;
@@ -330,12 +331,10 @@ void StartFlying(World& world, entt::entity object)
 	}
 	if (auto* animal = registry.TryGet<Animal>(object))
 	{
-		// It flies, and stops what it did. A dying or dead animal keeps its state, so that it lies dead when it comes down
-		if (animal->state != AnimalState::Dying && animal->state != AnimalState::Dead)
-		{
-			animal->state = AnimalState::Flying;
-			animal->turnsInState = 0;
-		}
+		// It flies, and stops what it did, also when it dies or lies dead. Its mark of a kill stays, so that it lies
+		// dead when it comes down
+		animal->state = AnimalState::Flying;
+		animal->turnsInState = 0;
 		if (const auto clip = living::ClipsOf(animal->type).thrown)
 		{
 			animal->animation = *clip;

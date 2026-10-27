@@ -577,27 +577,35 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 	}
 }
 
-void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& grazer)
+void AnimalSystem::GrazerNeedsTurn(entt::entity entity, const Animal& animal, Grazer& grazer)
 {
 	auto& registry = EntityRegistry();
 	const auto& info = InfoOf(animal.type);
 	// Seeing to its needs, and growing a quarter of a year at a time while young
-	if (SeesToNeedsIn(animal.state))
+	if (!SeesToNeedsIn(animal.state))
 	{
-		const auto age = AgeOf(animal);
-		grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
-		// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
-		if (auto* herd = registry.TryGet<Flock>(animal.flock);
-		    herd != nullptr && herd->shepherd == entt::null && LeaderOf(animal.flock) == entity)
-		{
-			++herd->turnsOnLeg;
-		}
-		if (age < info.grownUpAge && GameTurn() % villager_age::k_GrowthTurns == 0)
-		{
-			auto& transform = registry.Get<Transform>(entity);
-			SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
-		}
+		return;
 	}
+	const auto age = AgeOf(animal);
+	grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
+	// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
+	if (auto* herd = registry.TryGet<Flock>(animal.flock);
+	    herd != nullptr && herd->shepherd == entt::null && LeaderOf(animal.flock) == entity)
+	{
+		++herd->turnsOnLeg;
+	}
+	if (age < info.grownUpAge && GameTurn() % villager_age::k_GrowthTurns == 0)
+	{
+		auto& transform = registry.Get<Transform>(entity);
+		SetScale(entity, grazers::GrownScale(transform.scale.x, age, info.ageToScale.values, Random));
+	}
+}
+
+void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& grazer)
+{
+	auto& registry = EntityRegistry();
+	const auto& info = InfoOf(animal.type);
+	GrazerNeedsTurn(entity, animal, grazer);
 	// Its reaction comes before its own ways
 	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
