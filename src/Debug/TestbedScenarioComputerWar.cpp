@@ -64,7 +64,10 @@ constexpr uint32_t k_RivalTown = 901;
 constexpr uint32_t k_Wait = 300;
 
 /// The view of both towns and the temple
-constexpr Framing k_BothTowns {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(230.0f, 100.0f)}};
+Framing BothTowns()
+{
+	return {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(230.0f, 100.0f)}};
+}
 
 /// A grown up creature of a player at a place
 CreatureSetup CreatureOf(std::string_view label, CreatureType species, PlayerNames owner, glm::vec2 offset)
@@ -111,7 +114,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	    .expected = "The hand moves to the fireball icon, and the worshippers chant for the miracle. When the charge is "
 	                "full, the god throws the fireball at the building or the field of the town of player one that it "
 	                "wants most. A building that stands complete, near the hand, comes first.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .landScript = k_WarScript,
 	    .worshipShare = 0.5f,
 	    .computerActions =
@@ -127,7 +130,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	    .expected = "The hand puts the evil leash on the tiger and ties the leash to the storage pit of the town of player "
 	                "one. The tiger walks to the town to attack it. The tiger knows no angry miracle, so the god counts "
 	                "one more time that it sent the creature without the lesson. The players.list query shows the count.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {60.0f, -20.0f})},
 	    .landScript = k_WarScript,
 	    .computerActions = {{.afterTurns = k_Wait,
@@ -144,7 +147,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "one and the rock, as a land script does.",
 	    .expected = "The hand moves to the rock and picks it up. Then the hand moves toward the town of player one and "
 	                "throws the rock at the middle of the town.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {60.0f, -40.0f}}},
 	    .landScript = k_WarScript,
 	    .objectsAfterLandScript = true,
@@ -160,7 +163,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "with the cow and the fireball icon, as a land script does.",
 	    .expected = "The hand moves near the cow, then to the fireball icon, and the worshippers chant for the miracle. "
 	                "The god throws the fireball at the cow. It does this two or three times, by a random number.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
 	    .landScript = k_WarScript,
 	    .worshipShare = 0.5f,
@@ -179,7 +182,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "script does.",
 	    .expected = "The hand puts the evil leash on the tiger and ties the leash to the cow. The tiger walks to the cow "
 	                "to attack it.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player two's", CreatureType::Tiger, PlayerNames::PLAYER_TWO, {40.0f, -40.0f}),
 	                  CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
 	    .landScript = k_WarScript,
@@ -197,7 +200,7 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "god the action ThrowrockatCreature, with the cow and the rock, as a land script does.",
 	    .expected = "The hand moves to the rock and picks it up. Then the hand moves toward the cow and throws the rock at "
 	                "it.",
-	    .framing = k_BothTowns,
+	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
 	    .objects = {{.type = MobileStaticInfo::Rock, .offset = {60.0f, -40.0f}}},
 	    .landScript = k_WarScript,
