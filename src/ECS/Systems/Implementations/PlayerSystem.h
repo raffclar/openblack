@@ -41,6 +41,7 @@ public:
 	void ForgetKept() override;
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
 
 private:
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them

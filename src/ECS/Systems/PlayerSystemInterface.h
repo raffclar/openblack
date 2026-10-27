@@ -15,6 +15,7 @@
 
 #include <entt/fwd.hpp>
 
+#include "ECS/PlayerKind.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -45,12 +46,14 @@ public:
 	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
-	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.
+	/// The first player: the player that the scripts and the turns take as the player of a game alone. It is the same on
+	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
+	/// computer instead (see HandSystemInterface::GetOwnPlayer).
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
-	/// Whether the computer plays a player: every player but the one at this machine
+	/// Whether the computer plays a player (see player_kind::IsComputer)
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames name) const
 	{
-		return name != GetLocalPlayer() && name != PlayerNames::NEUTRAL;
+		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
 	}
 };
 } // namespace openblack::ecs::systems

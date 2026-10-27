@@ -230,9 +230,9 @@ void Renderer::DrawCaveSeeds(const DrawSceneDesc& desc) const
 	}
 	// The seeds are the player's at this computer: theirs is the alignment that makes the flock's seed a bat. Each is
 	// drawn at its full size and colour, the land's light not on it.
-	const float alignment = Locator::alignmentSystem::has_value()
-	                            ? Locator::alignmentSystem::value().GetPlayerAlignment(PlayerNames::PLAYER_ONE)
-	                            : 0.0f;
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	const float alignment =
+	    Locator::alignmentSystem::has_value() ? Locator::alignmentSystem::value().GetPlayerAlignment(own) : 0.0f;
 	for (const auto& seed : Locator::temple::value().GetCaveSeeds())
 	{
 		DrawSeedModel(desc, {.seed = seed.seed,
