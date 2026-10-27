@@ -9,6 +9,7 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include <memory>
 #include <optional>
 #include <utility>
 #include <vector>
@@ -24,6 +25,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/Implementations/SpellIconSystem.h"
 #include "ECS/Systems/MagicSystemInterface.h"
+#include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/WorshipBattery.h"
 
@@ -85,6 +87,14 @@ public:
 		return player == heldBy ? held : std::nullopt;
 	}
 	void SetIconSeedPowerUp(entt::entity seed, int powerUp) override { poweredUp.emplace_back(seed, powerUp); }
+	entt::entity TakeIconSeed(entt::entity site, SpellSeedType seed, int /*powerUp*/, float chants) override
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto made = registry.Create();
+		registry.Assign<SpellSeed>(made, SpellSeed {.seedType = seed, .chantStore = chants});
+		taken.push_back(site);
+		return made;
+	}
 	[[nodiscard]] HandResult GetLastHandResult() const override { return {}; }
 	bool SendSpellEvent(entt::entity, const particles::SpellEventInfo&) override { return false; }
 	float ForcePayForSpell(entt::entity, float) override { return 0.0f; }
@@ -105,6 +115,8 @@ public:
 	/// The player whose hand holds the seed
 	PlayerNames heldBy {PlayerNames::PLAYER_ONE};
 	std::vector<std::pair<entt::entity, int>> poweredUp;
+	/// The sites that gave a seed to a hand, in order
+	std::vector<entt::entity> taken;
 };
 
 class SpellIconSystemTest: public ::testing::Test
@@ -284,4 +296,93 @@ TEST_F(SpellIconSystemTest, APlayerMadeAfterItsTownsMayCastWhatTheTownsOffer)
 	_system.PlayerMade(PlayerNames::PLAYER_TWO);
 	EXPECT_TRUE(player_miracles::IsMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Heal));
 	EXPECT_FALSE(player_miracles::IsMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Teleport));
+}
+
+/// A computer god starts the charge of an icon at a site of the player. The icon has this much prayer power stored, and
+/// the miracle costs 100.
+class GodChargeTest: public SpellIconSystemTest
+{
+protected:
+	void SetUp() override
+	{
+		SpellIconSystemTest::SetUp();
+		// The tables are large: made on the heap
+		_info = std::make_unique<InfoConstants>();
+		_info->spellSeed.at(static_cast<size_t>(SpellSeedType::Heal)).magicTypes.at(0) = MagicType::Heal;
+		_info->magicEffect.at(static_cast<size_t>(MagicType::Heal)).costToCreate = 100.0f;
+		Locator::infoConstants::emplace(*_info);
+	}
+	void TearDown() override
+	{
+		Locator::infoConstants::reset();
+		SpellIconSystemTest::TearDown();
+	}
+
+	/// An icon of the heal miracle that does not charge, at a site of the player, who may cast the miracle
+	entt::entity IdleIcon(PlayerNames player, float store)
+	{
+		auto& registry = Entities();
+		const auto playerEntity = registry.Create();
+		registry.Assign<Player>(playerEntity, player);
+		player_miracles::SetMagicTypeEnabled(registry.Get<Player>(playerEntity).miracles, MagicType::Heal, true);
+		const auto site = registry.Create();
+		registry.Assign<SiteIcons>(site);
+		registry.Assign<WorshipSite>(site, WorshipSite {.player = player});
+		const auto icon = Icon(site, SpellSeedType::Heal, entt::null);
+		auto& component = registry.Get<WorshipIcon>(icon);
+		component.charging = false;
+		component.charger = PlayerNames::NEUTRAL;
+		component.store = store;
+		return icon;
+	}
+
+	std::unique_ptr<InfoConstants> _info;
+};
+
+// With no hands in the game, only the first player is a human. A full icon gives the miracle to the empty hand of a
+// human god at the start of the charge, as a tap does.
+TEST_F(GodChargeTest, AFullIconGivesItsMiracleToTheEmptyHandOfAHumanGod)
+{
+	const auto icon = IdleIcon(PlayerNames::PLAYER_ONE, 100.0f);
+	ASSERT_TRUE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_ONE));
+	const auto& after = Entities().Get<const WorshipIcon>(icon);
+	EXPECT_TRUE(after.charging);
+	EXPECT_EQ(after.charger, PlayerNames::PLAYER_ONE);
+	ASSERT_EQ(_magic->taken.size(), 1u);
+	EXPECT_EQ(_magic->taken[0], after.site);
+	EXPECT_EQ(after.store, 0.0f);
+	EXPECT_EQ(after.seedsOut.size(), 1u);
+}
+
+// The hand of a computer god never takes the miracle: the icon keeps its full store for the cast of the god
+TEST_F(GodChargeTest, AFullIconKeepsItsMiracleForAComputerGod)
+{
+	const auto icon = IdleIcon(PlayerNames::PLAYER_TWO, 100.0f);
+	ASSERT_TRUE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_TWO));
+	const auto& after = Entities().Get<const WorshipIcon>(icon);
+	EXPECT_TRUE(after.charging);
+	EXPECT_TRUE(_magic->taken.empty());
+	EXPECT_EQ(after.store, 100.0f);
+	EXPECT_TRUE(after.seedsOut.empty());
+	EXPECT_EQ(_system.ChantNeeded(icon), 0.0f);
+}
+
+// An icon that is not full only starts to charge, also for a human god
+TEST_F(GodChargeTest, AnIconThatIsNotFullOnlyStartsToCharge)
+{
+	const auto icon = IdleIcon(PlayerNames::PLAYER_ONE, 40.0f);
+	ASSERT_TRUE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_ONE));
+	EXPECT_TRUE(_magic->taken.empty());
+	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 40.0f);
+	EXPECT_EQ(_system.ChantNeeded(icon), 60.0f);
+}
+
+// The cast of a god takes the cost of the miracle from the store of the icon, and never more than the store holds
+TEST_F(GodChargeTest, ACastTakesTheCostButNeverMoreThanTheStore)
+{
+	const auto icon = IdleIcon(PlayerNames::PLAYER_TWO, 150.0f);
+	_system.TakeCastCharge(icon);
+	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 50.0f);
+	_system.TakeCastCharge(icon);
+	EXPECT_EQ(Entities().Get<const WorshipIcon>(icon).store, 0.0f);
 }
