@@ -131,4 +131,46 @@ constexpr double k_LeastPlacePull = 0.01;
 /// influence, out to the reach of the hand past the border. A place that pulls less than a hundredth gives 0.
 [[nodiscard]] float OutsidePlacePull(float distanceToEdge, float reach);
 
+/// How much the god wants to take food from a fish farm: the full share of food, less the further the farm is from the
+/// hand, times the pull of the farm's place. A farm always gives its food, so its share is always 1.
+[[nodiscard]] float FishFarmWish(float distanceFromHand, float placePull);
+
+/// The food that a town wants more than it has, in whole food, below 0 when it has more than it wants
+[[nodiscard]] int32_t FoodShortfall(float wanted, uint32_t held);
+
+/// The god asks another town for this much of food or wood for each unit of the need of the town above
+constexpr float k_AskPerNeed = 1000.0f;
+/// The god asks another town only for more than this
+constexpr float k_LeastAsk = 50.0f;
+
+/// The food or the wood that the god asks another town for: the need of the node above times k_AskPerNeed
+[[nodiscard]] float OtherTownAsk(float need);
+
+/// Another town of the god with a storage pit, as the god sees it when the town above needs food or wood
+struct GivingTown
+{
+	/// The food or the wood in the storage pit of the town
+	uint32_t stock {0};
+	/// What the town itself wants of the food or the wood, before its people act on it
+	float rawDesire {0.0f};
+	/// The pull of the place of the storage pit
+	float pull {0.0f};
+};
+
+/// The town that the god takes the food or the wood from, and how much the god wants to take it
+struct GivingChoice
+{
+	size_t index {0};
+	float value {0.0f};
+};
+
+/// The town that the god takes food or wood from for the town above, from the need of the node above. A town gives only
+/// when its pit has more than the ask, and when its own desire times its pull is less than the need. The town with the
+/// least desire times pull wins, the first of equals. None when the ask is k_LeastAsk or less, or no town gives.
+[[nodiscard]] std::optional<GivingChoice> ChooseGivingTown(std::span<const GivingTown> towns, float need);
+
+/// The food or the wood that the hand takes from a container: what the step wants less what the pot in the hand holds,
+/// no more than the container has. The hand takes nothing when the result is 0 or less.
+[[nodiscard]] int32_t ContainerTake(int32_t wanted, std::optional<uint32_t> inPot, uint32_t inContainer);
+
 } // namespace openblack::computer_mind_rules

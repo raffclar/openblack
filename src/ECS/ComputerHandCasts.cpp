@@ -138,8 +138,7 @@ Result GestureEnd(HandAction& action, const World& world, const Step& step)
 
 void openblack::computer_hand::steps::AddCastSteps(StepTable& table)
 {
-	// CastSpellAtPos, CastSpellTowardPos, CastShieldAtPos, CloseDownCurrentSpell and WaitForSpellToWearOff are not made
-	// yet
+	// CastSpellAtPos, CastSpellTowardPos, CastShieldAtPos and WaitForSpellToWearOff are not made yet
 	AddStep(table, StepOwner::Casts, StepKind::MakeWorshippersChantForSpell,
 	        {.made = true, .start = ChantStart, .process = ChantProcess, .end = ChantEnd});
 	AddStep(table, StepOwner::Casts, StepKind::MakeWorshippersChantForSpellNoWait,
@@ -148,4 +147,6 @@ void openblack::computer_hand::steps::AddCastSteps(StepTable& table)
 	        {.made = true, .start = CastStart, .process = CastProcess, .end = CastEnd});
 	AddStep(table, StepOwner::Casts, StepKind::MakeGesture,
 	        {.made = true, .start = GestureStart, .process = GestureProcess, .end = GestureEnd});
+	// The step that ends the miracle of the hand does nothing. The hand goes to the next step at once.
+	AddStep(table, StepOwner::Casts, StepKind::CloseDownCurrentSpell, {.made = true});
 }

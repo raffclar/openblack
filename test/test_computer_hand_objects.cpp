@@ -143,3 +143,117 @@ TEST(ComputerHand, VillagerGoesToThePlaceWaitsAndIsDropped)
 	ASSERT_EQ(world.droppedAt.size(), 1u);
 	EXPECT_TRUE(world.held == entt::null);
 }
+
+namespace
+{
+constexpr auto k_Pile = static_cast<entt::entity>(9);
+
+/// An action of one step to take food or wood from the pile, with no move first
+HandAction FromPile(StepKind kind, int32_t wanted)
+{
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, kind, {Argument {.object = k_Pile}, Argument {.number = wanted}});
+	return action;
+}
+} // namespace
+
+TEST(ComputerHandObjects, HandMakesAPotOfFoodFromAContainer)
+{
+	FakeWorld world;
+	world.stock[k_Pile] = 3000;
+	auto action = FromPile(StepKind::CreateFoodFromContainer, 900);
+	for (int turn = 0; turn < 5 && Busy(action); ++turn)
+	{
+		ASSERT_TRUE(Process(action, world.view));
+	}
+	EXPECT_FALSE(Busy(action));
+	EXPECT_EQ(world.held, k_Pot);
+	EXPECT_EQ(world.potType, ResourceType::Food);
+	EXPECT_EQ(world.potAmount, 900u);
+	EXPECT_EQ(world.stock[k_Pile], 2100u);
+}
+
+TEST(ComputerHandObjects, HandFillsItsPotOfWoodUpToTheAmount)
+{
+	FakeWorld world;
+	world.stock[k_Pile] = 3000;
+	world.held = k_Pot;
+	world.potType = ResourceType::Wood;
+	world.potAmount = 100;
+	auto action = FromPile(StepKind::CreateWoodFromContainer, 900);
+	for (int turn = 0; turn < 5 && Busy(action); ++turn)
+	{
+		ASSERT_TRUE(Process(action, world.view));
+	}
+	EXPECT_EQ(world.potAmount, 900u);
+	ASSERT_EQ(world.taken.size(), 1u);
+	EXPECT_EQ(world.taken[0], 800u);
+}
+
+TEST(ComputerHandObjects, HandTakesNoMoreThanTheContainerHas)
+{
+	FakeWorld world;
+	world.stock[k_Pile] = 500;
+	auto action = FromPile(StepKind::CreateFoodFromContainer, 900);
+	for (int turn = 0; turn < 5 && Busy(action); ++turn)
+	{
+		ASSERT_TRUE(Process(action, world.view));
+	}
+	EXPECT_EQ(world.potAmount, 500u);
+	EXPECT_EQ(world.stock[k_Pile], 0u);
+}
+
+TEST(ComputerHandObjects, HandThatHoldsSomethingElseWaits)
+{
+	FakeWorld world;
+	world.stock[k_Pile] = 3000;
+	world.held = k_Store;
+	auto action = FromPile(StepKind::CreateFoodFromContainer, 900);
+	for (int turn = 0; turn < 10; ++turn)
+	{
+		ASSERT_TRUE(Process(action, world.view));
+	}
+	EXPECT_TRUE(Busy(action));
+	EXPECT_TRUE(world.taken.empty());
+	// A pot of the other resource is something else too
+	world.held = k_Pot;
+	world.potType = ResourceType::Wood;
+	ASSERT_TRUE(Process(action, world.view));
+	EXPECT_TRUE(Busy(action));
+	EXPECT_TRUE(world.taken.empty());
+}
+
+TEST(ComputerHandObjects, ActionEndsBadlyWithNoPot)
+{
+	// An empty container gives nothing, so the hand gets no pot
+	FakeWorld world;
+	auto empty = FromPile(StepKind::CreateFoodFromContainer, 900);
+	bool good = true;
+	for (int turn = 0; turn < 5 && Busy(empty); ++turn)
+	{
+		good = Process(empty, world.view) && good;
+	}
+	EXPECT_FALSE(good);
+	EXPECT_FALSE(Busy(empty));
+	// The hand keeps its pot and continues when it has all that the step wants
+	world.held = k_Pot;
+	world.potAmount = 900;
+	auto full = FromPile(StepKind::CreateFoodFromContainer, 900);
+	for (int turn = 0; turn < 5 && Busy(full); ++turn)
+	{
+		ASSERT_TRUE(Process(full, world.view));
+	}
+	EXPECT_TRUE(world.taken.empty());
+	// A pot that the world cannot make ends the action badly
+	FakeWorld noPot;
+	noPot.stock[k_Pile] = 3000;
+	noPot.makesPot = false;
+	auto failed = FromPile(StepKind::CreateFoodFromContainer, 900);
+	good = true;
+	for (int turn = 0; turn < 5 && Busy(failed); ++turn)
+	{
+		good = Process(failed, noPot.view) && good;
+	}
+	EXPECT_FALSE(good);
+}

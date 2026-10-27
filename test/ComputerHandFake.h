@@ -31,6 +31,7 @@ using namespace openblack::computer_hand;
 
 constexpr auto k_Icon = static_cast<entt::entity>(5);
 constexpr auto k_Store = static_cast<entt::entity>(6);
+constexpr auto k_Pot = static_cast<entt::entity>(70);
 
 /// A flat land with things at places that the test sets. It gives each part of the world of the steps.
 class FakeWorld final: public MovesWorld, public ObjectsWorld, public CastsWorld, public CreatureWorld, public TotemWorld
@@ -90,6 +91,35 @@ public:
 		held = entt::null;
 		droppedAt.push_back(hand);
 	}
+	[[nodiscard]] std::optional<uint32_t> HeldPotHolds(ResourceType type) const override
+	{
+		if (held != k_Pot || potType != type)
+		{
+			return std::nullopt;
+		}
+		return potAmount;
+	}
+	[[nodiscard]] uint32_t ResourceIn(entt::entity thing, ResourceType /*type*/) const override
+	{
+		const auto found = stock.find(thing);
+		return found == stock.end() ? 0u : found->second;
+	}
+	bool TakeFromContainer(entt::entity container, ResourceType type, uint32_t amount, glm::vec3 /*hand*/) override
+	{
+		stock[container] -= amount;
+		taken.push_back(amount);
+		if (held == k_Pot)
+		{
+			potAmount += amount;
+		}
+		else if (makesPot)
+		{
+			held = k_Pot;
+			potType = type;
+			potAmount = amount;
+		}
+		return held == k_Pot;
+	}
 
 	std::map<entt::entity, glm::vec2> places;
 	bool charging {false};
@@ -104,6 +134,11 @@ public:
 	int putDown {0};
 	std::vector<entt::entity> usedOn;
 	std::vector<glm::vec3> droppedAt;
+	std::map<entt::entity, uint32_t> stock;
+	std::vector<uint32_t> taken;
+	bool makesPot {true};
+	ResourceType potType {ResourceType::Food};
+	uint32_t potAmount {0};
 	/// The world of the steps, made of the parts of this fake
 	World view {.moves = *this, .objects = *this, .casts = *this, .creature = *this, .totem = *this};
 };

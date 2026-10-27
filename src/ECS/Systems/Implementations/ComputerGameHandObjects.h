@@ -40,8 +40,14 @@ public:
 	void PickUp(entt::entity thing, glm::vec3 hand) override;
 	void UseHeldOn(entt::entity target, glm::vec3 hand) override;
 	void DropHeld(glm::vec3 hand) override;
+	[[nodiscard]] std::optional<uint32_t> HeldPotHolds(ResourceType type) const override;
+	[[nodiscard]] uint32_t ResourceIn(entt::entity thing, ResourceType type) const override;
+	bool TakeFromContainer(entt::entity container, ResourceType type, uint32_t amount, glm::vec3 hand) override;
 
 private:
+	/// The god places a fish farm in its hand: the hand gets a pot of food
+	void PickUpFishFarm(entt::entity farm, glm::vec3 hand);
+
 	PlayerNames _player;
 	components::ComputerPlayer& _state;
 };
