@@ -143,3 +143,27 @@ TEST(ComputerHand, VillagerGoesToThePlaceWaitsAndIsDropped)
 	ASSERT_EQ(world.droppedAt.size(), 1u);
 	EXPECT_TRUE(world.held == entt::null);
 }
+
+TEST(ComputerHandObjects, HandThrowsWhatItHoldsSoThatItFallsAtThePlace)
+{
+	FakeWorld world;
+	world.held = k_Icon;
+	HandAction action;
+	action.moveFirst = false;
+	action.hand = {0.0f, 30.0f, 0.0f};
+	Add(action, StepKind::ThrowObjectInHandAtPos, {Argument {.place = {40.0f, 30.0f, 0.0f}}});
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_TRUE(Process(action, world.view));
+	}
+	EXPECT_FALSE(Busy(action));
+	ASSERT_EQ(world.thrownAt.size(), 1u);
+	EXPECT_TRUE(world.held == entt::null);
+	// The flight takes the square root of 40 times 0.1019 seconds: about 2.02 seconds, at about 19.8 metres a second
+	const auto velocity = world.thrownAt[0];
+	const float seconds = 40.0f / velocity.x;
+	EXPECT_NEAR(seconds, 2.019f, 0.001f);
+	// Gravity pulls the thing down for that time: it starts up at half the time of the flight times 9.81
+	EXPECT_NEAR(velocity.y, 9.81f * seconds * 0.5f, 0.001f);
+	EXPECT_FLOAT_EQ(velocity.z, 0.0f);
+}

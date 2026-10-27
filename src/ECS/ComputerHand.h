@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <bit>
 #include <optional>
 #include <vector>
 
@@ -154,6 +155,25 @@ constexpr float k_GestureTurns = 30.0f;
 /// The gesture whose length measures the time of the others: the circle
 constexpr uint32_t k_GestureCircle = 4;
 
+/// A hand that moves near a place or a thing stops when it is no further than this, in metres
+constexpr float k_NearDistance = 80.0f;
+/// A hand nearer than this to the place or thing first moves to the side, in metres: 0.33 times the near distance
+constexpr float k_NearMinimum = 26.400002f;
+static_assert(std::bit_cast<uint32_t>(k_NearMinimum) == 0x41D33334u);
+/// The most that a hand too near a place, or too near a thing, moves to the side each turn, in metres
+constexpr float k_NearPlaceSideStep = 1.4142f;
+constexpr float k_NearObjectSideStep = 1.41421f;
+static_assert(std::bit_cast<uint32_t>(k_NearPlaceSideStep) == 0x3FB50481u);
+static_assert(std::bit_cast<uint32_t>(k_NearObjectSideStep) == 0x3FB504D5u);
+/// The seconds that the hand waits for a thing to come near a place before the action ends badly
+constexpr float k_WaitForNearSeconds = 60.0f;
+/// The flight of a thing that the hand throws: the time in seconds is the square root of the distance times this
+constexpr float k_ThrowTimeScale = 0.101936795f;
+static_assert(std::bit_cast<uint32_t>(k_ThrowTimeScale) == 0x3DD0C43Du);
+/// The pull of gravity on a thrown thing, in metres a second for each second
+constexpr float k_ThrowGravity = -9.81f;
+static_assert(std::bit_cast<uint32_t>(k_ThrowGravity) == 0xC11CF5C3u);
+
 /// What the steps of the hand read and change in the game, in one part for each kind of step. Each part has its own
 /// header, so that the steps of each kind add their calls without a change to the other parts.
 struct World
@@ -174,6 +194,8 @@ void Clear(HandAction& action);
 /// The hand does a turn of its action. False when the action ended badly, which clears it.
 bool Process(HandAction& action, const World& world);
 
+/// The speed at which the hand throws a thing from where the hand is, so that the thing falls at the place
+[[nodiscard]] glm::vec3 ThrowVelocity(glm::vec3 hand, glm::vec3 place);
 /// The share of a gesture that the hand draws in one turn, from the length of the gesture and of the circle. The hand
 /// draws all of a gesture with no length in one turn.
 [[nodiscard]] float GestureSharePerTurn(float length, float circleLength);
