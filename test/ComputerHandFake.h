@@ -14,6 +14,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <utility>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -163,6 +164,29 @@ public:
 	}
 	void DrawForShortJourney() override { ++shortJourneyDraws; }
 	void SetRequiredSpeed(entt::entity creature, float speed) override { required[creature] = speed; }
+	[[nodiscard]] bool HasPlayer(entt::entity creature) const override { return !playerless.contains(creature); }
+	void SetLeashType(entt::entity creature, LeashType type) override { leashTypes.push_back({creature, type}); }
+	void TakeOffTiedLeash(entt::entity creature) override { takenOff.push_back(creature); }
+	bool TieLeash(entt::entity creature, entt::entity object) override
+	{
+		if (!places.contains(object))
+		{
+			return false;
+		}
+		tied.push_back({creature, object});
+		return true;
+	}
+	void Feedback(entt::entity creature, float feedback) override { feedbacks.push_back({creature, feedback}); }
+	[[nodiscard]] float DrawFeedbackSeconds() override
+	{
+		++feedbackDraws;
+		return feedbackDraw;
+	}
+	void LetGoForCast(MagicType type, const map_coords::MapCoords& hand) override
+	{
+		letGoTypes.push_back(type);
+		letGoHands.push_back(hand);
+	}
 
 	/// An order that the god gave to a creature, and a desire that it made dominant
 	struct Order
@@ -183,6 +207,15 @@ public:
 	std::vector<Dominant> dominant;
 	int shortJourneyDraws {0};
 	std::map<entt::entity, float> required;
+	std::set<entt::entity> playerless;
+	std::vector<std::pair<entt::entity, LeashType>> leashTypes;
+	std::vector<entt::entity> takenOff;
+	std::vector<std::pair<entt::entity, entt::entity>> tied;
+	std::vector<std::pair<entt::entity, float>> feedbacks;
+	int feedbackDraws {0};
+	float feedbackDraw {0.0f};
+	std::vector<MagicType> letGoTypes;
+	std::vector<map_coords::MapCoords> letGoHands;
 
 	std::map<entt::entity, glm::vec2> places;
 	std::vector<glm::vec3> castAt;

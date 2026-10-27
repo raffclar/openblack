@@ -10,6 +10,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -18,6 +19,7 @@
 #include "ComputerHandFake.h"
 #include "ECS/ComputerHand.h"
 #include "ECS/ComputerHandSteps.h"
+#include "Enums.h"
 
 using namespace openblack;
 using namespace openblack::computer_hand;
@@ -174,4 +176,117 @@ TEST(ComputerHandCreature, JourneySpeedRunsFarAndDrawsForNear)
 	EXPECT_EQ(world.shortJourneyDraws, 0);
 	EXPECT_FLOAT_EQ(journey({150.0f, 20.0f, 100.0f}), (0.6f + 0.3f) * 0.5f);
 	EXPECT_EQ(world.shortJourneyDraws, 1);
+}
+
+TEST(ComputerHandCreature, GodPicksTheTypeOfTheLeashOfACreatureWithAPlayer)
+{
+	FakeWorld world;
+	world.speeds[k_Creature] = {.walk = 0.3f, .run = 0.6f};
+	const auto setLeash = [&world](entt::entity creature) {
+		HandAction action;
+		action.moveFirst = false;
+		Add(action, StepKind::SetLeash,
+		    {Argument {.object = creature}, Argument {.number = static_cast<int32_t>(LeashType::Evil)}});
+		for (int turn = 0; turn < 3; ++turn)
+		{
+			EXPECT_TRUE(Process(action, world.view));
+		}
+		EXPECT_FALSE(Busy(action));
+	};
+	setLeash(k_Creature);
+	ASSERT_EQ(world.leashTypes.size(), 1u);
+	EXPECT_EQ(world.leashTypes[0].first, k_Creature);
+	EXPECT_EQ(world.leashTypes[0].second, LeashType::Evil);
+	// The step continues, but a creature that belongs to no player gets no leash
+	world.playerless.insert(k_Creature);
+	setLeash(k_Creature);
+	setLeash(k_Food);
+	EXPECT_EQ(world.leashTypes.size(), 1u);
+}
+
+TEST(ComputerHandCreature, GodTiesTheLeashAndFollowsTheThing)
+{
+	FakeWorld world;
+	world.speeds[k_Creature] = {.walk = 0.3f, .run = 0.6f};
+	world.places[k_Creature] = {100.0f, 100.0f};
+	world.places[k_Food] = {100.0f, 100.0f};
+	HandAction action;
+	action.moveFirst = false;
+	action.hand = {100.0f, 0.0f, 100.0f};
+	Add(action, StepKind::AttachLeashToObject, {Argument {.object = k_Creature}, Argument {.object = k_Food}});
+	// The start takes off a leash that is tied, and the next part ties the new leash
+	ASSERT_TRUE(Process(action, world.view));
+	ASSERT_EQ(world.takenOff.size(), 1u);
+	ASSERT_TRUE(Process(action, world.view));
+	ASSERT_EQ(world.tied.size(), 1u);
+	EXPECT_EQ(world.tied[0].second, k_Food);
+	EXPECT_EQ(action.counter, 20u);
+	// The hand follows the thing for 20 turns, and then stops when it is near the thing
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		ASSERT_TRUE(Process(action, world.view));
+		EXPECT_TRUE(Busy(action));
+	}
+	ASSERT_TRUE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+}
+
+TEST(ComputerHandCreature, TieEndsBadlyWithNoCreatureOrNoThing)
+{
+	FakeWorld world;
+	world.speeds[k_Creature] = {.walk = 0.3f, .run = 0.6f};
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::AttachLeashToObject, {Argument {.object = k_Creature}, Argument {.object = k_Food}});
+	ASSERT_TRUE(Process(action, world.view));
+	// The thing has no place, so the tie does not occur
+	EXPECT_FALSE(Process(action, world.view));
+	EXPECT_TRUE(world.tied.empty());
+
+	world.playerless.insert(k_Creature);
+	Add(action, StepKind::AttachLeashToObject, {Argument {.object = k_Creature}, Argument {.object = k_Food}});
+	EXPECT_FALSE(Process(action, world.view));
+	EXPECT_EQ(world.takenOff.size(), 1u);
+}
+
+TEST(ComputerHandCreature, SlapAndStrokeGiveFeedbackAndStayForATime)
+{
+	FakeWorld world;
+	world.speeds[k_Creature] = {.walk = 0.3f, .run = 0.6f};
+	world.places[k_Creature] = {100.0f, 100.0f};
+	world.feedbackDraw = 1.0f;
+	for (const auto [kind, feedback] : {std::pair {StepKind::SlapCreature, -1.0f}, std::pair {StepKind::StrokeCreature, 1.0f}})
+	{
+		world.feedbacks.clear();
+		HandAction action;
+		action.moveFirst = false;
+		action.hand = {100.0f, 0.0f, 100.0f};
+		Add(action, kind, {Argument {.object = k_Creature}});
+		ASSERT_TRUE(Process(action, world.view));
+		ASSERT_TRUE(Process(action, world.view));
+		ASSERT_EQ(world.feedbacks.size(), 1u);
+		EXPECT_EQ(world.feedbacks[0].second, feedback);
+		// (1 + 3) seconds of 10 turns
+		EXPECT_EQ(action.counter, 40u);
+		for (int turn = 0; turn < 39; ++turn)
+		{
+			ASSERT_TRUE(Process(action, world.view));
+			EXPECT_TRUE(Busy(action));
+		}
+		ASSERT_TRUE(Process(action, world.view));
+		EXPECT_FALSE(Busy(action));
+	}
+	EXPECT_EQ(world.feedbackDraws, 2);
+}
+
+TEST(ComputerHandCreature, SlapOfAThingThatIsNotACreatureStillDraws)
+{
+	FakeWorld world;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::SlapCreature, {Argument {.object = k_Food}});
+	ASSERT_TRUE(Process(action, world.view));
+	ASSERT_TRUE(Process(action, world.view));
+	EXPECT_TRUE(world.feedbacks.empty());
+	EXPECT_EQ(world.feedbackDraws, 1);
 }

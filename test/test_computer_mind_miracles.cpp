@@ -88,12 +88,13 @@ TEST(ComputerMindMiracles, OwnsTheNeedToCheckTheTownsForDamage)
 
 TEST(ComputerMindRules, KindOfMiracleSuitsItsAim)
 {
-	EXPECT_EQ(KindScore(SpellKind::Aggressive, CreatureDesires::Anger, 0.3f), 1.0f);
-	EXPECT_EQ(KindScore(SpellKind::Aggressive, CreatureDesires::Compassion, 0.3f), 0.0f);
-	EXPECT_EQ(KindScore(SpellKind::Compassionate, CreatureDesires::Compassion, 0.3f), 1.0f);
-	EXPECT_EQ(KindScore(SpellKind::Compassionate, CreatureDesires::Anger, 0.3f), 0.0f);
+	EXPECT_EQ(KindScore(SpellKind::Aggressive, CreatureDesires::Anger, 0.3f, 0.7f), 1.0f);
+	EXPECT_EQ(KindScore(SpellKind::Aggressive, CreatureDesires::Compassion, 0.3f, 0.7f), 0.0f);
+	EXPECT_EQ(KindScore(SpellKind::Compassionate, CreatureDesires::Compassion, 0.3f, 0.7f), 1.0f);
+	EXPECT_EQ(KindScore(SpellKind::Compassionate, CreatureDesires::Anger, 0.3f, 0.7f), 0.0f);
 	// An impressive miracle suits its aim as much as its balance says
-	EXPECT_EQ(KindScore(SpellKind::Impressive, CreatureDesires::Anger, 0.3f), 0.3f);
+	EXPECT_EQ(KindScore(SpellKind::Impressive, CreatureDesires::Anger, 0.3f, 0.7f), 0.3f);
+	EXPECT_EQ(KindScore(SpellKind::Attack, CreatureDesires::Compassion, 0.3f, 0.7f), 0.7f);
 	EXPECT_EQ(KindWish(0.5f, 0.3f), 0.5f * 0.3f);
 }
 

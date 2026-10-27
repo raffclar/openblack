@@ -591,8 +591,8 @@ float computer_world::BestSpellOfKind(RuleContext& context, SpellKind kind, cons
 	{
 		const auto type = static_cast<MagicType>(number);
 		const auto& effect = magic::GetMagicEffectInfo(info, type);
-		const float score =
-		    computer_mind_rules::KindScore(kind, effect.perceivedPlayerDesire.at(0), effect.cpImpressiveBalance);
+		const float score = computer_mind_rules::KindScore(kind, effect.perceivedPlayerDesire.at(0), effect.cpImpressiveBalance,
+		                                                   effect.aggressiveAttackValue);
 		if (score == 0.0f)
 		{
 			continue;

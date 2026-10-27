@@ -16,6 +16,7 @@
 
 #include "3D/CreatureBody.h"
 #include "ComputerMindCommon.h"
+#include "ComputerMindCreature.h"
 #include "ComputerMindRuleTable.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureExplorationMap.h"
@@ -63,22 +64,6 @@ constexpr uint32_t k_SleepAtHomeAction = 17;
 constexpr uint32_t k_DrinkFromTheSeaAction = 55;
 constexpr uint32_t k_GoHomeAction = 162;
 
-/// The creature of the god, none when it has none or a script controls it
-entt::entity CreatureOf(PlayerNames player)
-{
-	if (!Locator::playerSystem::has_value())
-	{
-		return entt::null;
-	}
-	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player);
-	auto& registry = Entities();
-	if (!creature.has_value() || !registry.Valid(*creature) || registry.AllOf<ScriptControlled>(*creature))
-	{
-		return entt::null;
-	}
-	return *creature;
-}
-
 /// The body of the creature plays an action, walks, turns or catches
 bool BodyBusy(entt::entity creature)
 {
@@ -103,35 +88,6 @@ float DesireOf(entt::entity creature, Desire desire)
 {
 	const auto* mind = Entities().TryGet<const CreatureMindState>(creature);
 	return mind != nullptr && mind->desires.has_value() ? (*mind->desires)[desire].value : 0.0f;
-}
-
-/// The desire of the plan that the creature made last, if any
-std::optional<Desire> PlanDesireOf(entt::entity creature)
-{
-	const auto* mind = Entities().TryGet<const CreatureMindState>(creature);
-	if (mind == nullptr || !mind->planner.current.has_value())
-	{
-		return std::nullopt;
-	}
-	return mind->planner.current->desire;
-}
-
-/// How free the creature is for the god. On the god's leash, the creature is not free for a time after the leash is tied.
-float FreedomOf(PlayerNames player, entt::entity creature)
-{
-	const auto* leash = Entities().TryGet<const CreatureLeash>(creature);
-	const bool leashed = leash != nullptr && leash->worn.has_value() && leash->worn->holder == player;
-	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	const auto needs = NeedsOf(creature);
-	return computer_mind_rules::CreatureFreedom({
-	    .leashed = leashed,
-	    .turnsSinceTied = leashed ? turn - leash->worn->tiedTurn : 0,
-	    .fighting = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature),
-	    .life = needs.life,
-	    .exhaustion = needs.exhaustion,
-	    .energy = needs.energy,
-	    .restoringHealth = PlanDesireOf(creature) == Desire::RestoreHealth,
-	});
 }
 
 /// The god wants to interact with its creature as much as the creature is free, but not while its body is busy
@@ -268,37 +224,6 @@ float CastHeal(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	}
 	mind.nodes[node].object = icon;
 	return computer_mind_rules::SpellValue(charge, turns, 1.0f);
-}
-
-/// The object of the node, or of the first node above it that has one
-entt::entity ObjectOf(const computer_mind::Mind& mind, uint16_t node)
-{
-	for (std::optional<uint16_t> at = node; at.has_value(); at = mind.nodes[*at].parent)
-	{
-		if (mind.nodes[*at].object != entt::null)
-		{
-			return mind.nodes[*at].object;
-		}
-	}
-	return entt::null;
-}
-
-/// The object of the first node above the node that has one
-entt::entity ObjectAboveOf(const computer_mind::Mind& mind, uint16_t node)
-{
-	const auto parent = mind.nodes[node].parent;
-	return parent.has_value() ? ObjectOf(mind, *parent) : entt::null;
-}
-
-/// The object of the leaf that the node chose, or of the first node above that leaf that has one
-entt::entity LeafObjectOf(const computer_mind::Mind& mind, uint16_t node)
-{
-	auto leaf = node;
-	while (mind.nodes[leaf].bestLeaf.has_value() && *mind.nodes[leaf].bestLeaf != leaf)
-	{
-		leaf = *mind.nodes[leaf].bestLeaf;
-	}
-	return ObjectOf(mind, leaf);
 }
 
 /// A thing that is still in the world and has a place
@@ -450,6 +375,82 @@ bool NoCure(RuleContext& /*context*/, computer_mind::Mind& /*mind*/, uint16_t /*
 }
 
 } // namespace
+
+entt::entity computer_world::CreatureOf(PlayerNames player)
+{
+	if (!Locator::playerSystem::has_value())
+	{
+		return entt::null;
+	}
+	const auto creature = Locator::playerSystem::value().GetPrimaryCreature(player);
+	auto& registry = Entities();
+	if (!creature.has_value() || !registry.Valid(*creature) || registry.AllOf<ScriptControlled>(*creature))
+	{
+		return entt::null;
+	}
+	return *creature;
+}
+
+std::optional<Desire> computer_world::PlanDesireOf(entt::entity creature)
+{
+	const auto* mind = Entities().TryGet<const CreatureMindState>(creature);
+	if (mind == nullptr || !mind->planner.current.has_value())
+	{
+		return std::nullopt;
+	}
+	return mind->planner.current->desire;
+}
+
+bool computer_world::LeashedBy(PlayerNames player, entt::entity creature)
+{
+	const auto* leash = Entities().TryGet<const CreatureLeash>(creature);
+	return leash != nullptr && leash->worn.has_value() && leash->worn->holder == player;
+}
+
+float computer_world::FreedomOf(PlayerNames player, entt::entity creature)
+{
+	const auto* leash = Entities().TryGet<const CreatureLeash>(creature);
+	const bool leashed = leash != nullptr && leash->worn.has_value() && leash->worn->holder == player;
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	const auto needs = NeedsOf(creature);
+	return computer_mind_rules::CreatureFreedom({
+	    .leashed = leashed,
+	    .turnsSinceTied = leashed ? turn - leash->lastTiedTurn : 0,
+	    .fighting = Locator::creatureFightSystem::has_value() && Locator::creatureFightSystem::value().IsFighting(creature),
+	    .life = needs.life,
+	    .exhaustion = needs.exhaustion,
+	    .energy = needs.energy,
+	    .restoringHealth = PlanDesireOf(creature) == Desire::RestoreHealth,
+	});
+}
+
+entt::entity computer_world::ObjectOf(const computer_mind::Mind& mind, uint16_t node)
+{
+	for (std::optional<uint16_t> at = node; at.has_value(); at = mind.nodes[*at].parent)
+	{
+		if (mind.nodes[*at].object != entt::null)
+		{
+			return mind.nodes[*at].object;
+		}
+	}
+	return entt::null;
+}
+
+entt::entity computer_world::ObjectAboveOf(const computer_mind::Mind& mind, uint16_t node)
+{
+	const auto parent = mind.nodes[node].parent;
+	return parent.has_value() ? ObjectOf(mind, *parent) : entt::null;
+}
+
+entt::entity computer_world::LeafObjectOf(const computer_mind::Mind& mind, uint16_t node)
+{
+	auto leaf = node;
+	while (mind.nodes[leaf].bestLeaf.has_value() && *mind.nodes[leaf].bestLeaf != leaf)
+	{
+		leaf = *mind.nodes[leaf].bestLeaf;
+	}
+	return ObjectOf(mind, leaf);
+}
 
 void computer_world::RegisterCreatureCareRules(RuleTable& table)
 {
