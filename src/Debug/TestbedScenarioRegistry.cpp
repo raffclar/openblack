@@ -3973,6 +3973,26 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "temple.scroll_control_words",
+	    .name = "The library's did you know scroll with control words",
+	    .facet = Facet::Story,
+	    .description = "The player reads three did you know tips on signs, one of them ending in the words of a control. "
+	                   "Then the player goes through the temple's main room into the library. After four seconds the "
+	                   "camera looks at the did you know scroll.",
+	    .expected = "The last tip ends \"field. (RMB )\" on its own line, whole, as the game breaks it. Its words are "
+	                "the brackets, the name of the mouse input and a space inside them. The line is not cut at the "
+	                "right. The temple's hand at the middle of the screen hides the end of the line. Move the pointer away "
+	                "and the whole line shows.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {{.kind = Kind::ReadTip, .delaySeconds = 0.5f, .value = 4131, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4138, .amount = 4.0f},
+	                 {.kind = Kind::ReadTip, .delaySeconds = 0.2f, .value = 4153, .amount = 4.0f},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::EnterTemple, .delaySeconds = 0.5f, .value = 2},
+	                 {.kind = Kind::LookAtTempleScroll, .delaySeconds = 4.0f, .value = 5}},
+	});
+
+	all.push_back({
 	    .id = "temple.library_history",
 	    .name = "The temple's library with tips read and a story history",
 	    .facet = Facet::Story,
