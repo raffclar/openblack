@@ -268,6 +268,9 @@ struct CreatureSetup
 	bool hold {false};
 	/// The mind leaves the body alone, to be posed by the commands
 	bool pauseMind {false};
+	/// A paused mind starts to think this many seconds after the scenario starts, so that the creature stays where it is
+	/// until then
+	std::optional<float> thinksAfterSeconds;
 	std::vector<creature_tattoo::Slot> tattoos;
 	/// Wounds and burns, and drops of blood, on its skin
 	std::vector<creature_marks::Mark> wounds;
