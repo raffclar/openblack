@@ -1823,3 +1823,49 @@ openblack_setup_and_add_test(test_start_alignment test_start_alignment.cpp)
 openblack_setup_and_add_test(test_computer_mind test_computer_mind.cpp)
 openblack_setup_and_add_test(test_computer_hand test_computer_hand.cpp)
 openblack_setup_and_add_test(test_influence_citadel_reach test_influence_citadel_reach.cpp)
+openblack_setup_and_add_test(
+  test_computer_hand_moves test_computer_hand_moves.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_objects test_computer_hand_objects.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_casts test_computer_hand_casts.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_creature test_computer_hand_creature.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_hand_totem test_computer_hand_totem.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_core test_computer_mind_core.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_towns test_computer_mind_towns.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_worship test_computer_mind_worship.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_miracles test_computer_mind_miracles.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_creature_care test_computer_mind_creature_care.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_creature_play test_computer_mind_creature_play.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_conquest test_computer_mind_conquest.cpp
+)
+openblack_setup_and_add_test(test_computer_mind_war test_computer_mind_war.cpp)
+openblack_setup_and_add_test(
+  test_computer_mind_defence test_computer_mind_defence.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_mind_attitudes test_computer_mind_attitudes.cpp
+)
+openblack_setup_and_add_test(
+  test_computer_player_state test_computer_player_state.cpp
+)
