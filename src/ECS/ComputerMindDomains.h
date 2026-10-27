@@ -76,9 +76,9 @@ constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domain
     MindDomain::Attitudes,    // NeedPlayerWithBetterCreature
     MindDomain::Attitudes,    // NeedPlayerWithMoreWorshippers
     MindDomain::Core,         // NeedReactToPlayer
-    MindDomain::Core,         // NeedCheckTownsForBeliefAttack
+    MindDomain::Defence,      // NeedCheckTownsForBeliefAttack
     MindDomain::Miracles,     // NeedCheckTownForDamage
-    MindDomain::Core,         // NeedCheckTownForProtection
+    MindDomain::Defence,      // NeedCheckTownForProtection
     MindDomain::War,          // ActionThrowThingAtPlayer
     MindDomain::Attitudes,    // ActionSendNiceTextToPlayer
     MindDomain::Attitudes,    // ActionSendNastyTextToPlayer

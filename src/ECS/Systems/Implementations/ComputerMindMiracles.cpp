@@ -23,6 +23,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ComputerMindCommon.h"
+#include "ComputerMindDefence.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Creature.h"
@@ -552,6 +553,11 @@ float KeepIcon(computer_mind::Mind& mind, uint16_t node, float value, entt::enti
 
 } // namespace
 
+bool computer_world::CastShieldOverTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return CastShieldToProtect(context, mind, node);
+}
+
 float computer_world::SpellWish(RuleContext& context, MagicType type, const std::optional<map_coords::MapCoords>& place,
                                 entt::entity& icon)
 {
@@ -799,8 +805,8 @@ void computer_world::RegisterMiraclesRules(RuleTable& table)
 	AddRule(table, k_Miracles, NodeKind::ActionFindBurningAbode, {.intensity = FindBurningAbode, .perform = CarryNear});
 	AddRule(table, k_Miracles, NodeKind::ObjectCastWaterSpell, {.intensity = CastWaterSpell, .perform = CastOnThing});
 	AddRule(table, k_Miracles, NodeKind::ActionFindUnprotectedAbode, {.intensity = FindUnprotectedAbode});
-	// The god does not keep the attacks on its towns yet, so it does not find how much it wants a shield over a town
-	AddRule(table, k_Miracles, NodeKind::ObjectCastShieldToProtect, {.perform = CastShieldToProtect});
+	AddRule(table, k_Miracles, NodeKind::ObjectCastShieldToProtect,
+	        {.intensity = ShieldForTown, .perform = CastShieldToProtect});
 	AddRule(table, k_Miracles, NodeKind::ObjectCastPhysicalShieldToProtect,
 	        {.intensity = CastPhysicalShieldToProtect, .perform = PerformPhysicalShield});
 }

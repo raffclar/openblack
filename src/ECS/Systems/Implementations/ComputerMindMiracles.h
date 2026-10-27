@@ -57,6 +57,10 @@ void CastAtThing(RuleContext& context, entt::entity target, entt::entity icon, f
 /// The steps that cast the miracle of the icon at the place, from the side of the hand at the radius
 void CastAtPlace(RuleContext& context, const map_coords::MapCoords& place, entt::entity icon, float radius);
 
+/// The god casts the shield of the node's icon over the town above, as wide as the town. False when the god has a shield
+/// of that type over the town already.
+bool CastShieldOverTown(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
+
 /// The hand carries the thing of the node's chosen leaf near to the thing above the node, and puts it down there
 bool CarryNear(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
 
