@@ -1692,6 +1692,8 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 	}
 	case ComputerActionThing::Kind::Object:
 		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Creature:
+		return thing.object < _creatures.size() ? _creatures[thing.object] : entt::null;
 	}
 	return entt::null;
 }
