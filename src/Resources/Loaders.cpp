@@ -611,6 +611,10 @@ CreatureRigLoader::result_type CreatureRigLoader::operator()(FromBufferTag, cons
 	for (const auto& set : file.GetAnimationSpecs().animationSets)
 	{
 		animationCount += set.animations.size();
+		for (const auto& line : set.animations)
+		{
+			rig->specLines.push_back({.name = line.name, .type = static_cast<char>(line.type), .set = set.name});
+		}
 	}
 	for (size_t mesh = 0; mesh < CreatureRig::k_AnimatedMeshCount; ++mesh)
 	{

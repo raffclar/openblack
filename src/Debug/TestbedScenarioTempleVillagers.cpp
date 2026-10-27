@@ -50,6 +50,9 @@ constexpr size_t k_DeadTree = 11;
 constexpr glm::vec2 k_Watcher {10.0f, 15.0f};
 /// Where the altar of the town's worship site stands
 constexpr glm::vec2 k_Altar {0.0f, -1.0f};
+/// Where a man of the town stands near the worship site: 10 m from the middle of the site, inside its reach. He stands
+/// between the parts of the site, so the hand puts him down on the land.
+constexpr glm::vec2 k_NearSite {0.0f, 9.0f};
 /// The Action button is the mouse's right button
 constexpr size_t k_ActionButton = 3;
 
@@ -162,6 +165,30 @@ void openblack::testbed_scenarios::AddTempleVillagerScenarios(std::vector<Scenar
 	    .commands = {{.kind = Command::Kind::HandPour, .delaySeconds = 3.0f, .point = k_SiteEdge, .value = k_Handful},
 	                 {.kind = Command::Kind::HandPour, .delaySeconds = 4.0f, .point = k_BeyondTheSite, .value = k_Handful}},
 	    .townBeliefInPlayer = k_TownBelief,
+	});
+	// The hand takes a villager of the town near the worship site and puts it down there
+	auto nearSite = Town();
+	nearSite.push_back({.type = VillagerInfo::CelticFarmerMale, .offset = k_NearSite, .joinTown = true});
+	all.push_back({
+	    .id = "worship.villager_put_down_at_site",
+	    .name = "A villager put down at its worship site",
+	    .facet = Facet::Hand,
+	    .description = "The same town and temple, the town's worship site built, with no share of the town sent to worship. "
+	                   "A man of the town stands 10 m from the middle of the site, between the site and the town. The hand "
+	                   "takes him and puts him down again at the same place.",
+	    .expected = "When the man is on the land, he walks to the gate of the site and starts to dance there. He stays at "
+	                "the site as a worshipper. As in the original game, the site measures his distance from its own middle, "
+	                "not from the temple.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2 {0.5f, 0.5f}},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 24.0f, 26.0f}, .look = {1.0f, 0.0f, 5.0f}},
+	    .objects = nearSite,
+	    .temples = {{.offset = k_Temple}},
+	    .commands = {{.kind = Command::Kind::BuildWorshipSites, .delaySeconds = 0.5f},
+	                 {.kind = Command::Kind::PointerOnObject, .delaySeconds = 1.0f, .object = nearSite.size() - 1},
+	                 {.kind = Command::Kind::HandTake, .delaySeconds = 0.5f, .object = nearSite.size() - 1},
+	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 2.0f}},
+	    .townBeliefInPlayer = k_TownBelief,
+	    .worshipShare = 0.0f,
 	});
 	all.push_back({
 	    .id = "objects.creature_sacrifice",

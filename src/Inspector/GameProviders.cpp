@@ -32,6 +32,7 @@
 #include <glm/matrix.hpp>
 #include <glm/trigonometric.hpp>
 
+#include "3D/CreatureBody.h"
 #include "3D/DayNightClock.h"
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
@@ -52,6 +53,7 @@
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureRig.h"
 #include "Creature/LeashRules.h"
 #include "Debug/DebugGuiInterface.h"
 #include "Debug/TempleVillagersSurvey.h"
@@ -128,6 +130,7 @@
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CloudSystemInterface.h"
 #include "ECS/Systems/ComputerSettingsSystemInterface.h"
+#include "ECS/Systems/CreatureAnimationLogSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -348,6 +351,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"leashSystem", "creatures.status"},
     LocatorCoverage {"creatureFightSystem", "creatures.status"},
     LocatorCoverage {"fightTranscript", "fights.transcripts"},
+    LocatorCoverage {"creatureAnimationLog", "creature.animation"},
     LocatorCoverage {"creatureModeSystem", "creatures.systems"},
     LocatorCoverage {"creatureCaveSystem", "creatures.systems"},
     LocatorCoverage {"cinematicDirectorSystem", "view.cinematic"},
@@ -4177,6 +4181,35 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 		               ? Locator::creatureMindSystem::value().FindClearAreaFor(creature, point, width, livingBlocks)
 		               : std::nullopt;
 	    },
+	    .animationLog = [](entt::entity creature) -> const creature_animation_log::Log* {
+		    return Locator::creatureAnimationLog::has_value() ? Locator::creatureAnimationLog::value().Find(creature) : nullptr;
+	    },
+	    .clipLine = [](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		    const auto* body = Locator::entitiesRegistry::value().TryGet<const Creature>(creature);
+		    if (body == nullptr || !Locator::resources::has_value())
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& rigs = Locator::resources::value().GetCreatureRigs();
+		    const auto rigId = creature::GetRigId(body->species);
+		    if (!rigs.Contains(rigId))
+		    {
+			    return std::nullopt;
+		    }
+		    const auto& lines = rigs.Handle(rigId)->specLines;
+		    if (clip >= lines.size())
+		    {
+			    return std::nullopt;
+		    }
+		    return ClipLine {.name = lines[clip].name, .type = lines[clip].type, .set = lines[clip].set};
+	    },
+	    .clearAnimationLogs =
+	        [] {
+		        if (Locator::creatureAnimationLog::has_value())
+		        {
+			        Locator::creatureAnimationLog::value().Clear();
+		        }
+	        },
 	}));
 	inspector.Add(MakeMapProvider({
 	    .world = World(),

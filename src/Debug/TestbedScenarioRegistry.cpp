@@ -3026,6 +3026,46 @@ void AddMovement(std::vector<Scenario>& all)
 	                 {.kind = Kind::HoldRouteSearch, .creature = 0, .delaySeconds = 14.0f, .value = 0}},
 	});
 
+	// Two pockets of tall conifers side by side, each open behind its tiger: the two searches for the routes run at the
+	// same time and share the search steps of each turn
+	std::vector<ObjectSetup> twoPockets;
+	for (const float side : {-130.0f, 130.0f})
+	{
+		for (const auto& tree : pocket)
+		{
+			auto moved = tree;
+			moved.offset.x = (tree.offset.x * 0.5f) + side;
+			twoPockets.push_back(moved);
+		}
+	}
+	all.push_back({
+	    .id = "movement.route_search_share",
+	    .name = "Two creatures share the route search",
+	    .facet = Facet::Movement,
+	    .description = "Two small tigers stand in two pockets of tall conifers that are open behind them. Both are told "
+	                   "to walk to a point beyond the far end of their pockets at the same time.",
+	    .expected = "The two searches share the search steps of each turn, and both tigers find their routes after the "
+	                "same number of turns. Both tigers start to walk in the same turn. Each tiger walks out of the open end "
+	                "of its pocket and round to its point.",
+	    .framing = {.shot = Shot::Overview, .include = {{-180.0f, 120.0f}, {180.0f, -60.0f}}},
+	    .creatures = {CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {-130.0f, 0.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .size = 0.6f,
+	                                 .needs = Content(),
+	                                 .hold = true,
+	                                 .pauseMind = true},
+	                  CreatureSetup {.species = CreatureType::Tiger,
+	                                 .offset = {130.0f, 0.0f},
+	                                 .facingDegrees = 90.0f,
+	                                 .size = 0.6f,
+	                                 .needs = Content(),
+	                                 .hold = true,
+	                                 .pauseMind = true}},
+	    .objects = twoPockets,
+	    .commands = {Go(Kind::WalkTo, 0, {-130.0f, 100.0f}, 1.0f, false), Go(Kind::WalkTo, 1, {130.0f, 100.0f}, 0.0f, false)},
+	});
+
 	all.push_back({
 	    .id = "movement.walk_step_off",
 	    .name = "Step off into the walk",
@@ -4600,6 +4640,22 @@ void AddObjects(std::vector<Scenario>& all)
 	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
 	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
 	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"}},
+	});
+
+	all.push_back({
+	    .id = "objects.stomp_lost_villager",
+	    .name = "Stomping on a villager that the hand takes away",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager in front of it. A script tells it to stomp on the villager. As "
+	                   "the foot starts to come down, the player's hand takes the villager.",
+	    .expected = "The foot stops and goes back up along the same path, to where the stomp started. Then the tiger "
+	                "stands, and the stomp fails. The villager stays alive in the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"},
+	                 {.kind = Kind::HandTake, .delaySeconds = 3.7f, .object = 0}},
 	});
 
 	all.push_back({
@@ -6606,6 +6662,26 @@ void AddLeash(std::vector<Scenario>& all)
 	};
 	all.push_back(templeGlows("leash.temple_glows", "The glows round the temple's leashes by day", 12.0f));
 	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
+
+	all.push_back({
+	    .id = "leash.l_key_picks_post",
+	    .name = "The leash key picks the leash at the temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your temple stands in front of the camera. The compassion "
+	                   "leash is tapped at its post, then tapped again, so no leash is picked. Then the leash key puts "
+	                   "the compassion leash on. Last, the leash key takes it off.",
+	    .expected = "After the second tap, no glow is orange and the hand carries no leash. When the leash key puts the "
+	                "leash on, the compassion leash (the rainbow fur) goes round the hand's wrist again and its glow "
+	                "turns orange. When the leash comes off, the leash stays in the hand and its glow stays orange.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 2.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
+	});
 
 	all.push_back({
 	    .id = "leash.pull_to_hand",
