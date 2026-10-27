@@ -163,6 +163,7 @@
 #include "ECS/Systems/CameraBookmarkSystemInterface.h"
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
@@ -2119,6 +2120,13 @@ std::string Runner::GivePlayerCommand(const Command& command)
 		                              .focus = ground});
 		return held;
 	}
+	case Kind::ComputerPersonality:
+		if (!Locator::computerPlayerSystem::has_value())
+		{
+			return "no computer players";
+		}
+		Locator::computerPlayerSystem::value().SetPersonality(command.player, command.action, command.amount);
+		return fmt::format("{} weighs {}", command.action, command.amount);
 	case Kind::BringCreature:
 	{
 		if (!Locator::filesystem::has_value())
@@ -2857,7 +2865,7 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
 	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
 	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::BringCreature)
+	    command.kind == Kind::BringCreature || command.kind == Kind::ComputerPersonality)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3637,6 +3645,7 @@ void Runner::Give(const Command& command)
 	case Kind::OtherGodHand:
 	case Kind::JoinOnline:
 	case Kind::BringCreature:
+	case Kind::ComputerPersonality:
 	case Kind::HandGripTotem:
 	case Kind::SetAlignment:
 	case Kind::Advisor:

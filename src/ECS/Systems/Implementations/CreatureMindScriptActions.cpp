@@ -44,6 +44,38 @@ constexpr std::string_view k_FightAction = "Fight";
 constexpr std::string_view k_DeadForeverAction = "DeadForever";
 } // namespace
 
+bool CreatureMindSystem::ObeyGodOrder(entt::entity creature, uint32_t action, entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.Valid(creature) ? registry.TryGet<CreatureMindState>(creature) : nullptr;
+	const auto* tables = GetTables();
+	if (mind == nullptr || tables == nullptr || action >= tables->actions.size())
+	{
+		return false;
+	}
+	const bool known = registry.Valid(object);
+	if (known)
+	{
+		ComeAcrossWithWhole(creature, *mind, object);
+	}
+	EndDominantDesire(creature);
+	const bool planned = ForceActivity(creature, {.desire = Desire::ObeyPlayer,
+	                                              .activityObject = known ? BelongsTo(object) : std::nullopt,
+	                                              .action = tables->actions[action].name,
+	                                              .actionObject = known ? object : entt::null,
+	                                              .ordered = true});
+	// The order is forced and counts at its end, also when the creature could not make a plan for it. A mind that has
+	// not thought yet takes no order.
+	auto& state = registry.Get<CreatureMindState>(creature);
+	if (!planned && (!state.learnt.has_value() || !state.desires.has_value()))
+	{
+		return true;
+	}
+	state.planForced = true;
+	state.forcedPlanCounts = true;
+	return true;
+}
+
 bool CreatureMindSystem::ScriptDoAction(entt::entity creature, uint32_t action, entt::entity target,
                                         std::optional<entt::entity> with)
 {
