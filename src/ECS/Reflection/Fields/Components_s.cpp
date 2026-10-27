@@ -72,7 +72,12 @@ void openblack::ecs::reflection::RegisterFields_Components_s(entt::meta_ctx& con
 	    .Field<&components::Scaffold::gentle>("gentle")
 	    .Field<&components::Scaffold::handPlayer>("handPlayer")
 	    .Field<&components::Scaffold::phantom>("phantom")
-	    .Field<&components::Scaffold::site>("site");
+	    .Field<&components::Scaffold::site>("site")
+	    .Field<&components::Scaffold::ghost>("ghost");
+	Reflect<components::ScaffoldGhost>(context)
+	    .Field<&components::ScaffoldGhost::scaffold>("scaffold")
+	    .Field<&components::ScaffoldGhost::alpha>("alpha");
+	Reflect<components::ScaffoldDrawnScale>(context).Field<&components::ScaffoldDrawnScale::scale>("scale");
 	Reflect<components::ScriptAnimation>(context)
 	    .Field<&components::ScriptAnimation::clip>("clip")
 	    .Field<&components::ScriptAnimation::playsLeft>("playsLeft");

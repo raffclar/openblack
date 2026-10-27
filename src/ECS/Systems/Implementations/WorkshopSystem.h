@@ -15,6 +15,7 @@
 
 #include <entt/signal/sigh.hpp>
 
+#include "ECS/ScaffoldGhostRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 
@@ -43,6 +44,7 @@ public:
 	[[nodiscard]] entt::entity TownForBuilding(glm::vec3 place) const override;
 	void ProcessHeld(entt::entity scaffold) override;
 	void SiteClosed(entt::entity building) override;
+	void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) override;
 
 private:
 	/// Whether a scaffold at a place is near a workshop of a town (see scaffold_offer::NearWorkshop)
@@ -58,6 +60,12 @@ private:
 	bool TryToBuild(entt::entity scaffold, entt::entity town);
 	/// The scaffold leaves the building site that it is on, and the building of the site goes
 	void LeaveSite(entt::entity scaffold);
+	/// The game turn makes the see-through copy that shows the phantom of the scaffold, if the scaffold has none
+	void MakeGhost(entt::entity scaffold);
+	/// The frame shows the phantom of a scaffold in the hand of the local player. Whether it shows.
+	bool PlaceHeldGhost(entt::entity scaffold, entt::entity ghost, glm::vec3 drawnHand);
+	/// The frame shows the phantom on the building site of a scaffold. Whether it shows.
+	bool PlaceSiteGhost(entt::entity scaffold, entt::entity ghost);
 
 	/// The workshop starts a scaffold: it uses the wood and its work sound starts
 	void StartScaffold(entt::entity workshop);
@@ -74,6 +82,8 @@ private:
 	void OnWorkshopGone(entt::registry& registry, entt::entity workshop);
 
 	std::vector<entt::scoped_connection> _connections;
+	/// The sounds of the phantom in the hand that played. Only the frames change them.
+	scaffold_ghost::SoundsPlayed _ghostSounds;
 };
 
 } // namespace openblack::ecs::systems

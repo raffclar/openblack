@@ -83,6 +83,24 @@ struct Scaffold
 	ScaffoldPhantom phantom;
 	/// The building whose site the scaffold is on, none when the scaffold is on no site
 	entt::entity site {entt::null};
+	/// The copy that shows the phantom building, none until the scaffold first shows a phantom
+	entt::entity ghost {entt::null};
+};
+
+/// The see-through copy that shows the phantom building of a scaffold. It is only a picture: the game turns make it
+/// with the phantom and remove it with the scaffold, and only the frames change it.
+struct ScaffoldGhost
+{
+	/// The scaffold whose phantom the copy shows
+	entt::entity scaffold {entt::null};
+	/// Its alpha, 0 to 255
+	uint8_t alpha {0};
+};
+
+/// The size that a scaffold on a building site shows in the frames, which becomes small as the building grows
+struct ScaffoldDrawnScale
+{
+	float scale {1.0f};
 };
 
 } // namespace openblack::ecs::components

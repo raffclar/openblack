@@ -27,6 +27,7 @@
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87Angle.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScaffoldArchetype.h"
@@ -43,8 +44,10 @@
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
+#include "ECS/ScaffoldGhostRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
@@ -718,6 +721,10 @@ void WorkshopSystem::ProcessHeld(entt::entity scaffold)
 	{
 		Puff(place);
 	}
+	if (phantom.shown.has_value())
+	{
+		MakeGhost(scaffold);
+	}
 }
 
 bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player)
@@ -830,6 +837,8 @@ bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)
 	data.phantom.scale = registry.Get<const Transform>(scaffold).scale.x;
 	data.phantom.shown.reset();
 	data.phantom.next.reset();
+	// The phantom of the building shows on the site
+	MakeGhost(scaffold);
 	registry.SetDirty();
 	return true;
 }
@@ -862,10 +871,152 @@ void WorkshopSystem::SiteClosed(entt::entity building)
 	}
 }
 
+void WorkshopSystem::MakeGhost(entt::entity scaffold)
+{
+	auto& registry = Entities();
+	if (registry.Valid(registry.Get<const Scaffold>(scaffold).ghost))
+	{
+		return;
+	}
+	// The copy shows nothing until a frame gives it a model
+	const auto ghost = registry.Create();
+	registry.Assign<Transform>(ghost, registry.Get<const Transform>(scaffold));
+	registry.Assign<ScaffoldGhost>(ghost, ScaffoldGhost {.scaffold = scaffold});
+	registry.Get<Scaffold>(scaffold).ghost = ghost;
+}
+
+void WorkshopSystem::PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand)
+{
+	auto& registry = Entities();
+	std::vector<std::pair<entt::entity, entt::entity>> ghosts;
+	registry.Each<const Scaffold>([&registry, &ghosts](entt::entity scaffold, const Scaffold& data) {
+		if (registry.Valid(data.ghost) && registry.AllOf<ScaffoldGhost, Transform>(data.ghost))
+		{
+			ghosts.emplace_back(scaffold, data.ghost);
+		}
+	});
+	for (const auto& [scaffold, ghost] : ghosts)
+	{
+		const bool inHand = registry.AllOf<InHand>(scaffold);
+		bool shown = false;
+		if (inHand && drawnHand.has_value())
+		{
+			shown = PlaceHeldGhost(scaffold, ghost, *drawnHand);
+		}
+		else if (!inHand)
+		{
+			shown = PlaceSiteGhost(scaffold, ghost);
+		}
+		// A copy that shows nothing has no model
+		if (!shown && registry.AllOf<Mesh>(ghost))
+		{
+			registry.Remove<Mesh>(ghost);
+		}
+		// The scaffold on a site becomes small as the building grows
+		const auto site = registry.Get<const Scaffold>(scaffold).site;
+		if (!inHand && registry.Valid(site))
+		{
+			const float scale = scaffold_ghost::ScaleOnSite(ecs::construction::BuiltOf(site),
+			                                                registry.Get<const Scaffold>(scaffold).phantom.scale);
+			registry.AssignOrReplace<ScaffoldDrawnScale>(scaffold, ScaffoldDrawnScale {.scale = scale});
+		}
+		else if (registry.AllOf<ScaffoldDrawnScale>(scaffold))
+		{
+			registry.Remove<ScaffoldDrawnScale>(scaffold);
+		}
+	}
+}
+
+bool WorkshopSystem::PlaceHeldGhost(entt::entity scaffold, entt::entity ghost, glm::vec3 drawnHand)
+{
+	auto& registry = Entities();
+	// Only the local player sees the phantom of a scaffold in a hand, and only in the hand of that player
+	if (!Locator::handSystem::has_value() || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	const auto hand = registry.Get<const InHand>(scaffold).hand;
+	const auto ownHands = Locator::handSystem::value().GetOwnHands();
+	if (std::ranges::find(ownHands, hand) == ownHands.end())
+	{
+		return false;
+	}
+	const auto& phantom = registry.Get<const Scaffold>(scaffold).phantom;
+	if (!phantom.shown.has_value())
+	{
+		return false;
+	}
+	const auto msIntoTurn = Locator::time::has_value() ? Locator::time::value().GetTurnRemainderMs() : 0;
+	const auto look = scaffold_ghost::Held(
+	    phantom, msIntoTurn, Locator::infoConstants::value().scaffold.phantomBuildingRotationPerGameTurn, _ghostSounds);
+	if (look.sound == scaffold_ghost::GhostSound::Shrinks)
+	{
+		audio::PlayGameSoundEffect(entt::hashed_string("InGame.sad/50").value(), std::nullopt);
+	}
+	else if (look.sound == scaffold_ghost::GhostSound::Grows)
+	{
+		const auto pitch = scaffold_ghost::GrowPitchPercent(static_cast<int32_t>(phantom.shown->number));
+		audio::StartGameSoundEffect(entt::hashed_string("InGame.sad/51").value(),
+		                            {.pitchPercent = static_cast<uint32_t>(pitch)});
+	}
+	if (!look.pose.has_value())
+	{
+		return false;
+	}
+	// The phantom shows at the drawn hand, on the fixed grid of the map, as high above the land as the hand
+	const auto coords = CoordsOf(drawnHand);
+	const glm::vec2 metres {map_coords::ToMetres(coords.x), map_coords::ToMetres(coords.z)};
+	const float aboveLand = drawnHand.y - GroundAt(glm::vec2(drawnHand.x, drawnHand.z));
+	auto& transform = registry.Get<Transform>(ghost);
+	transform.position = glm::vec3(metres.x, GroundAt(metres) + aboveLand, metres.y);
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(-look.pose->yAngle));
+	transform.scale = glm::vec3(look.pose->scale);
+	auto& data = registry.Get<ScaffoldGhost>(ghost);
+	data.alpha = scaffold_ghost::k_HeldAlpha;
+	const auto mesh = resources::HashIdentifier(phantom.shown->mesh);
+	if (const auto* drawn = registry.TryGet<const Mesh>(ghost); drawn == nullptr || drawn->id != mesh)
+	{
+		registry.AssignOrReplace<Mesh>(ghost, mesh, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	}
+	return true;
+}
+
+bool WorkshopSystem::PlaceSiteGhost(entt::entity scaffold, entt::entity ghost)
+{
+	auto& registry = Entities();
+	const auto site = registry.Get<const Scaffold>(scaffold).site;
+	if (!registry.Valid(site))
+	{
+		return false;
+	}
+	const auto* building = registry.TryGet<const Transform>(site);
+	const auto* model = registry.TryGet<const Mesh>(site);
+	if (building == nullptr || model == nullptr)
+	{
+		return false;
+	}
+	// The phantom on the site is a copy of the building, which fades as the building grows
+	registry.Get<Transform>(ghost) = *building;
+	registry.Get<ScaffoldGhost>(ghost).alpha = scaffold_ghost::SiteAlpha(ecs::construction::BuiltOf(site));
+	// Copied out first: adding to a pool may move what is in it
+	const Mesh copy = *model;
+	if (const auto* drawn = registry.TryGet<const Mesh>(ghost); drawn == nullptr || drawn->id != copy.id)
+	{
+		registry.AssignOrReplace<Mesh>(ghost, copy);
+	}
+	return true;
+}
+
 void WorkshopSystem::OnScaffoldGone(entt::registry& /*registry*/, entt::entity scaffold)
 {
 	// A scaffold that goes from the world stops to count for its workshop
 	ReleaseScaffold(scaffold);
+	// Its phantom goes with it
+	auto& registry = Entities();
+	if (const auto ghost = registry.Get<const Scaffold>(scaffold).ghost; registry.Valid(ghost))
+	{
+		registry.Destroy(ghost);
+	}
 }
 
 void WorkshopSystem::OnWorkshopGone(entt::registry& /*registry*/, entt::entity workshopEntity)

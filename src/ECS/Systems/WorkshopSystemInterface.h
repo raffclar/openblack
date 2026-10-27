@@ -65,6 +65,10 @@ public:
 	virtual void ProcessHeld(entt::entity scaffold) = 0;
 	/// A building site closes: the scaffolds on it go
 	virtual void SiteClosed(entt::entity building) = 0;
+	/// The frame shows the phantom buildings of the scaffolds. The phantom of a scaffold in the hand of the local player
+	/// shows at `drawnHand`, where the frame draws that hand. The phantom on a building site fades as the building
+	/// grows, and the scaffold on the site becomes small.
+	virtual void PlaceGhostsForFrame(std::optional<glm::vec3> drawnHand) = 0;
 
 	/// The town that a scaffold at a place builds for: the town of the nearest building, else the nearest town or
 	/// planned building of a town nearer than 50 metres; none when there is none
