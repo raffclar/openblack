@@ -29,7 +29,11 @@ constexpr auto k_Storm = SpellSeedType::Storm;
 class FakeWorld final: public reward::OpeningWorld
 {
 public:
-	void Pour(ResourceType type, uint32_t amount) override { events.push_back(fmt("pour", static_cast<int>(type), amount)); }
+	void Pour(ResourceType type, uint32_t amount, PlayerNames player) override
+	{
+		events.push_back(fmt("pour", static_cast<int>(type), amount));
+		pourPlayers.push_back(player);
+	}
 	[[nodiscard]] bool HasTown() const override { return town; }
 	void GiveTownBelief(float belief) override { events.push_back("belief " + std::to_string(static_cast<int>(belief))); }
 	void MakeObject(MobileStaticInfo object) override { events.push_back(fmt("object", static_cast<int>(object), 0)); }
@@ -74,6 +78,8 @@ public:
 		return std::string(what) + " " + std::to_string(a) + (b != 0 ? " " + std::to_string(b) : "");
 	}
 
+	/// The player of each pour
+	std::vector<PlayerNames> pourPlayers;
 	bool town {false};
 	bool townToFind {false};
 	bool townLearnsNew {true};
@@ -92,31 +98,46 @@ std::string Globe(SpellSeedType seed)
 TEST(RewardOpening, FoodComesFirstThenWoodPouredAtTheChest)
 {
 	FakeWorld world;
-	reward::Open({.food = 750.5f, .wood = 300}, world);
+	reward::Open({.food = 750.5f, .wood = 300}, PlayerNames::PLAYER_ONE, world);
 	ASSERT_EQ(world.events.size(), 1u);
 	EXPECT_EQ(world.events[0], "pour 0 750");
 
 	world.events.clear();
-	reward::Open({.wood = 300}, world);
+	reward::Open({.wood = 300}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, std::vector<std::string> {"pour 1 300"});
+}
+
+TEST(RewardOpening, TheFoodOrWoodGoesToThePlayerWhoTappedTheChest)
+{
+	FakeWorld world;
+	// The second player taps a chest of food, then a chest of wood
+	reward::Open({.food = 750.5f}, PlayerNames::PLAYER_TWO, world);
+	reward::Open({.wood = 300}, PlayerNames::PLAYER_TWO, world);
+	EXPECT_EQ(world.events, (std::vector<std::string> {"pour 0 750", "pour 1 300"}));
+	EXPECT_EQ(world.pourPlayers, (std::vector<PlayerNames> {PlayerNames::PLAYER_TWO, PlayerNames::PLAYER_TWO}));
+
+	// In a game alone, only the first player taps a chest
+	world.pourPlayers.clear();
+	reward::Open({.wood = 300}, PlayerNames::PLAYER_ONE, world);
+	EXPECT_EQ(world.pourPlayers, std::vector<PlayerNames> {PlayerNames::PLAYER_ONE});
 }
 
 TEST(RewardOpening, BeliefGoesOnlyToATown)
 {
 	FakeWorld world;
-	reward::Open({.belief = 500.0f, .seed = k_Fireball}, world);
+	reward::Open({.belief = 500.0f, .seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_TRUE(world.events.empty());
 
 	world.town = true;
-	reward::Open({.belief = 500.0f}, world);
+	reward::Open({.belief = 500.0f}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, std::vector<std::string> {"belief 500"});
 }
 
 TEST(RewardOpening, AnObjectOrAScaffoldIsMadeAtTheChest)
 {
 	FakeWorld world;
-	reward::Open({.object = MobileStaticInfo::ToyBall}, world);
-	reward::Open({.scaffold = true}, world);
+	reward::Open({.object = MobileStaticInfo::ToyBall}, PlayerNames::PLAYER_ONE, world);
+	reward::Open({.scaffold = true}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("object", static_cast<int>(MobileStaticInfo::ToyBall), 0),
 	                                                   "scaffold"}));
 }
@@ -124,7 +145,7 @@ TEST(RewardOpening, AnObjectOrAScaffoldIsMadeAtTheChest)
 TEST(RewardOpening, ASeedThePlayerCantCastIsAGlobeWithoutATown)
 {
 	FakeWorld world;
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, std::vector<std::string> {Globe(k_Fireball)});
 }
 
@@ -132,14 +153,14 @@ TEST(RewardOpening, ATownLearnsASeedThePlayerCantCastAndShowsIt)
 {
 	FakeWorld world;
 	world.town = true;
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("town learns", static_cast<int>(MagicType::Fireball), 0),
 	                                                   FakeWorld::fmt("town seed", static_cast<int>(k_Fireball), 0)}));
 
 	// A town that knew it already gives a globe instead
 	world.events.clear();
 	world.townLearnsNew = false;
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events.back(), Globe(k_Fireball));
 }
 
@@ -147,7 +168,7 @@ TEST(RewardOpening, ASeedThePlayerCastsGivesTheFirstPowerUpLackedWithItsGesture)
 {
 	FakeWorld world;
 	world.may = {MagicType::Fireball};
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
 	          (std::vector<std::string> {FakeWorld::fmt("player learns", static_cast<int>(MagicType::FireballPowerUpOne), 0),
 	                                     FakeWorld::fmt("gesture", static_cast<int>(MagicType::FireballPowerUpOne), 0)}));
@@ -156,7 +177,7 @@ TEST(RewardOpening, ASeedThePlayerCastsGivesTheFirstPowerUpLackedWithItsGesture)
 	world.events.clear();
 	world.town = true;
 	world.may = {MagicType::Fireball, MagicType::FireballPowerUpOne};
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
 	          (std::vector<std::string> {FakeWorld::fmt("town learns", static_cast<int>(MagicType::FireballPowerUpTwo), 0),
 	                                     FakeWorld::fmt("gesture", static_cast<int>(MagicType::FireballPowerUpTwo), 0)}));
@@ -166,7 +187,7 @@ TEST(RewardOpening, WithEveryPowerUpTheSeedIsAGlobe)
 {
 	FakeWorld world;
 	world.may = {MagicType::Fireball, MagicType::FireballPowerUpOne, MagicType::FireballPowerUpTwo};
-	reward::Open({.seed = k_Fireball}, world);
+	reward::Open({.seed = k_Fireball}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, std::vector<std::string> {Globe(k_Fireball)});
 }
 
@@ -175,7 +196,7 @@ TEST(RewardOpening, ThreePowerUpsReadOnIntoTheGestures)
 	// The game reads one level past the last power-up: for a seed with three, its first power-up gesture as a magic type
 	FakeWorld world;
 	world.may = {MagicType::StormWindRain, MagicType::StormWindRainLightning, MagicType::Tornado, MagicType::Shield};
-	reward::Open({.seed = k_Storm}, world);
+	reward::Open({.seed = k_Storm}, PlayerNames::PLAYER_ONE, world);
 	const auto misread = static_cast<MagicType>(GestureType::Spiral);
 	EXPECT_EQ(world.events, (std::vector<std::string> {FakeWorld::fmt("player learns", static_cast<int>(misread), 0),
 	                                                   FakeWorld::fmt("gesture", static_cast<int>(misread), 0)}));
@@ -184,7 +205,7 @@ TEST(RewardOpening, ThreePowerUpsReadOnIntoTheGestures)
 TEST(RewardOpening, APowerUpWithNoSeedOnlyShowsItsGesture)
 {
 	FakeWorld world;
-	reward::Open({.powerUp = MagicType::HealPowerUpOne}, world);
+	reward::Open({.powerUp = MagicType::HealPowerUpOne}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events,
 	          std::vector<std::string> {FakeWorld::fmt("gesture", static_cast<int>(MagicType::HealPowerUpOne), 0)});
 }
@@ -194,7 +215,7 @@ TEST(RewardOpening, TheNextMiracleChestFindsATownAndGivesTheNextMiracle)
 	FakeWorld world;
 	world.townToFind = true;
 	world.next = MagicType::StormWindRain;
-	reward::Open({.nextMiracle = true}, world);
+	reward::Open({.nextMiracle = true}, PlayerNames::PLAYER_ONE, world);
 	EXPECT_EQ(world.events, (std::vector<std::string> {
 	                            "find town", FakeWorld::fmt("town learns", static_cast<int>(MagicType::StormWindRain), 0),
 	                            FakeWorld::fmt("town seed", static_cast<int>(k_Storm), 0)}));
