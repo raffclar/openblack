@@ -23,6 +23,7 @@ public:
 	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] GameRandomInterface* Random() override;
 	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
+	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override;
 	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] float HeightOf(entt::entity object) const override;
 	[[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity object) const override;

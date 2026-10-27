@@ -1823,7 +1823,8 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 			        const auto name = player.name;
 			        Json item = {{"player", static_cast<int>(name)},
 			                     {"id", Id(entity)},
-			                     {"local", players.GetLocalPlayer() == name},
+			                     {"local", (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+			                                                                 : PlayerNames::PLAYER_ONE) == name},
 			                     {"computer", players.IsComputerPlayer(name)},
 			                     {"primary_creature", Id(players.GetPrimaryCreature(name))}};
 			        // The computer mind of the player, when a land script switched it on or named a player for it

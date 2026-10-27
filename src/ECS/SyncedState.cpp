@@ -284,6 +284,9 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandOnCreature", .field = "", .marker = ""},
     // The guidance that the player at this machine hears, weighed from this machine's camera with the local draws
     {.component = "GuidanceHeard", .field = "", .marker = ""},
+    // The help of the creature is for the player at this machine only. Each computer keeps it for the creature of its
+    // own player, from its own dialogue. Only the help reads it.
+    {.component = "CreatureHelpMemory", .field = "", .marker = ""},
     // The hand holds a town's totem and slides it as the frames draw it; the town takes the share at the turn
     {.component = "VillageTotem", .field = "gripped", .marker = ""},
     {.component = "VillageTotem", .field = "held", .marker = ""},
@@ -302,6 +305,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "HandGrab", .field = "lastHand", .marker = ""},
     // The frames bend the trees away from what moves near them, and only the frames read the bend
     {.component = "Tree", .field = "bendSlot", .marker = ""},
+    // The heart of the player at this machine beats faster while its temple goes. Only the sound of the heart reads the
+    // beat.
+    {.component = "Heartbeat", .field = "", .marker = ""},
+    // The strain that the player at this machine hears from the worship sites of its temple. Only the guidance reads it.
+    {.component = "CitadelWorship", .field = "strainSound", .marker = ""},
+    // The pictures of the web page of the creature of the player at this machine, from this machine's camera
+    {.component = "CreaturePictures", .field = "", .marker = ""},
+    // The copy of the creature of the player at this machine that a film shows
+    {.component = "*", .field = "", .marker = "FilmCreature"},
     // A field's crop sways as one of the trees' sways, which each computer picks with its own local random number. Only
     // the frames read it.
     {.component = "Swayable", .field = "swaySlot", .marker = "Field"},

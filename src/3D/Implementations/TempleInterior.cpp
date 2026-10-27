@@ -67,6 +67,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CreatureCaveSystemInterface.h"
 #include "ECS/Systems/CreatureModeSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/Implementations/CameraPathSystem.h"
 #include "ECS/Systems/Implementations/RenderingSystem.h"
@@ -264,8 +265,7 @@ TempleScrolls::Facts GatherScrollFacts()
 		facts.bindings.assign(bindings.begin(), bindings.end());
 	}
 	// The world scroll tells the player at this machine of the world and their people
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto world = player_statistics::World(local);
 	facts.population = world.population;
 	facts.believersPercent = world.believersPercent;
@@ -526,7 +526,8 @@ void TempleInterior::UpdateSaveGameRoom()
 	// The empty pictures show the half for the player's alignment
 	if (Locator::playerSystem::has_value() && Locator::alignmentSystem::has_value())
 	{
-		const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		_saveGameRoom->SetAlignment(Locator::alignmentSystem::value().GetPlayerAlignment(local));
 	}
 	auto& boxes = _interface->GetSaveGameBoxes();
