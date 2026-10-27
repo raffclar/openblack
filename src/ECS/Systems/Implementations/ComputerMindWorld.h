@@ -54,7 +54,7 @@ public:
 	void StartAction() override;
 	[[nodiscard]] bool ActionLocked() const override;
 	void UnlockAction() override;
-	bool ForceQueued() override;
+	[[nodiscard]] std::optional<glm::vec3> MarkerPlace(entt::entity thing) const override;
 	[[nodiscard]] bool HeldByHelp() const override;
 
 private:
@@ -69,8 +69,15 @@ private:
 	RuleContext _context;
 };
 
-/// Before the mind's turn: the god forgets its miracles that are gone, and stops an action whose things are gone
+/// Before the mind's turn: the god forgets its miracles, its seen things and its queued actions whose things are gone,
+/// and stops an action whose things are gone
 void Validate(components::ComputerPlayer& state);
+/// The thing is in the world, and it is not a villager on its way to dying
+[[nodiscard]] bool Available(entt::entity thing);
+/// The cinema bars hold the mind of the god while it has no script action and no queued action
+[[nodiscard]] bool HeldByHelp(const components::ComputerPlayer& state);
+/// The god adds the forests and the seeds of miracles near its hand to its list of seen things
+void SeeNearHand(components::ComputerPlayer& state, uint32_t turn);
 /// Where the hand of the god starts on the land: at its temple
 [[nodiscard]] std::optional<glm::vec3> StartingHand(PlayerNames player);
 
