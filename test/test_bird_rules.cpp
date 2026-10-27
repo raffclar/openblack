@@ -241,3 +241,17 @@ TEST(BirdRules, AnAnimalWithNoLifeLiesDeadAtOnceOnlyWhenAKillMadeItDie)
 	EXPECT_EQ(LandsAs(false, false), LandedAs::Dying);
 	EXPECT_EQ(LandsAs(false, true), LandedAs::Dead);
 }
+
+TEST(BirdRules, AnAnimalLetsGoOfATargetThatIsGoneOrInThePlayersHand)
+{
+	using animals::DropOfTarget;
+	using animals::TargetDrop;
+	EXPECT_EQ(DropOfTarget({}), TargetDrop::Keeps);
+	// An animal in a hand keeps a target that is in the world
+	EXPECT_EQ(DropOfTarget({.inHand = true}), TargetDrop::Keeps);
+	EXPECT_EQ(DropOfTarget({.gone = true}), TargetDrop::DropsAndDecides);
+	EXPECT_EQ(DropOfTarget({.inPlayersHand = true}), TargetDrop::DropsAndDecides);
+	// The state of the hand refuses the change, so the animal only lets go of the target
+	EXPECT_EQ(DropOfTarget({.gone = true, .inHand = true}), TargetDrop::Drops);
+	EXPECT_EQ(DropOfTarget({.inPlayersHand = true, .inHand = true}), TargetDrop::Drops);
+}

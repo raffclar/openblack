@@ -202,6 +202,15 @@ bool animals::TakesOwnTurn(const AnimalHolders& holders)
 	return !holders.tornado && !holders.physics;
 }
 
+animals::TargetDrop animals::DropOfTarget(const TargetFacts& facts)
+{
+	if (!facts.gone && !facts.inPlayersHand)
+	{
+		return TargetDrop::Keeps;
+	}
+	return facts.inHand ? TargetDrop::Drops : TargetDrop::DropsAndDecides;
+}
+
 animals::LandedAs animals::LandsAs(bool alive, bool dying)
 {
 	if (alive)

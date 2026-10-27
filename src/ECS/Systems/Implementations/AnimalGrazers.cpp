@@ -577,22 +577,30 @@ void AnimalSystem::MergeNearbyHerd(entt::entity entity, Animal& animal)
 	}
 }
 
-void AnimalSystem::GrazerNeedsTurn(entt::entity entity, const Animal& animal, Grazer& grazer)
+void AnimalSystem::NeedsTurn(entt::entity entity, Animal& animal)
 {
 	auto& registry = EntityRegistry();
 	const auto& info = InfoOf(animal.type);
-	// Seeing to its needs, and growing a quarter of a year at a time while young
+	// Only some states see to the needs. Then the needs grow, and a young animal grows a quarter of a year at a time
 	if (!SeesToNeedsIn(animal.state))
 	{
 		return;
 	}
 	const auto age = AgeOf(animal);
-	grazers::GrowNeeds(grazer.needs, LimitsOf(info), age, HerdSizeOf(animal));
-	// A herd's leader counts the turns of its leg, unless a shepherd leads the herd
-	if (auto* herd = registry.TryGet<Flock>(animal.flock);
-	    herd != nullptr && herd->shepherd == entt::null && LeaderOf(animal.flock) == entity)
+	if (auto* grazer = registry.TryGet<Grazer>(entity))
 	{
-		++herd->turnsOnLeg;
+		grazers::GrowNeeds(grazer->needs, LimitsOf(info), age, HerdSizeOf(animal));
+	}
+	else if (info.hunger != 0 && animal.hunger < static_cast<int32_t>(info.hunger))
+	{
+		// The other kinds that openblack makes have no sleep, and nothing reads their need to breed
+		++animal.hunger;
+	}
+	// A flock's leader counts the turns of its leg, unless a shepherd leads the flock
+	if (auto* flock = registry.TryGet<Flock>(animal.flock);
+	    flock != nullptr && flock->shepherd == entt::null && LeaderOf(animal.flock) == entity)
+	{
+		++flock->turnsOnLeg;
 	}
 	if (age < info.grownUpAge && GameTurn() % villager_age::k_GrowthTurns == 0)
 	{
@@ -605,7 +613,6 @@ void AnimalSystem::GrazerTurn(entt::entity entity, Animal& animal, Grazer& graze
 {
 	auto& registry = EntityRegistry();
 	const auto& info = InfoOf(animal.type);
-	GrazerNeedsTurn(entity, animal, grazer);
 	// Its reaction comes before its own ways
 	if (Flee(entity, animal) || LookOrGoToFood(entity, animal))
 	{
