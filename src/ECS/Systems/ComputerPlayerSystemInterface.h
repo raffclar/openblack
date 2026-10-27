@@ -9,8 +9,12 @@
 
 #pragma once
 
+#include <optional>
 #include <span>
 #include <string_view>
+
+#include <entt/entity/entity.hpp>
+#include <glm/vec3.hpp>
 
 #include "Enums.h"
 
@@ -38,6 +42,22 @@ public:
 	virtual void SetSuppression(PlayerNames player, std::string_view name, float suppression) = 0;
 	/// The hand of the god has no action to do
 	[[nodiscard]] virtual bool Ready(PlayerNames player) = 0;
+	/// A land script makes the god do the action of a node of its mind with two things. False when it cannot start.
+	virtual bool ForceAction(PlayerNames player, std::string_view name, entt::entity first, entt::entity second) = 0;
+	/// A land script puts an action at the end of the queue of the god
+	virtual void QueueAction(PlayerNames player, std::string_view name, entt::entity first, entt::entity second) = 0;
+	/// A land script stops the action of the hand and empties the queue of the god
+	virtual void ClearActions(PlayerNames player) = 0;
+	/// A land script sets the speed of the hand of the god, in metres a second
+	virtual void SetSpeed(PlayerNames player, float speed) = 0;
+	/// A land script moves the hand of the god to a place at a speed, and holds the hand there. The script switches the
+	/// mind on and starts a paused mind again. With a fixed height the hand floats over the land, else it goes straight.
+	virtual void MoveHand(PlayerNames player, glm::vec3 place, float speed, bool fixedHeight) = 0;
+	/// A land script puts the hand of the god at a place at once, and holds the hand there. With a fixed height the
+	/// hand floats over the land.
+	virtual void SetHand(PlayerNames player, glm::vec3 place, bool fixedHeight) = 0;
+	/// Where the hand of the god is, at the height of the land under it. None for a player with no computer mind.
+	[[nodiscard]] virtual std::optional<glm::vec3> HandPosition(PlayerNames player) = 0;
 	/// In the turn of the players: each mind that is switched on and did not start on the land starts
 	virtual void ProcessTurn() = 0;
 	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and
