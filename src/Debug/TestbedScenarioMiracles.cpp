@@ -382,9 +382,9 @@ void AddFoundation(std::vector<Scenario>& all)
 	    .description = "A water miracle comes into the hand. The hand stays inside the player's influence, then goes just "
 	                   "past the border and casts there. Right after the press, the hand moves far out, before the next "
 	                   "turn.",
-	    .expected = "In a single player game the turn after the press checks the cast from the hand now, which is far "
-	                "out: the water does not rain. In a network game the turn checks it from the hand that the last turn "
-	                "reported, which was at the cast point: the water rains there on the server and on each computer.",
+	    .expected = "The turn after the press checks the cast from the hand that the last turn reported, which was at the "
+	                "cast point, not from the hand now, which is far out. Thus the water rains there in a single player "
+	                "game, and on the server and on each computer of a network game.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 30.0f, 375.0f}, .look = {0.0f, 0.0f, 415.0f}},
 	    .commands = {{.kind = Command::Kind::HoldSeed,

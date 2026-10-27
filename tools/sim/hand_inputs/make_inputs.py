@@ -441,7 +441,7 @@ def store_hand(piles, cycles, takes=None):
 def cast_edge():
     """The testbed scenario miracles.cast_at_influence_edge: the hand waits inside the player's influence with the water
     miracle, goes just past the border, waits two turns and casts there, then moves far out at once, before the next
-    turn. In a network game the turn after the press checks the cast from the hand that the last turn reported."""
+    turn. The turn after the press checks the cast from the hand that the last turn reported, in every game."""
     script = Script()
     script.wait(10)
     script.move((640, 980), 20)
