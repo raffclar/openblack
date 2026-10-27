@@ -162,7 +162,8 @@ void testbed_scenarios::AddComputerGodWarScenarios(std::vector<Scenario>& all)
 	                   "of player one. After 30 seconds, a testbed tool gives the god the action AttackCreatureWithSpells, "
 	                   "with the cow and the fireball icon, as a land script does.",
 	    .expected = "The hand moves near the cow, then to the fireball icon, and the worshippers chant for the miracle. "
-	                "The god throws the fireball at the cow. It does this two or three times, by a random number.",
+	                "The god throws the fireball at the cow. The god puts two or three of these casts in the list of the "
+	                "hand, by a random number. The players.list query shows the steps.",
 	    .framing = BothTowns(),
 	    .creatures = {CreatureOf("player one's", CreatureType::Cow, PlayerNames::PLAYER_ONE, {140.0f, 0.0f})},
 	    .landScript = k_WarScript,
