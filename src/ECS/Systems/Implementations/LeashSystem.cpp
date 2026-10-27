@@ -207,18 +207,7 @@ void LayRopeAfresh(Registry& registry, entt::entity creature)
 /// This computer's hand where the frames draw it, none off the land. The ropes and the hold of a rope go from here.
 std::optional<glm::vec3> DrawnHandPoint()
 {
-	if (!Locator::handSystem::has_value())
-	{
-		return std::nullopt;
-	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-	const auto* transform = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr;
-	if (transform == nullptr || transform->position == glm::vec3(0.0f))
-	{
-		return std::nullopt;
-	}
-	return transform->position;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetDrawnHandPosition() : std::nullopt;
 }
 
 float CreatureHeight(const Creature& creature)
@@ -1152,11 +1141,11 @@ void LeashSystem::ShowPosts(bool handShown)
 	_handShown = handShown;
 	auto& registry = Locator::entitiesRegistry::value();
 	const auto light = temple_leashes::GlowAlpha(FrameLandLight(LandLightTable::k_Size - 1));
-	// The wrist of the hand carrying the picked leash: its first bone, where it is posed this frame
+	// The wrist of this computer's hand, which carries the picked leash: its first bone, where this frame poses it
 	std::optional<std::pair<glm::mat4, float>> wrist;
 	if (Locator::handSystem::has_value())
 	{
-		const auto entity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		const auto entity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 		const auto* at = registry.Valid(entity) ? registry.TryGet<const Transform>(entity) : nullptr;
 		const auto* hand = registry.Valid(entity) ? registry.TryGet<const Hand>(entity) : nullptr;
 		if (at != nullptr)
