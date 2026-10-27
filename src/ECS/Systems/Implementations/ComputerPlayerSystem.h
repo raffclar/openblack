@@ -50,6 +50,8 @@ public:
 	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames player) override;
 	void SetAttitude(PlayerNames player, PlayerNames other, float attitude) override;
 	[[nodiscard]] float Attitude(PlayerNames player, PlayerNames other) const override;
+	bool SavePersonality(PlayerNames player, std::string_view file) override;
+	bool LoadPersonality(PlayerNames player, std::string_view file) override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;

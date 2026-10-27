@@ -8897,18 +8897,24 @@ void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 
 void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto file = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The mind of the player gets the weights of the file. A missing file or a number that names no player does nothing.
+	if (player < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().LoadPersonality(player, file);
+	}
 }
 
 void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto file = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The file gets the weights of the mind of the player. A number that names no player does nothing.
+	if (player < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SavePersonality(player, file);
+	}
 }
 
 void SetPlayerAlly() // 382 SET_PLAYER_ALLY

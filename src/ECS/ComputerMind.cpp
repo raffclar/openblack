@@ -13,8 +13,10 @@
 #include <cstdint>
 
 #include <algorithm>
+#include <bit>
 #include <functional>
 #include <optional>
+#include <string>
 #include <string_view>
 #include <vector>
 
@@ -460,5 +462,54 @@ void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const m
 			}
 		}
 		map_coords::AddCells(coords, spiral.Next());
+	}
+}
+
+std::string openblack::computer_mind::PersonalityName(NodeKind kind)
+{
+	const auto& info = InfoOf(kind);
+	std::string name(info.name);
+	if (info.text.has_value())
+	{
+		name += ": " + std::to_string(*info.text) + " ";
+	}
+	return name;
+}
+
+std::vector<uint8_t> openblack::computer_mind::PersonalityFile(const Mind& mind)
+{
+	// The nodes of a mind are in the order of the file: a node, then the whole branch of each child in turn
+	std::vector<uint8_t> bytes;
+	for (const auto& node : mind.nodes)
+	{
+		const auto name = PersonalityName(node.kind);
+		bytes.insert(bytes.end(), name.begin(), name.end());
+		bytes.push_back(0);
+		const auto bits = std::bit_cast<uint32_t>(node.weight);
+		for (uint32_t shift = 0; shift < 32; shift += 8)
+		{
+			bytes.push_back(static_cast<uint8_t>(bits >> shift));
+		}
+	}
+	return bytes;
+}
+
+void openblack::computer_mind::ReadPersonalityFile(Mind& mind, std::span<const uint8_t> bytes)
+{
+	size_t at = 0;
+	for (auto& node : mind.nodes)
+	{
+		// The load skips the name with its zero byte. It does not compare the name with the name in the file.
+		at = std::min(bytes.size(), at + PersonalityName(node.kind).size() + 1);
+		auto bits = std::bit_cast<uint32_t>(node.weight);
+		for (uint32_t shift = 0; shift < 32 && at < bytes.size(); shift += 8, ++at)
+		{
+			bits = (bits & ~(0xFFu << shift)) | (static_cast<uint32_t>(bytes[at]) << shift);
+		}
+		node.weight = std::bit_cast<float>(bits);
+		if (at >= bytes.size())
+		{
+			return;
+		}
 	}
 }

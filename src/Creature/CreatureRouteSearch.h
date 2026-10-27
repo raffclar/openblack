@@ -86,6 +86,12 @@ public:
 	void ResetWithoutWalker(float margin, Gatherer gatherer = {});
 	/// Circles that hold either point (the square of the distance is less than the square of the radius) are left out
 	void LeaveOutCirclesHolding(glm::vec2 first, glm::vec2 second);
+	/// The points whose circles the obstacles leave out, for a saved game that keeps the obstacles with them
+	template <typename Self>
+	[[nodiscard]] static auto& LeftOutAround(Self& self)
+	{
+		return self._leftOutAround;
+	}
 	/// Forgets every circle, keeping how blocks are gathered
 	void Clear();
 	/// Sets what fills a block the first time that a search reaches it. A load of a saved game sets it again, because a
