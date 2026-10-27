@@ -451,6 +451,7 @@ public:
 	[[nodiscard]] bool IsRingOpen() const noexcept { return _ringOpen; }
 	/// How far the ring has come up, 0 to 1
 	[[nodiscard]] float GetRingOpening() const noexcept { return std::clamp(_ring.GetValue(), 0.0f, 1.0f); }
+	using Control::Release;
 	/// The mouse button was let go, wherever it was: the ring goes
 	void Release();
 	std::function<void(int)> onChange;

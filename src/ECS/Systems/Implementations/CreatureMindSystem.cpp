@@ -1603,6 +1603,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Inspected:
 	case Effect::TookFromPile:
 	case Effect::TookFromHand:
+	case Effect::Stomped:
 	case Effect::None:
 		break;
 	}
