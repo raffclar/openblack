@@ -73,6 +73,7 @@
 #include "Creature/CreatureObjectActions.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureScriptPlay.h"
+#include "Debug/ComputerActions.h"
 #include "Debug/FightAutopilotInterface.h"
 #include "Debug/TestbedMultiplayer.h"
 #include "Debug/TownMiracles.h"
@@ -985,6 +986,9 @@ void Runner::Start(const Scenario& scenario)
 	{
 		SetUpWorship(*scenario.worshipShare);
 	}
+	_startTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	_computerActionsDone.assign(scenario.computerActions.size(), false);
+	UpdateComputerActions();
 	if (!scenario.debugWindow.empty() && Locator::debugGui::has_value())
 	{
 		Locator::debugGui::value().OpenWindow(scenario.debugWindow);
@@ -1620,6 +1624,75 @@ void Runner::SetUpWorship(float share)
 	{
 		Locator::villageTotemSystem::value().SetTownShare(town, share);
 	}
+}
+
+void Runner::UpdateComputerActions()
+{
+	if (_scenario == nullptr)
+	{
+		return;
+	}
+	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	for (size_t i = 0; i < _scenario->computerActions.size() && i < _computerActionsDone.size(); ++i)
+	{
+		const auto& action = _scenario->computerActions[i];
+		if (_computerActionsDone[i] || turn - _startTurn < action.afterTurns)
+		{
+			continue;
+		}
+		_computerActionsDone[i] = true;
+		const auto first = ComputerActionThingOf(action.first, action.player);
+		const auto second = ComputerActionThingOf(action.second, action.player);
+		if (!debug::computer_actions::Force(action.player, action.node, first, second))
+		{
+			SPDLOG_LOGGER_WARN(spdlog::get("game"), "Testbed: the computer god {} has no node {}",
+			                   static_cast<int>(action.player), action.node);
+		}
+	}
+}
+
+entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, PlayerNames player) const
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	switch (thing.kind)
+	{
+	case ComputerActionThing::Kind::None:
+		break;
+	case ComputerActionThing::Kind::Town:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		return found != towns.end() ? found->second : entt::null;
+	}
+	case ComputerActionThing::Kind::Icon:
+	{
+		if (!Locator::infoConstants::has_value())
+		{
+			break;
+		}
+		const auto& info = Locator::infoConstants::value();
+		entt::entity found = entt::null;
+		registry.Each<const ecs::components::WorshipIcon>(
+		    [&registry, &info, &found, &thing, player](entt::entity entity, const ecs::components::WorshipIcon& icon) {
+			    const auto* site =
+			        registry.Valid(icon.site) ? registry.TryGet<const ecs::components::WorshipSite>(icon.site) : nullptr;
+			    if (found != entt::null || site == nullptr || site->player != player || icon.seed == SpellSeedType::None)
+			    {
+				    return;
+			    }
+			    const auto plain =
+			        magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, icon.seed), magic::k_BasePowerUpLevel);
+			    if (plain == thing.type)
+			    {
+				    found = entity;
+			    }
+		    });
+		return found;
+	}
+	case ComputerActionThing::Kind::Object:
+		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
+	}
+	return entt::null;
 }
 
 void Runner::PlaceBirds(const Scenario& scenario, glm::vec2 middle)
@@ -4083,6 +4156,7 @@ void Runner::Update(float seconds)
 	UpdateVillagerWalks();
 	UpdateTurnsAsked();
 	UpdateThrows();
+	UpdateComputerActions();
 	WatchGesture();
 	FinishTakingFireBall();
 	ApplyStates();

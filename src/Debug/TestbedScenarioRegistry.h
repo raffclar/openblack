@@ -1153,6 +1153,40 @@ struct FootpathSetup
 	std::vector<size_t> leadsFrom;
 };
 
+/// A thing that a testbed tool gives to a forced action of a computer god
+struct ComputerActionThing
+{
+	enum class Kind : uint8_t
+	{
+		/// No thing
+		None,
+		/// The town that the land script made with the number
+		Town,
+		/// The icon of the miracle at a worship site of the god
+		Icon,
+		/// The scenario's object at the index
+		Object,
+	};
+	Kind kind {Kind::None};
+	uint32_t townId {0};
+	MagicType type {MagicType::None};
+	size_t object {0};
+};
+
+/// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool
+/// puts the action in the queue of the god, as a land script does, at a game turn after the scenario is laid out.
+struct ComputerActionSetup
+{
+	PlayerNames player {PlayerNames::PLAYER_TWO};
+	/// The game turns after the start of the scenario at which the tool puts the action in the queue. A wait lets the
+	/// worshippers come to the site first, so that they can chant for the miracle.
+	uint32_t afterTurns {0};
+	/// The name of the node, as a land script gives it
+	std::string_view node;
+	ComputerActionThing first;
+	ComputerActionThing second;
+};
+
 struct Scenario
 {
 	/// Unique and never changed, for picking it from the command line or a test
@@ -1216,6 +1250,8 @@ struct Scenario
 	/// The things are made after the lines of the land script run, so that a thing of the scenario's town joins the town
 	/// that the script made
 	bool objectsAfterLandScript {false};
+	/// Actions of computer gods that the testbed tool forces once the scenario is laid out, in order
+	std::vector<ComputerActionSetup> computerActions;
 	/// The debug window opened as the scenario starts, by its name; none when empty
 	std::string_view debugWindow;
 	/// The first player's statistics as the scenario starts, for the Game Statistics box and the temple's scrolls
