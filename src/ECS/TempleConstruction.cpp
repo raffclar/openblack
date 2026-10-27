@@ -53,6 +53,7 @@
 #include "ECS/Systems/BuildingDamageSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/VillagerBuild.h"
 #include "ECS/Systems/Implementations/VillagerFootpath.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
@@ -60,6 +61,7 @@
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SaveGameSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleHeartOf.h"
@@ -141,7 +143,9 @@ std::optional<int32_t> TownOf(entt::entity building)
 void TempleFinished(PlayerNames owner)
 {
 	auto* music = Game::Instance() != nullptr ? Game::Instance()->GetGameMusic() : nullptr;
-	const bool local = Locator::playerSystem::has_value() && Locator::playerSystem::value().GetLocalPlayer() == owner;
+	// The game server and an observer have no player of their own
+	const bool local =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().IsOwnPlayer(owner) : owner == PlayerNames::PLAYER_ONE;
 	bool cutScene = false;
 	if (Locator::cinematicDirectorSystem::has_value())
 	{
@@ -154,6 +158,7 @@ void TempleFinished(PlayerNames owner)
 	    .scriptMusic = music != nullptr && music->GetScriptType() != audio::MusicType::None,
 	    .landNumber = Entities().Context().mapScriptGlobals.landNumber,
 	    .skirmish = Entities().Context().skirmish,
+	    .networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame(),
 	};
 	if (music != nullptr && building_construction::PlaysFinishedMusic(temple))
 	{

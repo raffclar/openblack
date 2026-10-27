@@ -41,6 +41,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
@@ -122,8 +123,10 @@ int BeamPlayer(PlayerNames owner)
 	{
 		return static_cast<int>(owner);
 	}
-	return static_cast<int>(Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer()
-	                                                           : PlayerNames::PLAYER_ONE);
+	return static_cast<int>(
+	    Locator::playerSystem::has_value()
+	        ? (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE)
+	        : PlayerNames::PLAYER_ONE);
 }
 } // namespace
 

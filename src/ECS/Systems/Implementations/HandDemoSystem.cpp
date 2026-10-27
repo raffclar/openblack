@@ -207,7 +207,9 @@ void HandDemoSystem::Play(std::string_view name, uint32_t task, bool pauseOnTrig
 	// The hand lets go of what it holds first, unless the demonstration needs it (a miracle to cast)
 	// TODO(miracles-gaps-1): the game also cancels the player's miracles that charge at their worship site icons here.
 	// The first land has no worship site, thus no miracle charges there.
-	if (!withoutHandModify && Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value())
+	// A script starts the demonstration at the turn. It asks about the first player's hand, which ForceDrop empties.
+	if (!withoutHandModify && Locator::handGrabSystem::has_value() &&
+	    Locator::handGrabSystem::value().GetHeldOf(PlayerNames::PLAYER_ONE).has_value())
 	{
 		Locator::handGrabSystem::value().ForceDrop();
 	}

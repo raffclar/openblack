@@ -77,9 +77,13 @@ public:
 			auto& data = atom->data[this];
 			if (!data.started)
 			{
-				// Three starting angles are drawn, as the game does, though only two are used
+				// Three starting angles are drawn, as the game does, though only two are used. The draws occur in
+				// this order, one statement each, because the arguments of a call have no fixed order of evaluation.
 				data.started = true;
-				data.a = glm::vec4(effect.Random(k_TwoPi), effect.Random(k_TwoPi), effect.Random(k_TwoPi), 0.0f);
+				data.a.x = effect.Random(k_TwoPi);
+				data.a.y = effect.Random(k_TwoPi);
+				data.a.z = effect.Random(k_TwoPi);
+				data.a.w = 0.0f;
 			}
 			auto point = forest_path::PathPoint(radius, effect.AtomAge(*atom), thetaSpeed, phiSpeed, data.a.x, data.a.y, scale);
 			point += parent;

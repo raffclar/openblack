@@ -46,6 +46,7 @@
 #include "GameSession.h"
 #include "GameTurnOrder.h"
 #include "Graphics/UploadPacer.h"
+#include "Gui/EndGameBoxRules.h"
 #include "Gui/EscapeKeyRules.h"
 #include "Gui/LoadingScreenRules.h"
 #include "Gui/MenuPause.h"
@@ -295,6 +296,7 @@ public:
 	void MakeSymbolSheet() override;
 	void StartLandAudio() override;
 	void TestbedLoaded() override;
+	void StartCameraAtTemple() override;
 	bool AskStartQuestion(bool hasCreature) override;
 	[[nodiscard]] std::optional<std::filesystem::path> ChallengeFile() override;
 	/// The parts of the effects of a frame that the view of the player does
@@ -346,6 +348,26 @@ public:
 	void UpdateFrameEffects();
 	/// The web client and the lobby client do their work of the frame
 	void UpdateOnline();
+	/// The end of a skirmish or a network game: the boxes that the turns of the frame open, and the player's choice in the
+	/// end box
+	void FollowGameEnd();
+	/// The player asks to leave the network game: the end box asks the question to leave
+	void AskToLeaveNetworkGame();
+	/// Exit Online Game of the menu: the question to leave, or a leave at once when the god of the player is out
+	void ExitOnlineGame();
+	/// The player leaves the network game. The game server makes the god of the player a leaver. A join from the command
+	/// line and a run of the tools stop the game; a join from the front end goes back to the multiplayer front end.
+	void LeaveNetworkGame();
+	/// Tests: the player leaves the network game through the menu and the question to leave, as a player does
+	void LeaveAsAPlayerDoes();
+	/// The god of this computer for the end of the game: player seven for a looker-on of a network game
+	[[nodiscard]] PlayerNames LocalGodForGameEnd() const;
+	/// After the player left a network game: the start land loads as a plain start does, and the multiplayer front end
+	/// opens in place of the menu
+	void StartAfterNetworkGame();
+	/// Opens the multiplayer front end in place of the menu. When it cannot open, the start-of-game question that waited
+	/// for it shows.
+	bool OpenFrontEndInPlaceOfMenu();
 	/// The numbers and the marks that rise over things
 	void UpdateScreenMarks();
 	/// The hand goes under the cursor, as the camera of this frame sees it, before the draw
@@ -476,6 +498,9 @@ public:
 	/// Join Online Game: the player goes into the temple's future room, and the front end's first box shows over
 	/// it. Returns false when the game has no interface or no temple.
 	bool OpenMultiplayerFrontEnd(std::unique_ptr<gui::MultiplayerFrontEnd> frontEnd);
+	/// The Join Online Game button of the browser page: the multiplayer front end opens at the next frame that it may
+	/// open in. Tools and the testbed use this request too.
+	void RequestJoinOnline() noexcept { _joinOnlineAsked = true; }
 	/// The size of the villagers' names display, 0 to 1
 	[[nodiscard]] float GetVillagerNameFade() const noexcept { return _villagerNameFade; }
 	/// The map script of the land loaded last, or "testbed"; empty before one is
@@ -610,6 +635,10 @@ private:
 	/// The out-of-sync box was asked; the player answered No to it
 	bool _outOfSyncAsked {false};
 	bool _leaveNetworkGame {false};
+	/// What the end boxes of this computer keep between turns
+	end_game_box::State _endGameBoxState;
+	/// Tests: the player left the network game at the turn that the command line gives
+	bool _testLeaveDone {false};
 	/// The -MULTIPLAYER switch opens the multiplayer front end before the first frame
 	bool _frontEndOnStart {false};
 	input::LockMode _inspectInputLock {input::LockMode::Auto};
@@ -732,17 +761,17 @@ private:
 	std::optional<entt::entity> _creatureUnderHand;
 	/// Grabbing the sea plays G_HandInWater_01 to _10 in turn
 	uint32_t _handInWaterSample {0};
-	/// Where the hand gripped the land since the last turn. The grip plays its sound at once, and the next turn makes its
-	/// puff of dust. Thus a grip while the game is paused makes its dust when the game continues.
-	std::vector<glm::vec3> _gripDust;
-
 	/// Plays the sound of the hand grabbing the land or the sea at the grab point, as the game does
 	void PlayHandGrabSound();
-	/// What the hand steps by this frame, in seconds
+	/// What the drawn fades of the hand step by this frame, in seconds
 	[[nodiscard]] float HandStepSeconds() const;
 	/// What the camera and the hand step by this frame: the frame's real time in whole milliseconds, or the game's time
 	/// while a script holds the widescreen
 	[[nodiscard]] std::chrono::milliseconds CameraStepTime() const;
+	/// Whether a script holds the widescreen for a cut scene, when the camera and the hand keep to the game's time
+	[[nodiscard]] bool ScriptHoldsCamera() const;
+	/// The time that the steps of the input go by in this frame (see input_steps), from the real time of the frame
+	[[nodiscard]] std::chrono::microseconds InputStepTime(std::chrono::microseconds frameTime) const;
 	/// The miracles hear where the hand and cursor are, and the held miracle follows the hand
 	void UpdateMagicHand(const glm::vec3& handPosition, float deltaSeconds);
 	/// The hand's debugging trace keeps the frame: where the hand was placed and drawn, where it shows, on the screen
@@ -751,9 +780,9 @@ private:
 	                  const ecs::systems::HandGrabSystemInterface* grab);
 	/// The gestures drawn with the cursor this frame, through the gesture system
 	void UpdateGestures(const Camera& camera, glm::ivec2 screenSize, float deltaSeconds);
-	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it
-	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp,
-	                float deltaSeconds);
+	/// Turns the hand to face along the line of sight through the cursor and stands it on the slope under it. Its up
+	/// eases at the fixed steps of the input.
+	void OrientHand(ecs::components::Transform& handTransform, const glm::mat3& facingCamera, glm::vec3 surfaceUp);
 	/// Decides how the hand moves this frame, gripping the land, held as it drags by the edge, or hovering, and its pose
 	void UpdateHandNavigation(const ecs::components::Transform& handTransform);
 	/// The camera's helper icons by the hand while a tutorial demonstration plays, from where the hand is drawn; none
@@ -784,6 +813,12 @@ private:
 	/// The land's start-of-game question that waits while the multiplayer front end is open: whether the profile has a
 	/// creature
 	std::optional<bool> _startQuestionAfterFrontEnd;
+	/// Opens the multiplayer front end for a request of the page, when the situation lets it open
+	void AnswerJoinOnline();
+	/// The page asked for the multiplayer front end, and the front end did not open yet
+	bool _joinOnlineAsked {false};
+	/// The front end opened over a cut scene: the land stops until the player leaves the front end
+	bool _frontEndHoldsLand {false};
 	/// The renderer draws the creature that the main menu's tattoo editor shows, in the next frame of the scene
 	void ShowTattooMenuCreature() const;
 	/// Closes the menu before a land change. The game then gets the pause that it had before the menu opened.

@@ -19,6 +19,7 @@
 #include <glm/vec3.hpp>
 
 #include "Commands/PlayerCommands.h"
+#include "Common/InputSteps.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -49,6 +50,8 @@ public:
 		/// The frame's time: the clock's for the hand's fades, the game's for the spring
 		float seconds {0.0f};
 		uint32_t gameMs {0};
+		/// The steps of the player's input that the frame takes
+		input_steps::Steps inputSteps {input_steps::Steps::One()};
 		/// The clock now, and the game's turn
 		uint32_t nowMs {0};
 		uint32_t turn {0};
@@ -78,6 +81,9 @@ public:
 	virtual void PlaceOthersHeldForFrame([[maybe_unused]] int32_t frameMs) {}
 	/// The hand is made to let go of what it holds, which is put down where it is and never planted again
 	virtual void ForceDrop() = 0;
+	/// At the turn: a scribble of the player's hand shakes off the thing that the hand holds (see
+	/// player_commands::HandShakeOff)
+	virtual void DoShakeOff(PlayerNames player) = 0;
 	/// A hand demonstration's recorded throw: if the hand throws before its spring next moves it, what it holds leaves
 	/// at this velocity rather than the spring's
 	virtual void SetRecordedThrow(glm::vec3 velocity) = 0;
@@ -107,6 +113,8 @@ public:
 	virtual void DoTwist(PlayerNames /*player*/, entt::entity /*object*/, glm::vec3 /*moved*/) {}
 	/// The hand gives the thing that it holds to a creature
 	virtual void DoGive(PlayerNames /*player*/, entt::entity /*creature*/, entt::entity /*object*/) {}
+	/// At the turn: the hand of the player called off the gift to the creature (player_commands::GiveCallOff)
+	virtual void DoGiveCallOff(PlayerNames /*player*/, entt::entity /*creature*/) {}
 	/// A creature takes a thing the hand gave it: the hand lets go of it into the creature's hand, without dropping it.
 	/// Whether the hand still held it to give.
 	virtual bool HandOver(entt::entity /*object*/) { return false; }
@@ -129,20 +137,30 @@ public:
 	/// in radians
 	[[nodiscard]] virtual float GetOfferTurn() const { return 0.0f; }
 
-	/// What the hand holds, none when it holds nothing of its own
+	/// What the hand of this computer holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
-	/// The field, fish farm or pile the hand is locked onto while it scoops from it, none when it scoops from nothing
+	/// What the hand of a player holds, none when it holds nothing of its own
+	[[nodiscard]] virtual std::optional<entt::entity> GetHeldOf(PlayerNames player) const = 0;
+	/// The field, fish farm or pile that the hand of this computer scoops from, none when it scoops from nothing
 	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOn() const { return std::nullopt; }
+	/// The field, fish farm or pile that the hand of a player scoops from. The turns read this, because it is the same on
+	/// every computer.
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOnOf(PlayerNames /*player*/) const { return std::nullopt; }
 	/// Whether the Action button is down to throw what the hand holds
 	[[nodiscard]] virtual bool IsAboutToThrow() const { return false; }
 	/// Whether the creature under the pointer can take what the hand holds as a gift
 	[[nodiscard]] virtual bool CreatureTakesHeld(entt::entity /*creature*/) const { return false; }
 	/// Whether the hand is taking, holding or about to throw a thing, so that other uses of the button leave it be
 	[[nodiscard]] virtual bool IsBusy() const = 0;
+	/// Whether the hand of a player is taking, holding or about to throw a thing. The turns read this, because it is the
+	/// same on every computer.
+	[[nodiscard]] virtual bool IsBusyOf(PlayerNames player) const = 0;
 	/// Whether the hand is pulling a thing out of the ground, from the press until it holds it
 	[[nodiscard]] virtual bool IsPulling() const = 0;
 	/// Whether the hand's point on the land is in its player's influence
 	[[nodiscard]] virtual bool IsInInfluence() const = 0;
+	/// Whether the point of the hand of a player on the land is in the influence of that player
+	[[nodiscard]] virtual bool IsInInfluenceOf(PlayerNames player) const = 0;
 	/// Why a press of the Action button on a thing wouldn't take it (out of the influence, a thing the hand can't hold,
 	/// a script holding it out of reach...); empty when it would
 	[[nodiscard]] virtual std::string WhyNotTake(entt::entity object) const = 0;

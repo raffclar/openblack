@@ -67,7 +67,8 @@ bool IsPlayersCreature(entt::entity creature)
 		return false;
 	}
 	const auto& players = Locator::playerSystem::value();
-	return players.GetPrimaryCreature(players.GetLocalPlayer()) == creature;
+	return players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                    : PlayerNames::PLAYER_ONE)) == creature;
 }
 
 /// A script holds the dialogue, or has the cinema bars in
@@ -311,7 +312,8 @@ void CreatureHelpSystem::ProcessTurn()
 		return;
 	}
 	const auto& players = Locator::playerSystem::value();
-	const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+	const auto creature = players.GetPrimaryCreature(
+	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 	if (creature.has_value() && Locator::entitiesRegistry::value().Valid(*creature))
 	{
 		UpdateCreature(*creature);
@@ -326,7 +328,9 @@ void CreatureHelpSystem::CreatureTurn(entt::entity creature)
 	}
 	// The help tells of the primary creature of the player at this machine
 	const auto& players = Locator::playerSystem::value();
-	if (players.GetPrimaryCreature(players.GetLocalPlayer()) == creature && Locator::entitiesRegistry::value().Valid(creature))
+	if (players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                 : PlayerNames::PLAYER_ONE)) == creature &&
+	    Locator::entitiesRegistry::value().Valid(creature))
 	{
 		UpdateCreature(creature);
 	}

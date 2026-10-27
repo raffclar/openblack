@@ -77,6 +77,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::Reward::landingPoint>("landingPoint")
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
+	    .Field<&components::Reward::drawn>("drawn")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
 	    .Field<&components::Reward::dust>("dust")
 	    .Field<&components::Reward::opened>("opened")

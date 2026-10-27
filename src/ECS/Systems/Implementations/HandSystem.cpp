@@ -11,6 +11,8 @@
 
 #include "HandSystem.h"
 
+#include <span>
+
 #include <L3DFile.h>
 #include <glm/gtc/constants.hpp>
 #include <spdlog/spdlog.h>
@@ -302,31 +304,46 @@ std::array<entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 	return _hands;
 }
 
+namespace
+{
+/// Where the world has a pair of hands: the left hand from the last report, the right hand where its Transform puts it.
+/// A hand at the origin of the world is off the land, and has none.
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+PositionsOf(std::span<const entt::entity, static_cast<size_t>(HandSystemInterface::Side::_Count)> hands)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	// The left hand is where the reports put it. The right hand has no reports, and its Transform never moves.
+	const auto left = hands[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto right = hands[static_cast<size_t>(HandSystemInterface::Side::Right)];
+	const auto* reported = registry.Valid(left) ? registry.TryGet<const ReportedHand>(left) : nullptr;
+	const auto* rightAt = registry.Valid(right) ? registry.TryGet<const Transform>(right) : nullptr;
+	const auto onLand = [](const glm::vec3& point) {
+		return point == glm::zero<glm::vec3>() ? std::nullopt : std::optional(point);
+	};
+	return {
+	    reported != nullptr ? onLand(reported->handPoint) : std::nullopt,
+	    rightAt != nullptr ? onLand(rightAt->position) : std::nullopt,
+	};
+}
+} // namespace
+
 std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
 HandSystem::GetPlayerHandPositions() const noexcept
 {
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto hands = GetPlayerHands();
-	// The left hand is where the reports put it. The right hand has no reports, and its Transform never moves.
-	const auto left = hands[static_cast<size_t>(Side::Left)];
-	const auto right = hands[static_cast<size_t>(Side::Right)];
-	const auto* reported = registry.Valid(left) ? registry.TryGet<const ReportedHand>(left) : nullptr;
-	const auto* rightAt = registry.Valid(right) ? registry.TryGet<const Transform>(right) : nullptr;
-	std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> result = {
-	    reported != nullptr ? reported->handPoint : glm::zero<glm::vec3>(),
-	    rightAt != nullptr ? rightAt->position : glm::zero<glm::vec3>(),
-	};
-	// TODO(#693): Hand Getter should return an optional if the hand doesn't have a valid position
-	// When the position is zero, it probably means it's not on the map (e.g. mouse is in the sky)
-	if (result[static_cast<size_t>(Side::Left)] == glm::zero<glm::vec3>())
-	{
-		result[static_cast<size_t>(Side::Left)] = std::nullopt;
-	}
-	if (result[static_cast<size_t>(Side::Right)] == glm::zero<glm::vec3>())
-	{
-		result[static_cast<size_t>(Side::Right)] = std::nullopt;
-	}
-	return result;
+	return PositionsOf(_hands);
+}
+
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+HandSystem::GetHandPositionsOf(PlayerNames player) const noexcept
+{
+	const auto hands = GetHandsOf(player);
+	return hands.has_value() ? PositionsOf(*hands) : std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> {};
+}
+
+std::array<std::optional<glm::vec3>, static_cast<size_t>(HandSystemInterface::Side::_Count)>
+HandSystem::GetOwnHandPositions() const noexcept
+{
+	return PositionsOf(GetOwnHands());
 }
 
 namespace

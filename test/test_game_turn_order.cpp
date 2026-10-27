@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <iterator>
 #include <vector>
 
 #include <gtest/gtest.h>
@@ -372,6 +373,33 @@ TEST(GameTurnOrder, TheChecksumComesAtTheEndOfTheTurn)
 	EXPECT_TRUE(recorder.Before(Step::SyncChecksum, Step::RunRecord));
 }
 
+TEST(GameTurnOrder, TheFullTurnMeasuresTheInfluenceFromTheTurnHands)
+{
+	// The players' commands and the hand's own work come before the influence of the turn, and measure as it does
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::DrawnPlaces));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::PlayerCommands));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandStillness));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HandInterface));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnStart));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::Influence));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::CreatureHandMoments));
+	EXPECT_TRUE(MeasuresInfluenceFromTurnHands(Step::HeldThing));
+	// After the end of that part, the frames measure from the hand that this computer shows
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::InfluenceTurnEnd));
+	EXPECT_FALSE(MeasuresInfluenceFromTurnHands(Step::SyncChecksum));
+}
+
+TEST(GameTurnOrder, EachStepOfTheTurnBeforeItsEndMeasuresFromTheTurnHands)
+{
+	// The turn with a creature's own steps in the turn of the living
+	const auto recorder = PlayOneTurn();
+	const auto& steps = recorder.Steps();
+	const auto end = std::ranges::find(steps, k_TurnHandsInfluenceEnd);
+	ASSERT_NE(end, steps.end());
+	EXPECT_TRUE(std::all_of(steps.begin(), end, MeasuresInfluenceFromTurnHands));
+	EXPECT_TRUE(std::none_of(end, steps.end(), MeasuresInfluenceFromTurnHands));
+}
+
 // The frames only draw: a creature that the turn made gets its skeleton and its first pose in the turn, before the
 // checksum reads the world
 TEST(GameTurnOrder, ANewCreatureGetsItsFirstPoseInTheTurn)
@@ -389,4 +417,26 @@ TEST(GameTurnOrder, TheThingsThatTheTurnMadeGoIntoTheMapAtItsEnd)
 	const auto recorder = PlayOneTurn();
 	EXPECT_TRUE(recorder.Before(Step::WalkerLookahead, Step::MapCellsAtTurnEnd));
 	EXPECT_TRUE(recorder.Before(Step::MapCellsAtTurnEnd, Step::SyncChecksum));
+}
+
+// After the game is decided, the turn does only the input of the players, the turn count and the steps after the turn
+TEST(GameTurnOrder, ADecidedGameDoesOnlyTheInputTheCountAndTheStepsAfterTheTurn)
+{
+	TurnRecorder recorder;
+	PlayTurn([&recorder](Step step) { recorder(step); }, true);
+	const std::vector<Step> expected {Step::DrawnPlaces,       Step::PlayerCommands,   Step::HandStillness,
+	                                  Step::HandInterface,     Step::ChimneySmoke,     Step::Clock,
+	                                  Step::RealWeather,       Step::WalkerLookahead,  Step::CreatureShapes,
+	                                  Step::MapCellsAtTurnEnd, Step::InfluenceTurnEnd, Step::SyncChecksum,
+	                                  Step::RunRecord};
+	EXPECT_EQ(recorder.Steps(), expected);
+}
+
+// A step with no stage between two steps of the players' turns is part of the players' turns
+TEST(GameTurnOrder, AStepWithNoStageFollowsTheStepBeforeIt)
+{
+	const auto index =
+	    static_cast<size_t>(std::distance(k_Turn.begin(), std::ranges::find(k_Turn, Step::TownFlags, &Place::step)));
+	EXPECT_FALSE(PlaysOnceDecided(k_Turn, index));
+	EXPECT_TRUE(PlaysOnceDecided(k_Turn, 0));
 }

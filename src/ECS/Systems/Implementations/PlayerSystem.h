@@ -33,7 +33,7 @@ class PlayerSystem final: public PlayerSystemInterface
 public:
 	void RegisterPlayers() override;
 	void AddPlayer(entt::entity playerEntity) override;
-	[[nodiscard]] entt::entity GetPlayer(PlayerNames playerName) const override;
+	[[nodiscard]] std::optional<entt::entity> FindPlayer(PlayerNames playerName) const override;
 	void AddCreature(entt::entity creature) override;
 	void MakePrimaryCreature(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetPrimaryCreature(PlayerNames name) const override;
@@ -41,6 +41,7 @@ public:
 	void ForgetKept() override;
 	[[nodiscard]] bool KeepAlignmentAt(uint32_t turn) override;
 	void TakeUpKept(entt::entity playerEntity) override;
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
 
 private:
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them

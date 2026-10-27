@@ -68,6 +68,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -1065,6 +1066,23 @@ void PrepareNetworkLand(uint32_t seed)
 		Locator::gameRandom::value().Restart();
 	}
 	Locator::rng::value().SetRunSeed(seed);
+}
+
+std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools)
+{
+	if (const auto refusal = developer_tools::SoakRefusalOf(developer_tools::k_Built, tools); refusal.has_value())
+	{
+		return refusal;
+	}
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetAllComputerGods(tools.allComputerGods);
+	}
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAiSeed(tools.aiSeed);
+	}
+	return std::nullopt;
 }
 
 void LoadEveryResource()

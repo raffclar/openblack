@@ -34,6 +34,7 @@
 #include "ECS/Components/HandMorph.h"
 #include "ECS/Components/MapScriptGlobals.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/Reward.h"
 #include "ECS/Components/Shark.h"
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/TownCreatureAttitude.h"
@@ -88,6 +89,7 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::RegistryContext::gameOver>("gameOver")
 	    .Field<&openblack::ecs::RegistryContext::skirmish>("skirmish")
 	    .Field<&openblack::ecs::RegistryContext::slotsWaitForHumans>("slotsWaitForHumans")
+	    .Field<&openblack::ecs::RegistryContext::gameEnd>("gameEnd")
 	    .Field<&openblack::ecs::RegistryContext::partnersAlwaysAgree>("partnersAlwaysAgree")
 	    .Field<&openblack::ecs::RegistryContext::nextHeartBeamSound>("nextHeartBeamSound")
 	    .Field<&openblack::ecs::RegistryContext::nextDamageBeamSound>("nextDamageBeamSound")
@@ -284,6 +286,9 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::Player::Miracles::allEnabled>("allEnabled")
 	    .Field<&openblack::ecs::components::Player::Miracles::tribalPower>("tribalPower")
 	    .Field<&openblack::ecs::components::Player::Miracles::maxTribalPower>("maxTribalPower");
+	Reflect<openblack::ecs::components::Reward::Drawn>(context, ValueOnly {})
+	    .Field<&openblack::ecs::components::Reward::Drawn::position>("position")
+	    .Field<&openblack::ecs::components::Reward::Drawn::rotation>("rotation");
 	Reflect<openblack::ecs::components::Shark::DrawnPlace>(context, ValueOnly {})
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::position>("position")
 	    .Field<&openblack::ecs::components::Shark::DrawnPlace::rotation>("rotation");

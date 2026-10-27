@@ -20,6 +20,7 @@
 #include <glm/vec3.hpp>
 
 #include "Creature/CreatureMarks.h"
+#include "Creature/CreatureTattoo.h"
 #include "Creature/LeashKeys.h"
 #include "Enums.h"
 
@@ -335,6 +336,27 @@ struct HandCastUnlock
 	entt::entity seed {entt::null};
 };
 
+/// The gesture of the leash picker chose a leash: the creature of the player changes to the leash of this type, if it
+/// knows that leash
+struct LeashPick
+{
+	LeashType type;
+};
+
+/// A scribble of the hand shakes off the thing that the hand holds. The thing falls from where the hand holds it, with
+/// no speed, and the turn does not plant it again.
+struct HandShakeOff
+{
+};
+
+/// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
+/// makes the same dust at the same turn.
+struct GripDust
+{
+	/// The point on the ground under the hand at the grip
+	glm::vec3 point {0.0f};
+};
+
 /// The report of what the player did that the help counts, since the last report: the help events of the input of the
 /// player, and what the world camera of the player shows. Only the computer of the player counts the report, at the
 /// turn. Thus the help counts the same things at the same turns at all frame rates.
@@ -364,6 +386,33 @@ struct HelpQuery
 	/// The point on the ground under the hand, if the hand is over the ground
 	bool hasGround {false};
 	glm::vec3 ground {0.0f};
+};
+
+/// The hand moved too far from the creature that reaches for the thing that the hand gave it. The creature gives up the
+/// take, unless it already has the thing, and the hand of the player forgets the gift.
+struct GiveCallOff
+{
+	entt::entity creature {entt::null};
+};
+
+/// The tattoo editor changed the tattoos of a creature: its slots, and the block of the player's own pictures when the
+/// editor made the block again. The turn puts them on the creature on every computer.
+struct CreatureTattoo
+{
+	entt::entity creature {entt::null};
+	creature_tattoo::Slots slots {};
+	/// When set, the block of pictures changes too (see creature_tattoo::PicturesBlock)
+	bool hasPictures {false};
+	std::vector<uint8_t> pictures;
+
+	bool operator==(const CreatureTattoo& other) const = default;
+};
+
+/// The hand let go of the rope of the leash of the player's creature, which the leash ties to a thing. The leash becomes
+/// this long, and its slack length a share of it.
+struct LeashLength
+{
+	float length {0.0f};
 };
 
 /// The report of the view of the player that the scripts and the advisors' remarks read: the view of the camera, the
@@ -400,11 +449,11 @@ struct ViewReport
 };
 
 /// What a command does
-using Action =
-    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
-                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
-                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
-                 MiracleRepeat, HandCast, HandCastUnlock, HelpReport, HelpQuery, ViewReport>;
+using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
+                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
+                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
+                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff,
+                            GripDust, HelpReport, HelpQuery, ViewReport, GiveCallOff, CreatureTattoo, LeashLength>;
 
 /// A command and the player that sent it
 struct Command

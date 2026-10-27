@@ -135,6 +135,7 @@ TEST(DeveloperTools, TheServerFilterKeepsTheOptionsOfADeployedServer)
 	                                               "--client-key=/c.key",
 	                                               "--room-name=Game",
 	                                               "--gods=2",
+	                                               "--min-gods=1",
 	                                               "--profile-folder=/p",
 	                                               "--log-file=stdout",
 	                                               "--come-back-seconds",
@@ -193,4 +194,29 @@ TEST(DeveloperTools, TheQuestionOfAPlayerHasOnlyTheAnswersOfTheOriginalGame)
 	}
 	EXPECT_TRUE(IsShown(Choice::KeepOldCreature, true, false));
 	EXPECT_FALSE(IsShown(Choice::KeepOldCreature, false, true));
+}
+
+TEST(DeveloperTools, ABuildForPlayersRefusesTheSoakToolsAndADeveloperBuildAllowsThem)
+{
+	const SoakTools none;
+	const SoakTools computers {.allComputerGods = true};
+	const SoakTools seeded {.allComputerGods = false, .aiSeed = 0u};
+	EXPECT_FALSE(none.Any());
+	EXPECT_TRUE(computers.Any());
+	EXPECT_TRUE(seeded.Any());
+	EXPECT_FALSE(SoakRefusalOf(false, none).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, computers).has_value());
+	EXPECT_TRUE(SoakRefusalOf(false, seeded).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, computers).has_value());
+	EXPECT_FALSE(SoakRefusalOf(true, seeded).has_value());
+}
+
+TEST(DeveloperTools, TheSoakOptionsOfTheGameAndTheServerAreDeveloperOptions)
+{
+	EXPECT_TRUE(IsDeveloperOption("sim-all-computer-gods", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("sim-ai-seed", k_DeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("all-computer-gods", k_ServerDeveloperOptions));
+	EXPECT_TRUE(IsDeveloperOption("ai-seed", k_ServerDeveloperOptions));
+	const std::vector<std::string_view> arguments {"openblack-server", "--all-computer-gods", "--ai-seed", "5", "-g", "path"};
+	EXPECT_EQ(Kept(arguments, k_ServerDeveloperOptions), (std::vector<std::string> {"openblack-server", "-g", "path"}));
 }

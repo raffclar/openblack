@@ -306,7 +306,7 @@ void LeaveTheWay(entt::entity villager)
 
 /// Whether a villager is free to be sent to worship: not held by a script or by the hand, in a state it may be taken from, and
 /// not a disciple unless disciples may go, and not already worshipping or on its way
-bool IsAvailableForWorshipSite(entt::entity villager, bool disciplesToo)
+bool AvailableForWorshipSite(entt::entity villager, bool disciplesToo)
 {
 	if (!systems::villager_reactions::FreeForNewTask(villager))
 	{
@@ -603,7 +603,7 @@ void villager_worship::AdjustWorshippers(entt::entity town, int32_t count, bool 
 		{
 			auto people = PeopleOf(town);
 			std::erase_if(people,
-			              [disciplesToo](entt::entity villager) { return !IsAvailableForWorshipSite(villager, disciplesToo); });
+			              [disciplesToo](entt::entity villager) { return !AvailableForWorshipSite(villager, disciplesToo); });
 			const auto keys = KeysOf(town, people);
 			for (const auto index : rules::CandidateOrder(keys, true))
 			{
@@ -1140,4 +1140,9 @@ bool villager_worship::ExitMoveToWorshipSiteWithSupplies(LivingAction& action, V
 		}
 	}
 	return false;
+}
+
+bool villager_worship::IsAvailableForWorshipSite(entt::entity villager, bool disciplesToo)
+{
+	return AvailableForWorshipSite(villager, disciplesToo);
 }

@@ -74,6 +74,7 @@ public:
 	void PlacePosts(PlayerNames owner, const std::array<glm::vec3, 3>& points) override;
 	bool TapPost(entt::entity post) override;
 	void DoOrder(PlayerNames player, const player_commands::LeashOrder& order) override;
+	void DoLeashLength(PlayerNames player, float length) override;
 	bool PressKey(PlayerNames player, creature_leash::LeashKey key) override;
 	bool TapCreature(PlayerNames player, entt::entity creature) override;
 	bool Shake(PlayerNames player) override;

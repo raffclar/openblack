@@ -185,11 +185,6 @@ bool IsAtHome(entt::entity villager)
 	return WorldRegistry().AnyOf<AtHome>(villager);
 }
 
-float LifeOf(entt::entity villager)
-{
-	return WorldRegistry().Get<const Villager>(villager).life;
-}
-
 glm::vec2 PositionOf(entt::entity entity)
 {
 	return glm::xz(WorldRegistry().Get<const Transform>(entity).position);
