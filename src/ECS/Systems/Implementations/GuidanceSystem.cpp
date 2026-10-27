@@ -133,7 +133,7 @@ std::optional<glm::vec3> ReportedPointUnderCursor()
 	{
 		return std::nullopt;
 	}
-	const auto hands = Locator::handSystem::value().GetHandsOf(LocalPlayer());
+	const auto hands = Locator::handSystem::value().GetHandsOf(OwnPlayer());
 	if (!hands.has_value())
 	{
 		return std::nullopt;
@@ -549,7 +549,7 @@ void GuidanceSystem::TownDesireVoices()
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto turn = Turn();
 	// The camera of the player as the last report of the hand that a turn did gives it
-	const auto reportedCamera = Locator::handSystem::value().GetReportedCamera(LocalPlayer());
+	const auto reportedCamera = Locator::handSystem::value().GetReportedCamera(OwnPlayer());
 	if (!reportedCamera.has_value())
 	{
 		return;
