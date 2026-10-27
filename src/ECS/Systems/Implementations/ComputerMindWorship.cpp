@@ -23,7 +23,9 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "ComputerMindCommon.h"
+#include "ComputerMindMiracles.h"
 #include "ComputerMindRuleTable.h"
+#include "ComputerMindTowns.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AtHome.h"
@@ -32,8 +34,10 @@
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/SpellIcon.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
+#include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/WorshipSite.h"
@@ -56,6 +60,7 @@
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "ECS/TempleConstruction.h"
 #include "ECS/WorldObjects.h"
+#include "ECS/WorshipSites.h"
 #include "Hand/HandGrabRules.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -947,6 +952,18 @@ std::optional<uint16_t> SiteNode(const computer_mind::Mind& mind, uint16_t node)
 	return holder;
 }
 
+/// The map position of a point in the world, from its place on the land and its height above the sea. The altitude is
+/// the height above the land under the point.
+map_coords::MapCoords CoordsOfPoint(const RuleContext& context, glm::vec2 point, float height)
+{
+	auto coords = map_coords::FromMetres(point);
+	// The land under the point is found a little differently from the point itself
+	const map_coords::MapCoords under {.x = map_coords::FtoL(point.x * 65536.0f * 0.1f),
+	                                   .z = map_coords::FtoL(point.y * 65536.0f * 0.1f)};
+	coords.altitude = height - context.hand.moves.LandHeight(under);
+	return coords;
+}
+
 /// Where the game holds a building to stand, as a map position: a worship site at the place of its first miracle icon
 map_coords::MapCoords StandingPlaceOf(const RuleContext& context, entt::entity building)
 {
@@ -957,12 +974,7 @@ map_coords::MapCoords StandingPlaceOf(const RuleContext& context, entt::entity b
 		const auto height = sites.StandingHeight(building);
 		if (point.has_value() && height.has_value())
 		{
-			auto coords = map_coords::FromMetres(*point);
-			// The land under the point is found a little differently from the point itself
-			const map_coords::MapCoords under {.x = map_coords::FtoL(point->x * 65536.0f * 0.1f),
-			                                   .z = map_coords::FtoL(point->y * 65536.0f * 0.1f)};
-			coords.altitude = *height - context.hand.moves.LandHeight(under);
-			return coords;
+			return CoordsOfPoint(context, *point, *height);
 		}
 	}
 	return CoordsOfThing(building).value_or(map_coords::MapCoords {});
@@ -1001,17 +1013,9 @@ bool CarryWorkerToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t
 	return true;
 }
 
-/// The hand takes the wood that the chosen leaf found and drops it at the building of the site: at a worship site's
-/// door, at any other building where it stands
-bool CarryWoodToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+/// Where the god puts wood for a building: at a worship site's door, at any other building where it stands
+map_coords::MapCoords WoodPlaceOf(entt::entity building)
 {
-	const auto wood = BestLeafThing(mind, node);
-	const auto site = SiteNode(mind, node);
-	if (wood == entt::null || !Entities().Valid(wood) || !site.has_value())
-	{
-		return false;
-	}
-	const auto building = mind.nodes[*site].object;
 	auto place = CoordsOfThing(building).value_or(map_coords::MapCoords {});
 	if (IsA<WorshipSite>(building) && Locator::worshipSiteSystem::has_value())
 	{
@@ -1021,7 +1025,128 @@ bool CarryWoodToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 			place = map_coords::FromMetres(*door);
 		}
 	}
-	PickUpAndDropAt(context, wood, place);
+	return place;
+}
+
+/// The hand takes the wood that the chosen leaf found and drops it at the building of the site
+bool CarryWoodToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	const auto wood = BestLeafThing(mind, node);
+	const auto site = SiteNode(mind, node);
+	if (wood == entt::null || !Entities().Valid(wood) || !site.has_value())
+	{
+		return false;
+	}
+	PickUpAndDropAt(context, wood, WoodPlaceOf(mind.nodes[*site].object));
+	return true;
+}
+
+/// How much the god wants to cast the food miracle at the worship site above
+float FoodSpellForSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return ShallCastAt(context, mind, node, MagicType::Food, CoordsOfThing(FirstObjectFrom(mind, mind.nodes[node].parent)));
+}
+
+/// The place where a worship site keeps its food, as a map position
+std::optional<map_coords::MapCoords> FoodPlaceOf(const RuleContext& context, entt::entity site)
+{
+	const auto* transform = Entities().TryGet<const Transform>(site);
+	if (transform == nullptr)
+	{
+		return std::nullopt;
+	}
+	const auto point =
+	    ecs::worship_site::TurnedPoint({transform->position.x, transform->position.z},
+	                                   Entities().Get<const WorshipSite>(site).facing, ecs::worship_site::k_FoodPotPoint);
+	return CoordsOfPoint(context, point, transform->position.y);
+}
+
+/// The god charges the food miracle of the node's icon and casts it where the worship site above keeps its food
+bool CastFoodAtSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	const auto icon = FirstObjectFrom(mind, node);
+	const auto site = FirstObjectFrom(mind, mind.nodes[node].parent);
+	if (!IsA<WorshipIcon>(icon) || !IsA<WorshipSite>(site))
+	{
+		return false;
+	}
+	const auto place = FoodPlaceOf(context, site);
+	if (!place.has_value())
+	{
+		return false;
+	}
+	ReachAndChant(context, icon);
+	CastAtPlace(context, *place, icon, 0.0f);
+	return true;
+}
+
+/// How much the god wants to cast the heal miracle, at no place
+float HealSpellForSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return ShallCastAt(context, mind, node, MagicType::Heal, std::nullopt);
+}
+
+/// Whether the villager ends up hidden at its worship site
+bool HidesAtSite(entt::entity villager)
+{
+	const auto* action = Entities().TryGet<const LivingAction>(villager);
+	return action != nullptr && Locator::livingActionSystem::has_value() &&
+	       Locator::livingActionSystem::value().VillagerGetFinalState(*action) == VillagerStates::HidingAtWorshipSite;
+}
+
+/// The god charges the heal miracle of the node's icon and casts it on the worshipper of the site above with the least
+/// life. A worshipper that hides at the site does not count, and a worshipper with full life does not get the miracle.
+bool HealWorshipper(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	const auto icon = FirstObjectFrom(mind, node);
+	const auto site = FirstObjectFrom(mind, mind.nodes[node].parent);
+	if (!IsA<WorshipIcon>(icon) || !IsA<WorshipSite>(site))
+	{
+		return false;
+	}
+	std::vector<entt::entity> worshippers;
+	std::vector<float> lives;
+	for (const auto worshipper : Entities().Get<const WorshipSite>(site).worshippers)
+	{
+		if (IsA<Villager>(worshipper) && !HidesAtSite(worshipper))
+		{
+			worshippers.push_back(worshipper);
+			lives.push_back(LifeOf(worshipper));
+		}
+	}
+	const auto weakest = computer_mind_rules::LeastLife(lives);
+	if (!weakest.has_value())
+	{
+		return false;
+	}
+	const auto place = CoordsOfThing(worshippers[*weakest]);
+	if (!place.has_value())
+	{
+		return false;
+	}
+	ReachAndChant(context, icon);
+	CastAtPlace(context, *place, icon, 0.0f);
+	return true;
+}
+
+/// How much the god wants to cast the wood miracle at the building of the site above
+float WoodSpellForSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return ShallCastAt(context, mind, node, MagicType::Wood, CoordsOfThing(FirstObjectFrom(mind, mind.nodes[node].parent)));
+}
+
+/// The god charges the wood miracle of the node's icon and casts it where it puts wood for the building of the site above
+bool CastWoodAtSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	const auto icon = FirstObjectFrom(mind, node);
+	const auto parent = mind.nodes[node].parent;
+	const auto site = parent.has_value() ? SiteNode(mind, *parent) : std::nullopt;
+	if (!IsA<WorshipIcon>(icon) || !site.has_value())
+	{
+		return false;
+	}
+	ReachAndChant(context, icon);
+	CastAtPlace(context, WoodPlaceOf(mind.nodes[*site].object), icon, 0.0f);
 	return true;
 }
 
@@ -1046,4 +1171,10 @@ void computer_world::RegisterWorshipRules(RuleTable& table)
 	AddRule(table, k_Worship, NodeKind::ActionGiveBuildingSiteWorkers,
 	        {.intensity = SiteWantingWorkers, .perform = CarryWorkerToSite});
 	AddRule(table, k_Worship, NodeKind::ActionGiveBuildingSiteWood, {.intensity = SiteWantingWood, .perform = CarryWoodToSite});
+	AddRule(table, k_Worship, NodeKind::ObjectCastFoodSpellOnWorshipSite,
+	        {.intensity = FoodSpellForSite, .perform = CastFoodAtSite});
+	AddRule(table, k_Worship, NodeKind::ObjectCastHealSpellAtWorshipSite,
+	        {.intensity = HealSpellForSite, .perform = HealWorshipper});
+	AddRule(table, k_Worship, NodeKind::ObjectShallCastWoodSpellAgain,
+	        {.intensity = WoodSpellForSite, .perform = CastWoodAtSite});
 }

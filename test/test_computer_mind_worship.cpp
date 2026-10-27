@@ -168,3 +168,24 @@ TEST(ComputerMindWorshipRules, PlaceOfAWorkerForASite)
 	    [](const map_coords::MapCoords&) { return false; });
 	EXPECT_EQ(none, start);
 }
+
+TEST(ComputerMindWorship, OwnsTheMiraclesAtTheSites)
+{
+	EXPECT_EQ(DomainOf(NodeKind::ObjectCastFoodSpellOnWorshipSite), MindDomain::Worship);
+	EXPECT_EQ(DomainOf(NodeKind::ObjectCastHealSpellAtWorshipSite), MindDomain::Worship);
+	EXPECT_EQ(DomainOf(NodeKind::ObjectShallCastWoodSpellAgain), MindDomain::Worship);
+}
+
+TEST(ComputerMindWorshipRules, WorshipperWithTheLeastLife)
+{
+	// The first of the least wins
+	const std::array<float, 4> lives {0.75f, 0.25f, 0.5f, 0.25f};
+	EXPECT_EQ(LeastLife(lives), std::optional<size_t> {1});
+	// Full life does not count, and no worshipper gives none
+	const std::array<float, 2> full {1.0f, 1.0f};
+	EXPECT_FALSE(LeastLife(full).has_value());
+	EXPECT_FALSE(LeastLife({}).has_value());
+	// A life just below full counts
+	const std::array<float, 2> almost {1.0f, 0.99999994f};
+	EXPECT_EQ(LeastLife(almost), std::optional<size_t> {1});
+}

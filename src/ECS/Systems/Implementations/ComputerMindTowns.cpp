@@ -9,6 +9,8 @@
 
 #define LOCATOR_IMPLEMENTATIONS
 
+#include "ComputerMindTowns.h"
+
 #include <algorithm>
 #include <optional>
 #include <vector>
@@ -114,36 +116,7 @@ float ShallCast(RuleContext& context, computer_mind::Mind& mind, uint16_t node, 
 		place = CoordsOfThing(above);
 	}
 
-	const auto* player = [&context]() -> const Player* {
-		const Player* found = nullptr;
-		Entities().Each<const Player>([&found, &context](const Player& each) {
-			if (each.name == context.player && found == nullptr)
-			{
-				found = &each;
-			}
-		});
-		return found;
-	}();
-	if (player == nullptr || !player_miracles::IsMagicTypeEnabled(player->miracles, type))
-	{
-		return 0.0f;
-	}
-	entt::entity icon = entt::null;
-	float charge = ChargeLevel(context, type, icon);
-	// Short of a full charge the god asks again, so each look counts two requests
-	charge = charge < 1.0f ? ChargeLevel(context, type, icon) : 1.0f;
-	if (icon == entt::null)
-	{
-		return 0.0f;
-	}
-	const float turns = computer_mind_rules::TurnsToCharge(FactsOf(icon));
-	if (turns < 0.0f)
-	{
-		return 0.0f;
-	}
-	const float pull = place.has_value() ? PlacePull(context, *place) : 1.0f;
-	mind.nodes[node].object = icon;
-	return computer_mind_rules::SpellValue(charge, turns, pull);
+	return ShallCastAt(context, mind, node, type, place);
 }
 
 /// The field of the god's towns that the god wants to take food from most
@@ -534,4 +507,39 @@ void computer_world::RegisterTownsRules(RuleTable& table)
 	        {.intensity = [](RuleContext& context, computer_mind::Mind& mind,
 	                         uint16_t node) { return ShallCast(context, mind, node, MagicType::Wood, ResourceType::Wood); },
 	         .perform = CastOnThing});
+}
+
+float computer_world::ShallCastAt(RuleContext& context, computer_mind::Mind& mind, uint16_t node, MagicType type,
+                                  const std::optional<map_coords::MapCoords>& place)
+{
+	const auto* player = [&context]() -> const Player* {
+		const Player* found = nullptr;
+		Entities().Each<const Player>([&found, &context](const Player& each) {
+			if (each.name == context.player && found == nullptr)
+			{
+				found = &each;
+			}
+		});
+		return found;
+	}();
+	if (player == nullptr || !player_miracles::IsMagicTypeEnabled(player->miracles, type))
+	{
+		return 0.0f;
+	}
+	entt::entity icon = entt::null;
+	float charge = ChargeLevel(context, type, icon);
+	// Short of a full charge the god asks again, so each look counts two requests
+	charge = charge < 1.0f ? ChargeLevel(context, type, icon) : 1.0f;
+	if (icon == entt::null)
+	{
+		return 0.0f;
+	}
+	const float turns = computer_mind_rules::TurnsToCharge(FactsOf(icon));
+	if (turns < 0.0f)
+	{
+		return 0.0f;
+	}
+	const float pull = place.has_value() ? PlacePull(context, *place) : 1.0f;
+	mind.nodes[node].object = icon;
+	return computer_mind_rules::SpellValue(charge, turns, pull);
 }

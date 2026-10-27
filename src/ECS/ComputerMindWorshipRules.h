@@ -47,6 +47,8 @@ constexpr int32_t k_FreeVillagerCells = 36;
 [[nodiscard]] float WorshippersRestUrge(float mostRestDesire);
 /// How much the god wants to take the most tired worshipper home, from what it lacks of life: all above the mark
 [[nodiscard]] float TiredWorshipperUrge(float mostLifeDesire);
+/// The worshipper with the least life, the first of the least. None when no worshipper has less than full life.
+[[nodiscard]] std::optional<size_t> LeastLife(std::span<const float> lives);
 
 /// The desire of a town that a disciple of each work serves, none for a work that serves none
 [[nodiscard]] std::optional<TownDesireInfo> DesireServedBy(VillagerDisciple work);
