@@ -683,7 +683,9 @@ Game* Game::sInstance = nullptr;
 /// The state that the frames of the game loop keep from one frame to the next
 struct Game::FrameLoop
 {
-	std::chrono::high_resolution_clock::time_point lastTime;
+	/// The game's clock when the loop started. The clock follows a fixed frame time in a tool's run, so the draw's time
+	/// does not change with the speed of the machine.
+	uint32_t startTicks {0};
 	std::optional<debug::FrameStatsLog> frameStats;
 	std::chrono::steady_clock::time_point frameStart;
 };
@@ -2344,7 +2346,7 @@ game_frame::GraphicsWindow Game::FrameGraphicsWindow() const
 bool Game::DoesFrameGraphics() const
 {
 	const auto window = FrameGraphicsWindow();
-	return game_frame::DoesGraphics(window.minimised, window.pictureWanted);
+	return game_frame::DoesGraphics(window.minimised, window.pictureWanted, window.fixedFrameTime);
 }
 
 bool Game::PlayFrameStep(game_frame::Step step, FrameState& frame)
@@ -4488,7 +4490,7 @@ Game::RunStart Game::StartRun() noexcept
 	simulation::BeginPlay(continued, loadAllFirst, *this);
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
-	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
+	_frameLoop->startTicks = Locator::time::value().GetTicks();
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,
@@ -4579,7 +4581,7 @@ bool Game::RunFrame() noexcept
 	}
 	auto& config = Locator::config::value();
 	auto& profiler = Locator::profiler::value();
-	const auto lastTime = _frameLoop->lastTime;
+	const auto startTicks = _frameLoop->startTicks;
 	auto& frameStats = _frameLoop->frameStats;
 	auto& frameStart = _frameLoop->frameStart;
 	{
@@ -4591,8 +4593,8 @@ bool Game::RunFrame() noexcept
 			_prefetchTimer.reset();
 		}
 
-		auto duration = std::chrono::high_resolution_clock::now() - lastTime;
-		auto milliseconds = std::chrono::duration_cast<std::chrono::duration<uint32_t, std::milli>>(duration);
+		// The time since the loop started, in milliseconds, by the game's clock
+		const uint32_t drawMs = Locator::time::value().GetTicks() - startTicks;
 		// The frame is drawn from where the inspector shows the camera (an override, a picture's), while everything the
 		// game did this frame went by its own camera, which it gets back once the frame is drawn
 		ShowInspectorCamera(true);
@@ -4615,8 +4617,7 @@ bool Game::RunFrame() noexcept
 		if (drawsFrame)
 		{
 			auto section = profiler.BeginScoped(Profiler::Stage::SceneDraw);
-			// TODO(#481): get actual time
-			const auto drawDesc = SceneDrawDesc(config, milliseconds.count(), IsHandDrawn());
+			const auto drawDesc = SceneDrawDesc(config, drawMs, IsHandDrawn());
 			// The sun, the moon and the dome's blend of this frame, for drawing it
 			Locator::skySystem::value().UpdateFrame(config.drawSky);
 			// Nothing of the world shows under a video that covers the screen, nor behind the falling spell's film

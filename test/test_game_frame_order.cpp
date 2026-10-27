@@ -241,9 +241,18 @@ TEST(GameFrameOrder, TheDrawMeasuresItsRealTimeAfterTheCameraAndBeforeTheFilmAnd
 // A minimised window skips the graphics, except in a frame that a picture is necessary from
 TEST(GameFrameOrder, AMinimisedWindowSkipsTheGraphicsUnlessAPictureIsWanted)
 {
-	EXPECT_TRUE(DoesGraphics(false, false));
-	EXPECT_FALSE(DoesGraphics(true, false));
-	EXPECT_TRUE(DoesGraphics(true, true));
+	EXPECT_TRUE(DoesGraphics(false, false, false));
+	EXPECT_FALSE(DoesGraphics(true, false, false));
+	EXPECT_TRUE(DoesGraphics(true, true, false));
+}
+
+// A run with a fixed frame time draws each frame while the desktop minimises its window. The renderer keeps some of what
+// it drew before, so a picture of the run does not change with the window.
+TEST(GameFrameOrder, ARunWithAFixedFrameTimeDrawsEveryFrameWhileTheWindowIsMinimised)
+{
+	EXPECT_TRUE(DoesGraphics(true, false, true));
+	EXPECT_TRUE(DoesGraphics(true, true, true));
+	EXPECT_TRUE(DoesGraphics(false, false, true));
 }
 
 // A run with a fixed frame time does every step while the desktop minimises its window, so that the camera and the hand

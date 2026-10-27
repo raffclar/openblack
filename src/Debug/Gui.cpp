@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <chrono>
 
 #include "Graphics/EmbeddedShaders.h"
 #ifdef __GNUC__
@@ -58,6 +59,7 @@
 #include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "Editor/EditorWindow.h"
 #include "EngineConfig.h"
@@ -441,6 +443,15 @@ void Gui::NewFrame() noexcept
 	ImGui_ImplSDL2_NewFrame();
 	ImGuiIO& io = ImGui::GetIO();
 	io.DisplayFramebufferScale = ImVec2(1.0f, 1.0f);
+	// A tool's run with a fixed frame time gives the debug windows that time too, so that their frame rate and their
+	// animations do not change with the speed of the machine
+	if (Locator::time::has_value())
+	{
+		if (const auto fixed = Locator::time::value().GetFixedFrameTime(); fixed.has_value() && fixed->count() > 0)
+		{
+			io.DeltaTime = std::chrono::duration<float>(*fixed).count();
+		}
+	}
 	ImGui::NewFrame();
 }
 
