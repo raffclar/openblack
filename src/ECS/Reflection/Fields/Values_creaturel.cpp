@@ -38,6 +38,7 @@ void openblack::ecs::reflection::RegisterFields_Values_creaturel(entt::meta_ctx&
 	    .Field<&openblack::creature_layers::BodyAction::timedByPlayer>("timedByPlayer")
 	    .Field<&openblack::creature_layers::BodyAction::hurried>("hurried")
 	    .Field<&openblack::creature_layers::BodyAction::keepsPace>("keepsPace")
+	    .Field<&openblack::creature_layers::BodyAction::kiss>("kiss")
 	    .Field<&openblack::creature_layers::BodyAction::realTime>("realTime")
 	    .Field<&openblack::creature_layers::BodyAction::danceMoveMs>("danceMoveMs")
 	    .Field<&openblack::creature_layers::BodyAction::blendedWith>("blendedWith")
