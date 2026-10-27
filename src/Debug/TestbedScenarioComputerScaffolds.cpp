@@ -50,6 +50,8 @@ CREATE_VILLAGER_POS("6.0,30.0", "-4.0,41.0", "CELTIC_FORESTER", 20)
 
 /// The game turns that the scenarios wait before the action, so that the town settles first
 constexpr uint32_t k_Wait = 50;
+/// The share of the town's totem. The tool also builds the worship site at once, so that the god does not take wood to it.
+constexpr float k_WorshipShare = 0.5f;
 /// The scale of a scaffold of the value of one scaffold and of two scaffolds
 constexpr float k_OneScaffold = 0.7f;
 constexpr float k_TwoScaffolds = 0.9f;
@@ -80,6 +82,7 @@ void testbed_scenarios::AddComputerGodScaffoldScenarios(std::vector<Scenario>& a
 	    .objects = {{.type = ScaffoldInfo::Normal, .offset = {-30.0f, -30.0f}, .scale = k_OneScaffold},
 	                {.type = ScaffoldInfo::Normal, .offset = {30.0f, -30.0f}, .scale = k_TwoScaffolds}},
 	    .landScript = k_WorkshopTownScript,
+	    .worshipShare = k_WorshipShare,
 	    .objectsAfterLandScript = true,
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "CombineScaffolds",
@@ -100,6 +103,7 @@ void testbed_scenarios::AddComputerGodScaffoldScenarios(std::vector<Scenario>& a
 	    .framing = ScaffoldFraming(),
 	    .objects = {{.type = ScaffoldInfo::Normal, .offset = {30.0f, -30.0f}, .scale = k_OneScaffold}},
 	    .landScript = k_WorkshopTownScript,
+	    .worshipShare = k_WorshipShare,
 	    .objectsAfterLandScript = true,
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "FindPlaceToUseScaffoldForBuilding",
@@ -117,6 +121,7 @@ void testbed_scenarios::AddComputerGodScaffoldScenarios(std::vector<Scenario>& a
 	                "one. The players.list query shows the node and the steps of the hand.",
 	    .framing = ScaffoldFraming(),
 	    .landScript = k_WorkshopTownScript,
+	    .worshipShare = k_WorshipShare,
 	    .computerActions = {{.afterTurns = k_Wait,
 	                         .node = "FillWorkshop",
 	                         .first = {.kind = ComputerActionThing::Kind::Workshop, .townId = 900}}},
