@@ -77,6 +77,9 @@ bool SetDiscipleNothingToDo(components::LivingAction& action, std::optional<entt
 /// preaching in it stop
 void TownClaimed(entt::entity town);
 
+/// Each turn: the glow of each disciple whose work glows, and the one mark of the symbol. The frames do not make the
+/// entities of the marks, so the world of each computer has the same marks.
+void MakeMarks();
 /// Every frame: the disciples' glows, and the symbol of the one in the hand or under it
 void UpdateMarks();
 

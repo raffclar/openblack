@@ -73,6 +73,7 @@
 #include "ECS/Systems/HeartbeatSystemInterface.h"
 #include "ECS/Systems/HelpMessageSystemInterface.h"
 #include "ECS/Systems/HelpTextSystemInterface.h"
+#include "ECS/Systems/Implementations/VillagerDisciples.h"
 #include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/LeashSystemInterface.h"
 #include "ECS/Systems/LivingActionSystemInterface.h"
@@ -918,6 +919,10 @@ void PlayTurnStep(game_turn::Step step, TurnViewInterface& view)
 	case Step::CreatureShapes:
 		// A creature that has no skeleton or no pose yet gets them, so that the frames have a body to draw
 		Locator::creatureAnimationSystem::value().ShapeBodies();
+		break;
+	case Step::DiscipleMarks:
+		// Each disciple whose work glows gets its glow, so that no frame makes an entity of the world
+		ecs::villager_disciple::MakeMarks();
 		break;
 	case Step::MapCellsAtTurnEnd:
 		// The things that the turn made go into the map's cells, so that the frames find them there and file nothing

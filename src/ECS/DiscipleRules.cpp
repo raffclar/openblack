@@ -327,3 +327,36 @@ WaitStep disciple::WaitStepFromCentre(float towardsDisciple, float centreRadius,
 	const float beyond = random(k_Beyond);
 	return {.radians = towardsDisciple + turn, .metres = centreRadius + beyond};
 }
+
+disciple::MarkChanges disciple::PlanMarks(std::span<const MarkFacts> marks, std::span<const entt::entity> glowing)
+{
+	MarkChanges changes;
+	bool hasSymbol = false;
+	std::vector<entt::entity> kept;
+	for (size_t i = 0; i < marks.size(); ++i)
+	{
+		const auto& mark = marks[i];
+		if (mark.symbol)
+		{
+			hasSymbol = true;
+		}
+		else if (mark.glows)
+		{
+			kept.push_back(mark.villager);
+		}
+		else
+		{
+			changes.marksToRemove.push_back(i);
+		}
+	}
+	for (const auto villager : glowing)
+	{
+		if (std::ranges::find(kept, villager) == kept.end())
+		{
+			changes.glowsToMake.push_back(villager);
+			kept.push_back(villager);
+		}
+	}
+	changes.makeSymbol = !hasSymbol && !glowing.empty();
+	return changes;
+}
