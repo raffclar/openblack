@@ -62,10 +62,10 @@ float game_random::FloatRand(float x, uint32_t& seed) noexcept
 	return FloatOf(LHRand(k_FloatRandRange, seed), x);
 }
 
-float GameRandomInterface::GameFloatRange(float a, float b)
+float GameRandomInterface::GameFloatRange(float a, float b, DrawSite site)
 {
 	const float range = b - a;
-	const float r = GameFloatRand(range);
+	const float r = GameFloatRand(range, site);
 	return r + a;
 }
 
@@ -78,12 +78,12 @@ float GameRandomInterface::CrtRandom(float a, float b)
 	return r + a;
 }
 
-float GameRandomInterface::ParticleFloatRand(float x)
+float GameRandomInterface::ParticleFloatRand(float x, DrawSite site)
 {
 	switch (GetParticleStream())
 	{
 	case ParticleRandomStream::Synced:
-		return ParticleFloat(GameRand(game_random::k_FloatRandRange), x);
+		return ParticleFloat(GameRand(game_random::k_FloatRandRange, site), x);
 	case ParticleRandomStream::Local:
 		return ParticleFloat(LocalRand(static_cast<int32_t>(game_random::k_FloatRandRange)), x);
 	case ParticleRandomStream::None:
@@ -92,19 +92,19 @@ float GameRandomInterface::ParticleFloatRand(float x)
 	return 0.0f;
 }
 
-float GameRandomInterface::ParticleFloatRand(float a, float b)
+float GameRandomInterface::ParticleFloatRand(float a, float b, DrawSite site)
 {
 	const float range = b - a;
-	const float r = ParticleFloatRand(range);
+	const float r = ParticleFloatRand(range, site);
 	return r + a;
 }
 
-int32_t GameRandomInterface::ParticleRand(int32_t n)
+int32_t GameRandomInterface::ParticleRand(int32_t n, DrawSite site)
 {
 	switch (GetParticleStream())
 	{
 	case ParticleRandomStream::Synced:
-		return static_cast<int32_t>(GameRand(static_cast<uint32_t>(n)));
+		return static_cast<int32_t>(GameRand(static_cast<uint32_t>(n), site));
 	case ParticleRandomStream::Local:
 		return static_cast<int32_t>(LocalRand(n));
 	case ParticleRandomStream::None:
@@ -113,7 +113,7 @@ int32_t GameRandomInterface::ParticleRand(int32_t n)
 	return 0;
 }
 
-glm::vec3 GameRandomInterface::ParticleRandR3()
+glm::vec3 GameRandomInterface::ParticleRandR3(DrawSite site)
 {
 	if (GetParticleStream() == ParticleRandomStream::None)
 	{
@@ -123,9 +123,9 @@ glm::vec3 GameRandomInterface::ParticleRandR3()
 	float sum = 0.0f;
 	do
 	{
-		p.x = ParticleFloatRand(2.0f) - 1.0f;
-		p.y = ParticleFloatRand(2.0f) - 1.0f;
-		p.z = ParticleFloatRand(2.0f) - 1.0f;
+		p.x = ParticleFloatRand(2.0f, site) - 1.0f;
+		p.y = ParticleFloatRand(2.0f, site) - 1.0f;
+		p.z = ParticleFloatRand(2.0f, site) - 1.0f;
 		// (z z + y y) + x x
 		const float zz = p.z * p.z;
 		const float yy = p.y * p.y;

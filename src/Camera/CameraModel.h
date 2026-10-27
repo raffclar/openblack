@@ -87,6 +87,8 @@ public:
 	/// A script command or a debug tool puts the camera here, with no speed. Each model decides what continues from
 	/// here, for example a flight or a camera that follows a thing.
 	virtual void PlaceAt(glm::vec3 /*origin*/, glm::vec3 /*focus*/) {}
+	/// Stops a flight that is in progress or that waits to start. The camera stays where it is.
+	virtual void StopFlight() {}
 	[[nodiscard]] virtual glm::vec3 GetTargetOrigin() const = 0;
 	[[nodiscard]] virtual glm::vec3 GetTargetFocus() const = 0;
 	[[nodiscard]] virtual std::optional<Lens> GetLens() const { return std::nullopt; }

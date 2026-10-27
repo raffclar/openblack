@@ -17,6 +17,7 @@
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
+#include <glm/mat3x3.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec3.hpp>
 
@@ -26,6 +27,7 @@
 #include "Creature/CreatureLayers.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureSway.h"
+#include "ECS/Components/Transform.h"
 
 namespace openblack::ecs::components
 {
@@ -125,7 +127,35 @@ struct CreatureAnimation
 	/// Where each bone was in the world at the end of the last game turn. The alignment motes of a turn start at the
 	/// bones of the pose of the turn before.
 	std::vector<glm::vec3> lastTurnBones;
+	/// Where the frame draws a walking body between its last two game turns: its place, its turn and the animations of
+	/// its walk at that part of the turn. Only the draw reads it. The game turns go by the Transform and the slots above.
+	struct DrawnPlace
+	{
+		glm::vec3 position;
+		glm::mat3 rotation;
+		std::vector<Slot> slots;
+	};
+	/// Empty: the body is drawn where its Transform puts it, with the slots above
+	std::optional<DrawnPlace> drawnPlace;
 };
+
+/// Where the frame draws a creature's body: where its walk is drawn between the last two game turns, or where its
+/// Transform puts it
+[[nodiscard]] inline Transform DrawnTransform(const Transform& transform, const CreatureAnimation* animation)
+{
+	if (animation == nullptr || !animation->drawnPlace.has_value())
+	{
+		return transform;
+	}
+	return {.position = animation->drawnPlace->position, .rotation = animation->drawnPlace->rotation, .scale = transform.scale};
+}
+
+/// The animations that the frame draws a creature's body with: those of its walk at the frame's part of the turn, or
+/// those of the turn
+[[nodiscard]] inline const std::vector<CreatureAnimation::Slot>& DrawnSlots(const CreatureAnimation& animation)
+{
+	return animation.drawnPlace.has_value() ? animation.drawnPlace->slots : animation.slots;
+}
 
 /// A creature's eyes: where they look and blink, and where each eyeball and eyelid is drawn this frame
 struct CreatureEyes

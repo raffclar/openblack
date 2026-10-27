@@ -12,6 +12,9 @@
 #include <cstdint>
 
 #include <limits>
+#include <optional>
+
+#include <glm/vec2.hpp>
 
 #include "3D/MapCoords.h"
 #include "ECS/Components/Town.h"
@@ -37,5 +40,16 @@ void Widen(components::TownArea& area, const map_coords::MapCoords& at, float ra
 
 /// The radius of the town: half of the longer side of the box, each side first cut to whole metres
 [[nodiscard]] float Radius(const components::TownArea& area);
+
+/// The gathering place that a land script gives a town, in metres. A place at 0, 0 counts as no place: the town then
+/// finds its own gathering place when it first needs one.
+[[nodiscard]] constexpr std::optional<glm::vec2> GatheringPlaceFromScript(const map_coords::MapCoords& place)
+{
+	if (place.x == 0 && place.z == 0)
+	{
+		return std::nullopt;
+	}
+	return glm::vec2 {map_coords::ToMetres(place.x), map_coords::ToMetres(place.z)};
+}
 
 } // namespace openblack::ecs::town_area

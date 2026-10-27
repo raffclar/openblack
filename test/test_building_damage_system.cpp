@@ -78,12 +78,12 @@ std::vector<std::array<damage::Corner, 3>> Wall(int width, int height, float ste
 class MiddleRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override
 	{
 		++draws;
 		return n / 2;
 	}
-	float GameFloatRand(float x) override
+	float SyncedFloatRand(float x, DrawSite /*site*/) override
 	{
 		++draws;
 		return x / 2.0f;
@@ -148,8 +148,9 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(1.0f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f}, cube);
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->SetUpPose({.axes = glm::mat3(1.0f), .origin = centre});
 		entry.body->velocity = velocity;
 		return entry;

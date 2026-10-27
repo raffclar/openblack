@@ -236,6 +236,15 @@ inline constexpr uint32_t k_SoulEndsEarlyMs = 110;
 {
 	return timeMs + k_SoulEndsEarlyMs > clipMs;
 }
+/// The frames draw a soul by their own clock, which can be up to a turn and a frame behind the clock of the turns. The
+/// turns remove the soul this many turns after its clip has gone by their clock, so that the frames have drawn it to its
+/// end at any frame time up to a turn long.
+inline constexpr uint32_t k_SoulRemovedTurnsLate = 2;
+/// Whether the turns remove a soul, so many turns after it rose
+[[nodiscard]] constexpr bool SoulRemoved(uint32_t turns, uint32_t turnMs, uint32_t clipMs)
+{
+	return turns >= k_SoulRemovedTurnsLate && SoulGone((turns - k_SoulRemovedTurnsLate) * turnMs, clipMs);
+}
 /// How see-through a soul is, so far into its clip
 [[nodiscard]] uint8_t SoulAlphaAt(uint32_t timeMs, uint32_t clipMs);
 

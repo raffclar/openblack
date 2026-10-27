@@ -23,6 +23,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/GameMusic.h"
 #include "Audio/Sound.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureCave.h"
 #include "Creature/CreatureFace.h"
 #include "Creature/CreatureFeedback.h"
@@ -201,7 +202,7 @@ std::vector<glm::vec2> Circle(glm::vec2 centre, float radius, size_t points)
 	for (size_t i = 0; i < points; ++i)
 	{
 		const auto angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(points);
-		circle.emplace_back(centre + (radius * glm::vec2(std::cos(angle), std::sin(angle))));
+		circle.emplace_back(centre + (radius * glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle))));
 	}
 	return circle;
 }
@@ -2087,6 +2088,18 @@ void AddAppearance(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "interface.film_surface",
+	    .name = "The 16-bit colours of a film",
+	    .facet = Facet::Interface,
+	    .description = "After a second, the intro film plays full screen. Each picture goes through the 16-bit surface "
+	                   "that the game uses on the display cards of today. The Videos window changes the surface.",
+	    .expected = "The sky and the sea of the film show bands of colour, as the game shows them. Each channel "
+	                "keeps 32 levels. The 565 surface keeps 64 levels of green. The None surface shows smooth colours.",
+	    .framing = {.shot = Shot::Overview},
+	    .commands = {Command {.kind = Kind::PlayIntroFilm, .delaySeconds = 1.0f}},
+	});
+
+	all.push_back({
 	    .id = "appearance.creature_hand_glows",
 	    .name = "The glows on a creature's hands",
 	    .facet = Facet::Appearance,
@@ -3342,7 +3355,7 @@ void AddMovement(std::vector<Scenario>& all)
 	{
 		// Each piece runs round the ring
 		const glm::vec2 out = point - k_Pen;
-		const float yaw = glm::degrees(std::atan2(out.y, out.x)) + 90.0f;
+		const float yaw = glm::degrees(portable_math::Atan2(out.y, out.x)) + 90.0f;
 		pen.push_back({.type = MobileStaticInfo::CeltFenceShort, .offset = point, .yawDegrees = yaw});
 	}
 	pen.push_back({.type = VillagerInfo::CelticForesterMale,
@@ -4685,7 +4698,7 @@ void AddObjects(std::vector<Scenario>& all)
 		for (int i = 0; i < 8; ++i)
 		{
 			const auto angle = static_cast<float>(i) * std::numbers::pi_v<float> / 4.0f;
-			const glm::vec2 at {std::sin(angle) * 6.0f, std::cos(angle) * 6.0f};
+			const glm::vec2 at {portable_math::Sin(angle) * 6.0f, portable_math::Cos(angle) * 6.0f};
 			if (i % 3 == 0)
 			{
 				round.push_back({.type = MobileObjectInfo::Cart, .offset = at});
@@ -5222,6 +5235,12 @@ void AddObjects(std::vector<Scenario>& all)
 	auto curious = Posed(CreatureType::Tiger, {0.0f, 0.0f});
 	curious.hold = false;
 	curious.pauseMind = false;
+	// A creature that moves far from the hand while the hand takes the villager cannot take her. Its mind starts a short
+	// time before the hand gives her.
+	constexpr float k_ThinksBeforeTheGive = 2.0f;
+	auto curiousAtTheGive = curious;
+	curiousAtTheGive.pauseMind = true;
+	curiousAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
 	all.push_back({
 	    .id = "creature.give_villager",
 	    .name = "Giving a villager from the hand",
@@ -5232,24 +5251,66 @@ void AddObjects(std::vector<Scenario>& all)
 	                "wants nothing much, eats her if hungry, or throws her at the camera if it wants to play.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
-	    .creatures = {curious},
+	    .creatures = {curiousAtTheGive},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
+	    .commands = giving,
+	    .hand = offering,
+	});
+
+	// It wants to play with the player and nothing else, so it throws what it is given at the camera
+	auto playful = curiousAtTheGive;
+	playful.desires = {{.desire = Desire::PlayWithPlayer, .fraction = 1.0f}};
+	playful.hold = true;
+	all.push_back({
+	    .id = "creature.throws_villager",
+	    .name = "A creature throws a villager it is given",
+	    .facet = Facet::Objects,
+	    .description = "The player's hand takes a villager and, held in front of a tiger that wants to play with the "
+	                   "player, gives her to it.",
+	    .expected = "The tiger takes her with its take clip and throws her at the camera with its throw clip, looking at "
+	                "the camera. She leaves its hand at the moment of the throw and flies with her thrown clip, then "
+	                "lands and gets up.",
+	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {playful},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	    .commands = giving,
 	    .hand = offering,
 	});
 
 	all.push_back({
+	    .id = "creature.picks_up_villager",
+	    .name = "A creature picks up, puts down and throws a villager",
+	    .facet = Facet::Objects,
+	    .description = "A tiger picks up the villager in front of it and puts her down. Then it picks her up again and "
+	                   "throws her to the west.",
+	    .expected = "The tiger reaches down with its pick-up clips and takes her at the moment of the pick-up; in its "
+	                "hand she plays her scared stiff clip. It puts her down with its put-down clip. Then it picks her up "
+	                "and throws her with its throw clip: she leaves its hand at the moment of the throw, flies with her "
+	                "thrown clip, lands and gets up.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {OnObject(Kind::PickUp, 0, 0, 1.0f), Act(Kind::PutDown, 0, 1.5f, true), OnObject(Kind::PickUp, 0, 0, 1.5f),
+	                 Go(Kind::ThrowAt, 0, {-40.0f, -10.0f}, 1.5f)},
+	});
+
+	auto hungryAtTheGive = hungryThinking;
+	hungryAtTheGive.pauseMind = true;
+	hungryAtTheGive.thinksAfterSeconds = k_ThinksBeforeTheGive;
+	all.push_back({
 	    .id = "creature.give_villager_eaten",
 	    .name = "Giving a villager to a hungry creature",
 	    .facet = Facet::Objects,
 	    .description = "The player's hand takes a villager and, held in front of a hungry tiger, gives her to it.",
 	    .expected = "The tiger reaches out with its take clip and takes her; in its hand she plays her scared stiff clip. "
-	                "It looks her over the first time it is given a villager, then plays its eat clip: at the moment of "
+	                "Its hunger is its strongest desire, so it plays its eat clip at once: at the moment of "
 	                "the bite she is gone from its hand, and it swallows her as the clip ends. Then she dies and its "
 	                "hunger falls.",
 	    .environment = {.dispenserGrid = false, .cursor = glm::vec2(0.5f, 0.6f), .temple = glm::vec2(0.0f, 80.0f)},
 	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
-	    .creatures = {hungryThinking},
+	    .creatures = {hungryAtTheGive},
 	    .objects = {{.type = VillagerInfo::CelticHousewifeFemale, .offset = {-15.0f, -15.0f}}},
 	    .commands = giving,
 	    .hand = offering,
@@ -5481,6 +5542,23 @@ void AddHand(std::vector<Scenario>& all)
 	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
 	    .creatures = {slapped},
 	    .commands = sweeps,
+	});
+
+	// The creature that the recorded input of the hand strokes and slaps for the dedicated server's check
+	// (tools/sim/hand_inputs/strokes.json). The creature help is on: in a network game every computer counts the time
+	// that the reported hand stays over the creature, and the turn sets the look of the held creature.
+	all.push_back({
+	    .id = "hand.recorded_strokes",
+	    .name = "A tiger for the recorded strokes and slaps",
+	    .facet = Facet::Hand,
+	    .description = "The player's tiger faces the camera in the middle of the screen. The "
+	                   "dedicated server and the game both play this scenario, and the game makes the recorded input of "
+	                   "tools/sim/hand_inputs/strokes.json: the hand holds the tiger, strokes it, slaps it and lets go.",
+	    .expected = "The strokes play the pleased animations and the slaps the reeling ones. In a network game each "
+	                "reaction plays at the next turn, on every computer at the same turn.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.2f},
+	    .creatures = {Posed(CreatureType::Tiger, {0.0f, 0.0f})},
 	});
 
 	// The carried leash round the wrist while the hand strokes and slaps: slow sweeps stroke, fast sweeps slap
@@ -6016,6 +6094,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 3.5f, .value = 3}},
 	});
 
+	// The camera looks at a conifer from 25 m, 20 degrees down, the pointer on its crown. A press of a fifth of a second
+	// is shorter than a tap, but the pull starts after the 0.13 s fade and the hand is far from its grip on the trunk.
+	// Thus the conifer comes free on the first frame of the pull and the hand takes it. The same press does the same in
+	// a network game.
+	all.push_back({
+	    .id = "hand.tree_short_press",
+	    .name = "A short press on a conifer",
+	    .facet = Facet::Hand,
+	    .description = "Seen from 25 m, 20 degrees down, the hand presses on the crown of a conifer for a fifth of a "
+	                   "second and lets go.",
+	    .expected = "The conifer comes out of the ground on the first frame of the pull and leaves its roots hole. The "
+	                "hand holds it after the button comes up. The conifer does not stay leaning in the ground.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.55f, -3.49f}, .look = {0.0f, 4.0f, 20.0f}},
+	    .objects = {{.type = TreeInfo::ConiferA, .offset = {0.0f, 20.0f}, .scale = 1.03f}},
+	    .commands = {{.kind = Kind::PointerTo, .delaySeconds = 1.0f, .point = {0.5f, 0.35f}},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 1.0f, .value = 3},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.2f, .value = 3}},
+	});
+
 	// The camera looks down on a few people and animals from about 25 m, as in play: three people stand still at different
 	// distances, two more walk to and fro, two stand by an oak, and a cow, a sheep, a horse and a pig graze to the left
 	all.push_back({
@@ -6192,6 +6290,26 @@ void AddHand(std::vector<Scenario>& all)
 	                 {.kind = Kind::PointerPress, .delaySeconds = 0.5f, .value = 3},
 	                 {.kind = Kind::PointerRelease, .delaySeconds = 0.1f, .value = 3}},
 	});
+	// The hand pulls a conifer out of the ground: the tree leaves a pile of roots in its hole, which fades away
+	all.push_back({
+	    .id = "hand.pull_tree_roots_hole",
+	    .name = "Tree pulled free leaves a hole of roots",
+	    .facet = Facet::Hand,
+	    .description =
+	        "A conifer stands at the middle of the screen. After a second the pointer goes onto its trunk, "
+	        "presses the Action button and moves up, so the hand pulls the tree. Two seconds later the button comes up.",
+	    .expected = "The tree leans to the hand, comes free and goes into the hand with a puff of dust. A pile of roots "
+	                "and earth stays in the hole where the tree stood, on the shape of the land. After 14 seconds of "
+	                "game time the pile fades, and one second later it is gone. Only this computer draws the pile. The "
+	                "inspector query magic.state shows it under roots_piles.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 12.0f, -20.0f}, .look = {0.0f, 5.0f, 10.0f}},
+	    .objects = {{.type = TreeInfo::Conifer, .offset = {0.0f, 10.0f}}},
+	    .commands = {{.kind = Kind::PointerOnObject, .delaySeconds = 1.0f, .object = 0, .amount = 6.0f},
+	                 {.kind = Kind::PointerPress, .delaySeconds = 0.2f, .value = 3},
+	                 {.kind = Kind::PointerSweep, .delaySeconds = 0.1f, .point = {0.0f, -0.25f}, .amount = 0.6f},
+	                 {.kind = Kind::PointerRelease, .delaySeconds = 2.0f, .value = 3}},
+	});
 }
 
 void AddLeash(std::vector<Scenario>& all)
@@ -6233,6 +6351,33 @@ void AddLeash(std::vector<Scenario>& all)
 	                 Go(Kind::LeashOrderAt, 0, {0.0f, k_NearShallows + 10.0f}, 15.0f, false),
 	                 Act(Kind::TakeOffLeash, 0, 15.0f)},
 	    .repeatFrom = 0,
+	});
+
+	// A man held by a script out in the lake, as the drowning men of Land 1's silver scroll, and a tiger that shrinks
+	// in its temple's pen first, so that it grows again on its way out to him
+	constexpr glm::vec2 k_RescueTemple {-150.0f, 150.0f};
+	constexpr glm::vec2 k_DrowningMan {-30.0f, k_NearShallows + 8.0f};
+	constexpr glm::vec2 k_Bank {-30.0f, k_NearShallows - 20.0f};
+	all.push_back({
+	    .id = "leash.rescue_from_water",
+	    .name = "A man carried out of the water on the leash",
+	    .facet = Facet::Leash,
+	    .description = "A tiger of size 0.5 walks home into its temple's pen, where it shrinks, and then goes on the "
+	                   "learning leash. The Action button of the leash orders it onto a man that a script holds still out "
+	                   "in the lake, as the drowning men of Land 1, and some time later onto the bank.",
+	    .expected = "It grows back to its own size as it leaves the pen, wades out, picks the man up and holds him, "
+	                "facing the player. Told onto the bank, it carries him there and puts him down gently on his feet, "
+	                "with no toss: he stays where its hand sets him.",
+	    .framing = {.shot = Shot::Overview, .include = {k_RescueTemple, k_DrowningMan, k_Bank}},
+	    .creatures = {[&] {
+		    auto tiger = Content(CreatureType::Tiger, k_RescueTemple + glm::vec2(60.0f, -40.0f));
+		    tiger.size = 0.5f;
+		    return tiger;
+	    }()},
+	    .objects = {{.type = VillagerInfo::NorseFarmerMale, .offset = k_DrowningMan, .inScript = true}},
+	    .temples = {{.offset = k_RescueTemple, .angle = 36.0f}},
+	    .commands = {Act(Kind::WalkHome, 0, 1.0f), Leash(0, LeashType::Rope, 25.0f),
+	                 OnObject(Kind::LeashOrderOn, 0, 0, 1.0f, false), Go(Kind::LeashOrderAt, 0, k_Bank, 45.0f, false)},
 	});
 
 	// Worn out and wanting to sleep more than anything, far from its player's temple
@@ -6869,6 +7014,23 @@ void AddCombat(std::vector<Scenario>& all)
 	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
 	});
 
+	// The fight that the recorded input of the hand directs for the dedicated server's check (tools/sim/hand_inputs).
+	// The creature help is on: in a network game every computer counts the time that the reported hand stays over the
+	// creature.
+	all.push_back({
+	    .id = "combat.recorded_presses",
+	    .name = "A fight for the recorded presses of the hand",
+	    .facet = Facet::Combat,
+	    .description = "As Watching a fight: the player's red tiger and a blue tiger fight by "
+	                   "themselves, and the hand's presses direct the red one. The dedicated server and the game both "
+	                   "play this scenario, and the game makes the recorded input of tools/sim/hand_inputs/fight.json.",
+	    .expected = "The camera flies to the side of the arena. Each press on the blue tiger, on the red tiger or on the "
+	                "ground puts its sparkle up at once, and the red tiger makes the move at the next turn.",
+	    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+	    .commands = {Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+	});
+
 	all.push_back({
 	    .id = "combat.gesture_view_moves",
 	    .name = "Drawing a gesture while the fight view moves",
@@ -7289,7 +7451,8 @@ void AddCombat(std::vector<Scenario>& all)
 		{
 			const auto angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Villagers);
 			crowd.push_back({.type = i % 2 == 0 ? VillagerInfo::CelticFarmerMale : VillagerInfo::CelticHousewifeFemale,
-			                 .offset = glm::vec2 {20.0f, 35.0f} + (k_RingRadius * glm::vec2 {std::cos(angle), std::sin(angle)}),
+			                 .offset = glm::vec2 {20.0f, 35.0f} +
+			                           (k_RingRadius * glm::vec2 {portable_math::Cos(angle), portable_math::Sin(angle)}),
 			                 .joinTown = true});
 		}
 		auto strong = red(PlayerNames::PLAYER_ONE, 0.9f, -0.6f);
@@ -8223,7 +8386,7 @@ void AddMind(std::vector<Scenario>& all)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
 			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .offset = {k_RingRadius * portable_math::Sin(angle), k_RingRadius * portable_math::Cos(angle)},
 			                   .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
@@ -8254,9 +8417,10 @@ void AddMind(std::vector<Scenario>& all)
 		for (int i = 0; i < k_Huts; ++i)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
-			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
-			                   .yawDegrees = glm::degrees(angle)});
+			objects.push_back(
+			    {.type = AbodeInfo::CelticHut,
+			     .offset = {k_RingRadius * portable_math::Sin(angle), -60.0f + k_RingRadius * portable_math::Cos(angle)},
+			     .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
 		    .id = "mind.pick_up_no_way",
@@ -8285,9 +8449,10 @@ void AddMind(std::vector<Scenario>& all)
 		for (int i = 0; i < k_Huts; ++i)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
-			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), -60.0f + k_RingRadius * std::cos(angle)},
-			                   .yawDegrees = glm::degrees(angle)});
+			objects.push_back(
+			    {.type = AbodeInfo::CelticHut,
+			     .offset = {k_RingRadius * portable_math::Sin(angle), -60.0f + k_RingRadius * portable_math::Cos(angle)},
+			     .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
 		    .id = "mind.stomp_no_way",
@@ -8314,7 +8479,7 @@ void AddMind(std::vector<Scenario>& all)
 		{
 			const float angle = glm::two_pi<float>() * static_cast<float>(i) / static_cast<float>(k_Huts);
 			objects.push_back({.type = AbodeInfo::CelticHut,
-			                   .offset = {k_RingRadius * std::sin(angle), k_RingRadius * std::cos(angle)},
+			                   .offset = {k_RingRadius * portable_math::Sin(angle), k_RingRadius * portable_math::Cos(angle)},
 			                   .yawDegrees = glm::degrees(angle)});
 		}
 		all.push_back({
@@ -10513,10 +10678,13 @@ std::vector<Scenario> Build()
 	AddTownGrowthScenarios(all);
 	AddStatisticsScenarios(all);
 	AddMultiplayerFrontEndScenarios(all);
+	AddOtherGodScenarios(all);
+	AddJoinOnlineScenarios(all);
 	AddTutorialScenarios(all);
 	AddCreatureDanceScenarios(all);
 	AddCreatureLearningScenarios(all);
 	AddComputerPlayerScenarios(all);
+	AddGameEndScenarios(all);
 	AddWorldSoundScenarios(all);
 	AddTownMiracleScenarios(all);
 	AddCreatureExplorationScenarios(all);
@@ -10666,10 +10834,12 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::OpenTattooMenu || kind == Kind::OpenControlsBox || kind == Kind::OpenMenuPage ||
 	       kind == Kind::PressMenuKey || kind == Kind::StopScript || kind == Kind::StartScriptMusic || kind == Kind::SaveGame ||
 	       kind == Kind::LoadGame || kind == Kind::QuickSave || kind == Kind::ContinueGame || kind == Kind::PlayLogoEffect ||
-	       kind == Kind::PlayFallingSpellFilm || kind == Kind::SayLine || kind == Kind::PlayGuidanceVoice ||
-	       kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons || kind == Kind::ChargeIconWithSeedHeld ||
-	       kind == Kind::FinishBuilding || kind == Kind::CallNative || kind == Kind::PauseGame || kind == Kind::SetGameSpeed ||
-	       kind == Kind::RemoveTeleportStone || kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox ||
+	       kind == Kind::PlayFallingSpellFilm || kind == Kind::PlayIntroFilm || kind == Kind::SayLine ||
+	       kind == Kind::PlayGuidanceVoice || kind == Kind::ScriptRelease || kind == Kind::FillSiteIcons ||
+	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
+	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
+	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
+	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
 	       IsPointerCommand(kind);
 }
 
@@ -10698,7 +10868,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 175> k_Names {
+	constexpr std::array<std::string_view, 182> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -10829,6 +10999,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand grips totem",
 	    "pointer on altar",
 	    "pointer on rope",
+	    "pointer on object",
 	    "set fizz",
 	    "check the profile folder",
 	    "give the player a picture of their own",
@@ -10850,6 +11021,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "press the Tab key",
 	    "keep the creature in a bookmark and follow it",
 	    "play the falling spell film",
+	    "play the intro film",
 	    "give hand glows",
 	    "give a creed power",
 	    "attach a script sound",
@@ -10874,6 +11046,11 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "remove the teleport stone",
 	    "make a dance",
 	    "open a multiplayer box",
+	    "build the worship sites",
+	    "show another god's hand",
+	    "press Join Online Game of the page",
+	    "end box",
+	    "bring a creature into a network game",
 	};
 	return k_Names.at(static_cast<size_t>(kind));
 }
@@ -10883,7 +11060,7 @@ bool testbed_scenarios::IsPointerCommand(Command::Kind kind)
 	return kind == Kind::PointerTo || kind == Kind::PointerPress || kind == Kind::PointerRelease ||
 	       kind == Kind::PointerSweep || kind == Kind::WheelTurn || kind == Kind::PointerOnOpponent ||
 	       kind == Kind::PointerOnCaveCreature || kind == Kind::PointerOnCreature || kind == Kind::PointerOnAltar ||
-	       kind == Kind::PointerOnRope;
+	       kind == Kind::PointerOnRope || kind == Kind::PointerOnObject;
 }
 
 bool NeedOverrides::Empty() const
@@ -11203,11 +11380,12 @@ CameraPlacement testbed_scenarios::Overview(glm::vec3 centre, glm::vec2 halfSize
 	constexpr float k_Margin = 25.0f;
 	const auto halfAngles = glm::clamp(fieldOfView * 0.5f, 0.1f, 1.5f);
 	// The near side of the box is closer to the camera than its middle, so its width takes a wider angle
-	const auto across = ((halfSize.x + k_Margin) / std::tan(halfAngles.x)) + ((halfSize.y + k_Margin) * std::cos(k_Pitch));
-	const auto upAndDown = (halfSize.y + k_Margin) * std::sin(k_Pitch) / std::tan(halfAngles.y);
+	const auto across =
+	    ((halfSize.x + k_Margin) / portable_math::Tan(halfAngles.x)) + ((halfSize.y + k_Margin) * portable_math::Cos(k_Pitch));
+	const auto upAndDown = (halfSize.y + k_Margin) * portable_math::Sin(k_Pitch) / portable_math::Tan(halfAngles.y);
 	const auto distance = distanceFactor * std::max({across, upAndDown, k_MinDistance});
 	return {
-	    .origin = centre + glm::vec3(0.0f, distance * std::sin(k_Pitch), -distance * std::cos(k_Pitch)),
+	    .origin = centre + glm::vec3(0.0f, distance * portable_math::Sin(k_Pitch), -distance * portable_math::Cos(k_Pitch)),
 	    .focus = centre,
 	};
 }

@@ -141,6 +141,7 @@ struct ImGui_ImplSDL2_Data
     SDL_Cursor*             MouseLastCursor;
     int                     MouseLastLeaveFrame;
     bool                    MouseCanUseGlobalState;
+    bool                    KeepOffSystemPointer; // openblack: see ImGui_ImplSDL2_KeepOffSystemPointer
 
     // Gamepad handling
     ImVector<SDL_GameController*> Gamepads;
@@ -621,6 +622,17 @@ void ImGui_ImplSDL2_Shutdown()
     IM_DELETE(bd);
 }
 
+void ImGui_ImplSDL2_KeepOffSystemPointer(bool keep_off)
+{
+    ImGui_ImplSDL2_Data* bd = ImGui_ImplSDL2_GetBackendData();
+    if (bd != nullptr)
+        bd->KeepOffSystemPointer = keep_off;
+    // The backend may not move the pointer of the system for Dear ImGui then
+    ImGuiIO& io = ImGui::GetIO();
+    if (keep_off)
+        io.BackendFlags &= ~ImGuiBackendFlags_HasSetMousePos;
+}
+
 static void ImGui_ImplSDL2_UpdateMouseData()
 {
     ImGui_ImplSDL2_Data* bd = ImGui_ImplSDL2_GetBackendData();
@@ -634,14 +646,15 @@ static void ImGui_ImplSDL2_UpdateMouseData()
     for (int button_n = 0; button_n < ImGuiMouseButton_COUNT && !want_capture; button_n++)
         if (ImGui::IsMouseDragging(button_n, 1.0f))
             want_capture = true;
-    SDL_CaptureMouse(want_capture ? SDL_TRUE : SDL_FALSE);
+    if (!bd->KeepOffSystemPointer)
+        SDL_CaptureMouse(want_capture ? SDL_TRUE : SDL_FALSE);
 
     SDL_Window* focused_window = SDL_GetKeyboardFocus();
     const bool is_app_focused = (bd->Window == focused_window);
 #else
     const bool is_app_focused = (SDL_GetWindowFlags(bd->Window) & SDL_WINDOW_INPUT_FOCUS) != 0; // SDL 2.0.3 and non-windowed systems: single-viewport only
 #endif
-    if (is_app_focused)
+    if (is_app_focused && !bd->KeepOffSystemPointer)
     {
         // (Optional) Set OS mouse position from Dear ImGui if requested (rarely used, only when io.ConfigNavMoveSetMousePos is enabled by user)
         if (io.WantSetMousePos)
@@ -666,6 +679,8 @@ static void ImGui_ImplSDL2_UpdateMouseCursor()
     if (io.ConfigFlags & ImGuiConfigFlags_NoMouseCursorChange)
         return;
     ImGui_ImplSDL2_Data* bd = ImGui_ImplSDL2_GetBackendData();
+    if (bd->KeepOffSystemPointer)
+        return;
 
     ImGuiMouseCursor imgui_cursor = ImGui::GetMouseCursor();
     if (io.MouseDrawCursor || imgui_cursor == ImGuiMouseCursor_None)

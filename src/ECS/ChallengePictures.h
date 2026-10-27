@@ -17,6 +17,7 @@
 #include <string>
 #include <vector>
 
+#include <ChallengePictureFiles.h>
 #include <entt/entity/fwd.hpp>
 
 #include "Graphics/ScreenshotCapture.h"
@@ -78,11 +79,30 @@ struct Screens
 	std::function<bool(const std::string& name)> failed;
 };
 
+/// The files of the challenge pictures in the profile, which their owner reads and writes
+struct Files
+{
+	/// Keeps the picture in high detail of the challenge at a place of the room in its files
+	std::function<void(uint32_t place, std::span<const uint8_t> picture)> put;
+	/// The compressed blocks of the picture of the challenge at a place, as its files hold them now
+	std::function<gamesave::ChallengePictureCells(uint32_t place)> cells;
+};
+
+/// The files of the challenge pictures in the profile, through the save game system. Without the system, none.
+[[nodiscard]] Files ProfileFiles();
+
 /// Whether a picture of the screen is asked for and not back yet: the game had no debug windows, so they are left out
 /// of the frames a picture may be taken of
 [[nodiscard]] bool AnyWaiting(const Registry& registry);
 
-/// Brings every record's picture up to date with the screens that are back: one given up leaves the old picture
-void Collect(Registry& registry, const Screens& screens);
+/// Brings every record's picture up to date with the screens that are back: one given up leaves the old picture. Each
+/// picture that is back goes into the files at the place of its record. Then each record shows its picture as the files
+/// hold it, because a new picture compresses the other pictures of its files again. Without files, a store of its own
+/// keeps the pictures for this call only.
+void Collect(Registry& registry, const Screens& screens, const Files& files);
+
+/// Each record shows its picture as the files hold it, when the files have it: for example after a load copied the
+/// files of the saved game
+void Refresh(Registry& registry, const Files& files);
 
 } // namespace openblack::ecs::challenge_pictures

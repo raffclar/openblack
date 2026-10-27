@@ -35,6 +35,7 @@
 #include <imgui_internal.h>
 #include <imgui_stdlib.h>
 #include <imgui_user.h>
+#include <spdlog/spdlog.h>
 #ifdef _WIN32
 #include <SDL2/SDL_syswm.h>
 #endif
@@ -44,6 +45,7 @@
 #include "Audio.h"
 #include "Camera.h"
 #include "Camera/Camera.h"
+#include "Common/DeveloperToolsGate.h"
 #include "Console.h"
 #include "Creature/BonusCreatures.h"
 #include "CreatureSpawner.h"
@@ -83,6 +85,7 @@
 #include "TextureViewer.h"
 #include "VideoViewer.h"
 #include "Weather.h"
+#include "Windowing/SystemPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 // Turn off formatting because it adds spaces which break the stringifying
@@ -169,6 +172,9 @@ std::unique_ptr<DebugGuiInterface> DebugGuiInterface::Create(graphics::RenderPas
 			{
 				return nullptr;
 			}
+			// A background run (a tool or an agent) never touches the pointer of the system: it is the user's
+			const bool background = Locator::config::has_value() && Locator::config::value().background;
+			ImGui_ImplSDL2_KeepOffSystemPointer(!openblack::windowing::system_pointer::MayTouch(background));
 		}
 	}
 	// The system's cursor stays hidden: the game shows the hand, and its menu its own pointer
@@ -242,9 +248,43 @@ void Gui::SetScale(float scale) noexcept
 	ImGui::GetIO().FontGlobalScale = scale;
 }
 
+void Gui::FollowNetworkSession() noexcept
+{
+	const bool live = developer_tools::NetworkSessionLive();
+	if (live == _networkDormant)
+	{
+		return;
+	}
+	_networkDormant = live;
+	if (live)
+	{
+		// The editor keeps the camera while it is open, thus it closes. The other windows stay as they are, hidden.
+		for (auto& window : _debugWindows)
+		{
+			if (window->GetName() == "Editor" && window->IsOpen())
+			{
+				window->Close();
+			}
+		}
+		_stealsFocus = false;
+	}
+	if (auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, live ? "A network game is live: the debug windows and the editor stop"
+		                                : "The network game ended: the debug windows start again");
+	}
+}
+
 bool Gui::ProcessEvents(const SDL_Event& event) noexcept
 {
 	ImGui::SetCurrentContext(_imgui);
+	// While a network game is live, no debug window or editor tool takes an event, so that none changes the shared
+	// world
+	FollowNetworkSession();
+	if (_networkDormant)
+	{
+		return false;
+	}
 
 	auto takenByWindow = false;
 	for (auto& window : _debugWindows)
@@ -406,6 +446,15 @@ void Gui::NewFrame() noexcept
 
 bool Gui::Loop() noexcept
 {
+	FollowNetworkSession();
+	if (_networkDormant)
+	{
+		// An empty frame: no menu, no window and no overlay
+		NewFrame();
+		ShowInputLockNotice();
+		ImGui::Render();
+		return false;
+	}
 	for (auto& window : _debugWindows)
 	{
 		window->WindowUpdate();

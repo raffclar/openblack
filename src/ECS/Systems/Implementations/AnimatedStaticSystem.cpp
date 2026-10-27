@@ -31,6 +31,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/Transform.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/ObjectDrawListSystemInterface.h"
 #include "Graphics/MeshDetail.h"
@@ -111,14 +112,14 @@ std::optional<uint32_t> AnimatedStaticSystem::GateStoneValue(entt::entity object
 	return animated_static::GateStoneValue(still->gateStones);
 }
 
-bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
+bool AnimatedStaticSystem::TakesGateStone(entt::entity plinth, entt::entity stone) const
 {
-	auto& registry = Locator::entitiesRegistry::value();
+	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(plinth) || !registry.Valid(stone) || !Locator::infoConstants::has_value())
 	{
 		return false;
 	}
-	auto* still = registry.TryGet<AnimatedStatic>(plinth);
+	const auto* still = registry.TryGet<const AnimatedStatic>(plinth);
 	const auto* mobile = registry.TryGet<const MobileStatic>(stone);
 	if (still == nullptr || mobile == nullptr || still->type != AnimatedStaticInfo::GateStonePlinth)
 	{
@@ -126,12 +127,21 @@ bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
 	}
 	const auto& infos = Locator::infoConstants::value().mobileStatic;
 	const auto index = static_cast<size_t>(mobile->type);
-	if (index >= infos.size() || !animated_static::IsGateStoneKind(infos[index].mobileType))
+	return index < infos.size() && animated_static::IsGateStoneKind(infos[index].mobileType);
+}
+
+bool AnimatedStaticSystem::LayGateStone(entt::entity plinth, entt::entity stone)
+{
+	if (!TakesGateStone(plinth, stone))
 	{
 		return false;
 	}
+	auto& registry = Locator::entitiesRegistry::value();
+	auto& still = registry.Get<AnimatedStatic>(plinth);
+	const auto& infos = Locator::infoConstants::value().mobileStatic;
+	const auto index = static_cast<size_t>(registry.Get<const MobileStatic>(stone).type);
 	// A full plinth still takes the stone, which is then lost
-	[[maybe_unused]] const bool laid = animated_static::AddGateStone(still->gateStones, infos[index].meshId);
+	[[maybe_unused]] const bool laid = animated_static::AddGateStone(still.gateStones, infos[index].meshId);
 	return true;
 }
 
@@ -163,11 +173,13 @@ std::optional<std::vector<animated_static::RouteCircle>> AnimatedStaticSystem::R
 
 void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 {
-	if (!Locator::resources::has_value() || !Locator::infoConstants::has_value())
+	if (!Locator::resources::has_value() || !Locator::infoConstants::has_value() || !Locator::drawnRegistry::has_value())
 	{
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
+	// The stones on the plinths are things of the drawn registry: only the frames make, place and remove them
+	auto& drawn = Locator::drawnRegistry::value();
 	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 
 	const auto& animations = Locator::resources::value().GetAnimations();
@@ -176,7 +188,7 @@ void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 
 	// The stones of a plinth that is gone go with it
 	std::vector<entt::entity> orphans;
-	registry.Each<const PlinthStone>([&registry, &orphans](entt::entity entity, const PlinthStone& stone) {
+	drawn.Each<const PlinthStone>([&registry, &orphans](entt::entity entity, const PlinthStone& stone) {
 		if (!registry.Valid(stone.plinth) || !registry.AllOf<AnimatedStaticPose>(stone.plinth))
 		{
 			orphans.push_back(entity);
@@ -184,7 +196,7 @@ void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 	});
 	for (const auto orphan : orphans)
 	{
-		registry.Destroy(orphan);
+		drawn.Destroy(orphan);
 	}
 
 	// It plays on only on the frames the land's draw list draws it
@@ -264,16 +276,21 @@ void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 	for (const auto& [plinth, draws] : plinths)
 	{
 		auto& stones = registry.Get<AnimatedStaticPose>(plinth).stones;
+		// A stone that went with the drawn registry is made again
+		std::erase_if(stones, [&drawn, plinth](entt::entity stone) {
+			const auto* of = drawn.Valid(stone) ? drawn.TryGet<const PlinthStone>(stone) : nullptr;
+			return of == nullptr || of->plinth != plinth;
+		});
 		while (stones.size() > draws.size())
 		{
-			registry.Destroy(stones.back());
+			drawn.Destroy(stones.back());
 			stones.pop_back();
 			changed = true;
 		}
 		while (stones.size() < draws.size())
 		{
-			const auto stone = registry.Create();
-			registry.Assign<PlinthStone>(stone, plinth, false);
+			const auto stone = drawn.Create();
+			drawn.Assign<PlinthStone>(stone, plinth, false);
 			stones.push_back(stone);
 		}
 		const auto still = registry.Get<const AnimatedStatic>(plinth);
@@ -282,17 +299,17 @@ void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 		{
 			const auto& draw = draws[i];
 			const auto meshId = resources::HashIdentifier(*still.gateStones.at(draw.slot));
-			const auto* mesh = registry.TryGet<const Mesh>(stones[i]);
+			const auto* mesh = drawn.TryGet<const Mesh>(stones[i]);
 			if (mesh == nullptr || mesh->id != meshId)
 			{
-				registry.AssignOrReplace<Mesh>(stones[i], meshId, static_cast<int8_t>(0), static_cast<int8_t>(1));
+				drawn.AssignOrReplace<Mesh>(stones[i], meshId, static_cast<int8_t>(0), static_cast<int8_t>(1));
 			}
 			const Transform placed {.position = transform.position + glm::vec3(0.0f, draw.lift, 0.0f),
 			                        .rotation = transform.rotation,
 			                        .scale = transform.scale};
-			if (auto* current = registry.TryGet<Transform>(stones[i]); current == nullptr)
+			if (auto* current = drawn.TryGet<Transform>(stones[i]); current == nullptr)
 			{
-				registry.Assign<Transform>(stones[i], placed);
+				drawn.Assign<Transform>(stones[i], placed);
 			}
 			else if (current->position != placed.position || current->rotation != placed.rotation ||
 			         current->scale != placed.scale)
@@ -300,7 +317,7 @@ void AnimatedStaticSystem::Update(std::chrono::milliseconds frameGameTime)
 				*current = placed;
 				changed = true;
 			}
-			registry.Get<PlinthStone>(stones[i]).pickable = draw.pickable;
+			drawn.Get<PlinthStone>(stones[i]).pickable = draw.pickable;
 		}
 	}
 	if (changed)

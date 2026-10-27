@@ -14,9 +14,12 @@
 
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#include <ChallengePictureFiles.h>
 
 namespace openblack::ecs::systems
 {
@@ -83,6 +86,13 @@ public:
 	/// records with the same bytes now
 	[[nodiscard]] virtual std::vector<VanillaCheck> CheckVanillaRecords() const = 0;
 
+	/// The whole world at the end of the last turn, as the bytes of a world file in openblack's own layout, with no file
+	/// and no picture. The game server sends it to a player who comes back to a network game.
+	[[nodiscard]] virtual std::vector<uint8_t> WorldState() { return {}; }
+	/// Puts back the whole world from the bytes that WorldState gave. The land of the bytes starts again, and the world
+	/// goes on from the turn of the bytes. Returns whether the world loaded.
+	virtual bool LoadWorldState(std::span<const uint8_t> /*bytes*/) { return false; }
+
 	/// The player goes into the temple: the game takes a picture of the screen for the saves that come next
 	virtual void TakeTemplePicture() = 0;
 	/// A save that the game does by itself into the slot: a new picture of the screen, and the slot's own name. Returns
@@ -106,6 +116,12 @@ public:
 	[[nodiscard]] virtual bool AnyPictureWaiting() const = 0;
 	/// Takes the pictures of the screen that are back, and writes the picture files with them
 	virtual void CollectPictures(const Screens& screens) = 0;
+	/// Keeps the picture of the challenge at a place of the challenge room in the challenge picture files of the game
+	/// that the player plays now. The writer writes the two files that change on its own thread.
+	virtual void PutChallengePicture(uint32_t place, std::span<const uint8_t> picture) = 0;
+	/// The compressed blocks of the picture of the challenge at a place, as the files of the game that the player plays
+	/// now hold them
+	[[nodiscard]] virtual gamesave::ChallengePictureCells ChallengePictureCells(uint32_t place) = 0;
 	/// Shows the box of a save or a load at once, as a frame of its own: whether it loads, and whether it makes the
 	/// screen darker
 	using ShowBox = std::function<void(bool loading, bool darken)>;

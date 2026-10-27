@@ -65,6 +65,25 @@ set(CMAKE_JOB_POOL_COMPILE openblack_compile_pool)
 set(CMAKE_CXX_STANDARD 23)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 
+# Build everything of openblack with sanitizers, for example -DOPENBLACK_SANITIZE=address,undefined. Off by default.
+# Use a Debug build in a separate build folder. MSVC supports only "address".
+set(OPENBLACK_SANITIZE
+    ""
+    CACHE STRING "Sanitizers to build with (address, undefined; comma separated), empty for none"
+)
+if (OPENBLACK_SANITIZE)
+  if (MSVC)
+    if (NOT OPENBLACK_SANITIZE STREQUAL "address")
+      message(FATAL_ERROR "OPENBLACK_SANITIZE supports only \"address\" with MSVC")
+    endif ()
+    add_compile_options(/fsanitize=address)
+  else ()
+    add_compile_options(-fsanitize=${OPENBLACK_SANITIZE} -fno-omit-frame-pointer)
+    add_link_options(-fsanitize=${OPENBLACK_SANITIZE})
+  endif ()
+  message(STATUS "Sanitizers on: ${OPENBLACK_SANITIZE}")
+endif ()
+
 # don't allow in source builds
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
@@ -105,6 +124,26 @@ option(OPENBLACK_INSPECTOR
        "Build the debug inspector into the game (debug and development builds)"
        ${OPENBLACK_INSPECTOR_DEFAULT}
 )
+# The developer tools: the debug windows and the editor, the inspector, the testbed scenarios, the debug keys, and the
+# options of the command line and the web page that only developers and tools use. The builds that players get (the
+# *-shipping presets) set it off. Then the program does not have these tools, and it ignores their options.
+option(
+  OPENBLACK_DEVELOPER_TOOLS
+  "Build the developer tools into the game (off for the builds that players get)"
+  ON
+)
+if (OPENBLACK_DEVELOPER_TOOLS)
+  add_compile_definitions(OPENBLACK_DEVELOPER_TOOLS)
+elseif (OPENBLACK_INSPECTOR)
+  message(STATUS "OPENBLACK_DEVELOPER_TOOLS is off: the build has no inspector")
+  set(OPENBLACK_INSPECTOR
+      OFF
+      CACHE
+        BOOL
+        "Build the debug inspector into the game (debug and development builds)"
+        FORCE
+  )
+endif ()
 # The web build uses the 128-bit vector instructions of WebAssembly, which all current desktop browsers have. The
 # compiler uses them only where the results stay the same.
 if (EMSCRIPTEN)
@@ -142,6 +181,27 @@ find_package(glm REQUIRED)
 if (TARGET glm AND NOT TARGET glm::glm)
   add_library(glm::glm ALIAS glm)
 endif ()
+
+# The world's maths must give the same bits on every build: the desktop, the web and the server's. glm adds the parts of a
+# four-part dot product in another order with MSVC than with other compilers, so openblack takes glm with a patch that
+# keeps one order (vcpkg-overlay-ports/glm). A glm without the patch, as a system's own, stops the configure.
+function (openblack_check_glm_dot_order)
+  get_target_property(dirs glm::glm INTERFACE_INCLUDE_DIRECTORIES)
+  foreach (dir ${dirs})
+    if (EXISTS "${dir}/glm/detail/func_geometric.inl")
+      file(READ "${dir}/glm/detail/func_geometric.inl" text)
+      string(FIND "${text}" "openblack: the same order of the additions" at)
+      if (at EQUAL -1)
+        message(
+          FATAL_ERROR
+            "${dir}/glm has no patch for the order of its dot product: use vcpkg with vcpkg-overlay-ports/glm"
+        )
+      endif ()
+      return()
+    endif ()
+  endforeach ()
+endfunction ()
+openblack_check_glm_dot_order()
 
 # vcpkg loses the dependency of bx on windows which fails to pull in all headers
 find_package(bgfx REQUIRED)
@@ -279,6 +339,14 @@ function (openblack_check_deterministic_fp)
     "-ffast-math"
     "-mfma"
     "-ffp-contract=fast"
+    "-ffp-contract=on"
+    "-ffp-model=fast"
+    "-ffp-model=aggressive"
+    "-fassociative-math"
+    "-funsafe-math-optimizations"
+    "-Ofast"
+    "-mrelaxed-simd"
+    "-march=native"
   )
     string(FIND "${flags}" "${bad}" at)
     if (NOT at EQUAL -1)

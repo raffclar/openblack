@@ -39,6 +39,7 @@
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
@@ -84,6 +85,7 @@
 #include "ECS/Systems/Implementations/FireSystem.h"
 #include "ECS/Systems/Implementations/FireflySystem.h"
 #include "ECS/Systems/Implementations/FishFarmSystem.h"
+#include "ECS/Systems/Implementations/FloatingNumberSystem.h"
 #include "ECS/Systems/Implementations/FootpathSystem.h"
 #include "ECS/Systems/Implementations/FootprintSystem.h"
 #include "ECS/Systems/Implementations/ForestSystem.h"
@@ -102,6 +104,7 @@
 #include "ECS/Systems/Implementations/LandShadeSystem.h"
 #include "ECS/Systems/Implementations/LiquidParticleSystem.h"
 #include "ECS/Systems/Implementations/LobbyClientSystem.h"
+#include "ECS/Systems/Implementations/NetworkGameSystem.h"
 #include "ECS/Systems/Implementations/ObjectDrawListSystem.h"
 #include "ECS/Systems/Implementations/PlayerCommandSystem.h"
 #include "ECS/Systems/Implementations/RealWeatherSystem.h"
@@ -118,6 +121,7 @@
 #include "ECS/Systems/Implementations/DanceSystem.h"
 #include "ECS/Systems/Implementations/FilmCreatureSystem.h"
 #include "ECS/Systems/Implementations/FixedOutlineSystem.h"
+#include "ECS/Systems/Implementations/GameEndSystem.h"
 #include "ECS/Systems/Implementations/HeartbeatSystem.h"
 #include "ECS/Systems/Implementations/LandSystem.h"
 #include "ECS/Systems/Implementations/LeashSystem.h"
@@ -202,6 +206,7 @@ using openblack::TempleInterior;
 using openblack::UnloadedIsland;
 using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
+using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
@@ -251,6 +256,7 @@ using openblack::ecs::systems::FixedOutlineSystem;
 using openblack::ecs::systems::FootpathSystem;
 using openblack::ecs::systems::FootprintSystem;
 using openblack::ecs::systems::ForestSystem;
+using openblack::ecs::systems::GameEndSystem;
 using openblack::ecs::systems::GestureEventsInterface;
 using openblack::ecs::systems::GestureSystem;
 using openblack::ecs::systems::GuidanceSystem;
@@ -277,6 +283,7 @@ using openblack::ecs::systems::MagicSystem;
 using openblack::ecs::systems::MiracleFxSystem;
 using openblack::ecs::systems::MistSystem;
 using openblack::ecs::systems::MusicMoodSystem;
+using openblack::ecs::systems::NetworkGameSystem;
 using openblack::ecs::systems::ObjectDrawListSystem;
 using openblack::ecs::systems::ParticleSystem;
 using openblack::ecs::systems::PathfindingSystem;
@@ -440,10 +447,48 @@ void InitializeOnline(const player_profiles::Store& profiles)
 	// The browser cannot send headers in the handshake
 	constexpr auto k_PushAuth = online::PushAuth::Subprotocol;
 #else
-	Locator::httpClient::emplace<online::CurlHttpClient>();
-	Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	// Tests on this computer only: a lobby on a loopback address with a certificate of a test authority
+	const auto testAuthorities = Locator::config::has_value() ? Locator::config::value().lobbyTestAuthorities : std::nullopt;
+	const bool loopbackLobby = Locator::config::has_value() && Locator::config::value().lobbyOrigin.has_value() &&
+	                           online::http_policy::IsLoopbackAddress(*Locator::config::value().lobbyOrigin);
+	if (testAuthorities.has_value() && loopbackLobby)
+	{
+		Locator::httpClient::emplace<online::CurlHttpClient>(std::nullopt, std::filesystem::path(*testAuthorities));
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>(*testAuthorities);
+	}
+	else
+	{
+		if (testAuthorities.has_value())
+		{
+			SPDLOG_LOGGER_ERROR(spdlog::get("game"), "The test authorities are only for a lobby on a loopback address");
+		}
+		Locator::httpClient::emplace<online::CurlHttpClient>();
+		Locator::webSocketClient::emplace<online::CurlWebSocketClient>();
+	}
 	constexpr auto k_PushAuth = online::PushAuth::Header;
 #endif
+	Locator::networkGame::emplace<NetworkGameSystem>(
+	    Locator::webSocketClient::value(),
+	    [](const std::string& authorities) -> std::unique_ptr<online::WebSocketClientInterface> {
+#if defined(__EMSCRIPTEN__)
+		    static_cast<void>(authorities);
+		    return nullptr;
+#else
+		    return std::make_unique<online::CurlWebSocketClient>(authorities);
+#endif
+	    },
+	    [creatureMinds = profiles.creatureMinds]() -> std::vector<uint8_t> {
+		    // The creature of the player's profile goes to the other players before a network game starts
+		    const auto file =
+		        Locator::playerProfileSystem::has_value() ? Locator::playerProfileSystem::value().CreatureFile() : std::nullopt;
+		    if (!file.has_value() || !creatureMinds.has_value())
+		    {
+			    return {};
+		    }
+		    auto& fileSystem = Locator::filesystem::value();
+		    const auto path = *creatureMinds / *file;
+		    return fileSystem.Exists(path) ? fileSystem.ReadAll(path) : std::vector<uint8_t> {};
+	    });
 	Locator::lobbyClient::emplace<LobbyClientSystem>(
 	    LobbyConfig(), Locator::httpClient::value(),
 	    std::make_unique<online::WebSocketPushChannel>(Locator::webSocketClient::value(), k_PushAuth),
@@ -485,6 +530,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::resources::emplace<Resources>();
 	Locator::playerSystem::emplace<PlayerSystem>();
 	Locator::entitiesRegistry::emplace<Registry>();
+	Locator::drawnRegistry::emplace<DrawnRegistry>();
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
@@ -510,6 +556,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::spellIconSystem::emplace<SpellIconSystem>();
 	Locator::artefactSystem::emplace<ArtefactSystem>();
 	Locator::heartbeatSystem::emplace<HeartbeatSystem>();
+	Locator::gameEndSystem::emplace<GameEndSystem>();
 	Locator::fieldSystem::emplace<FieldSystem>();
 	Locator::fishFarmSystem::emplace<FishFarmSystem>();
 	Locator::animalSystem::emplace<AnimalSystem>();
@@ -594,6 +641,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::pauseTextSystem::emplace<PauseTextSystem>();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
 	Locator::explosionSystem::emplace<ecs::systems::ExplosionSystem>();
+	Locator::floatingNumberSystem::emplace<ecs::systems::FloatingNumberSystem>();
 	Locator::rewardSystem::emplace<ecs::systems::RewardSystem>();
 	Locator::scriptObjects::emplace<ecs::systems::ScriptObjectsSystem>();
 	Locator::buildingDamageSystem::emplace<ecs::systems::BuildingDamageSystem>();
@@ -609,7 +657,10 @@ void openblack::InitializeClient(const player_profiles::Store& profiles)
 	Locator::gameActionSystem::emplace<GameActionMap>();
 	Locator::rendereringSystem::emplace<RenderingSystem>();
 	InitializeOnline(profiles);
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The editor is a developer tool: a build without the developer tools has no editor
 	Locator::editorSystem::emplace<EditorSystem>();
+#endif
 	Locator::videoSystem::emplace<VideoSystem>();
 }
 
@@ -732,6 +783,7 @@ void openblack::ShutDownServices()
 	// The lobby client goes before the web client that it uses, and the real-world weather before the lobby client
 	Locator::realWeatherSystem::reset();
 	Locator::lobbyClient::reset();
+	Locator::networkGame::reset();
 	Locator::webSocketClient::reset();
 	Locator::httpClient::reset();
 	Locator::fightTranscript::reset();
@@ -813,11 +865,13 @@ void openblack::ShutDownServices()
 	Locator::spellIconSystem::reset();
 	Locator::artefactSystem::reset();
 	Locator::heartbeatSystem::reset();
+	Locator::gameEndSystem::reset();
 	Locator::townDesireSystem::reset();
 	Locator::miracleFxSystem::reset();
 	Locator::pauseTextSystem::reset();
 	Locator::fireSystem::reset();
 	Locator::explosionSystem::reset();
+	Locator::floatingNumberSystem::reset();
 	Locator::rewardSystem::reset();
 	Locator::scriptObjects::reset();
 	Locator::buildingDamageSystem::reset();
@@ -850,6 +904,7 @@ void openblack::ShutDownServices()
 	// The map listens to the registry's signals, so it goes first: a map left behind would later let go of signals of a
 	// registry that is gone
 	Locator::entitiesMap::reset();
+	Locator::drawnRegistry::reset();
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();

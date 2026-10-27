@@ -317,11 +317,7 @@ std::vector<uint16_t> ToSixteenBit(std::span<const uint8_t> bgrx, uint32_t width
 	const size_t count = std::min(static_cast<size_t>(width) * height, bgrx.size() / 4);
 	for (size_t i = 0; i < count; ++i)
 	{
-		const uint32_t blue = bgrx[i * 4];
-		const uint32_t green = bgrx[(i * 4) + 1];
-		const uint32_t red = bgrx[(i * 4) + 2];
-		pixels[i] = static_cast<uint16_t>(format == Rgb16::Rgb555 ? ((red >> 3) << 10) | ((green >> 3) << 5) | (blue >> 3)
-		                                                          : ((red >> 3) << 11) | ((green >> 2) << 5) | (blue >> 3));
+		pixels[i] = graphics::film_surface::Pack({.r = bgrx[(i * 4) + 2], .g = bgrx[(i * 4) + 1], .b = bgrx[i * 4]}, format);
 	}
 	return pixels;
 }
@@ -367,13 +363,8 @@ Blur BlurPicture(std::span<const uint16_t> pixels, uint32_t width, uint32_t heig
 
 std::array<uint8_t, 4> ToRgba8(uint16_t pixel, Rgb16 format) noexcept
 {
-	const auto widen5 = [](uint32_t value) { return static_cast<uint8_t>((value << 3) | (value >> 2)); };
-	const auto widen6 = [](uint32_t value) { return static_cast<uint8_t>((value << 2) | (value >> 4)); };
-	if (format == Rgb16::Rgb555)
-	{
-		return {widen5((pixel >> 10) & 0x1F), widen5((pixel >> 5) & 0x1F), widen5(pixel & 0x1F), 0xFF};
-	}
-	return {widen5((pixel >> 11) & 0x1F), widen6((pixel >> 5) & 0x3F), widen5(pixel & 0x1F), 0xFF};
+	const auto colour = graphics::film_surface::Read(pixel, format);
+	return {colour.r, colour.g, colour.b, 0xFF};
 }
 
 } // namespace openblack::loading

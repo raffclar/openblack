@@ -17,6 +17,8 @@
 #include <limits>
 #include <type_traits>
 
+#include "Common/PortableMath.h"
+
 /// The game's floating point maths, bit for bit.
 ///
 /// The game thread runs its FPU at 24-bit precision. Each add, subtract, multiply, divide and square root rounds its
@@ -40,8 +42,9 @@
 ///
 /// Limits:
 /// - The FPU keeps a wider exponent than a float. These functions are exact only for results in the normal float range.
-/// - `Sin` and the other wide functions use the C library in double. The FPU gives a few more bits, and its sine is not
-///   correctly rounded near large multiples of pi. The difference is very rare in the final float.
+/// - `Sin` and the other wide functions use portable_math in double, which gives the same bits on each build. The FPU
+///   gives a few more bits, and its sine is not correctly rounded near large multiples of pi. The difference is very
+///   rare in the final float.
 ///
 /// The build stops fused multiply-add and reassociation (CMakeLists.txt), so a float expression rounds at each step.
 namespace openblack::x87
@@ -200,31 +203,31 @@ struct Exact
 /// The FPU's sine, kept wide. Give the result to the next operation, which rounds it
 [[nodiscard]] inline double Sin(double radians)
 {
-	return std::sin(radians);
+	return portable_math::Sin(radians);
 }
 
 /// The FPU's cosine, kept wide
 [[nodiscard]] inline double Cos(double radians)
 {
-	return std::cos(radians);
+	return portable_math::Cos(radians);
 }
 
 /// The FPU's tangent, kept wide
 [[nodiscard]] inline double Tan(double radians)
 {
-	return std::tan(radians);
+	return portable_math::Tan(radians);
 }
 
 /// The FPU's arctangent of one value, kept wide
 [[nodiscard]] inline double Atan(double value)
 {
-	return std::atan(value);
+	return portable_math::Atan(value);
 }
 
 /// The FPU's arctangent of y / x in the correct quarter of the circle, kept wide
 [[nodiscard]] inline double Atan2(double y, double x)
 {
-	return std::atan2(y, x);
+	return portable_math::Atan2(y, x);
 }
 
 /// The C library's arccosine of the game, kept wide. The library keeps the FPU at 24-bit precision, so 1 + x, 1 - x,
@@ -258,7 +261,7 @@ namespace detail
 	constexpr double k_Ln2 = 0.6931471805599453;
 	const double whole = std::nearbyint(value);
 	const float part = Sub(value, whole);
-	const float sum = Add(1.0, std::expm1(static_cast<double>(part) * k_Ln2));
+	const float sum = Add(1.0, portable_math::Expm1(static_cast<double>(part) * k_Ln2));
 	return Narrow(std::ldexp(static_cast<double>(sum), static_cast<int>(whole)));
 }
 
@@ -271,7 +274,7 @@ namespace detail
 /// of the float range, are not the game's.
 [[nodiscard]] inline float Pow(float base, double exponent)
 {
-	return detail::PowerOfTwo(exponent * std::log2(static_cast<double>(base)));
+	return detail::PowerOfTwo(exponent * portable_math::Log2(static_cast<double>(base)));
 }
 
 /// The game's e to the power of a float, when the game makes it with the FPU's own steps. The value times the FPU's

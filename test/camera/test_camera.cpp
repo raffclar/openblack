@@ -83,6 +83,9 @@ protected:
 	{
 		_model.reset();
 		_camera.reset();
+		Locator::rng::reset();
+		Locator::audio::reset();
+		Locator::entitiesRegistry::reset();
 		Locator::terrainSystem::reset();
 		Locator::windowing::reset();
 		Locator::pickingSystem::reset();

@@ -40,19 +40,9 @@ glm::vec2 TextPlace(glm::vec2 screenPoint, float textWidth)
 	return {screenPoint.x - textWidth, screenPoint.y};
 }
 
-void StepAll(Registry& registry, float seconds)
+void StepAll(std::vector<components::FloatingNumber>& numbers, float seconds)
 {
-	std::vector<entt::entity> gone;
-	registry.Each<components::FloatingNumber>([seconds, &gone](entt::entity entity, components::FloatingNumber& number) {
-		if (!Step(number, seconds))
-		{
-			gone.push_back(entity);
-		}
-	});
-	for (const auto entity : gone)
-	{
-		registry.Destroy(entity);
-	}
+	std::erase_if(numbers, [seconds](components::FloatingNumber& number) { return !Step(number, seconds); });
 }
 
 } // namespace openblack::ecs::floating_number

@@ -511,3 +511,26 @@ TEST(CreatureObjectBeliefs, ABeliefKeepsTheAttributesItLastTookIn)
 	EXPECT_EQ(building.attributes->Value(Attribute::OnFire), 1u);
 	EXPECT_EQ(building.attributes->Value(Attribute::AbodeBeingBuilt), 0u);
 }
+
+// The store looks for beliefs about gone things only when things went since it last looked; a copy looks again
+TEST(CreatureObjectBeliefs, ItLooksForGoneThingsOnlyWhenThingsWent)
+{
+	Store store;
+	store.Add(Thing(1), k_Forest, {});
+	store.Add(Thing(2), k_Flock, {});
+	size_t looks = 0;
+	const auto goneIsTwo = [&looks](entt::entity thing) {
+		++looks;
+		return thing == Thing(2);
+	};
+	store.ForgetIfAnyWent(5, goneIsTwo);
+	EXPECT_EQ(store.Size(), 1u);
+	EXPECT_EQ(looks, 2u);
+	store.ForgetIfAnyWent(5, goneIsTwo);
+	EXPECT_EQ(looks, 2u);
+	auto copy = store;
+	copy.ForgetIfAnyWent(5, goneIsTwo);
+	EXPECT_EQ(looks, 3u);
+	store.ForgetIfAnyWent(6, [](entt::entity thing) { return thing == Thing(1); });
+	EXPECT_EQ(store.Size(), 0u);
+}

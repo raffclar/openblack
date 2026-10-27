@@ -125,8 +125,22 @@ TestbedScenarios::TestbedScenarios(CreatureSpawner& spawner) noexcept
 {
 }
 
+TestbedScenarios::~TestbedScenarios()
+{
+	if (auto* game = Game::Instance(); game != nullptr && _stagerSet)
+	{
+		game->SetScenarioStager({});
+	}
+}
+
 void TestbedScenarios::UpdateAlways() noexcept
 {
+	// The game lays out a scenario asked for as its turns step starts. The frame does not change the world.
+	if (auto* game = Game::Instance(); game != nullptr && !_stagerSet)
+	{
+		game->SetScenarioStager([this]() { RunRequested(); });
+		_stagerSet = true;
+	}
 	// Scenarios run in the game's time: not while it is paused, faster as the game is, and a fixed step a frame when the
 	// game is stepped, so that their timers keep in line with the game's turns
 	// The game's time stops while the player is in the temple. Scenarios that go into the temple continue on the frame's
@@ -144,7 +158,6 @@ void TestbedScenarios::UpdateAlways() noexcept
 		                                           : time.GetFrameGameTime())
 		              .count();
 	}
-	RunRequested();
 	_runner.Update(seconds);
 }
 

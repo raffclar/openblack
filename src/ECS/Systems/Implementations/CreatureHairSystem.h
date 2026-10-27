@@ -22,7 +22,7 @@ class CreatureHairSystem final: public CreatureHairSystemInterface
 {
 public:
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
-	void StepCopy(entt::entity copy, std::chrono::duration<float, std::milli> frameTime) override;
+	void StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime) override;
 	[[nodiscard]] bool IsShown() const override { return _shown; }
 	void SetShown(bool shown) override;
 

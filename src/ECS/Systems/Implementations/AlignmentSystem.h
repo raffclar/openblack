@@ -30,7 +30,7 @@ public:
 	void AddPlayerAlignment(PlayerNames player, float change) override;
 	void AddPendingAlignment(PlayerNames player, float change) override;
 	[[nodiscard]] float GetPendingAlignment(PlayerNames player) const override;
-	void UpdatePlayersTurn(const glm::vec3& eye) override;
+	void UpdatePlayersTurn() override;
 	void UpdateCreaturesTurn() override;
 	void CreatureTurn(entt::entity creature) override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;

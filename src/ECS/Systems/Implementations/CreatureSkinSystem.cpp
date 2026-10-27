@@ -31,6 +31,7 @@
 #include "ECS/Components/CreatureSkin.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Locator.h"
@@ -148,8 +149,7 @@ void Paint(CreatureSkin& skin, const SkinSources& sources, uint8_t weight, const
 /// The entity of the player that a creature belongs to. A creature of nobody's uses the masks of the local player.
 std::optional<entt::entity> PlayerEntityOf(const ecs::Registry& registry, PlayerNames owner)
 {
-	const auto local =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto local = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	const auto wanted = owner == PlayerNames::NEUTRAL ? local : owner;
 	std::optional<entt::entity> found;
 	registry.Each<const Player>([&found, wanted](entt::entity entity, const Player& player) {
@@ -180,7 +180,8 @@ const creature_tattoo::Slots& ShownTattoos(const ecs::Registry& registry, Player
 	if (Locator::playerSystem::has_value())
 	{
 		const auto& players = Locator::playerSystem::value();
-		const auto local = players.GetLocalPlayer();
+		const auto local =
+		    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		const bool inTemple = Locator::temple::has_value() && Locator::temple::value().Active();
 		if (owner == local || inTemple)
 		{
@@ -243,20 +244,32 @@ void CreatureSkinSystem::Update()
 		    PaintIfChanged(skin, creature, morph, ShownTattoos(registry, creature.owner, tattoos, tattoos), tattoos.revision,
 		                   MasksOf(registry, creature.owner), marks, art);
 	    });
-	// A copy with a skin of its own, as the Creature Cave's copy has, is painted at its own times
-	registry.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
-	    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
-		    const auto* creature = registry.TryGet<const Creature>(copy.creature);
-		    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
-		    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
-		    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
-		    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
-		    {
-			    return;
-		    }
-		    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body), tattoos.revision,
-		                   MasksOf(registry, creature->owner), *marks, art);
-	    });
+	// A copy with a skin of its own is painted at its own times. The copy of the land's creature in the temple's
+	// creature room is a thing of the temple's rooms.
+	const auto paintCopies = [&](Registry& copies) {
+		copies.Each<const CreatureCopy, const CreatureTattoos, CreatureSkin>(
+		    [&](const CreatureCopy& copy, const CreatureTattoos& tattoos, CreatureSkin& skin) {
+			    if (!registry.Valid(copy.creature))
+			    {
+				    return;
+			    }
+			    const auto* creature = registry.TryGet<const Creature>(copy.creature);
+			    const auto* morph = registry.TryGet<const CreatureMorph>(copy.creature);
+			    const auto* body = registry.TryGet<const CreatureTattoos>(copy.creature);
+			    const auto* marks = registry.TryGet<const CreatureMarks>(copy.creature);
+			    if (creature == nullptr || morph == nullptr || body == nullptr || marks == nullptr)
+			    {
+				    return;
+			    }
+			    PaintIfChanged(skin, *creature, *morph, ShownTattoos(registry, creature->owner, tattoos, *body),
+			                   tattoos.revision, MasksOf(registry, creature->owner), *marks, art);
+		    });
+	};
+	paintCopies(registry);
+	if (Locator::temple::has_value())
+	{
+		paintCopies(Locator::temple::value().GetRooms());
+	}
 }
 
 void CreatureSkinSystem::ProcessTurn()

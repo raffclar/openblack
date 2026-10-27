@@ -15,6 +15,8 @@
 
 #include <glm/gtx/euler_angles.hpp>
 
+#include "Common/PortableRotations.h"
+
 using namespace openblack;
 using namespace openblack::ecs;
 
@@ -34,13 +36,13 @@ float shark_rules::Heading(const glm::vec3& turnStart, const glm::vec3& position
 	{
 		return facing;
 	}
-	const float angle = std::atan2(position.z - turnStart.z, position.x - turnStart.x);
+	const float angle = portable_math::Atan2(position.z - turnStart.z, position.x - turnStart.x);
 	return angle < 0.0f ? angle + (2.0f * std::numbers::pi_v<float>) : angle;
 }
 
 glm::mat3 shark_rules::Facing(float heading)
 {
-	return glm::mat3(glm::eulerAngleY(-heading));
+	return glm::mat3(portable_math::EulerAngleY(-heading));
 }
 
 glm::vec3 shark_rules::Drawn(const glm::vec3& turnStart, float startHeight, const glm::vec3& position, float endHeight,

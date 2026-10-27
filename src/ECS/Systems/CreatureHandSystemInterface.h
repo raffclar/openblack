@@ -17,6 +17,13 @@
 
 #include "Creature/CreatureFeedback.h"
 #include "Creature/CreatureHandRules.h"
+#include "Enums.h"
+
+namespace openblack::player_commands
+{
+struct CreatureBruise;
+struct CreatureReaction;
+} // namespace openblack::player_commands
 
 namespace openblack::ecs::systems
 {
@@ -71,6 +78,24 @@ public:
 
 	/// The creature the hand is held to, if any
 	[[nodiscard]] virtual std::optional<entt::entity> GetCreature() const = 0;
+	/// The creature that the world has the hand of a player hold, from the turn that did the lock of the press to the
+	/// turn that does its end. The turns read only this, never the creature that the frames hold the hand to.
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedCreature([[maybe_unused]] PlayerNames player) const
+	{
+		return std::nullopt;
+	}
+	/// Whether the world has the hand of a player hold the creature (see GetLockedCreature). Only the hand of the
+	/// creature's own player can hold it.
+	[[nodiscard]] virtual bool IsLocked([[maybe_unused]] entt::entity creature) const { return false; }
+	/// At the turn: the hand of the player locks on to a creature, which stops and turns to the player's camera
+	/// (player_commands::HandLock)
+	virtual void DoLock(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// At the turn: the lock on the creature ends (player_commands::HandUnlock)
+	virtual void DoUnlock(PlayerNames /*player*/, entt::entity /*creature*/) {}
+	/// At the turn: a hard slap bruised a creature (player_commands::CreatureBruise)
+	virtual void DoBruise(PlayerNames /*player*/, const player_commands::CreatureBruise& /*bruise*/) {}
+	/// The turn of a stroke or a slap that a player sent in a network game: the creature plays its reaction
+	virtual void DoReaction(PlayerNames /*player*/, const player_commands::CreatureReaction& /*reaction*/) {}
 	/// Whether the hand was put on the creature by a command, so the button letting go leaves it held
 	[[nodiscard]] virtual bool IsHeldByCommand() const = 0;
 	/// The creature the interface picked under the cursor at the last frame drawn, which the hand would take hold of
@@ -82,6 +107,9 @@ public:
 	/// Whether letting go just told the creature something too slight to count, which forces the hand's "Focus Creature"
 	/// tooltip once; asking takes it
 	virtual bool TakeFocusTip() = 0;
+	/// At the turn of a network game: each creature that a hand holds looks at the hand that its player last reported,
+	/// so that every computer has the same look. A single game sets the look from the hand in each frame.
+	virtual void LookAtReportedHand() {}
 };
 
 } // namespace openblack::ecs::systems
