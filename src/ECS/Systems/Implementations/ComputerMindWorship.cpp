@@ -258,11 +258,11 @@ bool CarryToSite(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 	const glm::vec3 place {map_coords::ToMetres(gate.x), context.hand.moves.LandHeight(gate) + gate.altitude,
 	                       map_coords::ToMetres(gate.z)};
 	computer_hand::Add(context.state.hand, StepKind::PickUpObject,
-	                   {Argument {.object = villager}, Argument {.value = context.state.hand.speed}});
+	                   {Argument {.object = villager}, Argument {.value = context.state.speed}});
 	computer_hand::Add(context.state.hand, StepKind::MoveHandToPos, {Argument {.place = place}, Argument {.value = 900.0f}});
 	computer_hand::Add(context.state.hand, StepKind::Wait, {Argument {.value = 1.0f}});
 	computer_hand::Add(context.state.hand, StepKind::DropObjectInHandAtPos,
-	                   {Argument {.place = place}, Argument {.value = context.state.hand.speed}});
+	                   {Argument {.place = place}, Argument {.value = context.state.speed}});
 	return true;
 }
 
