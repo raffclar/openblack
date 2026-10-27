@@ -17,6 +17,7 @@
 #include <glm/gtc/constants.hpp>
 
 #include "3D/MapCoords.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 
 namespace openblack::ecs::script_highlights
@@ -102,7 +103,7 @@ float Spin(float yAngle, float frameMilliseconds)
 
 float FacingAngle(glm::vec3 camera, glm::vec3 at)
 {
-	return WrapAngle(std::atan2(camera.z - at.z, camera.x - at.x) + k_QuarterTurn);
+	return WrapAngle(portable_math::Atan2(camera.z - at.z, camera.x - at.x) + k_QuarterTurn);
 }
 
 float DrawnScale(HighlightInfo kind, float scale, float cameraDistance)

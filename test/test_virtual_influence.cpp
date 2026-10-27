@@ -130,14 +130,15 @@ TEST(VirtualInfluence, TheHumPlaysOutsideWhileTheLastPlaceInIsStillIn)
 
 TEST(VirtualInfluence, TheHumsPitchIsTheStrengthLeft)
 {
-	State state {.fraction = 0.734f, .soundFraction = 1.0f};
-	EXPECT_EQ(HumPitchPercent(state), 73u);
+	State state {.fraction = 0.734f};
+	Shown shown {.soundFraction = 1.0f};
+	EXPECT_EQ(HumPitchPercent(state, shown), 73u);
 	state.fraction = 0.1f;
-	EXPECT_EQ(HumPitchPercent(state), 10u);
+	EXPECT_EQ(HumPitchPercent(state, shown), 10u);
 	// Never above what it began at
 	state.fraction = 0.9f;
-	state.soundFraction = 0.6f;
-	EXPECT_EQ(HumPitchPercent(state), 60u);
+	shown.soundFraction = 0.6f;
+	EXPECT_EQ(HumPitchPercent(state, shown), 60u);
 }
 
 TEST(VirtualInfluence, NearTheHandThePlaceIsInInfluenceAsMuchAsTheStrength)
@@ -199,23 +200,25 @@ TEST(VirtualInfluence, TheManaPathLeadsHalfwayBackRoundingHalvesToEven)
 TEST(VirtualInfluence, AManaPathSparkIsDueOncePastTenWeighedMilliseconds)
 {
 	State state;
+	Shown shown;
 	state.fraction = 0.5f;
 	// 16 ms at half strength is 8: not yet; another 4 ms makes 10, which is not past ten
-	EXPECT_FALSE(EmitManaPath(state, 16.0f).has_value());
-	EXPECT_FALSE(EmitManaPath(state, 4.0f).has_value());
-	EXPECT_FLOAT_EQ(state.manaPathEmission, 10.0f);
+	EXPECT_FALSE(EmitManaPath(shown, state, 16.0f).has_value());
+	EXPECT_FALSE(EmitManaPath(shown, state, 4.0f).has_value());
+	EXPECT_FLOAT_EQ(shown.manaPathEmission, 10.0f);
 	// Then one more and it is due, starting again from nothing, scaled by half of 255 truncated
-	const auto scale = EmitManaPath(state, 1.0f);
+	const auto scale = EmitManaPath(shown, state, 1.0f);
 	ASSERT_TRUE(scale.has_value());
 	EXPECT_EQ(*scale, 127);
-	EXPECT_FLOAT_EQ(state.manaPathEmission, 0.0f);
+	EXPECT_FLOAT_EQ(shown.manaPathEmission, 0.0f);
 }
 
 TEST(VirtualInfluence, AManaPathSparkAtFullStrengthIsNotDimmedPastFull)
 {
 	State state;
+	Shown shown;
 	state.fraction = 1.5f;
-	const auto scale = EmitManaPath(state, 11.0f);
+	const auto scale = EmitManaPath(shown, state, 11.0f);
 	ASSERT_TRUE(scale.has_value());
 	EXPECT_EQ(*scale, 255);
 }
@@ -230,9 +233,9 @@ TEST(VirtualInfluence, ColoursAreScaledOnEveryChannelOutOf256)
 TEST(VirtualInfluence, BackInInfluenceTheManaPathIsWorkedOutAfresh)
 {
 	State state;
-	state.manaPathStart = map_coords::MapCoords {.x = 5, .z = 6, .altitude = 0.0f};
-	ProcessTurn(state, Outside({30.0f, 0.0f, 40.0f}, 5), k_Settings);
-	EXPECT_TRUE(state.manaPathStart.has_value());
-	ProcessTurn(state, Inside({30.0f, 0.0f, 40.0f}, 6), k_Settings);
-	EXPECT_FALSE(state.manaPathStart.has_value());
+	EXPECT_FALSE(ManaPathEnds(state, Outside({30.0f, 0.0f, 40.0f}, 5)));
+	EXPECT_TRUE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 6)));
+	// Switched off, the strength does not change, nor does the path
+	state.disabled = true;
+	EXPECT_FALSE(ManaPathEnds(state, Inside({30.0f, 0.0f, 40.0f}, 7)));
 }

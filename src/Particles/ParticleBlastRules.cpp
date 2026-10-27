@@ -24,6 +24,7 @@
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 
+#include "Common/PortableRotations.h"
 #include "ParticleArchive.h"
 #include "ParticleBlast.h"
 #include "ParticleClassRegistry.h"
@@ -334,7 +335,7 @@ private:
 			const float scale = effect.Random(k_RockSmallest, k_RockLargest);
 			const float yaw = effect.Random(0.0f, k_TwoPi);
 			const auto transform = glm::scale(
-			    glm::rotate(glm::translate(glm::mat4(1.0f), at), yaw, glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(scale));
+			    portable_math::Rotate(glm::translate(glm::mat4(1.0f), at), yaw, glm::vec3(0.0f, 1.0f, 0.0f)), glm::vec3(scale));
 			objects->ExplodeMesh(resources::HashIdentifier(blast::k_RockMesh), transform, origin, rules.blastSpeed);
 		}
 	}

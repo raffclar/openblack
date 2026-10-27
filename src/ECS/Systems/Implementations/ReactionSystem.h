@@ -49,6 +49,7 @@ public:
 	void BelieveInTown(entt::entity town) override;
 	[[nodiscard]] uint32_t CurrentTurn() const override { return _turn; }
 	void Reset() override;
+	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -92,6 +93,8 @@ private:
 
 	std::vector<Active> _reactions;
 	uint32_t _nextId {1};
+	/// The next Reset starts the ids again from the first
+	bool _freshIdsAtNextReset {false};
 	/// The id of the reaction that spread again last, 0 for none. After that reaction goes, it is the id of the next older
 	/// reaction.
 	size_t _cursor {0};

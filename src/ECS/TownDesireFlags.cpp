@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::ecs::town_desire_flags
 {
 
@@ -57,7 +59,7 @@ float DrawnScale(float level, float showsAfter)
 
 float FacingAngle(glm::vec3 flag, glm::vec3 camera)
 {
-	return std::atan2(camera.z - flag.z, camera.x - flag.x) + (std::numbers::pi_v<float> / 2.0f);
+	return portable_math::Atan2(camera.z - flag.z, camera.x - flag.x) + (std::numbers::pi_v<float> / 2.0f);
 }
 
 bool InView(glm::vec4 clip)

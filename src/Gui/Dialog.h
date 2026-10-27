@@ -101,6 +101,8 @@ public:
 	};
 	/// The visible controls that act and have a name: buttons, check boxes, sliders and tabs, in the order they were made
 	[[nodiscard]] std::vector<NamedControl> GetNamedControls() const;
+	/// The places of all the visible controls, texts too, in the order they were made
+	[[nodiscard]] std::vector<DialogRect> GetVisibleRects() const;
 
 	[[nodiscard]] static DialogRect GetTabRect(size_t index);
 	/// Opens another of the tabs

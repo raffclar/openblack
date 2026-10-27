@@ -42,6 +42,16 @@ const glm::vec3& At(const Points& points, Corner corner)
 }
 } // namespace
 
+Points creature_reach::Scaled(const Points& points, float scale)
+{
+	auto scaled = points;
+	for (auto& point : scaled)
+	{
+		point = glm::vec3(scale * point.x, scale * point.y, scale * point.z);
+	}
+	return scaled;
+}
+
 Points creature_reach::Mirrored(const Points& points)
 {
 	auto mirrored = points;

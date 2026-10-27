@@ -17,6 +17,8 @@
 #include <glm/gtx/euler_angles.hpp>
 #include <glm/mat4x4.hpp>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::snowfall
 {
 
@@ -87,10 +89,10 @@ void Step(std::span<Flake> flakes, float seconds, float fallSpeed, float height,
 				flake.heading += k_TwoPi;
 			}
 		}
-		const float drift = std::sin(flake.sway) * seconds * k_Drift;
-		flake.position.x += std::sin(flake.heading) * drift;
-		flake.position.z += std::cos(flake.heading) * drift;
-		flake.position.y -= std::cos(flake.sway) * seconds * k_Drift * 0.5f;
+		const float drift = portable_math::Sin(flake.sway) * seconds * k_Drift;
+		flake.position.x += portable_math::Sin(flake.heading) * drift;
+		flake.position.z += portable_math::Cos(flake.heading) * drift;
+		flake.position.y -= portable_math::Cos(flake.sway) * seconds * k_Drift * 0.5f;
 		flake.spin += seconds * flake.spinSpeed;
 	}
 }

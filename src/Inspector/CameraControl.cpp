@@ -248,6 +248,14 @@ OverrideForPointer::~OverrideForPointer()
 	}
 }
 
+bool ShownCameraCuts::Next(const std::optional<CameraPose>& shown)
+{
+	const auto same = [](const CameraPose& a, const CameraPose& b) { return a.origin == b.origin && a.focus == b.focus; };
+	const bool cut = shown.has_value() != _last.has_value() || (shown.has_value() && !same(*shown, *_last));
+	_last = shown;
+	return cut;
+}
+
 CameraAngles openblack::inspector::AnglesOf(const CameraPose& pose)
 {
 	const auto towards = pose.focus - pose.origin;

@@ -10,6 +10,7 @@
 #include "Inspector.h"
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <optional>
 #include <string>
@@ -316,6 +317,15 @@ QueryResult Inspector::Answer(const Request& request) const
 		return error("no query " + request.query + "; ask \"describe\" with {\"provider\": \"" + std::string(providerName) +
 		             "\"}");
 	}
+	if (_networkGameLive && _networkGameLive() && RefusedInNetworkGame(request.query, description->writes))
+	{
+		auto refused = error(request.query + " is refused while a network game is live: no tool changes the shared world");
+		if (description->writes)
+		{
+			Remember(request, refused);
+		}
+		return refused;
+	}
 	std::vector<std::string> known;
 	known.reserve(description->parameters.size());
 	std::ranges::transform(description->parameters, std::back_inserter(known), &ParameterDescription::name);
@@ -370,11 +380,12 @@ QueryResult Inspector::Writes(const QueryOptions& options) const
 
 void Inspector::Remember(const Request& request, const QueryResult& answer) const
 {
+	const auto logged = ForTheLog(request);
 	if (_writeLog)
 	{
-		_writeLog(request, answer);
+		_writeLog(logged, answer);
 	}
-	Json write = {{"query", request.query}, {"params", request.params}, {"ok", answer.Ok()}};
+	Json write = {{"query", logged.query}, {"params", logged.params}, {"ok", answer.Ok()}};
 	if (!answer.Ok())
 	{
 		write["error"] = answer.error;
@@ -451,4 +462,27 @@ bool Inspector::TakesControl(std::string_view line)
 	const auto decoded = DecodeRequest(line);
 	const auto* request = std::get_if<Request>(&decoded);
 	return request == nullptr || request->query != "ping";
+}
+
+bool openblack::inspector::RefusedInNetworkGame(std::string_view query, bool writes)
+{
+	// These queries change the run or the world, but do not say that they write
+	constexpr std::array<std::string_view, 5> k_RunControls {"game.scenario", "game.pause", "game.resume", "game.step",
+	                                                         "game.speed"};
+	// These queries write, but act only on this computer
+	constexpr std::array<std::string_view, 3> k_LocalProviders {"input.", "camera.", "screenshot."};
+	constexpr std::array<std::string_view, 5> k_LocalQueries {"sim.record", "sim.feedback", "fights.transcript_folder",
+	                                                          "fights.clear_transcripts", "audio.lose_device"};
+	if (std::ranges::find(k_RunControls, query) != k_RunControls.end())
+	{
+		return true;
+	}
+	if (!writes)
+	{
+		return false;
+	}
+	const bool local =
+	    std::ranges::any_of(k_LocalProviders, [query](std::string_view provider) { return query.starts_with(provider); }) ||
+	    std::ranges::find(k_LocalQueries, query) != k_LocalQueries.end();
+	return !local;
 }

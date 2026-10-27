@@ -337,6 +337,16 @@ glm::vec3 creature_feedback::HeldLookPoint(const glm::vec3& hand, const glm::vec
 	return hand - (SightWay(camera, lineOfSight) * (creatureHeight * k_LooksNearerTheCamera));
 }
 
+std::optional<glm::vec3> creature_feedback::ReportedLookPoint(const glm::vec3& hand, const glm::vec3& middle,
+                                                              const glm::vec3& camera, float creatureHeight)
+{
+	if (hand == camera)
+	{
+		return std::nullopt;
+	}
+	return HeldLookPoint(hand, middle, camera, x87::Scaled<x87::SumOrder::Zyx>(hand - camera), creatureHeight);
+}
+
 glm::vec3 creature_feedback::SightWay(const glm::vec3& camera, const glm::vec3& lineOfSight)
 {
 	return PointOnSight(camera, lineOfSight, 1.0f) - camera;

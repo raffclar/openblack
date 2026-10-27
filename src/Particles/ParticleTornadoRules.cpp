@@ -24,6 +24,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/PortableMath.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleSounds.h"
@@ -375,13 +376,13 @@ private:
 		const float pulled = tornado::RadialRate(wall, distance, dt) * dt + distance;
 		const float riseSpeed = tornado::RiseSpeed(atom.position.y, state.base.y, state.top.y, data.target,
 		                                           data.type == Flying::Carried ? rise : pretendRise);
-		const float angle = std::atan2(offset.z, offset.x) + tornado::SpinOutside(spin, wall, pulled) * dt;
+		const float angle = openblack::portable_math::Atan2(offset.z, offset.x) + tornado::SpinOutside(spin, wall, pulled) * dt;
 		const auto axisVelocity = state.baseVelocity + (state.topVelocity - state.baseVelocity) * h;
 		const float invDt = 1.0f / dt;
 		const glm::vec3 wanted {
-		    (axis.x + std::cos(angle) * pulled - atom.position.x) * invDt + axisVelocity.x,
+		    (axis.x + openblack::portable_math::Cos(angle) * pulled - atom.position.x) * invDt + axisVelocity.x,
 		    ((riseSpeed * dt + offset.y + axis.y) - atom.position.y) * invDt + axisVelocity.y,
-		    (axis.z + std::sin(angle) * pulled - atom.position.z) * invDt + axisVelocity.z,
+		    (axis.z + openblack::portable_math::Sin(angle) * pulled - atom.position.z) * invDt + axisVelocity.z,
 		};
 		if (data.type == Flying::Pretend)
 		{
@@ -420,7 +421,8 @@ private:
 			const auto axis = tornado::AxisCentre(shape, state.base, state.top, data.target);
 			const float angle = effect.Random(k_TwoPi);
 			const float wall = tornado::WallRadius(shape, data.target);
-			atom.position = axis + glm::vec3(std::cos(angle) * wall, 0.0f, std::sin(angle) * wall);
+			atom.position = axis + glm::vec3(openblack::portable_math::Cos(angle) * wall, 0.0f,
+			                                 openblack::portable_math::Sin(angle) * wall);
 		}
 	}
 

@@ -52,6 +52,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void ProcessTurn() override;
+	void ProcessTempleTurn() override;
 	void Update(std::chrono::duration<float, std::milli> gameTime) override;
 
 	void SetCloseClipping(bool close) override { _closeClipping = close; }

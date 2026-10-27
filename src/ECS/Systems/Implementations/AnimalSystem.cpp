@@ -35,6 +35,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/AnimalArchetype.h"
 #include "ECS/BeingEatenRules.h"
 #include "ECS/ClipSoundPlayer.h"
@@ -1757,7 +1758,7 @@ void AnimalSystem::FallDying(entt::entity entity, const Animal& animal)
 	constexpr glm::vec3 k_DyingTumble {5.0f, 0.0f, 0.0f};
 	const auto step = Metres(animal.move.step);
 	const float speed = glm::length(step) * k_TurnsPerSecond;
-	const glm::vec3 forward(std::cos(animal.heading), 0.0f, std::sin(animal.heading));
+	const glm::vec3 forward(portable_math::Cos(animal.heading), 0.0f, portable_math::Sin(animal.heading));
 	Locator::dynamicsSystem::value().InitialisePhysics(entity, {.velocity = forward * speed, .spin = k_DyingTumble});
 }
 
@@ -2388,10 +2389,13 @@ void AnimalSystem::ShowTurnEnd()
 {
 	auto& registry = EntityRegistry();
 	registry.Each<const Animal, Transform>([&registry](entt::entity entity, const Animal& animal, Transform& transform) {
-		// What carries it, holds it or moves it in the physics places it
+		// What carries it, holds it or moves it in the physics places it. If nothing does, the turn sees it at the place of
+		// its last turn, upright and turned to its heading, as the game sees each thing by its own angle. Only the frames
+		// draw the tilt and the lean on the slope.
 		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			transform.position = animal.position;
+			transform.rotation = animals::Orientation(animal.heading, 0.0f);
 		}
 	});
 }
@@ -2399,7 +2403,6 @@ void AnimalSystem::ShowTurnEnd()
 void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFraction)
 {
 	auto& registry = EntityRegistry();
-	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
 	const auto elapsed = static_cast<uint32_t>(frameGameTime.count());
 	// A screen refresh of the game's, when a clip held at its end plays its sounds again; none while the game is paused
 	const bool refresh = Locator::time::has_value() && !Locator::time::value().IsPaused() &&
@@ -2407,24 +2410,25 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 	const float elapsedSeconds = static_cast<float>(elapsed) * 0.001f;
 	const auto& animations = Locator::resources::value().GetAnimations();
 	auto& meshes = Locator::resources::value().GetMeshes();
-	registry.Each<Animal, Transform, const Mesh>([&](entt::entity entity, Animal& animal, Transform& transform,
-	                                                 const Mesh& mesh) {
+	// The frame writes only the drawn place, the tilt, the clip and the pose. The turns go by the Transform.
+	registry.Each<Animal, const Transform, const Mesh>([&](entt::entity entity, Animal& animal, const Transform& transform,
+	                                                       const Mesh& mesh) {
 		// A tornado carrying it places it, as does a hand or a creature holding it or the physics moving it; it still plays
 		// its clip
+		animal.drawn.reset();
 		if (!registry.AnyOf<CarriedByTornado, InHand, HeldByCreature, InPhysics>(entity))
 		{
 			// Drawn between its last two turns, tilted as far as its bank has glided
-			transform.position = animal.previousPosition + ((animal.position - animal.previousPosition) * t);
-			const float heading =
-			    animal.previousHeading + (std::remainder(animal.heading - animal.previousHeading, k_TwoPi) * t);
+			const auto between = animals::DrawnAt(animal.previousPosition, animal.position, animal.previousHeading,
+			                                      animal.heading, turnFraction);
 			const float bank = animal.bank.Step(elapsedSeconds);
-			transform.rotation = animals::Orientation(heading, bank);
+			auto rotation = animals::Orientation(between.heading, bank);
 			// An animal on the land leans to its slope: each of its x and z axes lifts or drops to the land at its end
 			if (!(animal.height > animals::k_HighestToFollowSlope) && Locator::terrainSystem::has_value())
 			{
-				const auto turned = animals::Orientation(heading, 0.0f);
+				const auto turned = animals::Orientation(between.heading, 0.0f);
 				const float scale = transform.scale.x;
-				const auto& at = transform.position;
+				const auto& at = between.position;
 				const auto& land = Locator::terrainSystem::value();
 				const auto landAt = [&](const glm::vec3& axis) {
 					return land.GetAltitude(animals::SlopeSampleUnit(at.x + (axis.x * scale)),
@@ -2432,9 +2436,11 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 				};
 				const float alongX = animals::SlopeLift(landAt(turned[0]), at.y);
 				const float alongZ = animals::SlopeLift(landAt(turned[2]), at.y);
-				transform.rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(glm::eulerAngleZ(bank));
+				rotation = turned * animals::SlopeLean(alongX, alongZ) * glm::mat3(portable_math::EulerAngleZ(bank));
 			}
+			animal.drawn = Animal::DrawnPlace {.position = between.position, .rotation = rotation};
 		}
+		const auto drawnAt = animal.drawn.has_value() ? animal.drawn->position : transform.position;
 		auto* pose = registry.TryGet<AnimalPose>(entity);
 		// The clips are kept by the hash of their number in the animation pack
 		const auto clipId = resources::HashIdentifier(static_cast<uint32_t>(animal.animation));
@@ -2461,7 +2467,7 @@ void AnimalSystem::Update(std::chrono::milliseconds frameGameTime, float turnFra
 		animal.groundCarry = carried.carry;
 		// The sounds on the clip's frames it passes play from the animal
 		ecs::clip_sound_player::Play(entity, animal.animation, *clip, animal.clipPlace,
-		                             static_cast<uint32_t>(std::max(played, 0)), transform.position, refresh);
+		                             static_cast<uint32_t>(std::max(played, 0)), drawnAt, refresh);
 		animal.clipPlace = animals::AdvanceClip(timing, animal.clipPlace, played);
 
 		// A wolf fades out of sight as it goes; the doves and bats stay whole until they go
