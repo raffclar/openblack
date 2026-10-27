@@ -24,6 +24,7 @@
 #include <gtest/gtest.h>
 
 #include "ECS/Components/Dance.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Footpath.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -265,6 +266,18 @@ TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
 	registry.Assign<Transform>(other, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
 	EXPECT_NEAR(object_measures::DistanceFromObject(registry, other, villager), glm::length(glm::vec2(18.179f, 39.397f)),
 	            0.05f);
+}
+
+TEST(WorshipSitePlaces, AFishFarmMeasuresWithItsFixedRadiusWhateverItsModel)
+{
+	Registry registry;
+	const auto farm = registry.Create();
+	registry.Assign<Transform>(farm, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(3.0f));
+	registry.Assign<FishFarm>(farm);
+	EXPECT_EQ(object_measures::TwoDRadius(registry, farm), 5.0f);
+	const auto villager = registry.Create();
+	registry.Assign<Transform>(villager, glm::vec3(20.0f, 0.0f, 0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	EXPECT_NEAR(object_measures::DistanceFromObject(registry, farm, villager), 15.0f, 0.05f);
 }
 
 TEST(WorshipSitePlaces, TheFreePlaceNearestTheSpotIsChosen)

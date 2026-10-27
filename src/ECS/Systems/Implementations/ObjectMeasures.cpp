@@ -17,6 +17,7 @@
 
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Animals/FishFarmRules.h"
 #include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureRig.h"
@@ -24,6 +25,7 @@
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/Feature.h"
 #include "ECS/Components/Field.h"
+#include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Mobile.h"
 #include "ECS/Components/OneOffSpellSeed.h"
@@ -128,6 +130,10 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	if (registry.AllOf<Field>(entity))
 	{
 		return cast_moves::k_FieldRadius;
+	}
+	if (registry.AllOf<FishFarm>(entity))
+	{
+		return fish_farm::k_Radius;
 	}
 	const auto half = HalfExtentsOf(registry, entity);
 	return half.has_value() ? std::max(half->x, half->z) : 0.0f;

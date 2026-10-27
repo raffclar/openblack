@@ -20,7 +20,7 @@ class Registry;
 }
 
 // How big the things of the world are, as creatures measure them to walk up to them and cast at them (see
-// creature_cast_moves): a thing's radius on the ground and height from its model and scale, a field's radius always 5, a
+// creature_cast_moves): a thing's radius on the ground and height from its model and scale, the radius of a field and a fish farm always 5, a
 // creature's from its size and how far its bones reach.
 namespace openblack::ecs::systems::object_measures
 {
