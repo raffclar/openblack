@@ -40,6 +40,8 @@ public:
 	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
 	[[nodiscard]] bool Angry(MagicType type) const override;
 	bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) override;
+	bool CastAt(MagicType type, glm::vec3 place, entt::entity icon, glm::vec3 hand, float magnitude) override;
+	[[nodiscard]] bool UnderSpell(entt::entity creature) const override;
 	[[nodiscard]] float CastSeconds(MagicType type) const override;
 	[[nodiscard]] uint32_t SeedGesture(MagicType type, int32_t stage) const override;
 	[[nodiscard]] float GestureLength(uint32_t gesture) const override;
@@ -47,6 +49,10 @@ public:
 	void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) override;
 
 private:
+	/// The god casts the miracle at the thing, or at the place when there is no thing
+	bool CastFrom(MagicType type, entt::entity target, const map_coords::MapCoords& targetCoords, entt::entity icon,
+	              glm::vec3 hand, float magnitude);
+
 	PlayerNames _player;
 	components::ComputerPlayer& _state;
 };
