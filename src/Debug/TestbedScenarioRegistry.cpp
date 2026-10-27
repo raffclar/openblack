@@ -7781,30 +7781,35 @@ void AddCombat(std::vector<Scenario>& all)
 		});
 	}
 
-	all.push_back({
-	    .id = "combat.opponent_out_of_life",
-	    .name = "An opponent with no life left loses the duel",
-	    .facet = Facet::Combat,
-	    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
-	                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
-	    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
-	                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
-	                "The blue tiger does not faint. It stops and plays the sad response. The fight view ends a few "
-	                "seconds later. The fight transcript shows a win with by_blow false.",
-	    .environment = {.fainting = false},
-	    .framing = ringside,
-	    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
-	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
-	                 Fight(Kind::StartFight, 0, 1, 0.5f),
-	                 Fight(Kind::FightAuto, 0, 1, 0.2f),
-	                 {.kind = Kind::CallNative,
-	                  .delaySeconds = 12.0f,
-	                  .script = "SET_PROPERTY",
-	                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
-	                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
-	                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
-	                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
-	});
+	{
+		// The needs of the blue tiger are not set again each frame, so the script can take its life
+		auto loser = blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f);
+		loser.hold = false;
+		all.push_back({
+		    .id = "combat.opponent_out_of_life",
+		    .name = "An opponent with no life left loses the duel",
+		    .facet = Facet::Combat,
+		    .description = "The red tiger of the player and a blue tiger fight by themselves, and the creatures do not faint. "
+		                   "When the duel is on, a script sets the life of the blue tiger to zero. Its fight health stays.",
+		    .expected = "On its next turn, the red tiger wins. It finishes its move, stands and plays the happy response. "
+		                "An advisor says one of the lines for good news, because the place of the red tiger is on screen. "
+		                "The blue tiger does not faint. It stops and plays the sad response. The fight view ends a few "
+		                "seconds later. The fight transcript shows a win with by_blow false.",
+		    .environment = {.fainting = false},
+		    .framing = ringside,
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), loser},
+		    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f},
+		                 Fight(Kind::StartFight, 0, 1, 0.5f),
+		                 Fight(Kind::FightAuto, 0, 1, 0.2f),
+		                 {.kind = Kind::CallNative,
+		                  .delaySeconds = 12.0f,
+		                  .script = "SET_PROPERTY",
+		                  .scriptArguments = {{.kind = ScriptArgument::Kind::Integer,
+		                                       .number = static_cast<float>(script::ObjectPropertyType::Health)},
+		                                      {.kind = ScriptArgument::Kind::Creature, .index = 1},
+		                                      {.kind = ScriptArgument::Kind::Number, .number = 0.0f}}}},
+		});
+	}
 
 	{
 		// Blows strike the shapes round the bones of the body: a tiger against a horse, which has a body of a different
