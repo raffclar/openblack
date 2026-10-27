@@ -13,6 +13,7 @@
 #include <cstdint>
 
 #include <array>
+#include <unordered_map>
 
 #include "ECS/Components/ComputerPlayer.h"
 #include "ECS/ComputerHand.h"
@@ -36,6 +37,10 @@ struct RuleContext
 	PlayerNames player;
 	components::ComputerPlayer& state;
 	const computer_hand::World& hand;
+	/// The cells of the thing searches that are in the influence of the god or its allies, by cell. The influence does
+	/// not change while the god works out its needs, so a search asks for each cell one time. The world clears it
+	/// before each step of the hand and each start of an action.
+	std::unordered_map<uint32_t, bool> searchCells {};
 };
 
 /// How much the node is wanted. The rule can set the node's object and amount.
