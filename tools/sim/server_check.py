@@ -333,7 +333,7 @@ def main():
     summary["hand_deeds"] = {str(player): counts for player, counts in sorted(server_deeds.items())}
     summary["hand_deeds_same"] = game_deeds == server_deeds
     summary["missing_deeds"] = missing
-    # A land with no temple for the player's god (Land 1, the testbed) decides the network game at its first turn: the
+    # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
     # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
     with open(game_log, encoding="utf-8", errors="replace") as file:
         decided = [re.search(r"Turn (\d+):", line) for line in file if "and the game is decided" in line]
