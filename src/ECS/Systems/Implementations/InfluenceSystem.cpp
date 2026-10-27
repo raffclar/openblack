@@ -147,19 +147,34 @@ std::array<entt::entity, static_cast<size_t>(PlayerNames::_COUNT)> Citadels()
 	return citadels;
 }
 
-/// How far a citadel reaches: its heart's reach for the land, fixed the first time, times the land's multiplier
-float CitadelReach(entt::entity temple)
+/// The reach of a citadel's heart for the land that is played now
+float HeartReachForLand()
+{
+	const auto& heart = Locator::infoConstants::value().citadelHeart;
+	const auto land = Globals().landNumber;
+	return land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
+}
+
+/// The game turn fixes the reach of a citadel's heart the first time and keeps it on the citadel. Only the turn calls
+/// this, because the order in which the citadels get their reach is part of the synced world.
+CitadelInfluence& FixCitadelReach(entt::entity temple)
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto* stored = registry.TryGet<const CitadelInfluence>(temple);
-	if (stored == nullptr)
+	if (auto* stored = registry.TryGet<CitadelInfluence>(temple); stored != nullptr)
 	{
-		const auto& heart = Locator::infoConstants::value().citadelHeart;
-		const auto land = Globals().landNumber;
-		const float reach = land != 0 ? ForLand(heart.storyInfluence, heart.transferedDamageMultiplier, land) : heart.influence;
-		stored = &registry.Assign<CitadelInfluence>(temple, reach);
+		return *stored;
 	}
-	return Globals().playerInfluenceMultiplier * stored->reach;
+	return registry.Assign<CitadelInfluence>(temple, HeartReachForLand());
+}
+
+/// How far a citadel reaches: its heart's reach for the land, as the turn fixed it, times the land's multiplier. Before
+/// the turn fixes it, the answer is the reach that the turn will fix. A question changes nothing in the world.
+float CitadelReach(entt::entity temple)
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* stored = registry.TryGet<const CitadelInfluence>(temple);
+	const float reach = stored != nullptr ? stored->reach : HeartReachForLand();
+	return Globals().playerInfluenceMultiplier * reach;
 }
 
 /// The player's hand in the world, if it is in it, as the reports of the player put it. The turns measure from here.
@@ -332,7 +347,7 @@ void InfluenceSystem::FixCitadelReaches()
 	{
 		if (citadel != entt::null)
 		{
-			CitadelReach(citadel);
+			FixCitadelReach(citadel);
 		}
 	}
 }
@@ -355,8 +370,8 @@ void InfluenceSystem::ProcessCitadels()
 			_borderShown.at(player) =
 			    influence::BorderShows(_borderShown.at(player), progress != nullptr ? progress->built : 1.0f);
 		}
-		const float reach = CitadelReach(citadel);
-		NoteReach(reach, registry.Get<const CitadelInfluence>(citadel).drawnRadius);
+		const auto& fixed = FixCitadelReach(citadel);
+		NoteReach(CitadelReach(citadel), fixed.drawnRadius);
 	}
 }
 
@@ -372,12 +387,13 @@ void InfluenceSystem::DrawBorders()
 		const auto name = static_cast<PlayerNames>(player);
 		if (const auto citadel = citadels.at(player); citadel != entt::null)
 		{
+			auto& fixed = FixCitadelReach(citadel);
 			const float reach = CitadelReach(citadel);
 			if (const auto* transform = registry.TryGet<const Transform>(citadel); transform != nullptr && reach != 0.0f)
 			{
 				influence::AddCircle(_circles, name, transform->position, reach, ground);
 			}
-			registry.Get<CitadelInfluence>(citadel).drawnRadius = reach;
+			fixed.drawnRadius = reach;
 		}
 		registry.Each<const Town, TownInfluence, const Transform>(
 		    [&](const Town& town, TownInfluence& influence, const Transform& transform) {
