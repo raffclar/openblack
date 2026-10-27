@@ -13,7 +13,6 @@
 #include <array>
 #include <limits>
 #include <optional>
-#include <tuple>
 
 namespace openblack::graphics
 {
@@ -76,8 +75,23 @@ void DescriptorSetTally::Submit(uint16_t view, uint16_t program, uint32_t depth,
 
 FrameDescriptorSets DescriptorSetTally::EndFrame()
 {
-	// bgfx's sort key for each view order: the view first, then what the order sorts by, ties in the order they came
-	const auto key = [this](const Draw& draw) {
+	// What each view would take in the order its draws came, before they are sorted
+	std::array<uint32_t, k_Views> setsInOrder {};
+	std::array<std::optional<uint32_t>, k_Views> boundInOrder {};
+	for (const auto& draw : _draws)
+	{
+		if (draw.view < k_Views && boundInOrder.at(draw.view) != draw.bindings)
+		{
+			boundInOrder.at(draw.view) = draw.bindings;
+			++setsInOrder.at(draw.view);
+		}
+	}
+	// bgfx's sort key for each view order: the view first, then what the order sorts by, ties in the order they came.
+	// Each key is made once, in two words, so that the sort compares only numbers.
+	_sorted.clear();
+	_sorted.reserve(_draws.size());
+	for (const auto& draw : _draws)
+	{
 		const auto order = draw.view < _orders.size() ? _orders.at(draw.view) : ViewOrder::ByProgram;
 		uint32_t first = 0;
 		uint32_t second = 0;
@@ -98,42 +112,37 @@ FrameDescriptorSets DescriptorSetTally::EndFrame()
 			second = draw.program;
 			break;
 		}
-		return std::tuple {draw.view, first, second, draw.sequence};
-	};
-	// What each view would take in the order its draws came, before they are sorted
-	std::array<uint32_t, k_Views> setsInOrder {};
-	std::array<std::optional<uint32_t>, k_Views> boundInOrder {};
-	for (const auto& draw : _draws)
-	{
-		if (draw.view < k_Views && boundInOrder.at(draw.view) != draw.bindings)
-		{
-			boundInOrder.at(draw.view) = draw.bindings;
-			++setsInOrder.at(draw.view);
-		}
+		_sorted.push_back({
+		    .high = (static_cast<uint64_t>(draw.view) << 32U) | first,
+		    .low = (static_cast<uint64_t>(second) << 32U) | draw.sequence,
+		    .bindings = draw.bindings,
+		});
 	}
-	std::ranges::sort(_draws, {}, key);
+	std::ranges::sort(
+	    _sorted, [](const SortedDraw& a, const SortedDraw& b) { return a.high != b.high ? a.high < b.high : a.low < b.low; });
 
 	FrameDescriptorSets frame;
 	frame.draws = static_cast<uint32_t>(_draws.size());
 	// The set in use carries over from one view to the next
 	std::optional<uint32_t> bound;
-	for (const auto& draw : _draws)
+	for (const auto& draw : _sorted)
 	{
-		if (frame.views.empty() || frame.views.back().view != draw.view)
+		const auto view = static_cast<uint16_t>(draw.high >> 32U);
+		if (frame.views.empty() || frame.views.back().view != view)
 		{
 			frame.views.push_back({
-			    .view = draw.view,
+			    .view = view,
 			    .draws = 0,
 			    .sets = 0,
-			    .setsInOrder = draw.view < k_Views ? setsInOrder.at(draw.view) : 0,
+			    .setsInOrder = view < k_Views ? setsInOrder.at(view) : 0,
 			});
 		}
-		auto& view = frame.views.back();
-		++view.draws;
+		auto& counted = frame.views.back();
+		++counted.draws;
 		if (bound != draw.bindings)
 		{
 			bound = draw.bindings;
-			++view.sets;
+			++counted.sets;
 			++frame.sets;
 		}
 	}

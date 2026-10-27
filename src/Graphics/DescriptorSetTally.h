@@ -129,6 +129,14 @@ private:
 	std::array<uint16_t, k_Stages> _textures {};
 	std::array<ViewOrder, k_Views> _orders {};
 	std::vector<Draw> _draws;
+	/// A draw with its sort key, for the sort at the end of the frame
+	struct SortedDraw
+	{
+		uint64_t high;
+		uint64_t low;
+		uint32_t bindings;
+	};
+	std::vector<SortedDraw> _sorted;
 };
 
 } // namespace openblack::graphics
