@@ -220,7 +220,7 @@ void testbed_scenarios::AddFlockScenarios(std::vector<Scenario>& all)
 	                "of a kill, and a hunger that grows each turn. The cow does not fall dead in the hand. Let go, it lies "
 	                "dead at once where it lands, and its body goes after 60 seconds.",
 	    .environment = {.dispenserGrid = false},
-	    .framing = {.shot = Shot::Overview, .include = {{-20.0f, 30.0f}, {20.0f, 70.0f}}, .distance = 0.4f},
+	    .framing = {.shot = Shot::Placed, .eye = {6.0f, 7.0f, 38.0f}, .look = {0.0f, 3.0f, 50.0f}},
 	    .objects = {{.type = AnimalInfo::Cow, .offset = {0.0f, 50.0f}, .life = 0.0f, .living = true}},
 	    .commands = {{.kind = Command::Kind::HandTake, .delaySeconds = 1.0f, .object = 0},
 	                 {.kind = Command::Kind::HandRelease, .delaySeconds = 8.0f}},

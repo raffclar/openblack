@@ -308,6 +308,12 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		{
 			animal->state = AnimalState::Dead;
 			animal->turnsInState = 0;
+			// It plays its dead clip by how it lies, not the clip of the hand or of the air
+			if (const auto clip = animals::DeadClip(animal->type, pose == living::LandingPose::Front))
+			{
+				animal->animation = *clip;
+				animal->clipPlace = 0;
+			}
 		}
 		return;
 	}
