@@ -231,9 +231,14 @@ TEST(MainThreadQueue, TheFailCheckCallsItsHandlerAtTheFirstCallOfAPlace)
 	std::vector<std::string> failed;
 	queue.SetFailHandler([&failed](const DirectCall& call) { failed.push_back(call.what); });
 	const MainThreadQueue::TurnScope turn(queue);
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
+	// The two calls come from the same place, which is one line in the loop
+	for (int i = 0; i < 2; ++i)
+	{
+		MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::Frame");
+	}
 	EXPECT_EQ(failed, (std::vector<std::string> {"Renderer::Frame"}));
+	ASSERT_EQ(queue.GetDirectCalls().size(), 1U);
+	EXPECT_EQ(queue.GetDirectCalls().front().count, 2U);
 }
 
 TEST(MainThreadQueue, TheCheckSeesATurnOnAnotherThread)

@@ -49,6 +49,7 @@
 #include "Common/EventManager.h"
 #include "Common/GameHeading.h"
 #include "Common/GameRandom.h"
+#include "Common/MainThreadQueue.h"
 #include "Common/RandomNumberManager.h"
 #include "Creature/BonusCreatures.h"
 #include "Creature/CreatureDesires.h"
@@ -283,6 +284,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"computerSettingsSystem", "engine.computer_settings"},
     LocatorCoverage {"infoConstants", "engine.services"},
     LocatorCoverage {"profiler", "engine.frame"},
+    LocatorCoverage {"mainThreadQueue", "engine.services"},
     LocatorCoverage {"events", "engine.services"},
     LocatorCoverage {"windowing", "engine.frame"},
     LocatorCoverage {"debugGui", "engine.services"},
@@ -785,6 +787,11 @@ std::unique_ptr<ProviderInterface> EngineProvider()
 		                  {"events", Locator::events::has_value()},
 		                  {"rng", Locator::rng::has_value()},
 		              };
+		              if (Locator::mainThreadQueue::has_value())
+		              {
+			              // The work that the turn gave to the main thread and that still waits
+			              result["main_thread_work_waits"] = Locator::mainThreadQueue::value().GetPendingCount();
+		              }
 		              if (Locator::gameRandom::has_value())
 		              {
 			              const auto seeds = Locator::gameRandom::value().GetSeeds();
