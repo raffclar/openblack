@@ -148,6 +148,21 @@ TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(4.0f, 2.0f), 1.0f / 60.0f);
 }
 
+TEST(ComputerHandCasts, StepThatEndsTheMiracleDoesNothing)
+{
+	FakeWorld world;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::CloseDownCurrentSpell, {});
+	// Each of its three parts takes one turn
+	for (int turn = 0; turn < 3; ++turn)
+	{
+		EXPECT_TRUE(Process(action, world.view));
+	}
+	EXPECT_FALSE(Busy(action));
+	EXPECT_TRUE(world.cast.empty());
+}
+
 TEST(ComputerHandCasts, CastAtPlaceStaysForTheTimeOfTheCast)
 {
 	FakeWorld world;

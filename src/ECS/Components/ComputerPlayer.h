@@ -9,6 +9,8 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <optional>
 #include <vector>
 
@@ -42,6 +44,9 @@ struct ComputerPlayer
 	float speed {90.0f};
 	/// The forests and the seeds of miracles that the god saw near its hand, the newest first
 	std::vector<computer_mind::SeenThing> seen;
+	/// How many times the god sent its creature to help a town while the creature knew none of the kind miracles that it
+	/// casts in fights. The wish to teach the creature a kind miracle grows with this count.
+	uint32_t kindLessonAsks {0};
 };
 
 } // namespace openblack::ecs::components
