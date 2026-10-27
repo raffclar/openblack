@@ -260,7 +260,11 @@ TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
 	const auto villager = registry.Create();
 	registry.Assign<Transform>(villager, glm::vec3(1000.0f + k_PlacePoint.x, 0.0f, 1000.0f + k_PlacePoint.z), glm::mat3(1.0f),
 	                           glm::vec3(1.0f));
-	EXPECT_LE(object_measures::DistanceFromObject(registry, site, villager), 0.0f);
+	// A villager without a model has no radius: it stands less than half a metre from the reach of the site
+	const auto centre = ws::CentreOnLand({1000.0f, 0.0f, 1000.0f}, glm::mat3(1.0f), 1.0f);
+	const auto gap = object_measures::DistanceFromObject(registry, site, villager);
+	EXPECT_EQ(gap, ws::EdgeGap(centre, {1000.0f + k_PlacePoint.x, 1000.0f + k_PlacePoint.z}, 0.0f));
+	EXPECT_LT(gap, 0.5f);
 	// A thing of another kind measures from where it stands, about 43 metres away
 	const auto other = registry.Create();
 	registry.Assign<Transform>(other, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
