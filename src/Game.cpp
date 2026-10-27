@@ -705,6 +705,12 @@ Game::Game(Arguments&& args) noexcept
     , _fightAutopilot(args.fightAutopilot)
     , _fightTranscriptFolder(args.fightTranscriptFolder)
     , _simulation(args.simulation)
+    , _profileFolder(args.profileFolder)
+    // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
+    // backend, detail and logging chosen, is the player's
+    , _automatedRun(args.startLevel != k_DefaultStartLevel || args.startTestbed || args.scenario.has_value() ||
+                    args.newGameStart.has_value() || args.skipLogos || args.inspectPort.has_value() || args.seed.has_value() ||
+                    !args.playVideo.empty() || args.numFramesToSimulate > 0 || args.requestScreenshot.has_value())
     , _screenshotRoot(args.screenshotRoot)
     , _seed(args.seed)
     , _networkGame(args.networkGame)
@@ -713,12 +719,6 @@ Game::Game(Arguments&& args) noexcept
     , _inspectInputLock(args.inspectInputLock)
     , _testbedWindow(!args.scenario.has_value() || !args.scenario->hideWindow)
     , _requestScreenshot(args.requestScreenshot)
-    , _profileFolder(args.profileFolder)
-    // Any of these is a developer's or a tool's run; the game started plainly, or with only its window's size, mode,
-    // backend, detail and logging chosen, is the player's
-    , _automatedRun(args.startLevel != k_DefaultStartLevel || args.startTestbed || args.scenario.has_value() ||
-                    args.newGameStart.has_value() || args.skipLogos || args.inspectPort.has_value() || args.seed.has_value() ||
-                    !args.playVideo.empty() || args.numFramesToSimulate > 0 || args.requestScreenshot.has_value())
 {
 	Locator::camera::emplace(glm::zero<glm::vec3>());
 	// The log of each part of the game
