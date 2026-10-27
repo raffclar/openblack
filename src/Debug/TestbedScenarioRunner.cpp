@@ -1692,6 +1692,10 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 	}
 	case ComputerActionThing::Kind::Object:
 		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Creature:
+		return Locator::playerSystem::has_value()
+		           ? Locator::playerSystem::value().GetPrimaryCreature(thing.owner).value_or(entt::null)
+		           : entt::null;
 	}
 	return entt::null;
 }
