@@ -512,7 +512,8 @@ Json GameInput::State() const
 	}
 	if (Locator::handSystem::has_value())
 	{
-		const auto positions = Locator::handSystem::value().GetPlayerHandPositions();
+		// The hand of this computer, which its pointer moves
+		const auto positions = Locator::handSystem::value().GetOwnHandPositions();
 		if (positions[0].has_value())
 		{
 			state["hand"] = {positions[0]->x, positions[0]->y, positions[0]->z};

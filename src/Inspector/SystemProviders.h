@@ -169,6 +169,8 @@ struct InfluenceSources
 {
 	/// Where the player's hand is, none without one
 	std::function<std::optional<glm::vec3>(int player)> hand;
+	/// The player of this computer, whose hand the query gives when it names no player. None gives the first player.
+	std::function<int()> ownPlayer;
 	/// The player's influence at a point, none without the influence system
 	std::function<std::optional<InfluenceAt>(int player, glm::vec3 point)> at;
 	/// Whether the player's border is shown
@@ -177,7 +179,8 @@ struct InfluenceSources
 	std::function<size_t()> circles;
 };
 
-///   influence.hand {player?}             the hand's share: the player's influence where the hand is
+///   influence.hand {player?}             the hand's share: the player's influence where the hand is (by default
+///                                        the player of this computer)
 ///   influence.at   {position, player?}   the player's influence at a point
 [[nodiscard]] std::unique_ptr<ProviderInterface> MakeInfluenceProvider(InfluenceSources sources);
 

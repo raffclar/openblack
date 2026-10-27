@@ -1216,12 +1216,15 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeInfluenceProvider(I
 		return Json {
 		    {"influence", at.influence}, {"hand_point", at.handPoint}, {"raw", at.raw}, {"inside", at.handPoint > 0.0f}};
 	};
+	const ParameterDescription handPlayer =
+	    Parameter("player", "integer", "The player's number, the player of this computer by default", false);
 	provider->Add(Query("hand",
 	                    "The hand's share: the player's influence where their hand is (with what the hand keeps past the "
 	                    "border), at the hand's own place, and their own; whether the hand is inside",
-	                    {player}),
+	                    {handPlayer}),
 	              [sources, influenceJson](const QueryContext& context) {
-		              const auto number = PlayerParam(context.params);
+		              const auto number = context.params.contains("player") || !sources.ownPlayer ? PlayerParam(context.params)
+		                                                                                          : sources.ownPlayer();
 		              const auto hand = sources.hand ? sources.hand(number) : std::nullopt;
 		              if (!hand.has_value())
 		              {
