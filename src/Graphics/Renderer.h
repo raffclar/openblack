@@ -488,9 +488,6 @@ private:
 	void DrawGestureHintCollars(const DrawSceneDesc& desc) const;
 	/// The leashes hanging on the temples, and the one carried in the hand, each drawn just after its glow
 	void DrawTempleLeashes(const DrawSceneDesc& desc) const;
-	/// Takes up the creatures' skins where they have been painted again, before their bodies are drawn with them; drops
-	/// those of creatures no longer on the land
-	void UploadCreatureSkins(const DrawSceneDesc& drawDesc) const;
 	/// A texture for a painted skin: a spare one, else a new one. None if bgfx has no more textures.
 	[[nodiscard]] std::unique_ptr<Texture2D> TakeCreatureSkinTexture() const;
 	/// A new texture for a painted skin. None if bgfx has no more textures.
@@ -665,6 +662,11 @@ private:
 		std::vector<std::pair<uint32_t, const Texture2D*>> drawn;
 	};
 	mutable std::unordered_map<entt::entity, CreatureSkins> _creatureSkins;
+	/// Takes up the skins of the things of a registry where they have been painted again, before their bodies are drawn
+	/// with them; drops those of things that are no longer in the registry
+	void UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const;
+	/// The painted skins of the copies of creatures in the temple's rooms, as the copy in the creature room has
+	mutable std::unordered_map<entt::entity, CreatureSkins> _roomCreatureSkins;
 	/// Textures for painted skins that no creature uses now. The game makes them behind the loading screen, so that the
 	/// first frame of a creature does not make them.
 	mutable std::vector<std::unique_ptr<Texture2D>> _spareCreatureSkins;
@@ -694,7 +696,7 @@ private:
 		entt::entity entity;
 		uint32_t instance;
 		/// A copy of the creature drawn elsewhere in its own pose: the entity it takes its pose and eyes from, and where
-		/// it is lit from
+		/// it is lit from. The copy is a thing of the temple's rooms.
 		entt::entity posedBy {entt::null};
 		std::optional<glm::vec3> light;
 	};

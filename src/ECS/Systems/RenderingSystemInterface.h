@@ -211,7 +211,8 @@ struct RenderContext
 	std::vector<EntityDraw> entityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
-	/// its instance and lit from a light of its own
+	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the
+	/// temple's rooms.
 	struct CreatureCopyDraw
 	{
 		entt::entity creature;
@@ -225,6 +226,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its

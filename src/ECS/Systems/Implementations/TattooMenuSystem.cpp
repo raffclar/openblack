@@ -220,12 +220,13 @@ void TattooMenuSystem::Update(float milliseconds, glm::ivec2 pointer, bool butto
 	animation->lookAt = body.lookAt;
 	if (Locator::creatureAnimationSystem::has_value())
 	{
-		Locator::creatureAnimationSystem::value().PoseCopy(*_copy, frameMs);
+		Locator::creatureAnimationSystem::value().PoseCopy(Locator::entitiesRegistry::value(), *_copy, frameMs);
 	}
 	// Its hair swings from the new pose by the whole time of the frame, as the game is paused under the menu
 	if (Locator::creatureHairSystem::has_value())
 	{
-		Locator::creatureHairSystem::value().StepCopy(*_copy, std::chrono::duration<float, std::milli>(milliseconds));
+		Locator::creatureHairSystem::value().StepCopy(Locator::entitiesRegistry::value(), *_copy,
+		                                              std::chrono::duration<float, std::milli>(milliseconds));
 	}
 	HoverSites(pointer);
 }

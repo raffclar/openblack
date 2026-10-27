@@ -39,6 +39,7 @@
 #include "Common/RandomNumberManagerProduction.h"
 #include "Debug/DebugGuiInterface.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MapProduction.h"
 #include "ECS/PhysicsGameHooks.h"
 #include "ECS/Registry.h"
@@ -205,6 +206,7 @@ using openblack::TempleInterior;
 using openblack::UnloadedIsland;
 using openblack::chlapi::CHLApi;
 using openblack::debug::gui::DebugGuiInterface;
+using openblack::ecs::DrawnRegistry;
 using openblack::ecs::MapProduction;
 using openblack::ecs::Registry;
 using openblack::ecs::systems::AbodeKnockSystem;
@@ -528,6 +530,7 @@ bool openblack::InitializeSimulation(const player_profiles::Store& profiles) noe
 	Locator::resources::emplace<Resources>();
 	Locator::playerSystem::emplace<PlayerSystem>();
 	Locator::entitiesRegistry::emplace<Registry>();
+	Locator::drawnRegistry::emplace<DrawnRegistry>();
 	Locator::handSystem::emplace<HandSystem>();
 	Locator::handGrabSystem::emplace<HandGrabSystem>();
 	Locator::temple::emplace<TempleInterior>();
@@ -901,6 +904,7 @@ void openblack::ShutDownServices()
 	// The map listens to the registry's signals, so it goes first: a map left behind would later let go of signals of a
 	// registry that is gone
 	Locator::entitiesMap::reset();
+	Locator::drawnRegistry::reset();
 	Locator::entitiesRegistry::reset();
 	Locator::rendererInterface::reset();
 	Locator::windowing::reset();

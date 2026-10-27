@@ -3753,6 +3753,8 @@ void Runner::Give(const Command& command)
 	case Kind::ContinueGame:
 	case Kind::PlayLogoEffect:
 	case Kind::StopScript:
+	case Kind::RunScript:
+	case Kind::CallNative:
 	case Kind::StartScriptMusic:
 	case Kind::RunText:
 	case Kind::ReadTip:
@@ -4978,13 +4980,19 @@ std::optional<glm::ivec2> Runner::CaveCreatureOnScreen(glm::vec2 size)
 	}
 	const auto& cave = Locator::creatureCaveSystem::value();
 	const auto copy = cave.GetCaveCreature();
-	if (!copy.has_value())
+	if (!copy.has_value() || !Locator::temple::has_value())
 	{
 		return std::nullopt;
 	}
+	// The copy is a thing of the temple's rooms, and its creature is a thing of the land
 	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
-	const auto* original = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
+	const auto& copies = Locator::temple::value().GetRooms();
+	if (!copies.Valid(*copy))
+	{
+		return std::nullopt;
+	}
+	const auto* transform = copies.TryGet<const ecs::components::Transform>(*copy);
+	const auto* original = copies.TryGet<const ecs::components::CreatureCopy>(*copy);
 	const auto* mesh = original != nullptr && registry.Valid(original->creature)
 	                       ? registry.TryGet<const ecs::components::Mesh>(original->creature)
 	                       : nullptr;

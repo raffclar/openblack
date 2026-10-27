@@ -87,6 +87,8 @@ class World
 public:
 	virtual ~World() = default;
 
+	/// The first player. A computer god that a land script switches on sizes its creature from the creature of this
+	/// player, on every computer.
 	[[nodiscard]] virtual PlayerNames LocalPlayer() const = 0;
 	/// The first creature of the player that is still the player's
 	[[nodiscard]] virtual std::optional<entt::entity> Creature(PlayerNames player) const = 0;

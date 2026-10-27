@@ -24,6 +24,7 @@
 #include "ECS/PlayerMiracles.h"
 #include "ECS/ProfileAlignment.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/VillageTotemSystemInterface.h"
 #include "Locator.h"
@@ -54,10 +55,10 @@ std::optional<entt::entity> PlayerSystem::FindPlayer(PlayerNames playerName) con
 	return player != _players.end() ? std::optional(player->second) : std::nullopt;
 }
 
-bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+openblack::player_kind::Facts PlayerSystem::FactsOf(PlayerNames name) const
 {
 	const bool networkGame = Locator::time::has_value() && Locator::time::value().IsNetworkGame();
-	// A computer mind that a land script or the start of a network game switched on marks its player
+	// A computer mind that a land script or the start of a game switched on marks its player
 	bool computerMind = false;
 	if (const auto player = FindPlayer(name); player.has_value() && Locator::entitiesRegistry::has_value())
 	{
@@ -65,7 +66,18 @@ bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
 		const auto* mind = registry.Valid(*player) ? registry.TryGet<const ComputerPlayer>(*player) : nullptr;
 		computerMind = mind != nullptr && mind->marked;
 	}
-	return player_kind::IsComputer({.player = name, .networkGame = networkGame, .computerMind = computerMind});
+	const bool hands = Locator::handSystem::has_value() && Locator::handSystem::value().GetHandsOf(name).has_value();
+	return {.player = name, .networkGame = networkGame, .computerMind = computerMind, .hands = hands};
+}
+
+bool PlayerSystem::IsComputerPlayer(PlayerNames name) const
+{
+	return player_kind::IsComputer(FactsOf(name));
+}
+
+bool PlayerSystem::IsHumanPlayer(PlayerNames name) const
+{
+	return player_kind::IsHuman(FactsOf(name));
 }
 
 void PlayerSystem::AddCreature(entt::entity creature)

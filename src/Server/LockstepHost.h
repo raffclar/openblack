@@ -48,8 +48,8 @@ struct HostSettings
 	game_socket::Start start;
 	/// The checksum of the server's land file, which each player's land file must have before the start
 	uint64_t landChecksum {0};
-	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready.
-	/// In a room with no human god (tools), the world turns when this many observers joined.
+	/// The fewest gods with a player that start the game. The start comes when each god in the room is ready. In a room
+	/// with no human god (tools), the world turns when this many observers joined.
 	uint32_t minGods {1};
 	/// The god slots of the room: the citadels of the land. A god who joins when all the slots have a player is refused.
 	uint8_t godSlots {k_DefaultGodSlots};

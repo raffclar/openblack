@@ -45,8 +45,11 @@ public:
 	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override;
 
 	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
+	[[nodiscard]] bool IsHumanPlayer(PlayerNames name) const override;
 
 private:
+	/// What decides who plays a player now
+	[[nodiscard]] player_kind::Facts FactsOf(PlayerNames name) const;
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
 	void Acquire(entt::entity creature, bool primary);
 	/// What a player keeps from land to land
