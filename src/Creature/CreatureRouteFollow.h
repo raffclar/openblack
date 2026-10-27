@@ -148,8 +148,10 @@ public:
 	template <typename Self, typename Visitor>
 	static void VisitSaved(Self& self, Visitor&& visit)
 	{
+		// The heading and the circles that the obstacles leave out come last, so that a save without them still gives
+		// the values before them
 		visit(self._obstacles, self._state, self._route, self._position, self._routeEnd, self._destination, self._pending,
-		      self._searches, self._chosen, self._met);
+		      self._searches, self._chosen, self._met, self._heading, Obstacles::LeftOutAround(self._obstacles));
 	}
 };
 } // namespace openblack::creature_route

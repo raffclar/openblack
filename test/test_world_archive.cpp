@@ -619,6 +619,30 @@ TEST(WorldArchive, AWalkCarriesOnFromTheSavedSearch)
 	}
 }
 
+// The heading along the route and the circles that the obstacles leave out come back, so that a loaded walk starts
+// its next leg as the walk that was not saved does
+TEST(WorldArchive, AWalkKeepsItsHeadingAndTheCirclesItLeavesOut)
+{
+	using creature_route::Follower;
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	auto walking = WalkSearchingAgain();
+	ASSERT_NE(walking.GetHeading(), GameHeading {});
+	walking.GetObstacles().LeaveOutCirclesHolding({1200.0f, 1200.0f}, {1300.0f, 1300.0f});
+	const auto bytes = FollowerBytes(context, walking);
+
+	Follower loaded;
+	const EntityRemap identity;
+	BinaryReader in(context, bytes, identity);
+	Load(in, loaded);
+	ASSERT_FALSE(in.Failed());
+	EXPECT_EQ(in.Remaining(), 0u);
+	EXPECT_EQ(loaded.GetHeading(), walking.GetHeading());
+	// A circle round a point that the walk leaves out does not go in, and other circles do
+	EXPECT_FALSE(loaded.GetObstacles().Add(7u, {1200.0f, 1205.0f}, 10.0f));
+	EXPECT_TRUE(loaded.GetObstacles().Add(8u, {1250.0f, 1205.0f}, 10.0f));
+}
+
 TEST(WorldArchive, ACreaturesWalkIsKeptWithItsComponent)
 {
 	entt::meta_ctx context;
