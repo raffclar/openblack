@@ -982,6 +982,9 @@ struct Command
 		/// (mindFile) of the creature mind folder of the game takes the place of the creature file of the god's player.
 		/// The creature comes at the creature home of the god's temple. Needs no creature.
 		BringCreature,
+		/// The god of the player (player) gets the weight (amount) for each node of its mind of the name (action), as a
+		/// script's SET_COMPUTER_PLAYER_PERSONALITY gives it. Needs no creature.
+		ComputerPersonality,
 	};
 	Kind kind {Kind::Stop};
 	/// Which creature, by its place in the scenario's creatures

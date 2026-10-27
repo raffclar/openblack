@@ -55,7 +55,7 @@ namespace detail
 constexpr std::array<MindDomain, static_cast<size_t>(NodeKind::_Count)> k_Domains {{
     MindDomain::Core,         // Root
     MindDomain::Core,         // TopPlayerInteract
-    MindDomain::Core,         // TopCreatureInteract
+    MindDomain::CreatureCare, // TopCreatureInteract
     MindDomain::Core,         // TopTownInteract
     MindDomain::Attitudes,    // TopDefeatPlayer
     MindDomain::Core,         // TopReactToPlayer

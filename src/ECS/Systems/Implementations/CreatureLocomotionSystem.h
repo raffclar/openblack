@@ -52,6 +52,7 @@ public:
 	void Stop(entt::entity creature) override;
 	void StopAtOnce(entt::entity creature) override;
 	void ResetPace(entt::entity creature) override;
+	void SetKeptFraction(entt::entity creature, float fraction) override;
 	void Place(entt::entity creature, glm::vec3 position) override;
 	void PlaceWithoutWalking(entt::entity creature, glm::vec3 position) override;
 	[[nodiscard]] bool IsMoving(entt::entity creature) const override;

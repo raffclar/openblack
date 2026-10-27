@@ -13,6 +13,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -140,6 +141,48 @@ public:
 		thrownFrom.push_back(hand);
 		thrownAt.push_back(velocity);
 	}
+	bool ForceAction(entt::entity creature, uint32_t action, entt::entity object) override
+	{
+		if (!speeds.contains(creature))
+		{
+			return false;
+		}
+		ordered.push_back({creature, action, object});
+		forced.insert(creature);
+		return true;
+	}
+	[[nodiscard]] bool PlanForced(entt::entity creature) const override { return forced.contains(creature); }
+	void ForceDominantDesire(entt::entity creature, int32_t desire, float seconds) override
+	{
+		dominant.push_back({creature, desire, seconds});
+	}
+	[[nodiscard]] std::optional<CreatureSpeeds> SpeedsOf(entt::entity creature) const override
+	{
+		const auto found = speeds.find(creature);
+		return found != speeds.end() ? std::optional(found->second) : std::nullopt;
+	}
+	void DrawForShortJourney() override { ++shortJourneyDraws; }
+	void SetRequiredSpeed(entt::entity creature, float speed) override { required[creature] = speed; }
+
+	/// An order that the god gave to a creature, and a desire that it made dominant
+	struct Order
+	{
+		entt::entity creature {entt::null};
+		uint32_t action {0};
+		entt::entity object {entt::null};
+	};
+	struct Dominant
+	{
+		entt::entity creature {entt::null};
+		int32_t desire {0};
+		float seconds {0.0f};
+	};
+	std::map<entt::entity, CreatureSpeeds> speeds;
+	std::vector<Order> ordered;
+	std::set<entt::entity> forced;
+	std::vector<Dominant> dominant;
+	int shortJourneyDraws {0};
+	std::map<entt::entity, float> required;
 
 	std::map<entt::entity, glm::vec2> places;
 	std::vector<glm::vec3> castAt;
