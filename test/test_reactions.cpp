@@ -97,8 +97,10 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(0.5f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f}, cube);
+		// A material that keeps part of its spin: a zero share is not a material of the game
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 0.5f, .mass = 1.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->velocity = velocity;
 	}
 	[[nodiscard]] PhysicsEntry* Find(entt::entity object) override { return object == entry.entity ? &entry : nullptr; }
@@ -261,6 +263,8 @@ protected:
 		for (auto& villager : _info->villager)
 		{
 			ReactToEverything(villager);
+			// The town needs share divides by this: zero is not a value of the game's data
+			villager.divisorForTownNeedsSpeedMod = 1.0f;
 			// As every kind of villager in the game's data, they walk in the plain walking state
 			villager.moveState = LivingStates::LivingMoveToPos;
 		}
@@ -720,6 +724,10 @@ TEST_F(Reactions, AFiremanWhoseFireCoolsOnTheWayIsNotLeftAmongTheBlazesFiremen)
 		row.isReactionState = 1;
 		row.resumeState = static_cast<int>(state);
 	}
+	// The fire reaction has a reach, as every reaction of the game's data: a zero reach divides by zero
+	auto& fireRow = _info->reaction.at(static_cast<size_t>(Reaction::ReactToFire));
+	fireRow.maxReactionDistance = 60.0f;
+	fireRow.howImportantIsDistance = 0.25f;
 	Locator::infoConstants::emplace(*_info);
 	Locator::reactionSystem::emplace<ecs::systems::ReactionSystem>();
 	Locator::fireSystem::emplace<ecs::systems::FireSystem>();
