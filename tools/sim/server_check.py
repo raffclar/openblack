@@ -316,11 +316,13 @@ def main():
     # What the turns did with the hand: the game and the server do the same commands, so each must count the same deeds.
     # An input that expects deeds of its hand (its "expect") fails the run when the hand did fewer: the checksums are
     # then the same only because the hand did nothing.
-    game_deeds = sim_report.hand_deeds_in_file(game_log)
-    server_deeds = sim_report.hand_deeds_in_file(server_log)
+    # Only the deeds up to the last turn that the checksums were compared at are counted: the game can play on a few turns
+    # after the last one that the record keeps, and a deed in those turns is not a difference (the 32 god map shows it).
+    last_compared = compared[-1] if compared else None
+    game_deeds, server_deeds, deeds_same = sim_report.hand_deeds_of_both(game_log, server_log, last_compared)
     missing = sim_report.missing_deeds(game_deeds.get(0, {}), sim_report.expected_deeds(options.input))
     summary["hand_deeds"] = {str(player): counts for player, counts in sorted(server_deeds.items())}
-    summary["hand_deeds_same"] = game_deeds == server_deeds
+    summary["hand_deeds_same"] = deeds_same
     summary["missing_deeds"] = missing
     # A land with no temple for the player's god (Land 1) decides the network game at its first turn: the
     # god is out, its creature goes, and the end box takes the mouse, so a recorded input does nothing there
@@ -329,7 +331,7 @@ def main():
     summary["decided_at_turn"] = int(decided[0].group(1)) if decided and decided[0] else None
     if events is not None and summary["decided_at_turn"] is not None:
         print(f"the game was decided at turn {summary['decided_at_turn']}: the end box takes the input of the hand")
-    if missing or game_deeds != server_deeds:
+    if missing or not deeds_same:
         summary["same"] = False
         print(f"the hand did not do what its input expects: {missing}" if missing
               else f"the game and the server count other deeds of the hand: game {game_deeds}, server {server_deeds}")
