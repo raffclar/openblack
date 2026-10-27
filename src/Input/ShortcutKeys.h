@@ -10,6 +10,7 @@
 #pragma once
 
 #include "Camera/ZoomToPlaces.h"
+#include "Enums.h"
 
 namespace openblack::input
 {
@@ -22,6 +23,10 @@ class ShortcutKeys
 public:
 	/// Acts on the presses of the frame
 	void Update();
+	/// A game starts on the land: the camera starts at the temple of the player and flies to it as a double tap of the
+	/// temple key makes it fly. The next press of the temple key flies the camera back. Without a temple of the player,
+	/// the camera stays where it is.
+	void StartAtTemple(PlayerNames player);
 
 private:
 	zoom_to::ZoomToPlaces _zoomTo;

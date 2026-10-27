@@ -72,9 +72,10 @@ uint32_t Turn()
 	return Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 }
 
-PlayerNames LocalPlayer()
+/// The player of this computer, who hears the guidance
+PlayerNames OwnPlayer()
 {
-	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 }
 
 /// The help level the player chose, none while the scripts keep the help system off
@@ -221,7 +222,7 @@ GuidanceHeard* GuidanceSystem::Heard()
 		return nullptr;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto here = LocalPlayer();
+	const auto here = OwnPlayer();
 	std::optional<entt::entity> player;
 	registry.Each<const Player>([&](entt::entity entity, const Player& candidate) {
 		if (candidate.name == here)
@@ -346,7 +347,7 @@ void GuidanceSystem::SayRemark(guidance::Kind kind)
 
 void GuidanceSystem::TownAttacked(entt::entity town, PlayerNames attacker, bool byCreature)
 {
-	const auto here = LocalPlayer();
+	const auto here = OwnPlayer();
 	// TODO(guidance-alerts): harm done by the player's creature is the creature's own remark, kept quiet on the first
 	// land
 	if (byCreature || attacker != here || !Locator::entitiesRegistry::has_value())
@@ -410,7 +411,7 @@ void GuidanceSystem::TownAttackCry(entt::entity town, const guidance::TownAttack
 
 void GuidanceSystem::BuildingBroken(entt::entity building, std::optional<PlayerNames> player, float remaining)
 {
-	if (!(remaining < k_WreckedShare) || player != LocalPlayer() || !RemarkNow(guidance::Kind::DestroyBuilding))
+	if (!(remaining < k_WreckedShare) || player != OwnPlayer() || !RemarkNow(guidance::Kind::DestroyBuilding))
 	{
 		return;
 	}
@@ -432,7 +433,7 @@ void GuidanceSystem::AlignmentTurn(float change)
 		return;
 	}
 	heard->alignmentDrift = guidance::Drift(heard->alignmentDrift, change);
-	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(LocalPlayer());
+	const float alignment = Locator::alignmentSystem::value().GetPlayerAlignment(OwnPlayer());
 	const auto remark = guidance::AlignmentRemark(heard->alignmentDrift, alignment,
 	                                              Locator::infoConstants::value().player.maxAlignmentChangePerGameTurn);
 	if (remark.has_value() && RemarkNow(*remark))
@@ -605,7 +606,7 @@ void GuidanceSystem::TownDesireVoices()
 
 	// Find the worship site of the player at this machine that is nearest to the camera, with people that dance at it
 	const auto temple =
-	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(LocalPlayer()) : entt::null;
+	    Locator::worshipSiteSystem::has_value() ? Locator::worshipSiteSystem::value().TempleOf(OwnPlayer()) : entt::null;
 	if (temple != entt::null)
 	{
 		const auto& worship = registry.Get<const CitadelWorship>(temple);

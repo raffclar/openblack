@@ -56,6 +56,8 @@ public:
 	void LookAtReportedHand() override;
 
 private:
+	/// The creature that a player holds looks at the hand that the player last reported
+	void LookAtReportedHandOf(PlayerNames player);
 	/// Whether the hand of the player may take hold of the creature
 	[[nodiscard]] static bool MayHoldFor(PlayerNames player, entt::entity creature);
 	/// Takes hold of a creature by a command, keeping the session if already held to it

@@ -50,6 +50,21 @@ public:
 	/// report or off the land. The frames draw the hand from its Transform, which the world never reads.
 	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
 	GetPlayerHandPositions() const noexcept = 0;
+	/// Where the world has the hands of a player, as GetPlayerHandPositions gives them for the first player. A player with
+	/// no hands has none.
+	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
+	GetHandPositionsOf(PlayerNames player) const noexcept
+	{
+		return player == PlayerNames::PLAYER_ONE ? GetPlayerHandPositions()
+		                                         : std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)> {};
+	}
+	/// Where the world has the hands that this computer moves and draws (see GetOwnHands). Only the frames, the input and
+	/// the inspector of this computer read it.
+	[[nodiscard]] virtual std::array<std::optional<glm::vec3>, static_cast<size_t>(Side::_Count)>
+	GetOwnHandPositions() const noexcept
+	{
+		return GetPlayerHandPositions();
+	}
 	/// This computer's left hand where the frames draw it, none off the land. Only the frames and the input of this computer
 	/// read it.
 	[[nodiscard]] virtual std::optional<glm::vec3> GetDrawnHandPosition() const noexcept { return std::nullopt; }

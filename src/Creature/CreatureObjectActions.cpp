@@ -95,6 +95,11 @@ bool creature_object_actions::ShowsHoldPose(std::optional<Kind> playing)
 	return true;
 }
 
+bool creature_object_actions::PosesBody(bool playing, Status status)
+{
+	return playing && (status == Status::Running || status == Status::Contact);
+}
+
 Hands creature_object_actions::HandsFor(Kind kind)
 {
 	switch (kind)
@@ -131,6 +136,11 @@ creature_object_actions::ApproachStep creature_object_actions::NextApproachStep(
 		return ApproachStep::WalkNear;
 	}
 	return flatDistance < straightReach || inRange ? ApproachStep::Begin : ApproachStep::WalkInReach;
+}
+
+creature_object_actions::MovingApproachStep creature_object_actions::NextMovingApproachStep(bool turnsToReach)
+{
+	return turnsToReach ? MovingApproachStep::WaitForTurn : MovingApproachStep::AimAgain;
 }
 
 float creature_object_actions::NearWalkDistance(float creatureRadius, float thingRadius)

@@ -411,20 +411,21 @@ std::vector<creature_desires::PhaseDesires> Phases()
 	return phases;
 }
 
-/// How interesting the creature finds its player this turn. The local player's hand is the player's; a creature of
-/// another player, or of none, finds nothing of interest here.
+/// How interesting the creature finds its player this turn: the hand of the player that owns the creature, where the
+/// reports of that player put it. A creature of a player with no hand, or of no player, finds nothing of interest here.
 float PlayerInterestNow(const Creature& creature, CreatureMindState& mind)
 {
-	if (!Locator::handSystem::has_value() || !Locator::playerSystem::has_value() ||
-	    creature.owner != Locator::playerSystem::value().GetLocalPlayer())
+	const auto hands =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(creature.owner) : std::nullopt;
+	if (!hands.has_value())
 	{
 		return creature_desire_sources::InterestNow(mind.playerInterest, std::nullopt, std::nullopt);
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	constexpr auto k_Hand = static_cast<size_t>(HandSystemInterface::Side::Left);
-	const auto handEntity = Locator::handSystem::value().GetPlayerHands().at(k_Hand);
+	const auto handEntity = hands->at(k_Hand);
 	// Off the land the hand has no place: it counts as where it last was
-	auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(k_Hand);
+	auto hand = Locator::handSystem::value().GetHandPositionsOf(creature.owner).at(k_Hand);
 	if (!hand.has_value())
 	{
 		hand = mind.playerInterest.lastHand;
@@ -1603,6 +1604,7 @@ void TakeEffect(entt::entity creature, const creature_mind::Commands& commands, 
 	case Effect::Inspected:
 	case Effect::TookFromPile:
 	case Effect::TookFromHand:
+	case Effect::Stomped:
 	case Effect::None:
 		break;
 	}
@@ -2025,13 +2027,13 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	auto& animation = registry.Get<CreatureAnimation>(entity);
 	const auto& transform = registry.Get<const Transform>(entity);
 	// Where the player's camera is and looks, which tells whether it is looking at the player's creatures
-	// Where the player's camera is and looks, which tells whether it is looking at the player's creatures
+	// Where the camera of the creature's own player is and looks, which tells whether that player looks at it
 	struct View
 	{
 		glm::vec3 origin;
 		glm::vec3 focus;
 	};
-	const auto reported = openblack::ecs::ReportedCreatureCamera(entity);
+	const auto reported = openblack::ecs::ReportedCameraOfItsPlayer(entity);
 	const auto view =
 	    reported.has_value() ? std::optional(View {.origin = reported->origin, .focus = reported->focus}) : std::nullopt;
 	SetUpMind(entity, creature, mind);
@@ -2077,8 +2079,8 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		LookAtLand(entity, creature, mind, transform);
 		LookFarAbout(entity, mind, transform);
 		ecs::creature_exploration_land::Visit(entity, {transform.position.x, transform.position.z});
-		const bool lookedAt = creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
-		                      creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
+		const bool lookedAt =
+		    view.has_value() && creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
 		creature_desire_sources::CountTurn(mind.attention, lookedAt);
 		if (lookedAt)
 		{

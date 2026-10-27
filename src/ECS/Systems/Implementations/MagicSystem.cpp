@@ -113,6 +113,7 @@
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/TeleportSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -1250,7 +1251,10 @@ entt::entity MagicSystem::Cast(MagicType type, const components::SpellCaster& ca
 	spell.magicType = type;
 	spell.spellClass = magic::ClassOf(type);
 	spell.caster = caster;
-	spell.humanCasting = caster.kind == SpellCaster::Kind::Player && player == PlayerNames::PLAYER_ONE;
+	// A person casts it: the hand of a player that the computer does not play
+	spell.humanCasting = caster.kind == SpellCaster::Kind::Player && player != PlayerNames::NEUTRAL &&
+	                     (Locator::playerSystem::has_value() ? !Locator::playerSystem::value().IsComputerPlayer(player)
+	                                                         : player == PlayerNames::PLAYER_ONE);
 	magic::SetChants(spell.chants, cast.chants);
 	spell.duration = cast.duration;
 	spell.magnitude = cast.magnitude;

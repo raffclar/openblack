@@ -1062,7 +1062,7 @@ void CreatureAnimationSystem::Update(std::chrono::duration<float, std::milli> ga
 		auto& glows = registry.Get<CreatureHandGlows>(entity);
 		const auto slideMs = frame_pace::Step(glows.slidePace, realTime, realTime);
 		const auto turnMs = frame_pace::Step(glows.turnPace, realTime, std::chrono::milliseconds(milliseconds));
-		PlaceHandGlows(entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
+		PlaceHandGlows(registry, entity, static_cast<int32_t>(slideMs.count()), static_cast<int32_t>(turnMs.count()));
 	}
 }
 
@@ -1115,10 +1115,19 @@ void CreatureAnimationSystem::PoseTurn(entt::entity creature)
 	{
 		return;
 	}
-	// The body takes its pose where its turn took it
+	// The body takes its pose where its turn took it. The walk puts its clips on the body for the end of the turn. When
+	// the body plays the animations of what it does with a thing, these animations make the pose and not the walk clips.
 	if (Locator::creatureLocomotionSystem::has_value())
 	{
+		const auto* action = registry.TryGet<const CreatureObjectAction>(creature);
+		const bool acting = action != nullptr && creature_object_actions::PosesBody(
+		                                             action->phase == CreatureObjectAction::Phase::Playing, action->status);
+		auto actionSlots = acting ? animation->slots : decltype(animation->slots) {};
 		Locator::creatureLocomotionSystem::value().ShowTurnEnd(creature);
+		if (acting)
+		{
+			animation->slots = std::move(actionSlots);
+		}
 	}
 	constexpr auto k_TurnMs = std::chrono::duration<float, std::milli>(TimeSystemInterface::k_TurnDuration).count();
 	BreatheForTurn(creature, k_TurnMs);
@@ -1190,18 +1199,18 @@ void CreatureAnimationSystem::HoldTurnPose(entt::entity creature)
 	}
 }
 
-void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
+void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, float milliseconds)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* self = registry.TryGet<const CreatureCopy>(copy);
-	if (self == nullptr || !registry.Valid(self->creature))
+	const auto& land = Locator::entitiesRegistry::value();
+	const auto* self = copies.Valid(copy) ? copies.TryGet<const CreatureCopy>(copy) : nullptr;
+	if (self == nullptr || !land.Valid(self->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(self->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(self->creature);
-	auto* animation = registry.TryGet<CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
+	const auto* creature = land.TryGet<const Creature>(self->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(self->creature);
+	auto* animation = copies.TryGet<CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
 	if (creature == nullptr || morph == nullptr || animation == nullptr || transform == nullptr)
 	{
 		return;
@@ -1252,12 +1261,12 @@ void CreatureAnimationSystem::PoseCopy(entt::entity copy, float milliseconds)
 	}
 
 	// Its eyes are the creature's, looking where the copy's head looks
-	auto* eyes = registry.TryGet<CreatureEyes>(copy);
+	auto* eyes = copies.TryGet<CreatureEyes>(copy);
 	if (eyes == nullptr)
 	{
 		return;
 	}
-	if (const auto* own = registry.TryGet<const CreatureEyes>(self->creature))
+	if (const auto* own = land.TryGet<const CreatureEyes>(self->creature))
 	{
 		eyes->mode = own->mode;
 		eyes->openness = own->openness;
@@ -1450,25 +1459,32 @@ struct BodyOf
 	float size;
 };
 
-std::optional<BodyOf> FindBody(const ecs::Registry& registry, entt::entity entity)
+/// The body of a creature, or of the creature of a copy. `things` is the registry of the creature or the copy, and `land`
+/// the registry of the creature of a copy.
+std::optional<BodyOf> FindBody(const ecs::Registry& things, const ecs::Registry& land, entt::entity entity)
 {
-	if (const auto* creature = registry.TryGet<const Creature>(entity); creature != nullptr)
+	if (const auto* creature = things.TryGet<const Creature>(entity); creature != nullptr)
 	{
-		const auto* morph = registry.TryGet<const CreatureMorph>(entity);
+		const auto* morph = things.TryGet<const CreatureMorph>(entity);
 		return morph != nullptr ? std::optional(BodyOf {creature->species, morph, ShownSize(*creature)}) : std::nullopt;
 	}
-	const auto* copy = registry.TryGet<const CreatureCopy>(entity);
-	if (copy == nullptr || !registry.Valid(copy->creature))
+	const auto* copy = things.TryGet<const CreatureCopy>(entity);
+	if (copy == nullptr || !land.Valid(copy->creature))
 	{
 		return std::nullopt;
 	}
-	const auto* creature = registry.TryGet<const Creature>(copy->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(copy->creature);
+	const auto* creature = land.TryGet<const Creature>(copy->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(copy->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return std::nullopt;
 	}
 	return BodyOf {creature->species, morph, copy->size};
+}
+
+std::optional<BodyOf> FindBody(const ecs::Registry& registry, entt::entity entity)
+{
+	return FindBody(registry, registry, entity);
 }
 
 const CreatureRig* RigOf(CreatureType species)
@@ -1556,6 +1572,7 @@ void CreatureAnimationSystem::LoadCreedPowers(
 	                                                          : registry.Assign<CreatureHandGlows>(creature);
 	const auto hum = creature_hand_glow::LoadCreedPowers(glows.glows, powers);
 	glows.placed = {};
+	glows.motion = {};
 	ApplyHum(creature, hum);
 }
 
@@ -1592,14 +1609,13 @@ void CreatureAnimationSystem::PlayCreedEvent(entt::entity creature, int32_t even
 	creature_hand_glow::Set(glows.glows, glow->place, creature_hand_glow::k_CreedEventScale, glow->power);
 }
 
-void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t frameMs, int32_t gameMs)
+void CreatureAnimationSystem::PlaceHandGlows(Registry& things, entt::entity creature, int32_t frameMs, int32_t gameMs)
 {
 	using creature_hand_glow::Place;
-	auto& registry = Locator::entitiesRegistry::value();
-	auto* hand = registry.TryGet<CreatureHandGlows>(creature);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto body = FindBody(registry, creature);
+	auto* hand = things.TryGet<CreatureHandGlows>(creature);
+	const auto* animation = things.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = things.TryGet<const Transform>(creature);
+	const auto body = FindBody(things, Locator::entitiesRegistry::value(), creature);
 	if (hand == nullptr || animation == nullptr || transform == nullptr || !body.has_value())
 	{
 		return;
@@ -1614,9 +1630,11 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 	{
 		auto& glow = hand->glows.at(i);
 		auto& placed = hand->placed.at(i);
+		auto& motion = hand->motion.at(i);
 		placed.reset();
 		if (!glow.has_value())
 		{
+			motion = {};
 			continue;
 		}
 		const auto place = static_cast<Place>(i);
@@ -1625,8 +1643,8 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		if (place == Place::Circling)
 		{
 			// It turns about the up axis above the body
-			creature_hand_glow::Turn(*glow, gameMs);
-			axes = creature_hand_glow::CirclingAxes(glow->turn);
+			creature_hand_glow::Turn(motion, gameMs);
+			axes = creature_hand_glow::CirclingAxes(motion.turn);
 			point = creature_hand_glow::CirclingPoint(transform->position, body->size);
 		}
 		else
@@ -1663,21 +1681,20 @@ void CreatureAnimationSystem::PlaceHandGlows(entt::entity creature, int32_t fram
 		}
 		// The shell reaches out by the power it had when it was drawn, and its texture slides on
 		const float zoom = creature_hand_glow::Zoom(*glow);
-		creature_hand_glow::Slide(*glow, frameMs);
+		creature_hand_glow::Slide(motion, frameMs);
 		placed = CreatureHandGlows::Placed {
 		    .model = creature_hand_glow::ModelMatrix(axes, point, transform->scale.x, glow->scale),
 		    .zoom = zoom,
-		    .slide = glow->slide,
+		    .slide = motion.slide,
 		};
 	}
 }
 
-std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::entity creature)
+std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(const Registry& things, entt::entity creature)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	const auto body = FindBody(registry, creature);
+	const auto* animation = things.TryGet<const CreatureAnimation>(creature);
+	const auto* transform = things.TryGet<const Transform>(creature);
+	const auto body = FindBody(things, Locator::entitiesRegistry::value(), creature);
 	if (animation == nullptr || transform == nullptr || !body.has_value())
 	{
 		return std::nullopt;
@@ -1718,17 +1735,16 @@ std::optional<glm::vec3> CreatureAnimationSystem::MiddleOfGroinAndLips(entt::ent
 	return glm::vec3((lips.x + groin.x) * half, (groin.y + lips.y) * half, (groin.z + lips.z) * half);
 }
 
-void CreatureAnimationSystem::AddAlignmentMotesOf(entt::entity copy)
+void CreatureAnimationSystem::AddAlignmentMotesOf(const Registry& copies, entt::entity copy)
 {
 	if (!Locator::liquidParticleSystem::has_value() || !Locator::gameRandom::has_value())
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
-	const auto body = FindBody(registry, copy);
-	if (animation == nullptr || transform == nullptr || !body.has_value() || !registry.AllOf<CreatureCopy>(copy) ||
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	const auto body = FindBody(copies, Locator::entitiesRegistry::value(), copy);
+	if (animation == nullptr || transform == nullptr || !body.has_value() || !copies.AllOf<CreatureCopy>(copy) ||
 	    !creature_alignment_motes::MakesAny(body->morph->drawn.evilGood))
 	{
 		return;

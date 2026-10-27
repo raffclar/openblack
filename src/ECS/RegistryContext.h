@@ -27,6 +27,7 @@
 #include "Components/Town.h"
 #include "Components/VillageLight.h"
 #include "Creature/CreatureExplorationMap.h"
+#include "ECS/GameEndRules.h"
 #include "ECS/StatisticsRules.h"
 #include "Enums.h"
 
@@ -66,6 +67,8 @@ struct RegistryContext
 	/// The land of a network game waits for the humans of the network session. At the turn that they join, each slot with
 	/// no player gets a computer god.
 	bool slotsWaitForHumans {false};
+	/// The end of a skirmish or a network game: whether it is decided, and the last place that a god took
+	game_end::State gameEnd;
 	/// Once a script or the hand has forced an action on a creature, a free creature always agrees to play, to be friends
 	/// or to be shown something when another creature asks it, until the land changes
 	bool partnersAlwaysAgree {false};

@@ -35,11 +35,15 @@ public:
 	[[nodiscard]] std::optional<size_t> CentreMiraclesShown(entt::entity town) const override;
 	void CentreWorking(entt::entity centre) override;
 	void TownChangedHands(entt::entity town, PlayerNames previous) override;
+	void PlayerMade(PlayerNames player) override;
 	void TownJoinedSite(entt::entity site, entt::entity town) override;
 	void TownLeftSite(entt::entity site, entt::entity town) override;
 	void SiteRemoved(entt::entity site) override;
 
 	[[nodiscard]] bool ValidToTap(entt::entity icon, PlayerNames player) const override;
+	bool StartChargeForGod(entt::entity icon, PlayerNames player) override;
+	[[nodiscard]] float ChantNeeded(entt::entity icon) const override;
+	void TakeCastCharge(entt::entity icon) override;
 	bool Tap(entt::entity icon, PlayerNames player) override;
 	[[nodiscard]] bool HasIconFor(PlayerNames player, SpellSeedType seed) const override;
 	[[nodiscard]] bool IsIcon(entt::entity entity) const override;

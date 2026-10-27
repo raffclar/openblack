@@ -130,23 +130,23 @@ void CreatureHairSystem::Update(std::chrono::duration<float, std::milli> gameTim
 	    });
 }
 
-void CreatureHairSystem::StepCopy(entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
+void CreatureHairSystem::StepCopy(Registry& copies, entt::entity copy, std::chrono::duration<float, std::milli> frameTime)
 {
-	if (!_shown)
+	if (!_shown || !copies.Valid(copy))
 	{
 		return;
 	}
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* body = registry.TryGet<const CreatureCopy>(copy);
-	const auto* animation = registry.TryGet<const CreatureAnimation>(copy);
-	const auto* transform = registry.TryGet<const Transform>(copy);
-	auto* hair = registry.TryGet<CreatureHair>(copy);
-	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !registry.Valid(body->creature))
+	const auto& land = Locator::entitiesRegistry::value();
+	const auto* body = copies.TryGet<const CreatureCopy>(copy);
+	const auto* animation = copies.TryGet<const CreatureAnimation>(copy);
+	const auto* transform = copies.TryGet<const Transform>(copy);
+	auto* hair = copies.TryGet<CreatureHair>(copy);
+	if (body == nullptr || animation == nullptr || transform == nullptr || hair == nullptr || !land.Valid(body->creature))
 	{
 		return;
 	}
-	const auto* creature = registry.TryGet<const Creature>(body->creature);
-	const auto* morph = registry.TryGet<const CreatureMorph>(body->creature);
+	const auto* creature = land.TryGet<const Creature>(body->creature);
+	const auto* morph = land.TryGet<const CreatureMorph>(body->creature);
 	if (creature == nullptr || morph == nullptr)
 	{
 		return;
