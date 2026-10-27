@@ -7145,6 +7145,30 @@ void AddCombat(std::vector<Scenario>& all)
 	});
 
 	{
+		// The player's tiger knows the five miracles that a creature casts in a fight
+		const auto knows = [](MagicType magic) {
+			return Command {
+			    .kind = Kind::KnowMiracle, .creature = 0, .delaySeconds = 0.1f, .value = static_cast<size_t>(magic)};
+		};
+		all.push_back({
+		    .id = "interface.hint_fight_seeds",
+		    .name = "The seeds over the hints of the fight miracles",
+		    .facet = Facet::Interface,
+		    .description = "The player's red tiger knows the fireball, the lightning bolt, the heal, and the weak and the "
+		                   "strong creature spells. It fights a blue tiger, and the two fight by themselves.",
+		    .expected = "When the duel starts, the hints along the bottom right of the screen show the star of the "
+		                "special move and the gesture of each of the five miracles. Over each gesture of a miracle, the "
+		                "seed of the miracle turns slowly, with the effect of its holder over it. The seeds are small, in "
+		                "white light, and they do not go away while the duel continues.",
+		    .framing = {.shot = Shot::Placed, .eye = {0.0f, 80.0f, 10.0f}, .look = {0.0f, 0.0f, 40.0f}},
+		    .creatures = {red(PlayerNames::PLAYER_ONE, 0.6f, -0.2f), blue(PlayerNames::PLAYER_TWO, 0.5f, -0.2f)},
+		    .commands = {knows(MagicType::Fireball), knows(MagicType::LightningBolt), knows(MagicType::Heal),
+		                 knows(MagicType::CreatureSpellWeak), knows(MagicType::CreatureSpellStrong),
+		                 Fight(Kind::StartFight, 0, 1, 1.0f), Fight(Kind::FightAuto, 0, 1, 0.2f)},
+		});
+	}
+
+	{
 		// Two creatures that are not the player's fight by themselves, and the player's own lion stands near the arena
 		// The Action button is the right button of the mouse
 		constexpr size_t k_RightButton = 3;
@@ -10935,8 +10959,8 @@ bool testbed_scenarios::NeedsNoCreature(Command::Kind kind)
 	       kind == Kind::ChargeIconWithSeedHeld || kind == Kind::FinishBuilding || kind == Kind::CallNative ||
 	       kind == Kind::PauseGame || kind == Kind::SetGameSpeed || kind == Kind::RemoveTeleportStone ||
 	       kind == Kind::MakeDance || kind == Kind::OpenMultiplayerBox || kind == Kind::BuildWorshipSites ||
-	       kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox || kind == Kind::BringCreature ||
-	       IsPointerCommand(kind);
+	       kind == Kind::PressPlainKey || kind == Kind::OtherGodHand || kind == Kind::JoinOnline || kind == Kind::EndBox ||
+	       kind == Kind::BringCreature || IsPointerCommand(kind);
 }
 
 std::string_view testbed_scenarios::Name(Facet facet)
@@ -11144,6 +11168,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "make a dance",
 	    "open a multiplayer box",
 	    "build the worship sites",
+	    "press a key on the keyboard",
 	    "show another god's hand",
 	    "press Join Online Game of the page",
 	    "end box",

@@ -233,6 +233,7 @@ public:
 	void SetDrawPath(EffectId id, particles::draw::DrawPath path) override;
 	void SetDrawOffset(EffectId id, glm::vec3 offset) override;
 	void SetInTemple(EffectId id) override;
+	void SetDrawnAlone(EffectId id) override;
 	[[nodiscard]] std::shared_ptr<particles::ShieldSphere> FindShield(glm::vec3 point, float margin) const override;
 	[[nodiscard]] size_t GetSoundCount() const override { return _world.SoundCount(); }
 	void AddTarget(EffectId id, entt::entity target) override;
@@ -258,6 +259,7 @@ public:
 	bool LoadState(reflection::BinaryReader& in) override;
 
 	void CollectDrawFrame(float turnFraction, particles::draw::Frame& frame, bool inTemple) const override;
+	void CollectEffectDrawFrame(EffectId id, float turnFraction, particles::draw::Frame& frame) const override;
 	[[nodiscard]] DrawStats GetDrawStats() const override { return _drawStats; }
 	[[nodiscard]] std::vector<EffectInfo> GetEffects() const override;
 	[[nodiscard]] std::vector<std::string> GetFileNames() const override;
@@ -292,6 +294,8 @@ private:
 		bool everyFrame {false};
 		/// One of the temple's rooms' effects, drawn only while the player is in the temple
 		bool inTemple {false};
+		/// Drawn only by itself, never with the world's or the temple's effects
+		bool drawnAlone {false};
 		/// A spot visual's turns left, negative for ever
 		std::optional<int> turnsLeft;
 		/// An object it follows and ends with
@@ -301,6 +305,11 @@ private:
 		glm::vec3 drawOffset {0.0f};
 	};
 
+	/// What the draw of the effects reads from the world
+	[[nodiscard]] particles::draw::Sources DrawSources() const;
+	/// Adds what a running effect draws to a frame
+	void AddRunning(const Running& running, float turnFraction, particles::draw::Frame& frame,
+	                const particles::draw::Sources& sources) const;
 	std::deque<Running>::iterator FindRunning(EffectId id);
 	[[nodiscard]] std::deque<Running>::const_iterator FindRunning(EffectId id) const;
 	/// Steps an effect; true once it has ended

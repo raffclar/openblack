@@ -2355,6 +2355,24 @@ std::string Runner::GivePlayerCommand(const Command& command)
 	}
 	case Kind::ChargeIconWithSeedHeld:
 		return ChargeIconWithSeedHeld(command);
+	case Kind::PressPlainKey:
+	{
+		// The key goes down and comes up again, each as an event of the window
+		const auto scancode = static_cast<SDL_Scancode>(command.value);
+		for (const bool down : {true, false})
+		{
+			SDL_Event key {};
+			key.type = down ? SDL_KEYDOWN : SDL_KEYUP;
+			key.key.windowID = Locator::windowing::has_value() ? Locator::windowing::value().GetID() : 0;
+			key.key.state = down ? SDL_PRESSED : SDL_RELEASED;
+			key.key.keysym.scancode = scancode;
+			key.key.keysym.sym = SDL_GetKeyFromScancode(scancode);
+			key.key.keysym.mod = KMOD_NONE;
+			input::MarkInjected(key);
+			SDL_PushEvent(&key);
+		}
+		return fmt::format("key {} pressed", SDL_GetScancodeName(scancode));
+	}
 	case Kind::BuildWorshipSites:
 	{
 		if (!Locator::worshipSiteSystem::has_value())
@@ -2876,10 +2894,10 @@ void Runner::Give(const Command& command)
 	    command.kind == Kind::RemoveObject || command.kind == Kind::HandGripTotem ||
 	    command.kind == Kind::AttachObjectScriptSound || command.kind == Kind::SayLine ||
 	    command.kind == Kind::PlayGuidanceVoice || command.kind == Kind::ScriptRelease || command.kind == Kind::FillSiteIcons ||
-	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::ChargeIconWithSeedHeld ||
-	    command.kind == Kind::FinishBuilding || command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed ||
-	    command.kind == Kind::RemoveTeleportStone || command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand ||
-	    command.kind == Kind::BringCreature)
+	    command.kind == Kind::BuildWorshipSites || command.kind == Kind::PressPlainKey ||
+	    command.kind == Kind::ChargeIconWithSeedHeld || command.kind == Kind::FinishBuilding ||
+	    command.kind == Kind::PauseGame || command.kind == Kind::SetGameSpeed || command.kind == Kind::RemoveTeleportStone ||
+	    command.kind == Kind::MakeDance || command.kind == Kind::OtherGodHand || command.kind == Kind::BringCreature)
 	{
 		const auto result = GivePlayerCommand(command);
 		Log(fmt::format("{:.1f}s: {}{}{}", _seconds, Name(command.kind), result.empty() ? "" : ": ", result));
@@ -3648,6 +3666,7 @@ void Runner::Give(const Command& command)
 	case Kind::ScriptRelease:
 	case Kind::FillSiteIcons:
 	case Kind::BuildWorshipSites:
+	case Kind::PressPlainKey:
 	case Kind::ChargeIconWithSeedHeld:
 	case Kind::RemoveObject:
 	case Kind::FinishBuilding:

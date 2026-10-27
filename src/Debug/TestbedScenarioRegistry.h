@@ -971,6 +971,9 @@ struct Command
 		/// Each worship site of the player that is not built yet is built at once, with its altar, as when its builders
 		/// put on the last of it. Needs no creature.
 		BuildWorshipSites,
+		/// The player presses a key (value, the key's scancode) on the keyboard and lets it go. The key goes through the
+		/// queue of the window's events, as the real keyboard's keys do. Needs no creature.
+		PressPlainKey,
 		/// Another god's hand, as a network game reports it: the player (player) gets hands of its own, and its hand
 		/// takes the scenario's object (object), or holds a miracle seed (heldSeed) in place of the object. Then the
 		/// player reports its hand at the point (point), so high above the land (radius), and its camera 30 m above the

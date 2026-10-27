@@ -829,19 +829,26 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		_particleSpriteOrder.insert(_particleSpriteOrder.end(), _particleBeforeLandSprites.begin(),
 		                            _particleBeforeLandSprites.end());
 	}
-	const auto& frame = _particleFrame;
+	SubmitParticleFrame(desc, _particleFrame, _particleCommands, _particleSpriteOrder, _particleBeforeLandCommands, origin);
+}
+
+void Renderer::SubmitParticleFrame(const DrawSceneDesc& desc, const particles::draw::Frame& frame,
+                                   std::span<const particles::draw::Command> commands, std::span<const uint32_t> spriteOrder,
+                                   std::span<const particles::draw::Command> beforeLand, const glm::vec3& origin) const
+{
+	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto& textures = Locator::resources::value().GetTextures();
 
 	// Every sprite of the pass in one buffer of instances, in the order drawn
 	bgfx::InstanceDataBuffer instances {};
 	constexpr auto k_Stride = static_cast<uint16_t>(sizeof(particles::sprites::SpriteInstance));
-	const auto spriteCount = static_cast<uint32_t>(_particleSpriteOrder.size());
+	const auto spriteCount = static_cast<uint32_t>(spriteOrder.size());
 	const bool haveSprites = spriteCount > 0 && bgfx::getAvailInstanceDataBuffer(spriteCount, k_Stride) >= spriteCount;
 	if (haveSprites)
 	{
 		bgfx::allocInstanceDataBuffer(&instances, spriteCount, k_Stride);
 		auto* out = reinterpret_cast<particles::sprites::SpriteInstance*>(instances.data);
-		for (const auto index : _particleSpriteOrder)
+		for (const auto index : spriteOrder)
 		{
 			*out++ = frame.sprites[index];
 		}
@@ -1005,14 +1012,14 @@ void Renderer::DrawParticles(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto translucentViewId = static_cast<bgfx::ViewId>(TranslucentView(desc.viewId));
-	for (const auto& command : _particleCommands)
+	for (const auto& command : commands)
 	{
 		submit(command, translucentViewId);
 	}
 	// Only the surfaces, sprites and ribbons of what is drawn before the land go in the sky's pass: a vortex's swirl is
 	// surfaces of revolution
 	const auto skyViewId = static_cast<bgfx::ViewId>(SkyPassOf(desc.viewId));
-	for (const auto& command : _particleBeforeLandCommands)
+	for (const auto& command : beforeLand)
 	{
 		const bool inSkyPass =
 		    command.kind == ItemKind::Sprite || command.kind == ItemKind::Chain || command.kind == ItemKind::Surface;
