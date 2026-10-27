@@ -38,9 +38,16 @@ public:
 	[[nodiscard]] std::optional<computer_hand::CreatureSpeeds> SpeedsOf(entt::entity creature) const override;
 	void DrawForShortJourney() override;
 	void SetRequiredSpeed(entt::entity creature, float speed) override;
+	[[nodiscard]] bool HasPlayer(entt::entity creature) const override;
+	void SetLeashType(entt::entity creature, LeashType type) override;
+	void TakeOffTiedLeash(entt::entity creature) override;
+	bool TieLeash(entt::entity creature, entt::entity object) override;
+	void Feedback(entt::entity creature, float feedback) override;
+	[[nodiscard]] float DrawFeedbackSeconds() override;
+	void LetGoForCast(MagicType type, const map_coords::MapCoords& hand) override;
 
 private:
-	[[maybe_unused]] PlayerNames _player;
+	PlayerNames _player;
 	[[maybe_unused]] components::ComputerPlayer& _state;
 };
 

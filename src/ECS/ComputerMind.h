@@ -237,6 +237,8 @@ struct Node
 	std::optional<uint16_t> bestLeaf;
 	/// The thing that the node acts on: a town, a player, a creature, a site
 	entt::entity object {entt::null};
+	/// For a node that acts on a building site: the town whose site it is at the building that is the object
+	entt::entity siteTown {entt::null};
 	/// A number that a node can keep for its action: the food that a town wants more than it has
 	int32_t amount {0};
 	/// The thing and the place that a land script gave when it made the god do the action of the node. They stay

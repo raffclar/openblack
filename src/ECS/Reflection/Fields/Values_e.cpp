@@ -178,7 +178,6 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::holder>("holder")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::works>("works")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTo>("tiedTo")
-	    .Field<&openblack::ecs::components::CreatureLeash::Worn::tiedTurn>("tiedTurn")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::slackLength>("slackLength")
 	    .Field<&openblack::ecs::components::CreatureLeash::Worn::maxLength>("maxLength");
 	Reflect<openblack::ecs::components::CreatureLeashRope::HeldRopes>(context, ValueOnly {})

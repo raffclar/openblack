@@ -68,9 +68,22 @@ uint32_t StayTurns(const World& world, MagicType type)
 	return static_cast<uint32_t>(map_coords::FtoL(static_cast<float>(k_TurnsPerSecond) * world.casts.CastSeconds(type)));
 }
 
-Result CastStart(HandAction& action, const World& /*world*/, const Step& step)
+/// At the start of a cast, the god can let go of the thing that the leash of its creature is tied to
+void LetGoForCast(const HandAction& action, const World& world, const Step& step)
 {
+	world.creature.LetGoForCast(static_cast<MagicType>(ArgumentAt(step, 1).number), action.coords);
+}
+
+Result CastStart(HandAction& action, const World& world, const Step& step)
+{
+	LetGoForCast(action, world, step);
 	action.castTarget = ArgumentAt(step, 0).object;
+	return Result::Next;
+}
+
+Result CastAtPlaceStart(HandAction& action, const World& world, const Step& step)
+{
+	LetGoForCast(action, world, step);
 	return Result::Next;
 }
 
@@ -120,6 +133,7 @@ Result CastAtPlaceEnd(HandAction& action, const World& /*world*/, const Step& /*
 /// The god casts a shield at the place. Its radius is the third argument.
 Result ShieldProcess(HandAction& action, const World& world, const Step& step)
 {
+	LetGoForCast(action, world, step);
 	const auto type = static_cast<MagicType>(ArgumentAt(step, 1).number);
 	const float radius = ArgumentAt(step, 2).value;
 	return world.casts.CastAt(type, CastPlace(step), ArgumentAt(step, 3).object, action.hand, radius) ? Result::Next
@@ -193,9 +207,9 @@ void openblack::computer_hand::steps::AddCastSteps(StepTable& table)
 	        {.made = true, .start = GestureStart, .process = GestureProcess, .end = GestureEnd});
 	// A miracle cast at a place and one cast toward a place do the same steps
 	AddStep(table, StepOwner::Casts, StepKind::CastSpellAtPos,
-	        {.made = true, .process = CastAtPlaceProcess, .end = CastAtPlaceEnd});
+	        {.made = true, .start = CastAtPlaceStart, .process = CastAtPlaceProcess, .end = CastAtPlaceEnd});
 	AddStep(table, StepOwner::Casts, StepKind::CastSpellTowardPos,
-	        {.made = true, .process = CastAtPlaceProcess, .end = CastAtPlaceEnd});
+	        {.made = true, .start = CastAtPlaceStart, .process = CastAtPlaceProcess, .end = CastAtPlaceEnd});
 	AddStep(table, StepOwner::Casts, StepKind::CastShieldAtPos, {.made = true, .process = ShieldProcess});
 	AddStep(table, StepOwner::Casts, StepKind::WaitForSpellToWearOff, {.made = true, .process = WearOffProcess});
 	// The step that ends the miracle of the hand does nothing. The hand goes to the next step at once.

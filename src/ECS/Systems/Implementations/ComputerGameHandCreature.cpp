@@ -12,14 +12,20 @@
 #include "ComputerGameHandCreature.h"
 
 #include "3D/CreatureBody.h"
+#include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "ComputerMindCommon.h"
+#include "ComputerMindCreature.h"
 #include "Creature/CreatureDesires.h"
+#include "Creature/CreatureMindTables.h"
+#include "Creature/CreatureWatching.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/ComputerMindCreatureRules.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureLocomotionSystemInterface.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/LeashSystemInterface.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 
@@ -102,5 +108,89 @@ void GameHandCreature::SetRequiredSpeed(entt::entity creature, float speed)
 	if (IsCreature(creature) && Locator::creatureLocomotionSystem::has_value())
 	{
 		Locator::creatureLocomotionSystem::value().SetKeptFraction(creature, speed);
+	}
+}
+
+bool GameHandCreature::HasPlayer(entt::entity creature) const
+{
+	return IsCreature(creature) &&
+	       Locator::entitiesRegistry::value().Get<const Creature>(creature).owner != PlayerNames::NEUTRAL;
+}
+
+void GameHandCreature::SetLeashType(entt::entity creature, LeashType type)
+{
+	if (IsCreature(creature) && Locator::leashSystem::has_value())
+	{
+		static_cast<void>(Locator::leashSystem::value().ChangeType(creature, type));
+	}
+}
+
+void GameHandCreature::TakeOffTiedLeash(entt::entity creature)
+{
+	if (IsCreature(creature) && Locator::leashSystem::has_value() && Locator::leashSystem::value().TiedTo(creature).has_value())
+	{
+		Locator::leashSystem::value().TakeOff(creature);
+	}
+}
+
+bool GameHandCreature::TieLeash(entt::entity creature, entt::entity object)
+{
+	if (!IsCreature(creature) || !Locator::leashSystem::has_value() || !CoordsOfThing(object).has_value())
+	{
+		return false;
+	}
+	static_cast<void>(Locator::leashSystem::value().TieTo(creature, object));
+	return true;
+}
+
+void GameHandCreature::Feedback(entt::entity creature, float feedback)
+{
+	if (IsCreature(creature) && Locator::creatureMindSystem::has_value())
+	{
+		Locator::creatureMindSystem::value().ReceiveFeedback(creature, feedback);
+	}
+}
+
+float GameHandCreature::DrawFeedbackSeconds()
+{
+	return Locator::gameRandom::value().GameFloatRand(computer_mind_rules::k_FeedbackSecondsRange);
+}
+
+void GameHandCreature::LetGoForCast(MagicType type, const map_coords::MapCoords& hand)
+{
+	const auto creature = CreatureOf(_player);
+	if (creature == entt::null || !Locator::creatureMindSystem::has_value())
+	{
+		return;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto& body = registry.Get<const Creature>(creature);
+	const auto coords = CoordsOfThing(creature);
+	const auto* mind = registry.TryGet<const CreatureMindState>(creature);
+	const auto* tables = Locator::creatureMindSystem::value().GetTables();
+	if (!coords.has_value() || mind == nullptr || tables == nullptr)
+	{
+		return;
+	}
+	// The times that the creature saw the miracle, and the times that it must see the miracle to learn it. A miracle
+	// that the creature cannot learn needs no sightings.
+	const auto number = static_cast<size_t>(type);
+	float seen = 0.0f;
+	float needed = 0.0f;
+	if (mind->learnt.has_value() && number < mind->learnt->knowledge.miraclesSeen.size())
+	{
+		seen = static_cast<float>(mind->learnt->knowledge.miraclesSeen[number].count);
+	}
+	if (number < tables->miracles.size())
+	{
+		needed = creature_watching::TimesNeeded(tables->miracles[number].timesToSee,
+		                                        creature_mind_tables::MiracleMultiplier(creature::InfoRow(body.species)));
+	}
+	const float freedom = FreedomOf(_player, creature);
+	const float wish = computer_mind_rules::CastLetGoWish(freedom, seen, needed);
+	const float distance = gutils::GetDistanceInMetres(hand, *coords);
+	if (computer_mind_rules::LetsGoAtCast(freedom, wish, distance, body.size) && Locator::leashSystem::has_value())
+	{
+		Locator::leashSystem::value().UntieToHand(creature);
 	}
 }

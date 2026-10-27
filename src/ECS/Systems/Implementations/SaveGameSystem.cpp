@@ -506,9 +506,9 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 			kept.tiedTo = save_state::ToRef(worn.tiedTo);
 			kept.length = worn.slackLength;
 			kept.fullLength = worn.maxLength;
-			// The turn that the leash was last tied
-			kept.word34 = worn.tiedTurn;
 		}
+		// The turn that a leash was last tied
+		kept.word34 = leash->lastTiedTurn;
 		saved.leash = gamesave::LeashStatusObject {.thing = {}, .leash = kept};
 	}
 	return saved;

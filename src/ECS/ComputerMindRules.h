@@ -143,6 +143,8 @@ enum class SpellKind : uint8_t
 	Compassionate,
 	/// A miracle that impresses the people that see it
 	Impressive,
+	/// A miracle that the god casts on its own creature for a laugh, as well as the miracle can attack
+	Attack,
 };
 
 /// The magic types that the god looks at when it chooses a miracle, from the first to the last
@@ -150,8 +152,8 @@ constexpr uint32_t k_FirstChoiceType = 1;
 constexpr uint32_t k_LastChoiceType = 41;
 
 /// How well a magic type suits an aim. An aggressive or a compassionate miracle suits it fully or not at all. The suit
-/// of an impressive miracle is its impressive balance for a computer god.
-[[nodiscard]] float KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance);
+/// of an impressive miracle is its impressive balance for a computer god. The suit of an attack miracle is its attack value.
+[[nodiscard]] float KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance, float attackValue);
 /// The wish for a miracle of the kind, from how well it suits the aim and how much the god wants to cast it
 [[nodiscard]] float KindWish(float wish, float score);
 
