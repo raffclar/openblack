@@ -34,6 +34,9 @@ namespace openblack::ecs::systems::object_measures
 /// A building or anything else of several map cells fixed to the land, or a tree: a creature walking up to one stops
 /// where its walk takes it
 [[nodiscard]] bool WalkedUpToItself(const Registry& registry, entt::entity entity);
+/// The distance from the edge of a thing to the edge of another thing, across the land. A worship site measures from
+/// its middle with its fixed reach. Every other thing measures from where it stands with its radius on the ground.
+[[nodiscard]] float DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other);
 /// Where a thing stands, none once it has gone
 [[nodiscard]] std::optional<glm::vec3> PositionOf(const Registry& registry, entt::entity entity);
 

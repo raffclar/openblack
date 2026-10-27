@@ -13,8 +13,11 @@
 
 #include <algorithm>
 
+#include <glm/gtx/vec_swizzle.hpp>
+
 #include "3D/CreatureBody.h"
 #include "3D/L3DMesh.h"
+#include "Common/GUtilsDistance.h"
 #include "Creature/CreatureCastMoves.h"
 #include "Creature/CreatureRig.h"
 #include "ECS/Components/Abode.h"
@@ -27,8 +30,10 @@
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Tree.h"
+#include "ECS/Components/WorshipSite.h"
 #include "ECS/Registry.h"
 #include "ECS/ThingModel.h"
+#include "ECS/WorshipSites.h"
 #include "Locator.h"
 #include "Resources/ResourcesInterface.h"
 
@@ -126,6 +131,19 @@ float object_measures::TwoDRadius(const Registry& registry, entt::entity entity)
 	}
 	const auto half = HalfExtentsOf(registry, entity);
 	return half.has_value() ? std::max(half->x, half->z) : 0.0f;
+}
+
+float object_measures::DistanceFromObject(const Registry& registry, entt::entity entity, entt::entity other)
+{
+	const auto& transform = registry.Get<const Transform>(entity);
+	const auto otherPlace = glm::xz(registry.Get<const Transform>(other).position);
+	if (registry.AllOf<WorshipSite>(entity))
+	{
+		const auto centre = worship_site::CentreOnLand(transform.position, transform.rotation, transform.scale.x);
+		return worship_site::EdgeGap(centre, otherPlace, TwoDRadius(registry, other));
+	}
+	return gutils::GetDistanceInMetres(glm::xz(transform.position), otherPlace) -
+	       (TwoDRadius(registry, other) + TwoDRadius(registry, entity));
 }
 
 float object_measures::Height(const Registry& registry, entt::entity entity)

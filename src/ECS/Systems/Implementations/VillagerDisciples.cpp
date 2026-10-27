@@ -405,7 +405,6 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 	}
 	const auto& registry = Entities();
 	const auto position = PositionOf(villager);
-	const float ownRadius = systems::object_measures::TwoDRadius(registry, villager);
 	// The map's cells don't keep the fish farms, which are few: each is looked at with the things of its cell
 	std::vector<std::pair<glm::ivec2, entt::entity>> farms;
 	registry.Each<const FishFarm, const Transform>([&farms](entt::entity farm, const FishFarm&, const Transform& transform) {
@@ -438,8 +437,8 @@ std::vector<entt::entity> ThingsNear(entt::entity villager)
 			{
 				continue;
 			}
-			const float gap = gutils::GetDistanceInMetres(glm::xz(position), glm::xz(transform->position)) -
-			                  (ownRadius + systems::object_measures::TwoDRadius(registry, thing));
+			// The thing measures the gap: a worship site measures from its middle, not from where it stands
+			const float gap = systems::object_measures::DistanceFromObject(registry, thing, villager);
 			found.push_back(thing);
 			interests.push_back(disciple::Interest(gap, *desire));
 		}

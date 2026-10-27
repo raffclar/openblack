@@ -37,6 +37,7 @@
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Dances.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/WorshipSiteSystem.h"
 #include "ECS/WorshipSites.h"
 
@@ -237,6 +238,33 @@ TEST(WorshipSitePlaces, ThePourIsJudgedFromTheSiteMiddleWellOutFromWhereItIsSetD
 	const auto doubled = ws::CentreOnLand({0.0f, 0.0f, 0.0f}, glm::mat3(1.0f), 2.0f);
 	EXPECT_NEAR(doubled.x, 25.1f, 1e-4f);
 	EXPECT_NEAR(doubled.y, -52.2f, 1e-4f);
+}
+
+TEST(WorshipSitePlaces, AVillagerAtTheGateTouchesTheSiteMeasuredFromItsMiddle)
+{
+	// The gate is about 14.4 metres from the middle, inside the reach of the site and the radius of the villager
+	const auto centre = ws::CentreOnLand({0.0f, 0.0f, 0.0f}, glm::mat3(1.0f), 1.0f);
+	EXPECT_LE(ws::EdgeGap(centre, {k_PlacePoint.x, k_PlacePoint.z}, 0.5f), 0.0f);
+	// Far from the site, the gap is the distance from the middle less the reach and the radius
+	EXPECT_NEAR(ws::EdgeGap(centre, centre + glm::vec2(30.0f, 0.0f), 1.0f), 15.0f, 0.05f);
+}
+
+TEST(WorshipSitePlaces, TheDistanceFromASiteIsFromItsMiddleNotFromWhereItStands)
+{
+	Registry registry;
+	// A site stands at the temple, with its model far out from there
+	const auto site = registry.Create();
+	registry.Assign<Transform>(site, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<WorshipSite>(site);
+	const auto villager = registry.Create();
+	registry.Assign<Transform>(villager, glm::vec3(1000.0f + k_PlacePoint.x, 0.0f, 1000.0f + k_PlacePoint.z), glm::mat3(1.0f),
+	                           glm::vec3(1.0f));
+	EXPECT_LE(object_measures::DistanceFromObject(registry, site, villager), 0.0f);
+	// A thing of another kind measures from where it stands, about 43 metres away
+	const auto other = registry.Create();
+	registry.Assign<Transform>(other, glm::vec3(1000.0f, 0.0f, 1000.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	EXPECT_NEAR(object_measures::DistanceFromObject(registry, other, villager), glm::length(glm::vec2(18.179f, 39.397f)),
+	            0.05f);
 }
 
 TEST(WorshipSitePlaces, TheFreePlaceNearestTheSpotIsChosen)
