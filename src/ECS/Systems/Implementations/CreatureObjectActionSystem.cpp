@@ -60,6 +60,7 @@
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureStomp.h"
 #include "Creature/CreatureThrow.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Animal.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -2834,10 +2835,12 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 		{
 			return;
 		}
-		// A hurried action doubles the step of its animations. The time that a point holds is the time of the mind,
-		// and does not change.
-		const float step = creature_layers::HurriedStep(
-		    gameTime.count() * creature_layers::BodyRate(ShownSize(body), animation.realTime), action.hurried);
+		// The animations move on by the whole milliseconds that the creature lives in the turn, at the rate of its
+		// size. A frozen creature lives fewer milliseconds. A hurried action doubles the step. The time that a point
+		// holds is the time of the mind, and does not change.
+		const auto turnMs = creature_walk_planner::TurnMs(animation.playbackScale, static_cast<int32_t>(gameTime.count()));
+		const float step = static_cast<float>(creature_layers::HurriedStep(
+		    creature_layers::TurnStepMs(turnMs, ShownSize(body), animation.realTime), action.hurried));
 		if (action.kind == Kind::Catch)
 		{
 			using Catching = CreatureObjectAction::Catching;

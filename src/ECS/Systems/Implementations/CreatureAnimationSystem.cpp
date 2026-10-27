@@ -52,6 +52,7 @@
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSway.h"
 #include "Creature/CreatureTurnPose.h"
+#include "Creature/CreatureWalkPlanner.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureBody.h"
@@ -448,10 +449,10 @@ std::optional<HoldingHand> HoldingHandOf(const ecs::Registry& registry, entt::en
 }
 
 /// The body posed for this frame: its action or breathing, or its slots blended, then the arm that holds a thing, the
-/// head turned, the face and any gesture on top
+/// head turned, the face and any gesture on top. The body's animations move on by bodyStepMs, the face by milliseconds.
 void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const CreatureRig& rig,
               const creature_morph::Morph& morph, const Transform& transform, float size, float milliseconds, float seconds,
-              const HeadLook& look, const std::function<uint32_t(uint32_t)>& random,
+              float bodyStepMs, const HeadLook& look, const std::function<uint32_t(uint32_t)>& random,
               std::optional<HoldingHand> holding = std::nullopt)
 {
 	const auto* stand = AnimationOf(adjusted, animation, rig, morph, creature_layers::animations::k_Stand);
@@ -459,7 +460,7 @@ void PoseBody(AdjustedAnimations& adjusted, CreatureAnimation& animation, const 
 	{
 		return;
 	}
-	const auto playbackMs = milliseconds * creature_layers::BodyRate(size, animation.realTime);
+	const auto playbackMs = bodyStepMs;
 	const auto animationOf = [&](size_t index) { return AnimationOf(adjusted, animation, rig, morph, index); };
 
 	// A species without the start, the first move or the finish of the dance does not dance
@@ -1082,14 +1083,16 @@ void CreatureAnimationSystem::PoseForTurn(entt::entity entity, float millisecond
 	if (rigs.Contains(rigId))
 	{
 		const auto& rig = *rigs.Handle(rigId);
-		// A frozen creature plays slower, down to not at all
-		const float scale = animation->playbackScale;
+		// A frozen creature lives fewer whole milliseconds in the turn, down to none. The body's animations move on by
+		// these milliseconds at the rate of its size, cut to whole milliseconds.
+		const auto turnMs = creature_walk_planner::TurnMs(animation->playbackScale, static_cast<int32_t>(milliseconds));
+		const auto stepMs = creature_layers::TurnStepMs(turnMs, ShownSize(*creature), animation->realTime);
 		const auto look = HeadLookOf(_adjusted, registry, entity, *animation, &rig, morph->drawn, *transform, *creature,
 		                             static_cast<int32_t>(std::lround(milliseconds)));
 		PoseBody(
-		    _adjusted, *animation, rig, morph->drawn, *transform, ShownSize(*creature), milliseconds * scale,
-		    milliseconds * scale / 1000.0f, look, [this](uint32_t range) { return _random.GameRand(range); },
-		    HoldingHandOf(registry, entity));
+		    _adjusted, *animation, rig, morph->drawn, *transform, ShownSize(*creature), static_cast<float>(turnMs),
+		    static_cast<float>(turnMs) / 1000.0f, static_cast<float>(stepMs), look,
+		    [this](uint32_t range) { return _random.GameRand(range); }, HoldingHandOf(registry, entity));
 	}
 	if (animation->boneMatrices.empty())
 	{
@@ -1243,6 +1246,7 @@ void CreatureAnimationSystem::PoseCopy(Registry& copies, entt::entity copy, floa
 	if (rig != nullptr)
 	{
 		PoseBody(_adjusted, *animation, *rig, morph->drawn, *transform, self->size, milliseconds, seconds,
+		         milliseconds * creature_layers::BodyRate(self->size, animation->realTime),
 		         HeadLookOfCopy(*animation, *transform, creature->species, self->size),
 		         [this](uint32_t range) { return _random.GameRand(range); });
 	}
