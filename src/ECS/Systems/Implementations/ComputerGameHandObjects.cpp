@@ -54,6 +54,18 @@ void GameHandObjects::PutDownHeld(glm::vec3 hand)
 	    _player, player_commands::HandLetGo {.object = *held, .velocity = glm::vec3(0.0f), .start = {.origin = hand}});
 }
 
+void GameHandObjects::ThrowHeld(glm::vec3 hand, glm::vec3 velocity)
+{
+	const auto held = HeldBy(_player);
+	if (!held.has_value() || !Locator::handGrabSystem::has_value())
+	{
+		return;
+	}
+	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	Locator::handGrabSystem::value().DoLetGo(
+	    _player, player_commands::HandLetGo {.object = *held, .velocity = velocity, .start = {.origin = hand}});
+}
+
 bool GameHandObjects::CanPickUp(entt::entity thing) const
 {
 	return thing != entt::null && Entities().Valid(thing);

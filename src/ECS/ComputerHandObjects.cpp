@@ -55,12 +55,19 @@ Result UseHeldProcess(HandAction& action, const World& world, const Step& step)
 	return Result::Next;
 }
 
+Result ThrowProcess(HandAction& action, const World& world, const Step& step)
+{
+	world.objects.ThrowHeld(action.hand, ThrowVelocity(action.hand, ArgumentAt(step, 0).place));
+	return Result::Next;
+}
+
 } // namespace
 
 void openblack::computer_hand::steps::AddObjectSteps(StepTable& table)
 {
-	// ThrowObjectInHandAtPos, CreateFoodFromContainer and CreateWoodFromContainer are not made yet
+	// CreateFoodFromContainer and CreateWoodFromContainer are not made yet
 	AddStep(table, StepOwner::Objects, StepKind::PickUpObject, {.made = true, .start = PickUpStart, .process = PickUpProcess});
 	AddStep(table, StepOwner::Objects, StepKind::DropObjectInHandAtPos, {.made = true, .process = DropHeldProcess});
 	AddStep(table, StepOwner::Objects, StepKind::DropObjectInHandOnObject, {.made = true, .process = UseHeldProcess});
+	AddStep(table, StepOwner::Objects, StepKind::ThrowObjectInHandAtPos, {.made = true, .process = ThrowProcess});
 }

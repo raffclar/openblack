@@ -19,9 +19,20 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/MapCoords.h"
+#include "Common/GUtilsDistance.h"
 #include "ComputerMindCommon.h"
+#include "ECS/Components/ForestMember.h"
+#include "ECS/Components/LivingAction.h"
+#include "ECS/Components/OneOffSpellSeed.h"
+#include "ECS/Components/ScriptControl.h"
+#include "ECS/Components/Tree.h"
+#include "ECS/Components/Villager.h"
 #include "ECS/ComputerMindDomains.h"
+#include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ForestSystemInterface.h"
+#include "ECS/Systems/LivingActionSystemInterface.h"
 #include "ECS/Systems/WorshipSiteSystemInterface.h"
 #include "Locator.h"
 
@@ -173,20 +184,103 @@ void GameMindWorld::UnlockAction()
 	_state.hand.locked = false;
 }
 
-bool GameMindWorld::ForceQueued()
+std::optional<glm::vec3> GameMindWorld::MarkerPlace(entt::entity thing) const
 {
-	return false;
+	if (thing == entt::null || !Entities().Valid(thing) || !Entities().AllOf<ScriptMarker>(thing))
+	{
+		return std::nullopt;
+	}
+	const auto coords = CoordsOfThing(thing);
+	if (!coords.has_value())
+	{
+		return std::nullopt;
+	}
+	return glm::vec3(map_coords::ToMetres(coords->x), _moves.LandHeight(*coords) + coords->altitude,
+	                 map_coords::ToMetres(coords->z));
 }
 
 bool GameMindWorld::HeldByHelp() const
 {
-	return false;
+	return computer_world::HeldByHelp(_state);
+}
+
+bool computer_world::Available(entt::entity thing)
+{
+	auto& registry = Entities();
+	if (thing == entt::null || !registry.Valid(thing))
+	{
+		return false;
+	}
+	// A villager on its way to dying is no longer available
+	const auto* action = registry.AllOf<Villager>(thing) ? registry.TryGet<const LivingAction>(thing) : nullptr;
+	return action == nullptr || !Locator::livingActionSystem::has_value() ||
+	       Locator::livingActionSystem::value().VillagerGetState(*action, LivingAction::Index::Final) != VillagerStates::Dying;
+}
+
+bool computer_world::HeldByHelp(const ComputerPlayer& state)
+{
+	// The cinema bars of the help or of a land script hold the mind, but not while a script action or queue is due.
+	// The bars are not the same on each computer of a network game (see docs/vanilla-bugs.md).
+	const bool bars =
+	    Locator::cinematicDirectorSystem::has_value() && Locator::cinematicDirectorSystem::value().IsWideScreenOn();
+	return bars && state.mind.queue.empty() && !state.mind.scriptHand;
+}
+
+namespace
+{
+
+/// The things near the hand of the god in the game's world
+class GameSeenWorld final: public computer_mind::SeenWorld
+{
+public:
+	[[nodiscard]] std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const override
+	{
+		return Locator::entitiesMap::value().GetAllInCell(cell);
+	}
+
+	[[nodiscard]] entt::entity SeenAs(entt::entity thing) const override
+	{
+		auto& registry = Entities();
+		if (registry.AllOf<Tree>(thing))
+		{
+			const auto* member = registry.TryGet<const ForestMember>(thing);
+			if (member != nullptr && Locator::forestSystem::has_value())
+			{
+				if (const auto forest = Locator::forestSystem::value().LandForestOf(member->forest))
+				{
+					return *forest;
+				}
+			}
+			return thing;
+		}
+		return registry.AllOf<OneOffSpellSeed>(thing) ? thing : entt::null;
+	}
+
+	[[nodiscard]] bool Available(entt::entity thing) const override { return computer_world::Available(thing); }
+};
+
+} // namespace
+
+void computer_world::SeeNearHand(ComputerPlayer& state, uint32_t turn)
+{
+	if (!Locator::entitiesMap::has_value())
+	{
+		return;
+	}
+	const GameSeenWorld world;
+	computer_mind::SeeNearHand(state.seen, state.hand.coords, turn, world);
 }
 
 void computer_world::Validate(ComputerPlayer& state)
 {
 	auto& registry = Entities();
 	std::erase_if(state.casts, [&registry](entt::entity spell) { return !registry.Valid(spell); });
+	// The god forgets the seen things that are not available, and the queued actions whose things are not available
+	std::erase_if(state.seen, [](const computer_mind::SeenThing& old) { return !Available(old.thing); });
+	std::erase_if(state.mind.queue, [](const computer_mind::QueuedAction& queued) {
+		return (queued.first != entt::null && !Available(queued.first)) ||
+		       (queued.second != entt::null && !Available(queued.second));
+	});
 	// An action whose thing has gone stops
 	const bool gone = std::ranges::any_of(state.hand.steps, [&registry](const computer_hand::Step& step) {
 		return std::ranges::any_of(step.arguments, [&registry](const Argument& argument) {
