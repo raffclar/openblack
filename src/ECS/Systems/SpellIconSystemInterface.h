@@ -60,7 +60,8 @@ public:
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
 	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge,
 	/// no hand may hold its seed, the god must be able to cast the miracle, and the site must have prayer power to give
-	/// or the icon some stored. Whether the charge started.
+	/// or the icon some stored. An icon that is full already then gives its miracle to the hand, as a tap does. Only the
+	/// hand of a human player takes it, so a computer god keeps its miracle in the icon. Whether the charge started.
 	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
 	/// The prayer power that an icon's miracle still needs to be charged full
 	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
