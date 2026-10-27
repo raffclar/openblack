@@ -15,6 +15,7 @@
 
 #include "3D/LandIslandInterface.h"
 #include "Common/GameRandom.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -140,23 +141,47 @@ void PlayerDid(uint32_t deed, entt::entity object, PlayerNames player)
 
 std::optional<PlayerNames> villager_physics::DropperOf(entt::entity object)
 {
-	return DropperOf(Entities(), object,
-	                 Locator::playerSystem::has_value() ? std::optional(Locator::playerSystem::value().GetLocalPlayer())
-	                                                    : std::nullopt);
+	return DropperOf(Entities(), object);
 }
 
-std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object,
-                                                       std::optional<PlayerNames> localPlayer)
+namespace
 {
-	// The hand whose last let-go thing it is: the local player's hands are the only ones on the screen
-	std::optional<PlayerNames> dropper;
-	registry.Each<const HandGrab>([&dropper, object, localPlayer](const HandGrab& hand) {
-		if (hand.lastDropped == object)
+/// The player of a hand: the hand of a god other than the first player has the mark of its god
+PlayerNames PlayerOfHand(const Registry& registry, entt::entity hand)
+{
+	const auto* god = registry.TryGet<const GodHand>(hand);
+	return god != nullptr ? god->player : PlayerNames::PLAYER_ONE;
+}
+
+/// The first player, in the order of the players, of a hand that the test accepts
+template <typename Accepts>
+std::optional<PlayerNames> FirstPlayerOfHand(const Registry& registry, Accepts accepts)
+{
+	std::optional<PlayerNames> found;
+	registry.Each<const HandGrab>([&registry, &found, &accepts](entt::entity hand, const HandGrab& grab) {
+		if (!accepts(grab))
 		{
-			dropper = localPlayer.value_or(PlayerNames::PLAYER_ONE);
+			return;
+		}
+		const auto player = PlayerOfHand(registry, hand);
+		if (!found.has_value() || player < *found)
+		{
+			found = player;
 		}
 	});
-	return dropper;
+	return found;
+}
+} // namespace
+
+std::optional<PlayerNames> villager_physics::DropperOf(const Registry& registry, entt::entity object)
+{
+	return FirstPlayerOfHand(registry, [object](const HandGrab& grab) { return grab.lastDropped == object; });
+}
+
+std::optional<PlayerNames> villager_physics::HolderOf(const Registry& registry, entt::entity object)
+{
+	return FirstPlayerOfHand(
+	    registry, [object](const HandGrab& grab) { return grab.state != HandGrab::State::Empty && grab.object == object; });
 }
 
 bool villager_physics::StartFlying(entt::entity villager)

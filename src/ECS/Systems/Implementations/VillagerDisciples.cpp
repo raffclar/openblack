@@ -797,7 +797,9 @@ uint32_t villager_disciple::InHand(LivingAction& action)
 	{
 		facts.push_back(NearFactsOf(thing, villager));
 	}
-	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, LocalPlayer()), held->atPickUp);
+	// The work is for the player whose hand holds the villager, a computer god too
+	const auto holder = villager_physics::HolderOf(registry, villager);
+	const auto choice = disciple::ChooseWhileHeld(facts, HeldFactsOf(villager, holder), held->atPickUp);
 	// When the hand shows a trader a thing of a town, the trader trades with that town. Other work keeps the trade town.
 	if (choice.type == Trader && choice.from.has_value())
 	{

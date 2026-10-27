@@ -471,7 +471,7 @@ bool PhysicsGameHooks::HasSunk(DynamicsSystemInterface& dynamics, PhysicsEntry& 
 			return false;
 		}
 		// The player who dropped it may teach their creature to throw things in the sea; it dies and is gone
-		if (const auto dropper = villager_physics::DropperOf(registry, entry.entity, _world->LocalPlayer()))
+		if (const auto dropper = villager_physics::DropperOf(registry, entry.entity))
 		{
 			const auto& at = registry.Get<const Transform>(entry.entity).position;
 			_world->PlayerDid(living::k_DeedThrowInTheSea, at, entry.entity, *dropper);
@@ -586,7 +586,7 @@ void PhysicsGameHooks::ConsiderMimickingLanding(entt::entity object, std::option
 	// A thing that came to rest after it flew is the deed of the player who dropped it last
 	if (!player.has_value())
 	{
-		player = villager_physics::DropperOf(registry, object, _world->LocalPlayer());
+		player = villager_physics::DropperOf(registry, object);
 	}
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (!player.has_value() || transform == nullptr)
