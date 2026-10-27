@@ -145,6 +145,8 @@ bool GameMindWorld::Perform(computer_mind::Mind& mind, uint16_t node)
 {
 	const auto rule = RuleOf(mind, node).perform;
 	const bool started = rule != nullptr && rule(_context, mind, node);
+	// The start of an action can change the world, so the searches ask for the influence again
+	_context.searchCells.clear();
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "Computer god {} action {} ({:.3f}) started {}", static_cast<int>(_player),
 	                    computer_mind::InfoOf(mind.nodes[node].kind).name, mind.nodes[0].value, started);
 	if (started)
@@ -165,6 +167,8 @@ bool GameMindWorld::StepAction()
 	const auto start = _timeHand ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 	const auto hand = _state.hand.hand;
 	const bool ended = computer_hand::Process(_state.hand, _hand);
+	// The step can change the world, so the searches ask for the influence again
+	_context.searchCells.clear();
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
 	if (_timeHand)
 	{

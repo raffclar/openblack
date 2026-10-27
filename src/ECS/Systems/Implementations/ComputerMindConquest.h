@@ -41,7 +41,7 @@ using ThingScore = std::function<float(entt::entity thing)>;
 /// The thing in the cells around the place, in the influence of the god and its allies, whose score against its
 /// distance is the best. Cells go along x, then along z, and in each cell the things that stay put come first. None
 /// when no thing scores.
-[[nodiscard]] entt::entity BestThingNear(const RuleContext& context, const map_coords::MapCoords& centre, float radius,
+[[nodiscard]] entt::entity BestThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius,
                                          const ThingScore& score);
 /// The player can throw the thing: a loose thing, a standing tree, a pile that holds something, or a rock, a bonfire or
 /// a dead tree that is not too wide

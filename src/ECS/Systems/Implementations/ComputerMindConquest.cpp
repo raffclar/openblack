@@ -720,7 +720,7 @@ float computer_world::CreatureToTown(RuleContext& context, computer_mind::Mind& 
 	return wish;
 }
 
-entt::entity computer_world::BestThingNear(const RuleContext& context, const map_coords::MapCoords& centre, float radius,
+entt::entity computer_world::BestThingNear(RuleContext& context, const map_coords::MapCoords& centre, float radius,
                                            const ThingScore& score)
 {
 	if (!Locator::entitiesMap::has_value())
@@ -757,13 +757,31 @@ entt::entity computer_world::BestThingNear(const RuleContext& context, const map
 				continue;
 			}
 			const auto cell = map_coords::CellCentre(static_cast<uint16_t>(x), static_cast<uint16_t>(z));
-			if (!map_coords::InBounds(cell) || !(ecs::ally_influence::InfluenceWithAllies(context.player, cell) > 0.0f))
+			if (!map_coords::InBounds(cell))
 			{
 				continue;
 			}
 			const auto id = ecs::MapInterface::CellId(static_cast<uint16_t>(x), static_cast<uint16_t>(z));
-			look(map.GetFixedInGridCell(id));
-			look(map.GetMobileInGridCell(id));
+			const auto fixed = map.GetFixedInGridCell(id);
+			const auto mobile = map.GetMobileInGridCell(id);
+			// A cell with no things gives nothing, so the search does not ask for its influence
+			if (fixed.empty() && mobile.empty())
+			{
+				continue;
+			}
+			const auto key = (static_cast<uint32_t>(x) << 16u) | static_cast<uint32_t>(z);
+			auto known = context.searchCells.find(key);
+			if (known == context.searchCells.end())
+			{
+				known = context.searchCells.emplace(key, ecs::ally_influence::InfluenceWithAllies(context.player, cell) > 0.0f)
+				            .first;
+			}
+			if (!known->second)
+			{
+				continue;
+			}
+			look(fixed);
+			look(mobile);
 		}
 	}
 	return found;
