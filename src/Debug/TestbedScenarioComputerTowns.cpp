@@ -15,6 +15,89 @@
 using namespace openblack;
 using namespace openblack::testbed_scenarios;
 
+namespace
+{
+
+/// The lines of a land that give player two a computer mind, a temple and a Celtic town by the lake, with an empty
+/// storage pit and two abodes of people. A fish farm of the town stands on the shore.
+constexpr std::string_view k_FishFarmTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,100.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,101.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "30.0,115.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "-30.0,90.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,92.0", "-30.0,90.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-30.0,70.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-34.0,72.0", "-30.0,70.0", "CELTIC_FORESTER", 20)
+)";
+
+/// The lines of a land that give player two a computer mind, a temple and two Celtic towns. The east town has no food
+/// in its storage pit. The west town, 160 metres away, has 5000 food and 5000 wood in its pit.
+constexpr std::string_view k_TwoTownsFoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "110.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 5000)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
+/// The same two towns, but the east town has 5000 food and no wood in its storage pit
+constexpr std::string_view k_TwoTownsWoodScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "76.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "90.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 0)
+CREATE_ABODE(900, "110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,62.0", "110.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "110.0,80.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("106.0,82.0", "110.0,80.0", "CELTIC_FORESTER", 20)
+CREATE_TOWN(901, "-80.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(901, "PLAYER_TWO", 2.0)
+SET_TOWN_BELIEF(901, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(901, "-84.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(901, "-70.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 5000, 5000)
+CREATE_ABODE(901, "-110.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-114.0,62.0", "-110.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
+} // namespace
+
 void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 {
 	all.push_back({
@@ -51,5 +134,45 @@ void testbed_scenarios::AddComputerGodTownsScenarios(std::vector<Scenario>& all)
 	    .landScript = k_ComputerGodFarTownScript,
 	    .worshipShare = 0.5f,
 	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_fish_farm_food",
+	    .name = "A computer god that takes food from a fish farm for its town",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and a Celtic town by the lake to the north, with an empty storage pit. A fish farm of the town "
+	                   "stands on the shore.",
+	    .expected = "The town wants food, and it has no field. The hand of the god moves to the fish farm, takes a pot "
+	                "of fish food, and drops the pot in the storage pit of the town. The farm keeps all its fish. The "
+	                "players.list query shows the need, the hand and its steps.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-60.0f, -110.0f), glm::vec2(60.0f, 160.0f)}},
+	    .objects = {{.type = FishFarmInfo::Normal, .offset = {5.0f, 145.0f}}},
+	    .landScript = k_FishFarmTownScript,
+	    .objectsAfterLandScript = true,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_food_from_other_town",
+	    .name = "A computer god that takes food from one of its towns to another",
+	    .facet = Facet::Mind,
+	    .description = "Lines of a land switch on the computer mind of player two. Player two has a temple to the south "
+	                   "and two Celtic towns. The east town has no food in its storage pit. The west town has 5000 food "
+	                   "and 5000 wood in its storage pit.",
+	    .expected = "The east town wants food. The hand of the god moves to the food pile of the west town's pit and "
+	                "takes a pot of food from it, as much as the need of the east town asks. Then the hand carries the "
+	                "pot to the pit of the east town and drops it in.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
+	    .landScript = k_TwoTownsFoodScript,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_wood_from_other_town",
+	    .name = "A computer god that takes all the wood of one of its towns for another",
+	    .facet = Facet::Mind,
+	    .description = "The two towns of the food scenario, but the east town has 5000 food and no wood in its storage "
+	                   "pit.",
+	    .expected = "The east town wants wood. The hand of the god takes all the wood of the west town's pit in a pot. "
+	                "It moves to the east town but the town does not take the pot, so the hand keeps it, as in the "
+	                "original game. The hand holds the pot after the action.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-130.0f, -110.0f), glm::vec2(130.0f, 110.0f)}},
+	    .landScript = k_TwoTownsWoodScript,
 	});
 }

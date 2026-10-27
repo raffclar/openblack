@@ -1873,3 +1873,11 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_computer_player_state test_computer_player_state.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_computer_town_goods oracle/test_oracle_computer_town_goods.cpp
+)
+set_tests_properties(
+  test_oracle_computer_town_goods
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
