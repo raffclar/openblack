@@ -132,10 +132,8 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // The rise that the totem last showed, by which the hand's tooltip of its share comes
     {.component = "VillageTotem", .field = "lastShownRise", .marker = ""},
     {.component = "VillageTotem", .field = "quietOnce", .marker = ""},
-    // The frames move the totem and its icon to the share they ease to, and move and show the second totem
-    {.component = "Transform", .field = "position", .marker = "VillageTotem"},
-    {.component = "Transform", .field = "position", .marker = "VillageTotemIcon"},
-    {.component = "*", .field = "", .marker = "VillageTotemGhost"},
+    // The height where the frames draw a town's totem and its icon as they ease by the computer's clock
+    {.component = "DrawnHeight", .field = "", .marker = ""},
     // The frames move the fish of a shoal near the camera of each computer, and a grip of the sea scares them only on the
     // computer of the hand. The turns read only the shoal's centre, which the land gives, and its fullness, which comes
     // from the fish of the farm.
@@ -160,6 +158,29 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     // draw and the script camera read.
     {.component = "*", .field = "", .marker = "IntroHand"},
     {.component = "*", .field = "", .marker = "BoatFilmPart"},
+    // The rooms of the temple, their lights and the mist of the creature cave are not a part of the land. The temple
+    // makes them for the player of this computer when the player goes into it, and removes them when the player leaves.
+    {.component = "*", .field = "", .marker = "TempleInteriorPart"},
+    // The glows on a creature's body turn and slide in the frames, and the frames place them where the body is drawn.
+    // The turns set their powers and scales.
+    {.component = "CreatureHandGlows", .field = "slidePace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "turnPace", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "placed", .marker = ""},
+    {.component = "CreatureHandGlows", .field = "motion", .marker = ""},
+    // The snow on a thing comes and goes in the frames that draw the thing. Only the draw reads it.
+    {.component = "SnowLevel", .field = "", .marker = ""},
+    // The picture of a challenge comes from the screen of this computer, or from its profile's files, in the frames. The
+    // turns only count the pictures that the scripts ask for.
+    {.component = "ChallengePicture", .field = "full", .marker = ""},
+    {.component = "ChallengePicture", .field = "small", .marker = ""},
+    {.component = "ChallengePicture", .field = "waiting", .marker = ""},
+    {.component = "ChallengePicture", .field = "taken", .marker = ""},
+    // The turn makes the see-through copy of a town totem and of its icon. The frames move, show and hide it.
+    {.component = "*", .field = "", .marker = "VillageTotemGhost"},
+    // The draw gives the light of the frame to a thing in the hand, and takes it away when the hand lets go
+    {.component = "HeldLight", .field = "", .marker = ""},
+    // The static of a creature that fizzes slides only in the frames that draw its body. Only the draw reads it.
+    {.component = "CreatureSpells", .field = "staticScroll", .marker = ""},
     {.component = "HighDetail", .field = "heldAt", .marker = ""},
     // The eyes of a villager that a script draws in high detail blink and look in the frames, by the local random
     // numbers. Only the draw reads them.
@@ -347,6 +368,15 @@ constexpr auto k_PresentationParts = std::to_array<PresentationPart>({
     {.component = "SoundTag", .field = "active", .marker = ""},
     // The sound that the audio of this computer plays for a tag. A server with no audio plays none.
     {.component = "SoundTag", .field = "emitter", .marker = ""},
+    // The frames draw a reward chest that falls between its last two turns. The turns go by its Transform and clock.
+    {.component = "Reward", .field = "drawn", .marker = ""},
+    // The lid of an opened chest lifts in the frames that draw it, and its dust fades in the frames
+    {.component = "Reward", .field = "clipPlace", .marker = ""},
+    {.component = "Reward", .field = "dustMilliseconds", .marker = ""},
+    // The miracle above an opened chest spins and pulses in the frames
+    {.component = "RewardSeed", .field = "spin", .marker = ""},
+    {.component = "RewardSeed", .field = "phialFrame", .marker = ""},
+    {.component = "RewardSeed", .field = "phialPhase", .marker = ""},
 });
 
 } // namespace

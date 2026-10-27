@@ -81,9 +81,10 @@ void openblack::ecs::reflection::RegisterFields_Values_creatureh(entt::meta_ctx&
 	    .Field<&openblack::creature_hair::Strand::velocities>("velocities");
 	Reflect<openblack::creature_hand_glow::Glow>(context, ValueOnly {})
 	    .Field<&openblack::creature_hand_glow::Glow::power>("power")
-	    .Field<&openblack::creature_hand_glow::Glow::scale>("scale")
-	    .Field<&openblack::creature_hand_glow::Glow::turn>("turn")
-	    .Field<&openblack::creature_hand_glow::Glow::slide>("slide");
+	    .Field<&openblack::creature_hand_glow::Glow::scale>("scale");
+	Reflect<openblack::creature_hand_glow::Motion>(context, ValueOnly {})
+	    .Field<&openblack::creature_hand_glow::Motion::turn>("turn")
+	    .Field<&openblack::creature_hand_glow::Motion::slide>("slide");
 	Reflect<openblack::creature_head_look::RouteLook>(context, ValueOnly {})
 	    .Field<&openblack::creature_head_look::RouteLook::countdownMs>("countdownMs")
 	    .Field<&openblack::creature_head_look::RouteLook::point>("point");

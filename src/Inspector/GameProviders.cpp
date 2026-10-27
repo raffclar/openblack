@@ -106,6 +106,7 @@
 #include "ECS/Components/WalkPath.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/CreatureReactionNotice.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/Map.h"
 #include "ECS/PhysicsEntry.h"
 #include "ECS/Registry.h"
@@ -308,6 +309,7 @@ constexpr std::array k_Coverage {
     LocatorCoverage {"weatherSystem", "land.weather"},
     LocatorCoverage {"pathfindingSystem", "living.pathfinding"},
     LocatorCoverage {"entitiesRegistry", "ecs.components"},
+    LocatorCoverage {"drawnRegistry", "drawn.components"},
     LocatorCoverage {"entitiesMap", "map.cell"},
     LocatorCoverage {"playerSystem", "players.list"},
     LocatorCoverage {"alignmentSystem", "players.list"},
@@ -474,6 +476,12 @@ Json Optional(const std::optional<Value>& value)
 const ecs::Registry* Registry()
 {
 	return Locator::entitiesRegistry::has_value() ? &Locator::entitiesRegistry::value() : nullptr;
+}
+
+/// The things that only the frames make, out of the synced world
+const ecs::Registry* DrawnRegistry()
+{
+	return Locator::drawnRegistry::has_value() ? &Locator::drawnRegistry::value() : nullptr;
 }
 
 const InfoConstants* Info()
@@ -3137,9 +3145,12 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			                                {"creature_shown", cave.IsCreatureShown()},
 			                                {"copy", Id(cave.GetCaveCreature())}};
 			              // The copy of the creature by the cave's fire, and what it is doing
-			              const auto& registry = Locator::entitiesRegistry::value();
-			              if (const auto copy = cave.GetCaveCreature(); copy.has_value() && registry.Valid(*copy))
+			              const auto copy = cave.GetCaveCreature();
+			              if (copy.has_value() && Locator::temple::has_value() &&
+			                  Locator::temple::value().GetRooms().Valid(*copy))
 			              {
+				              // The copy is a thing of the temple's rooms
+				              const auto& registry = Locator::temple::value().GetRooms();
 				              const auto* self = registry.TryGet<const ecs::components::CreatureCopy>(*copy);
 				              const auto* state = registry.TryGet<const ecs::components::CaveCreature>(*copy);
 				              const auto* transform = registry.TryGet<const ecs::components::Transform>(*copy);
@@ -4081,6 +4092,9 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 {
 	const RegistrySources registrySources {.registry = &Registry, .info = &Info};
 	inspector.Add(std::make_unique<RegistryProvider>(registrySources, reflection));
+	// The same queries over the things that only the frames make: drawn.entities, drawn.entity and the others
+	inspector.Add(std::make_unique<RegistryProvider>(
+	    RegistrySources {.registry = &DrawnRegistry, .info = &Info, .name = "drawn"}, reflection));
 	inspector.Add(std::make_unique<ObjectsProvider>(registrySources));
 	inspector.Add(std::make_unique<EditProvider>(
 	    EditSources {
