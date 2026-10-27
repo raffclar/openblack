@@ -1966,3 +1966,11 @@ set_tests_properties(
 openblack_setup_and_add_test(
   test_computer_mind_scaffolds test_computer_mind_scaffolds.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_computer_scaffolds oracle/test_oracle_computer_scaffolds.cpp
+)
+set_tests_properties(
+  test_oracle_computer_scaffolds
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
