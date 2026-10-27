@@ -26,6 +26,7 @@
 #include <spdlog/spdlog.h>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/Footpath.h"
@@ -45,6 +46,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Statistics.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -377,8 +379,7 @@ void WorshipSiteSystem::RemakeModelsAfterLoad()
 void WorshipSiteSystem::ProcessChants()
 {
 	auto& registry = _world->Entities();
-	const auto here =
-	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+	const auto here = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 	// Every player in turn, the neutral player last, each site of their temple by its place round it
 	for (size_t player = 0; player < static_cast<size_t>(PlayerNames::_COUNT); ++player)
 	{
@@ -673,7 +674,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	const auto facing = ws::PlaceFacing(worship.facing, *place);
 	const auto site = registry.Create();
 	const auto ground = glm::vec3(templePosition.x, _world->LandHeightAt(Across(templePosition)), templePosition.z);
-	registry.Assign<Transform>(site, ground, glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
+	registry.Assign<Transform>(site, ground, glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	registry.Assign<Mesh>(site, _world->SiteMesh(temple), static_cast<int8_t>(0), static_cast<int8_t>(0));
 	registry.Assign<BuildProgress>(site, 0.0f);
 	registry.Assign<WorshipChants>(site);
@@ -702,7 +703,7 @@ entt::entity WorshipSiteSystem::Make(entt::entity temple, Tribe tribe)
 	// The altar has its model's size and shape on the map from now on, but the model shows only when the town builds the site
 	const auto altar = registry.Create();
 	const auto& placed = registry.Assign<Transform>(altar, glm::vec3(altarAt.x, _world->LandHeightAt(altarAt), altarAt.y),
-	                                                glm::mat3(glm::eulerAngleY(-facing)), glm::vec3(1.0f));
+	                                                glm::mat3(portable_math::EulerAngleY(-facing)), glm::vec3(1.0f));
 	const auto altarModel = _world->AltarMesh(tribe);
 	if (const auto circle = _world->FixedCircleOf(altarModel, placed))
 	{

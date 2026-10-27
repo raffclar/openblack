@@ -71,7 +71,8 @@ void GameParticleWorld::SetHandGlow(uint32_t rgb)
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// The glow of the gesture is on the hand of this computer, which draws the gesture
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (!registry.Valid(hand))
 	{
 		return;
@@ -102,7 +103,8 @@ void ParticleSystem::KeepGestureTrails()
 	}
 	// This computer's own: it draws on its own random numbers, in its player's colour
 	_gestureTrails = Start(ParticleType::Gesture, glm::vec3(0.0f), 1.0f, false);
-	SetPlayer(_gestureTrails, static_cast<int>(PlayerNames::PLAYER_ONE));
+	SetPlayer(_gestureTrails, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                            : PlayerNames::PLAYER_ONE));
 }
 
 void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
@@ -123,7 +125,8 @@ void ParticleSystem::UpdateFrame(float gameSeconds, const HandFrame& hand)
 	if (!IsRunning(_gestureChain))
 	{
 		_gestureChain = Start(ParticleType::GestureLocal, glm::vec3(0.0f), 1.0f, false);
-		SetPlayer(_gestureChain, static_cast<int>(PlayerNames::PLAYER_ONE));
+		SetPlayer(_gestureChain, static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                                           : PlayerNames::PLAYER_ONE));
 		if (const auto it = FindRunning(_gestureChain); it != _effects.end())
 		{
 			it->everyFrame = true;
@@ -157,7 +160,9 @@ void ParticleSystem::StepSelectionEffect(float gameSeconds, const HandFrame& han
 	if (!IsRunning(_selectionEffect))
 	{
 		_selectionEffect = Start(ParticleType::SpellSelection, glm::vec3(0.0f), 1.0f, false);
-		SetPlayer(_selectionEffect, static_cast<int>(PlayerNames::PLAYER_ONE));
+		SetPlayer(_selectionEffect,
+		          static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                            : PlayerNames::PLAYER_ONE));
 		if (const auto it = FindRunning(_selectionEffect); it != _effects.end())
 		{
 			it->everyFrame = true;

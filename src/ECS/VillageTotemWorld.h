@@ -16,6 +16,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec3.hpp>
 
+#include "Commands/PlayerCommands.h"
 #include "Enums.h"
 
 namespace openblack::ecs
@@ -64,6 +65,9 @@ public:
 	virtual void FloatNumber(glm::vec3 position, float value, uint32_t colour) = 0;
 	/// A town's worship share has just been set: it sends people to worship, or calls them back, to match it
 	virtual void ShareSet(entt::entity /*town*/) {}
+	/// Sends a command of the player, which the world does at the start of a later turn. False where the world has no
+	/// commands: then the system does it at once.
+	virtual bool SendCommand(const player_commands::Action& /*action*/) { return false; }
 };
 
 } // namespace openblack::ecs::village_totem

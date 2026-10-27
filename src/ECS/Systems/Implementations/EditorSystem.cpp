@@ -19,6 +19,7 @@
 #include "Camera/Camera.h"
 #include "Camera/DoubleClickFlight.h"
 #include "Camera/EditorCameraModel.h"
+#include "Common/PortableMath.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -172,7 +173,7 @@ void EditorSystem::FrameSelection()
 	if (OwnsCamera())
 	{
 		// Each step of zoom is a tenth closer
-		_cameraModel->Zoom(std::log(distance / _cameraModel->GetOrbit().distance) / std::log(0.9f));
+		_cameraModel->Zoom(portable_math::Log(distance / _cameraModel->GetOrbit().distance) / portable_math::Log(0.9f));
 		return;
 	}
 	auto& camera = Locator::camera::value();

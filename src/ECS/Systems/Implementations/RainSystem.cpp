@@ -94,13 +94,11 @@ std::vector<rain::Tile> RainSystem::TakeTiles(const rain::View& view)
 {
 	std::vector<rain::Tile> tiles;
 	// Rain is part of the weather setting
-	const auto detail = Locator::config::value().detailLevel;
-	if (!graphics::detail_level::Weather(detail) || !Locator::terrainSystem::has_value() ||
-	    !Locator::weatherSystem::has_value())
+	const auto& settings = Locator::config::value().detail;
+	if (!settings.weather || !Locator::terrainSystem::has_value() || !Locator::weatherSystem::has_value())
 	{
 		return tiles;
 	}
-	const auto settings = graphics::detail_level::For(detail);
 	auto& weather = Locator::weatherSystem::value();
 	const auto& island = Locator::terrainSystem::value();
 	const glm::vec2 eye {view.eye.x, view.eye.z};

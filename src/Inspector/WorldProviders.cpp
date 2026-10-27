@@ -216,8 +216,12 @@ std::vector<QueryDescription> ParticlesProvider::Describe() const
 	     .needsNear = false},
 	    {.name = "liquid",
 	     .description = "The pool of liquid particles (drops of blood and sick, dust, smoke, motes): the count of each "
-	                    "kind and the drops that lie on the land",
-	     .parameters = {},
+	                    "kind and the drops that lie on the land. With player, the pool of the sparkles at that other "
+	                    "player's camera",
+	     .parameters = {{.name = "player",
+	                     .type = "integer",
+	                     .description = "The other player whose sparkles to count, from 0",
+	                     .required = false}},
 	     .kind = ResultKind::Object,
 	     .needsNear = false},
 	};
@@ -249,6 +253,16 @@ QueryResult ParticlesProvider::Run(std::string_view query, const QueryContext& c
 	}
 	if (query == "liquid")
 	{
+		if (const auto player = context.params.find("player"); player != context.params.end())
+		{
+			if (!player->is_number_unsigned() || player->get<size_t>() >= static_cast<size_t>(PlayerNames::_COUNT))
+			{
+				return QueryResult::Error("player must be a player's number, from 0");
+			}
+			const auto name = static_cast<PlayerNames>(player->get<size_t>());
+			return QueryResult::Value(LiquidSummary(_sources.playerLiquids ? _sources.playerLiquids(name)
+			                                                               : std::span<const liquid_particles::Particle> {}));
+		}
 		const auto liquids = _sources.liquids ? _sources.liquids() : std::span<const liquid_particles::Particle> {};
 		return QueryResult::Value(LiquidSummary(liquids));
 	}

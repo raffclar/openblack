@@ -30,6 +30,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/Creature.h"
 #include "ECS/Components/CreatureObjectAction.h"
@@ -170,11 +171,12 @@ void MagicShieldSystem::Raise(entt::entity spell, const Spell& miracle)
 	auto& transform = registry.Get<Transform>(object);
 	transform.position.y = position.y + dome.pose.height;
 	transform.scale = glm::vec3(dome.pose.scale);
-	// Its sparkling trail and hum, on the dome
+	// Its sparkling trail and hum, on the dome. Its random numbers are only this computer's: the trail does not change
+	// the world.
 	if (Locator::particleSystem::has_value())
 	{
 		auto& particles = Locator::particleSystem::value();
-		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude, true);
+		dome.effect = particles.Start(ParticleType::PhysicalShieldFx, transform.position, miracle.magnitude);
 		if (dome.effect != ParticleSystemInterface::k_NoEffect)
 		{
 			particles.SetPlayer(dome.effect, static_cast<int>(miracle.caster.player));
@@ -195,6 +197,8 @@ void MagicShieldSystem::Strip(entt::entity object, MagicShield& shieldObject)
 			ids.push_back(id);
 		}
 	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(ids);
 	for (const auto id : ids)
 	{
 		RemoveReaction(id, true);
@@ -252,7 +256,7 @@ bool MagicShieldSystem::StepDome(entt::entity object)
 		dome.alpha = shield::DomeAlpha(strength);
 	}
 	transform.position.y = LandHeight(transform.position) + dome.pose.height;
-	transform.rotation = glm::eulerAngleY(dome.pose.angle);
+	transform.rotation = portable_math::EulerAngleY(dome.pose.angle);
 	transform.scale = glm::vec3(dome.pose.scale);
 	if (dome.effect != ParticleSystemInterface::k_NoEffect && Locator::particleSystem::has_value())
 	{

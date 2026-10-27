@@ -86,6 +86,15 @@ private:
 	float _nightRate {0.0f};
 	float _scale {1.0f};
 	std::array<float, 4> _times {k_ScriptTimes};
+
+public:
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const DayNightClock& self, Visitor&& visit)
+	{
+		visit(self._visualTime, self._target, self._step, self._moveSeconds, self._dayRate, self._nightRate, self._scale,
+		      self._times);
+	}
 };
 
 } // namespace openblack

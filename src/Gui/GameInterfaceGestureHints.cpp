@@ -12,6 +12,7 @@
 #include "Camera/Camera.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Systems/GestureSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "GameInterface.h"
 #include "Gestures/GestureHints.h"
 #include "Graphics/Texture2D.h"
@@ -22,8 +23,11 @@ using openblack::Locator;
 
 namespace
 {
-/// The player at this computer, whose colour the gestures' pictures are drawn in
-constexpr size_t k_LocalPlayer = 0;
+/// The player of this computer, whose colour the pictures of the gestures show
+openblack::PlayerNames OwnPlayer()
+{
+	return Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : openblack::PlayerNames::PLAYER_ONE;
+}
 
 glm::vec4 Colour(const std::array<uint8_t, 4>& rgba)
 {
@@ -48,7 +52,7 @@ void GameInterface::DrawGestureHints(glm::u16vec2 resolution)
 	const float fov = Locator::camera::value().GetHorizontalFieldOfView();
 	const float pictureSide = hints::SpriteSide(hints::k_PictureHalfSize, rowWidth, fov);
 	const float dotSide = hints::SpriteSide(hints::k_DotHalfSize, rowWidth, fov);
-	const auto playerRgb = openblack::ecs::components::Player::k_Colours.at(k_LocalPlayer) & 0xFFFFFFu;
+	const auto playerRgb = openblack::ecs::components::Player::k_Colours.at(static_cast<size_t>(OwnPlayer())) & 0xFFFFFFu;
 	const auto pictureColour = Colour(hints::PictureColour(playerRgb, row.alpha));
 	constexpr float k_DotCell = 1.0f / static_cast<float>(hints::k_DotSheetSide);
 	const glm::vec2 dotUv {static_cast<float>(hints::k_DotPicture % hints::k_DotSheetSide) * k_DotCell,

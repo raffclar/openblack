@@ -45,6 +45,7 @@
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -54,9 +55,6 @@ namespace
 {
 /// The game's templates in the resource caches
 constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
-
-/// The kinds of script that a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
@@ -269,10 +267,10 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 	if (!seedEntity.has_value() && Locator::handGrabSystem::has_value())
 	{
 		const auto& hand = Locator::handGrabSystem::value();
-		context.holdingObject = hand.GetHeld().has_value();
+		context.holdingObject = hand.GetHeldOf(player).has_value();
 		if (context.holdingObject)
 		{
-			context.inInfluence = hand.IsInInfluence();
+			context.inInfluence = hand.IsInInfluenceOf(player);
 		}
 	}
 	// A circle is remembered for the seed it was drawn for
@@ -733,43 +731,43 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		_events.push_back({.kind = GestureEvent::Kind::Scribble, .gesture = request.gesture, .centre = handAt});
 		break;
 	case Purpose::ShakeOffLeash:
+		// The hand shakes, and the leash key command takes the held leash off at the turn
 		ShakeHand();
-		if (leashes != nullptr)
+		if (creature.has_value() && leashes->IsLeashed(*creature) && !leashes->TiedTo(*creature).has_value())
 		{
-			leashes->Shake(frame.player);
+			SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 		}
 		break;
 	case Purpose::ShakeOffHeld:
-		// The hand shakes and lets go of it where it is, never planted again
+		// The hand shakes, and at the turn it lets go of the thing where it is, never planted again
 		ShakeHand();
-		if (Locator::handGrabSystem::has_value())
-		{
-			Locator::handGrabSystem::value().ForceDrop();
-		}
+		SendRequest(player_commands::HandShakeOff {});
 		break;
 	case Purpose::LeashGesture:
 		if (creature.has_value())
 		{
-			// An unleashed creature has the leash put on; knowing more than one, it may then be changed
+			// The leash key command puts the leash on an unleashed creature at the turn. A creature that knows more than one
+			// leash opens the picker at once, so that the player can change the leash.
 			if (!leashes->IsLeashed(*creature))
 			{
-				leashes->Toggle(*creature);
+				SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 			}
 			int known = 0;
 			for (const auto type : creature_leash::k_Types)
 			{
 				known += leashes->Knows(*creature, type) ? 1 : 0;
 			}
-			if (known > 1 && leashes->IsLeashed(*creature))
+			if (known > 1)
 			{
 				_picker.Open();
 			}
 		}
 		break;
 	case Purpose::PickLeash:
+		// The command changes the leash at the turn
 		if (creature.has_value())
 		{
-			leashes->ChangeType(*creature, request.leash);
+			SendRequest(player_commands::LeashPick {.type = request.leash});
 		}
 		_picker.Close();
 		break;
@@ -793,7 +791,7 @@ bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		// Each square wave starts the script again. The script itself finds the phone box that it made before.
 		if (Locator::vm::has_value())
 		{
-			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), k_SinglePlayerScripts);
+			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), script::start::StartableScripts());
 		}
 		break;
 	case Purpose::OpenSelection:

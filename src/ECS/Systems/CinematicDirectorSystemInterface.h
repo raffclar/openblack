@@ -77,8 +77,11 @@ public:
 
 	/// As a new land opens: no fade, no bars, no close clipping, and the texts are taken away
 	virtual void Reset() = 0;
-	/// Moves the fade on by a game turn
+	/// Moves the fade on by a game turn, and the bars that the scripts wait for
 	virtual void ProcessTurn() = 0;
+	/// A turn of the temple's scripts, while the world stands still: the bars that the scripts wait for move on by the
+	/// real time of the temple's turn
+	virtual void ProcessTempleTurn() {}
 	/// Slides the bars on by the game time of the frame, which stops while the game is paused
 	virtual void Update(std::chrono::duration<float, std::milli> gameTime) = 0;
 };

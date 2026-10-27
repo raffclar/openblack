@@ -53,6 +53,28 @@ inline constexpr uint32_t k_DustFrameMask = 63;
 /// How far it has turned about its up axis
 [[nodiscard]] float FallYaw(float seconds);
 
+/// The game time of one game turn, in milliseconds. The clock of a chest that falls moves on by this in each turn.
+inline constexpr float k_TurnMilliseconds = 100.0f;
+
+/// One game turn of a chest that falls
+struct FallTurn
+{
+	/// Its height above the land and its turn about its up axis, from its clock at the start of the turn
+	float height {0.0f};
+	float yaw {0.0f};
+	/// Its clock after the turn
+	float seconds {0.0f};
+	/// It touches the land in this turn
+	bool lands {false};
+};
+/// The turn puts the chest where its clock was at the start of the turn, then moves the clock on by the turn's time
+[[nodiscard]] FallTurn StepFall(float seconds);
+/// The clock that the frames draw a chest that falls with, at a part of the way (0..1) to its next turn. The chest goes
+/// from the place of its last turn to the place of its next turn, and the clock is never less than zero.
+[[nodiscard]] float DrawnFallClock(float seconds, float turnFraction);
+/// The height that the frames draw a chest that falls at. It touches the land at the turn that lands it.
+[[nodiscard]] float DrawnFallHeight(float clock);
+
 /// One puff of its dust as it is made: where it is about the chest, its frame on the smoke sheet and its colour
 struct DustSprite
 {

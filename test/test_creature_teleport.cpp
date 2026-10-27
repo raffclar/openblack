@@ -152,3 +152,29 @@ TEST(CreatureTeleport, ACarryDoneOutsideTheCarryChangesNothing)
 	CarryDone(mind);
 	EXPECT_EQ(mind.step, 0u);
 }
+
+TEST(CreatureTeleport, TheStoneControlsTheCreatureOnlyWhileItsPlanHasAStepOfTheTeleportLeft)
+{
+	IdleMind mind;
+	EXPECT_FALSE(StoneControls(mind));
+	Plan(mind, Activity::Told, GoToTeleport(9u, glm::vec2 {1.0f, 2.0f}));
+	EXPECT_TRUE(StoneControls(mind));
+	// After the jump: the carry, the walk on and the last step
+	Plan(mind, Activity::Told, AfterTeleport(glm::vec2 {1.0f, 2.0f}));
+	EXPECT_TRUE(StoneControls(mind));
+	mind.step = 2;
+	EXPECT_TRUE(StoneControls(mind));
+	// The last step is done: the stone lets the creature go
+	mind.step = 3;
+	EXPECT_FALSE(StoneControls(mind));
+	// A new plan with no teleport step stops the control at that time
+	Plan(mind, Activity::Told, AfterTeleport(std::nullopt));
+	EXPECT_TRUE(StoneControls(mind));
+	Plan(mind, Activity::Planned, {{.kind = Step::Kind::Wait, .seconds = 1.0f}});
+	EXPECT_FALSE(StoneControls(mind));
+	// A plan given up or let go of has no step left
+	Plan(mind, Activity::Told, GoToTeleport(9u, glm::vec2 {1.0f, 2.0f}));
+	mind.agenda.clear();
+	mind.step = 0;
+	EXPECT_FALSE(StoneControls(mind));
+}

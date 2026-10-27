@@ -254,6 +254,7 @@ public:
 
 	void ProcessTurn() override;
 	void Reset() override;
+	void SetFreshIdsAtNextReset() override { _freshIdsAtNextReset = true; }
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
 
@@ -333,6 +334,7 @@ private:
 	/// Newest first, as they are stepped and drawn
 	std::deque<Running> _effects;
 	EffectId _nextId {1};
+	bool _freshIdsAtNextReset {false};
 	bool _paused {false};
 	/// When the ribbons' textures last slid on
 	water_rings::Pace _chainScrollPace;

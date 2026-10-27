@@ -325,6 +325,10 @@ void Save(BinaryWriter& out, const Type& value)
 	{
 		out.WriteRaw(value.Radians());
 	}
+	else if constexpr (detail::k_IsBuildSized<Type>)
+	{
+		out.WriteRaw(static_cast<std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t>>(value));
+	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)
 	{
 		out.WriteRaw(value);
@@ -483,6 +487,19 @@ void Load(BinaryReader& in, Type& value)
 		if (in.ReadRaw(saved))
 		{
 			value = in.Remap()(saved);
+		}
+	}
+	else if constexpr (detail::k_IsBuildSized<Type>)
+	{
+		std::conditional_t<std::is_signed_v<Type>, int64_t, uint64_t> wide {};
+		if (in.ReadRaw(wide))
+		{
+			if (!std::in_range<Type>(wide))
+			{
+				in.Fail();
+				return;
+			}
+			value = static_cast<Type>(wide);
 		}
 	}
 	else if constexpr (std::is_arithmetic_v<Type> || std::is_enum_v<Type>)

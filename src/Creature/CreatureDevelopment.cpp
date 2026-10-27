@@ -27,5 +27,6 @@ bool creature_development::ReleasedFromHome(uint32_t stage, float confinementRad
 
 bool creature_development::KeptAtHome(const YoungCreature& creature)
 {
-	return !creature.leashed && creature.stage < k_LeavesHomeStage && creature.localPlayers && creature.land == k_TrainingLand;
+	return !creature.networkGame && !creature.leashed && creature.stage < k_LeavesHomeStage && creature.localPlayers &&
+	       creature.land == k_TrainingLand;
 }

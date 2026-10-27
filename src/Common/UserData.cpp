@@ -12,6 +12,7 @@
 #include <string>
 #include <system_error>
 
+#include <ComputerSettings.h>
 #include <SDL.h>
 
 std::optional<std::filesystem::path> openblack::user_data::Folder()
@@ -36,4 +37,24 @@ std::optional<std::filesystem::path> openblack::user_data::ProfileFolder()
 		return std::nullopt;
 	}
 	return folder / k_ProfileFolderName;
+}
+
+std::optional<std::filesystem::path> openblack::user_data::SettingsFile()
+{
+	const auto profiles = ProfileFolder();
+	if (!profiles.has_value())
+	{
+		return std::nullopt;
+	}
+	std::error_code error;
+	auto folder = *profiles;
+	if (std::filesystem::is_symlink(folder, error))
+	{
+		const auto target = std::filesystem::read_symlink(folder, error);
+		if (!error)
+		{
+			folder = target.is_absolute() ? target : profiles->parent_path() / target;
+		}
+	}
+	return folder.parent_path() / openblack::computer_settings::k_FileName;
 }

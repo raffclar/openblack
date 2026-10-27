@@ -16,6 +16,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "ParticleClassRegistry.h"
 
@@ -483,8 +484,9 @@ public:
 		const float theta = std::fmod(age * thetaSpeed + data.a.x, k_TwoPi);
 		const float phi = std::fmod(age * phiSpeed + data.a.y, k_TwoPi);
 		const float r = radius * effect.FloatProvider(radiusScale, 1.0f);
-		glm::vec3 p = r * glm::vec3(scale.x * std::cos(theta) * std::cos(phi), scale.y * std::sin(phi),
-		                            scale.z * std::sin(theta) * std::cos(phi));
+		glm::vec3 p = r * glm::vec3(scale.x * openblack::portable_math::Cos(theta) * openblack::portable_math::Cos(phi),
+		                            scale.y * openblack::portable_math::Sin(phi),
+		                            scale.z * openblack::portable_math::Sin(theta) * openblack::portable_math::Cos(phi));
 		if (!atom.collection->hierarchy)
 		{
 			p += effect.SpawnPosition(*atom.collection);

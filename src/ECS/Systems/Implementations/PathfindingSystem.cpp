@@ -30,6 +30,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -266,7 +267,7 @@ void FaceAngle(Walker& walker, uint16_t angle)
 	auto& wallHug = walker.wallHug;
 	wallHug.gameAngle = static_cast<uint16_t>(angle & gutils::k_GameAngleMask);
 	wallHug.yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
-	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	walker.transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
 	wallHug.step = wall_hug::StepAlong(wallHug.gameAngle, walker.speed);
 	wallHug.stepAltitude = 0.0f;
 }

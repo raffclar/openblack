@@ -434,6 +434,7 @@ const GWorshipSiteInfo* mind_detail::AltarInfoOf(const ecs::Registry& registry, 
 
 void CreatureMindSystem::ComeAcross(entt::entity creature, components::CreatureMindState& mind, entt::entity thing)
 {
+	++_comeAcrossCount;
 	const auto& registry = Locator::entitiesRegistry::value();
 	if (!registry.Valid(thing))
 	{
@@ -652,7 +653,8 @@ void CreatureMindSystem::ForgetGoneThings(entt::entity creature, components::Cre
 		idle.stepStarted = false;
 		idle.gaveUp = true;
 	}
-	mind.beliefs.ForgetIf([&registry](entt::entity thing) { return !registry.Valid(thing); });
+	mind.beliefs.ForgetIfAnyWent(registry.GetEntitiesGone(),
+	                             [&registry](entt::entity thing) { return !registry.Valid(thing); });
 	// When the thing of its last try that fizzled goes, the creature forgets that try too
 	auto* casting = registry.TryGet<components::CreatureCasting>(creature);
 	if (casting == nullptr || casting->lastFizzleTarget == entt::null || registry.Valid(casting->lastFizzleTarget))

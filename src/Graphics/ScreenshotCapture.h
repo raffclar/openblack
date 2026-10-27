@@ -35,8 +35,9 @@ enum class ScreenshotRoute : uint8_t
 {
 	/// From the window's own buffers, as it is presented
 	Screen,
-	/// The frame's screen passes drawn into a target of the window's size and read back from it, for a window with no
-	/// buffers to read (Vulkan drops them while the window is minimised)
+	/// The frame's screen passes drawn into a target of the window's size and read back from it, for a window whose
+	/// buffers the renderer cannot read (Vulkan drops them while the window is minimised, and OpenGL gives no pixels
+	/// where other windows cover the window)
 	Offscreen,
 	/// Not at all, for the reason given
 	Refused,
@@ -49,10 +50,20 @@ struct ScreenshotPlan
 	std::string why;
 };
 
-/// How to read a picture of the frame being made: from the screen, unless the renderer keeps no screen while the window
-/// is minimised and it is, when the frame is drawn aside and read back if the renderer can do that at that size
-[[nodiscard]] ScreenshotPlan PlanScreenshot(bool screenDroppedWhenMinimised, bool minimised, bool canReadBack,
-                                            glm::u16vec2 size);
+/// What the renderer keeps in the window's buffers, which a picture of the screen reads
+enum class WindowBuffers : uint8_t
+{
+	/// All the pixels of the frame, at all times
+	Kept,
+	/// All the pixels of the frame, but no buffers while the window is minimised (Vulkan)
+	DroppedWhenMinimised,
+	/// Only the pixels that no other window covers; the other pixels have no defined value (OpenGL)
+	UncoveredOnly,
+};
+
+/// How to read a picture of the frame being made: from the screen when the window's buffers hold the whole frame now,
+/// else the renderer draws the frame aside and reads it back, if it can do that at that size
+[[nodiscard]] ScreenshotPlan PlanScreenshot(WindowBuffers buffers, bool minimised, bool canReadBack, glm::u16vec2 size);
 
 /// The picture's path in bgfx's note that it couldn't read the screen for it; none for any other note
 [[nodiscard]] std::optional<std::string_view> UncapturedScreenshotPath(std::string_view note);

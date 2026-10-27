@@ -37,4 +37,12 @@ struct Frustum
 /// main and the reflection passes draw between them
 [[nodiscard]] bool SeesSphereOrReflection(const Frustum& frustum, glm::vec3 centre, float radius) noexcept;
 
+/// Whether any of a box, which a model matrix puts in the world, can be inside the view. The answer is false only when
+/// all eight corners are outside one side by more than k_BoxMargin. The margin is larger than the rounding of floats,
+/// so a box that touches the screen is always in view.
+[[nodiscard]] bool SeesBox(const Frustum& frustum, const glm::mat4& model, glm::vec3 minima, glm::vec3 maxima) noexcept;
+
+/// The distance outside a side that SeesBox still counts as in view, in world units
+inline constexpr float k_BoxMargin = 1.0f;
+
 } // namespace openblack::graphics::view_frustum

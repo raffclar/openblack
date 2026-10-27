@@ -27,6 +27,9 @@ vcpkg_download_distfile(
 # - webgpu-vertex-texture-caps: WebGPU can read textures in vertex shaders, thus the formats get the vertex flag.
 # - webgpu-min-max-blend-factors: min and max blends get the factors one. They do not use the factors, but WebGPU
 #   refuses other factors for them.
+# - webgpu-occlusion-one-map: the occlusion queries copy their results into the readback buffer only while it is not
+#   mapped, and map it once for each copy. A submit that used the mapped buffer was not valid, the browser dropped it,
+#   and after some minutes of such frames the browser stopped the frames of the page.
 # A change to shaderc's ESSL output (the WebGL 2 shaders). It does not change the SPIR-V, WGSL, Metal or Direct3D
 # shaders:
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
@@ -43,6 +46,7 @@ vcpkg_extract_source_archive(
     webgpu-missing-vertex-inputs.patch
     webgpu-vertex-texture-caps.patch
     webgpu-min-max-blend-factors.patch
+    webgpu-occlusion-one-map.patch
     essl-no-inline.patch
 )
 

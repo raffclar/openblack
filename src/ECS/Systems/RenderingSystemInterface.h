@@ -17,6 +17,7 @@
 #include <optional>
 #include <vector>
 
+#include <entt/entity/entity.hpp>
 #include <entt/fwd.hpp>
 #include <glm/mat4x4.hpp>
 #include <glm/vec2.hpp>
@@ -210,7 +211,8 @@ struct RenderContext
 	std::vector<EntityDraw> entityDraws;
 	/// Copies of creatures drawn where they stand in a pose of their own (see components::CreatureCopy), as the Creature
 	/// Cave shows the player's creature: each looks as `creature` does, takes its pose and eyes from `copy`, is placed by
-	/// its instance and lit from a light of its own
+	/// its instance and lit from a light of its own. The creature is a thing of the land, and the copy is a thing of the
+	/// temple's rooms.
 	struct CreatureCopyDraw
 	{
 		entt::entity creature;
@@ -224,6 +226,9 @@ struct RenderContext
 	{
 		entt::entity entity;
 		glm::mat4 model;
+		/// The model that the cursor finds, when it is not the model of `entity`: a gate stone of the drawn registry
+		/// stands for its plinth
+		std::optional<entt::id_type> mesh;
 	};
 	std::vector<DrawnObject> drawnObjects;
 	/// The animals drawn this frame, with the model that each one is drawn as and its matrix: each casts blobs from its
@@ -273,6 +278,8 @@ struct RenderContext
 	std::vector<glm::mat4> streamSegments;
 	/// The hand is scaled by a negative factor to mirror it, which turns its faces round
 	bool handMirrored {false};
+	/// The hand that the draw lists draw. When another hand becomes the drawn hand, the lists change.
+	entt::entity drawnHand {entt::null};
 
 	/// Not an actual vertex buffer, but a dynamic general purpose buffer which
 	/// stores uniform data as a GPU-side copy of \ref _instanceUniforms and
@@ -344,6 +351,14 @@ struct RenderContext
 	std::vector<ObjectInstance> soulInstances;
 	graphics::DynamicVertexBufferHandle soulInstanceBuffer;
 	uint32_t soulCapacity {0};
+
+	/// The piles of roots that this frame draws (see roots_pile), on the land and with its light. The opaque piles are
+	/// first, then the piles that fade, which blend by the alpha in their looks. Their instances are in
+	/// rootsPileInstanceBuffer.
+	std::vector<ObjectInstance> rootsPileInstances;
+	uint32_t rootsPileOpaqueCount {0};
+	graphics::DynamicVertexBufferHandle rootsPileInstanceBuffer;
+	uint32_t rootsPileCapacity {0};
 
 	/// Kept for backward compatibility, will be removed once shader is updated
 	std::vector<glm::mat4> treeInstanceUniforms;

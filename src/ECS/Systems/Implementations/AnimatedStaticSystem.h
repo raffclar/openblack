@@ -38,6 +38,7 @@ public:
 	bool SetOpenState(entt::entity object, int32_t openState) override;
 	[[nodiscard]] std::optional<uint32_t> GateStoneValue(entt::entity object) const override;
 	bool LayGateStone(entt::entity plinth, entt::entity stone) override;
+	[[nodiscard]] bool TakesGateStone(entt::entity plinth, entt::entity stone) const override;
 	[[nodiscard]] std::optional<std::vector<animated_static::RouteCircle>> RouteCircles(entt::entity gate) const override;
 	void Update(std::chrono::milliseconds frameGameTime) override;
 

@@ -12,20 +12,20 @@
 
 using namespace openblack;
 
-uint32_t GameRandomSource::GameRand(uint32_t n)
+uint32_t GameRandomSource::GameRand(uint32_t n, DrawSite site)
 {
 	if (Locator::gameRandom::has_value())
 	{
-		return Locator::gameRandom::value().GameRand(n);
+		return Locator::gameRandom::value().GameRand(n, site);
 	}
 	return n == 0 ? 0 : game_random::LHRand(n, _own.synced);
 }
 
-float GameRandomSource::GameFloatRand(float x)
+float GameRandomSource::GameFloatRand(float x, DrawSite site)
 {
 	if (Locator::gameRandom::has_value())
 	{
-		return Locator::gameRandom::value().GameFloatRand(x);
+		return Locator::gameRandom::value().GameFloatRand(x, site);
 	}
 	return game_random::FloatRand(x, _own.synced);
 }

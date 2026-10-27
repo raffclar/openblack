@@ -36,6 +36,8 @@ struct WindowInfo
 	std::vector<std::string> buttons;
 	/// For the start-of-game question, the answer picked now
 	std::string selected;
+	/// For the multiplayer front end, the games of the game list, or the last lines of the room's chat
+	std::vector<std::string> lines;
 };
 
 /// The labels over the villagers' heads that the Show Villager Names (N) and Show Villager Details (S) keys toggle

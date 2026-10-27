@@ -336,6 +336,39 @@ TEST(CreatureMindFile, FreshMindWritesACurrentFile)
 	EXPECT_EQ(read.developmentPhase, 2);
 }
 
+/// The start of a file that the game saved: the version, the species row and the two encrypted names. The player's
+/// creature (species row 0) names its creature file "C643e7b7f.erc"; a creature of no player (species row 2) names
+/// "Graeme". Both name the profile "abab".
+constexpr std::array<uint8_t, 34> k_GameSavedPlayersCreature = {
+    0x21, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x0E, 0x0B, 0xC1, 0x90, 0x7D, 0xB0, 0x4D, 0x1F, 0x99,
+    0x00, 0xD9, 0x20, 0xE7, 0xDA, 0x14, 0x0A, 0x29, 0x8B, 0xBE, 0x4A, 0xAC, 0x16, 0x1F, 0x62, 0x9A, 0xAB};
+constexpr std::array<uint8_t, 27> k_GameSavedOtherCreature = {0x21, 0x00, 0x00, 0x00, 0x02, 0x00, 0x00, 0x00, 0x07,
+                                                              0x0F, 0xFD, 0xBD, 0xAF, 0xB8, 0x7B, 0xBD, 0x0A, 0x29,
+                                                              0x8B, 0xBE, 0x4A, 0xAC, 0x16, 0x1F, 0x62, 0x9A, 0xAB};
+
+TEST(CreatureMindFile, TheNamesOfWhoSavedItAreWrittenAsTheGameWritesThem)
+{
+	creature_desires::Desires desires;
+	const auto learnt = creature_mind_model::Fresh(desires, std::vector<float>(328, 0.0f), {});
+
+	auto players = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 0);
+	creature_mind_model::SetSavedBy(players, "C643e7b7f.erc", u"abab");
+	const auto playersBytes = Write(players);
+	ASSERT_GE(playersBytes.size(), k_GameSavedPlayersCreature.size());
+	EXPECT_TRUE(std::equal(k_GameSavedPlayersCreature.begin(), k_GameSavedPlayersCreature.end(), playersBytes.begin()));
+
+	auto other = creature_mind_model::ToFile(desires, learnt, 2, 0.0f, 0, 2);
+	creature_mind_model::SetSavedBy(other, std::nullopt, u"abab");
+	const auto otherBytes = Write(other);
+	ASSERT_GE(otherBytes.size(), k_GameSavedOtherCreature.size());
+	EXPECT_TRUE(std::equal(k_GameSavedOtherCreature.begin(), k_GameSavedOtherCreature.end(), otherBytes.begin()));
+
+	MindFileData read;
+	ASSERT_EQ(Read(otherBytes, read), MindResult::Success);
+	EXPECT_EQ(read.SavedAsText(), "Graeme");
+	EXPECT_EQ(read.ProfileText(), u"abab");
+}
+
 /// Real creature saves are players' own files, not part of the project: this only runs on a folder of them given by
 /// OPENBLACK_CREATURE_SAVES
 TEST(CreatureMindFile, ReferenceSavesParseAndRoundTrip)

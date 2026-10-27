@@ -146,6 +146,15 @@ TEST_F(CameraPlace, AFlightNotStartedFliesFromThePlace)
 	EXPECT_LT(glm::distance(_camera.GetOrigin(), k_FarOrigin), 1e-2f);
 }
 
+// A flight that did not start yet and that is stopped does not start: the camera stays where it is put
+TEST_F(CameraPlace, AStoppedFlightDoesNotStart)
+{
+	_camera.GetModel().SetFlight(k_FarOrigin, k_FarFocus, openblack::camera_fly::k_BookmarkRise);
+	_camera.Place(k_PlacedOrigin, k_PlacedFocus);
+	_camera.GetModel().StopFlight();
+	ExpectItStaysPlaced(250);
+}
+
 // Put outside the world's ball during a flight, the camera moves back to the ball. Half a flight time later, the last
 // part of the flight starts.
 TEST_F(CameraPlace, AMoveBackIntoTheWorldStartsTheRestOfAFlight)

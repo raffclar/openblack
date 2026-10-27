@@ -1,0 +1,12 @@
+[
+{"event":{"kind":"pointer","position":[640,900],"timing":"mouse"},"frame":0},
+{"event":{"kind":"pointer","position":[644,546],"timing":"mouse"},"frame":104},
+{"event":{"button":3,"kind":"button_down","timing":"mouse"},"frame":106},
+{"event":{"button":3,"kind":"button_up","timing":"mouse"},"frame":107},
+{"event":{"kind":"pointer","position":[644,546],"timing":"mouse"},"frame":502},
+{"event":{"button":3,"kind":"button_down","timing":"mouse"},"frame":504},
+{"event":{"button":3,"kind":"button_up","timing":"mouse"},"frame":505},
+{"event":{"kind":"pointer","position":[644,546],"timing":"mouse"},"frame":903},
+{"event":{"button":3,"kind":"button_down","timing":"mouse"},"frame":905},
+{"event":{"button":3,"kind":"button_up","timing":"mouse"},"frame":906}
+]

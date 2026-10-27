@@ -81,24 +81,19 @@ std::optional<glm::vec3> creature_scars::BellyOf(entt::entity creature)
 
 void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 direction, uint8_t kind, uint8_t column)
 {
-	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value() ||
-	    !Locator::creatureSkinSystem::has_value())
+	if (!Locator::creatureSkinSystem::has_value())
 	{
 		return;
 	}
-	const auto& registry = Locator::entitiesRegistry::value();
-	const auto* mesh = registry.TryGet<const Mesh>(creature);
-	const auto* transform = registry.TryGet<const Transform>(creature);
-	auto& meshes = Locator::resources::value().GetMeshes();
-	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
+	if (const auto wound = WoundAlong(creature, from, direction, kind, column))
 	{
-		return;
+		Locator::creatureSkinSystem::value().AddWound(creature, *wound);
 	}
-	// The line meets the skin as the body is posed at the end of its newest game turn
-	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
-	// The unit direction adds the squares from z to x. A direction of no length stays as it is.
-	const auto unit = direction == glm::vec3(0.0f) ? direction : x87::Scaled<x87::SumOrder::Zyx>(direction);
-	const auto& model = *meshes.Handle(mesh->id);
+}
+
+std::vector<glm::mat4> creature_scars::TurnBones(const Registry& registry, entt::entity creature,
+                                                 const graphics::L3DMesh& model, const glm::mat4& placement)
+{
 	const auto drawn = posed_model::BonesOf(registry, creature, model);
 	std::vector<glm::mat4> bones(drawn.begin(), drawn.end());
 	if (const auto* animation = registry.TryGet<const CreatureAnimation>(creature);
@@ -106,15 +101,38 @@ void creature_scars::MarkAlong(entt::entity creature, glm::vec3 from, glm::vec3 
 	{
 		creature_turn_pose::ToMesh(animation->newerTurnPose, placement, bones);
 	}
+	return bones;
+}
+
+std::optional<openblack::creature_marks::Mark> creature_scars::WoundAlong(entt::entity creature, glm::vec3 from,
+                                                                          glm::vec3 direction, uint8_t kind, uint8_t column)
+{
+	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
+	{
+		return std::nullopt;
+	}
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* mesh = registry.TryGet<const Mesh>(creature);
+	const auto* transform = registry.TryGet<const Transform>(creature);
+	auto& meshes = Locator::resources::value().GetMeshes();
+	if (mesh == nullptr || transform == nullptr || !meshes.Contains(mesh->id))
+	{
+		return std::nullopt;
+	}
+	// The line meets the skin as the body is posed at the end of its newest game turn
+	const auto placement = creature::PlacementMatrix(transform->position, transform->rotation, transform->scale);
+	// The unit direction adds the squares from z to x. A direction of no length stays as it is.
+	const auto unit = direction == glm::vec3(0.0f) ? direction : x87::Scaled<x87::SumOrder::Zyx>(direction);
+	const auto& model = *meshes.Handle(mesh->id);
+	const auto bones = TurnBones(registry, creature, model, placement);
 	const auto hit = posed_model::NearestSkinHit(registry, creature, model, placement, bones, from, unit);
 	if (!hit.has_value())
 	{
-		return;
+		return std::nullopt;
 	}
 	const auto texel = creature_marks::scar::TexelAt(hit->uvs, hit->hit.s, hit->hit.t);
-	Locator::creatureSkinSystem::value().AddWound(
-	    creature,
-	    {.u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0, .type = kind, .column = column});
+	return creature_marks::Mark {
+	    .u = texel.x, .v = texel.y, .skin = static_cast<uint8_t>(hit->skin & 3u), .age = 0, .type = kind, .column = column};
 }
 
 void creature_scars::BurnOnCatching(entt::entity creature)
