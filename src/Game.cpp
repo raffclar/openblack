@@ -734,6 +734,7 @@ Game::Game(Arguments&& args) noexcept
 	config.numFramesToSimulate = args.numFramesToSimulate;
 	config.frameStatsInterval = args.frameStatsInterval;
 	config.frameStatsViews = args.frameStatsViews;
+	config.aiTimesEvery = args.aiTimesEvery;
 	config.warmUpFirstFrame = args.warmUpFirstFrame;
 	config.lobbyOrigin = args.lobbyOrigin;
 	config.lobbyTestAuthorities = args.lobbyTestAuthorities;
@@ -4484,6 +4485,10 @@ Game::RunStart Game::StartRun() noexcept
 	_frameCount = 0;
 	_frameLoop = std::make_unique<FrameLoop>();
 	_frameLoop->lastTime = std::chrono::high_resolution_clock::now();
+	if (config.aiTimesEvery > 0 && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetTimesReport(config.aiTimesEvery);
+	}
 	if (config.frameStatsInterval > 0)
 	{
 		_frameLoop->frameStats.emplace(config.frameStatsInterval, config.frameStatsViews,

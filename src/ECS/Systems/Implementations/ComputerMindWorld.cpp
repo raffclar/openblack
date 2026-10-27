@@ -14,6 +14,7 @@
 #include <cassert>
 
 #include <algorithm>
+#include <chrono>
 #include <optional>
 
 #include <spdlog/spdlog.h>
@@ -161,9 +162,14 @@ bool GameMindWorld::ActionBusy() const
 bool GameMindWorld::StepAction()
 {
 	// The god reports the place of its hand before the step, and its camera after it
+	const auto start = _timeHand ? std::chrono::steady_clock::now() : std::chrono::steady_clock::time_point {};
 	const auto hand = _state.hand.hand;
 	const bool ended = computer_hand::Process(_state.hand, _hand);
 	computer_world::ReportHand(_player, hand, _state.hand.camera);
+	if (_timeHand)
+	{
+		_handMs += std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+	}
 	return ended;
 }
 

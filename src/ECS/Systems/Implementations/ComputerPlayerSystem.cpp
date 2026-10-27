@@ -12,6 +12,7 @@
 #include "ComputerPlayerSystem.h"
 
 #include <algorithm>
+#include <chrono>
 #include <exception>
 #include <filesystem>
 #include <optional>
@@ -561,7 +562,21 @@ void ComputerPlayerSystem::ProcessTurn()
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	for (const auto& [name, entity] : players)
 	{
-		MindTurn(name, entity, turn);
+		if (_timesEvery == 0)
+		{
+			MindTurn(name, entity, turn);
+		}
+		else
+		{
+			_seeMs = 0.0;
+			_handMs = 0.0;
+			const auto start = std::chrono::steady_clock::now();
+			if (MindTurn(name, entity, turn))
+			{
+				const auto fullMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - start).count();
+				_times.Add(static_cast<int>(name), turn, _seeMs, _handMs, fullMs);
+			}
+		}
 		if (auto* power = registry.TryGet<PlayerInfluencePower>(entity); power != nullptr)
 		{
 			power->power =
@@ -569,15 +584,19 @@ void ComputerPlayerSystem::ProcessTurn()
 			power->average = player_relations::NextAverageInfluence(power->average, power->power);
 		}
 	}
+	if (_timesEvery != 0 && turn % _timesEvery == 0 && !_times.Gods().empty())
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "{}", _times.Report(turn));
+	}
 }
 
-void ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint32_t turn)
+bool ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint32_t turn)
 {
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* mind = registry.TryGet<ComputerPlayer>(entity);
 	if (mind == nullptr)
 	{
-		return;
+		return false;
 	}
 	if (mind->mind.nodes.empty())
 	{
@@ -586,7 +605,7 @@ void ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 	computer_world::Validate(*mind);
 	if (!mind->switchedOn || mind->mind.paused || computer_world::HeldByHelp(*mind))
 	{
-		return;
+		return false;
 	}
 	if (computer_player::DueToStart(*mind))
 	{
@@ -602,13 +621,21 @@ void ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint3
 		mind = registry.TryGet<ComputerPlayer>(entity);
 		if (mind == nullptr)
 		{
-			return;
+			return false;
 		}
 	}
+	const auto seeStart = std::chrono::steady_clock::now();
 	computer_world::SeeNearHand(*mind, turn);
+	if (_timesEvery != 0)
+	{
+		_seeMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - seeStart).count();
+	}
 	computer_world::CheckCreatureLeash(name);
 	computer_world::GameMindWorld world(name, *mind);
+	world.TimeHand(_timesEvery != 0);
 	computer_mind::ProcessTurn(mind->mind, world, turn);
+	_handMs = world.HandMs();
+	return true;
 }
 
 void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)

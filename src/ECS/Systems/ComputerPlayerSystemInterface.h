@@ -86,6 +86,8 @@ public:
 	/// as it starts. None: each god keeps its built-in personality. The seed is not part of the saved world: every
 	/// computer of a network game sets it before its land loads.
 	virtual void SetAiSeed(std::optional<uint32_t> seed) = 0;
+	/// Tools: log the time of the mind and the hand of each computer god each time this many turns go by (0 for never)
+	virtual void SetTimesReport(uint32_t /*everyTurns*/) {}
 };
 
 } // namespace openblack::ecs::systems
