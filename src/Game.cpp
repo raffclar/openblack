@@ -870,14 +870,9 @@ bool Game::ProcessEvents(const SDL_Event& event) noexcept
 	ecs::components::InterfaceLimits interfaceLimits {};
 	if (Locator::playerSystem::has_value())
 	{
-		const auto player = Locator::playerSystem::value().GetPlayer(LocalInputPlayer());
-		const auto& registry = Locator::entitiesRegistry::value();
-		if (const auto* limits =
-		        registry.Valid(player) ? registry.TryGet<const ecs::components::InterfaceLimits>(player) : nullptr;
-		    limits != nullptr)
-		{
-			interfaceLimits = *limits;
-		}
+		// In a network game the input can come before the first turn makes the player of this computer
+		interfaceLimits = script::interface_levels::LimitsOf(Locator::entitiesRegistry::value(),
+		                                                     Locator::playerSystem::value().FindPlayer(LocalInputPlayer()));
 	}
 	const bool mayHold = script::interface_levels::MayHold(interfaceLimits);
 	// Letting go of the Action button lets go of the tip bubble

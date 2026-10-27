@@ -36,7 +36,6 @@
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
 #include "Common/RandomNumberManager.h"
-#include "Common/UserData.h"
 #include "Debug/TestbedScenarioRunner.h"
 #include "ECS/ChallengePictures.h"
 #include "ECS/Components/Temple.h"
@@ -233,9 +232,14 @@ bool ServerWorld::Initialize()
 		_startMap = fileSystem.GetPath<filesystem::Path::Scripts>() / _startMap;
 	}
 
-	// The server plays as the profile of a tool's run, or as its own profile
-	const auto profiles = player_profiles::StoreFor(
-	    {.profileFolder = _settings.profileFolder, .userFolder = user_data::ProfileFolder(), .automated = true});
+	// The server plays as a profile in memory. No file holds it, and the server has no folder for saved games, so the
+	// server never saves a game and never keeps the data of a player.
+	const auto profiles = player_profiles::ServerStore();
+	if (_settings.profileFolder.has_value())
+	{
+		SPDLOG_LOGGER_WARN(spdlog::get("game"), "The server keeps no profile: the profile folder {} is not used",
+		                   _settings.profileFolder->generic_string());
+	}
 	if (!InitializeGame(profiles))
 	{
 		SPDLOG_LOGGER_CRITICAL(spdlog::get("game"), "Failed to initialize game services.");
@@ -330,12 +334,7 @@ bool ServerWorld::StartLand()
 	}
 	else
 	{
-		// A server with no profile plays as the profile that the game makes for a player who gives no name
-		auto& profiles = Locator::playerProfileSystem::value();
-		if (profiles.GetProfileCount() == 0)
-		{
-			profiles.CreateProfile(u"", 0);
-		}
+		// The server plays as the profile in memory, so it makes none
 		if (!land.LoadMap(_startMap, loading::LoadingClock::Mode::Tips, land_change::Kind::NewGame))
 		{
 			return false;

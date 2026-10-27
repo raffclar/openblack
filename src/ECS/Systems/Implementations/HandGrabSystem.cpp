@@ -270,8 +270,17 @@ bool HandGrabSystem::MayTake(entt::entity object) const
 	return hand_grab::PassesGate(GateOf(object));
 }
 
+bool HandGrabSystem::IsInInfluence() const
+{
+	// The interface of this computer asks about its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	return HandInInfluence();
+}
+
 std::string HandGrabSystem::WhyNotTake(entt::entity object) const
 {
+	// The interface of this computer asks about its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	if (!_world->Entities().Valid(object))
 	{
 		return "there is no such thing";
