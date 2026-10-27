@@ -23,6 +23,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/VirtualInfluence.h"
 #include "ComputerMindRuleTable.h"
+#include "ECS/AllyInfluence.h"
 #include "ECS/BuildingSites.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Influence.h"
@@ -286,7 +287,8 @@ float computer_world::PlacePull(const RuleContext& context, const map_coords::Ma
 		return 0.0f;
 	}
 	const auto& influence = Locator::influenceSystem::value();
-	if (influence.PlayerInfluence(context.player, place) > 0.0f)
+	// Inside its own influence, or the influence that an ally lends, the place pulls fully
+	if (ecs::ally_influence::InfluenceWithAllies(context.player, place) > 0.0f)
 	{
 		return 1.0f;
 	}

@@ -9,7 +9,11 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
+
+#include <entt/entity/entity.hpp>
 
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -44,6 +48,8 @@ public:
 	void MoveHand(PlayerNames player, glm::vec3 place, float speed, bool fixedHeight) override;
 	void SetHand(PlayerNames player, glm::vec3 place, bool fixedHeight) override;
 	[[nodiscard]] std::optional<glm::vec3> HandPosition(PlayerNames player) override;
+	void SetAttitude(PlayerNames player, PlayerNames other, float attitude) override;
+	[[nodiscard]] float Attitude(PlayerNames player, PlayerNames other) const override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;
@@ -56,6 +62,8 @@ private:
 	components::ComputerPlayer* FindMind(PlayerNames player);
 	/// A land script gives the hand of the god one step to a place, and holds the hand
 	void ScriptHandStep(PlayerNames player, computer_hand::StepKind kind, glm::vec3 place, float speed);
+	/// The turn of the mind of one player, when the player has a mind
+	void MindTurn(PlayerNames name, entt::entity entity, uint32_t turn);
 
 	std::unique_ptr<computer_player::World> _world;
 };
