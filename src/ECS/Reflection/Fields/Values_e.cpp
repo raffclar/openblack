@@ -344,9 +344,14 @@ void openblack::ecs::reflection::RegisterFields_Values_e(entt::meta_ctx& context
 	    .Field<&openblack::ecs::reward::DustSprite::offset>("offset")
 	    .Field<&openblack::ecs::reward::DustSprite::frame>("frame")
 	    .Field<&openblack::ecs::reward::DustSprite::rgb>("rgb");
+	Reflect<openblack::ecs::town_aggression::Harm>(context, ValueOnly {})
+	    .Field<&openblack::ecs::town_aggression::Harm::burn>("burn")
+	    .Field<&openblack::ecs::town_aggression::Harm::crush>("crush")
+	    .Field<&openblack::ecs::town_aggression::Harm::hit>("hit");
 	Reflect<openblack::ecs::town_aggression::Record>(context, ValueOnly {})
 	    .Field<&openblack::ecs::town_aggression::Record::aggression>("aggression", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurns>("lastTurns", {k_PlayerNamesNames})
+	    .Field<&openblack::ecs::town_aggression::Record::lastHarms>("lastHarms", {k_PlayerNamesNames})
 	    .Field<&openblack::ecs::town_aggression::Record::lastAggressor>("lastAggressor")
 	    .Field<&openblack::ecs::town_aggression::Record::lastTurn>("lastTurn")
 	    .Field<&openblack::ecs::town_aggression::Record::protectionMultiplier>("protectionMultiplier")
