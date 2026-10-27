@@ -30,6 +30,7 @@
 #include "3D/MapCoords.h"
 #include "Animals/AnimalMove.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Archetypes/VillagerArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/AnimatedStatic.h"
@@ -274,7 +275,7 @@ void FaceAngle(Walker& walker, uint16_t angle)
 	const float yAngle = gutils::ConvertGameAngleTo3D(wallHug.gameAngle);
 	const bool turned = yAngle != wallHug.yAngle;
 	wallHug.yAngle = yAngle;
-	walker.transform.rotation = glm::eulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
+	walker.transform.rotation = portable_math::EulerAngleY(-wallHug.yAngle - glm::radians(90.0f));
 	// A walker that turns comes out of its map cell and goes in again, at the front of the cell's list
 	if (turned)
 	{

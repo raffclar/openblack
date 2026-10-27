@@ -88,6 +88,10 @@ public:
 	virtual RegistryContext& Context();
 	[[nodiscard]] virtual const RegistryContext& Context() const;
 	virtual void Reset();
+	/// The next Reset gives the entities after it the ids of a new registry, and forgets the ids of the entities before
+	/// it. Every computer of a network game loads its land this way, so that the entities have the same ids on each,
+	/// whatever ran before the land.
+	void SetFreshIdsAtNextReset() noexcept { _freshIdsAtNextReset = true; }
 	template <typename Component>
 	size_t Size()
 	{
@@ -209,10 +213,13 @@ protected:
 private:
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
+	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
+	void LivingGone(entt::registry& registry, entt::entity living);
 
 	uint32_t _entitiesMade {0};
 	uint64_t _entitiesGone {0};
 	entt::sigh<void(entt::entity)> _destroying;
+	bool _freshIdsAtNextReset {false};
 };
 
 } // namespace openblack::ecs

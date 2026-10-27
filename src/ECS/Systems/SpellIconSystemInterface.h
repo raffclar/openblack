@@ -43,6 +43,9 @@ public:
 	virtual void CentreWorking(entt::entity centre) = 0;
 	/// A town has changed hands: what it offers goes from its old player to its new one
 	virtual void TownChangedHands(entt::entity town, PlayerNames previous) = 0;
+	/// A player's entity is made after the land made its towns, as a god that joins a network game: the player may cast
+	/// what each of its towns offers, as if the player had been there when the towns were made
+	virtual void PlayerMade(PlayerNames /*player*/) {}
 	/// A town comes to worship at a site: the site gets an icon for each miracle the town's hands show that it has none of
 	virtual void TownJoinedSite(entt::entity site, entt::entity town) = 0;
 	/// A town no longer worships at a site: the site's icons of the miracles none of its other towns offer go
@@ -55,10 +58,33 @@ public:
 	[[nodiscard]] virtual bool ValidToTap(entt::entity icon, PlayerNames player) const = 0;
 	/// The hand taps an icon: whether the tap counted
 	virtual bool Tap(entt::entity icon, PlayerNames player) = 0;
+	/// A computer god's hand makes the worshippers of an icon's site chant for its miracle. The icon must not charge,
+	/// no hand may hold its seed, the god must be able to cast the miracle, and the site must have prayer power to give
+	/// or the icon some stored. Whether the charge started.
+	virtual bool StartChargeForGod(entt::entity /*icon*/, PlayerNames /*player*/) { return false; }
+	/// The prayer power that an icon's miracle still needs to be charged full
+	[[nodiscard]] virtual float ChantNeeded(entt::entity /*icon*/) const { return 0.0f; }
+	/// A god cast the miracle of an icon: the icon's store loses the miracle's cost, never more than it holds
+	virtual void TakeCastCharge(entt::entity /*icon*/) {}
 	/// Whether a player has an icon for a seed at any of their worship sites
 	[[nodiscard]] virtual bool HasIconFor(PlayerNames player, SpellSeedType seed) const = 0;
 	/// Whether something is an icon or a stone hand
 	[[nodiscard]] virtual bool IsIcon(entt::entity entity) const = 0;
+
+	/// Whether the hand of a player has space for a miracle now: only the hand at this machine, while it holds nothing
+	[[nodiscard]] virtual bool IsHandReady(PlayerNames player) const = 0;
+	/// The seeds of the icons at a player's worship sites that a gesture may ask for, of the miracles whose chain of
+	/// gestures in the miracle selection starts with a gesture
+	[[nodiscard]] virtual std::vector<SpellSeedType> SeedsForSelection(PlayerNames player, GestureType opening) const = 0;
+	/// Whether a gesture may ask an icon of a seed at one of a player's worship sites for its miracle
+	[[nodiscard]] virtual bool ValidForRequest(PlayerNames player, SpellSeedType seed) const = 0;
+	/// A gesture asks for the miracle of a seed. Of the player's icons of the seed that may give it, the icon at the
+	/// site with the most prayer power left this turn gives it: the miracle goes into the hand when it is charged, else
+	/// the icon starts to charge it. Whether an icon did something.
+	virtual bool RequestSeed(PlayerNames player, SpellSeedType seed) = 0;
+	/// The seed of the last miracle that went into a player's hand, none before the first one: the R gesture and the R
+	/// key ask for it again
+	[[nodiscard]] virtual SpellSeedType LastSeedGained(PlayerNames player) const = 0;
 	/// The charge that a worship site's icon shows after the name of its miracle, in percent. None for a thing that is
 	/// not such an icon, and for an icon whose charge is zero.
 	[[nodiscard]] virtual std::optional<float> ShownCharge(entt::entity icon) const = 0;

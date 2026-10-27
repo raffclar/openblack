@@ -30,6 +30,7 @@
 #include "3D/TempleInteriorInterface.h"
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
+#include "Blast/RootsPile.h"
 #include "Camera/Camera.h"
 #include "Common/GameRandom.h"
 #include "Common/X87Angle.h"
@@ -44,6 +45,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/FishFarm.h"
 #include "ECS/Components/Flock.h"
+#include "ECS/Components/GodHand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/Indestructible.h"
 #include "ECS/Components/LivingAction.h"
@@ -54,6 +56,7 @@
 #include "ECS/Components/Physics.h"
 #include "ECS/Components/Player.h"
 #include "ECS/Components/Pot.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/Reward.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/ScriptHighlight.h"
@@ -105,6 +108,7 @@
 #include "ECS/Systems/RewardSystemInterface.h"
 #include "ECS/Systems/ScriptHighlightSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/VillagerAge.h"
 #include "ECS/VillagerMemory.h"
 #include "ECS/WorldObjects.h"
@@ -132,9 +136,6 @@ using namespace openblack::ecs::systems;
 
 namespace
 {
-/// A pulled-up tree's hole of roots is this share of its width across
-constexpr float k_RootsHoleShare = 0.3f;
-
 /// The particles of a handful poured out of the hand: food and wood
 constexpr auto k_PourFood = ParticleType::FoodPutdown;
 constexpr auto k_PourWood = ParticleType::WoodPutdown;
@@ -180,12 +181,41 @@ entt::entity GameHandGrabWorld::Hand() const
 	{
 		return entt::null;
 	}
-	return Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	const auto& hands = Locator::handSystem::value();
+	constexpr auto k_Left = static_cast<size_t>(HandSystemInterface::Side::Left);
+	// A command acts with its player's hand, which a player of a network game has from the first turn
+	if (_acting.has_value())
+	{
+		const auto acting = hands.GetHandsOf(*_acting);
+		return acting.has_value() ? (*acting)[k_Left] : entt::null;
+	}
+	// With no acting player the turn acts with the first player's hand. The turn does the first player's hand first, and
+	// then each other god's hand as its acting player. The input, the frames and the questions of this computer set
+	// its own player as the acting player.
+	return hands.GetPlayerHands()[k_Left];
+}
+
+bool GameHandGrabWorld::IsNetworkGame() const
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
+std::optional<PlayerNames> GameHandGrabWorld::OwnHandPlayer() const
+{
+	if (!Locator::handSystem::has_value() || Locator::handSystem::value().GetOwnPlayer() == PlayerNames::PLAYER_ONE)
+	{
+		return std::nullopt;
+	}
+	return Locator::handSystem::value().GetOwnPlayer();
 }
 
 PlayerNames GameHandGrabWorld::HandPlayer() const
 {
-	// The hands on the screen are the local player's
+	if (_acting.has_value())
+	{
+		return *_acting;
+	}
+	// The first hands are the local player's
 	return Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 }
 
@@ -559,7 +589,8 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 	{
 		return;
 	}
-	auto* data = Entities().TryGet<Player>(Locator::playerSystem::value().GetPlayer(player));
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	auto* data = entity.has_value() && Entities().Valid(*entity) ? Entities().TryGet<Player>(*entity) : nullptr;
 	if (data == nullptr)
 	{
 		return;
@@ -572,7 +603,12 @@ void GameHandGrabWorld::GlobeIntoHand(entt::entity globe, PlayerNames player)
 
 bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player)
 {
-	const bool ownHand = !Locator::playerSystem::has_value() || Locator::playerSystem::value().GetLocalPlayer() == player;
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "The hand of player {} taps thing {}", static_cast<int>(player), entt::to_integral(object));
+	}
+	// The game server and an observer have no hand of their own
+	const bool ownHand = !Locator::handSystem::has_value() || Locator::handSystem::value().IsOwnPlayer(player);
 	// The help counts each tap of this computer's hand on a thing that takes the tap, before the thing answers it
 	const auto countTap = [ownHand]() {
 		if (ownHand && Locator::helpProfileSystem::has_value())
@@ -596,12 +632,15 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 		return Locator::abodeKnockSystem::value().Tap(object, handPoint, ownHand);
 	}
 	// A temple's entrance takes the player of this computer into their own temple. The held leash takes the tap first.
+	// The game server and the other computers play the tap, but stay out of the temple.
 	if (const auto* entrance = Entities().TryGet<const TempleEntrance>(object); entrance != nullptr)
 	{
 		const auto* heart = Entities().Valid(entrance->temple) ? Entities().TryGet<const Temple>(entrance->temple) : nullptr;
 		const auto tap = openblack::temple::TapEntrance({
 		    .scriptLetsTap = Entities().Context().scriptLetsTempleBeEntered,
-		    .ownTemple = ownHand && heart != nullptr && heart->owner == player,
+		    .networkGame = IsNetworkGame(),
+		    .ownTemple = heart != nullptr && heart->owner == player,
+		    .byThisComputer = ownHand,
 		    .leashHeld = LeashTakesTap(object, player),
 		});
 		if (tap.tapped)
@@ -628,7 +667,7 @@ bool GameHandGrabWorld::TapThing(entt::entity object, glm::vec3 handPoint, Playe
 	if (Entities().AllOf<OneOffSpellSeed>(object) && Locator::magicSystem::has_value())
 	{
 		countTap();
-		return Locator::magicSystem::value().TapGlobe(object);
+		return Locator::magicSystem::value().TapGlobe(object, player);
 	}
 	// A reward chest is opened by its player's tap, until it is open
 	if (const auto* reward = Entities().TryGet<const Reward>(object); reward != nullptr && Locator::rewardSystem::has_value())
@@ -666,7 +705,7 @@ std::optional<creature_giving::Verdict> GameHandGrabWorld::GiveVerdict(entt::ent
 	// holds a miracle's seed as a thing (seeds are held by the miracles), so no seed is ever offered this way.
 	const auto giver = HandPlayer();
 	const bool heldByHand =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature() == target;
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(giver) == target;
 	return creature_giving::MayGive({
 	    .creatureHasPlayer = true,
 	    .giverHasPlayer = true,
@@ -695,7 +734,7 @@ bool GameHandGrabWorld::GiveTo(entt::entity creature, entt::entity held, bool le
 	{
 		return false;
 	}
-	const auto camera = openblack::ecs::ReportedPlayerCamera();
+	const auto camera = openblack::ecs::ReportedPlayerCamera(HandPlayer());
 	const auto eye = camera.has_value() ? camera->origin : glm::vec3(0.0f);
 	return Locator::creatureMindSystem::value().TakeFromHand(creature, held, leftHand, glm::vec2(eye.x, eye.z));
 }
@@ -776,20 +815,15 @@ void GameHandGrabWorld::RemakeDrawList(uint32_t frames)
 	}
 }
 
-void GameHandGrabWorld::LeaveRootsHole(entt::entity tree)
+void GameHandGrabWorld::LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale)
 {
-	auto& registry = Locator::entitiesRegistry::value();
-	const auto* transform = registry.TryGet<const Transform>(tree);
-	const auto* mesh = MeshOf(registry, tree);
-	if (transform == nullptr || mesh == nullptr || !Locator::explosionSystem::has_value())
+	const auto* mesh = MeshOf(Locator::entitiesRegistry::value(), tree);
+	if (mesh == nullptr || !Locator::explosionSystem::has_value())
 	{
 		return;
 	}
-	// The hole is as wide as the tree's model is wide and deep, a share of it, and turned as the tree was
 	const auto half = mesh->GetBoundingBox().Size() * 0.5f;
-	const float scale = (half.x + half.z) * transform->scale.x * k_RootsHoleShare;
-	const float yaw = std::atan2(-transform->rotation[0].z, transform->rotation[0].x);
-	Locator::explosionSystem::value().AddRubble(transform->position, yaw, scale);
+	Locator::explosionSystem::value().AddRubble(place, rotation, roots_pile::TreeHoleScale(half, scale));
 }
 
 void GameHandGrabWorld::RemovePotReaction(entt::entity pot)
@@ -831,8 +865,72 @@ glm::vec3 GameHandGrabWorld::ReportedHandPlace() const
 	{
 		return glm::vec3(0.0f);
 	}
-	return Locator::handSystem::value().GetPlayerHandPositions()[static_cast<size_t>(HandSystemInterface::Side::Left)].value_or(
-	    glm::vec3(0.0f));
+	return ReportedPlaceOf(Hand());
+}
+
+glm::vec3 GameHandGrabWorld::ReportedPlaceOf(entt::entity hand) const
+{
+	// Where the last report of the hand's player put the hand
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? reported->handPoint : glm::vec3(0.0f);
+}
+
+bool GameHandGrabWorld::IsOtherPlayersHand(entt::entity hand) const
+{
+	// Only a network game, or a testbed scenario that acts as one, gives hands to the other gods
+	if (!Locator::handSystem::has_value())
+	{
+		return false;
+	}
+	// The hands of the first player have no god's mark
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	const auto player = god != nullptr ? god->player : PlayerNames::PLAYER_ONE;
+	return player != Locator::handSystem::value().GetOwnPlayer();
+}
+
+std::optional<PlayerNames> GameHandGrabWorld::PlayerOfHand(entt::entity hand) const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* god = registry.Valid(hand) ? registry.TryGet<const GodHand>(hand) : nullptr;
+	return god != nullptr ? std::optional(god->player) : std::nullopt;
+}
+
+std::optional<glm::vec3> GameHandGrabWorld::ReportedCollidePoint() const
+{
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto hand = Hand();
+	const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr;
+	return reported != nullptr ? std::optional(reported->collidePoint) : std::nullopt;
+}
+
+glm::vec3 GameHandGrabWorld::AsMapPlace(glm::vec3 point) const
+{
+	if (!Locator::terrainSystem::has_value())
+	{
+		return point;
+	}
+	const auto& island = Locator::terrainSystem::value();
+	return map_coords::ToWorld(island, map_coords::FromWorld(island, point));
+}
+
+std::vector<PlayerNames> GameHandGrabWorld::OtherHandPlayers() const
+{
+	std::vector<PlayerNames> players;
+	if (!Locator::handSystem::has_value())
+	{
+		return players;
+	}
+	const auto& hands = Locator::handSystem::value();
+	for (size_t i = 1; i < static_cast<size_t>(PlayerNames::_COUNT); ++i)
+	{
+		if (hands.GetHandsOf(static_cast<PlayerNames>(i)).has_value())
+		{
+			players.push_back(static_cast<PlayerNames>(i));
+		}
+	}
+	return players;
 }
 
 hand_grab::HandGrabWorldInterface::Pose GameHandGrabWorld::PoseOf(entt::entity object) const
@@ -865,6 +963,34 @@ void GameHandGrabWorld::SetPose(entt::entity object, const Pose& pose)
 	}
 	transform->position = pose.origin;
 	Locator::entitiesRegistry::value().SetDirty();
+}
+
+void GameHandGrabWorld::DrawPulledPose(entt::entity object, const Pose& pose)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (!registry.Valid(object) || !registry.AllOf<Transform>(object))
+	{
+		return;
+	}
+	HandPulled pulled {.position = pose.origin, .rotation = glm::mat3(1.0f), .scale = glm::vec3(1.0f)};
+	for (glm::length_t column = 0; column < 3; ++column)
+	{
+		const float length = glm::length(pose.axes[column]);
+		pulled.rotation[column] = length > 0.0f ? pose.axes[column] / length : pose.axes[column];
+		pulled.scale[column] = length;
+	}
+	registry.AssignOrReplace<HandPulled>(object, pulled);
+	registry.SetDirty();
+}
+
+void GameHandGrabWorld::ForgetPulledPose(entt::entity object)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	if (registry.Valid(object) && registry.AllOf<HandPulled>(object))
+	{
+		registry.Remove<HandPulled>(object);
+		registry.SetDirty();
+	}
 }
 
 glm::mat3 GameHandGrabWorld::UnstretchedAxes(entt::entity object, const glm::mat3& axes) const
@@ -1285,8 +1411,9 @@ bool GameHandGrabWorld::PlayerHasNoWindResistance(PlayerNames player) const
 	{
 		return false;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
-	const auto* data = Locator::entitiesRegistry::value().TryGet<const Player>(entity);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player);
+	const auto& registry = Locator::entitiesRegistry::value();
+	const auto* data = entity.has_value() && registry.Valid(*entity) ? registry.TryGet<const Player>(*entity) : nullptr;
 	return data != nullptr && data->windResistance != 0;
 }
 

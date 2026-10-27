@@ -21,6 +21,7 @@
 
 #include "3D/L3DMesh.h"
 #include "3D/L3DSubMesh.h"
+#include "Common/PortableMath.h"
 #include "Gui/GameFont.h"
 #include "Gui/TextDatabase.h"
 #include "Locator.h"
@@ -166,7 +167,7 @@ void TempleSigns::Append(std::vector<OrientedTextVertex>& vertices, TempleRoom r
 	}
 	// The highlighted label's grey, a second round
 	const auto phase = static_cast<float>(milliseconds & 0x3FFu) * (2.0f * std::numbers::pi_v<float> / 1024.0f);
-	const auto grey = static_cast<uint8_t>(std::sin(phase) * 24.0f + 230.0f);
+	const auto grey = static_cast<uint8_t>(portable_math::Sin(phase) * 24.0f + 230.0f);
 	const float size = rooms->size * 2.1f;
 	const float stretch = rooms->stretch * 0.9f;
 	size_t index = 0;

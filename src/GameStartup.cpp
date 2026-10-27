@@ -391,6 +391,7 @@ void Game::PlayStartupScreens()
 	{
 		return;
 	}
+	_loadingScreen->SetBuild(_buildVersion.Short());
 	if (!_skipLogos)
 	{
 		PlayLogoScreens();

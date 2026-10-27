@@ -85,8 +85,8 @@ private:
 	/// Just before an entity goes from the registry
 	void OnDestroying(entt::entity entity);
 
-	/// Files the things made since the last look, in the order they were made
-	void FileMade() const;
+	/// Files the things made since the last look, in the order they were made. The lookups do it before they look.
+	void FileMadeBeforeLook() const;
 	/// Gives the lists the land's blocks, before anything goes on them
 	void KnowLandBlocks() const;
 	void File(entt::entity entity, const Kind& kind) const;

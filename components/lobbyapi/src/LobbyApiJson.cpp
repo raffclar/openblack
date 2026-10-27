@@ -423,7 +423,8 @@ std::optional<Session> ParseSession(std::string_view text)
 		}
 		return ReadString(object, "access_token", out.accessToken) && !out.accessToken.empty() &&
 		       ReadTime(object, "access_token_expires", out.accessTokenExpires) &&
-		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false);
+		       ReadTime(object, "refresh_token_expires", out.refreshTokenExpires, false) &&
+		       ReadBool(object, "email_required", out.emailRequired, false);
 	});
 }
 
@@ -449,7 +450,7 @@ std::optional<JoinTicket> ParseJoinTicket(std::string_view text)
 {
 	return ParseWith<JoinTicket>(text, [](const Json& object, JoinTicket& out) {
 		return ReadString(object, "url", out.url) && ReadString(object, "ticket", out.ticket) && !out.ticket.empty() &&
-		       ReadTime(object, "expires", out.expires);
+		       ReadTime(object, "expires", out.expires) && ReadString(object, "role", out.role, false);
 	});
 }
 
@@ -510,6 +511,36 @@ std::string ToJson(const UseClanRequest& request)
 	auto object = Json::object();
 	object["clan"] = request.clan.has_value() ? Json(*request.clan) : Json(nullptr);
 	return Dump(object);
+}
+
+std::string ToJson(const TicketRequest& request)
+{
+	auto object = Json::object();
+	object["role"] = request.role;
+	return Dump(object);
+}
+
+std::string ToJson(const ServerStatus& status)
+{
+	auto players = Json::array();
+	for (const auto& player : status.players)
+	{
+		players.push_back(Json {
+		    {"account", player.account},
+		    {"role", player.role},
+		    {"clan", player.clan.has_value() ? Json(*player.clan) : Json(nullptr)},
+		});
+	}
+	return Dump(Json {
+	    {"hostname", status.hostname},
+	    {"land", status.land},
+	    {"gamemode", status.gamemode},
+	    {"locked", status.locked},
+	    {"password", status.password},
+	    {"maxplayers", status.maxplayers},
+	    {"gamever", status.gamever},
+	    {"players", players},
+	});
 }
 
 std::optional<AccountNameCheck> ParseAccountNameCheck(std::string_view text)
@@ -582,6 +613,15 @@ std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data)
 		}
 		out.clan = std::move(ref);
 		return true;
+	});
+}
+
+std::optional<ServerBanned> ParseServerBanned(std::string_view data)
+{
+	return ParseWith<ServerBanned>(data, [](const Json& object, ServerBanned& out) {
+		const auto* server = Member(object, "server");
+		return server != nullptr && server->is_object() && ReadString(*server, "id", out.server) &&
+		       ReadString(*server, "name", out.name, false) && ReadString(object, "reason", out.reason, false);
 	});
 }
 

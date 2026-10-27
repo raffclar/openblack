@@ -20,6 +20,7 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "Help/Spirits.h"
 #include "Locator.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 namespace openblack::temple_help
 {
@@ -30,9 +31,7 @@ void GameScripts::Start(std::string_view name)
 	{
 		return;
 	}
-	// The kinds of script a single player game starts by name
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
-	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	Locator::vm::value().StartScript(std::string(name), script::start::StartableScripts());
 }
 
 void GameScripts::StopHelp()

@@ -9,10 +9,10 @@
 
 #include "LivingFacing.h"
 
-#include <glm/gtx/euler_angles.hpp>
 #include <glm/trigonometric.hpp>
 
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Registry.h"
@@ -37,7 +37,7 @@ void Turn(Registry& registry, entt::entity walker, float yAngle, components::Wal
 	{
 		walk->yAngle = yAngle;
 	}
-	transform->rotation = glm::eulerAngleY(-yAngle - glm::radians(90.0f));
+	transform->rotation = portable_math::EulerAngleY(-yAngle - glm::radians(90.0f));
 	registry.SetDirty();
 	if (turned)
 	{

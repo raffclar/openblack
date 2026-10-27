@@ -125,7 +125,7 @@ enum class ScriptType : uint32_t
 	ChallengeHelp = 1 << 2,
 	TempleHelp = 1 << 3,
 	TempleSpecial = 1 << 4,
-	Unknown5 = 1 << 5,
+	Multiplayer = 1 << 5,
 	MultiplayerHelp = 1 << 6,
 
 	All = 0xFFFFFFFF
@@ -152,6 +152,7 @@ static const std::map<ScriptType, std::string> k_ScriptTypeNames = {
     {ScriptType::ChallengeHelp, "challenge help script"},
     {ScriptType::TempleHelp, "temple help script"},
     {ScriptType::TempleSpecial, "temple special script"},
+    {ScriptType::Multiplayer, "multiplayer script"},
     {ScriptType::MultiplayerHelp, "multiplayer help script"},
 };
 

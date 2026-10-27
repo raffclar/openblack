@@ -19,6 +19,7 @@
 #include <glm/gtx/vec_swizzle.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/MagicShield.h"
 #include "ECS/Components/TownDesire.h"
@@ -51,14 +52,14 @@ constexpr size_t k_ForProtection = 3;
 float FacingOf(const Transform& transform)
 {
 	const auto x = transform.rotation * glm::vec3(1.0f, 0.0f, 0.0f);
-	return -std::atan2(-x.z, x.x) - glm::radians(90.0f);
+	return -portable_math::Atan2(-x.z, x.x) - glm::radians(90.0f);
 }
 
 /// Turns a villager towards a point by at most its turn a game turn; whether it faces it
 bool LookAtPos(entt::entity villager, const Transform& transform, glm::vec2 point)
 {
 	const auto towards = point - glm::xz(transform.position);
-	const float target = std::atan2(towards.y, towards.x);
+	const float target = portable_math::Atan2(towards.y, towards.x);
 	const float step = shield::k_LookTurnPerTurn * k_TwoPi;
 	const float facing = FacingOf(transform);
 	const float diff = std::remainder(target - facing, k_TwoPi);

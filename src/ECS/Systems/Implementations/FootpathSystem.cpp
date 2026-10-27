@@ -64,15 +64,6 @@ namespace obstacles = openblack::creature_obstacles;
 namespace planning = openblack::ecs::footpath_planning;
 namespace obstacle_rules = openblack::ecs::footpath_obstacles;
 
-/// The search for a path's way and what it goes round, kept from turn to turn while the path is found
-struct components::FootpathFinder::Plan
-{
-	route::Obstacles obstacles;
-	std::optional<route::Search> search;
-	glm::vec2 start {0.0f};
-	glm::vec2 goal {0.0f};
-};
-
 namespace
 {
 
@@ -180,16 +171,22 @@ route::Obstacles::Gatherer Gatherer()
 	};
 }
 
-std::shared_ptr<FootpathFinder::Plan> StartPlan(glm::vec2 start, glm::vec2 goal)
+/// Lets the obstacles of a plan fill each block that the search reaches, and leave out the circles that hold either end
+void MakeLive(FootpathFinder::Plan& plan)
 {
-	auto plan = std::make_shared<FootpathFinder::Plan>();
-	plan->start = start;
-	plan->goal = goal;
-	plan->obstacles.ResetWithoutWalker(k_RouteMargin, Gatherer());
+	plan.obstacles.SetGatherer(Gatherer());
 	// Nothing that holds either end is gone round
-	plan->obstacles.LeaveOutCirclesHolding(goal, start);
-	plan->search.emplace(plan->obstacles, route::Search::Start {.point = start},
-	                     route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
+	plan.obstacles.LeaveOutCirclesHolding(plan.goal, plan.start);
+	plan.live = true;
+}
+
+FootpathFinder::Plan StartPlan(glm::vec2 start, glm::vec2 goal)
+{
+	FootpathFinder::Plan plan {.obstacles = {}, .search = std::nullopt, .start = start, .goal = goal, .live = false};
+	plan.obstacles.ResetWithoutWalker(k_RouteMargin);
+	MakeLive(plan);
+	plan.search.emplace(plan.obstacles, route::Search::Start {.point = start},
+	                    route::Search::Goal {.point = goal, .mostCost = planning::MostCost(start, goal)});
 	return plan;
 }
 
@@ -489,8 +486,8 @@ void FootpathSystem::DanceMade(entt::entity dance, entt::entity town)
 	// The path is planned from the dance to the pit, and laid at once
 	const auto [start, goal] = PlannedEnds(dance, *pit);
 	auto plan = StartPlan(start, goal);
-	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	const auto route = RouteOf(*plan);
+	StepPlan(plan, planning::k_MostStepsAtOnce);
+	const auto route = RouteOf(plan);
 	if (!route.has_value())
 	{
 		return;
@@ -706,14 +703,32 @@ void FootpathSystem::CatchUpWithMap()
 
 void FootpathSystem::ProcessTurn()
 {
-	ProcessObstacleChanges();
 	auto& registry = Entities();
+	// A search that a load brought back continues. After the load of a saved game, the search starts again from its two
+	// ends, as the game does when it loads a path that it still looks for.
+	for (auto&& [entity, finder] : registry.Underlying().view<FootpathFinder>().each())
+	{
+		if (!finder.plan.has_value())
+		{
+			if (registry.Valid(finder.from) && registry.Valid(finder.to))
+			{
+				const auto [start, goal] = PlannedEnds(finder.from, finder.to);
+				finder.plan = StartPlan(start, goal);
+			}
+		}
+		else if (!finder.plan->live)
+		{
+			MakeLive(*finder.plan);
+		}
+	}
+	ProcessObstacleChanges();
 	// The finders in the order of the game's list, the newest first
 	for (const auto entity : ecs::list_order::Walk<FootpathFinder>(registry))
 	{
 		auto& finder = registry.Get<FootpathFinder>(entity);
-		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath);
-		const auto status = finder.plan->search->GetStatus();
+		const bool alive = registry.Valid(finder.from) && registry.Valid(finder.to) && registry.Valid(finder.footpath) &&
+		                   finder.plan.has_value();
+		const auto status = alive ? finder.plan->search->GetStatus() : route::Search::Status::Failed;
 		if (alive && status == route::Search::Status::Searching)
 		{
 			StepPlan(*finder.plan, planning::k_StepsPerTurn);
@@ -737,6 +752,6 @@ void FootpathSystem::ProcessTurn()
 std::optional<std::vector<glm::ivec2>> FootpathSystem::PlanBetween(glm::ivec2 from, glm::ivec2 to) const
 {
 	auto plan = StartPlan(planning::ToPoint(from), planning::ToPoint(to));
-	StepPlan(*plan, planning::k_MostStepsAtOnce);
-	return RouteOf(*plan);
+	StepPlan(plan, planning::k_MostStepsAtOnce);
+	return RouteOf(plan);
 }

@@ -34,6 +34,7 @@
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/Dance.h"
 #include "ECS/Components/Disciple.h"
 #include "ECS/Components/Fire.h"
@@ -43,6 +44,7 @@
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/MiracleImpression.h"
 #include "ECS/Components/Player.h"
+#include "ECS/Components/ReportedHand.h"
 #include "ECS/Components/ScriptControl.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/TownDesire.h"
@@ -197,7 +199,7 @@ bool TurnTowards(entt::entity villager, const glm::vec3& point, float step = k_W
 	{
 		return true;
 	}
-	const float wanted = std::atan2(diff.y, diff.x);
+	const float wanted = portable_math::Atan2(diff.y, diff.x);
 	float turn = std::remainder(wanted - wallHug.yAngle, 2.0f * std::numbers::pi_v<float>);
 	const bool faces = std::abs(turn) < step;
 	if (!faces)
@@ -272,15 +274,16 @@ void BeliefVoiceOf(entt::entity source, entt::entity town, PlayerNames player, G
 	{
 		return;
 	}
-	// Heard near enough the hand, and not straight after the guidance has spoken
+	// Heard near enough the hand of this computer, and not straight after the guidance has spoken. The distance is from
+	// the point under the cursor that the last report of the hand gave.
 	const auto& at = registry.Get<const Transform>(source).position;
 	float distance = k_VoiceReach;
 	if (Locator::handSystem::has_value())
 	{
-		const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
-		if (const auto* handAt = registry.Valid(hand) ? registry.TryGet<const Transform>(hand) : nullptr)
+		const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+		if (const auto* reported = registry.Valid(hand) ? registry.TryGet<const ReportedHand>(hand) : nullptr)
 		{
-			distance = glm::distance(glm::xz(handAt->position), glm::xz(at));
+			distance = gutils::GetDistanceInMetres(reported->collidePoint, at);
 		}
 	}
 	const float away = std::min(distance / k_VoiceReach, 1.0f);

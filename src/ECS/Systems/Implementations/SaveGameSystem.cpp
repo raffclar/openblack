@@ -51,6 +51,7 @@
 #include "3D/LandIslandInterface.h"
 #include "3D/MapCoords.h"
 #include "Common/PlayerProfiles.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureMindFileBody.h"
 #include "Creature/CreatureSaveState.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -74,6 +75,7 @@
 #include "ECS/CreatureBodyFile.h"
 #include "ECS/Reflection/ComponentReflection.h"
 #include "ECS/Registry.h"
+#include "ECS/SaveDateLabel.h"
 #include "ECS/SaveGameFiles.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
@@ -181,14 +183,12 @@ std::u16string DateNow()
 	}
 #endif
 	const auto now = std::chrono::floor<std::chrono::seconds>(std::chrono::system_clock::now());
-#if defined(__EMSCRIPTEN__)
-	// The C++ library of the web build has no time zone data. The C library gives the local time of the browser.
+#if defined(__EMSCRIPTEN__) || defined(__APPLE__)
+	// The C++ library of the web build and of Apple has no time zone data. The C library gives the local time.
 	const std::time_t seconds = std::chrono::system_clock::to_time_t(now);
 	std::tm local {};
 	localtime_r(&seconds, &local);
-	std::array<char, 128> text {};
-	const auto length = std::strftime(text.data(), text.size(), "%H:%M:%S %A, %d %B %Y", &local);
-	return gui::ToUtf16(std::string(text.data(), length));
+	return gui::ToUtf16(ecs::save_date::FormatLabel(local));
 #else
 	try
 	{
@@ -291,7 +291,7 @@ ecs::save_files::SaveStep ChallengePictureCopyStep(std::filesystem::path from, s
 /// The heading of a thing that its turn about the vertical gives
 float HeadingOf(const glm::mat3& rotation)
 {
-	return std::atan2(rotation[2][0], rotation[2][2]);
+	return portable_math::Atan2(rotation[2][0], rotation[2][2]);
 }
 
 /// The creatures in the order that the game made them, which names their mind files
@@ -504,8 +504,8 @@ gamesave::SavedCreature Capture(ecs::Registry& registry, entt::entity entity, ui
 			kept.type = save_state::LeashTypeNumber(worn.type);
 			kept.player = save_state::PlayerNumber(worn.holder);
 			kept.tiedTo = save_state::ToRef(worn.tiedTo);
-			kept.length = worn.rope.slackLength;
-			kept.fullLength = worn.rope.maxLength;
+			kept.length = worn.slackLength;
+			kept.fullLength = worn.maxLength;
 			// The turn that the leash was last tied
 			kept.word34 = worn.tiedTurn;
 		}
@@ -600,7 +600,7 @@ void Restore(ecs::Registry& registry, entt::entity entity, const gamesave::Saved
 	if (auto* transform = registry.TryGet<Transform>(entity))
 	{
 		transform->position = WorldPosition(object.position.position);
-		transform->rotation = glm::eulerAngleY(saved.heading);
+		transform->rotation = portable_math::EulerAngleY(saved.heading);
 		// It keeps the exact map position of the save, which its metres cannot keep far from the corner of the map
 		ecs::thing_map_place::Keep(registry, entity,
 		                           {.x = object.position.position.x, .z = object.position.position.z, .altitude = 0.0f});
@@ -1242,6 +1242,61 @@ bool SaveGameSystem::Load(uint32_t slot)
 	return restored > 0;
 }
 
+std::vector<uint8_t> SaveGameSystem::WorldState()
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	gamesave::WorldFile world;
+	gamesave::GameChunk game {.land = LandNumber(),
+	                          .turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0u,
+	                          .landscape = {},
+	                          .knownLeashes = 0,
+	                          .creatureInTemple = 0,
+	                          .lastAutosaveTurn = _lastAutosaveTurn,
+	                          .lastQuickSaveTurn = _lastQuickSaveTurn};
+	if (Locator::landSystem::has_value())
+	{
+		const auto& lands = Locator::landSystem::value();
+		game.landscape = lands.GetLandPath().generic_string();
+		game.landscapeFile = lands.GetLandscapePath().generic_string();
+	}
+	world.chunks.push_back(gamesave::ToChunk(game));
+	// The records of the creatures, as a save keeps them
+	const auto creatures = CreaturesInOrder();
+	std::vector<gamesave::SavedCreature> saved;
+	for (uint32_t index = 0; index < creatures.size(); ++index)
+	{
+		saved.push_back(ToSave(registry, creatures[index], index));
+	}
+	const auto chunks = gamesave::ToChunks(saved);
+	world.chunks.insert(world.chunks.end(), chunks.begin(), chunks.end());
+	// Then the whole world in openblack's own layout. This computer makes all the blocks now, with no writer thread.
+	ecs::world_save::SaveSummary summary;
+	for (const auto& pending : ecs::world_save::SaveWorld(Reflection(), summary))
+	{
+		world.chunks.push_back({.tag = pending.tag, .bytes = pending.bytes()});
+	}
+	return gamesave::Write(world);
+}
+
+bool SaveGameSystem::LoadWorldState(std::span<const uint8_t> bytes)
+{
+	FlushWrites();
+	const auto world = gamesave::ReadWorldFile(bytes);
+	if (!world.has_value() || !ecs::world_save::HasWholeWorld(*world))
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state has no whole world that the game can read");
+		return false;
+	}
+	const auto gameChunk = std::ranges::find(world->chunks, gamesave::k_GameTag, &gamesave::Chunk::tag);
+	const auto game = gameChunk != world->chunks.end() ? gamesave::ReadGameChunk(gameChunk->bytes) : std::nullopt;
+	if (!game.has_value())
+	{
+		SPDLOG_LOGGER_WARN(Log(), "The world state has no game block");
+		return false;
+	}
+	return LoadWholeWorld(0, *world, *game, ecs::world_save::LoadKind::WorldState);
+}
+
 void SaveGameSystem::StartLandAgain() const
 {
 	if (!Locator::landSystem::has_value() || Locator::landSystem::value().GetLandPath().empty())
@@ -1265,7 +1320,8 @@ const entt::meta_ctx& SaveGameSystem::Reflection()
 	return *_reflection;
 }
 
-bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game)
+bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& world, const gamesave::GameChunk& game,
+                                    ecs::world_save::LoadKind kind)
 {
 	if (!Locator::landSystem::has_value() || (game.landscapeFile.empty() && game.landscape.empty()))
 	{
@@ -1279,9 +1335,11 @@ bool SaveGameSystem::LoadWholeWorld(uint32_t slot, const gamesave::WorldFile& wo
 	{
 		Locator::vm::value().StopAllTasks();
 	}
-	const bool loaded = Locator::landSystem::value().LoadSavedLand(game.landscape, game.landscapeFile, [&reflection, &world]() {
-		return ecs::world_save::LoadEntities(reflection, world).has_value();
-	});
+	const bool loaded = Locator::landSystem::value().LoadSavedLand(
+	    game.landscape, game.landscapeFile,
+	    [&reflection, &world, kind]() { return ecs::world_save::LoadEntities(reflection, world, kind).has_value(); },
+	    kind == ecs::world_save::LoadKind::WorldState ? LandSystemInterface::SavedLandUse::WorldState
+	                                                  : LandSystemInterface::SavedLandUse::SavedGame);
 	if (!loaded)
 	{
 		SPDLOG_LOGGER_WARN(Log(), "The world of slot {} did not load", slot);
@@ -1606,6 +1664,12 @@ bool GameOver()
 	return Locator::entitiesRegistry::value().Context().gameOver;
 }
 
+/// A network game never saves: not by itself, not by the quick keys and not as the player leaves it
+bool NetworkGame()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 /// The name of a save that the game does by itself into the slot
 std::u16string InstantName(uint32_t slot)
 {
@@ -1637,10 +1701,10 @@ bool SaveGameSystem::InstantSave(uint32_t slot)
 bool SaveGameSystem::SaveOnExit(bool quitting)
 {
 	const auto& context = Locator::entitiesRegistry::value().Context();
-	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, or a game that is over
+	// No save as the player leaves the testbed, the Gods' Playground, a skirmish, a network game, or a game that is over
 	const auto* lands = Locator::landSystem::has_value() ? &Locator::landSystem::value() : nullptr;
 	if (lands == nullptr || lands->GetLandPath().empty() || lands->GetLandPath() == ecs::systems::k_TestbedLandPath ||
-	    context.gameOver || context.skirmish || LandNumber() == gamesave::k_PlaygroundLand)
+	    context.gameOver || context.skirmish || NetworkGame() || LandNumber() == gamesave::k_PlaygroundLand)
 	{
 		return false;
 	}
@@ -1707,6 +1771,7 @@ void SaveGameSystem::EndTurn()
 	    .gameOver = GameOver(),
 	    .scriptCutScene = ScriptCutScene(),
 	    .paused = Locator::time::has_value() && Locator::time::value().IsPaused(),
+	    .networkGame = NetworkGame(),
 	    .land = LandNumber(),
 	    .turn = TurnNow(),
 	    .lastAutosaveTurn = _lastAutosaveTurn,
@@ -1734,7 +1799,7 @@ void SaveGameSystem::EndTurn()
 bool SaveGameSystem::QuickSave()
 {
 	const auto turn = TurnNow();
-	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene()))
+	if (!gamesave::QuickTurnAllowed(turn, _lastQuickSaveTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}
@@ -1744,7 +1809,7 @@ bool SaveGameSystem::QuickSave()
 
 bool SaveGameSystem::QuickLoad()
 {
-	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene()))
+	if (!gamesave::QuickTurnAllowed(TurnNow(), _lastLoadTurn, GameOver(), ScriptCutScene(), NetworkGame()))
 	{
 		return false;
 	}

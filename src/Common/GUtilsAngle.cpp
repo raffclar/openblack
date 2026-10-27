@@ -14,6 +14,7 @@
 #include <numbers>
 
 #include "Common/GUtilsDistance.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 using map_coords::MapCoords;
@@ -23,11 +24,11 @@ namespace
 /// The cosine and sine of a float angle times a distance, rounded once
 float CosTimes(float radians, float metres)
 {
-	return static_cast<float>(std::cos(static_cast<double>(radians)) * static_cast<double>(metres));
+	return static_cast<float>(portable_math::Cos(static_cast<double>(radians)) * static_cast<double>(metres));
 }
 float SinTimes(float radians, float metres)
 {
-	return static_cast<float>(std::sin(static_cast<double>(radians)) * static_cast<double>(metres));
+	return static_cast<float>(portable_math::Sin(static_cast<double>(radians)) * static_cast<double>(metres));
 }
 
 /// 32-bit arithmetic that wraps, as the game's does
@@ -51,7 +52,7 @@ const std::array<uint16_t, 257>& gutils::ArcTanTable()
 		for (size_t i = 0; i < table.size(); ++i)
 		{
 			table.at(i) = static_cast<uint16_t>(
-			    std::trunc(std::atan(static_cast<double>(i) / 256.0) * 2048.0 / (2.0 * std::numbers::pi)));
+			    std::trunc(portable_math::Atan(static_cast<double>(i) / 256.0) * 2048.0 / (2.0 * std::numbers::pi)));
 		}
 		return table;
 	}();
@@ -64,8 +65,8 @@ const std::array<int32_t, 2560>& gutils::SinTable()
 		std::array<int32_t, 2560> table {};
 		for (size_t i = 0; i < table.size(); ++i)
 		{
-			table.at(i) =
-			    static_cast<int32_t>(std::trunc(65536.0 * std::sin(static_cast<double>(i) * 2.0 * std::numbers::pi / 2048.0)));
+			table.at(i) = static_cast<int32_t>(
+			    std::trunc(65536.0 * portable_math::Sin(static_cast<double>(i) * 2.0 * std::numbers::pi / 2048.0)));
 		}
 		return table;
 	}();

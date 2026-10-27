@@ -27,6 +27,7 @@
 #include <ParticleFile.h>
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87Vector.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
@@ -282,9 +283,9 @@ public:
 			cloud->rgba = {look.grey, look.grey, look.grey, look.alpha};
 			cloud->ruleScale = look.scale;
 			cloud->stretch = look.ratio;
-			cloud->position = {middle.x + std::cos(own.angle) * distance,
+			cloud->position = {middle.x + openblack::portable_math::Cos(own.angle) * distance,
 			                   cloud->baseScale * own.heightVary * cloud->ruleScale + cloudHeight,
-			                   middle.z + std::sin(own.angle) * distance};
+			                   middle.z + openblack::portable_math::Sin(own.angle) * distance};
 			// A struck cloud flashes white blue
 			cloud->specular = {0, 0, 0};
 			if (own.lit)
@@ -638,7 +639,8 @@ public:
 			auto& data = atom->data[this];
 			data.a.x += dt * data.a.y * turning;
 			const float out = data.a.z * swirl.radius;
-			auto global = effect.LocalToGlobal(collection, {std::cos(data.a.x) * out, 0.0f, std::sin(data.a.x) * out});
+			auto global = effect.LocalToGlobal(collection, {openblack::portable_math::Cos(data.a.x) * out, 0.0f,
+			                                                openblack::portable_math::Sin(data.a.x) * out});
 			global.y = world.LandHeight({global.x, global.z}) + effect.GetMagnitude() * initHeight;
 			atom->position = effect.GlobalToLocal(collection, global);
 		}

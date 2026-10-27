@@ -26,6 +26,7 @@
 #include "Audio/AudioManagerInterface.h"
 #include "Audio/GameSoundEffects.h"
 #include "Camera/Camera.h"
+#include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Physics.h"
@@ -36,6 +37,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/DynamicsSystemInterface.h"
 #include "ECS/Systems/HandGrabSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TreeRustle.h"
@@ -169,7 +171,8 @@ void VegetationSystem::UpdateBendPoints(bool handShown)
 	if (Locator::playerSystem::has_value())
 	{
 		auto& players = Locator::playerSystem::value();
-		if (const auto creature = players.GetPrimaryCreature(players.GetLocalPlayer());
+		if (const auto creature = players.GetPrimaryCreature(
+		        (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
 		    creature.has_value() && registry.Valid(*creature))
 		{
 			if (const auto* transform = registry.TryGet<const Transform>(*creature))
@@ -272,7 +275,7 @@ glm::mat4 VegetationSystem::GetTreeMatrix(entt::entity tree, const glm::mat4& mo
 		{
 			return model;
 		}
-		const auto tilt = glm::rotate(glm::mat4(1.0f), k_MaxBend * bend->second.amount, axis);
+		const auto tilt = openblack::portable_math::Rotate(glm::mat4(1.0f), k_MaxBend * bend->second.amount, axis);
 		return glm::translate(glm::mat4(1.0f), position) * tilt * glm::translate(glm::mat4(1.0f), -position) * model;
 	}
 

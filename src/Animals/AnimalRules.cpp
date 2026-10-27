@@ -20,6 +20,7 @@
 
 #include "3D/MapCoords.h"
 #include "Common/GUtilsAngle.h"
+#include "Common/PortableRotations.h"
 #include "Common/X87.h"
 #include "InfoConstants.h"
 
@@ -138,7 +139,15 @@ float animals::BirthScale(uint32_t age, uint32_t grownUpAge, std::span<const flo
 
 glm::mat3 animals::Orientation(float heading, float bank)
 {
-	return glm::mat3(glm::eulerAngleY(-(heading + (k_Pi * 0.5f))) * glm::eulerAngleZ(bank));
+	return glm::mat3(portable_math::EulerAngleY(-(heading + (k_Pi * 0.5f))) * portable_math::EulerAngleZ(bank));
+}
+
+animals::DrawnBetweenTurns animals::DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
+                                            float heading, float turnFraction)
+{
+	const float t = std::clamp(turnFraction, 0.0f, 1.0f);
+	return {.position = previousPosition + ((position - previousPosition) * t),
+	        .heading = previousHeading + (std::remainder(heading - previousHeading, k_TwoPi) * t)};
 }
 
 animals::FormationSlot animals::FormationSlotOf(int place)
@@ -200,7 +209,7 @@ bool animals::TakesOwnTurn(const AnimalHolders& holders, bool dyingOrDead)
 glm::vec3 animals::DeadBodySmokePlace(const glm::vec3& position, float heading, float height)
 {
 	const float out = height * 0.5f;
-	return position + glm::vec3(std::cos(heading) * out, 0.0f, std::sin(heading) * out);
+	return position + glm::vec3(portable_math::Cos(heading) * out, 0.0f, portable_math::Sin(heading) * out);
 }
 
 int32_t animals::SlopeSampleUnit(float metres)
