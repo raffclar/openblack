@@ -44,6 +44,7 @@ public:
 	[[nodiscard]] NativeHandles GetNativeHandles() const final;
 	[[nodiscard]] uint32_t GetID() const final;
 	[[nodiscard]] glm::ivec2 GetSize() const final;
+	[[nodiscard]] glm::vec2 GetPixelScale() const final;
 	[[nodiscard]] float GetAspectRatio() const final;
 	[[nodiscard]] bool IsMinimised() const final;
 	[[nodiscard]] bool IsWindowed() const final;
