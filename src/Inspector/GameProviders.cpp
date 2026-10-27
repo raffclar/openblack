@@ -2000,13 +2000,10 @@ std::unique_ptr<ProviderInterface> PlayersProvider()
 		        return Json {{"decided", end.IsDecided()}, {"gods", gods}, {"last_events", events}};
 	        }));
 	provider->Add(
-	    Query("hand", "This computer's hands: where they are, and what the hand holds or takes"),
+	    Query("hand", "This computer's hands, the hands of its own god that it moves and draws: the player, where the hands "
+	                  "are, and what the hand holds or takes"),
 	    Serve<Locator::handSystem>("the hands", [](const ecs::systems::HandSystemInterface& hands, const QueryContext& /*c*/) {
-		    Json result = Json::object();
-		    const auto entities = hands.GetPlayerHands();
-		    const auto positions = hands.GetPlayerHandPositions();
-		    result["left"] = {{"id", Id(entities[0])}, {"position", Optional(positions[0])}};
-		    result["right"] = {{"id", Id(entities[1])}, {"position", Optional(positions[1])}};
+		    Json result = OwnHandsJson(hands);
 		    if (Locator::handGrabSystem::has_value())
 		    {
 			    const auto& grab = Locator::handGrabSystem::value();
@@ -3336,8 +3333,9 @@ std::unique_ptr<ProviderInterface> CreaturesProvider()
 			    return QueryResult::Error("no leash system");
 		    }
 		    const auto& leash = Locator::leashSystem::value();
+		    // The god of this computer, whose hand is at the rope
 		    const auto local =
-		        Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
+		        Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
 		    auto entity = EntityParam(context.params);
 		    if (!context.params.contains("id"))
 		    {
@@ -4095,6 +4093,17 @@ std::unique_ptr<ProviderInterface> HelpProvider()
 
 } // namespace
 
+Json openblack::inspector::OwnHandsJson(const ecs::systems::HandSystemInterface& hands)
+{
+	const auto entities = hands.GetOwnHands();
+	const auto positions = hands.GetOwnHandPositions();
+	return Json {
+	    {"player", static_cast<int>(hands.GetOwnPlayer())},
+	    {"left", {{"id", Id(entities[0])}, {"position", Optional(positions[0])}}},
+	    {"right", {{"id", Id(entities[1])}, {"position", Optional(positions[1])}}},
+	};
+}
+
 std::span<const LocatorCoverage> openblack::inspector::CoveredServices()
 {
 	return k_Coverage;
@@ -4205,21 +4214,17 @@ GameProvider* openblack::inspector::AddGameProviders(Inspector& inspector, const
 	inspector.Add(MakeWorshipProvider(World()));
 	inspector.Add(MakeInfluenceProvider({
 	    .hand = [](int player) -> std::optional<glm::vec3> {
-		    // Only this computer's player's hands are known; the first hand there is
-		    if (!Locator::handSystem::has_value() ||
-		        (Locator::playerSystem::has_value() &&
-		         static_cast<int>(Locator::playerSystem::value().GetLocalPlayer()) != player))
+		    // Where the reports put the left hand of the player, none for a player with no hands
+		    if (!Locator::handSystem::has_value() || player < 0 || player >= static_cast<int>(PlayerNames::_COUNT))
 		    {
 			    return std::nullopt;
 		    }
-		    for (const auto& position : Locator::handSystem::value().GetPlayerHandPositions())
-		    {
-			    if (position.has_value())
-			    {
-				    return position;
-			    }
-		    }
-		    return std::nullopt;
+		    return Locator::handSystem::value().GetHandPositionsOf(
+		        static_cast<PlayerNames>(player))[static_cast<size_t>(ecs::systems::HandSystemInterface::Side::Left)];
+	    },
+	    .ownPlayer = []() -> int {
+		    return static_cast<int>(Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+		                                                             : PlayerNames::PLAYER_ONE);
 	    },
 	    .at = [](int player, glm::vec3 point) -> std::optional<InfluenceAt> {
 		    if (!Locator::influenceSystem::has_value())

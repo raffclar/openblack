@@ -622,7 +622,7 @@
   "kind": "object",
   "parameters": [
    {
-    "description": "The player's number, 0 (the first) by default",
+    "description": "The player's number, the player of this computer by default",
     "name": "player",
     "type": "integer"
    }
@@ -1477,7 +1477,7 @@
   "query": "players.game_end"
  },
  {
-  "description": "This computer's hands: where they are, and what the hand holds or takes",
+  "description": "This computer's hands, the hands of its own god that it moves and draws: the player, where the hands are, and what the hand holds or takes",
   "kind": "object",
   "parameters": [],
   "query": "players.hand"

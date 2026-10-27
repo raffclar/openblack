@@ -71,7 +71,8 @@ void GameParticleWorld::SetHandGlow(uint32_t rgb)
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto hand = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	// The glow of the gesture is on the hand of this computer, which draws the gesture
+	const auto hand = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	if (!registry.Valid(hand))
 	{
 		return;

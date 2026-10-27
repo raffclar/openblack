@@ -368,6 +368,8 @@ bool HandGrabSystem::MarksThing(entt::entity object) const
 
 void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	if (!MarksThing(object))
 	{
 		return;
@@ -386,6 +388,8 @@ void HandGrabSystem::ClickThing(entt::entity object, uint32_t turn)
 
 void HandGrabSystem::ClickReleased(uint32_t turn)
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	const auto under = _world->ObjectUnderCursor();
 	const bool marks = under.has_value() && MarksThing(*under);
 	const auto* grab = Grab();
@@ -1762,6 +1766,10 @@ void HandGrabSystem::ForgetOffer(HandGrab& grab)
 
 bool HandGrabSystem::HandOver(entt::entity object)
 {
+	// The hand that holds the thing gives it, whichever player's hand it is
+	const auto* inHand = Exists(object) ? _world->Entities().TryGet<const InHand>(object) : nullptr;
+	const hand_grab::HandGrabWorldInterface::ActingPlayer holder(*_world, inHand != nullptr ? _world->PlayerOfHand(inHand->hand)
+	                                                                                        : std::nullopt);
 	auto* grab = Grab();
 	if (grab == nullptr || grab->object != object || !Holds(*grab))
 	{
@@ -1808,6 +1816,8 @@ bool HandGrabSystem::GiveHeldTo(entt::entity creature)
 
 std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	const auto* grab = Grab();
 	if (grab == nullptr || !Holds(*grab))
 	{
@@ -1822,12 +1832,16 @@ std::optional<entt::entity> HandGrabSystem::GetOfferedCreature() const
 
 bool HandGrabSystem::OffersToCreature() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	const auto* grab = Grab();
 	return grab != nullptr && Holds(*grab) && grab->offer.Active() && grab->offeredTo != entt::null;
 }
 
 float HandGrabSystem::GetOfferTurn() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
 	const auto* grab = Grab();
 	return grab != nullptr && grab->state != HandGrab::State::Empty ? grab->offerTurn.GetValue() : 0.0f;
 }
@@ -2018,7 +2032,7 @@ void HandGrabSystem::Reset()
 std::optional<entt::entity> HandGrabSystem::GetHeldOf(PlayerNames player) const
 {
 	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
-	return GetHeld();
+	return HeldNow();
 }
 
 bool HandGrabSystem::IsInInfluenceOf(PlayerNames player) const
@@ -2029,6 +2043,13 @@ bool HandGrabSystem::IsInInfluenceOf(PlayerNames player) const
 
 std::optional<entt::entity> HandGrabSystem::GetHeld() const
 {
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	return HeldNow();
+}
+
+std::optional<entt::entity> HandGrabSystem::HeldNow() const
+{
 	const auto* grab = Grab();
 	if (grab == nullptr || !Holds(*grab))
 	{
@@ -2038,6 +2059,19 @@ std::optional<entt::entity> HandGrabSystem::GetHeld() const
 }
 
 std::optional<entt::entity> HandGrabSystem::GetLockedOn() const
+{
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	return LockedOnNow();
+}
+
+std::optional<entt::entity> HandGrabSystem::GetLockedOnOf(PlayerNames player) const
+{
+	const hand_grab::HandGrabWorldInterface::ActingPlayer acting(*_world, player);
+	return LockedOnNow();
+}
+
+std::optional<entt::entity> HandGrabSystem::LockedOnNow() const
 {
 	const auto* grab = Grab();
 	if (grab == nullptr || grab->scoopSource == entt::null || !Holds(*grab))
@@ -2081,7 +2115,9 @@ bool HandGrabSystem::IsAboutToThrow() const
 
 bool HandGrabSystem::CreatureTakesHeld(entt::entity creature) const
 {
-	const auto held = GetHeld();
+	// The input and the frames of this computer act with its own hand
+	const hand_grab::HandGrabWorldInterface::ActingPlayer own(*_world, _world->OwnHandPlayer());
+	const auto held = HeldNow();
 	if (!held.has_value() || !Exists(*held) || !Exists(creature))
 	{
 		return false;

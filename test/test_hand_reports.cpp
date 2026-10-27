@@ -359,6 +359,28 @@ TEST_F(ReportedHands, ThisComputerMovesTheHandsOfItsOwnGodOnceTheyAreThere)
 	EXPECT_EQ(_hands.GetPlayerHands()[0], _hand);
 }
 
+// Each god has its hands where its own reports put them. This computer has the hands of its own god, which the
+// inspector and the frames read; the first player's hands stay the hands of the turn.
+TEST_F(ReportedHands, EachGodHasItsHandWhereItsReportsPutItAndThisComputerHasItsOwn)
+{
+	EXPECT_FALSE(_hands.GetHandPositionsOf(PlayerNames::PLAYER_TWO)[0].has_value());
+	const auto made = _hands.MakeHandsOf(PlayerNames::PLAYER_TWO);
+	_hands.Report(PlayerNames::PLAYER_ONE, ReportAt({20.0f, 0.0f, 20.0f}));
+	_hands.Report(PlayerNames::PLAYER_TWO, ReportAt({5.0f, 0.0f, 5.0f}));
+	EXPECT_EQ(_hands.GetHandPositionsOf(PlayerNames::PLAYER_ONE)[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	EXPECT_EQ(_hands.GetHandPositionsOf(PlayerNames::PLAYER_TWO)[0], glm::vec3(5.0f, 0.0f, 5.0f));
+	// A player with no hands has no place for them
+	EXPECT_FALSE(_hands.GetHandPositionsOf(PlayerNames::PLAYER_THREE)[0].has_value());
+
+	// The first computer has the first player's hands
+	EXPECT_EQ(_hands.GetOwnHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+	// The computer of the second god has the hands of that god, and the turn still has the first player's
+	_hands.SetOwnPlayer(PlayerNames::PLAYER_TWO);
+	EXPECT_EQ(_hands.GetOwnHands(), made);
+	EXPECT_EQ(_hands.GetOwnHandPositions()[0], glm::vec3(5.0f, 0.0f, 5.0f));
+	EXPECT_EQ(_hands.GetPlayerHandPositions()[0], glm::vec3(20.0f, 0.0f, 20.0f));
+}
+
 TEST_F(ReportedHands, AComputerWithNoPlayerOfItsOwnHasNoOwnPlayer)
 {
 	// A game on one computer: the first player is its own

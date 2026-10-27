@@ -117,6 +117,10 @@ public:
 	}
 	[[nodiscard]] PlayerNames HandPlayer() const override { return acting.value_or(PlayerNames::PLAYER_ONE); }
 	[[nodiscard]] bool IsOtherPlayersHand(entt::entity of) const override { return otherHands.contains(of); }
+	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity of) const override
+	{
+		return of == secondHand ? std::optional(PlayerNames::PLAYER_TWO) : std::nullopt;
+	}
 	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity of) const override
 	{
 		const auto found = reportedPlaces.find(of);
@@ -2627,6 +2631,40 @@ TEST_F(HandGrabSystemWithWorld, TheLockAndItsEndOfAnotherPlayerScoopWithThatPlay
 	EXPECT_EQ(world->registry.Get<const HandGrab>(world->secondHand).scoopSource, pile);
 	system->DoUnlock(PlayerNames::PLAYER_TWO, pile);
 	EXPECT_TRUE(world->registry.Get<const HandGrab>(world->secondHand).scoopSource == entt::null);
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// The questions of this computer are about the hand of its own god; the turn asks about the hand of a player by name
+TEST_F(HandGrabSystemWithWorld, ThisComputerAsksAboutTheHandOfItsOwnGod)
+{
+	world->networkGame = true;
+	world->secondPlayerHasHands = true;
+	world->ownHandPlayer = PlayerNames::PLAYER_TWO;
+	const auto first = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_ONE, first);
+	const auto pile = world->registry.Create();
+	world->registry.Assign<Transform>(pile, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	world->registry.Assign<Pot>(pile, Pot {.amount = 1000, .maxAmount = 2000, .type = PotInfo::FoodPile});
+	system->DoLock(PlayerNames::PLAYER_TWO, pile);
+	const auto handful = world->registry.Get<const HandGrab>(world->secondHand).object;
+	EXPECT_EQ(system->GetHeld(), std::optional(handful));
+	EXPECT_EQ(system->GetLockedOn(), std::optional(pile));
+	EXPECT_EQ(system->GetHeldOf(PlayerNames::PLAYER_ONE), std::optional(first));
+	EXPECT_FALSE(system->GetLockedOnOf(PlayerNames::PLAYER_ONE).has_value());
+	EXPECT_EQ(system->GetLockedOnOf(PlayerNames::PLAYER_TWO), std::optional(pile));
+	// The questions leave no acting player behind them
+	EXPECT_FALSE(world->acting.has_value());
+}
+
+// A creature takes a gift from the hand that holds it, whichever god's hand that is
+TEST_F(HandGrabSystemWithWorld, ACreatureTakesTheGiftFromTheHandOfTheGodThatHoldsIt)
+{
+	world->secondPlayerHasHands = true;
+	const auto rock = world->AddRock({0.0f, 0.0f, 0.0f});
+	system->DoTake(PlayerNames::PLAYER_TWO, rock);
+	ASSERT_EQ(system->GetHeldOf(PlayerNames::PLAYER_TWO), std::optional(rock));
+	EXPECT_TRUE(system->HandOver(rock));
+	EXPECT_FALSE(system->GetHeldOf(PlayerNames::PLAYER_TWO).has_value());
 	EXPECT_FALSE(world->acting.has_value());
 }
 
