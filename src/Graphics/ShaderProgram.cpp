@@ -16,6 +16,7 @@
 
 #include "BoneBudget.h"
 #include "DescriptorSetTally.h"
+#include "DrawEncoder.h"
 #include "DrawWindow.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/GraphicsHandleBgfx.h"
@@ -26,15 +27,16 @@ namespace openblack::graphics
 {
 
 static_assert(ShaderProgram::k_DiscardAll == BGFX_DISCARD_ALL);
+static_assert(BoundStages::k_DiscardBindings == BGFX_DISCARD_BINDINGS);
 
 ShaderProgram::ShaderProgram(const std::string& name, ShaderHandle vertexShader, ShaderHandle fragmentShader,
-                             std::vector<shader_samplers::Sampler> samplers, SamplerDefaults& samplerDefaults,
-                             DescriptorSetTally* tally, DrawWindow* window)
+                             std::vector<shader_samplers::Sampler> samplers, const SamplerDefaults& samplerDefaults,
+                             DrawEncoder& mainEncoder, DrawWindow* window)
     : _name(name)
     , _program(BGFX_INVALID_HANDLE)
     , _samplers(std::move(samplers))
     , _samplerDefaults(samplerDefaults)
-    , _tally(tally)
+    , _main(mainEncoder)
     , _window(window)
 {
 	uint16_t numShaderUniforms = 0;
@@ -90,26 +92,29 @@ ShaderProgram::~ShaderProgram()
 	}
 }
 
-void ShaderProgram::Bind(uint8_t bindPoint, UniformHandle sampler, TextureHandle texture, uint32_t samplerFlags) const
+void ShaderProgram::Bind(DrawEncoder& to, uint8_t bindPoint, UniformHandle sampler, TextureHandle texture,
+                         uint32_t samplerFlags) const
 {
-	bgfx::setTexture(bindPoint, toBgfx(sampler), toBgfx(texture), samplerFlags);
-	_samplerDefaults.Set(bindPoint);
-	if (_tally != nullptr)
+	to.encoder->setTexture(bindPoint, toBgfx(sampler), toBgfx(texture), samplerFlags);
+	to.stages.Set(bindPoint);
+	if (to.tally != nullptr)
 	{
-		_tally->SetTexture(bindPoint, toBgfx(texture).idx);
+		to.tally->SetTexture(bindPoint, toBgfx(texture).idx);
 	}
 }
 
-void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const Texture2D& texture) const
+void ShaderProgram::SetTextureSampler(DrawEncoder& to, const char* samplerName, uint8_t bindPoint,
+                                      const Texture2D& texture) const
 {
-	SetTextureSampler(samplerName, bindPoint, texture.GetNativeHandle());
+	SetTextureSampler(to, samplerName, bindPoint, texture.GetNativeHandle());
 }
 
-void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint, const graphics::TextureHandle& texture) const
+void ShaderProgram::SetTextureSampler(DrawEncoder& to, const char* samplerName, uint8_t bindPoint,
+                                      const graphics::TextureHandle& texture) const
 {
 	if (const auto uniform = _uniforms.Find(samplerName))
 	{
-		Bind(bindPoint, *uniform, texture);
+		Bind(to, bindPoint, *uniform, texture);
 	}
 	else
 	{
@@ -117,57 +122,59 @@ void ShaderProgram::SetTextureSampler(const char* samplerName, uint8_t bindPoint
 	}
 }
 
-void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
+void ShaderProgram::SetTextureSampler(DrawEncoder& to, UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture) const
 {
-	Bind(bindPoint, sampler, texture.GetNativeHandle());
+	Bind(to, bindPoint, sampler, texture.GetNativeHandle());
 }
 
-void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture,
+void ShaderProgram::SetTextureSampler(DrawEncoder& to, UniformHandle sampler, uint8_t bindPoint, const Texture2D& texture,
                                       uint32_t samplerFlags) const
 {
-	Bind(bindPoint, sampler, texture.GetNativeHandle(), samplerFlags);
+	Bind(to, bindPoint, sampler, texture.GetNativeHandle(), samplerFlags);
 }
 
-void ShaderProgram::SetTextureSampler(UniformHandle sampler, uint8_t bindPoint, const graphics::TextureHandle& texture) const
+void ShaderProgram::SetTextureSampler(DrawEncoder& to, UniformHandle sampler, uint8_t bindPoint,
+                                      const graphics::TextureHandle& texture) const
 {
-	Bind(bindPoint, sampler, texture);
+	Bind(to, bindPoint, sampler, texture);
 }
 
-void ShaderProgram::SetUniformValue(UniformHandle uniform, const void* value) const
+void ShaderProgram::SetUniformValue(DrawEncoder& to, UniformHandle uniform, const void* value) const
 {
-	bgfx::setUniform(toBgfx(uniform), value);
+	to.encoder->setUniform(toBgfx(uniform), value);
 }
 
-void ShaderProgram::Submit(uint16_t viewId, uint32_t depth, uint8_t discardFlags) const
+void ShaderProgram::Submit(DrawEncoder& to, uint16_t viewId, uint32_t depth, uint8_t discardFlags) const
 {
 	for (size_t i = 0; i < _samplers.size(); ++i)
 	{
 		const auto& sampler = _samplers[i];
-		if (!_samplerDefaults.IsSet(sampler.stage))
+		if (!to.stages.IsSet(sampler.stage))
 		{
 			const auto texture = _samplerDefaults.Texture(shader_samplers::DefaultTextureFor(sampler.dimension));
 			// Kept for the next draw as well when this one keeps its bindings
-			Bind(sampler.stage, _samplerUniforms[i], texture);
+			Bind(to, sampler.stage, _samplerUniforms[i], texture);
 		}
 	}
 	const bool dropsBindings = (discardFlags & BGFX_DISCARD_BINDINGS) != 0;
-	if (_window != nullptr && !_window->Admit(viewId))
+	// Only the game's thread draws while the window is open
+	if (&to == &_main && _window != nullptr && !_window->Admit(viewId))
 	{
 		// The draw goes in a later frame. Its state stays or goes as the draw would keep or drop it.
-		if (_tally != nullptr && dropsBindings)
+		if (to.tally != nullptr && dropsBindings)
 		{
-			_tally->DiscardBindings();
+			to.tally->DiscardBindings();
 		}
-		bgfx::discard(discardFlags);
-		_samplerDefaults.Discarded(discardFlags);
+		to.encoder->discard(discardFlags);
+		to.stages.Discarded(discardFlags);
 		return;
 	}
-	if (_tally != nullptr)
+	if (to.tally != nullptr)
 	{
-		_tally->Submit(viewId, toBgfx(_program).idx, depth, dropsBindings);
+		to.tally->Submit(viewId, toBgfx(_program).idx, depth, dropsBindings);
 	}
-	bgfx::submit(viewId, toBgfx(_program), depth, discardFlags);
-	_samplerDefaults.Discarded(discardFlags);
+	to.encoder->submit(viewId, toBgfx(_program), depth, discardFlags);
+	to.stages.Discarded(discardFlags);
 }
 
 void ShaderProgram::SetBoneVariants(const ShaderProgram* singleBone, const ShaderProgram* fewBones) noexcept
@@ -190,7 +197,7 @@ const ShaderProgram& ShaderProgram::ForBones(std::size_t bones) const noexcept
 	return *this;
 }
 
-void ShaderProgram::SetUniformArray(const char* uniformName, const void* values, uint16_t count) const
+void ShaderProgram::SetUniformArray(DrawEncoder& to, const char* uniformName, const void* values, uint16_t count) const
 {
 	if (count == 0)
 	{
@@ -198,7 +205,7 @@ void ShaderProgram::SetUniformArray(const char* uniformName, const void* values,
 	}
 	if (const auto uniform = _uniforms.Find(uniformName))
 	{
-		bgfx::setUniform(toBgfx(*uniform), values, count);
+		to.encoder->setUniform(toBgfx(*uniform), values, count);
 	}
 	else
 	{
@@ -206,11 +213,11 @@ void ShaderProgram::SetUniformArray(const char* uniformName, const void* values,
 	}
 }
 
-void ShaderProgram::SetUniformValue(const char* uniformName, const void* value) const
+void ShaderProgram::SetUniformValue(DrawEncoder& to, const char* uniformName, const void* value) const
 {
 	if (const auto uniform = _uniforms.Find(uniformName))
 	{
-		bgfx::setUniform(toBgfx(*uniform), value);
+		to.encoder->setUniform(toBgfx(*uniform), value);
 	}
 	else
 	{
@@ -220,7 +227,9 @@ void ShaderProgram::SetUniformValue(const char* uniformName, const void* value) 
 
 void ShaderProgram::WarnMissing(std::string_view name) const
 {
-	// Uniforms are set every frame, so each missing one is warned about once
+	// Uniforms are set every frame, so each missing one is warned about once. Draws can come from more than one
+	// thread.
+	const std::scoped_lock lock(_warnedLock);
 	if (!_warnedMissing.contains(name) && _warnedMissing.emplace(name).second)
 	{
 		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "Could not find uniform {} in {} Shader", name, _name);

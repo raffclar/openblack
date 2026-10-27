@@ -73,6 +73,18 @@ void DescriptorSetTally::Submit(uint16_t view, uint16_t program, uint32_t depth,
 	}
 }
 
+void DescriptorSetTally::Append(DescriptorSetTally& other)
+{
+	_draws.reserve(_draws.size() + other._draws.size());
+	for (auto draw : other._draws)
+	{
+		draw.sequence = static_cast<uint32_t>(_draws.size());
+		_draws.push_back(draw);
+	}
+	other._draws.clear();
+	other.DiscardBindings();
+}
+
 FrameDescriptorSets DescriptorSetTally::EndFrame()
 {
 	// What each view would take in the order its draws came, before they are sorted

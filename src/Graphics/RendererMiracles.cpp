@@ -93,7 +93,8 @@ constexpr uint64_t k_BlendedState = BGFX_STATE_WRITE_RGB | BGFX_STATE_DEPTH_TEST
 constexpr uint64_t k_AddedState = k_BlendedState | BGFX_STATE_BLEND_FUNC(BGFX_STATE_BLEND_SRC_ALPHA, BGFX_STATE_BLEND_ONE);
 } // namespace
 
-void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy) const
+void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& shown, const view_frustum::Frustum* seenBy,
+                             DrawEncoder* encoder) const
 {
 	const bool reflection = desc.viewId == RenderPass::Reflection;
 	const auto& meshes = Locator::resources::value().GetMeshes();
@@ -158,6 +159,7 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 				                       [&model](const glm::mat4& bone) { return model * bone; });
 			}
 			L3DMeshSubmitDesc submitDesc = {};
+			submitDesc.encoder = encoder;
 			submitDesc.program = environmentMapped ? environmentProgram : objectProgram;
 			submitDesc.environment = environmentMapped ? environment : nullptr;
 			submitDesc.modelMatrices = bones.empty() ? &model : bones.data();
@@ -425,38 +427,60 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 			}
 		}
 	}
+	// Each icon with the player it is for, found on the game's thread. The models that the icons show are loaded here,
+	// so that the threads that draw them only read them.
+	struct Icon
+	{
+		const IconSeed* shown;
+		PlayerNames player;
+		float alignment;
+	};
+	std::vector<Icon> icons;
+	const auto& info = Locator::infoConstants::value();
 	registry.Each<const IconSeed>([&](entt::entity icon, const IconSeed& shown) {
 		const auto player = ecs::world_objects::IconPlayer(registry, icon);
 		const float alignment = Locator::alignmentSystem::has_value() && player != PlayerNames::NEUTRAL
 		                            ? Locator::alignmentSystem::value().GetPlayerAlignment(player)
 		                            : 0.0f;
+		icons.push_back({.shown = &shown, .player = player, .alignment = alignment});
+		if (const auto model = magic::GetSeedModel(info, shown.seed, alignment); model.has_value())
+		{
+			static_cast<void>(meshes.Find(resources::HashIdentifier(*model)));
+		}
+	});
+	const auto& textures = Locator::resources::value().GetTextures();
+	static_cast<void>(textures.Find(entt::hashed_string("raw/envmap").value()));
+	static_cast<void>(textures.Find(entt::hashed_string("raw/S_IceEnvMap").value()));
+	const auto* ring = haveRing ? meshes.Find(ecs::components::OneOffSpellSeed::k_RingMeshId.value()) : nullptr;
+	EncodeInOrder(icons.size(), [&](size_t index, DrawEncoder& to) {
+		const auto& [shown, player, alignment] = icons[index];
 		DrawSeedModel(desc,
-		              {.seed = shown.seed,
-		               .middle = shown.middle,
+		              {.seed = shown->seed,
+		               .middle = shown->middle,
 		               .scale = 1.0f,
-		               .spin = shown.spin,
-		               .phialPhase = shown.phialPhase,
-		               .phialFrame = shown.phialFrame,
+		               .spin = shown->spin,
+		               .phialPhase = shown->phialPhase,
+		               .phialFrame = shown->phialFrame,
 		               .phialAlpha = std::numeric_limits<uint8_t>::max(),
 		               .ownerAlignment = alignment},
-		              &seenBy);
+		              &seenBy, &to);
 		// A power-up level shown has its rings, each drawn twice over, added without writing depth, in the player's colour
-		const int rings = magic::visuals::RingCount(shown.powerUp);
-		if (!haveRing || rings <= 0)
+		const int rings = magic::visuals::RingCount(shown->powerUp);
+		if (ring == nullptr || rings <= 0)
 		{
 			return;
 		}
-		const auto ring = meshes.Handle(ecs::components::OneOffSpellSeed::k_RingMeshId.value());
 		const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(player)));
 		const float alpha = static_cast<float>(magic::visuals::RingAlpha(std::numeric_limits<uint8_t>::max())) / k_ByteMax;
 		for (int i = 0; i < rings; ++i)
 		{
-			const auto model = magic::visuals::RingModel(i, shown.ringSpin, shown.middle, 1.0f, eye);
+			const auto model = magic::visuals::RingModel(i, shown->ringSpin, shown->middle, 1.0f, eye);
 			if (!ring->IsBoned() && !view_frustum::SeesBox(seenBy, model, ringBox->minima, ringBox->maxima))
 			{
 				continue;
 			}
 			L3DMeshSubmitDesc submitDesc = {};
+			submitDesc.encoder = &to;
 			submitDesc.viewId = translucent;
 			submitDesc.program = objectProgram;
 			submitDesc.modelMatrices = &model;
@@ -465,7 +489,7 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 			submitDesc.state = k_AddedState;
 			submitDesc.tint = glm::vec4(colour, alpha);
 			submitDesc.lightAdd = ColourOf(magic::visuals::k_RingSpecular);
-			submitDesc.sortDepth = zsort::Depth(shown.middle, eye);
+			submitDesc.sortDepth = zsort::Depth(shown->middle, eye);
 			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 			DrawMesh(*ring, submitDesc, std::numeric_limits<uint8_t>::max());
 		}

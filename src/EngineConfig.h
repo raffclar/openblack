@@ -169,6 +169,9 @@ struct EngineConfig
 	/// Draw the first frame of a land once behind the loading screen, so that the renderer makes its pipelines and
 	/// render targets there and not in the first frames of the game
 	bool warmUpFirstFrame {true};
+	/// A developer switch: encode some of the draws on worker threads at the same time as the game's thread. The
+	/// picture and the order of the draws are the same with it off.
+	bool parallelDrawEncode {true};
 
 	/// The https:// origin of the lobby (bwgame-service). With none, the game has no online services. The web build
 	/// uses the origin of the page for any value.

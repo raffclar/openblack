@@ -35,6 +35,10 @@ vcpkg_download_distfile(
 # - essl-no-inline: the ESSL shaders do not get the passes that inline functions. The inline of a function that
 #   returns early makes a block that runs one time, which SPIRV-Cross writes as a do-while(false) loop. ANGLE on
 #   Direct3D compiled the land shader with these loops for more than a minute, and Chrome then lost the context.
+# A change to the order of the draws, for all renderers. The game encodes some draws on many threads:
+# - submit-order: an encoder can set the submit order of its next draws. Draws with equal sort keys and the draws of a
+#   sequential view then render in that order, also when many encoders submit at the same time. Without it, that
+#   order follows the thread that submits first. A frame in which no encoder sets an order sorts as before.
 vcpkg_extract_source_archive(
   SOURCE_PATH
   ARCHIVE "${ARCHIVE_FILE}"
@@ -48,6 +52,7 @@ vcpkg_extract_source_archive(
     webgpu-min-max-blend-factors.patch
     webgpu-occlusion-one-map.patch
     essl-no-inline.patch
+    submit-order.patch
 )
 
 # Replaces text in a file of the bgfx source. The build stops when the text is not there, so that a new bgfx

@@ -171,6 +171,8 @@ struct Arguments
 	bool frameStatsViews {false};
 	/// Draw the first frame of a land once behind the loading screen, to make the renderer's pipelines there
 	bool warmUpFirstFrame {true};
+	/// Encode some of the draws on worker threads at the same time as the game's thread
+	bool parallelDrawEncode {true};
 	/// The https:// origin of the lobby, none for no online services
 	std::optional<std::string> lobbyOrigin;
 	std::optional<std::string> lobbyTestAuthorities;

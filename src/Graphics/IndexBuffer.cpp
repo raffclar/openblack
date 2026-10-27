@@ -120,14 +120,19 @@ bool IndexBuffer::IsValid() const noexcept
 
 void IndexBuffer::Bind(uint32_t count, uint32_t startIndex) const
 {
+	Bind(*bgfx::begin(), count, startIndex);
+}
+
+void IndexBuffer::Bind(bgfx::Encoder& encoder, uint32_t count, uint32_t startIndex) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_storage == Storage::Shared)
 	{
-		bgfx::setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
+		encoder.setIndexBuffer(toBgfx(_sharedHandle), startIndex, count);
 		return;
 	}
-	bgfx::setIndexBuffer(toBgfx(_handle), startIndex, count);
+	encoder.setIndexBuffer(toBgfx(_handle), startIndex, count);
 }

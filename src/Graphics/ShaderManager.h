@@ -18,6 +18,7 @@
 #include <vector>
 
 #include "DescriptorSetTally.h"
+#include "DrawEncoder.h"
 #include "DrawWindow.h"
 #include "RenderPass.h"
 #include "ShaderProgram.h"
@@ -40,9 +41,20 @@ public:
 
 	void LoadShaders();
 	[[nodiscard]] const ShaderProgram* GetShader(const std::string& name) const;
+	/// Calls `visit(program)` for each program loaded
+	template <typename Visit>
+	void ForEachProgram(const Visit& visit) const
+	{
+		for (const auto& [name, program] : _shaderPrograms)
+		{
+			visit(*program);
+		}
+	}
 
 	/// Drops the textures bound for the next draws, which a run of draws that kept them leaves bound
 	void DiscardBindings() const;
+	/// Where the game's thread draws: bgfx's own encoder, with the tally of the frame's descriptor sets
+	[[nodiscard]] DrawEncoder& GetMainEncoder() const { return *_mainEncoder; }
 	/// bgfx dropped every binding with the frame. Under Vulkan, the descriptor sets the frame's draws took.
 	[[nodiscard]] std::optional<FrameDescriptorSets> FrameEnded() const;
 	/// Sets how a view orders its draws, through bgfx and for the descriptor set tally
@@ -56,6 +68,7 @@ public:
 	bool OpenDrawWindow(uint32_t first, uint32_t count, std::span<const uint16_t> views) const;
 	/// Stops the draw window. Gives the number of draws into its views while it was open, if it was open.
 	[[nodiscard]] std::optional<uint32_t> CloseDrawWindow() const;
+	[[nodiscard]] bool IsDrawWindowOpen() const { return _drawWindow && _drawWindow->IsOpen(); }
 
 	/// Every program's name with the samplers of both its shaders, as their Vulkan builds give them
 	[[nodiscard]] static std::vector<std::pair<std::string, std::vector<shader_samplers::Sampler>>> ProgramSamplers();
@@ -66,6 +79,8 @@ private:
 	ShaderMap _shaderPrograms;
 	/// The textures bound to the samplers draws leave unset, shared by every program
 	std::unique_ptr<SamplerDefaults> _samplerDefaults;
+	/// The game thread's encoder, which the programs draw with when they are given no other
+	std::unique_ptr<DrawEncoder> _mainEncoder;
 	/// Under Vulkan, which runs out of descriptor sets where the other renderers don't: the sets each frame takes
 	std::unique_ptr<DescriptorSetTally> _descriptorSets;
 	/// Under Vulkan, the window that can divide a frame's draws between some frames

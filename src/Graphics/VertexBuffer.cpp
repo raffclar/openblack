@@ -135,17 +135,22 @@ bool VertexBuffer::IsValid() const noexcept
 
 void VertexBuffer::Bind() const
 {
+	Bind(*bgfx::begin());
+}
+
+void VertexBuffer::Bind(bgfx::Encoder& encoder) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_dynamic)
 	{
-		bgfx::setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
+		encoder.setVertexBuffer(0, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
 	else
 	{
-		bgfx::setVertexBuffer(0, toBgfx(_handle), 0, _vertexCount, toBgfx(_layoutHandle));
+		encoder.setVertexBuffer(0, toBgfx(_handle), 0, _vertexCount, toBgfx(_layoutHandle));
 	}
 }
 
@@ -167,17 +172,22 @@ void VertexBuffer::Bind(uint32_t firstVertex, uint32_t count) const
 
 void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
 {
+	BindStream(*bgfx::begin(), stream, layout);
+}
+
+void VertexBuffer::BindStream(bgfx::Encoder& encoder, uint8_t stream, VertexLayoutHandle layout) const
+{
 	if (!IsValid())
 	{
 		return;
 	}
 	if (_dynamic)
 	{
-		bgfx::setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
+		encoder.setVertexBuffer(stream, toBgfx(_dynamicHandle), 0, _vertexCount, toBgfx(layout));
 	}
 	else
 	{
-		bgfx::setVertexBuffer(stream, toBgfx(_handle), 0, _vertexCount, toBgfx(layout));
+		encoder.setVertexBuffer(stream, toBgfx(_handle), 0, _vertexCount, toBgfx(layout));
 	}
 }
 

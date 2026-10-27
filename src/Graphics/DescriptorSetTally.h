@@ -112,6 +112,9 @@ public:
 	/// A draw with the program (its bgfx handle) at the depth given, with the textures bound now. dropsBindings: the
 	/// submit discards the bindings after it.
 	void Submit(uint16_t view, uint16_t program, uint32_t depth, bool dropsBindings);
+	/// Puts the draws of another tally after the draws of this one, in their order, as if they came here after them.
+	/// The other tally then has no draws and no bindings. The bindings of this tally stay as they are.
+	void Append(DescriptorSetTally& other);
 	/// The frame's sets, counted in the order bgfx draws them. The draws and bindings are dropped for the next frame,
 	/// as bgfx drops them; the views keep their order.
 	[[nodiscard]] FrameDescriptorSets EndFrame();

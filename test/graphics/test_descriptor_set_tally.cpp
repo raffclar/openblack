@@ -7,6 +7,7 @@
  * openblack is licensed under the GNU General Public License version 3.
  *******************************************************************************/
 
+#include <cstddef>
 #include <cstdint>
 
 #include <array>
@@ -15,6 +16,7 @@
 #include <gtest/gtest.h>
 
 #include "Graphics/DescriptorSetTally.h"
+#include "Graphics/DrawEncoder.h"
 
 using namespace openblack::graphics;
 
@@ -167,6 +169,56 @@ TEST(DescriptorSetTally, InOrderCountsTheSubmittedOrder)
 	EXPECT_EQ(frame.views[0].setsInOrder, 2u);
 }
 
+/// The draws of the jobs of some threads, each job from no bindings: job j binds texture j at stage 0 for its first
+/// draw only, then draws three times keeping its bindings, in a sequential view and in a view sorted by program
+void DrawJob(DescriptorSetTally& tally, uint16_t job)
+{
+	tally.SetTexture(0, job);
+	tally.Submit(k_Main, 3, 0, false);
+	tally.Submit(k_Translucent, static_cast<uint16_t>(1 + (job % 2)), 5, false);
+	tally.Submit(k_Main, 3, 0, true);
+}
+
+TEST(DescriptorSetTally, AppendedTalliesCountAsTheDrawsInOneTally)
+{
+	constexpr uint16_t k_Jobs = 5;
+	DescriptorSetTally one;
+	one.SetViewOrder(k_Main, ViewOrder::Sequential);
+	for (uint16_t job = 0; job < k_Jobs; ++job)
+	{
+		one.DiscardBindings();
+		DrawJob(one, job);
+	}
+	const auto expected = one.EndFrame();
+
+	// Job 0 on the main tally, the others on tallies of their own, put after it in their order
+	DescriptorSetTally main;
+	main.SetViewOrder(k_Main, ViewOrder::Sequential);
+	std::array<DescriptorSetTally, k_Jobs - 1> others;
+	DrawJob(main, 0);
+	for (uint16_t job = k_Jobs - 1; job > 0; --job)
+	{
+		DrawJob(others.at(job - 1), job);
+	}
+	for (auto& other : others)
+	{
+		main.Append(other);
+	}
+	const auto frame = main.EndFrame();
+	EXPECT_EQ(frame.draws, expected.draws);
+	EXPECT_EQ(frame.sets, expected.sets);
+	ASSERT_EQ(frame.views.size(), expected.views.size());
+	for (size_t i = 0; i < frame.views.size(); ++i)
+	{
+		EXPECT_EQ(frame.views[i].view, expected.views[i].view);
+		EXPECT_EQ(frame.views[i].draws, expected.views[i].draws);
+		EXPECT_EQ(frame.views[i].sets, expected.views[i].sets);
+		EXPECT_EQ(frame.views[i].setsInOrder, expected.views[i].setsInOrder);
+	}
+	// An appended tally is empty after it
+	EXPECT_EQ(others.front().EndFrame().draws, 0u);
+}
+
 TEST(DescriptorSetRelief, AViewThatAlternatesWhenSortedIsDrawnInOrder)
 {
 	const FrameDescriptorSets frame {
@@ -217,6 +269,32 @@ TEST(DescriptorSetTally, TheBudgetWarnsWellBeforeThePoolRunsDry)
 	EXPECT_EQ(JudgeDescriptorSets(k_DescriptorSetsOver), DescriptorBudget::Over);
 	static_assert(k_DescriptorSetsNear < k_DescriptorSetsOver);
 	static_assert(k_DescriptorSetsOver < k_DescriptorSetsPerFrame);
+}
+
+TEST(BoundStages, BindingsStayUntilADiscardDropsThem)
+{
+	BoundStages stages;
+	stages.Set(0);
+	stages.Set(5);
+	EXPECT_TRUE(stages.IsSet(0));
+	EXPECT_TRUE(stages.IsSet(5));
+	EXPECT_FALSE(stages.IsSet(1));
+	// A discard that keeps the bindings keeps the stages
+	stages.Discarded(0);
+	EXPECT_TRUE(stages.IsSet(5));
+	stages.Discarded(BoundStages::k_DiscardBindings);
+	EXPECT_FALSE(stages.IsSet(0));
+	EXPECT_FALSE(stages.IsSet(5));
+	stages.Set(3);
+	stages.Clear();
+	EXPECT_FALSE(stages.IsSet(3));
+}
+
+TEST(BoundStages, AStageOutOfRangeIsNeverSet)
+{
+	BoundStages stages;
+	stages.Set(255);
+	EXPECT_FALSE(stages.IsSet(255));
 }
 
 } // namespace
