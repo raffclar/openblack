@@ -61,10 +61,6 @@ enum class RoomTab : uint8_t
 };
 inline constexpr size_t k_RoomTabCount = 4;
 
-/// The version of this client that a game server must have, else the game list shows "(Wrong Version)". The game
-/// servers give it as "gamever" in the lobby's list.
-inline constexpr std::string_view k_GameVersion = "openblack-1";
-
 /// The most characters of the name and the password in the login box
 inline constexpr size_t k_MostLoginCharacters = 32;
 /// The most characters of a line in the chat box
@@ -83,15 +79,33 @@ enum class Message : uint8_t
 	NotRegistered,
 	/// "Invalid details. Please try again.", with OK
 	InvalidDetails,
-	/// "Connection Failed.", with OK: the lobby did not give the list of the games
+	/// "Connection Failed.", with OK: the lobby did not give the list of the games, or a join of a game on the internet
+	/// failed
 	ConnectionFailed,
-	/// "Could not connect to remote machine.", with OK: the join of a game server failed
+	/// "Could not connect to remote machine.", with OK: the join of a game on the local network failed
 	CouldNotConnect,
+	/// "A person with this registration name was already in the game.", with OK: the server has the account in its room
+	AlreadyInRoom,
+	/// The account has no email address. The box has the text of NotRegistered, with Yes and No. Yes opens the account
+	/// page of the lobby's site.
+	EmailRequired,
 	/// "The channel host left the channel that you were in.", with OK: the game socket closed while the player was in
 	/// the room. OK goes back to the game list.
 	HostLeft,
-	/// The player is in the room of the game server, and the start of the game is not made yet. With Cancel.
-	WaitingForStart,
+	/// "Waiting for host to start transferring files...", with no button: the player has the land of the start, and the
+	/// server waits for the other players' replies
+	WaitingForTransfer,
+	/// "Sending/Receiving start data...", with no button: the creature files of the gods go to all players
+	SendingStartData,
+	/// "The host tried to start the game but you are still downloading the map.", with OK: the player does not have the
+	/// land of the start
+	StillDownloading,
+	/// "The game could not be started because other people are still downloading the map.", with OK: another player
+	/// does not have the land of the start
+	OthersDownloading,
+	/// "%s has kicked you from the game.", with OK, with the name of the room's server: the server removed the player
+	/// from the room. OK goes back to the game list.
+	KickedFromGame,
 };
 
 /// The buttons of a message box, as the game's message boxes have them
@@ -101,8 +115,6 @@ enum class MessageButtons : uint8_t
 	Ok,
 	/// Yes at the left, No at the right
 	YesNo,
-	/// One Cancel in the middle
-	Cancel,
 	/// No button: the box goes when the work is done
 	None,
 };
@@ -128,6 +140,15 @@ enum class LoginProblem : uint8_t
 
 /// Whether the box asks the lobby about the name after a failed login
 [[nodiscard]] bool AsksAboutName(ecs::systems::LobbyErrorKind error) noexcept;
+
+/// The message when the lobby gives no ticket for a game. A full room is not here: the front end then asks for an
+/// observer's ticket. The game shows "Connection Failed." for each failure of a join on the internet.
+/// @param code The code of the lobby's problem, empty when there is none
+[[nodiscard]] Message TicketFailureMessage(ecs::systems::LobbyErrorKind error, std::string_view code) noexcept;
+
+/// The message when the join of the game server fails
+/// @param refusal The reason that the server gave in its refusal, empty when the socket closed with no refusal
+[[nodiscard]] Message JoinFailureMessage(std::string_view refusal, LobbyKind kind) noexcept;
 
 /// A value for a text with printf codes: %s takes text, %d and %u take a number
 using TextArgument = std::variant<std::u16string_view, int64_t>;
@@ -179,10 +200,16 @@ struct Seat
 /// The places of the room's players: the gods are numbered in the order of the list, the observers are 0
 [[nodiscard]] std::vector<Seat> Seats(std::span<const lobby_api::RoomPlayer> players);
 
-/// The colour of a god's lines in the chat: the observers grey, the gods red, green, blue and yellow. Gods past the
-/// fourth take the four colours again in the same order.
+/// The most gods in a game, each with a chat colour of its own
+inline constexpr int32_t k_MostGods = 32;
+/// The colour of a god's lines in the chat, as 32-bit 0xAARRGGBB: the observers (and any number that is not a god's)
+/// grey, gods 1 to 4 red, green, blue and yellow, and gods 5 to 32 a colour of their own each
+[[nodiscard]] uint32_t GodColourBits(int32_t god) noexcept;
+/// The colour of a god's lines in the chat
 [[nodiscard]] glm::vec4 GodColour(int32_t god) noexcept;
-/// The colour of the player's own lines in the chat: light grey
+/// The colour of the player's own lines in the chat: light grey, as 0xAARRGGBB
+[[nodiscard]] uint32_t OwnLineColourBits() noexcept;
+/// The colour of the player's own lines in the chat
 [[nodiscard]] glm::vec4 OwnLineColour() noexcept;
 
 /// A line of the chat box
@@ -212,7 +239,8 @@ struct LocalMap
 
 [[nodiscard]] std::vector<LocalMap> ParseLocalMaps(std::string_view text);
 
-/// The land of the maps that the server plays, by its file or by its name. None when the player does not have it.
+/// The land of the maps that the server plays, by its file, its name or the path of its map file. None when the player
+/// does not have it.
 [[nodiscard]] std::optional<size_t> FindLand(std::span<const LocalMap> maps, std::string_view land);
 
 /// The name of the text that describes one of the first three local lands (Bombardment, King of the hill, The four

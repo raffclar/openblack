@@ -27,12 +27,12 @@ namespace
 class WidthRecordingRandom final: public GameRandomInterface
 {
 public:
-	uint32_t GameRand(uint32_t n) override
+	uint32_t SyncedRand(uint32_t n, DrawSite /*site*/) override
 	{
 		widths.push_back(n);
 		return n == 0 ? 0 : (answer.value_or(n - 1));
 	}
-	float GameFloatRand(float x) override
+	float SyncedFloatRand(float x, DrawSite /*site*/) override
 	{
 		floatWidths.push_back(x);
 		return floatAnswer.value_or(0.0f);

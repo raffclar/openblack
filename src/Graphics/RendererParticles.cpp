@@ -559,7 +559,8 @@ void Renderer::DrawParticleShell(const DrawSceneDesc& desc, const particles::dra
 	}
 	// The object as it is drawn this frame: none while it isn't
 	const auto& drawn = Locator::rendereringSystem::value().GetContext().drawnObjects;
-	const auto placed = std::ranges::find(drawn, shell.object, &ecs::systems::RenderContext::DrawnObject::entity);
+	const auto placed = std::ranges::find_if(
+	    drawn, [&shell](const auto& thing) { return thing.entity == shell.object && !thing.mesh.has_value(); });
 	if (placed == drawn.end())
 	{
 		return;

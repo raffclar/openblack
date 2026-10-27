@@ -21,6 +21,7 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
 #include "ECS/Systems/FilmCreatureSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
@@ -47,7 +48,7 @@ VideoSystem::Hooks GameHooks()
 {
 	return {
 	    .isPaused = []() { return Locator::time::value().IsPaused(); },
-	    .setPaused = [](bool paused) { Locator::time::value().SetPaused(paused); },
+	    .setPaused = [](bool paused) { Locator::time::value().SetPlayerPause(paused); },
 	    .isWideScreenOn = []() { return Locator::cinematicDirectorSystem::value().IsWideScreenOn(); },
 	    .setWideScreen = [](bool on) { Locator::cinematicDirectorSystem::value().SetWideScreen(on, 0); },
 	    .snapWideScreen = []() { Locator::cinematicDirectorSystem::value().SnapWideScreen(); },
@@ -87,7 +88,8 @@ VideoSystem::Hooks GameHooks()
 	    .closeFile = [](const std::filesystem::path& path) { Locator::resources::value().GetVideos().Erase(VideoId(path)); },
 	    .playerHasCreature =
 	        []() {
-		        const auto local = Locator::playerSystem::value().GetLocalPlayer();
+		        const auto local =
+		            (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE);
 		        auto& registry = Locator::entitiesRegistry::value();
 		        bool found = false;
 		        registry.Each<const ecs::components::Creature>(

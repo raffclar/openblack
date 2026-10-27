@@ -1,11 +1,10 @@
-// Small helpers for the web check scripts: a PNG reader for the screenshots of Chrome, and picture compares.
+// A small reader for the screenshots of Chrome (8 bits a channel, RGB or RGBA, no interlace), and the finders that the
+// web checks use on them.
 import { existsSync, readFileSync } from 'node:fs';
 import path from 'node:path';
 import { inflateSync } from 'node:zlib';
 
-// A small PNG reader for the screenshots of Chrome: 8 bits a channel, RGB or RGBA, no interlace
-export function readPng(file) {
-  const data = readFileSync(file);
+export function decodePng(data) {
   let offset = 8;
   let width = 0;
   let height = 0;
@@ -20,7 +19,7 @@ export function readPng(file) {
       height = body.readUInt32BE(4);
       channels = { 2: 3, 6: 4 }[body[9]];
       if (body[8] !== 8 || !channels || body[12] !== 0) {
-        throw new Error(`${file}: not an 8-bit RGB or RGBA PNG without interlace`);
+        throw new Error('not an 8-bit RGB or RGBA PNG without interlace');
       }
     } else if (type === 'IDAT') {
       parts.push(body);
@@ -55,6 +54,29 @@ export function readPng(file) {
     }
   }
   return { width, height, channels, pixels };
+}
+
+export const readPng = (file) => decodePng(readFileSync(file));
+
+// The place of the game's pointer in a screenshot: the middle of the pixels with the teal of the pointer, and how many
+// there are. The count is 0 when the picture has no pointer.
+export function findPointer(picture) {
+  const { width, height, channels, pixels } = picture;
+  let count = 0;
+  let sumX = 0;
+  let sumY = 0;
+  for (let y = 0; y < height; ++y) {
+    for (let x = 0; x < width; ++x) {
+      const i = (y * width + x) * channels;
+      const [r, g, b] = [pixels[i], pixels[i + 1], pixels[i + 2]];
+      if (r < 110 && g > 130 && b > 130 && Math.abs(g - b) < 40 && g - r > 60) {
+        ++count;
+        sumX += x;
+        sumY += y;
+      }
+    }
+  }
+  return count > 0 ? { x: Math.round(sumX / count), y: Math.round(sumY / count), count } : { x: -1, y: -1, count };
 }
 
 // The share of the pixels whose colour changed by more than 24 in one channel

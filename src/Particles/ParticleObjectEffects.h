@@ -34,6 +34,13 @@ struct WaveTarget
 	glm::vec3 point {0.0f};
 	/// Its radius across the ground
 	float radius {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const WaveTarget& self, Visitor&& visit)
+	{
+		visit(self.object, self.point, self.radius);
+	}
 };
 
 /// A model to break into pieces: its triangles in the world, and where the blast throws them from and how fast
@@ -43,6 +50,13 @@ struct ExplodeRecord
 	glm::mat4 transform {1.0f};
 	glm::vec3 origin {0.0f};
 	float speed {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const ExplodeRecord& self, Visitor&& visit)
+	{
+		visit(self.mesh, self.transform, self.origin, self.speed);
+	}
 };
 
 class ObjectEffectsInterface

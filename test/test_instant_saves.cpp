@@ -336,6 +336,9 @@ TEST(InstantSaves, AutosavesAfterTenMinutesOfTurns)
 	state.gameOver = true;
 	EXPECT_FALSE(AutosaveDue(state));
 	state.gameOver = false;
+	state.networkGame = true;
+	EXPECT_FALSE(AutosaveDue(state));
+	state.networkGame = false;
 	state.land = 6;
 	EXPECT_FALSE(AutosaveDue(state));
 	// A last autosave turn after the turn wraps to a large count of turns
@@ -350,15 +353,17 @@ TEST(InstantSaves, AutosavesAfterTenMinutesOfTurns)
 
 TEST(InstantSaves, QuickKeysNeedMoreThanThreeTurns)
 {
-	EXPECT_FALSE(QuickTurnAllowed(3, 0, false, false));
-	EXPECT_TRUE(QuickTurnAllowed(4, 0, false, false));
-	EXPECT_FALSE(QuickTurnAllowed(100, 97, false, false));
-	EXPECT_TRUE(QuickTurnAllowed(100, 104, false, false));
-	EXPECT_FALSE(QuickTurnAllowed(100, 103, false, false));
-	EXPECT_FALSE(QuickTurnAllowed(100, 0, true, false));
-	EXPECT_FALSE(QuickTurnAllowed(100, 0, false, true));
+	EXPECT_FALSE(QuickTurnAllowed(3, 0, false, false, false));
+	EXPECT_TRUE(QuickTurnAllowed(4, 0, false, false, false));
+	EXPECT_FALSE(QuickTurnAllowed(100, 97, false, false, false));
+	EXPECT_TRUE(QuickTurnAllowed(100, 104, false, false, false));
+	EXPECT_FALSE(QuickTurnAllowed(100, 103, false, false, false));
+	EXPECT_FALSE(QuickTurnAllowed(100, 0, true, false, false));
+	EXPECT_FALSE(QuickTurnAllowed(100, 0, false, true, false));
+	// A network game never saves or loads
+	EXPECT_FALSE(QuickTurnAllowed(100, 0, false, false, true));
 	// The most negative difference stays negative
-	EXPECT_FALSE(QuickTurnAllowed(0x80000000u, 0, false, false));
+	EXPECT_FALSE(QuickTurnAllowed(0x80000000u, 0, false, false, false));
 }
 
 TEST(InstantSaves, TheGameBlockKeepsTheTurnsOfTheLastSaves)

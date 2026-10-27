@@ -111,16 +111,27 @@ TEST(LearningMarker, ItsLookPlacesTheBulbUnderTheGlowAndTheTextOverIt)
 	EXPECT_FLOAT_EQ(look.textAlpha, 1.0f);
 }
 
-TEST(LearningMarker, MarksWhoseTimeIsUpGo)
+TEST(LearningMarker, MarksWhoseTimeIsUpGoAtTheTurn)
 {
 	ecs::Registry registry;
 	const auto first = registry.Create();
-	registry.Assign<ecs::components::LearningMarker>(first, marker::Start({}, 15.0f, 0.5f));
+	registry.Assign<ecs::components::LearningMarker>(first, marker::Start({}, 15.0f, 0.5f, 40));
 	const auto second = registry.Create();
-	auto old = marker::Start({}, 15.0f, 0.5f);
+	auto old = marker::Start({}, 15.0f, 0.5f, 0);
 	old.milliseconds = 5990.0f;
 	registry.Assign<ecs::components::LearningMarker>(second, old);
+	// The frames step them; one whose time is up stands still and stays until the turn
 	marker::StepAll(registry, 16.0f);
-	EXPECT_TRUE(registry.Valid(first));
+	EXPECT_TRUE(registry.Valid(second));
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::LearningMarker>(second).milliseconds, 6006.0f);
+	marker::StepAll(registry, 16.0f);
+	EXPECT_FLOAT_EQ(registry.Get<const ecs::components::LearningMarker>(second).milliseconds, 6006.0f);
+	// 60 turns of 100 ms after it was made, a mark goes
+	marker::RemoveDone(registry, 59);
+	EXPECT_TRUE(registry.Valid(second));
+	marker::RemoveDone(registry, 60);
 	EXPECT_FALSE(registry.Valid(second));
+	EXPECT_TRUE(registry.Valid(first));
+	marker::RemoveDone(registry, 100);
+	EXPECT_FALSE(registry.Valid(first));
 }

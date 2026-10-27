@@ -26,13 +26,13 @@
 namespace openblack::ecs::systems
 {
 class LobbyClientSystemInterface;
-}
+class NetworkGameSystemInterface;
+} // namespace openblack::ecs::systems
 
 namespace openblack::online
 {
 class LanDiscoveryInterface;
-class TurnStream;
-class WebSocketClientInterface;
+class NetworkSession;
 } // namespace openblack::online
 
 namespace openblack::gui
@@ -42,9 +42,13 @@ namespace openblack::gui
 /// game server. The boxes (MultiplayerBoxes) show this state and give it the player's clicks.
 ///
 /// The player chooses a connection, then finds the games on the internet or on the local network. On the internet the
-/// player logs in to the lobby, which gives the list of the game servers. A join asks the lobby for a ticket, then opens
-/// the game socket of the server with it. The game room shows the server's players, its chat on the lobby's channel of
-/// the server, its land, the player's clans and the winning conditions.
+/// player logs in to the lobby, which gives the list of the game servers. A join asks the lobby for a ticket, then the
+/// network game joins the server with it. The game room shows the server's players, its chat on the lobby's channel of
+/// the server, its land, the player's clans and the winning conditions. When the server starts the game, the network
+/// game keeps its session with the server, and the game loads the server's land.
+///
+/// The lobby gives a ticket for a full room only to an observer, so a join of a full room asks again for an observer's
+/// ticket.
 class MultiplayerFrontEnd
 {
 public:
@@ -52,13 +56,11 @@ public:
 	struct Services
 	{
 		ecs::systems::LobbyClientSystemInterface* lobby {nullptr};
-		/// The client that opens the game socket
-		online::WebSocketClientInterface* sockets {nullptr};
+		/// The network game, which joins the game server and keeps the session for the game
+		ecs::systems::NetworkGameSystemInterface* network {nullptr};
 		online::LanDiscoveryInterface* lan {nullptr};
 		/// Opens a web page in the system's browser, or a new tab in the browser build
 		std::function<void(std::string_view url)> openPage;
-		/// Microseconds for the pings of the game socket
-		std::function<uint64_t()> clock;
 		/// Keeps the services above alive when the front end has services of its own, as the testbed's demonstration lobby
 		std::shared_ptr<void> owner;
 		/// Once a frame, for services of its own that the game does not move on
@@ -69,6 +71,8 @@ public:
 	{
 		/// The address of the registration page of the lobby's site
 		std::string registerPage;
+		/// The address of the account page of the lobby's site, where the player adds an email address
+		std::string accountPage;
 		/// The name of the internet connection in the connections' list: the lobby's host
 		std::u16string internetName;
 		/// The name of the player's profile, which the player has on the LAN
@@ -89,7 +93,6 @@ public:
 		Ok,
 		Yes,
 		No,
-		Cancel,
 	};
 
 	MultiplayerFrontEnd(Services services, Settings settings);
@@ -160,8 +163,12 @@ public:
 	[[nodiscard]] const std::vector<multiplayer::ChatItem>& GetChat() const noexcept { return _chat; }
 	/// Return in the chat's box: the line goes to the room's channel
 	void SendChat(std::u16string_view text);
-	/// Whether the game socket is open and the player asked to join the room
+	/// Whether the game server let the player in the room
 	[[nodiscard]] bool IsJoined() const noexcept { return _joined; }
+	/// The player is in the room as an observer, who watches the game and has no god
+	[[nodiscard]] bool IsObserver() const noexcept { return _observer; }
+	/// The server started the game: the network game has the session now, and the front end leaves it open
+	[[nodiscard]] bool IsStarted() const;
 
 	// The Landscape tab
 	[[nodiscard]] std::span<const multiplayer::LocalMap> GetLocalMaps() const noexcept { return _maps; }
@@ -198,6 +205,9 @@ public:
 	void SetReady(bool ready);
 
 	// For the testbed
+	/// The name in the message box of a message with a name: the room's server for KickedFromGame
+	[[nodiscard]] const std::u16string& GetMessageName() const noexcept { return _messageName; }
+
 	/// Puts the front end on a box, as if the player had come to it
 	void ShowBox(multiplayer::Box box, multiplayer::LobbyKind kind);
 
@@ -206,13 +216,24 @@ private:
 	void EnterGameList();
 	void LeaveRoom();
 	void HandleEvent(const lobby_api::PushEvent& event);
+	void RequestTicket(const lobby_api::ServerEntry& server, game_socket::Role role, std::u16string password);
 	void RoomOpened(std::string ticket, std::u16string password);
+	/// Follows the session of the network game: the join, a refusal, a loss
+	void FollowSession();
+	/// Shows the steps of the start that the server makes
+	void FollowStart();
+	/// The server removed the player from the room: the box names the server
+	void ShowKicked();
 	void UpdateRoom();
+	/// Puts the pick on the place of its game in a list that changed, or takes it away when its game went
+	void FollowSelectedGame();
+	[[nodiscard]] const online::NetworkSession* Session() const;
 
 	Services _services;
 	Settings _settings;
 	multiplayer::Flow _flow;
 	multiplayer::Message _message {multiplayer::Message::None};
+	std::u16string _messageName;
 	bool _left {false};
 	bool _busy {false};
 	std::optional<size_t> _connection;
@@ -222,14 +243,20 @@ private:
 
 	std::u16string _loginName;
 	std::optional<size_t> _selectedGame;
+	/// The id of the picked game: the list changes on the push channel, and the pick stays on its game
+	std::string _selectedId;
 	std::u16string _filter;
 	/// The game of the room, by its id, and a copy for the LAN
 	std::optional<lobby_api::ServerEntry> _room;
 	std::vector<multiplayer::Seat> _seats;
 	std::vector<multiplayer::ChatItem> _chat;
 	multiplayer::RoomTab _tab {multiplayer::RoomTab::Chat};
-	std::unique_ptr<online::TurnStream> _stream;
+	/// The front end asked the network game to join the room's server
+	bool _joining {false};
 	bool _joined {false};
+	bool _observer {false};
+	/// The player was logged in to the lobby, so a loss of the session goes back to the login box
+	bool _loggedIn {false};
 
 	std::vector<multiplayer::LocalMap> _maps;
 	std::optional<size_t> _shownLand;

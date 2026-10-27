@@ -477,3 +477,116 @@ TEST(GameClock, AFixedFrameTimeWithAPartOfAMillisecondAddsThePartsUp)
 	EXPECT_TRUE(std::ranges::all_of(steps, [](uint32_t step) { return step == 16u || step == 17u; }));
 	EXPECT_EQ(clock.time.GetFixedFrameTime(), std::optional(std::chrono::microseconds(16700)));
 }
+
+TEST(GameClock, ThePlayersPauseStopsTheClockInASinglePlayerGame)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.time.SetPlayerPause(true);
+	EXPECT_TRUE(clock.time.IsPaused());
+	clock.now += 500;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 1);
+	clock.time.SetPlayerPause(false);
+	EXPECT_FALSE(clock.time.IsPaused());
+}
+
+TEST(GameClock, ANetworkGameNeverStopsForThePlayersPauseOrTheTempleHold)
+{
+	static_assert(openblack::ecs::systems::PlayerCanStopClock(false));
+	static_assert(!openblack::ecs::systems::PlayerCanStopClock(true));
+	Clock clock;
+	clock.time.SetNetworkGame(true);
+	EXPECT_TRUE(clock.time.IsNetworkGame());
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	// The P key, the menu, the start question and the films ask for the player's pause: the clock runs on
+	clock.time.SetPlayerPause(true);
+	EXPECT_FALSE(clock.time.IsPaused());
+	// The temple's hold does not stop the clock
+	clock.time.SetHeld(true);
+	EXPECT_FALSE(clock.time.IsHeld());
+	clock.now += 100;
+	EXPECT_TRUE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+	EXPECT_EQ(clock.time.GetFrameGameTime().count(), 100);
+	// The land's own start and the tools still stop the clock
+	clock.time.SetPaused(true);
+	clock.now += 100;
+	EXPECT_FALSE(clock.Frame());
+	EXPECT_EQ(clock.time.GetTurn(), 2);
+}
+
+TEST(GameClock, AHoldThatStartedBeforeTheNetworkGameEnds)
+{
+	Clock clock;
+	clock.time.StartGameClock(false);
+	clock.Frame();
+	clock.time.SetHeld(true);
+	EXPECT_TRUE(clock.time.IsHeld());
+	clock.time.SetNetworkGame(true);
+	EXPECT_FALSE(clock.time.IsHeld());
+	clock.now += 100;
+	EXPECT_TRUE(clock.Frame());
+}
+
+TEST(GameClock, ANetworkGameCatchesUpTenTurnsAFrameAndKeepsTheTimeItLost)
+{
+	Clock alone;
+	alone.time.StartGameClock(false);
+	Clock network;
+	network.time.SetNetworkGame(true);
+	network.time.SetCatchesUp(true);
+	network.time.StartGameClock(false);
+	// Three seconds behind: alone, the game gives up the lost time after two seconds and does one turn a frame
+	alone.now += 3000;
+	network.now += 3000;
+	const auto turns = [](Clock& clock) {
+		uint32_t count = 0;
+		while (clock.time.IsTurnDue())
+		{
+			clock.time.StartTurn();
+			++count;
+		}
+		clock.time.UpdateFrame();
+		return count;
+	};
+	EXPECT_EQ(turns(alone), 1u);
+	EXPECT_EQ(turns(network), 10u);
+	EXPECT_EQ(turns(network), 10u);
+	EXPECT_EQ(turns(network), 10u);
+	// The 31 turns of the three seconds are done; the next is due after its time
+	EXPECT_EQ(turns(network), 1u);
+	EXPECT_EQ(turns(network), 0u);
+	EXPECT_EQ(network.time.GetTurn(), 31u);
+	EXPECT_EQ(turns(alone), 0u);
+}
+
+TEST(GameClock, AFrameBetweenTwoTurnsOfOneFrameTakesTheTimeOfATurnAndKeepsTheCount)
+{
+	Clock network;
+	network.time.SetNetworkGame(true);
+	network.time.SetCatchesUp(true);
+	network.time.StartGameClock(false);
+	network.now += 3000;
+	// A computer that is behind puts its timer at each turn, as the turns of the server are there
+	uint32_t turns = 0;
+	while (true)
+	{
+		network.time.ResetTimerToTurn();
+		if (!network.time.IsTurnDue())
+		{
+			break;
+		}
+		network.time.StartTurn();
+		network.time.CatchUpFrame();
+		EXPECT_EQ(network.time.GetFrameGameTime(), std::chrono::milliseconds(100)) << turns;
+		++turns;
+	}
+	// The frames between the turns keep the count of the frame: ten turns at most
+	EXPECT_EQ(turns, 10u);
+	network.time.UpdateFrame();
+	network.time.ResetTimerToTurn();
+	EXPECT_TRUE(network.time.IsTurnDue());
+}

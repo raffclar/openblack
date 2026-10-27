@@ -119,6 +119,8 @@ struct MusicBankInfo
 class AudioManagerInterface
 {
 public:
+	virtual ~AudioManagerInterface() = default;
+
 	/// The game has a working sound device; the fallback without one plays nothing
 	[[nodiscard]] virtual bool IsInstalled() const = 0;
 	/// The machine lost the sound device after the game opened it. The game then continues as if the device is still

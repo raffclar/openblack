@@ -19,6 +19,7 @@ button, .file-button {
 }
 button:disabled { opacity: 0.5; cursor: default; }
 .file-button input { display: none; }
+.play-buttons { display: flex; gap: 10px; flex-wrap: wrap; }
 #drop-zone { border: 2px dashed var(--muted); border-radius: 6px; padding: 24px; width: 100%; box-sizing: border-box; }
 #drop-zone.active { border-color: var(--accent); }
 #check-list { margin: 0; padding-left: 20px; }

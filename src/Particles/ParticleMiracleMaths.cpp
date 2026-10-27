@@ -34,12 +34,6 @@ constexpr float k_TooCloseSquared = 0.1f;
 constexpr float k_TooCloseNudge = 0.1f;
 /// The squared flight time a lob re-solved for its steepest angle takes when the steepest angle cannot reach the aim
 constexpr float k_ShortestFlightSquared = 0.1f;
-
-glm::vec3 NormaliseOrZero(glm::vec3 v)
-{
-	const float length = glm::length(v);
-	return length > 0.0f ? v / length : glm::vec3(0.0f);
-}
 } // namespace
 
 glm::vec3 maths::LiftDirection(glm::vec3 direction, float lift)

@@ -18,6 +18,7 @@
 
 #include <glm/vec2.hpp>
 
+#include "Graphics/FilmSurface.h"
 #include "Graphics/RenderPass.h"
 #include "Video/VideoRules.h"
 
@@ -51,9 +52,9 @@ public:
 	VideoOverlay& operator=(const VideoOverlay&) = delete;
 
 	/// Draws the picture over `rect` of a view `resolution` pixels big, at `alpha` (0 to 255), alpha blended with no
-	/// depth test. `sixteenBit` shows it as the game's 16-bit copy did, each channel cut to 5 bits
+	/// depth test. When `surface` has a value, the picture goes through that 16-bit surface first, as the game's did
 	void Draw(RenderPass view, glm::u16vec2 resolution, const Planes& planes, video::ScreenRect rect, uint8_t alpha,
-	          bool sixteenBit);
+	          std::optional<film_surface::Format> surface);
 
 private:
 	/// Makes the plane textures for a picture's size, then uploads its planes when they're new

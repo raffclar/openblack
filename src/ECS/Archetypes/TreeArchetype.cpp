@@ -15,6 +15,7 @@
 #include <glm/gtx/euler_angles.hpp>
 
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Common/RandomNumberManager.h"
 #include "ECS/Components/Fixed.h"
 #include "ECS/Components/ForestMember.h"
@@ -43,7 +44,8 @@ entt::entity TreeArchetype::Create(uint32_t forestId, const glm::vec3& position,
 
 	const auto& info = Locator::infoConstants::value().tree.at(static_cast<size_t>(type));
 
-	const auto& transform = registry.Assign<Transform>(entity, position, glm::eulerAngleY(-yAngleRadians), glm::vec3(scale));
+	const auto& transform =
+	    registry.Assign<Transform>(entity, position, portable_math::EulerAngleY(-yAngleRadians), glm::vec3(scale));
 	const auto [point, radius] = GetFixedObstacleBoundingCircle(info.normal, transform);
 	registry.Assign<Fixed>(entity, point, radius);
 	auto& tree = registry.Assign<Tree>(entity, type, maxSize);

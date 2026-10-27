@@ -12,6 +12,12 @@
 // The device pixel ratio (default 1) gives the screen more pixels for each CSS pixel. The game then draws at the CSS
 // size times the ratio, and it reads the mouse in these pixels.
 // The exit code is 0 when all the checks pass.
+//
+// The game can be seconds behind the page on a busy computer: it does the events of the page only between two of its
+// frames, and a frame can be slow. Thus no step waits for a time. Each step that needs the game to be at some state
+// waits for a sign of that state: a line of the game log, the picture of the game pointer where it must be, or new
+// pictures of the game. The times of the steps only keep the steps in order, and the run does not end before the last
+// step is done.
 import { spawnSync } from 'node:child_process';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import path from 'node:path';
@@ -37,54 +43,79 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 // for each CSS pixel of the movement, and its pointer speed at 2560x2048 pixels is 1.6. Thus, in CSS pixels, the
 // pointer moves 0.8 times the ratio for each CSS pixel of the movement.
 const k_PointerScale = 0.8 * pixelRatio;
-const k_LockAt = [640, 330];
+// The lock click is in the middle of the window: the page of the check keeps its own mouse there, and Chrome then has
+// no reason to move the locked pointer by itself while it takes screenshots
+const k_LockAt = [640, 512];
 // The place of the click in the pixels of the game
 const lockPixels = k_LockAt.map((value) => Math.floor(value * pixelRatio));
 // The OK button of the name box at 1280x1024
 const k_NameBoxOk = [290, 700];
+// Where the picture of the game pointer is when its point is on the OK button: the middle of the picture is a little
+// right of and below the point
+const k_PointerPictureOffset = [35, 12];
 const k_MoveSteps = 25;
 const k_Name = 'ab';
 
-// The times leave room for a busy computer, where a frame of the game can take a long time
 const nameBoxSteps = [
   { at: 1, do: 'wait-log', text: 'asking the new player for their name', seconds: 240 },
-  { at: 5, do: 'mouse', type: 'mouseMoved', x: 600, y: 300 },
+  { at: 5, do: 'mouse', type: 'mouseMoved', x: 600, y: 480 },
   { at: 5.3, do: 'mouse', type: 'mouseMoved', x: k_LockAt[0], y: k_LockAt[1] },
   ...[...k_Name].map((key, i) => ({ at: 6 + i * 0.5, do: 'key', key, code: `Key${key.toUpperCase()}`,
     keyCode: key.toUpperCase().charCodeAt(0), hold: 150 })),
   { at: 7.5, do: 'mouse', type: 'mousePressed', x: k_LockAt[0], y: k_LockAt[1], button: 'left' },
   { at: 7.7, do: 'mouse', type: 'mouseReleased', x: k_LockAt[0], y: k_LockAt[1], button: 'left' },
+  // The game logs the lock when it reads the first event after the lock. It reads the events in the order of the page,
+  // so the keys and the first moves are done by then.
+  { at: 8, do: 'wait-log', text: 'The page locked the pointer', seconds: 240 },
   { at: 8.5, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
   { at: 9, do: 'synth-move', dx: (k_NameBoxOk[0] - k_LockAt[0]) / k_PointerScale / k_MoveSteps,
     dy: (k_NameBoxOk[1] - k_LockAt[1]) / k_PointerScale / k_MoveSteps, count: k_MoveSteps, ms: 1500 },
-  { at: 12, do: 'shot', name: 'name-over-ok' },
-  { at: 12.5, do: 'synth-button', type: 'mousedown', button: 0 },
-  { at: 12.8, do: 'synth-button', type: 'mouseup', button: 0 },
-  { at: 13, do: 'wait-log', text: `Made the player profile "${k_Name}"`, seconds: 20 },
+  // The game draws its pointer from the place that the moves gave it
+  { at: 10.5, do: 'wait-pointer', x: k_NameBoxOk[0] + k_PointerPictureOffset[0],
+    y: k_NameBoxOk[1] + k_PointerPictureOffset[1], within: 30, seconds: 240 },
+  { at: 11, do: 'shot', name: 'name-over-ok' },
+  { at: 11.5, do: 'synth-button', type: 'mousedown', button: 0 },
+  // The button stays down for some frames of the game, as a click of a user does
+  { at: 11.6, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 11.9, do: 'look-pointer', label: 'button down' },
+  { at: 12, do: 'synth-button', type: 'mouseup', button: 0 },
+  { at: 12.2, do: 'look-pointer', label: 'button up' },
+  { at: 12.4, do: 'look-pointer', label: 'later' },
+  { at: 12.5, do: 'wait-log', text: `Made the player profile "${k_Name}"`, seconds: 120 },
 ];
 
 const testbedSteps = [
-  // The loading screen ends a short time after this line
-  { at: 2, do: 'wait-log', text: 'pipelines made', seconds: 240 },
-  { at: 12, do: 'mouse', type: 'mouseMoved', x: 640, y: 512 },
-  { at: 12.3, do: 'mouse', type: 'mousePressed', x: 640, y: 512, button: 'left' },
-  { at: 12.4, do: 'mouse', type: 'mouseReleased', x: 640, y: 512, button: 'left' },
-  { at: 13, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
-  { at: 14, do: 'shot', name: 'still-1' },
-  { at: 14.6, do: 'shot', name: 'still-2' },
-  { at: 15, do: 'synth-button', type: 'mousedown', button: 0 },
-  { at: 15.1, do: 'synth-move', dx: -20, dy: 0, count: 30, ms: 900, buttons: 1 },
-  { at: 16.1, do: 'synth-button', type: 'mouseup', button: 0 },
-  { at: 17, do: 'shot', name: 'dragged' },
-  { at: 17.5, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
-  { at: 18, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
-  { at: 18.5, do: 'shot', name: 'escape-1' },
-  { at: 19, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
-  { at: 20, do: 'shot', name: 'escape-2' },
-  { at: 20.5, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
-  { at: 21.5, do: 'mouse', type: 'mousePressed', x: 640, y: 512, button: 'left' },
-  { at: 21.6, do: 'mouse', type: 'mouseReleased', x: 640, y: 512, button: 'left' },
-  { at: 22.1, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
+  // The loading screen is over when the game has drawn its first frame
+  { at: 2, do: 'wait-log', text: 'Load startup: first frame', seconds: 240 },
+  { at: 3, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 3.5, do: 'mouse', type: 'mouseMoved', x: 640, y: 512 },
+  { at: 3.8, do: 'mouse', type: 'mousePressed', x: 640, y: 512, button: 'left' },
+  { at: 3.9, do: 'mouse', type: 'mouseReleased', x: 640, y: 512, button: 'left' },
+  { at: 4.5, do: 'wait-log', text: 'The page locked the pointer', seconds: 240 },
+  { at: 5, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
+  { at: 5.5, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 6, do: 'shot', name: 'still-1' },
+  { at: 6.6, do: 'shot', name: 'still-2' },
+  { at: 7, do: 'synth-button', type: 'mousedown', button: 0 },
+  { at: 7.1, do: 'synth-move', dx: -20, dy: 0, count: 30, ms: 900, buttons: 1 },
+  { at: 8.1, do: 'synth-button', type: 'mouseup', button: 0 },
+  // The game has done the drag when it has drawn some frames after it
+  { at: 8.5, do: 'wait-frames', count: 4, seconds: 120 },
+  { at: 9, do: 'shot', name: 'dragged' },
+  { at: 9.5, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
+  { at: 10, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
+  { at: 10.5, do: 'wait-log', text: 'Escape freed the pointer', seconds: 240 },
+  { at: 11, do: 'wait-frames', count: 3, seconds: 120 },
+  { at: 11.5, do: 'shot', name: 'escape-1' },
+  { at: 12, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
+  { at: 12.5, do: 'wait-frames', count: 5, seconds: 30 },
+  { at: 13, do: 'shot', name: 'escape-2' },
+  { at: 13.5, do: 'key', key: 'Escape', code: 'Escape', keyCode: 27 },
+  { at: 14, do: 'wait-frames', count: 3, seconds: 30 },
+  { at: 14.5, do: 'mouse', type: 'mousePressed', x: 640, y: 512, button: 'left' },
+  { at: 14.6, do: 'mouse', type: 'mouseReleased', x: 640, y: 512, button: 'left' },
+  { at: 15, do: 'eval', expression: 'document.pointerLockElement?.id ?? "none"' },
+  { at: 15.5, do: 'wait-log', text: 'The page locked the pointer', count: 2, seconds: 240 },
 ];
 
 const run = (name, args, steps, seconds) => {
@@ -94,7 +125,7 @@ const run = (name, args, steps, seconds) => {
   const query = `renderer=${renderer}&args=${encodeURIComponent(args)}`;
   const url = `${pageUrl}${pageUrl.includes('?') ? '&' : '?'}${query}`;
   const result = spawnSync(process.execPath, [path.join(here, 'cdp-run.mjs'), chromePath, url, String(seconds), folder,
-    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--dpr', String(pixelRatio), '--actions', actions], { encoding: 'utf8', timeout: 600000 });
+    '--game-folder', gameFolder, '--click', '#play', '--gpu', '--virtual-pointer-lock', '--run-all-steps', '--dpr', String(pixelRatio), '--actions', actions], { encoding: 'utf8', timeout: 600000 });
   if (result.status !== 0) {
     console.log(`${name}: cdp-run failed (${result.status}): ${result.stdout}${result.stderr}`);
   }
@@ -118,8 +149,12 @@ check('name box shown', box.console.includes('[wait-log] found: asking the new p
 check('click locks the pointer', boxEvals[0] === 'canvas', `lock element ${boxEvals[0]}`);
 check('game follows the lock',
   box.log.includes(`The page locked the pointer: the game moves its own pointer from ${lockPixels[0]}, ${lockPixels[1]}`));
+// What the steps saw of the game: when it read the lock, where its pointer was, and how many frames it drew
+const waits = box.console.split(/\r?\n/).filter((line) => /\[(wait|look)-(pointer|frames)\]/.test(line))
+  .map((line) => line.replace(/^\S+ \[/, '').replace('] ', ' ')).join('; ');
 check('keys, locked moves and a locked click answer the name box',
-  box.log.includes(`Made the player profile "${k_Name}"`));
+  box.log.includes(`Made the player profile "${k_Name}"`),
+  `typed "${k_Name}", ${box.log.includes('Made the player profile') ? 'profile made' : 'no profile made'}; ${waits}`);
 
 const bed = run('testbed', '--skip-logos --testbed', testbedSteps, 23);
 const bedEvals = evals(bed.console);

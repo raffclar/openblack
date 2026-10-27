@@ -183,14 +183,38 @@ TEST(TurnStream, TheClientRefusesBadFramesAndGivesTheJsonFrames)
 	Player player(clock);
 	const std::vector<uint8_t> garbage {9, 9, 9};
 	player.sockets.ServerBinary(player.connection, garbage);
-	// A client never gets commands or checksums from the server
-	player.sockets.ServerBinary(player.connection, turn_codec::Encode(turn_codec::TurnChecksum {.turn = 1, .checksum = 2}));
+	// A client never gets commands from the server
+	player.sockets.ServerBinary(player.connection,
+	                            turn_codec::Encode(turn_codec::CommandBlock {.sequence = 1, .turn = 2, .actions = {}}));
 	player.sockets.ServerText(player.connection, R"({"type":"room","players":[]})");
 	player.sockets.Poll();
 	EXPECT_EQ(player.stream.RejectedFrames(), 2u);
 	EXPECT_TRUE(player.turns.empty());
 	ASSERT_EQ(player.texts.size(), 1u);
 	EXPECT_EQ(player.texts[0], R"({"type":"room","players":[]})");
+}
+
+TEST(TurnStream, TheClientGetsTheChecksumsOfTheServer)
+{
+	FakeWebSocketClient sockets;
+	TurnStream stream(sockets, [] { return uint64_t {0}; });
+	std::vector<turn_codec::TurnChecksum> checksums;
+	stream.Open({.url = "wss://bw.example/game/1", .headers = {}, .subprotocols = {}},
+	            online::TurnStreamHandlers {
+	                .opened = {},
+	                .turn = {},
+	                .checksum = [&checksums](const turn_codec::TurnChecksum& checksum) { checksums.push_back(checksum); },
+	                .text = {},
+	                .closed = {},
+	            });
+	const auto connection = sockets.Last();
+	sockets.Accept(connection);
+	sockets.ServerBinary(connection, turn_codec::Encode(turn_codec::TurnChecksum {.turn = 7, .checksum = 0x1234}));
+	sockets.Poll();
+	ASSERT_EQ(checksums.size(), 1u);
+	EXPECT_EQ(checksums[0].turn, 7u);
+	EXPECT_EQ(checksums[0].checksum, 0x1234u);
+	EXPECT_EQ(stream.RejectedFrames(), 0u);
 }
 
 TEST(TurnStream, NothingGoesBeforeTheSocketOpensOrAfterItCloses)

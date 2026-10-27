@@ -192,6 +192,7 @@ private:
 	[[nodiscard]] std::optional<glm::ivec2> RopeOnScreen(size_t creature, glm::vec2 size) const;
 	/// Where the middle of the foot of the scenario's town's worship site altar is on the screen
 	[[nodiscard]] std::optional<glm::ivec2> AltarOnScreen(glm::vec2 size) const;
+	[[nodiscard]] std::optional<glm::ivec2> ObjectOnScreen(size_t object, float height, glm::vec2 size) const;
 	/// A pixel over the body of the creature in the Creature Cave, as the cave finds it under the pointer, on a screen
 	/// of a size
 	[[nodiscard]] static std::optional<glm::ivec2> CaveCreatureOnScreen(glm::vec2 size);
@@ -221,6 +222,8 @@ private:
 	/// The debug option's bonus creatures as they were before the scenario took some as unlocked
 	std::optional<creature_swap::Unlocked> _unlockedBefore;
 	std::optional<int32_t> _landNumberBefore;
+	/// Whether the game was a skirmish before a scenario made it one
+	std::optional<bool> _skirmishBefore;
 	/// The players that the scenario put in the game, which go when it stops
 	std::vector<entt::entity> _addedPlayers;
 	/// Frames since the hand went over a fireball to take hold of it, none while it isn't

@@ -47,12 +47,24 @@ public:
 	void ClickThing(entt::entity object, uint32_t turn) override;
 	glm::vec3 UpdateFrame(const Frame& frame) override;
 	void ProcessTurn() override;
+	/// The turn of the hand that HandGrabWorldInterface::Hand gives now
+	void ProcessHandTurn();
 	void PlaceHeldForTurn() override;
+	void PlaceOthersHeldForFrame(int32_t frameMs) override;
 	void DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved) override;
+	void DoLock(PlayerNames player, entt::entity object) override;
+	void DoApply(PlayerNames player, entt::entity target) override;
+	void DoClick(PlayerNames player, const player_commands::HandClick& click, uint32_t turn) override;
+	/// The clicks that the scripts read are forgotten some seconds of turns after they were made
+	void ForgetClicks(uint32_t turn);
+	void DoUnlock(PlayerNames player, entt::entity object) override;
 	void ForceDrop() override;
+	void DoShakeOff(PlayerNames player) override;
 	void SetRecordedThrow(glm::vec3 velocity) override;
 	[[nodiscard]] std::optional<PullPose> GetPullPose() const override;
-	[[nodiscard]] bool IsInInfluence() const override { return HandInInfluence(); }
+	[[nodiscard]] bool IsInInfluence() const override;
+	[[nodiscard]] bool IsInInfluenceOf(PlayerNames player) const override;
+	[[nodiscard]] std::optional<entt::entity> GetHeldOf(PlayerNames player) const override;
 	[[nodiscard]] std::string WhyNotTake(entt::entity object) const override;
 	[[nodiscard]] float HangOf(entt::entity object) const override;
 	[[nodiscard]] std::optional<uint32_t> TakeAmountToolTip() override { return std::exchange(_amountToolTip, std::nullopt); }
@@ -65,14 +77,17 @@ public:
 
 	[[nodiscard]] std::optional<entt::entity> GetHeld() const override;
 	[[nodiscard]] std::optional<entt::entity> GetLockedOn() const override;
+	[[nodiscard]] std::optional<entt::entity> GetLockedOnOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsAboutToThrow() const override;
 	[[nodiscard]] bool CreatureTakesHeld(entt::entity creature) const override;
 	[[nodiscard]] bool IsBusy() const override;
+	[[nodiscard]] bool IsBusyOf(PlayerNames player) const override;
 	[[nodiscard]] bool IsPulling() const override;
 	[[nodiscard]] std::optional<HeldPose> GetHeldPose() const override;
 	[[nodiscard]] float GetCursorRaise() const override;
 	bool HandOver(entt::entity object) override;
 	bool TakeIntoHand(entt::entity object) override;
+	bool TakeIntoHandOf(PlayerNames player, entt::entity object) override;
 	bool LetGoAt(glm::vec3 velocity) override;
 	bool GiveHeldTo(entt::entity creature) override;
 	[[nodiscard]] std::optional<entt::entity> GetOfferedCreature() const override;
@@ -85,6 +100,10 @@ private:
 	/// The hand's grab, made on the hand when first needed; none without a hand
 	[[nodiscard]] components::HandGrab* Grab();
 	[[nodiscard]] const components::HandGrab* Grab() const;
+	/// What the hand of the acting player holds, none when it holds nothing of its own
+	[[nodiscard]] std::optional<entt::entity> HeldNow() const;
+	/// What the hand of the acting player scoops from, none when it scoops from nothing
+	[[nodiscard]] std::optional<entt::entity> LockedOnNow() const;
 	[[nodiscard]] bool Exists(entt::entity object) const;
 	/// How the hand treats a thing
 	[[nodiscard]] hand_grab::GrabKind KindOf(entt::entity object) const;
@@ -92,6 +111,7 @@ private:
 	[[nodiscard]] hand_grab::Holdable HoldableOf(entt::entity object) const;
 	/// Whether the hand may take a thing now: what it is, what a script says of it, and the hand's influence
 	[[nodiscard]] hand_grab::Gate GateOf(entt::entity object) const;
+	[[nodiscard]] hand_grab::Gate GateAt(entt::entity object, std::optional<glm::vec3> point) const;
 	[[nodiscard]] bool MayTake(entt::entity object) const;
 	/// A press that doesn't take the thing taps it, when the player may touch it
 	void Tap(entt::entity object);
@@ -107,12 +127,20 @@ private:
 	glm::vec3 Pull(components::HandGrab& grab, const Frame& frame);
 	/// The hand takes a thing it waited for or pulled free; or, not from the world, a handful it made as it scoops. With
 	/// sounds, the hand also plays the sounds of the take.
-	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true);
+	/// Without askInfluence, the hand takes the thing outside its player's influence too (the debug tools only)
+	void Take(components::HandGrab& grab, entt::entity object, bool fromTheWorld = true, bool sounds = true,
+	          bool askInfluence = true);
 	/// The hand sends the command that takes a thing that it waited for or pulled free, and plays the sounds of the take
 	void SendTake(components::HandGrab& grab, entt::entity object);
 	/// The pick-up sound of a thing, and the cry of a villager
 	void PlayTakeSounds(entt::entity object);
 	/// A press on a pile scoops a handful out of it, which grows while the button is held; whether it did
+	/// Whether a press on a thing scoops from it: a pile, a field or a fish farm with something to give, inside the
+	/// player's influence. The frame asks it, and sends the lock.
+	[[nodiscard]] bool Scoopable(entt::entity source) const;
+	/// Whether the held thing can be used on a target, as ApplyTo uses it, with no change. The frame asks it, and sends the
+	/// use.
+	[[nodiscard]] bool AppliesTo(const components::HandGrab& grab, entt::entity target) const;
 	bool StartScoop(components::HandGrab& grab, entt::entity source);
 	/// A game turn of scooping: whether the scoop goes on
 	bool Scoop(components::HandGrab& grab);
@@ -151,6 +179,8 @@ private:
 	[[nodiscard]] bool HandInInfluence() const;
 
 	std::unique_ptr<hand_grab::HandGrabWorldInterface> _world;
+	/// The thing that the frames of this computer draw in the pose of a pull, until the pull ends
+	entt::entity _drawnPull {entt::null};
 };
 
 } // namespace openblack::ecs::systems

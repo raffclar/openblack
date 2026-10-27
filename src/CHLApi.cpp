@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -57,9 +58,13 @@
 #include "Blast/CameraShake.h"
 #include "Camera/Camera.h"
 #include "Camera/ScriptCameraModel.h"
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+#include "Common/DrawTrace.h"
+#endif
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "Creature/CreatureActivity.h"
 #include "Creature/CreatureDesires.h"
 #include "Creature/CreatureDevelopment.h"
@@ -152,6 +157,7 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/Reflection/BinaryArchive.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/ScriptFlocks.h"
 #include "ECS/ScriptPopulate.h"
@@ -166,6 +172,7 @@
 #include "ECS/Systems/CameraHelpSystemInterface.h"
 #include "ECS/Systems/CameraZoneSystemInterface.h"
 #include "ECS/Systems/CinematicDirectorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureAudioSystemInterface.h"
 #include "ECS/Systems/CreatureCarryOverSystemInterface.h"
@@ -272,6 +279,7 @@
 #include "ScriptHeaders/ScriptPropertyRules.h"
 #include "ScriptHeaders/ScriptRandom.h"
 #include "ScriptHeaders/ScriptRealTime.h"
+#include "ScriptHeaders/ScriptStart.h"
 #include "ScriptHeaders/ScriptSwitchChanges.h"
 #include "Temple/TempleEntrancePoint.h"
 #include "Windowing/WindowingInterface.h"
@@ -613,10 +621,10 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	const auto seedType = static_cast<SpellSeedType>(subtype);
 	// The hand takes the miracle only when it is ready for an object
 	const bool holdsSomething =
-	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeld().has_value()) ||
-	    Locator::magicSystem::value().IsHandBusy();
+	    (Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetHeldOf(player).has_value()) ||
+	    Locator::magicSystem::value().IsHandBusyOf(player);
 	const bool holdsCreature =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature().has_value();
+	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetLockedCreature(player).has_value();
 	if (!hand_grab::ReadyForObject(holdsSomething, holdsCreature))
 	{
 		return entt::null;
@@ -631,7 +639,7 @@ entt::entity CreateScriptSeedInHand(uint32_t subtype)
 	registry.Get<ecs::components::SpellSeed>(seed).fromGlobe = true;
 	const auto type = magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(Locator::infoConstants::value(), seedType),
 	                                                      magic::k_BasePowerUpLevel);
-	if (const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+	if (const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	    registry.Valid(playerEntity) && static_cast<size_t>(type) < ecs::components::Player::k_MagicTypeCount)
 	{
 		if (auto* component = registry.TryGet<ecs::components::Player>(playerEntity))
@@ -911,6 +919,17 @@ void Pushb(bool value)
 
 void CHLApi::TaskStopped(uint32_t task)
 {
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	// The draw trace keeps the turn of each stop: a stop changes the waits of the tasks before it
+	if (auto* trace = Locator::gameRandom::has_value() ? Locator::gameRandom::value().GetDrawTrace() : nullptr;
+	    trace != nullptr)
+	{
+		const auto& tasks = Locator::vm::value().GetTasks();
+		const auto found = tasks.find(task);
+		trace->TaskStopped(found == tasks.end() ? fmt::format("{}", task)
+		                                        : fmt::format("{} {} {}", task, found->second.filename, found->second.name));
+	}
+#endif
 	// What the task held goes back: the dialogue, its cinema bars, the camera and the game's speed
 	ReleaseDialogue(task);
 	auto& director = Locator::cinematicDirectorSystem::value();
@@ -951,8 +970,6 @@ void CHLApi::StopHelpScriptsByEscape()
 
 bool CHLApi::StartHelpScript(std::string_view name)
 {
-	// The kinds of script a single player game starts by name
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 	auto& dialogue = Locator::dialogueControlSystem::value();
 	if (const auto owner = dialogue.GetOwner(); owner != 0)
 	{
@@ -966,7 +983,7 @@ bool CHLApi::StartHelpScript(std::string_view name)
 			return false;
 		}
 	}
-	Locator::vm::value().StartScript(std::string(name), k_SinglePlayerScripts);
+	Locator::vm::value().StartScript(std::string(name), script::start::StartableScripts());
 	return true;
 }
 
@@ -986,7 +1003,6 @@ bool CHLApi::StartChallengeReminder(uint32_t challenge)
 
 bool CHLApi::StartChallengeScript(uint32_t challenge)
 {
-	constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
 	if (!Locator::vm::has_value())
 	{
 		return false;
@@ -1003,7 +1019,7 @@ bool CHLApi::StartChallengeScript(uint32_t challenge)
 	{
 		lhvm.Push(argument.value, argument.type);
 	}
-	lhvm.StartScript(record.reminderScript, k_SinglePlayerScripts);
+	lhvm.StartScript(record.reminderScript, script::start::StartableScripts());
 	return true;
 }
 
@@ -1115,7 +1131,9 @@ void NotImplemented(std::optional<int32_t> detail = std::nullopt)
 
 } // namespace
 
-/// What the player at this computer last clicked, kept on their hand; none without a hand
+/// What the player last clicked, kept on their hand; none without a hand. A game on one computer has the click of its
+/// own player, the first player. In a network game the turn writes the clicks, and the scripts read the clicks of the
+/// first player on every computer.
 ecs::components::HandClicked* LocalHandClicked()
 {
 	if (!Locator::handSystem::has_value())
@@ -1196,8 +1214,22 @@ void MoveCameraFocus() // 004 MOVE_CAMERA_FOCUS
 	}
 }
 
+/// In a network game the scripts read the camera and the hand of the player from the last report of a turn, so that
+/// every computer gets the same answer; before the first report they read the middle of the world's axes. Alone, the
+/// scripts read the camera and the hand of this computer.
+bool ScriptsReadReports()
+{
+	return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+}
+
 void GetCameraPosition() // 005 GET_CAMERA_POSITION
 {
+	if (ScriptsReadReports())
+	{
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+		PushVec(reported.has_value() ? reported->origin : glm::vec3(0.0f));
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	const auto position = camera.GetOrigin();
 	PushVec(position);
@@ -1205,6 +1237,12 @@ void GetCameraPosition() // 005 GET_CAMERA_POSITION
 
 void GetCameraFocus() // 006 GET_CAMERA_FOCUS
 {
+	if (ScriptsReadReports())
+	{
+		const auto reported = ecs::ReportedPlayerCamera(PlayerNames::PLAYER_ONE);
+		PushVec(reported.has_value() ? reported->focus : glm::vec3(0.0f));
+		return;
+	}
 	auto& camera = Locator::camera::value();
 	const auto focus = camera.GetFocus();
 	PushVec(focus);
@@ -1637,7 +1675,7 @@ static void TurnLivingThing(entt::entity object, Transform& transform, float ang
 		locomotion->fromHeading = heading;
 		locomotion->toHeading = heading;
 	}
-	transform.rotation = glm::mat3(glm::eulerAngleY(heading.Yaw()));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(heading.Yaw()));
 	registry.SetDirty();
 }
 
@@ -3290,7 +3328,14 @@ void GetHandPosition() // 042 GET_HAND_POSITION
 	{
 		ScriptMessage("Hand in citadel");
 	}
-	const auto handEntity = Locator::handSystem::value().GetPlayerHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+	if (ScriptsReadReports())
+	{
+		const auto reported = Locator::handSystem::value().GetPlayerHandPositions()[0];
+		PushVec(reported.value_or(glm::vec3(0.0f)));
+		return;
+	}
+	// A game on one computer reads the hand of this computer where the frames draw it
+	const auto handEntity = Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
 	auto& handTransform = Locator::entitiesRegistry::value().Get<Transform>(handEntity);
 
 	PushVec(handTransform.position);
@@ -3746,7 +3791,7 @@ void KeepChallengeRecord(const script::challenge_snapshots::Snapshot& snapshot, 
 	// The totals of the alignment changes count the change before the alignment takes it
 	if (Locator::playerSystem::has_value())
 	{
-		const auto playerEntity = Locator::playerSystem::value().GetPlayer(player);
+		const auto playerEntity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 		if (registry.Valid(playerEntity))
 		{
 			auto* history = registry.TryGet<ecs::components::AlignmentHistory>(playerEntity);
@@ -3865,7 +3910,7 @@ void GetInfluence() // 062 GET_INFLUENCE
 	// A player who isn't in the game has no influence anywhere
 	std::optional<float> influence;
 	if (player < PlayerNames::_COUNT && Locator::playerSystem::has_value() && Locator::influenceSystem::has_value() &&
-	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().GetPlayer(player)))
+	    Locator::entitiesRegistry::value().Valid(Locator::playerSystem::value().FindPlayer(player).value_or(entt::null)))
 	{
 		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
 	}
@@ -3887,7 +3932,8 @@ void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
 	if (Locator::playerSystem::has_value())
 	{
 		script::interface_levels::Apply(Locator::entitiesRegistry::value(),
-		                                Locator::playerSystem::value().GetPlayer(PlayerNames::PLAYER_ONE), level);
+		                                Locator::playerSystem::value().FindPlayer(PlayerNames::PLAYER_ONE).value_or(entt::null),
+		                                level);
 	}
 }
 
@@ -3963,7 +4009,7 @@ void CallInNear() // 067 CALL_IN_NEAR
 	auto& registry = Locator::entitiesRegistry::value();
 	// Not finding one is no mistake: the Pied Piper asks every few seconds for a child near him. Only the closest tracing
 	// tells of it
-	const auto notFound = [type, subtype]() {
+	const auto notFound = [=]() {
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Cannot find in Near. {}.{}", type, subtype);
 		Pusho(0);
 	};
@@ -6155,7 +6201,9 @@ void GetSlowestSpeed() // 198 GET_SLOWEST_SPEED
 
 void GetObjectHeld199() // 199 GET_OBJECT_HELD
 {
-	// What the player's hand holds, if anything: a thing it took hold of, else the miracle in it
+	// What the hand of this computer holds, if anything: a thing it took hold of, else the miracle in it. In a network
+	// game each computer reads the hand of its own god, thus a script that acts on the answer can part the game
+	// (vanilla-bugs row 497).
 	auto held = Locator::handGrabSystem::has_value() ? Locator::handGrabSystem::value().GetHeld() : std::nullopt;
 	if (!held.has_value() && Locator::magicSystem::has_value())
 	{
@@ -7041,7 +7089,7 @@ void ObjectRelativeBelief() // 251 OBJECT_RELATIVE_BELIEF
 	{
 		const auto name = static_cast<PlayerNames>(p);
 		if (name == PlayerNames::NEUTRAL ||
-		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPlayer(name) != entt::null))
+		    (Locator::playerSystem::has_value() && Locator::playerSystem::value().FindPlayer(name).has_value()))
 		{
 			inGame.push_back(name);
 		}
@@ -7077,7 +7125,7 @@ void SetVirtualInfluence() // 254 SET_VIRTUAL_INFLUENCE
 		return;
 	}
 	auto& registry = Locator::entitiesRegistry::value();
-	const auto entity = Locator::playerSystem::value().GetPlayer(player);
+	const auto entity = Locator::playerSystem::value().FindPlayer(player).value_or(entt::null);
 	if (!registry.Valid(entity))
 	{
 		return;
@@ -7913,39 +7961,47 @@ void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto speed = Popf();
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto speed = Popf();
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().MoveHand(player, position, speed, withFixedHeight);
+	}
 }
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto enable = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto enable = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetActive(player, enable);
+	}
 }
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player with no computer mind gives the origin
+	std::optional<glm::vec3> position;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		position = Locator::computerPlayerSystem::value().HandPosition(player);
+	}
+	PushVec(position.value_or(glm::vec3(0.0f)));
 }
 
 void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetHand(player, position, withFixedHeight);
+	}
 }
 
 void GetStoredCameraPosition() // 314 GET_STORED_CAMERA_POSITION
@@ -8357,12 +8413,13 @@ void IsLockedInteraction() // 342 IS_LOCKED_INTERACTION
 		Pushb(false);
 		return;
 	}
-	const bool heldCreature =
-	    Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().GetCreature() == object;
+	const bool heldCreature = Locator::creatureHandSystem::has_value() && Locator::creatureHandSystem::value().IsLocked(object);
 	const bool grippedTotem =
 	    Locator::villageTotemSystem::has_value() && Locator::villageTotemSystem::value().GetGripped() == object;
+	const auto player =
+	    Locator::playerSystem::has_value() ? Locator::playerSystem::value().GetLocalPlayer() : PlayerNames::PLAYER_ONE;
 	const bool scooped =
-	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOn() == std::optional(object);
+	    Locator::handGrabSystem::has_value() && Locator::handGrabSystem::value().GetLockedOnOf(player) == std::optional(object);
 	Pushb(heldCreature || grippedTotem || scooped);
 }
 
@@ -8387,18 +8444,18 @@ void SetCreatureName() // 343 SET_CREATURE_NAME
 
 void ComputerPlayerReady() // 344 COMPUTER_PLAYER_READY
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushb(false);
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	Pushb(Locator::computerPlayerSystem::has_value() && Locator::computerPlayerSystem::value().Ready(player));
 }
 
 void EnableDisableComputerPlayer345() // 345 ENABLE_DISABLE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// const auto pause = static_cast<bool>(Pop().intVal);
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto pause = Pop().intVal != 0;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, pause);
+	}
 }
 
 void ClearActorMind() // 346 CLEAR_ACTOR_MIND
@@ -8655,40 +8712,48 @@ void SetScaffoldProperties() // 363 SET_SCAFFOLD_PROPERTIES
 
 void SetComputerPlayerPersonality() // 364 SET_COMPUTER_PLAYER_PERSONALITY
 {
-	// const auto probability = Popf();
-	// const auto aspect = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto weight = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPersonality(player, aspect, weight);
+	}
 }
 
 void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 {
-	// const auto unk2 = Pop().intVal;
-	// const auto unk1 = Pop().intVal;
-	// const auto unk0 = Pop().intVal;
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto suppression = Popf();
+	const auto aspect = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSuppression(player, aspect, suppression);
+	}
 }
 
 void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		std::ignore = Locator::computerPlayerSystem::value().ForceAction(player, action, first, second);
+	}
 }
 
 void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().QueueAction(player, action, first, second);
+	}
 }
 
 void GetTownWithId() // 368 GET_TOWN_WITH_ID
@@ -8734,17 +8799,22 @@ void SetDisciple() // 369 SET_DISCIPLE
 
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mind continues and releases the hand
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, false);
+	}
 }
 
 void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 {
-	// const auto speed = Popf();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto speed = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSpeed(player, speed);
+	}
 }
 
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
@@ -9047,7 +9117,7 @@ ecs::components::Player* ScriptPlayer(float number)
 	{
 		return nullptr;
 	}
-	const auto entity = Locator::playerSystem::value().GetPlayer(name);
+	const auto entity = Locator::playerSystem::value().FindPlayer(name).value_or(entt::null);
 	auto& registry = Locator::entitiesRegistry::value();
 	return registry.Valid(entity) ? registry.TryGet<ecs::components::Player>(entity) : nullptr;
 }
@@ -9640,9 +9710,11 @@ void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().ClearActions(player);
+	}
 }
 
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER

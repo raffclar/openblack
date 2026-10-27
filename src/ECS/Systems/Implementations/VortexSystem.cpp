@@ -105,14 +105,21 @@ bool OnMap(glm::ivec2 cell)
 	       cell.y < LandIslandInterface::k_MapCellsPerSide;
 }
 
+/// Where a vortex's time in its state is read: in the game turn or in a frame
+enum class ReadIn
+{
+	Turn,
+	Frame,
+};
+
 /// Seconds since a vortex's state began, now
-float SecondsInState(const Vortex& vortex)
+float SecondsInState(const Vortex& vortex, ReadIn readIn)
 {
 	const auto& time = Locator::time::value();
 	const auto turn = time.GetTurn();
 	const auto turns = turn >= vortex.stateStartTurn ? turn - vortex.stateStartTurn : 0;
-	return vortex::ElapsedSeconds(turns, time.GetTurnFraction(),
-	                              static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
+	const auto fraction = vortex::TurnFractionFor(time.GetTurnFraction(), readIn == ReadIn::Turn, time.IsNetworkGame());
+	return vortex::ElapsedSeconds(turns, fraction, static_cast<uint32_t>(TimeSystemInterface::k_TurnDuration.count()));
 }
 
 const GVortexInfo* InfoOf(VortexType type)
@@ -172,18 +179,21 @@ void VortexSystem::StartEffects(Vortex& vortex)
 	const auto start = [&particles](ParticleType type, glm::vec3 origin) {
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect : particles.Start(type, origin, 1.0f);
 	};
-	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin) {
+	const auto startStepped = [&particles](ParticleType type, glm::vec3 origin, bool synced) {
 		return type == ParticleType::None ? ParticleSystemInterface::k_NoEffect
-		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle);
+		                                  : particles.StartForSpell(type, origin, glm::vec3(0.0f), 1.0f, g_noMiracle, synced);
 	};
 	// The vortex steps the effect that draws things in itself, each turn just after it has handed it what it takes. A
-	// loaded vortex keeps the effect of the save, with the things that it carries.
+	// loaded vortex keeps the effect of the save, with the things that it carries. Its random numbers are the shared
+	// ones, because the turns step it.
 	if (vortex.objectMoverEffect == ParticleSystemInterface::k_NoEffect)
 	{
-		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre);
+		vortex.objectMoverEffect = startStepped(info->particleTypeObjectMover, vortex.centre, true);
 	}
-	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround);
-	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre);
+	// The frames step the swirl and the effect over the land. Their random numbers are only this computer's, so that the
+	// frames of each computer do not change the world.
+	vortex.beforeLandEffect = startStepped(info->particleTypePreLandscape, onGround, false);
+	vortex.afterLandEffect = startStepped(info->particleTypePostLandscape, vortex.centre, false);
 	vortex.lightMapEffect = start(info->particleTypeLightMap, vortex.centre);
 	// The swirl is drawn before the land, which covers it but where the vortex opens its hole
 	if (vortex.beforeLandEffect != ParticleSystemInterface::k_NoEffect)
@@ -214,7 +224,7 @@ void VortexSystem::UpdateFrame(float gameSeconds)
 	auto& registry = Locator::entitiesRegistry::value();
 	auto* particles = Locator::particleSystem::has_value() ? &Locator::particleSystem::value() : nullptr;
 	registry.Each<Vortex>([this, gameSeconds, particles](entt::entity /*entity*/, Vortex& vortex) {
-		const auto seconds = SecondsInState(vortex);
+		const auto seconds = SecondsInState(vortex, ReadIn::Frame);
 		const auto openness = vortex::Openness(vortex.state, seconds);
 		if (openness != 0.0f)
 		{
@@ -309,7 +319,7 @@ float VortexSystem::GetOpenness(entt::entity vortex) const
 	{
 		return 0.0f;
 	}
-	return vortex::Openness(component->state, static_cast<float>(SecondsInState(*component)));
+	return vortex::Openness(component->state, static_cast<float>(SecondsInState(*component, ReadIn::Frame)));
 }
 
 void VortexSystem::ProcessTurn()
@@ -335,7 +345,7 @@ void VortexSystem::ProcessTurn()
 		{
 			vortex.objectMoverEffect = ParticleSystemInterface::k_NoEffect;
 		}
-		const auto seconds = SecondsInState(vortex);
+		const auto seconds = SecondsInState(vortex, ReadIn::Turn);
 		switch (vortex::Advance(vortex.state, seconds))
 		{
 		case vortex::Step::Open:

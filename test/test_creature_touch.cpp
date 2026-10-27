@@ -394,6 +394,22 @@ TEST(CreatureTouch, HeldTheCreatureLooksAtTheHandOrAtTheCameraWithTheHandNearIts
 	EXPECT_NEAR(look.z, -2.0f - (0.3f * k_Height), k_Tolerance);
 }
 
+// In a network game the turn takes the way of the line of sight from the reported camera to the reported hand
+TEST(CreatureTouch, TheReportedHandAndCameraGiveTheSameLookAsTheLineOfSight)
+{
+	const glm::vec3 middle(0.0f, 5.0f, 0.0f);
+	const glm::vec3 camera(0.0f, 5.0f, -30.0f);
+	// The hand on the line straight ahead of the camera, far from the middle
+	const glm::vec3 hand(0.0f, 5.0f, -12.0f);
+	const auto look = feedback::ReportedLookPoint(hand, middle, camera, k_Height);
+	ASSERT_TRUE(look.has_value());
+	EXPECT_EQ(*look, feedback::HeldLookPoint(hand, middle, camera, glm::vec3(0.0f, 0.0f, 1.0f), k_Height));
+	// Near its middle it looks at the camera
+	EXPECT_EQ(feedback::ReportedLookPoint(glm::vec3(0.0f, 5.0f, -1.0f), middle, camera, k_Height), camera);
+	// A hand at the camera gives no way, and no look
+	EXPECT_FALSE(feedback::ReportedLookPoint(camera, middle, camera, k_Height).has_value());
+}
+
 TEST(CreatureTouch, AStrokeDoesNotHoldBackTheNextSlap)
 {
 	creature_feedback::StrokeClocks clocks;

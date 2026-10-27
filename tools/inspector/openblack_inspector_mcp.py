@@ -641,7 +641,8 @@ TOOLS = [
     {
         "name": "influence_hand",
         "description": "The hand's share of its player's influence: the influence where the hand is, at its own "
-                       "place and the player's own, and whether the hand is inside.",
+                       "place and the player's own, and whether the hand is inside. With no player: the hand of "
+                       "the god of this computer.",
         "inputSchema": schema({"player": {"type": "integer"}}),
         "query": "influence.hand",
         "params": ["player"],

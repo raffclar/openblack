@@ -10,6 +10,7 @@
 #pragma once
 
 #include <map>
+#include <span>
 #include <utility>
 
 #include "ECS/Systems/PlayerCommandSystemInterface.h"
@@ -33,11 +34,21 @@ public:
 	void SetSender(PlayerNames player) override { _sender = player; }
 	[[nodiscard]] PlayerNames GetSender() const override { return _sender; }
 	[[nodiscard]] size_t PendingCount() const override { return _queue.OpenCount() + _queue.SentCount(); }
+	void SetSource(player_commands::TurnCommandSourceInterface* source) override;
+	[[nodiscard]] bool TurnReady(uint32_t turn) const override { return _source == nullptr || _source->HasTurn(turn); }
+	[[nodiscard]] bool HasSource() const override { return _source != nullptr; }
+	[[nodiscard]] bool IsBehind(uint32_t turn) const override { return _source != nullptr && _source->IsBehind(turn); }
 
 private:
+	/// At the start of a network game, each god starts at the alignment that its player sent
+	void StartGodsAtSentAlignments(std::span<const PlayerNames> joined);
+	/// At the start of a network game, the god of each human that joined brings its player's creature
+	void BringCreatures(std::span<const PlayerNames> joined);
+
 	player_commands::CommandQueue _queue;
 	PlayerNames _sender {PlayerNames::PLAYER_ONE};
 	TurnListener _listener;
+	player_commands::TurnCommandSourceInterface* _source {nullptr};
 	/// The commands from other computers, by the turn that does them
 	std::map<uint32_t, std::vector<player_commands::Command>> _received;
 };

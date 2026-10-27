@@ -51,6 +51,26 @@ flat_land::Colour flat_land::MaterialColour(int x, int z)
 	return odd ? k_DarkSquare : k_LightSquare;
 }
 
+lnd::LNDMaterial flat_land::CheckerMaterial()
+{
+	lnd::LNDMaterial material {};
+	// Grass, so that what walks on it sounds as on land
+	material.type = k_GrassMaterial;
+	for (int x = 0; x < lnd::LNDMaterial::k_Width; ++x)
+	{
+		for (int z = 0; z < lnd::LNDMaterial::k_Height; ++z)
+		{
+			const auto colour = MaterialColour(x, z);
+			auto& texel = material.texels.at(static_cast<size_t>(x * lnd::LNDMaterial::k_Height + z));
+			texel.b = colour.b;
+			texel.g = colour.g;
+			texel.r = colour.r;
+			texel.a = 1;
+		}
+	}
+	return material;
+}
+
 uint8_t flat_land::Altitude(int x, int z)
 {
 	const auto out = std::min(CellsFromOpenWater(x, z), CornersFromPond(x, z));
@@ -141,21 +161,7 @@ LandData flat_land::Build()
 	auto& country = data.countries.emplace_back();
 	std::ranges::fill(country.materials, lnd::LNDMapMaterial {.indices = {0, 0}, .coefficient = 0});
 
-	auto& material = data.materials.emplace_back();
-	// Grass, so that what walks on it sounds as on land
-	material.type = k_GrassMaterial;
-	for (int x = 0; x < lnd::LNDMaterial::k_Width; ++x)
-	{
-		for (int z = 0; z < lnd::LNDMaterial::k_Height; ++z)
-		{
-			const auto colour = MaterialColour(x, z);
-			auto& texel = material.texels.at(static_cast<size_t>(x * lnd::LNDMaterial::k_Height + z));
-			texel.b = colour.b;
-			texel.g = colour.g;
-			texel.r = colour.r;
-			texel.a = 1;
-		}
-	}
+	data.materials.push_back(CheckerMaterial());
 
 	// The patches' countries, each its own material at every height, painted plain
 	for (const auto& patch : {k_SandPatch, k_SnowPatch})

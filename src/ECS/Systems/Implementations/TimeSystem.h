@@ -61,6 +61,7 @@ public:
 	[[nodiscard]] bool IsTurnDue() override;
 	void StartTurn() override;
 	void UpdateFrame() override;
+	void CatchUpFrame() override;
 
 	[[nodiscard]] uint32_t GetTurn() const override { return _turn; }
 	[[nodiscard]] float GetTurnFraction() const override { return _turnFraction; }
@@ -76,8 +77,12 @@ public:
 
 	void SetPaused(bool paused) override;
 	[[nodiscard]] bool IsPaused() const override { return _paused; }
+	void SetPlayerPause(bool paused) override;
 	void SetHeld(bool held) override;
 	[[nodiscard]] bool IsHeld() const override { return _held; }
+	void SetNetworkGame(bool networkGame) override;
+	[[nodiscard]] bool IsNetworkGame() const override { return _networkGame; }
+	void SetCatchesUp(bool catchesUp) override { _catchesUp = catchesUp; }
 	void SetSpeed(float speed) override;
 	[[nodiscard]] float GetSpeed() const override { return _speed; }
 
@@ -119,6 +124,8 @@ private:
 	uint32_t _turn {0};
 	bool _paused {true};
 	bool _held {false};
+	bool _networkGame {false};
+	bool _catchesUp {false};
 	float _speed {1.0f};
 	uint32_t _turnsThisFrame {0};
 	// The frame clock: the timer at the last frame, the turn then, and the time past that turn

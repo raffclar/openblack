@@ -20,6 +20,8 @@
 #include <utility>
 #include <vector>
 
+#include "SaveBytes.h"
+
 // The game writes its world file as one stream of values with no lengths. Each value goes in as its raw bytes, low
 // byte first. A running sum adds the first byte and the size of each value. Each object writes this sum after its
 // type, and a load reads it but does not compare it.
@@ -101,6 +103,7 @@ public:
 	void Put(const T& value)
 	{
 		static_assert(std::is_trivially_copyable_v<T>);
+		static_assert(k_HasNoGaps<T>, "A value with gaps between its fields must go in field by field");
 		const auto at = _bytes.size();
 		_bytes.resize(at + sizeof(T));
 		std::memcpy(_bytes.data() + at, &value, sizeof(T));
