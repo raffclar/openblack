@@ -19,6 +19,11 @@
 #include <glm/vec3.hpp>
 
 #include "3D/MapCoords.h"
+#include "ECS/ComputerHandCastsWorld.h"
+#include "ECS/ComputerHandCreatureWorld.h"
+#include "ECS/ComputerHandMovesWorld.h"
+#include "ECS/ComputerHandObjectsWorld.h"
+#include "ECS/ComputerHandTotemWorld.h"
 #include "Enums.h"
 
 /// The hand of a computer god. An action of the god is a list of steps that the hand does in turn: it moves, it makes the
@@ -149,53 +154,15 @@ constexpr float k_GestureTurns = 30.0f;
 /// The gesture whose length measures the time of the others: the circle
 constexpr uint32_t k_GestureCircle = 4;
 
-/// What the steps of the hand read and change in the game
-class World
+/// What the steps of the hand read and change in the game, in one part for each kind of step. Each part has its own
+/// header, so that the steps of each kind add their calls without a change to the other parts.
+struct World
 {
-public:
-	virtual ~World() = default;
-	/// The map position of the thing, none when it is gone
-	[[nodiscard]] virtual std::optional<map_coords::MapCoords> CoordsOf(entt::entity thing) const = 0;
-	/// The height of the thing
-	[[nodiscard]] virtual float HeightOf(entt::entity thing) const = 0;
-	/// The height of the land under a map position, in metres
-	[[nodiscard]] virtual float LandHeight(const map_coords::MapCoords& coords) const = 0;
-	/// The icon belongs to a worship site
-	[[nodiscard]] virtual bool IconHasSite(entt::entity icon) const = 0;
-	/// The worshippers chant at the icon now
-	[[nodiscard]] virtual bool IconCharging(entt::entity icon) const = 0;
-	/// The worshippers start to chant for the miracle at the icon. False when the icon cannot start.
-	virtual bool StartChant(entt::entity icon, MagicType type) = 0;
-	/// The prayer power that the miracle of the icon still needs
-	[[nodiscard]] virtual float ChantNeeded(entt::entity icon) const = 0;
-	/// The miracle is felt as an angry one
-	[[nodiscard]] virtual bool Angry(MagicType type) const = 0;
-	/// The god casts the miracle of the icon at the thing, from the hand. False when the miracle is not made.
-	virtual bool Cast(MagicType type, entt::entity target, entt::entity icon, glm::vec3 hand) = 0;
-	/// The seconds that the god keeps its hand over a miracle that it cast
-	[[nodiscard]] virtual float CastSeconds(MagicType type) const = 0;
-	/// The gesture of the seed of a miracle: for stage 0 the gesture that opens the choice of miracles, for stage 1 the
-	/// gesture of the miracle. 0 when the miracle has no seed.
-	[[nodiscard]] virtual uint32_t SeedGesture(MagicType type, int32_t stage) const = 0;
-	/// The length of the shape of a gesture, in a square of side 1. 0 when the gesture has no shape.
-	[[nodiscard]] virtual float GestureLength(uint32_t gesture) const = 0;
-	/// The point of the shape of a gesture at a share of its length, from 0 to 1, in a square of side 1
-	[[nodiscard]] virtual glm::vec3 GesturePoint(uint32_t gesture, float share) const = 0;
-	/// The shape of the gesture shows on the land, as a recognised gesture shows. The square is so many metres across,
-	/// from a corner.
-	virtual void ShowGesture(uint32_t gesture, glm::vec3 corner, float size) = 0;
-	/// The hand of the god has room for a thing
-	[[nodiscard]] virtual bool HandHasRoom() const = 0;
-	/// The hand puts down what it holds where the hand is
-	virtual void PutDownHeld(glm::vec3 hand) = 0;
-	/// The thing can go into the hand now
-	[[nodiscard]] virtual bool CanPickUp(entt::entity thing) const = 0;
-	/// The god places the thing in its hand. A field gives a handful of its food, then all the food that is left in it.
-	virtual void PickUp(entt::entity thing, glm::vec3 hand) = 0;
-	/// The hand uses what it holds on the thing: food or wood goes into a store
-	virtual void UseHeldOn(entt::entity target, glm::vec3 hand) = 0;
-	/// The hand lets go of what it holds where it is, with no speed
-	virtual void DropHeld(glm::vec3 hand) = 0;
+	MovesWorld& moves;
+	ObjectsWorld& objects;
+	CastsWorld& casts;
+	CreatureWorld& creature;
+	TotemWorld& totem;
 };
 
 /// The hand has steps left
@@ -205,7 +172,7 @@ void Add(HandAction& action, StepKind kind, std::vector<Argument> arguments);
 /// Stops the action: the steps go and the counts start again
 void Clear(HandAction& action);
 /// The hand does a turn of its action. False when the action ended badly, which clears it.
-bool Process(HandAction& action, World& world);
+bool Process(HandAction& action, const World& world);
 
 /// The share of a gesture that the hand draws in one turn, from the length of the gesture and of the circle. The hand
 /// draws all of a gesture with no length in one turn.
