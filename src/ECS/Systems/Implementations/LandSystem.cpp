@@ -606,12 +606,14 @@ bool LandSystem::LoadSavedLand(const std::filesystem::path& landPath, const std:
 	View().MakeSymbolSheet();
 	View().ShowLoadingFrame();
 	StartNewLand(land_change::Kind::SavedGame);
-	// A loaded skirmish starts as a skirmish starts: in the first turn the god of the player brings the creature that
-	// the profile keeps. The world of a game server continues and brings no creature.
+	// A loaded skirmish starts as a skirmish starts: in the first turn the god of the player tries to bring the creature
+	// that the profile keeps. When the save kept the creature of the god, the god brings no second creature. The world
+	// of a game server continues and brings no creature.
 	if (use == SavedLandUse::SavedGame &&
 	    land_change::LoadBringsProfileCreature(registry.Context().skirmish, Locator::time::value().IsNetworkGame()))
 	{
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "A saved skirmish loads: the god of the player brings the creature again");
+		SPDLOG_LOGGER_INFO(spdlog::get("game"),
+		                   "A saved skirmish loads: the god of the player tries to bring the creature again");
 		Locator::playerCommandSystem::value().SetPlayersCreatureDue(true);
 	}
 	View().EndLoadingScreen();

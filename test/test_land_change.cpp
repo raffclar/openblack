@@ -123,9 +123,10 @@ TEST(LandChange, OnlyASkirmishBringsTheCreatureOfTheProfile)
 	}
 }
 
-TEST(LandChange, ALoadedSkirmishBringsTheCreatureOfTheProfileAgain)
+TEST(LandChange, ALoadedSkirmishTriesToBringTheCreatureOfTheProfileAgain)
 {
-	// A saved skirmish loads as a skirmish, and the god of the player brings the creature from the profile again
+	// A saved skirmish loads as a skirmish, and the god of the player tries to bring the creature from the profile again.
+	// The god brings no second creature when the save kept its creature (test_creature_file_load).
 	EXPECT_TRUE(LoadBringsProfileCreature(true, false));
 	// A saved game that is not a skirmish brings no creature, and a network game saves no game
 	EXPECT_FALSE(LoadBringsProfileCreature(false, false));

@@ -44,6 +44,8 @@ enum class Refusal : uint8_t
 	UnknownSpecies,
 	/// The god has no citadel, so it brings no creature into the network game
 	NoCitadel,
+	/// The god has a creature already. The game makes no second creature for a god.
+	HasCreature,
 };
 
 /// What the script asks for, as the game finds it
@@ -71,6 +73,9 @@ struct BroughtRequest
 	bool onMap {false};
 	/// The species of the file
 	std::optional<CreatureType> species;
+	/// The god has a creature on the land. A saved skirmish keeps the creature, and the load brings the profile's
+	/// creature again.
+	bool hasCreature {false};
 };
 
 /// Why the god brings no creature, or Refusal::None when it brings one. The checks occur in this sequence. A god with

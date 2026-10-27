@@ -3943,17 +3943,17 @@ void AddAudio(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
-	    .id = "multiplayer.skirmish_load_creature_again",
-	    .name = "A loaded skirmish brings the player's creature again",
+	    .id = "multiplayer.skirmish_load_one_creature",
+	    .name = "A loaded skirmish keeps one creature for the player",
 	    .facet = Facet::Multiplayer,
 	    .description =
 	        "A temple of the player stands to the north, and the testbed plays as a skirmish. After a second, "
 	        "the god of the player brings the creature that the profile keeps, and the profile keeps it in its file. "
 	        "The game saves at 3 seconds into slot 0 and loads the slot at 5 seconds. The mind file "
 	        "LethysCreature of the game takes the place of the creature file of the profile.",
-	    .expected = "A grown ape named Matey comes at the creature home of the temple. After the load, a second ape named "
-	                "Matey comes at the same place, at once and with no sparkle. The first ape stays where the save kept "
-	                "it, and it still belongs to the player.",
+	    .expected = "A grown ape named Matey comes at the creature home of the temple. After the load, the ape stays where "
+	                "the save kept it, and it is the creature of the player. No second ape comes. The log tells that the "
+	                "god brings no creature, with the reason 6.",
 	    .environment = {.dispenserGrid = false, .skirmish = true},
 	    .framing = {.shot = Shot::Placed, .eye = {-30.0f, 18.0f, 60.0f}, .look = {-14.0f, 6.0f, 88.0f}},
 	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_ONE}},

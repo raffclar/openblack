@@ -131,9 +131,9 @@ struct Rules
 }
 
 /// Whether the god of the player brings the creature that the profile keeps, in the first turn after a saved game
-/// loads. A saved skirmish loads as a skirmish. Thus the god brings the creature from the profile's file again, as at
-/// the start of the skirmish. The creature of the save stays on the land, but the new creature becomes the creature of
-/// the god. A network game saves no game.
+/// loads. A saved skirmish loads as a skirmish, and the god tries to bring the creature again, as at the start of the
+/// skirmish. When the save kept the creature of the god, the god brings no second creature. A network game saves no
+/// game.
 [[nodiscard]] constexpr bool LoadBringsProfileCreature(bool skirmish, bool networkGame)
 {
 	return skirmish && !networkGame;

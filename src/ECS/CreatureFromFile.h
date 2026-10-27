@@ -48,7 +48,8 @@ struct Result
 {
 	std::optional<entt::entity> creature;
 	creature_file_load::Refusal refusal {creature_file_load::Refusal::None};
-	/// Whether the owner had a creature, which the new creature replaces as their creature
+	/// Whether the owner had a creature, which the new creature of the script replaces as their creature. A god that
+	/// brings a creature never replaces one.
 	bool replaced {false};
 };
 
@@ -61,12 +62,12 @@ Result Make(const Order& order);
 
 /// At the start of a network game, the god of a human brings the creature of the file that its player sent before the
 /// start. The creature comes at the creature home of the god's citadel, as a creature that a script makes from a mind
-/// file: the file gives its species too. A god with no citadel or no file brings no creature.
+/// file: the file gives its species too. A god with no citadel, no file or a creature already brings no creature.
 Result Bring(PlayerNames owner, std::span<const uint8_t> file);
 
 /// At the start of a skirmish, the god of the player brings the creature that the player's profile keeps. The creature
-/// comes at the creature home of the god's citadel, as Bring makes it. A god with no citadel or no creature kept brings
-/// no creature.
+/// comes at the creature home of the god's citadel, as Bring makes it. A god with no citadel, no creature kept or a
+/// creature already brings no creature.
 Result BringKept(PlayerNames owner, std::shared_ptr<const creaturemind::MindFileData> mind);
 
 } // namespace openblack::ecs::creature_from_file

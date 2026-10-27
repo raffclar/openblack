@@ -185,20 +185,21 @@ Result BringMind(PlayerNames owner, std::shared_ptr<const creaturemind::MindFile
 	const auto& registry = Locator::entitiesRegistry::value();
 	const auto home = creature_home::CitadelCreatureHomeOf(registry, owner);
 	const auto species = readable ? script::property_rules::CreatureTypeFromScript(mind->speciesRow) : std::nullopt;
+	const bool hasCreature =
+	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
 	result.refusal = creature_file_load::WhyNotBrought(
 	    {.citadel = home.has_value(),
 	     .file = file,
 	     .readable = readable,
 	     .onMap = home.has_value() && map_coords::InBounds(*home) && Locator::terrainSystem::has_value(),
-	     .species = species});
+	     .species = species,
+	     .hasCreature = hasCreature});
 	if (result.refusal != creature_file_load::Refusal::None)
 	{
 		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The god {} brings no creature from {}: reason {}", static_cast<int>(owner),
 		                   source, static_cast<int>(result.refusal));
 		return result;
 	}
-	result.replaced =
-	    Locator::playerSystem::has_value() && Locator::playerSystem::value().GetPrimaryCreature(owner).has_value();
 	result.creature = MakeFromMind(owner, *species, *home, std::move(mind), 0, source);
 	return result;
 }
