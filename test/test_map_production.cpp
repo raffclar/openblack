@@ -238,14 +238,14 @@ TEST_F(MapProductionFiling, ALoadKeepsAPersonInACreaturesHandOutOfTheCells)
 	map.FileResidents();
 	// A system that looks in the cells before the map state loads must not put the held villager in them
 	EXPECT_EQ(map.GetAllInCell(cell), before);
-	EXPECT_FALSE(registry.AnyOf<MapCellResident, MapCellMover>(held));
+	EXPECT_FALSE((registry.AnyOf<MapCellResident, MapCellMover>(held)));
 	const reflection::EntityRemap identity;
 	reflection::BinaryReader in(context, out.Bytes(), identity);
 	ASSERT_TRUE(map.LoadState(in));
 	EXPECT_EQ(in.Remaining(), 0u);
 	map.Sync();
 	EXPECT_EQ(map.GetAllInCell(cell), before);
-	EXPECT_FALSE(registry.AnyOf<MapCellResident, MapCellMover>(held));
+	EXPECT_FALSE((registry.AnyOf<MapCellResident, MapCellMover>(held)));
 	reflection::BinaryWriter again(context);
 	map.SaveState(again);
 	EXPECT_EQ(again.Bytes(), out.Bytes());
