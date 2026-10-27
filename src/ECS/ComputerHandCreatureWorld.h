@@ -15,6 +15,9 @@
 
 #include <entt/entity/entity.hpp>
 
+#include "3D/MapCoords.h"
+#include "Enums.h"
+
 namespace openblack::computer_hand
 {
 
@@ -45,6 +48,21 @@ public:
 	virtual void DrawForShortJourney() = 0;
 	/// The creature keeps this part of its top speed for its next walks, from 0 to 1
 	virtual void SetRequiredSpeed(entt::entity creature, float speed) = 0;
+	/// The creature belongs to a player, so that the leash of the player can go on it
+	[[nodiscard]] virtual bool HasPlayer(entt::entity creature) const = 0;
+	/// The god picks the type of the leash of a creature that belongs to a player
+	virtual void SetLeashType(entt::entity creature, LeashType type) = 0;
+	/// A leash on the creature that is tied to a thing comes off
+	virtual void TakeOffTiedLeash(entt::entity creature) = 0;
+	/// The leash of the player goes on the creature, and the god ties it to the thing. False when the thing has no place.
+	virtual bool TieLeash(entt::entity creature, entt::entity object) = 0;
+	/// The creature feels a stroke or a slap of its god, from -1 (a slap) to 1 (a stroke)
+	virtual void Feedback(entt::entity creature, float feedback) = 0;
+	/// The game draws a random number for the seconds that the hand stays after a stroke or a slap
+	[[nodiscard]] virtual float DrawFeedbackSeconds() = 0;
+	/// At the start of a cast of the miracle, the god can let go of the thing that the leash of its creature is tied to.
+	/// The hand is at the map position.
+	virtual void LetGoForCast(MagicType type, const map_coords::MapCoords& hand) = 0;
 };
 
 } // namespace openblack::computer_hand

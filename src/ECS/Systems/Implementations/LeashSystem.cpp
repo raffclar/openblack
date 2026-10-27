@@ -891,7 +891,7 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 	auto* leashes = &registry.Get<CreatureLeash>(creature);
 	auto& worn = *leashes->worn;
 	worn.tiedTo = object;
-	worn.tiedTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
+	leashes->lastTiedTurn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
 	const auto lengths = LengthsOf(registry, creature, worn);
 	worn.slackLength = lengths.slack;
 	worn.maxLength = lengths.max;

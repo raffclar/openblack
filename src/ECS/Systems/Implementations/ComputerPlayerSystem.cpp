@@ -24,6 +24,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GameRandom.h"
 #include "ComputerGameHandObjects.h"
+#include "ComputerMindCreature.h"
 #include "ComputerMindWorld.h"
 #include "Creature/CreatureFileLoad.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -457,6 +458,7 @@ void ComputerPlayerSystem::ProcessTurn()
 			}
 		}
 		computer_world::SeeNearHand(*mind, turn);
+		computer_world::CheckCreatureLeash(name);
 		computer_world::GameMindWorld world(name, *mind);
 		computer_mind::ProcessTurn(mind->mind, world, turn);
 	}

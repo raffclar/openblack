@@ -185,7 +185,7 @@ float computer_mind_rules::OutsidePlacePull(float distanceToEdge, float reach)
 	return static_cast<double>(pull) >= k_LeastPlacePull ? pull * pull : 0.0f;
 }
 
-float computer_mind_rules::KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance)
+float computer_mind_rules::KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance, float attackValue)
 {
 	switch (kind)
 	{
@@ -195,6 +195,8 @@ float computer_mind_rules::KindScore(SpellKind kind, CreatureDesires perceived, 
 		return perceived == CreatureDesires::Compassion ? 1.0f : 0.0f;
 	case SpellKind::Impressive:
 		return impressiveBalance;
+	case SpellKind::Attack:
+		return attackValue;
 	}
 	return 0.0f;
 }
