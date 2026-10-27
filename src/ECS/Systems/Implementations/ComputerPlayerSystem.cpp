@@ -27,13 +27,16 @@
 #include "ECS/Archetypes/CreatureArchetype.h"
 #include "ECS/Archetypes/PlayerArchetype.h"
 #include "ECS/Components/Creature.h"
+#include "ECS/Components/PlayerRelations.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureHome.h"
 #include "ECS/CreatureNaming.h"
+#include "ECS/PlayerRelations.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureMindSystemInterface.h"
+#include "ECS/Systems/InfluenceSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "Locator.h"
@@ -49,18 +52,32 @@ namespace
 /// Where the hand of a god with no temple starts, in metres
 constexpr glm::vec3 k_HandWithoutTemple {2150.0f, 0.0f, 2620.0f};
 
-/// The entity of the player. The game makes the player when the land has none, and the player is known to the players at
-/// once, so that a creature made for it next is its creature.
-entt::entity PlayerEntity(PlayerNames player)
+/// The entity of the player, none when the land has no such player
+entt::entity FoundPlayer(PlayerNames player)
 {
-	auto& registry = Locator::entitiesRegistry::value();
 	entt::entity entity = entt::null;
-	registry.Each<const Player>([&entity, player](entt::entity each, const Player& name) {
+	Locator::entitiesRegistry::value().Each<const Player>([&entity, player](entt::entity each, const Player& name) {
 		if (name.name == player && entity == entt::null)
 		{
 			entity = each;
 		}
 	});
+	return entity;
+}
+
+/// A component of the player, none when the land has no such player or the player has no such component
+template <typename Component>
+Component* PlayerComponent(PlayerNames player)
+{
+	const auto entity = FoundPlayer(player);
+	return entity != entt::null ? Locator::entitiesRegistry::value().TryGet<Component>(entity) : nullptr;
+}
+
+/// The entity of the player. The game makes the player when the land has none, and the player is known to the players at
+/// once, so that a creature made for it next is its creature.
+entt::entity PlayerEntity(PlayerNames player)
+{
+	entt::entity entity = FoundPlayer(player);
 	if (entity == entt::null)
 	{
 		entity = ecs::archetypes::PlayerArchetype::Create(player);
@@ -297,48 +314,84 @@ bool ComputerPlayerSystem::Ready(PlayerNames player)
 	return !computer_hand::Busy(MindOf(player).hand);
 }
 
+void ComputerPlayerSystem::SetAttitude(PlayerNames player, PlayerNames other, float attitude)
+{
+	const auto index = static_cast<size_t>(other);
+	if (index >= k_PlayerRecordSize)
+	{
+		return;
+	}
+	auto& registry = Locator::entitiesRegistry::value();
+	const auto entity = PlayerEntity(player);
+	auto* attitudes = registry.TryGet<ComputerAttitudes>(entity);
+	auto& kept = attitudes != nullptr ? *attitudes : registry.Assign<ComputerAttitudes>(entity);
+	kept.kept.at(index) = player_relations::KeptAttitude(attitude);
+}
+
+float ComputerPlayerSystem::Attitude(PlayerNames player, PlayerNames other) const
+{
+	const auto index = static_cast<size_t>(other);
+	if (index >= k_PlayerRecordSize)
+	{
+		return 0.0f;
+	}
+	const auto* attitudes = PlayerComponent<const ComputerAttitudes>(player);
+	return player_relations::ReadAttitude(attitudes != nullptr ? attitudes->kept.at(index) : ComputerAttitudes::k_StartValue);
+}
+
 void ComputerPlayerSystem::ProcessTurn()
 {
 	auto& registry = Locator::entitiesRegistry::value();
-	std::vector<std::pair<PlayerNames, entt::entity>> minds;
-	registry.Each<const Player, const ComputerPlayer>(
-	    [&minds](entt::entity entity, const Player& player, const ComputerPlayer& /*mind*/) {
-		    minds.emplace_back(player.name, entity);
-	    });
-	// The players take their turns in the order of their numbers
-	std::ranges::sort(minds, {}, &std::pair<PlayerNames, entt::entity>::first);
+	std::vector<std::pair<PlayerNames, entt::entity>> players;
+	registry.Each<const Player>(
+	    [&players](entt::entity entity, const Player& player) { players.emplace_back(player.name, entity); });
+	// The players take their turns in the order of their numbers. After its mind, each player notes its influence
+	// power, so a mind sees the players before it as they are in this turn.
+	std::ranges::sort(players, {}, &std::pair<PlayerNames, entt::entity>::first);
 	const uint32_t turn = Locator::time::has_value() ? Locator::time::value().GetTurn() : 0;
-	for (const auto& [name, entity] : minds)
+	for (const auto& [name, entity] : players)
 	{
-		auto* mind = registry.TryGet<ComputerPlayer>(entity);
+		MindTurn(name, entity, turn);
+		if (auto* power = registry.TryGet<PlayerInfluencePower>(entity); power != nullptr)
+		{
+			power->power =
+			    Locator::influenceSystem::has_value() ? Locator::influenceSystem::value().InfluencePower(name) : 0.0f;
+			power->average = player_relations::NextAverageInfluence(power->average, power->power);
+		}
+	}
+}
+
+void ComputerPlayerSystem::MindTurn(PlayerNames name, entt::entity entity, uint32_t turn)
+{
+	auto& registry = Locator::entitiesRegistry::value();
+	auto* mind = registry.TryGet<ComputerPlayer>(entity);
+	if (mind == nullptr)
+	{
+		return;
+	}
+	if (mind->mind.nodes.empty())
+	{
+		mind->mind = computer_mind::MakeMind();
+	}
+	computer_world::Validate(*mind);
+	if (!mind->switchedOn || mind->mind.paused)
+	{
+		return;
+	}
+	if (computer_player::DueToStart(*mind))
+	{
+		// The hand starts at the temple, or at a fixed place when the god has none
+		mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
+		// A start can make a creature, so the mind is found again after it
+		computer_player::Start(*_world, name, *mind);
+		mind = registry.TryGet<ComputerPlayer>(entity);
 		if (mind == nullptr)
 		{
-			continue;
+			return;
 		}
-		if (mind->mind.nodes.empty())
-		{
-			mind->mind = computer_mind::MakeMind();
-		}
-		computer_world::Validate(*mind);
-		if (!mind->switchedOn || mind->mind.paused)
-		{
-			continue;
-		}
-		if (computer_player::DueToStart(*mind))
-		{
-			// The hand starts at the temple, or at a fixed place when the god has none
-			mind->hand.hand = computer_world::StartingHand(name).value_or(k_HandWithoutTemple);
-			// A start can make a creature, so the mind is found again after it
-			computer_player::Start(*_world, name, *mind);
-			mind = registry.TryGet<ComputerPlayer>(entity);
-			if (mind == nullptr)
-			{
-				continue;
-			}
-		}
-		computer_world::GameMindWorld world(name, *mind);
-		computer_mind::ProcessTurn(mind->mind, world, turn);
 	}
+	computer_world::GameMindWorld world(name, *mind);
+	computer_mind::ProcessTurn(mind->mind, world, turn);
 }
 
 void ComputerPlayerSystem::FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans)

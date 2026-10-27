@@ -9,7 +9,11 @@
 
 #pragma once
 
+#include <cstdint>
+
 #include <memory>
+
+#include <entt/entity/entity.hpp>
 
 #include "ECS/ComputerPlayerStart.h"
 #include "ECS/Systems/ComputerPlayerSystemInterface.h"
@@ -37,6 +41,8 @@ public:
 	void SetPersonality(PlayerNames player, std::string_view name, float weight) override;
 	void SetSuppression(PlayerNames player, std::string_view name, float suppression) override;
 	[[nodiscard]] bool Ready(PlayerNames player) override;
+	void SetAttitude(PlayerNames player, PlayerNames other, float attitude) override;
+	[[nodiscard]] float Attitude(PlayerNames player, PlayerNames other) const override;
 	void ProcessTurn() override;
 	void FillEmptySlots(std::span<const PlayerNames> gods, std::span<const PlayerNames> humans) override;
 	void WaitForHumans() override;
@@ -45,6 +51,8 @@ public:
 private:
 	/// The computer mind of the player, made with the player when the land has none
 	components::ComputerPlayer& MindOf(PlayerNames player);
+	/// The turn of the mind of one player, when the player has a mind
+	void MindTurn(PlayerNames name, entt::entity entity, uint32_t turn);
 
 	std::unique_ptr<computer_player::World> _world;
 };

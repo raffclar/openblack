@@ -75,6 +75,7 @@
 #include "Creature/LeashRules.h"
 #include "Creature/TemplePen.h"
 #include "ECS/AlignmentHistory.h"
+#include "ECS/AllyInfluence.h"
 #include "ECS/Archetypes/AnimatedStaticArchetype.h"
 #include "ECS/Archetypes/BallArchetype.h"
 #include "ECS/Archetypes/CreatureArchetype.h"
@@ -3910,9 +3911,13 @@ void GetInfluence() // 062 GET_INFLUENCE
 	{
 		influence = Locator::influenceSystem::value().PlayerInfluence(player, position);
 	}
-	// TODO(raffclar): the influence of the player's allies who let them use theirs, once players can be allies; until
-	// then no player has any
-	Pushf(script::influence::Answer(influence, raw, {}));
+	// Where the player has none, the allies that lend their influence to the player lend it
+	std::vector<float> lent;
+	if (influence.has_value())
+	{
+		lent = ecs::ally_influence::LentInfluence(player, map_coords::FromMetres({position.x, position.z}));
+	}
+	Pushf(script::influence::Answer(influence, raw, lent));
 }
 
 void SetInterfaceInteraction() // 063 SET_INTERFACE_INTERACTION
@@ -8851,20 +8856,27 @@ void GetFacingCameraPosition() // 377 GET_FACING_CAMERA_POSITION
 
 void SetComputerPlayerAttitude() // 378 SET_COMPUTER_PLAYER_ATTITUDE
 {
-	// const auto attitude = Popf();
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto attitude = Popf();
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The mind of the first player now thinks this of the second; a number that names no player does nothing
+	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAttitude(player, other, attitude);
+	}
 }
 
 void GetComputerPlayerAttitude() // 379 GET_COMPUTER_PLAYER_ATTITUDE
 {
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A number that names no player gives 0
+	float attitude = 0.0f;
+	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::computerPlayerSystem::has_value())
+	{
+		attitude = Locator::computerPlayerSystem::value().Attitude(player, other);
+	}
+	Pushf(attitude);
 }
 
 void LoadComputerPlayerPersonality() // 380 LOAD_COMPUTER_PLAYER_PERSONALITY
@@ -8885,11 +8897,14 @@ void SaveComputerPlayerPersonality() // 381 SAVE_COMPUTER_PLAYER_PERSONALITY
 
 void SetPlayerAlly() // 382 SET_PLAYER_ALLY
 {
-	// const auto percentage = Popf();
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto strength = Popf();
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The two players are allies of each other with this strength; a number that names no player does nothing
+	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::playerSystem::has_value())
+	{
+		Locator::playerSystem::value().SetAlly(other, player, strength);
+	}
 }
 
 void CallFlying() // 383 CALL_FLYING
@@ -9071,11 +9086,15 @@ void SquareRoot() // 397 SQUARE_ROOT
 
 void GetPlayerAlly() // 398 GET_PLAYER_ALLY
 {
-	// const auto player2 = Popf();
-	// const auto player1 = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushf(0.0f);
+	const auto other = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// The strength that the second player keeps for the first; a number that names no player gives 0
+	float strength = 0.0f;
+	if (player < PlayerNames::_COUNT && other < PlayerNames::_COUNT && Locator::playerSystem::has_value())
+	{
+		strength = Locator::playerSystem::value().AllyStrength(other, player);
+	}
+	Pushf(strength);
 }
 
 /// The player a script names: its 0 is the player at this computer, the others count from 1

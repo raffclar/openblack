@@ -38,6 +38,11 @@ public:
 	virtual void SetSuppression(PlayerNames player, std::string_view name, float suppression) = 0;
 	/// The hand of the god has no action to do
 	[[nodiscard]] virtual bool Ready(PlayerNames player) = 0;
+	/// A land script sets what the mind of the player thinks of another player. The mind keeps two times the value. The
+	/// game makes the player when the land has none yet.
+	virtual void SetAttitude(PlayerNames /*player*/, PlayerNames /*other*/, float /*attitude*/) {}
+	/// What the mind of the player thinks of another player, as a land script reads it: half of the kept value
+	[[nodiscard]] virtual float Attitude(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
 	/// In the turn of the players: each mind that is switched on and did not start on the land starts
 	virtual void ProcessTurn() = 0;
 	/// At the start of a network game, in the order of the gods of the slots: each god with a citadel that no human and

@@ -45,6 +45,11 @@ public:
 	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
+	/// A land script sets the strength of the alliance of two players, for each of them. The game makes a player when the
+	/// land has none yet.
+	virtual void SetAlly(PlayerNames /*player*/, PlayerNames /*other*/, float /*strength*/) {}
+	/// How strongly the player is the ally of the other player; 0 when the land has no such player
+	[[nodiscard]] virtual float AllyStrength(PlayerNames /*player*/, PlayerNames /*other*/) const { return 0.0f; }
 	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
 	/// Whether the computer plays a player: every player but the one at this machine
