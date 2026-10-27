@@ -419,22 +419,28 @@ def busy_hand(cycles):
 # pick says that the Action button takes the thing (steps of 10 pixels, turns 680 to 1160 of a seed 1 network game).
 # The pit, its piles and the town's desire flags are not things that the hand takes: with no third list the take of each
 # cycle picks one of these or the land, and takes nothing.
+# A fourth item, when there is one, moves the camera: the point it looks at and its distance, for a store with no thing to
+# take in the view of the standard camera (the nearest conifer of the first god of mpm_4p_1 is 55 metres from its store, of
+# the fourth god 42 metres).
 ONLINE_MAP_STORES = {
     "mpm_2p_1": [((2199.33, 2406.03), [(780, 480), (550, 420)], [(1240, 190), (20, 630)]),
                  ((2922.59, 2653.02), [(780, 480), (470, 400)], [(130, 60), (50, 60)])],
-    "mpm_3p_1": [((2571.61, 2196.73), [(520, 520), (710, 620)]),
-                 ((2217.39, 2671.21), [(750, 440), (460, 410)]),
-                 ((2806.55, 2811.45), [(780, 480), (540, 400)])],
-    "mpm_4p_1": [((3102.37, 2169.45), [(770, 500)]),
-                 ((1987.71, 1958.34), [(730, 650)]),
-                 ((1812.98, 3026.09), [(670, 530), (560, 660)]),
-                 ((3090.47, 2966.72), [(680, 640)])],
+    "mpm_3p_1": [((2571.61, 2196.73), [(520, 520), (710, 620)], [(1190, 390), (1160, 320)]),
+                 ((2217.39, 2671.21), [(750, 440), (460, 410)], [(490, 650), (400, 480)]),
+                 ((2806.55, 2811.45), [(780, 480), (540, 400)], [(1210, 240), (30, 290)])],
+    "mpm_4p_1": [((3102.37, 2169.45), [(600, 296), (535, 282)], [(590, 900)],
+                  {"focus": (3090.0, 2147.0), "distance": 55}),
+                 ((1987.71, 1958.34), [(730, 650)], [(510, 70), (570, 30), (800, 30)]),
+                 ((1812.98, 3026.09), [(670, 530), (560, 660)], [(820, 680), (860, 70)]),
+                 ((3090.47, 2966.72), [(560, 871)], [(547, 105), (305, 58)],
+                  {"focus": (3094.0, 2982.0), "distance": 45})],
 }
 
 
-def store_camera(store):
+def store_camera(store, view=None):
     """The camera of a store input, as the inspector's camera_set takes it"""
-    return {"focus": [store[0], store[1]], "yaw": 30, "pitch": 40, "distance": 35}
+    focus = view["focus"] if view else store
+    return {"focus": [focus[0], focus[1]], "yaw": 30, "pitch": 40, "distance": view["distance"] if view else 35}
 
 
 def store_hand(piles, cycles, takes=None):
@@ -529,10 +535,11 @@ def main():
     write("busy_hand", busy_hand(18))
     # Each god slot's own store on the online maps (net_check.py --inputN), from the camera of store_camera
     for land, stores in ONLINE_MAP_STORES.items():
-        for slot, (store, piles, *takes) in enumerate(stores):
-            take_pixels = takes[0] if takes else None
+        for slot, (store, piles, *more) in enumerate(stores):
+            take_pixels = more[0] if more else None
+            view = more[1] if len(more) > 1 else None
             expect = {"scoops": 1, "throws": 1} | ({"takes": 1} if take_pixels else {})
-            write(f"{land}_slot{slot}_store", store_hand(piles, 30, take_pixels), store_camera(store), expect)
+            write(f"{land}_slot{slot}_store", store_hand(piles, 30, take_pixels), store_camera(store, view), expect)
 
 
 if __name__ == "__main__":
