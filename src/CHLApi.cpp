@@ -26,6 +26,7 @@
 #include <sstream>
 #include <string>
 #include <string_view>
+#include <tuple>
 #include <unordered_set>
 #include <utility>
 #include <vector>
@@ -7956,12 +7957,14 @@ void CreatureForceFriends() // 309 CREATURE_FORCE_FRIENDS
 
 void MoveComputerPlayerPosition() // 310 MOVE_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto speed = Popf();
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto speed = Popf();
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().MoveHand(player, position, speed, withFixedHeight);
+	}
 }
 
 void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
@@ -7976,21 +7979,25 @@ void EnableDisableComputerPlayer311() // 311 ENABLE_DISABLE_COMPUTER_PLAYER
 
 void GetComputerPlayerPosition() // 312 GET_COMPUTER_PLAYER_POSITION
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
-	Pushv(0.0f); // x
-	Pushv(0.0f); // y
-	Pushv(0.0f); // z
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	// A player with no computer mind gives the origin
+	std::optional<glm::vec3> position;
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		position = Locator::computerPlayerSystem::value().HandPosition(player);
+	}
+	PushVec(position.value_or(glm::vec3(0.0f)));
 }
 
 void SetComputerPlayerPosition() // 313 SET_COMPUTER_PLAYER_POSITION
 {
-	// const auto withFixedHeight = static_cast<bool>(Pop().intVal);
-	// const auto position = PopVec();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto withFixedHeight = Pop().intVal != 0;
+	const auto position = PopVec();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetHand(player, position, withFixedHeight);
+	}
 }
 
 void GetStoredCameraPosition() // 314 GET_STORED_CAMERA_POSITION
@@ -8721,22 +8728,26 @@ void SetComputerPlayerSuppression() // 365 SET_COMPUTER_PLAYER_SUPPRESSION
 
 void ForceComputerPlayerAction() // 366 FORCE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		std::ignore = Locator::computerPlayerSystem::value().ForceAction(player, action, first, second);
+	}
 }
 
 void QueueComputerPlayerAction() // 367 QUEUE_COMPUTER_PLAYER_ACTION
 {
-	// const auto obj2 = Pop().uintVal;
-	// const auto obj1 = Pop().uintVal;
-	// const auto action = PopString();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto second = PopObject();
+	const auto first = PopObject();
+	const auto action = PopString();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().QueueAction(player, action, first, second);
+	}
 }
 
 void GetTownWithId() // 368 GET_TOWN_WITH_ID
@@ -8782,17 +8793,22 @@ void SetDisciple() // 369 SET_DISCIPLE
 
 void ReleaseComputerPlayer() // 370 RELEASE_COMPUTER_PLAYER
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	// The mind continues and releases the hand
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetPaused(player, false);
+	}
 }
 
 void SetComputerPlayerSpeed() // 371 SET_COMPUTER_PLAYER_SPEED
 {
-	// const auto speed = Popf();
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto speed = Popf();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetSpeed(player, speed);
+	}
 }
 
 void SetFocusFollowComputerPlayer() // 372 SET_FOCUS_FOLLOW_COMPUTER_PLAYER
@@ -9688,9 +9704,11 @@ void GetSpellIconInTemple() // 453 GET_SPELL_ICON_IN_TEMPLE
 
 void GameClearComputerPlayerActions() // 454 GAME_CLEAR_COMPUTER_PLAYER_ACTIONS
 {
-	// const auto player = Popf();
-	// TODO(Daniels118): implement this
-	NotImplemented();
+	const auto player = ScriptPlayerName(static_cast<int32_t>(Popf()));
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().ClearActions(player);
+	}
 }
 
 void GetFirstInContainer() // 455 GET_FIRST_IN_CONTAINER

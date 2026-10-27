@@ -9,6 +9,7 @@
 
 #include "ComputerMind.h"
 
+#include <cctype>
 #include <cstdint>
 
 #include <algorithm>
@@ -16,6 +17,8 @@
 #include <optional>
 #include <string_view>
 #include <vector>
+
+#include "Common/GUtilsDistance.h"
 
 using namespace openblack::computer_mind;
 
@@ -93,29 +96,120 @@ void WorkOutChildren(Mind& mind, World& world, uint16_t node, uint32_t turn)
 	self.value = InfoOf(self.kind).intensity ? best * self.value : best;
 }
 
+/// Starts the action of the node itself. The suppression of the node goes down after the start, and much more when the
+/// action cannot start. False when the node has no action or the action cannot start.
+bool PerformOwn(Mind& mind, World& world, uint16_t node)
+{
+	const auto& info = InfoOf(mind.nodes[node].kind);
+	if (!info.perform)
+	{
+		return false;
+	}
+	world.ClearAction();
+	if (world.Perform(mind, node))
+	{
+		mind.nodes[node].suppression = info.afterPerform;
+		world.StartAction();
+		return true;
+	}
+	mind.nodes[node].suppression = k_FailedSuppression;
+	return false;
+}
+
 /// Starts the action of the node, or of the first node above that has an action
 bool PerformNode(Mind& mind, World& world, uint16_t node, uint32_t turn)
 {
 	for (std::optional<uint16_t> at = node; at.has_value(); at = mind.nodes[*at].parent)
 	{
-		auto& current = mind.nodes[*at];
-		current.lastPerformed = turn;
-		const auto& info = InfoOf(current.kind);
-		if (!info.perform)
+		mind.nodes[*at].lastPerformed = turn;
+		if (InfoOf(mind.nodes[*at].kind).perform)
 		{
-			continue;
+			return PerformOwn(mind, world, *at);
 		}
-		world.ClearAction();
-		if (world.Perform(mind, *at))
-		{
-			mind.nodes[*at].suppression = info.afterPerform;
-			world.StartAction();
-			return true;
-		}
-		mind.nodes[*at].suppression = k_FailedSuppression;
-		return false;
 	}
 	return false;
+}
+
+/// Starts the action of the leaf that the node chose. False when the node chose no leaf.
+bool PerformBestLeaf(Mind& mind, World& world, uint16_t node, uint32_t turn)
+{
+	const auto leaf = mind.nodes[node].bestLeaf;
+	return leaf.has_value() && PerformNode(mind, world, *leaf, turn);
+}
+
+/// The name starts with the letters of a direct action, in capitals or not
+[[nodiscard]] bool DirectName(std::string_view name)
+{
+	constexpr std::string_view k_Direct = "DIRECT";
+	if (name.size() < k_Direct.size())
+	{
+		return false;
+	}
+	return std::ranges::equal(name.substr(0, k_Direct.size()), k_Direct, [](char a, char b) {
+		return std::toupper(static_cast<unsigned char>(a)) == static_cast<unsigned char>(b);
+	});
+}
+
+/// A script action at a script marker: the node keeps the place of the marker. A node with an action gives the place to
+/// its first child and chooses that child. A node with no action looks at its children.
+bool ForceAtPlace(Mind& mind, World& world, uint16_t node, entt::entity first, glm::vec3 place, float value, uint32_t turn)
+{
+	auto& self = mind.nodes[node];
+	self.place = place;
+	self.object = first;
+	self.value = value;
+	if (InfoOf(self.kind).perform)
+	{
+		if (self.childCount != 0)
+		{
+			const auto child = self.children.at(0);
+			mind.nodes[child].place = place;
+			mind.nodes[node].bestLeaf = child;
+		}
+	}
+	else
+	{
+		WorkOutChildren(mind, world, node, turn);
+	}
+	return PerformBestLeaf(mind, world, node, turn);
+}
+
+/// A script action with two things: the node acts on the first thing. A node with an action gives the second thing to
+/// its first child, or, with no children, acts on the second thing and gives the first thing to the node above.
+bool ForceWithThings(Mind& mind, World& world, uint16_t node, entt::entity first, entt::entity second, float value,
+                     uint32_t turn)
+{
+	mind.nodes[node].value = value;
+	mind.nodes[node].object = first;
+	if (!InfoOf(mind.nodes[node].kind).perform)
+	{
+		WorkOutChildren(mind, world, node, turn);
+		if (mind.nodes[node].bestLeaf == node)
+		{
+			return false;
+		}
+		return PerformBestLeaf(mind, world, node, turn);
+	}
+	if (mind.nodes[node].childCount != 0)
+	{
+		if (second == entt::null)
+		{
+			WorkOutChildren(mind, world, node, turn);
+		}
+		else
+		{
+			const auto child = mind.nodes[node].children.at(0);
+			mind.nodes[child].object = second;
+			mind.nodes[child].bestLeaf = child;
+			mind.nodes[node].bestLeaf = child;
+		}
+	}
+	else if (const auto parent = mind.nodes[node].parent; parent.has_value())
+	{
+		mind.nodes[*parent].object = first;
+		mind.nodes[node].object = second;
+	}
+	return PerformBestLeaf(mind, world, node, turn);
 }
 
 /// Calls the function for each node that the name finds, depth first from the root
@@ -217,7 +311,7 @@ void openblack::computer_mind::ProcessTurn(Mind& mind, World& world, uint32_t tu
 	}
 	if (!world.ActionBusy() && !mind.scriptHold)
 	{
-		if (world.ForceQueued())
+		if (ForceNext(mind, world, turn))
 		{
 			return;
 		}
@@ -243,6 +337,11 @@ void openblack::computer_mind::ProcessTurn(Mind& mind, World& world, uint32_t tu
 	if (!world.StepAction() && mind.nodes[0].bestLeaf.has_value())
 	{
 		mind.nodes[*mind.nodes[0].bestLeaf].suppression *= k_BadEndShare;
+	}
+	// The action of a script ends with the last step of the hand
+	if (!world.ActionBusy())
+	{
+		mind.scriptHand = false;
 	}
 	mind.wasBusy = true;
 	if (mind.scriptHold)
@@ -276,4 +375,90 @@ bool openblack::computer_mind::SetSuppression(Mind& mind, std::string_view name,
 	const auto found = FindNodes(mind, name);
 	std::ranges::for_each(found, [&mind, suppression](uint16_t node) { mind.nodes[node].suppression = suppression; });
 	return !found.empty();
+}
+
+bool openblack::computer_mind::ForceAction(Mind& mind, World& world, std::string_view name, entt::entity first,
+                                           entt::entity second, float value, uint32_t turn)
+{
+	const auto found = FindNodes(mind, name);
+	if (found.empty())
+	{
+		return false;
+	}
+	const auto node = found.front();
+	// A direct action uses the two things itself and starts at once
+	if (DirectName(name))
+	{
+		mind.nodes[node].object = first;
+		mind.nodes[node].argument = second;
+		if (PerformOwn(mind, world, node))
+		{
+			mind.scriptHand = true;
+			return true;
+		}
+	}
+	const auto place = world.MarkerPlace(second);
+	const bool started = place.has_value() ? ForceAtPlace(mind, world, node, first, *place, value, turn)
+	                                       : ForceWithThings(mind, world, node, first, second, value, turn);
+	if (started)
+	{
+		mind.scriptHand = true;
+	}
+	return started;
+}
+
+void openblack::computer_mind::QueueAction(Mind& mind, std::string_view name, entt::entity first, entt::entity second,
+                                           uint32_t turn)
+{
+	mind.queue.push_back(
+	    {.name = std::string(name.substr(0, k_QueuedNameLength)), .first = first, .second = second, .turn = turn});
+}
+
+bool openblack::computer_mind::ForceNext(Mind& mind, World& world, uint32_t turn)
+{
+	if (mind.queue.empty())
+	{
+		return false;
+	}
+	const auto next = mind.queue.front();
+	const bool started = ForceAction(mind, world, next.name, next.first, next.second, 1.0f, turn);
+	mind.queue.erase(mind.queue.begin());
+	return started;
+}
+
+void openblack::computer_mind::SeeNearHand(std::vector<SeenThing>& seen, const map_coords::MapCoords& hand, uint32_t turn,
+                                           const SeenWorld& world)
+{
+	if (seen.size() > k_SeenMost && turn % k_SeenForgetEvery == 0)
+	{
+		std::erase_if(seen, [turn](const SeenThing& old) { return turn - old.turn > k_SeenForgetAfter; });
+	}
+	// The god looks at the cells in a spiral out from its hand. It stops at the first cell on the map that is too far.
+	auto coords = hand;
+	map_coords::Spiral spiral;
+	for (int32_t cells = k_SeenMostCells; cells != 0; --cells)
+	{
+		if (const glm::ivec2 cell = map_coords::Cell(coords); map_coords::InBounds(cell))
+		{
+			if (!(gutils::GetDistanceInMetres(hand, coords) < k_SeenCellMargin + k_SeenRadius))
+			{
+				return;
+			}
+			for (const auto object : world.ThingsIn(cell))
+			{
+				if (!world.Available(object))
+				{
+					continue;
+				}
+				const auto thing = world.SeenAs(object);
+				if (!world.Available(thing) ||
+				    std::ranges::any_of(seen, [thing](const SeenThing& old) { return old.thing == thing; }))
+				{
+					continue;
+				}
+				seen.insert(seen.begin(), {.thing = thing, .turn = turn});
+			}
+		}
+		map_coords::AddCells(coords, spiral.Next());
+	}
 }
