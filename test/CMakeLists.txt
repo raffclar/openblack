@@ -1901,3 +1901,4 @@ set_tests_properties(
 openblack_setup_and_add_test(
   test_debug_computer_actions test_debug_computer_actions.cpp
 )
+openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)

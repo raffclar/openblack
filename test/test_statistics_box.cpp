@@ -62,6 +62,8 @@ const Row& RowNamed(const Page& page, const std::string& label)
 	ADD_FAILURE() << "no row " << label;
 	return page.rows.front();
 }
+/// A row of a page that is about to end would dangle, so the page must be kept in a variable
+const Row& RowNamed(Page&&, const std::string&) = delete;
 } // namespace
 
 TEST(StatisticsBoxPages, EachTabListsItsRowsInOrder)
@@ -143,7 +145,8 @@ TEST(StatisticsBoxRows, SingleFiguresAreAlwaysNumbersInTheLocalColour)
 	EXPECT_EQ(count.values, (std::vector<float> {113.0f}));
 	EXPECT_EQ(count.players, (std::vector<PlayerNames> {PlayerNames::PLAYER_TWO}));
 	EXPECT_FALSE(DrawnAsBar(count, true));
-	const auto& alignment = RowNamed(MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE), "HELP_TEXT_PAUSE_STATS_112");
+	const auto playerPage = MakePage(Tab::Player, figures, PlayerNames::PLAYER_ONE);
+	const auto& alignment = RowNamed(playerPage, "HELP_TEXT_PAUSE_STATS_112");
 	EXPECT_FALSE(DrawnAsBar(alignment, true));
 }
 
