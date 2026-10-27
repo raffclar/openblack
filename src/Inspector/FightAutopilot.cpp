@@ -29,7 +29,6 @@
 #include "ECS/Registry.h"
 #include "ECS/Systems/CreatureFightSystemInterface.h"
 #include "ECS/Systems/FightTranscriptSystemInterface.h"
-#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/PickingSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -86,8 +85,7 @@ std::optional<entt::entity> PlayersCreature()
 		return std::nullopt;
 	}
 	auto& players = Locator::playerSystem::value();
-	return players.GetPrimaryCreature(
-	    (Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE));
+	return players.GetPrimaryCreature(players.GetLocalPlayer());
 }
 
 float HeightOf(const Creature& creature)
