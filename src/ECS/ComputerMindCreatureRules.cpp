@@ -12,6 +12,10 @@
 #include <cmath>
 
 #include <algorithm>
+#include <iterator>
+#include <ranges>
+
+#include "Common/X87.h"
 
 using namespace openblack;
 
@@ -124,4 +128,49 @@ bool computer_mind_rules::LetsGoAtCast(float freedom, float wish, float distance
 bool computer_mind_rules::UntiesEvilLeash(float influence, bool restoringHealth)
 {
 	return !(influence > 0.0f) || restoringHealth;
+}
+
+float computer_mind_rules::MiracleLessonWish(uint32_t untaughtSends)
+{
+	// The game multiplies the whole count by the wish at the precision of a float
+	const float wish = x87::Mul(static_cast<double>(untaughtSends), k_UntaughtSendWish);
+	if (wish < 0.0f)
+	{
+		return 0.0f;
+	}
+	return wish > 1.0f ? 1.0f : wish;
+}
+
+std::optional<size_t> computer_mind_rules::FirstSkillToTeach(std::span<const LessonFacts> skills)
+{
+	const auto found = std::ranges::find_if(skills, [](const LessonFacts& skill) { return skill.teachable && !skill.known; });
+	if (found == skills.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(skills.begin(), found));
+}
+
+std::optional<size_t> computer_mind_rules::FirstMiracleToTeach(std::span<const LessonFacts> miracles, LessonKind kind)
+{
+	const auto ofKind = [kind](CreatureDesires perceived) {
+		switch (kind)
+		{
+		case LessonKind::Aggressive:
+			return perceived == CreatureDesires::Anger;
+		case LessonKind::Compassionate:
+			return perceived == CreatureDesires::Compassion;
+		case LessonKind::Impressive:
+			return true;
+		}
+		return false;
+	};
+	const auto found = std::ranges::find_if(miracles, [&ofKind](const LessonFacts& miracle) {
+		return miracle.teachable && !miracle.known && ofKind(miracle.perceived) && miracle.seedExists;
+	});
+	if (found == miracles.end())
+	{
+		return std::nullopt;
+	}
+	return static_cast<size_t>(std::distance(miracles.begin(), found));
 }

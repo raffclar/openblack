@@ -14,7 +14,21 @@ using namespace openblack;
 using namespace openblack::computer_hand;
 using namespace openblack::computer_hand::steps;
 
-void openblack::computer_hand::steps::AddTotemSteps(StepTable& /*table*/)
+namespace
 {
-	// RaiseTotem and LowerTotem are not made yet
+
+/// The god raises the totem to the share at the start of the step. The other parts of the step do nothing.
+Result RaiseStart(HandAction& /*action*/, const World& world, const Step& step)
+{
+	world.totem.RaiseTotem(ArgumentAt(step, 0).object, ArgumentAt(step, 1).value);
+	return Result::Next;
+}
+
+} // namespace
+
+void openblack::computer_hand::steps::AddTotemSteps(StepTable& table)
+{
+	constexpr auto k_Totem = StepOwner::Totem;
+	AddStep(table, k_Totem, StepKind::RaiseTotem, {.made = true, .start = RaiseStart});
+	// No action of the god lowers a totem, so that kind of step is not made
 }

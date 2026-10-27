@@ -9,11 +9,16 @@
 
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 
 #include <bit>
+#include <optional>
+#include <span>
 
 #include <glm/vec3.hpp>
+
+#include "Enums.h"
 
 /// The rules by which a computer god finds how much it wants to look after its creature. Pure functions of what the god
 /// sees.
@@ -134,5 +139,59 @@ constexpr float k_LetGoDistance = 200.0f;
 /// The god takes off the evil leash of its creature, tied to another creature, when the other creature is out of the
 /// influence of the god or its own creature tries to get its health back
 [[nodiscard]] bool UntiesEvilLeash(float influence, bool restoringHealth);
+
+/// How much the god wants to teach its creature an ordinary skill, while the creature does not know a skill that the god
+/// teaches
+constexpr float k_SkillLessonWish = 0.3f;
+static_assert(std::bit_cast<uint32_t>(k_SkillLessonWish) == 0x3E99999Au);
+/// For each kind of miracle, each time that the god sent its creature while the creature did not know the miracles of
+/// that kind adds this much to the wish to teach a miracle of that kind
+constexpr float k_UntaughtSendWish = 0.7f;
+static_assert(std::bit_cast<uint32_t>(k_UntaughtSendWish) == 0x3F333333u);
+
+/// How much the god wants to teach its creature a kind of miracle: the times that it sent the creature while the
+/// creature did not know that kind, times the wish of one send, from 0 to 1
+[[nodiscard]] float MiracleLessonWish(uint32_t untaughtSends);
+
+/// What the god knows of an ordinary skill or a miracle when it looks for one to teach
+struct LessonFacts
+{
+	/// The game's table lets a computer god teach it
+	bool teachable {false};
+	/// The creature knows it
+	bool known {false};
+	/// For a miracle: what the creature thinks that its player wants with the miracle
+	CreatureDesires perceived {CreatureDesires::ToImpress};
+	/// For a miracle: the seed of the miracle is a real one
+	bool seedExists {false};
+};
+
+/// The kinds of miracle that the god teaches its creature
+enum class LessonKind : uint8_t
+{
+	/// A miracle that the creature feels as angry
+	Aggressive,
+	/// A miracle that the creature feels as kind
+	Compassionate,
+	/// Any miracle
+	Impressive,
+};
+
+/// The first ordinary skill, in the order of the game's table, that the god teaches and the creature does not know
+[[nodiscard]] std::optional<size_t> FirstSkillToTeach(std::span<const LessonFacts> skills);
+/// The first miracle, in the order of the magic types, of the kind that the god teaches, that the creature does not know
+/// and that has a real seed
+[[nodiscard]] std::optional<size_t> FirstMiracleToTeach(std::span<const LessonFacts> miracles, LessonKind kind);
+
+/// The ordinary skill that has a lesson after the god teaches it: the use of the totem of a town
+constexpr size_t k_TotemSkill = 2;
+/// The god looks for a totem this many metres round the creature for the lesson of the totem
+constexpr float k_LessonTotemReach = 250.0f;
+/// The god raises the totem to this share of the people at worship for the lesson of the totem
+constexpr float k_LessonTotemShare = 1.0f;
+/// The actions of the game's table that the creature does in a lesson: it looks at the camera of its god, and it looks
+/// at the totem
+constexpr uint32_t k_LessonLookAtGodAction = 82;
+constexpr uint32_t k_LessonLookAtTotemAction = 20;
 
 } // namespace openblack::computer_mind_rules

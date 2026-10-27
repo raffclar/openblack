@@ -134,3 +134,80 @@ TEST(ComputerMindCreaturePlay, EachKindOfThePartHasItsRules)
 		EXPECT_EQ(rule(kind).perform, nullptr) << static_cast<int>(kind);
 	}
 }
+
+TEST(ComputerMindCreatureTeach, WishesHaveTheValuesOfTheGame)
+{
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_SkillLessonWish), 0x3E99999Au);
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_UntaughtSendWish), 0x3F333333u);
+	EXPECT_EQ(k_TotemSkill, 2u);
+	EXPECT_EQ(std::bit_cast<uint32_t>(k_LessonTotemReach), 0x437A0000u);
+	EXPECT_EQ(k_LessonLookAtGodAction, 82u);
+	EXPECT_EQ(k_LessonLookAtTotemAction, 20u);
+}
+
+TEST(ComputerMindCreatureTeach, EachSendAddsToTheWishForAMiracleUpToOne)
+{
+	EXPECT_EQ(MiracleLessonWish(0), 0.0f);
+	EXPECT_EQ(std::bit_cast<uint32_t>(MiracleLessonWish(1)), 0x3F333333u);
+	EXPECT_EQ(MiracleLessonWish(2), 1.0f);
+	EXPECT_EQ(MiracleLessonWish(std::numeric_limits<uint32_t>::max()), 1.0f);
+}
+
+TEST(ComputerMindCreatureTeach, TheGodTeachesTheFirstSkillThatTheCreatureDoesNotKnow)
+{
+	std::vector<LessonFacts> skills(6);
+	EXPECT_FALSE(FirstSkillToTeach(skills).has_value());
+	// Only a skill that the table lets the god teach counts
+	skills[2].teachable = true;
+	EXPECT_EQ(FirstSkillToTeach(skills), 2u);
+	skills[4].teachable = true;
+	EXPECT_EQ(FirstSkillToTeach(skills), 2u);
+	skills[2].known = true;
+	EXPECT_EQ(FirstSkillToTeach(skills), 4u);
+	skills[4].known = true;
+	EXPECT_FALSE(FirstSkillToTeach(skills).has_value());
+}
+
+TEST(ComputerMindCreatureTeach, TheGodTeachesTheFirstMiracleOfTheKindWithARealSeed)
+{
+	const LessonFacts angry {.teachable = true, .perceived = CreatureDesires::Anger, .seedExists = true};
+	const LessonFacts kind {.teachable = true, .perceived = CreatureDesires::Compassion, .seedExists = true};
+	std::vector<LessonFacts> miracles {angry, kind, angry, kind};
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Aggressive), 0u);
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Compassionate), 1u);
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Impressive), 0u);
+	// A known miracle, a miracle that the table does not let the god teach, and a miracle with no real seed do not count
+	miracles[0].known = true;
+	miracles[1].teachable = false;
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Aggressive), 2u);
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Compassionate), 3u);
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Impressive), 2u);
+	miracles[3].seedExists = false;
+	EXPECT_FALSE(FirstMiracleToTeach(miracles, LessonKind::Compassionate).has_value());
+	// A miracle that the creature feels as impressive is only an impressive lesson
+	miracles = {{.teachable = true, .perceived = CreatureDesires::ToImpress, .seedExists = true}};
+	EXPECT_FALSE(FirstMiracleToTeach(miracles, LessonKind::Aggressive).has_value());
+	EXPECT_FALSE(FirstMiracleToTeach(miracles, LessonKind::Compassionate).has_value());
+	EXPECT_EQ(FirstMiracleToTeach(miracles, LessonKind::Impressive), 0u);
+}
+
+TEST(ComputerMindCreatureTeach, EachKindOfTheLessonsHasItsRules)
+{
+	computer_world::RuleTable table {};
+	computer_world::RegisterCreaturePlayRules(table);
+	const auto rule = [&table](NodeKind kind) { return table.at(static_cast<size_t>(kind)); };
+	// The ordinary skill and the kind miracle start lessons
+	for (const auto kind : {NodeKind::ActionTeachCreatureNormalAction, NodeKind::ObjectTeachCreatureCompassionateMagic})
+	{
+		EXPECT_NE(rule(kind).intensity, nullptr) << static_cast<int>(kind);
+		EXPECT_NE(rule(kind).perform, nullptr) << static_cast<int>(kind);
+	}
+	// The angry and the impressive miracles are always 0 under the lesson, so only their wishes are made
+	for (const auto kind : {NodeKind::ActionTeachCreatureAggressiveMagic, NodeKind::ActionTeachCreatureCompassionateMagic,
+	                        NodeKind::ActionTeachCreatureImpressiveMagic, NodeKind::ObjectTeachCreatureAggressiveMagic,
+	                        NodeKind::ObjectTeachCreatureImpressiveMagic})
+	{
+		EXPECT_NE(rule(kind).intensity, nullptr) << static_cast<int>(kind);
+		EXPECT_EQ(rule(kind).perform, nullptr) << static_cast<int>(kind);
+	}
+}

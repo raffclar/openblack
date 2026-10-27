@@ -1902,3 +1902,10 @@ openblack_setup_and_add_test(
   test_debug_computer_actions test_debug_computer_actions.cpp
 )
 openblack_setup_and_add_test(test_drawn_hand graphics/test_drawn_hand.cpp)
+openblack_setup_and_add_test(
+  test_oracle_computer_creature_teach oracle/test_oracle_computer_creature_teach.cpp
+)
+set_tests_properties(
+  test_oracle_computer_creature_teach
+  PROPERTIES ENVIRONMENT "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

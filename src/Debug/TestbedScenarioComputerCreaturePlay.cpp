@@ -100,6 +100,15 @@ std::vector<Command> StrokeThen(std::string_view way)
 	return commands;
 }
 
+/// At the start, the god of player two wants only to teach its creature:
+/// - The need to teach gets the weight 1.
+/// - The needs of the towns, to look after the creature and to play with it get the weight 0.
+std::vector<Command> OnlyTeach()
+{
+	return {Weight("TownInteract", 0.0f), Weight("Lookaftercreature", 0.0f), Weight("PlayWithCreature", 0.0f),
+	        Weight("TeachCreature", 1.0f)};
+}
+
 } // namespace
 
 void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario>& all)
@@ -187,5 +196,41 @@ void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario
 	    .landScript = k_FireballTownScript,
 	    .commands = laugh,
 	    .worshipShare = 0.5f,
+	});
+	all.push_back({
+	    .id = "mind.computer_god_teach_totem",
+	    .name = "A computer god that teaches its creature to use the totem",
+	    .facet = Facet::Mind,
+	    .description = "The land of the food miracle scenario. The tiger of player two stands 40 metres to the east of "
+	                   "the totem of the town, and it does not know how to use a totem. At the start, the god wants only "
+	                   "to teach its creature.",
+	    .expected = "The hand of the god moves over the tiger, and the tiger looks up at the god. The tiger learns how to "
+	                "use a totem. Then the tiger looks at the totem of the town. The hand moves to the totem and raises "
+	                "it to the top, and the people of the town go to worship. The god does not teach the skill again.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {GodCreature({36.0f, 20.0f})},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = OnlyTeach(),
+	});
+	all.push_back({
+	    .id = "mind.computer_god_teach_kind_miracle",
+	    .name = "A computer god that teaches its creature a kind miracle",
+	    .facet = Facet::Mind,
+	    .description = "The land of the food miracle scenario. Half of the people go to worship at the site of the town. "
+	                   "The tiger of player two stands between the temple and the town. At the start, the god wants only "
+	                   "to teach its creature. After 30 seconds, a testbed tool puts the action "
+	                   "TeachCreatureCompassionateMagic in the queue of the god, with the tiger, as a land script does. "
+	                   "In a game, the god wants this lesson only after it sent its creature to help a town.",
+	    .expected = "The tiger learns the first kind miracle that it does not know, which is heal. The hand moves over the "
+	                "tiger, then to the food icon of the site. The tiger looks up at the god, and the hand moves back over "
+	                "it. The worshippers chant at the food icon, and the hand casts the heal miracle on the tiger.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .creatures = {GodCreature({30.0f, -30.0f})},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = OnlyTeach(),
+	    .worshipShare = 0.5f,
+	    .computerActions = {{.afterTurns = 300,
+	                         .node = "TeachCreatureCompassionateMagic",
+	                         .first = {.kind = ComputerActionThing::Kind::Creature, .object = 0}}},
 	});
 }
