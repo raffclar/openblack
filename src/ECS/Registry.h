@@ -182,6 +182,9 @@ public:
 	/// Every entity made since the registry was last emptied, those destroyed since too: the statistics' count of the
 	/// objects made on the land
 	[[nodiscard]] uint32_t GetEntitiesMade() const noexcept { return _entitiesMade; }
+	/// Goes up each time the registry is emptied, as before a land or a saved world loads. A load can give an entity the
+	/// same id and version that it had before, so a cache that keeps data by entity also keeps this number.
+	[[nodiscard]] uint32_t GetResets() const noexcept { return _resets; }
 	/// How many entities went from the registry since it was made, however they went. The count only goes up: emptying
 	/// the registry counts too.
 	[[nodiscard]] uint64_t GetEntitiesGone() const noexcept { return _entitiesGone; }
@@ -213,6 +216,7 @@ private:
 	void LivingGone(entt::registry& registry, entt::entity living);
 
 	uint32_t _entitiesMade {0};
+	uint32_t _resets {0};
 	uint64_t _entitiesGone {0};
 	bool _freshIdsAtNextReset {false};
 };

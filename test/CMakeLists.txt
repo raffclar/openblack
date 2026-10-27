@@ -1884,3 +1884,4 @@ openblack_setup_and_add_test(
   test_computer_player_state test_computer_player_state.cpp
 )
 openblack_setup_and_add_test(test_creature_animation_log test_creature_animation_log.cpp)
+openblack_setup_and_add_test(test_painted_skin_stamp test_painted_skin_stamp.cpp)
