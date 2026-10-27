@@ -43,6 +43,7 @@
 #include "ECS/CreatureReactionNotice.h"
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
+#include "ECS/Systems/TimeSystemInterface.h"
 
 using namespace openblack;
 using namespace openblack::inspector;
@@ -471,6 +472,59 @@ Json openblack::inspector::PlanJson(const CreatureMindState& mind, const creatur
 	};
 }
 
+Json openblack::inspector::AnimationClipJson(const creature_animation_log::Clip& clip, const std::optional<ClipLine>& line)
+{
+	return {
+	    {"layer", creature_animation_log::Name(clip.layer)},
+	    {"clip", clip.animation},
+	    {"name", line.has_value() ? Json(line->name) : Json(nullptr)},
+	    {"type", line.has_value() ? Json(std::string(1, line->type)) : Json(nullptr)},
+	    {"set", line.has_value() ? Json(line->set) : Json(nullptr)},
+	    {"time_ms", clip.timeMs},
+	    {"weight", clip.weight},
+	    {"mirrored", clip.mirrored},
+	    {"blended_with", clip.blendedWith.has_value() ? Json(*clip.blendedWith) : Json(nullptr)},
+	    {"blend_weight", clip.blendWeight},
+	    {"found", clip.found},
+	    {"loop", clip.looping},
+	    {"duration_ms", clip.durationMs.has_value() ? Json(*clip.durationMs) : Json(nullptr)},
+	};
+}
+
+Json openblack::inspector::AnimationCauseJson(const creature_animation_log::Cause& cause)
+{
+	const auto text = [](const std::string& value) { return value.empty() ? Json(nullptr) : Json(value); };
+	return {
+	    {"by", text(cause.by)},
+	    {"activity", text(cause.activity)},
+	    {"plan_action", cause.planAction.has_value() ? Json(*cause.planAction) : Json(nullptr)},
+	    {"plan_action_name", text(cause.planActionName)},
+	    {"agenda_step", cause.agendaStep.has_value() ? Json(*cause.agendaStep) : Json(nullptr)},
+	    {"agenda_step_kind", cause.agendaStepKind.has_value()
+	                             ? Json(StepKindName(static_cast<creature_mind::Step::Kind>(*cause.agendaStepKind)))
+	                             : Json(nullptr)},
+	    {"agenda_step_clip", cause.agendaStepClip.has_value() ? Json(*cause.agendaStepClip) : Json(nullptr)},
+	    {"object_action", text(cause.objectAction)},
+	    {"fight", text(cause.fightStage)},
+	    {"body", text(cause.body)},
+	};
+}
+
+Json openblack::inspector::AnimationEntryJson(const creature_animation_log::Entry& entry, const std::optional<ClipLine>& line)
+{
+	constexpr auto k_TurnMs = static_cast<float>(ecs::systems::TimeSystemInterface::k_TurnDuration.count());
+	auto json = AnimationClipJson(entry.last, line);
+	json["start_turn"] = entry.startTurn;
+	json["end_turn"] = entry.endTurn.has_value() ? Json(*entry.endTurn) : Json(nullptr);
+	json["turns"] = entry.turns;
+	json["first_time_ms"] = entry.first.timeMs;
+	// The speed is how far the clip moved on in the last turn, for each millisecond of the turn
+	json["advance_ms"] = entry.lastAdvanceMs;
+	json["speed"] = entry.turns > 1 ? Json(entry.lastAdvanceMs / k_TurnMs) : Json(nullptr);
+	json["cause"] = AnimationCauseJson(entry.cause);
+	return json;
+}
+
 std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(CreatureSources sources)
 {
 	auto provider = std::make_unique<FunctionProvider>("creature");
@@ -802,6 +856,112 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 		              plan["id"] = ToId(entity);
 		              return QueryResult::Value(std::move(plan));
 	              });
+	// The developer log of the clips. Each query finds the creature, then its log.
+	const auto logOf = [sources](const QueryContext& context)
+	    -> std::variant<std::pair<entt::entity, const creature_animation_log::Log*>, std::string> {
+		const auto* registry = Registry(sources.world);
+		if (registry == nullptr)
+		{
+			return std::string(k_NoRegistry);
+		}
+		const auto creature = CreatureParam(*registry, context.params);
+		if (const auto* problem = std::get_if<std::string>(&creature); problem != nullptr)
+		{
+			return *problem;
+		}
+		const auto entity = std::get<entt::entity>(creature);
+		const auto* log = sources.animationLog ? sources.animationLog(entity) : nullptr;
+		if (log == nullptr)
+		{
+			return std::string("the creature has no log of its clips yet: the log starts with the inspector, and the "
+			                   "body logs its clips each game turn");
+		}
+		return std::make_pair(entity, log);
+	};
+	const auto lineOf = [sources](entt::entity creature, size_t clip) -> std::optional<ClipLine> {
+		return sources.clipLine ? sources.clipLine(creature, clip) : std::nullopt;
+	};
+	provider->Add(Query("animation",
+	                    "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, "
+	                    "wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip "
+	                    "milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and "
+	                    "what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+	                    {id}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              Json clips = Json::array();
+		              for (const auto& entry : log->Current())
+		              {
+			              clips.push_back(AnimationEntryJson(entry, lineOf(entity, entry.last.animation)));
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)},
+		                                         {"turn", log->LastTurn().has_value() ? Json(*log->LastTurn()) : Json(nullptr)},
+		                                         {"clips", std::move(clips)},
+		                                         {"problems", log->Problems().size()}});
+	              });
+	provider->Add(Query("animation_history",
+	                    "The clips that a creature's body played and that stopped, the newest last: each with the turn that "
+	                    "it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 64.",
+	                    {id, Parameter("last", "integer", "How many of the newest clips (all by default)", false)}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              const auto& history = log->History();
+		              const auto last = static_cast<size_t>(
+		                  std::max(0.0, NumberMember(context.params, "last").value_or(static_cast<double>(history.size()))));
+		              Json clips = Json::array();
+		              for (size_t i = history.size() - std::min(last, history.size()); i < history.size(); ++i)
+		              {
+			              clips.push_back(AnimationEntryJson(history[i], lineOf(entity, history[i].last.animation)));
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)}, {"clips", std::move(clips)}});
+	              });
+	provider->Add(Query("animation_problems",
+	                    "The clips that something asked a creature's body for that did not play: missing (the species has "
+	                    "no such clip, so the body showed the stand or the action ended at once) or refused (the body "
+	                    "played another action), with the turn, what asked and how many turns in a row it came again",
+	                    {id}),
+	              [logOf, lineOf](const QueryContext& context) {
+		              const auto found = logOf(context);
+		              if (const auto* problem = std::get_if<std::string>(&found); problem != nullptr)
+		              {
+			              return QueryResult::Error(*problem);
+		              }
+		              const auto [entity, log] = std::get<0>(found);
+		              Json problems = Json::array();
+		              for (const auto& problem : log->Problems())
+		              {
+			              const auto line = lineOf(entity, problem.animation);
+			              problems.push_back({{"problem", creature_animation_log::Name(problem.problem)},
+			                                  {"layer", creature_animation_log::Name(problem.layer)},
+			                                  {"clip", problem.animation},
+			                                  {"name", line.has_value() ? Json(line->name) : Json(nullptr)},
+			                                  {"turn", problem.turn},
+			                                  {"repeats", problem.repeats},
+			                                  {"by", problem.by},
+			                                  {"detail", problem.detail}});
+		              }
+		              return QueryResult::Value({{"id", ToId(entity)}, {"problems", std::move(problems)}});
+	              });
+	auto clearLogs = Query("animation_clear", "Removes the logs of the clips of all the creatures. The logs start again.");
+	clearLogs.writes = true;
+	provider->Add(std::move(clearLogs), [sources](const QueryContext& /*context*/) {
+		if (!sources.clearAnimationLogs)
+		{
+			return QueryResult::Error("this game has no log of the clips");
+		}
+		sources.clearAnimationLogs();
+		return QueryResult::Value({{"cleared", true}});
+	});
 	provider->Add(
 	    Query("clear_area",
 	          "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in "
