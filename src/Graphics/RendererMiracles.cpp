@@ -16,6 +16,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <array>
 #include <iterator>
 #include <limits>
 #include <optional>
@@ -125,8 +126,12 @@ void Renderer::DrawSeedModel(const DrawSceneDesc& desc, const SeedModelDraw& sho
 			}
 		}
 		const float pulse = visuals::PhialPulse(shown.phialPhase);
-		const auto draws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
-		                         : std::vector<visuals::PhialDraw> {{.size = 1.0f, .alpha = 255, .landLit = true}};
+		// Any other seed is drawn once, whole and lit by the land
+		static constexpr std::array<visuals::PhialDraw, 1> k_WholeDraw {{{.size = 1.0f, .alpha = 255, .landLit = true}}};
+		const auto phialDraws = phial ? visuals::PhialDraws(receiveType, shown.phialPhase, pulse, shown.phialAlpha)
+		                              : std::vector<visuals::PhialDraw> {};
+		const auto draws =
+		    phial ? std::span<const visuals::PhialDraw>(phialDraws) : std::span<const visuals::PhialDraw>(k_WholeDraw);
 		const auto shape = phial ? visuals::PhialScale(receiveType, shown.phialPhase) : glm::vec3(1.0f);
 		const bool environmentMapped = environment != nullptr && (phial || shown.seed == SpellSeedType::Food);
 		const bool added = shown.seed == k_AddedSeed;
