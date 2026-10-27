@@ -50,6 +50,7 @@
 #include "ECS/Components/Field.h"
 #include "ECS/Components/Fire.h"
 #include "ECS/Components/Graveyard.h"
+#include "ECS/Components/Hand.h"
 #include "ECS/Components/HandGrab.h"
 #include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
@@ -97,6 +98,7 @@
 #include "Graphics/BonePalette.h"
 #include "Graphics/DebugLines.h"
 #include "Graphics/DetailLevel.h"
+#include "Graphics/DrawnHand.h"
 #include "Graphics/GraphicsHandleBgfx.h"
 #include "Graphics/GroundBlobs.h"
 #include "Graphics/InstanceLightPoint.h"
@@ -247,6 +249,17 @@ void UploadChanged(bgfx::DynamicVertexBufferHandle buffer, std::span<const Insta
 		             bgfx::copy(instances.data() + run.first, static_cast<uint32_t>(run.count * sizeof(Instance))));
 	}
 }
+
+/// The hand that the frame draws: the left hand of the god of this computer
+entt::entity DrawnHand()
+{
+	using openblack::ecs::systems::HandSystemInterface;
+	if (!openblack::Locator::handSystem::has_value())
+	{
+		return entt::null;
+	}
+	return openblack::Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
 } // namespace
 
 RenderingSystem::~RenderingSystem() = default;
@@ -359,8 +372,15 @@ void RenderingSystem::PrepareDrawDescs(bool drawBoundingBox)
 		++instanceCount;
 	};
 
+	// Of the hands, the frame draws only the hand of the god of this computer
+	const auto drawnHand = DrawnHand();
 	registry.Each<const Mesh, const Transform>(
-	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) { prep(entity, mesh, false); },
+	    [&prep, &registry, drawnHand](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/) {
+		    if (graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    {
+			    prep(entity, mesh, false);
+		    }
+	    },
 	    entt::exclude<MorphWithTerrain, Tree, TempleInteriorPart, AtHome, HiddenByState, VillageTotemGhostHidden>);
 	registry.Each<const Mesh, const Transform, const MorphWithTerrain>(
 	    [&prep](entt::entity entity, const Mesh& mesh, const Transform& /*unused*/, const MorphWithTerrain& /*unused*/) {
@@ -629,10 +649,16 @@ bool RenderingSystem::UploadInstances(bool drawBoundingBox)
 	// The instances of each mesh go in the order of their segments. Each pass places the things of one segment.
 	uint32_t segmentPlaced = 0;
 	uint32_t lastSegment = 0;
+	const auto drawnHand = DrawnHand();
 	EachBySegment<const Mesh, const Transform>(
 	    [this, &registry, &vegetation, &meshes, &fits, &lastFilmLevels, &fizzOrder, &segmentPlaced, &lastSegment,
-	     drawBoundingBox, camera, &view, modelDetail,
-	     drawList](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+	     drawBoundingBox, camera, &view, modelDetail, drawList,
+	     drawnHand](entt::entity entity, const Mesh& mesh, const Transform& transform) {
+		    // The hands of the other gods and the right hands have no model on the screen
+		    if (!graphics::drawn_hand::Drawn(registry.AllOf<Hand>(entity), entity, drawnHand))
+		    {
+			    return;
+		    }
 		    const auto segment = fizzOrder.SegmentOf(entity);
 		    lastSegment = std::max(lastSegment, segment);
 		    if (segment != segmentPlaced)
