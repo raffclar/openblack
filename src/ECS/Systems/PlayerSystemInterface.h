@@ -55,5 +55,11 @@ public:
 	{
 		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
 	}
+	/// Whether a person plays a player (see player_kind::IsHuman). A computer god is not a human player, also when it
+	/// has hands.
+	[[nodiscard]] virtual bool IsHumanPlayer(PlayerNames name) const
+	{
+		return player_kind::IsHuman({.player = name, .networkGame = false, .computerMind = false});
+	}
 };
 } // namespace openblack::ecs::systems
