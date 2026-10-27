@@ -1171,12 +1171,15 @@ struct ComputerActionThing
 		Object,
 		/// The scenario's creature at the index
 		Creature,
+		/// The first creature of the player that owner gives
+		PlayerCreature,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
 	MagicType type {MagicType::None};
 	/// The index of the scenario's object or creature
 	size_t object {0};
+	PlayerNames owner {PlayerNames::PLAYER_ONE};
 };
 
 /// A testbed tool step: the computer god of a player does the action of a node of its mind with two things. The tool
