@@ -879,10 +879,6 @@ def main():
                         [f"Network game: {options.hold_after} turns compared"]):
                     hold_creature(clients[index].pid, near)
                     held.add(index)
-            slot = (options.slot_miracle or 0) - 1
-            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
-                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
-                miracle_done = slot_miracle(clients[slot].pid, slot)
             for index, client in enumerate(clients):
                 camera = client_cameras[index]
                 if (camera and options.camera_again_after is not None and index not in cameras_again
@@ -893,6 +889,10 @@ def main():
                         print(f"the camera of client {index + 1} was not set again; see {client_dirs[index]}")
                         return 1
                     cameras_again.add(index)
+            slot = (options.slot_miracle or 0) - 1
+            if (miracle_done is None and 0 <= slot < len(clients) and clients[slot].poll() is None and lines_with(
+                    os.path.join(client_dirs[slot], "client.log"), [f"Network game: {options.hold_after} turns compared"])):
+                miracle_done = slot_miracle(clients[slot].pid, slot)
             if (options.stop_second_after is not None and not stopped_second and len(clients) > 1
                     and time.monotonic() - started > options.stop_second_after):
                 stop(clients[1])

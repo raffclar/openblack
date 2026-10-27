@@ -98,6 +98,7 @@ class WindowingInterface;
 namespace ecs
 {
 class Registry;
+class DrawnRegistry;
 class MapInterface;
 } // namespace ecs
 
@@ -292,6 +293,8 @@ struct Locator
 	using weatherSystem = entt::locator<ecs::systems::WeatherSystemInterface>;
 	using pathfindingSystem = entt::locator<ecs::systems::PathfindingSystemInterface>;
 	using entitiesRegistry = entt::locator<ecs::Registry>;
+	/// The things that only the frames make and draw, out of the synced world
+	using drawnRegistry = entt::locator<ecs::DrawnRegistry>;
 	using entitiesMap = entt::locator<ecs::MapInterface>;
 	using playerSystem = entt::locator<ecs::systems::PlayerSystemInterface>;
 	using alignmentSystem = entt::locator<ecs::systems::AlignmentSystemInterface>;

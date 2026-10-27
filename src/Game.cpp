@@ -149,6 +149,7 @@
 #include "ECS/Components/Vortex.h"
 #include "ECS/CreatureDanceMusic.h"
 #include "ECS/CreatureExplorationLand.h"
+#include "ECS/DrawnPlace.h"
 #include "ECS/FloatingNumber.h"
 #include "ECS/LearningMarker.h"
 #include "ECS/Map.h"
@@ -1783,7 +1784,11 @@ void Game::ProcessHandToolTipTurn()
 	                         ? Locator::villageTotemSystem::value().TakeShareToolTip(LocalInputPlayer())
 	                         : std::nullopt;
 	    tip.has_value() && Locator::entitiesRegistry::value().Valid(tip->totem) &&
-	    OnScreen(Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem).position).has_value())
+	    OnScreen(ecs::drawn_place::DrawnTransformOf(
+	                 Locator::entitiesRegistry::value(), tip->totem,
+	                 Locator::entitiesRegistry::value().Get<const ecs::components::Transform>(tip->totem))
+	                 .position)
+	        .has_value())
 	{
 		toolTips.Force(ecs::village_totem::k_ShareToolTip, tip->percent);
 	}
@@ -4137,6 +4142,11 @@ void Game::StartSimulationLogs()
 	{
 		return;
 	}
+	if (_simulation->frameGuard != sim_run::HashDetail::None)
+	{
+		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
+		                                                         _simulation->frameGuardSystems);
+	}
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	if (_simulation->traceDrawsPath.has_value())
 	{
@@ -4147,11 +4157,6 @@ void Game::StartSimulationLogs()
 		}
 	}
 #endif
-	if (_simulation->frameGuard != sim_run::HashDetail::None)
-	{
-		_frameGuard = std::make_unique<frame_write_guard::Guard>(_simulation->frameGuard == sim_run::HashDetail::Fields,
-		                                                         _simulation->frameGuardSystems);
-	}
 	if (_simulation->checksumsPath.has_value())
 	{
 		_checksumLog = std::make_unique<checksum_log::Writer>(*_simulation->checksumsPath);

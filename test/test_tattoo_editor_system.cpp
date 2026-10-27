@@ -44,11 +44,14 @@ struct SkinLog
 	std::vector<std::pair<entt::entity, Sheet>> remade;
 	std::vector<entt::entity> painted;
 	std::optional<entt::entity> caveCopy;
+	/// The copies that the editor showed or painted through the calls for the copy in the cave
+	std::vector<entt::entity> copyCalls;
 
 	void Forget()
 	{
 		remade.clear();
 		painted.clear();
+		copyCalls.clear();
 	}
 };
 
@@ -73,6 +76,16 @@ public:
 	void Show(entt::entity shown, std::optional<Slots> slots) override { _log.shown[shown] = slots; }
 	void RemakeMasks(entt::entity creature, Sheet sheet) override { _log.remade.emplace_back(creature, sheet); }
 	void Paint(entt::entity creature) override { _log.painted.push_back(creature); }
+	void ShowCopy(entt::entity copy, std::optional<Slots> slots) override
+	{
+		_log.shown[copy] = slots;
+		_log.copyCalls.push_back(copy);
+	}
+	void PaintCopy(entt::entity copy) override
+	{
+		_log.painted.push_back(copy);
+		_log.copyCalls.push_back(copy);
+	}
 	[[nodiscard]] std::optional<entt::entity> CaveCopy(entt::entity creature) const override
 	{
 		return creature == k_Creature ? _log.caveCopy : std::nullopt;
@@ -122,6 +135,23 @@ TEST(TattooEditorSystem, OpeningInTheCaveShowsTheEditsOnTheCopyWithTheMasksMadeA
 	EXPECT_FALSE(f.log.shown.at(k_Copy).has_value());
 	EXPECT_EQ(f.log.painted, std::vector {k_Copy});
 	EXPECT_TRUE(f.log.remade.empty());
+}
+
+TEST(TattooEditorSystem, TheCopyInTheCaveGetsOnlyTheCallsForTheCopy)
+{
+	// The copy is a thing of the temple's rooms, so its number can also be the number of a thing of the land
+	Fixture f;
+	f.log.caveCopy = k_Copy;
+	f.editor.Open(k_Creature, {});
+	EXPECT_EQ(f.log.copyCalls, (std::vector {k_Copy, k_Copy}));
+	f.log.Forget();
+	// A drop shows and paints the copy through its calls, and paints the creature in the world through the others
+	static_cast<void>(f.editor.Drop(4, k_Green));
+	EXPECT_EQ(f.log.copyCalls, (std::vector {k_Copy, k_Copy}));
+	EXPECT_EQ(f.log.painted, (std::vector {k_Copy, k_Creature}));
+	f.log.Forget();
+	f.editor.Close();
+	EXPECT_EQ(f.log.copyCalls, (std::vector {k_Copy, k_Copy}));
 }
 
 TEST(TattooEditorSystem, ASymbolDroppedOverAPlaceGoesIntoTheSkin)
