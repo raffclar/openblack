@@ -1335,6 +1335,10 @@ void AddGodsRingMapScenarios(std::vector<Scenario>& all);
 /// A point given from the middle of the map, on the land
 [[nodiscard]] glm::vec2 MapPoint(glm::vec2 middle, glm::vec2 offset);
 
+/// The number of the help text that has this name, as the scripts give a challenge's title. Empty when no help text has
+/// this name.
+[[nodiscard]] std::optional<uint32_t> HelpTextNumber(std::span<const std::string> names, std::string_view name);
+
 /// About how tall a creature of a size stands
 [[nodiscard]] float CreatureHeight(float size);
 

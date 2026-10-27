@@ -11,6 +11,7 @@
 
 #include <algorithm>
 #include <array>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -825,4 +826,14 @@ TEST(TestbedScenarios, TheMapForThirtyTwoGodsHasScenariosThatLoadIt)
 		EXPECT_FALSE(scenario->environment.dispenserGrid) << id;
 	}
 	EXPECT_EQ(Name(Facet::Multiplayer), "Multiplayer");
+}
+
+TEST(TestbedScenarios, AChallengeTitleIsTheNumberOfTheHelpTextWithItsName)
+{
+	const std::vector<std::string> names {"HELP_TEXT_DIALOG_CONTINUEGAME", "HELP_TEXT_TITLE_01", "HELP_TEXT_TITLE_03"};
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_01"), 1U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_03"), 2U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_DIALOG_CONTINUEGAME"), 0U);
+	EXPECT_EQ(HelpTextNumber(names, "HELP_TEXT_TITLE_15"), std::nullopt);
+	EXPECT_EQ(HelpTextNumber({}, "HELP_TEXT_TITLE_01"), std::nullopt);
 }

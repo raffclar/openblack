@@ -5451,14 +5451,15 @@ std::string Runner::RecordChallenge(const Command& command) const
 	snapshot.position = position;
 	snapshot.focus = focus;
 	snapshot.quest = command.ctrl;
+	// The title is the number of a help text. The dedicated server has no game interface, so it reads the names from
+	// the same text scripts. Thus the server and the game record the same title.
 	auto* game = Game::Instance();
-	if (game != nullptr && game->GetInterface() != nullptr)
+	const auto* shown = game != nullptr && game->GetInterface() != nullptr ? &game->GetInterface()->GetTexts() : nullptr;
+	const auto loaded = shown == nullptr ? std::optional(gui::GameInterface::LoadTexts()) : std::nullopt;
+	const auto& texts = shown != nullptr ? *shown : *loaded;
+	if (const auto number = HelpTextNumber(texts.GetHelpNames(), command.title); number.has_value())
 	{
-		const auto names = game->GetInterface()->GetTexts().GetHelpNames();
-		if (const auto found = std::ranges::find(names, command.title); found != names.end())
-		{
-			snapshot.title = static_cast<uint32_t>(std::distance(names.begin(), found));
-		}
+		snapshot.title = *number;
 	}
 	chlapi::CHLApi::RecordChallenge(snapshot, script::challenge_snapshots::Call::Start);
 	return fmt::format("challenge {} ({}), {:.0f}% done{}", command.value, command.title, command.amount * 100.0f,
