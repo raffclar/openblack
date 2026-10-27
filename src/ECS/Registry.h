@@ -209,6 +209,8 @@ protected:
 private:
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
 	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
+	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
+	void LivingGone(entt::registry& registry, entt::entity living);
 
 	uint32_t _entitiesMade {0};
 	uint64_t _entitiesGone {0};
