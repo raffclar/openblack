@@ -4643,6 +4643,22 @@ void AddObjects(std::vector<Scenario>& all)
 	});
 
 	all.push_back({
+	    .id = "objects.stomp_lost_villager",
+	    .name = "Stomping on a villager that the hand takes away",
+	    .facet = Facet::Objects,
+	    .description = "A grown tiger with a villager in front of it. A script tells it to stomp on the villager. As "
+	                   "the foot starts to come down, the player's hand takes the villager.",
+	    .expected = "The foot stops and goes back up along the same path, to where the stomp started. Then the tiger "
+	                "stands, and the stomp fails. The villager stays alive in the hand.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Follow, .distance = 1.3f},
+	    .creatures = {Content(CreatureType::Tiger, {0.0f, 0.0f})},
+	    .objects = {{.type = VillagerInfo::CelticFarmerMale, .offset = {0.0f, -k_Reach}}},
+	    .commands = {{.kind = Kind::DoAction, .delaySeconds = 1.0f, .object = 0, .action = "Stomp"},
+	                 {.kind = Kind::HandTake, .delaySeconds = 3.7f, .object = 0}},
+	});
+
+	all.push_back({
 	    .id = "objects.stomp_and_eat",
 	    .name = "Stomping on a sheep and eating it",
 	    .facet = Facet::Objects,
@@ -6646,6 +6662,26 @@ void AddLeash(std::vector<Scenario>& all)
 	};
 	all.push_back(templeGlows("leash.temple_glows", "The glows round the temple's leashes by day", 12.0f));
 	all.push_back(templeGlows("leash.temple_glows_night", "The glows round the temple's leashes at night", 23.0f));
+
+	all.push_back({
+	    .id = "leash.l_key_picks_post",
+	    .name = "The leash key picks the leash at the temple",
+	    .facet = Facet::Leash,
+	    .description = "Your tiger knows all three leashes and your temple stands in front of the camera. The compassion "
+	                   "leash is tapped at its post, then tapped again, so no leash is picked. Then the leash key puts "
+	                   "the compassion leash on. Last, the leash key takes it off.",
+	    .expected = "After the second tap, no glow is orange and the hand carries no leash. When the leash key puts the "
+	                "leash on, the compassion leash (the rainbow fur) goes round the hand's wrist again and its glow "
+	                "turns orange. When the leash comes off, the leash stays in the hand and its glow stays orange.",
+	    .environment = {.hour = 12.0f, .clockRuns = false, .dispenserGrid = false},
+	    .framing = {.shot = Shot::Placed, .eye = {-262.0f, 30.0f, 120.0f}, .look = {-300.0f, 5.0f, 100.0f}},
+	    .creatures = {Posed(CreatureType::Tiger, {-240.0f, 40.0f}, 90.0f)},
+	    .temples = {{.offset = {-300.0f, 100.0f}, .angle = 36.0f}},
+	    .commands = {{.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 1.0f, .value = 2},
+	                 {.kind = Kind::TapLeashPost, .creature = 0, .delaySeconds = 2.0f, .value = 2},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0},
+	                 {.kind = Kind::LeashKey, .delaySeconds = 3.0f, .value = 0}},
+	});
 
 	all.push_back({
 	    .id = "leash.pull_to_hand",

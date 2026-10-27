@@ -302,6 +302,23 @@ TEST(CreatureObjectActions, AThrowIntoAStoreIsOverOnlyOnceTheThingHasComeDown)
 	EXPECT_TRUE(creature_object_actions::ThrowOver(true, true, false));
 }
 
+// The time of a reach that loses its thing decreases by one step in that turn and in each turn after it. The action
+// fails at the start of the reach.
+TEST(CreatureObjectActions, AReachThatLosesItsThingGoesToItsStart)
+{
+	using creature_object_actions::WithdrawStart;
+	using creature_object_actions::WithdrawStep;
+	EXPECT_FLOAT_EQ(WithdrawStart(351.0f, 117.0f), 234.0f);
+	EXPECT_FLOAT_EQ(WithdrawStart(0.0f, 117.0f), 0.0f);
+	EXPECT_FLOAT_EQ(WithdrawStart(100.0f, 117.0f), 0.0f);
+	EXPECT_EQ(WithdrawStep(234.0f, 117.0f), std::optional(117.0f));
+	EXPECT_EQ(WithdrawStep(117.0f, 117.0f), std::optional(0.0f));
+	EXPECT_EQ(WithdrawStep(116.0f, 117.0f), std::nullopt);
+	EXPECT_EQ(WithdrawStep(0.0f, 117.0f), std::nullopt);
+	// The time of a creature that is frozen does not change
+	EXPECT_EQ(WithdrawStep(0.0f, 0.0f), std::optional(0.0f));
+}
+
 TEST(CreatureObjectActions, APersonOrAnimalInACreaturesHandGoesIntoItsStateForTheHand)
 {
 	using creature_object_actions::HoldStart;
