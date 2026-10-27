@@ -130,6 +130,7 @@ void openblack::ecs::reflection::RegisterFields_Components_t(entt::meta_ctx& con
 	    .Field<&components::Town::desiresChanged>("desiresChanged")
 	    .Field<&components::Town::desiresChangedLastTurn>("desiresChangedLastTurn")
 	    .Field<&components::Town::planned>("planned")
+	    .Field<&components::Town::sitesOpened>("sitesOpened")
 	    .Field<&components::Town::askedToBuildTurn>("askedToBuildTurn")
 	    .Field<&components::Town::emptyTownTimer>("emptyTownTimer")
 	    .Field<&components::Town::temporaryStores>("temporaryStores")
