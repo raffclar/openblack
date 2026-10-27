@@ -147,3 +147,101 @@ TEST(ComputerHand, GestureWithNoShapeTakesOneTurn)
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(3.0f, 0.0f), 1.0f);
 	EXPECT_FLOAT_EQ(GestureSharePerTurn(4.0f, 2.0f), 1.0f / 60.0f);
 }
+
+TEST(ComputerHandCasts, CastAtPlaceStaysForTheTimeOfTheCast)
+{
+	FakeWorld world;
+	world.castWorks = true;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::CastSpellAtPos,
+	    {Argument {.place = {100.07f, 3.0f, 200.03f}}, Argument {.number = static_cast<int32_t>(MagicType::Heal)},
+	     Argument {.object = k_Icon}});
+	EXPECT_TRUE(Process(action, world.view)); // the start
+	EXPECT_TRUE(Process(action, world.view));
+	ASSERT_EQ(world.cast.size(), 1u);
+	EXPECT_EQ(world.cast[0], MagicType::Heal);
+	// The place goes to whole map units on the land, with the magnitude 1
+	EXPECT_EQ(world.castAt[0].x, map_coords::ToMetres(map_coords::ToFixed(100.07f)));
+	EXPECT_EQ(world.castAt[0].z, map_coords::ToMetres(map_coords::ToFixed(200.03f)));
+	EXPECT_EQ(world.castAt[0].y, 0.0f);
+	EXPECT_EQ(world.magnitudes[0], 1.0f);
+	EXPECT_EQ(action.counter, 5u);
+	for (int turn = 0; turn < 4; ++turn)
+	{
+		EXPECT_TRUE(Process(action, world.view));
+	}
+	EXPECT_TRUE(Busy(action));
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+}
+
+TEST(ComputerHandCasts, CastTowardPlaceIsTheSameAsAtPlace)
+{
+	FakeWorld world;
+	world.castWorks = false;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::CastSpellTowardPos,
+	    {Argument {.place = {10.0f, 0.0f, 20.0f}}, Argument {.number = static_cast<int32_t>(MagicType::Fireball)},
+	     Argument {.object = k_Icon}});
+	EXPECT_TRUE(Process(action, world.view));
+	// A miracle that is not made ends the action badly
+	EXPECT_FALSE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+	ASSERT_EQ(world.cast.size(), 1u);
+	EXPECT_EQ(world.cast[0], MagicType::Fireball);
+}
+
+TEST(ComputerHandCasts, ShieldGetsItsRadiusAsMagnitude)
+{
+	FakeWorld world;
+	world.castWorks = true;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::CastShieldAtPos,
+	    {Argument {.place = {50.0f, 0.0f, 60.0f}}, Argument {.number = static_cast<int32_t>(MagicType::Shield)},
+	     Argument {.value = 42.5f}, Argument {.object = k_Icon}});
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_TRUE(Process(action, world.view));
+	ASSERT_EQ(world.cast.size(), 1u);
+	EXPECT_EQ(world.cast[0], MagicType::Shield);
+	EXPECT_EQ(world.magnitudes[0], 42.5f);
+	// The hand does not stay
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+}
+
+TEST(ComputerHandCasts, WaitForSpellToWearOffWaitsWhileAMiracleActs)
+{
+	FakeWorld world;
+	constexpr auto k_Creature = static_cast<entt::entity>(9);
+	world.underSpell = k_Creature;
+	HandAction action;
+	action.moveFirst = false;
+	Add(action, StepKind::WaitForSpellToWearOff, {Argument {.object = k_Creature}});
+	EXPECT_TRUE(Process(action, world.view));
+	for (int turn = 0; turn < 20; ++turn)
+	{
+		EXPECT_TRUE(Process(action, world.view));
+	}
+	EXPECT_EQ(action.part, 1);
+	world.underSpell = entt::null;
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_TRUE(Process(action, world.view));
+	EXPECT_FALSE(Busy(action));
+}
+
+TEST(ComputerHandCasts, CastAtPlaceMovesTheHandThereFirst)
+{
+	FakeWorld world;
+	world.castWorks = true;
+	HandAction action;
+	Add(action, StepKind::CastShieldAtPos,
+	    {Argument {.place = {50.0f, 0.0f, 60.0f}}, Argument {.number = static_cast<int32_t>(MagicType::Shield)},
+	     Argument {.value = 4.0f}, Argument {.object = k_Icon}});
+	EXPECT_TRUE(Process(action, world.view));
+	ASSERT_EQ(action.steps.size(), 2u);
+	EXPECT_EQ(action.steps[0].kind, StepKind::MoveHandToPos);
+	EXPECT_EQ(action.steps[0].arguments[0].place, glm::vec3(50.0f, 0.0f, 60.0f));
+}

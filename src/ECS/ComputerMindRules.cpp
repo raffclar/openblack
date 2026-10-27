@@ -16,6 +16,7 @@
 
 #include "Common/GUtilsAngle.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/X87.h"
 
 using namespace openblack;
 using namespace openblack::computer_mind_rules;
@@ -182,4 +183,133 @@ float computer_mind_rules::OutsidePlacePull(float distanceToEdge, float reach)
 {
 	const float pull = gutils::GetDistanceModifier(distanceToEdge, reach);
 	return static_cast<double>(pull) >= k_LeastPlacePull ? pull * pull : 0.0f;
+}
+
+float computer_mind_rules::KindScore(SpellKind kind, CreatureDesires perceived, float impressiveBalance)
+{
+	switch (kind)
+	{
+	case SpellKind::Aggressive:
+		return perceived == CreatureDesires::Anger ? 1.0f : 0.0f;
+	case SpellKind::Compassionate:
+		return perceived == CreatureDesires::Compassion ? 1.0f : 0.0f;
+	case SpellKind::Impressive:
+		return impressiveBalance;
+	}
+	return 0.0f;
+}
+
+float computer_mind_rules::KindWish(float wish, float score)
+{
+	return wish * score;
+}
+
+bool computer_mind_rules::TooNearOwnCreature(float distance, float ownSize, float targetSize)
+{
+	const float own = ownSize * k_CreatureReachPerSize;
+	const float target = targetSize * k_CreatureReachPerSize;
+	const float twice = (target + own) + (target + own);
+	const float clearance = twice <= k_LeastCreatureClearance ? k_LeastCreatureClearance : twice;
+	return distance < clearance;
+}
+
+std::optional<DamagedChoice> computer_mind_rules::MostDamaged(std::span<const float> shares)
+{
+	std::optional<DamagedChoice> choice;
+	float least = 1.0f;
+	for (size_t i = 0; i < shares.size(); ++i)
+	{
+		if (shares[i] < least)
+		{
+			least = shares[i];
+			choice = DamagedChoice {.index = i, .share = least};
+		}
+	}
+	return choice;
+}
+
+float computer_mind_rules::DamageNeed(float share)
+{
+	if (share < k_BadDamage)
+	{
+		return 1.0f;
+	}
+	return 1.0f - share * share;
+}
+
+std::optional<TownThreat> computer_mind_rules::ThreatOf(std::span<const TownAttack, k_TownAttackPlayers> attacks, uint32_t turn)
+{
+	TownThreat threat;
+	float most = 0.0f;
+	for (const auto& attack : attacks)
+	{
+		// The turns since the attack, as a number that is never negative
+		const uint32_t since = turn - attack.turn;
+		float forgotten = x87::Mul(static_cast<double>(since), k_AttackMemoryShare);
+		if (!(forgotten < 1.0f))
+		{
+			forgotten = 1.0f;
+		}
+		const float fear = 1.0f - forgotten * forgotten * forgotten;
+		if (most < fear)
+		{
+			threat.miracleHarm = attack.miracleHarm;
+			threat.thingHarm = attack.thingHarm + attack.otherThingHarm;
+			threat.fear = fear;
+			most = fear;
+		}
+	}
+	if (threat.miracleHarm <= 0.0f && threat.thingHarm <= 0.0f)
+	{
+		return std::nullopt;
+	}
+	return threat;
+}
+
+MagicType computer_mind_rules::ShieldAgainst(const TownThreat& threat)
+{
+	return threat.miracleHarm > threat.thingHarm ? MagicType::Shield : MagicType::PhysicalShield;
+}
+
+MagicType computer_mind_rules::ShieldToCheck(const TownThreat& threat)
+{
+	return threat.thingHarm > threat.miracleHarm ? MagicType::PhysicalShield : MagicType::Shield;
+}
+
+float computer_mind_rules::ImpressPlaceValue(uint32_t villagers, float distanceFromHand)
+{
+	const float nearness = gutils::GetDistanceModifier(distanceFromHand, k_ImpressReach);
+	return x87::Mul(static_cast<double>(villagers), nearness);
+}
+
+std::optional<size_t> computer_mind_rules::BestImpressPlace(std::span<const float> values)
+{
+	if (values.empty())
+	{
+		return std::nullopt;
+	}
+	size_t best = 0;
+	for (size_t i = 1; i < values.size(); ++i)
+	{
+		if (values[best] < values[i])
+		{
+			best = i;
+		}
+	}
+	return best;
+}
+
+float computer_mind_rules::CarryDistance(float random, float targetRadius, float thingRadius)
+{
+	const float factor = x87::Add(random, k_LeastCarryFactor);
+	return thingRadius + targetRadius * factor;
+}
+
+bool computer_mind_rules::SameCastPlace(const map_coords::MapCoords& a, const map_coords::MapCoords& b)
+{
+	const auto apart = [](int32_t from, int32_t to) {
+		const auto difference = static_cast<int32_t>(static_cast<uint32_t>(from) - static_cast<uint32_t>(to));
+		return difference < 0 ? -difference : difference;
+	};
+	return apart(a.x, b.x) < k_SameCastPlace && apart(a.z, b.z) < k_SameCastPlace;
 }
