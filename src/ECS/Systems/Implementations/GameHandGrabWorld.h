@@ -62,6 +62,7 @@ public:
 	void CountHelpEvent(uint32_t event) override;
 	void ForgetGesturePath() override;
 	void HeatHeld(entt::entity object) override;
+	void HeldTurn(entt::entity object) override;
 	void PlaySample(uint32_t sample, glm::vec3 position) override;
 	bool TapThing(entt::entity object, glm::vec3 handPoint, PlayerNames player) override;
 	void GlobeIntoHand(entt::entity globe, PlayerNames player) override;

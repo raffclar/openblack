@@ -14,6 +14,7 @@
 
 #include "ECS/Components/Scaffold.h"
 #include "ECS/ScaffoldOfferRules.h"
+#include "InfoConstants.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -273,4 +274,20 @@ TEST(ScaffoldOfferRules, HeldTurnWhileTheHandMovesKeepsOrDropsTheOffer)
 	(void)HeldTurn(phantom, {.handStill = false}, {}, [](const ScaffoldPhantom&) { return false; });
 	EXPECT_FALSE(phantom.grows);
 	EXPECT_EQ(phantom.changeMs, k_ChangeMs);
+}
+
+TEST(ScaffoldOfferRules, FindFirstTakesTheFirstRowOfTheTribeOrOfNoTribe)
+{
+	std::vector<GAbodeInfo> rows(4);
+	rows[0].tribeType = Tribe::NORSE;
+	rows[0].abodeNumber = AbodeNumber::A;
+	rows[1].tribeType = Tribe::NONE;
+	rows[1].abodeNumber = AbodeNumber::Wonder;
+	rows[2].tribeType = Tribe::CELTIC;
+	rows[2].abodeNumber = AbodeNumber::A;
+	rows[3].tribeType = Tribe::CELTIC;
+	rows[3].abodeNumber = AbodeNumber::A;
+	EXPECT_EQ(GAbodeInfo::FindFirst(rows, Tribe::CELTIC, AbodeNumber::A), static_cast<AbodeInfo>(2));
+	EXPECT_EQ(GAbodeInfo::FindFirst(rows, Tribe::CELTIC, AbodeNumber::Wonder), static_cast<AbodeInfo>(1));
+	EXPECT_FALSE(GAbodeInfo::FindFirst(rows, Tribe::CELTIC, AbodeNumber::B).has_value());
 }

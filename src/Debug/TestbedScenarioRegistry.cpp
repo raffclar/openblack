@@ -10567,6 +10567,26 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
 	                {.type = AbodeInfo::CelticWorkshop, .offset = k_Workshop, .yawDegrees = 90.0f, .storedWood = 1000}},
 	});
+
+	constexpr glm::vec2 k_LooseScaffold {-25.0f, 30.0f};
+	constexpr glm::vec2 k_BuildPlace {-5.0f, 25.0f};
+	all.push_back({
+	    .id = "objects.scaffold_starts_building",
+	    .name = "A scaffold put down near a town starts the building that it offers",
+	    .facet = Facet::Objects,
+	    .description = "A Celtic town of the player's with a village centre and a loose scaffold of the value of one "
+	                   "scaffold. The input tools/sim/hand_inputs/scaffold_build.json moves the hand: it takes the "
+	                   "scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "While the hand holds the scaffold still near the village centre, the phantom of the building that "
+	                "the town wants grows below the scaffold and turns slowly. When the hand puts the scaffold down, no "
+	                "puff shows, a sound plays, and a building site of that building opens where the scaffold is. The "
+	                "scaffold stays on the site. While nothing of the building is built, the hand can take the scaffold "
+	                "again, and the site then goes.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
+	});
 }
 
 std::vector<Scenario> Build()

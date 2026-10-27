@@ -9,11 +9,13 @@
 
 #pragma once
 
+#include <optional>
 #include <utility>
 #include <vector>
 
 #include <entt/signal/sigh.hpp>
 
+#include "ECS/ScaffoldOfferRules.h"
 #include "ECS/Systems/WorkshopSystemInterface.h"
 
 #if !defined(LOCATOR_IMPLEMENTATIONS)
@@ -39,8 +41,24 @@ public:
 	void CameToRest(entt::entity scaffold, bool fromHand, bool inMap) override;
 	[[nodiscard]] bool CanMove(entt::entity scaffold) const override;
 	[[nodiscard]] entt::entity TownForBuilding(glm::vec3 place) const override;
+	void ProcessHeld(entt::entity scaffold) override;
+	void SiteClosed(entt::entity building) override;
 
 private:
+	/// Whether a scaffold at a place is near a workshop of a town (see scaffold_offer::NearWorkshop)
+	[[nodiscard]] bool NearWorkshops(entt::entity town, glm::vec3 place) const;
+	/// The building that a scaffold offers to the town near it, none when it offers none. A search of a town turns
+	/// from a random angle.
+	std::optional<scaffold_offer::Found> SearchOffer(entt::entity scaffold, entt::entity town);
+	/// The search for an offer, then the phantom takes the offer
+	bool SearchAndTakeOffer(entt::entity scaffold, entt::entity town);
+	/// A scaffold that a hand put down gently starts the building that it offers. Whether it started the building.
+	bool BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player);
+	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it.
+	bool TryToBuild(entt::entity scaffold, entt::entity town);
+	/// The scaffold leaves the building site that it is on, and the building of the site goes
+	void LeaveSite(entt::entity scaffold);
+
 	/// The workshop starts a scaffold: it uses the wood and its work sound starts
 	void StartScaffold(entt::entity workshop);
 	/// The workshop finishes its scaffold, which stands in the first free place of its yard

@@ -484,6 +484,14 @@ void GameHandGrabWorld::HeatHeld(entt::entity object)
 	}
 }
 
+void GameHandGrabWorld::HeldTurn(entt::entity object)
+{
+	if (Locator::workshopSystem::has_value())
+	{
+		Locator::workshopSystem::value().ProcessHeld(object);
+	}
+}
+
 void GameHandGrabWorld::PlaySample(uint32_t sample, glm::vec3 position)
 {
 	if (Locator::audio::has_value())

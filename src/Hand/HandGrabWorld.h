@@ -153,6 +153,8 @@ public:
 	virtual void ForgetGesturePath() {}
 	/// A held thing catches from the fires in its cell
 	virtual void HeatHeld(entt::entity object) = 0;
+	/// The game turn of a held thing of its own, after the hand moved it: a scaffold looks for the building that it offers
+	virtual void HeldTurn(entt::entity /*object*/) {}
 	/// A sound of the in-game bank where something is
 	virtual void PlaySample(uint32_t sample, glm::vec3 position) = 0;
 	/// The hand taps a thing at a point, for a player, as a rock breaks when tapped; whether the thing took the tap

@@ -1872,6 +1872,7 @@ void HandGrabSystem::ProcessHandTurn()
 	{
 		_world->HeatHeld(grab->object);
 	}
+	_world->HeldTurn(grab->object);
 }
 
 void HandGrabSystem::DoTwist(PlayerNames player, entt::entity object, glm::vec3 moved)

@@ -12,11 +12,13 @@
 #include "WorkshopSystem.h"
 
 #include <algorithm>
+#include <limits>
 #include <optional>
 #include <utility>
 #include <vector>
 
 #include <glm/gtc/type_ptr.hpp>
+#include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
 #include "3D/LandIslandInterface.h"
@@ -24,10 +26,13 @@
 #include "Audio/GameSoundEffects.h"
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
+#include "Common/GameRandom.h"
 #include "Common/X87Angle.h"
 #include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScaffoldArchetype.h"
 #include "ECS/Components/Abode.h"
+#include "ECS/Components/HandGrab.h"
+#include "ECS/Components/HandStillness.h"
 #include "ECS/Components/Mesh.h"
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
@@ -38,14 +43,19 @@
 #include "ECS/Map.h"
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
+#include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
+#include "ECS/Systems/Implementations/ObjectMeasures.h"
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/TempleConstruction.h"
 #include "ECS/TownHomes.h"
+#include "ECS/TownPlanning.h"
 #include "ECS/TownTurnOrder.h"
 #include "ECS/WorkshopRules.h"
 #include "ECS/WorldObjects.h"
@@ -58,6 +68,7 @@ using namespace openblack;
 using namespace openblack::ecs::systems;
 using namespace openblack::ecs::components;
 namespace workshop = openblack::ecs::workshop;
+namespace scaffold_offer = openblack::ecs::scaffold_offer;
 
 namespace
 {
@@ -152,6 +163,27 @@ void MarkDesiresChanged(entt::entity town)
 	{
 		Locator::townSystem::value().MarkDesiresChanged(town);
 	}
+}
+
+/// A puff at a scaffold shows that it starts no building
+void Puff(glm::vec3 position)
+{
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast, position, std::nullopt, entt::null,
+		                                                 1.0f);
+	}
+}
+
+/// The tribe of a town, none for what is not a town
+std::optional<Tribe> TribeOf(entt::entity town)
+{
+	const auto& registry = Entities();
+	if (const auto* tribe = registry.Valid(town) ? registry.TryGet<const Tribe>(town) : nullptr)
+	{
+		return *tribe;
+	}
+	return std::nullopt;
 }
 
 } // namespace
@@ -322,11 +354,18 @@ entt::entity WorkshopSystem::CreateScaffold(glm::vec3 place, entt::entity town, 
 	return ecs::archetypes::ScaffoldArchetype::Create(place, town, workshopEntity, yAngle, scale);
 }
 
-bool WorkshopSystem::CanTake([[maybe_unused]] entt::entity scaffold) const
+bool WorkshopSystem::CanTake(entt::entity scaffold) const
 {
-	// TODO(scaffolds): a scaffold on a building site can be taken only before the building starts, and only for a time
-	// after it was put down; openblack puts no scaffold on a site yet
-	return true;
+	const auto& registry = Entities();
+	const auto* data = registry.TryGet<const Scaffold>(scaffold);
+	if (data == nullptr || !registry.Valid(data->site))
+	{
+		return true;
+	}
+	const auto& info = Locator::infoConstants::value().scaffold;
+	return workshop::KeepsScaffold(data->putDownTurn, Turn(), info.gameTurnsAfterPlacingCanStillPickUp,
+	                               data->scriptBuilding.has_value()) &&
+	       ecs::construction::BuiltOf(data->site) == 0.0f;
 }
 
 void WorkshopSystem::TakenByHand(entt::entity scaffold, PlayerNames player)
@@ -339,6 +378,8 @@ void WorkshopSystem::TakenByHand(entt::entity scaffold, PlayerNames player)
 	}
 	data->handPlayer = player;
 	data->putDownTurn = 0;
+	LeaveSite(scaffold);
+	data = registry.TryGet<Scaffold>(scaffold);
 	// Its workshop keeps the place of the scaffold for it
 	if (auto* owner = registry.Valid(data->workshop) ? registry.TryGet<Workshop>(data->workshop) : nullptr)
 	{
@@ -379,15 +420,14 @@ void WorkshopSystem::CameToRest(entt::entity scaffold, bool fromHand, bool inMap
 		{
 			snapped = SnapToPlace(workshopEntity, scaffold) || snapped;
 		}
+		// A scaffold that the hand put down gently starts the building that it offers. Else a puff shows that it starts
+		// no building.
 		if (fromHand && !snapped)
 		{
-			// TODO(scaffolds): a scaffold put down gently becomes the site of the building that it shows; openblack has no
-			// building for a scaffold yet, thus every scaffold lies where it is put down, as one with no building does
-			if (Locator::particleSystem::has_value())
+			const auto& data = registry.Get<const Scaffold>(scaffold);
+			if (!data.gentle || !BuildBuilding(scaffold, data.handPlayer))
 			{
-				Locator::particleSystem::value().StartSpotVisual(SpotVisualType::SpellFailCast,
-				                                                 registry.Get<const Transform>(scaffold).position, std::nullopt,
-				                                                 entt::null, 1.0f);
+				Puff(registry.Get<const Transform>(scaffold).position);
 			}
 		}
 		auto& data = registry.Get<Scaffold>(scaffold);
@@ -399,8 +439,9 @@ void WorkshopSystem::CameToRest(entt::entity scaffold, bool fromHand, bool inMap
 
 bool WorkshopSystem::CanMove(entt::entity scaffold) const
 {
-	// TODO(scaffolds): a scaffold on a building site does not move either
-	return !workshop::StandsInYard(Entities(), scaffold);
+	const auto& registry = Entities();
+	const auto* data = registry.TryGet<const Scaffold>(scaffold);
+	return !workshop::StandsInYard(registry, scaffold) && (data == nullptr || !registry.Valid(data->site));
 }
 
 entt::entity WorkshopSystem::TownForBuilding(glm::vec3 place) const
@@ -535,6 +576,290 @@ void WorkshopSystem::MoveToPlace(entt::entity workshopEntity, entt::entity scaff
 	auto& owner = registry.Get<Workshop>(workshopEntity);
 	owner.places.at(place % owner.places.size()) = Workshop::Place::Holds;
 	registry.SetDirty();
+}
+
+bool WorkshopSystem::NearWorkshops(entt::entity town, glm::vec3 place) const
+{
+	const auto& registry = Entities();
+	const auto at = CoordsOf(place);
+	// The distance to a special point that the model does not have counts as far
+	const auto distanceTo = [&at](entt::entity workshopEntity, size_t point) {
+		const auto special = SpecialPlaceOf(workshopEntity, point);
+		return special.has_value() ? gutils::GetDistanceInMetres(at, special->coords) : std::numeric_limits<float>::max();
+	};
+	return std::ranges::any_of(WorkshopsOf(town), [&](entt::entity workshopEntity) {
+		scaffold_offer::WorkshopDistances distances {
+		    .workshop = gutils::GetDistanceInMetres(at, CoordsOf(registry.Get<const Transform>(workshopEntity).position)),
+		    .flag = distanceTo(workshopEntity, scaffold_offer::k_FlagPoint),
+		};
+		for (size_t i = 0; i < workshop::k_PlacePoints.size(); ++i)
+		{
+			distances.places.at(i) = distanceTo(workshopEntity, workshop::k_PlacePoints.at(i));
+		}
+		return scaffold_offer::NearWorkshop(distances);
+	});
+}
+
+std::optional<scaffold_offer::Found> WorkshopSystem::SearchOffer(entt::entity scaffold, entt::entity town)
+{
+	auto& registry = Entities();
+	const auto& data = registry.Get<const Scaffold>(scaffold);
+	const auto& transform = registry.Get<const Transform>(scaffold);
+	const auto place = transform.position;
+	// A town offers no building near its own workshops
+	if (town != entt::null && NearWorkshops(town, place))
+	{
+		return std::nullopt;
+	}
+	// TODO(scaffolds): a scaffold held above another scaffold adds the value of that scaffold
+	const auto value = workshop::ValueOfScale(transform.scale.x);
+	const auto fits = [place](const ScaffoldOffer& offer, float yAngle) {
+		return ecs::town_planning::FitsForScaffold(place, offer.mesh, yAngle, offer.scale);
+	};
+	const auto& rows = Locator::infoConstants::value().abode;
+	if (town == entt::null)
+	{
+		// With no town near, the scaffold offers a village centre of the tribe of its own town, which starts a new town
+		const auto tribe = TribeOf(data.town);
+		if (!tribe.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto centre = GAbodeInfo::FindFirst(rows, *tribe, AbodeNumber::TownCentre);
+		if (!centre.has_value())
+		{
+			return std::nullopt;
+		}
+		const auto& info = rows.at(static_cast<size_t>(*centre));
+		const scaffold_offer::Candidate candidate {
+		    .offer = {.info = *centre, .number = AbodeNumber::TownCentre, .mesh = info.meshId},
+		    .scaffoldsRequired = info.scaffoldsRequired,
+		};
+		const auto offer = scaffold_offer::SearchNewTown(candidate, value, fits);
+		if (!offer.has_value())
+		{
+			return std::nullopt;
+		}
+		return scaffold_offer::Found {.offer = *offer, .foundsTown = true};
+	}
+	const auto tribe = TribeOf(town);
+	if (!tribe.has_value())
+	{
+		return std::nullopt;
+	}
+	// A scaffold that a script gave a building offers only a building of that abode number
+	std::optional<AbodeNumber> only;
+	if (data.scriptBuilding.has_value())
+	{
+		only = rows.at(static_cast<size_t>(*data.scriptBuilding)).abodeNumber;
+	}
+	const auto candidates = ecs::town_planning::ScaffoldCandidates(town, *tribe, value, only);
+	const float startYAngle = Locator::gameRandom::value().GameFloatRand(scaffold_offer::k_FullTurn);
+	const auto offer = scaffold_offer::SearchTown(candidates, value, startYAngle, fits);
+	if (!offer.has_value())
+	{
+		return std::nullopt;
+	}
+	return scaffold_offer::Found {.offer = *offer};
+}
+
+bool WorkshopSystem::SearchAndTakeOffer(entt::entity scaffold, entt::entity town)
+{
+	const auto found = SearchOffer(scaffold, town);
+	auto& phantom = Entities().Get<Scaffold>(scaffold).phantom;
+	if (found.has_value())
+	{
+		phantom.next = found->offer;
+		if (found->foundsTown)
+		{
+			phantom.foundsTown = true;
+		}
+	}
+	scaffold_offer::TakeNextOffer(phantom);
+	return found.has_value();
+}
+
+void WorkshopSystem::ProcessHeld(entt::entity scaffold)
+{
+	auto& registry = Entities();
+	if (!registry.Valid(scaffold) || !registry.AllOf<Scaffold, InHand, Transform>(scaffold) ||
+	    !Locator::infoConstants::has_value())
+	{
+		return;
+	}
+	const auto hand = registry.Get<const InHand>(scaffold).hand;
+	const auto* stillness = registry.Valid(hand) ? registry.TryGet<const HandStillness>(hand) : nullptr;
+	const scaffold_offer::HeldFacts facts {
+	    .handStill = stillness != nullptr && stillness->stillTurns > 0,
+	    .turnPerGameTurn = Locator::infoConstants::value().scaffold.phantomBuildingRotationPerGameTurn,
+	};
+	const auto place = registry.Get<const Transform>(scaffold).position;
+	const auto town = TownForBuilding(place);
+	const scaffold_offer::Search search = [this, scaffold, town]() { return SearchOffer(scaffold, town); };
+	// The offer stays while the hand moves when it starts a new town away from every town. It also stays when it still
+	// fits and the town is away from its workshops.
+	const scaffold_offer::KeepsOffer keeps = [this, place, town](const ScaffoldPhantom& phantom) {
+		if (!phantom.shown.has_value())
+		{
+			return false;
+		}
+		if (town == entt::null && phantom.foundsTown)
+		{
+			return true;
+		}
+		return ecs::town_planning::FitsForScaffold(place, phantom.shown->mesh, phantom.yAngle, phantom.scale) &&
+		       town != entt::null && !NearWorkshops(town, place);
+	};
+	// The turn changes a copy of the phantom, which goes back to the scaffold at the end
+	auto phantom = registry.Get<const Scaffold>(scaffold).phantom;
+	const auto event = scaffold_offer::HeldTurn(phantom, facts, search, keeps);
+	registry.Get<Scaffold>(scaffold).phantom = phantom;
+	if (event == scaffold_offer::HeldEvent::ShowsNoOffer)
+	{
+		Puff(place);
+	}
+}
+
+bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player)
+{
+	auto& registry = Entities();
+	const auto place = registry.Get<const Transform>(scaffold).position;
+	const auto town = TownForBuilding(place);
+	// The scaffold looks again when it shows no offer, or an offer that needs more than its value
+	{
+		const auto& phantom = registry.Get<const Scaffold>(scaffold).phantom;
+		const auto value = workshop::ValueOfScale(registry.Get<const Transform>(scaffold).scale.x);
+		if (!phantom.shown.has_value() ||
+		    Locator::infoConstants::value().abode.at(static_cast<size_t>(phantom.shown->info)).scaffoldsRequired > value)
+		{
+			SearchAndTakeOffer(scaffold, town);
+		}
+	}
+	auto& phantom = registry.Get<Scaffold>(scaffold).phantom;
+	if (!phantom.shown.has_value())
+	{
+		return false;
+	}
+	// TODO(scaffolds): a village centre offered away from every town starts a new town. openblack does not start the
+	// town yet, thus such a scaffold starts no building.
+	if (phantom.foundsTown && phantom.shown->number == AbodeNumber::TownCentre)
+	{
+		return false;
+	}
+	if (town == entt::null)
+	{
+		return false;
+	}
+	// The building takes the turn of the phantom first, then the turn of the offer
+	const float offerYAngle = phantom.shown->yAngle;
+	phantom.shown->yAngle = phantom.yAngle;
+	if (!TryToBuild(scaffold, town))
+	{
+		if (auto& again = registry.Get<Scaffold>(scaffold).phantom; again.shown.has_value())
+		{
+			again.shown->yAngle = offerYAngle;
+		}
+		if (!TryToBuild(scaffold, town))
+		{
+			return false;
+		}
+	}
+	MarkDesiresChanged(town);
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Scaffold: scaffold {} starts building {} at turn {}", entt::to_integral(scaffold),
+		                   entt::to_integral(registry.Get<const Scaffold>(scaffold).site), Turn());
+	}
+	// TODO(scaffolds): the villagers of the towns near the new building react to the scaffold
+	const auto building = registry.Get<const Scaffold>(scaffold).site;
+	ecs::town_planning::DropPlansUnder(place, ecs::systems::object_measures::TwoDRadius(registry, building));
+	// The player who put the scaffold down hears the sound where the camera is. The other players hear it at the
+	// scaffold.
+	const auto sound = entt::hashed_string("InGame.sad/174").value();
+	const bool local =
+	    player.has_value() && Locator::playerSystem::has_value() && *player == Locator::playerSystem::value().GetLocalPlayer();
+	if (local)
+	{
+		audio::PlayGameSoundEffect(sound, std::nullopt);
+	}
+	else
+	{
+		audio::StartGameSoundEffect(sound, {.position = place, .owner = scaffold});
+	}
+	return true;
+}
+
+bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)
+{
+	auto& registry = Entities();
+	auto& phantom = registry.Get<Scaffold>(scaffold).phantom;
+	// The next offer comes first when there is one
+	if (phantom.next.has_value())
+	{
+		std::swap(phantom.shown, phantom.next);
+	}
+	if (!phantom.shown.has_value())
+	{
+		return false;
+	}
+	const auto place = registry.Get<const Transform>(scaffold).position;
+	if (NearWorkshops(town, place))
+	{
+		return false;
+	}
+	const auto offer = *phantom.shown;
+	// TODO(scaffolds): a script can let a scaffold build without the check of the land
+	if (!ecs::town_planning::FitsForScaffold(place, offer.mesh, offer.yAngle, offer.scale))
+	{
+		return false;
+	}
+	const auto building =
+	    ecs::town_planning::StartForScaffold(town, offer.info, OnMap(CoordsOf(place)), offer.yAngle, offer.scale);
+	if (building == entt::null)
+	{
+		return false;
+	}
+	auto& data = registry.Get<Scaffold>(scaffold);
+	// A building that no script gave the scaffold is not planned again when it goes
+	if (!data.scriptBuilding.has_value())
+	{
+		registry.Get<Abode>(building).notPlannedAgain = true;
+	}
+	data.site = building;
+	// The phantom on the site has the size of the scaffold
+	data.phantom.scale = registry.Get<const Transform>(scaffold).scale.x;
+	data.phantom.shown.reset();
+	data.phantom.next.reset();
+	registry.SetDirty();
+	return true;
+}
+
+void WorkshopSystem::LeaveSite(entt::entity scaffold)
+{
+	auto& registry = Entities();
+	auto& data = registry.Get<Scaffold>(scaffold);
+	const auto building = std::exchange(data.site, entt::null);
+	if (registry.Valid(building))
+	{
+		ecs::world_objects::Remove(building);
+	}
+}
+
+void WorkshopSystem::SiteClosed(entt::entity building)
+{
+	auto& registry = Entities();
+	std::vector<entt::entity> onSite;
+	registry.Each<const Scaffold>([&onSite, building](entt::entity scaffold, const Scaffold& data) {
+		if (data.site == building)
+		{
+			onSite.push_back(scaffold);
+		}
+	});
+	for (const auto scaffold : onSite)
+	{
+		registry.Get<Scaffold>(scaffold).site = entt::null;
+		ecs::world_objects::Remove(scaffold);
+	}
 }
 
 void WorkshopSystem::OnScaffoldGone(entt::registry& /*registry*/, entt::entity scaffold)
