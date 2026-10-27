@@ -396,6 +396,8 @@ physics_classes::ClassFacts DynamicsSystem::FactsOf(entt::entity object) const
 			}
 		});
 	}
+	// A workshop's wood pile is part of its workshop, as a pile of a storage pit is
+	inputs.partOfStoragePit = inputs.partOfStoragePit || workshop::IsWoodPile(registry, object);
 	inputs.scaffoldInYard = workshop::StandsInYard(registry, object);
 	auto facts = physics_classes::Classify(registry, object, *info, inputs);
 	// Every model moved by bones is drawn from its body turned a quarter about its up axis

@@ -40,8 +40,10 @@
 #include "ECS/ShepherdRules.h"
 #include "ECS/Systems/ChimneySmokeSystemInterface.h"
 #include "ECS/Systems/FootpathSystemInterface.h"
+#include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SpellIconSystemInterface.h"
 #include "ECS/Systems/TownSystemInterface.h"
+#include "ECS/Systems/WorkshopSystemInterface.h"
 #include "ECS/TownCentreParts.h"
 #include "InfoConstants.h"
 #include "Locator.h"
@@ -171,8 +173,11 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 
 	const auto& transform =
 	    registry.Assign<Transform>(entity, position, glm::mat3(portable_math::EulerAngleY(-yAngleRadians)), glm::vec3(scale));
-	registry.Assign<Abode>(entity, info.abodeNumber, townId, foodAmount, woodAmount).info = type;
-	if (info.abodeType == AbodeType::Workshop)
+	// A workshop gets its food and wood through its store, after it has its wood pile
+	const bool workshop = info.abodeType == AbodeType::Workshop;
+	registry.Assign<Abode>(entity, info.abodeNumber, townId, workshop ? 0u : foodAmount, workshop ? 0u : woodAmount).info =
+	    type;
+	if (workshop)
 	{
 		registry.Assign<Workshop>(entity);
 	}
@@ -238,6 +243,23 @@ entt::entity AbodeArchetype::Create(uint32_t townId, const glm::vec3& position, 
 	{
 	case AbodeType::StoragePit:
 		AddStoragePitComponents(entity, mesh, info, position, yAngleRadians, foodAmount, woodAmount);
+		break;
+	case AbodeType::Workshop:
+		// A workshop makes its empty wood pile, then takes its food and its wood as a store does: it keeps only the wood
+		if (Locator::workshopSystem::has_value())
+		{
+			Locator::workshopSystem::value().WoodPileOf(entity);
+		}
+		if (Locator::resourceStoreSystem::has_value())
+		{
+			auto& stores = Locator::resourceStoreSystem::value();
+			stores.AddResource(entity, ResourceType::Food, foodAmount, std::nullopt);
+			stores.AddResource(entity, ResourceType::Wood, woodAmount, std::nullopt);
+		}
+		else
+		{
+			registry.Get<Abode>(entity).woodAmount = woodAmount;
+		}
 		break;
 	case AbodeType::TownCentre:
 		// A town centre standing built carries its town's totem, and its stone hands show the miracles its town offers.

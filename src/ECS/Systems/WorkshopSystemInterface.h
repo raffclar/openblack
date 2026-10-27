@@ -35,6 +35,10 @@ public:
 	/// The room of a workshop for more scaffolds (see disciple_work::WorkshopRoom); 0 for what is not a workshop
 	[[nodiscard]] virtual int32_t RoomOf(entt::entity workshop) const = 0;
 
+	/// The pile that holds the wood of a workshop. The workshop makes the pile when it has none, at the special point of
+	/// its wood pile. None for what is not a workshop.
+	virtual entt::entity WoodPileOf(entt::entity workshop) = 0;
+
 	/// Makes a scaffold of a scale at a place on the land, for a town and a workshop, turned by an angle about the up axis.
 	/// The town and the workshop can be none.
 	virtual entt::entity CreateScaffold(glm::vec3 place, entt::entity town, entt::entity workshop, float yAngle,

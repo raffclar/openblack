@@ -54,6 +54,10 @@ struct SpecialPlace
 /// matrix. The angles come from the moved matrix, as the game finds the angles of a matrix.
 [[nodiscard]] SpecialPlace SpecialPlaceOf(const glm::mat4& point, const glm::mat4& building);
 
+/// The world point of a special point of a building's model, with its height. The point's matrix moves through the
+/// building's matrix, as for SpecialPlaceOf.
+[[nodiscard]] glm::vec3 SpecialPointOf(const glm::mat4& point, const glm::mat4& building);
+
 /// The scale of a scaffold that is worth a number of scaffolds
 [[nodiscard]] float ScaleOfValue(uint32_t value);
 /// The number of scaffolds that a scaffold of a scale is worth: the scale less a half, times five, rounded to the nearest
@@ -107,5 +111,8 @@ bool RemoveScaffold(components::Workshop& workshop, entt::entity scaffold, uint8
 
 /// Whether a thing is a scaffold that stands in its place of its workshop's yard. Such a scaffold does not fly.
 [[nodiscard]] bool StandsInYard(const Registry& registry, entt::entity scaffold);
+
+/// Whether a thing is the wood pile of a workshop. Such a pile is part of its workshop, as a pile of a storage pit is.
+[[nodiscard]] bool IsWoodPile(const Registry& registry, entt::entity pile);
 
 } // namespace openblack::ecs::workshop

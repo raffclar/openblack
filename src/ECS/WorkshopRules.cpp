@@ -47,6 +47,11 @@ workshop::SpecialPlace workshop::SpecialPlaceOf(const glm::mat4& point, const gl
 	        .angles = x87::GameTurnMatrixAngles(glm::mat3(world))};
 }
 
+glm::vec3 workshop::SpecialPointOf(const glm::mat4& point, const glm::mat4& building)
+{
+	return glm::vec3(x87::Product(point, building)[3]);
+}
+
 float workshop::ScaleOfValue(uint32_t value)
 {
 	return (static_cast<float>(value) * k_ScalePerValue) + k_ScaleOfNoValue;
@@ -119,6 +124,18 @@ bool workshop::StandsInYard(const Registry& registry, entt::entity scaffold)
 	}
 	const auto* owner = registry.TryGet<const components::Workshop>(data->workshop);
 	return owner != nullptr && owner->places.at(data->place % owner->places.size()) == components::Workshop::Place::Holds;
+}
+
+bool workshop::IsWoodPile(const Registry& registry, entt::entity pile)
+{
+	if (pile == entt::null)
+	{
+		return false;
+	}
+	bool found = false;
+	registry.Each<const components::Workshop>(
+	    [pile, &found](const components::Workshop& data) { found = found || data.woodPile == pile; });
+	return found;
 }
 
 } // namespace openblack::ecs

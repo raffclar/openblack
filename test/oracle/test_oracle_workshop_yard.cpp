@@ -15,8 +15,10 @@
 #include <string>
 
 #include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/WorkshopRules.h"
 #include "OracleData.h"
 
@@ -82,7 +84,14 @@ TEST(OracleWorkshopYard, ThePlacesOfTheYardAreTheSpecialPointsSixToEight)
 		const Row row {*table, index};
 		// The data puts the game's chosen special point of the place at that point of the model
 		const auto ours = ecs::workshop::SpecialPlaceOf(row.Matrix("p"), row.Matrix("b"));
-		const auto text = Mismatch(row, ours);
+		auto text = Mismatch(row, ours);
+		// The world point of the special point, as the wood pile uses it, is at the same map place
+		const auto point = ecs::workshop::SpecialPointOf(row.Matrix("p"), row.Matrix("b"));
+		const auto coords = map_coords::FromMetres(glm::vec2(point.x, point.z));
+		if (std::bit_cast<uint32_t>(coords.x) != row.U("cx") || std::bit_cast<uint32_t>(coords.z) != row.U("cz"))
+		{
+			text += " point";
+		}
 		if (!text.empty() && ++mismatches <= 10)
 		{
 			ADD_FAILURE() << "row " << index << " place " << row.U("place") << text;

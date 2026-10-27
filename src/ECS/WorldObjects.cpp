@@ -62,6 +62,7 @@
 #include "ECS/Components/Tree.h"
 #include "ECS/Components/Villager.h"
 #include "ECS/Components/Vortex.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/Creches.h"
 #include "ECS/Graveyards.h"
@@ -883,6 +884,12 @@ void world_objects::Remove(entt::entity object)
 		{
 			world_objects::Remove(pile);
 		}
+	}
+	// A workshop that goes removes its wood pile
+	if (const auto* workshop = registry.TryGet<const Workshop>(object);
+	    workshop != nullptr && registry.Valid(workshop->woodPile))
+	{
+		world_objects::Remove(workshop->woodPile);
 	}
 	// A graveyard going hands its town's dead over to another of the town's graveyards
 	graveyards::Lost(object);

@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <optional>
+#include <utility>
 #include <vector>
 
 #include <glm/gtc/type_ptr.hpp>
@@ -24,9 +25,11 @@
 #include "Audio/Sound.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/X87Angle.h"
+#include "ECS/Archetypes/PotArchetype.h"
 #include "ECS/Archetypes/ScaffoldArchetype.h"
 #include "ECS/Components/Abode.h"
 #include "ECS/Components/Mesh.h"
+#include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Town.h"
 #include "ECS/Components/Transform.h"
@@ -48,6 +51,7 @@
 #include "ECS/WorldObjects.h"
 #include "InfoConstants.h"
 #include "Locator.h"
+#include "Magic/ResourcePiles.h"
 #include "Resources/ResourcesInterface.h"
 
 using namespace openblack;
@@ -88,7 +92,8 @@ map_coords::MapCoords CoordsOf(glm::vec3 position)
 	return map_coords::FromMetres(glm::vec2(position.x, position.z));
 }
 
-std::optional<workshop::SpecialPlace> SpecialPlaceOf(entt::entity building, size_t point)
+/// The matrix of a special point of a building's model, and the building's matrix; none when the model has no such point
+std::optional<std::pair<glm::mat4, glm::mat4>> PointAndBuilding(entt::entity building, size_t point)
 {
 	const auto& registry = Entities();
 	const auto* transform = registry.TryGet<const Transform>(building);
@@ -107,9 +112,19 @@ std::optional<workshop::SpecialPlace> SpecialPlaceOf(entt::entity building, size
 	{
 		return std::nullopt;
 	}
-	return workshop::SpecialPlaceOf(points.at(point), workshop::BuildingMatrix(ecs::placed_turn::AnglesOf(registry, building),
-	                                                                           ecs::placed_turn::CanLean(registry, building),
-	                                                                           transform->scale.x, transform->position));
+	return std::pair {points.at(point), workshop::BuildingMatrix(ecs::placed_turn::AnglesOf(registry, building),
+	                                                             ecs::placed_turn::CanLean(registry, building),
+	                                                             transform->scale.x, transform->position)};
+}
+
+std::optional<workshop::SpecialPlace> SpecialPlaceOf(entt::entity building, size_t point)
+{
+	const auto matrices = PointAndBuilding(building, point);
+	if (!matrices.has_value())
+	{
+		return std::nullopt;
+	}
+	return workshop::SpecialPlaceOf(matrices->first, matrices->second);
 }
 
 /// The town's workshops in the town's order, the newest first
@@ -249,6 +264,45 @@ void WorkshopSystem::FinishScaffold(entt::entity workshopEntity)
 		                                                   static_cast<entt::id_type>(audio::SoundId::G_Workshop));
 	}
 	registry.SetDirty();
+}
+
+entt::entity WorkshopSystem::WoodPileOf(entt::entity workshopEntity)
+{
+	auto& registry = Entities();
+	auto* data = registry.Valid(workshopEntity) ? registry.TryGet<Workshop>(workshopEntity) : nullptr;
+	if (data == nullptr)
+	{
+		return entt::null;
+	}
+	if (registry.Valid(data->woodPile) && registry.AllOf<Pot>(data->woodPile))
+	{
+		return data->woodPile;
+	}
+	if (!Locator::infoConstants::has_value())
+	{
+		return entt::null;
+	}
+	// The pile stands at the special point of the model with the height of the point, else at the workshop. It is not
+	// turned.
+	glm::vec3 point = registry.Get<const Transform>(workshopEntity).position;
+	if (const auto matrices = PointAndBuilding(workshopEntity, workshop::k_WoodPilePoint))
+	{
+		point = workshop::SpecialPointOf(matrices->first, matrices->second);
+	}
+	if (Locator::terrainSystem::has_value())
+	{
+		const auto& island = Locator::terrainSystem::value();
+		point = map_coords::ToWorld(island, map_coords::FromWorld(island, point));
+	}
+	const auto pile = ecs::archetypes::PotArchetype::CreateEmpty(point, 0.0f, PotInfo::MagicWood);
+	if (pile == entt::null)
+	{
+		return entt::null;
+	}
+	registry.Get<Transform>(pile).scale = glm::vec3(magic::piles::k_MagicWoodScale);
+	// The archetype can add entities, thus the workshop's data is found again
+	registry.Get<Workshop>(workshopEntity).woodPile = pile;
+	return pile;
 }
 
 int32_t WorkshopSystem::RoomOf(entt::entity workshopEntity) const

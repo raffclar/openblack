@@ -10495,7 +10495,8 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .facet = Facet::Objects,
 	    .description = "A Celtic town of the player's with a village centre and a workshop that holds 10000 wood, the wood of "
 	                   "four scaffolds. The yard of the workshop faces the camera.",
-	    .expected = "The workshop uses the wood of one scaffold and its work sound starts. When the time to make a "
+	    .expected = "A pile of logs stands at the back of the workshop and holds its wood. The workshop uses the wood of "
+	                "one scaffold from the pile, and the pile becomes smaller. The work sound starts. When the time to make a "
 	                "scaffold is over, a small scaffold appears in the first free place of the yard, a horn sounds and "
 	                "the work sound stops. The workshop makes scaffolds until it has three in its yard. The hand can "
 	                "take a scaffold from the yard, and the workshop then makes one more.",

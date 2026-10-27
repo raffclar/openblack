@@ -12,8 +12,11 @@
 
 #include <array>
 
+#include <glm/mat4x4.hpp>
+#include <glm/vec2.hpp>
 #include <gtest/gtest.h>
 
+#include "3D/MapCoords.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/Registry.h"
@@ -160,4 +163,32 @@ TEST(WorkshopRules, StandsInYardOnlyInAPlaceThatHoldsIt)
 	EXPECT_FALSE(workshop::StandsInYard(registry, away));
 	EXPECT_FALSE(workshop::StandsInYard(registry, loose));
 	EXPECT_FALSE(workshop::StandsInYard(registry, other));
+}
+
+TEST(WorkshopRules, OnlyTheWoodPileOfAWorkshopIsItsWoodPile)
+{
+	Registry registry;
+	const auto owner = registry.Create();
+	const auto pile = registry.Create();
+	const auto other = registry.Create();
+	registry.Assign<Workshop>(owner).woodPile = pile;
+	registry.Assign<Workshop>(other);
+	EXPECT_TRUE(workshop::IsWoodPile(registry, pile));
+	EXPECT_FALSE(workshop::IsWoodPile(registry, other));
+	EXPECT_FALSE(workshop::IsWoodPile(registry, entt::null));
+}
+
+TEST(WorkshopRules, TheSpecialPointIsThePlaceOfTheSpecialPlaceWithItsHeight)
+{
+	glm::mat4 point {1.0f};
+	point[3] = glm::vec4(1.5f, 2.0f, -3.25f, 1.0f);
+	const auto building =
+	    workshop::BuildingMatrix(glm::vec3(0.0f, 0.75f, 0.0f), false, 1.2f, glm::vec3(2000.0f, 40.0f, 2100.0f));
+	const auto world = workshop::SpecialPointOf(point, building);
+	const auto place = workshop::SpecialPlaceOf(point, building);
+	const auto coords = openblack::map_coords::FromMetres(glm::vec2(world.x, world.z));
+	EXPECT_EQ(coords.x, place.coords.x);
+	EXPECT_EQ(coords.z, place.coords.z);
+	// The height is the building's height and the point's height, by the building's scale
+	EXPECT_NEAR(world.y, 40.0f + (2.0f * 1.2f), 1e-4f);
 }
