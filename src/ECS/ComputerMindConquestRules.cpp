@@ -107,7 +107,7 @@ float computer_mind_rules::PeopleCount(uint32_t people)
 
 float computer_mind_rules::RivalPowerCut(bool neutralOwner, float ownerPower, float godPower)
 {
-	if (neutralOwner || godPower == 0.0f)
+	if (neutralOwner || !(godPower < 0.0f || godPower > 0.0f))
 	{
 		return 0.0f;
 	}
@@ -152,7 +152,12 @@ float computer_mind_rules::CappedWorth(float worth)
 
 float computer_mind_rules::RivalBeliefRatio(float strongestRival, float godBelief)
 {
-	return godBelief == 0.0f ? 0.0f : strongestRival / godBelief;
+	// A belief that is 0, or that is not a number, gives 0
+	if (!(godBelief < 0.0f || godBelief > 0.0f))
+	{
+		return 0.0f;
+	}
+	return strongestRival / godBelief;
 }
 
 float computer_mind_rules::FeedFactor(bool ownTown, float rivalRatio)

@@ -519,7 +519,7 @@ bool CreatureHelpsTown(RuleContext& context, computer_mind::Mind& mind, uint16_t
 	}
 	if (KnownFightMiracleShare(creature, CreatureDesires::Compassion) < 1.0f)
 	{
-		++context.state.kindLessonAsks;
+		++context.state.mind.untaughtSends.at(static_cast<size_t>(CreatureDesires::Compassion));
 	}
 	auto& hand = context.state.hand;
 	computer_hand::Add(hand, StepKind::SetCreatureSpeedForJourney,
@@ -646,10 +646,7 @@ float ThrowToImpress(RuleContext& context, computer_mind::Mind& mind, uint16_t n
 	{
 		return 0.0f;
 	}
-	// The pull of a point two hand speeds from the place, toward the edge of the influence
-	const float angle = gutils::Get3DAngleFromXZ(place, *edge);
-	const float step = context.state.speed + context.state.speed;
-	const float pull = PlacePull(context, place + gutils::GetPosFromAngle(angle, step));
+	const float pull = PullPastEdge(context, *edge, place);
 	const float wish = computer_mind_rules::ThrowWish(pull, value, boredom);
 	const auto thing = BestThingNear(context, hand, computer_mind_rules::k_ThrowSearchRadius, ThrowScoreOf);
 	if (thing == entt::null)
@@ -772,12 +769,26 @@ entt::entity computer_world::BestThingNear(const RuleContext& context, const map
 	return found;
 }
 
-float computer_world::ThrowScoreOf(entt::entity thing)
+bool computer_world::CanPlayerThrow(entt::entity thing)
 {
 	auto& registry = Entities();
 	const auto* pot = registry.TryGet<const Pot>(thing);
 	const float radius = object_measures::TwoDRadius(registry, thing);
-	if (!computer_mind_rules::CanBeThrownByPlayer(ThrowKindOf(thing), radius, pot != nullptr ? pot->amount : 0))
+	return computer_mind_rules::CanBeThrownByPlayer(ThrowKindOf(thing), radius, pot != nullptr ? pot->amount : 0);
+}
+
+float computer_world::PullPastEdge(const RuleContext& context, const map_coords::MapCoords& edge,
+                                   const map_coords::MapCoords& target)
+{
+	const float angle = gutils::Get3DAngleFromXZ(target, edge);
+	const float step = context.state.speed * computer_mind_rules::k_ThrowPullSteps;
+	return PlacePull(context, target + gutils::GetPosFromAngle(angle, step));
+}
+
+float computer_world::ThrowScoreOf(entt::entity thing)
+{
+	auto& registry = Entities();
+	if (!CanPlayerThrow(thing))
 	{
 		return 0.0f;
 	}

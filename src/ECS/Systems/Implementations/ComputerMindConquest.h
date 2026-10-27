@@ -43,6 +43,12 @@ using ThingScore = std::function<float(entt::entity thing)>;
 /// when no thing scores.
 [[nodiscard]] entt::entity BestThingNear(const RuleContext& context, const map_coords::MapCoords& centre, float radius,
                                          const ThingScore& score);
+/// The player can throw the thing: a loose thing, a standing tree, a pile that holds something, or a rock, a bonfire or
+/// a dead tree that is not too wide
+[[nodiscard]] bool CanPlayerThrow(entt::entity thing);
+/// The pull of a point two hand speeds past the target, toward the edge of the influence
+[[nodiscard]] float PullPastEdge(const RuleContext& context, const map_coords::MapCoords& edge,
+                                 const map_coords::MapCoords& target);
 /// How much the thing impresses when the god throws it. 0 for a thing the god cannot throw or that knocks down
 /// buildings.
 [[nodiscard]] float ThrowScoreOf(entt::entity thing);

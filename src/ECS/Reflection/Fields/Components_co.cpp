@@ -35,8 +35,7 @@ void openblack::ecs::reflection::RegisterFields_Components_co(entt::meta_ctx& co
 	    .Field<&components::ComputerPlayer::hand>("hand")
 	    .Field<&components::ComputerPlayer::casts>("casts")
 	    .Field<&components::ComputerPlayer::speed>("speed")
-	    .Field<&components::ComputerPlayer::seen>("seen")
-	    .Field<&components::ComputerPlayer::kindLessonAsks>("kindLessonAsks");
+	    .Field<&components::ComputerPlayer::seen>("seen");
 	Reflect<components::PlannedTemple>(context)
 	    .Field<&components::PlannedTemple::townId>("townId")
 	    .Field<&components::PlannedTemple::owner>("owner")
