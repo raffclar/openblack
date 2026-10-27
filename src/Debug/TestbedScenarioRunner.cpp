@@ -1791,6 +1791,10 @@ void Runner::ApplyStates()
 		{
 			continue;
 		}
+		if (setup.pauseMind && setup.thinksAfterSeconds.has_value() && _seconds >= *setup.thinksAfterSeconds)
+		{
+			mind->paused = false;
+		}
 		if (_started[i] && !setup.hold)
 		{
 			continue;
