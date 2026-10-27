@@ -78,6 +78,9 @@ struct CreatureObjectAction
 	creature_object_actions::ApproachStall stall;
 	/// Whether it turned to get the thing in reach, and reaches when the turn ends
 	bool turnedToReach {false};
+	/// Whether the thing got out of reach before the hold or the blow. Then the time of the reach decreases each turn.
+	/// At the start of the reach, the action fails. Until then, the body and the mind wait.
+	bool withdraws {false};
 	/// Whether it waited one turn after its walk stopped because it was shut in, for the mind to clear the way
 	bool waitedForWay {false};
 	/// Throwing: how long the throw is to take to get there

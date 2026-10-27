@@ -188,6 +188,20 @@ bool creature_object_actions::ThrowOver(bool animationOver, bool waitsForLanding
 	return animationOver && !(waitsForLanding && thrownFlying);
 }
 
+float creature_object_actions::WithdrawStart(float timeBeforeMs, float stepMs)
+{
+	return std::max(timeBeforeMs - stepMs, 0.0f);
+}
+
+std::optional<float> creature_object_actions::WithdrawStep(float timeMs, float stepMs)
+{
+	if (stepMs > timeMs)
+	{
+		return std::nullopt;
+	}
+	return timeMs - stepMs;
+}
+
 bool creature_object_actions::BringsBackUp(bool indestructible, bool heldDuringCutscene)
 {
 	return indestructible || heldDuringCutscene;

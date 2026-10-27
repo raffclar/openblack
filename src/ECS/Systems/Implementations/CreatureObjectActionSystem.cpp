@@ -2824,6 +2824,25 @@ void CreatureObjectActionSystem::CreatureTurn(entt::entity entity)
 	}
 }
 
+namespace
+{
+/// The body plays the animations of the action at its time, with their weights
+void PoseActionSlots(entt::entity creature, const CreatureObjectAction& action, CreatureAnimation& animation)
+{
+	animation.slots.clear();
+	for (size_t i = 0; i < action.animationCount; ++i)
+	{
+		const auto duration = DurationOf(creature, action.animations.at(i));
+		// Each animation holds its last frame
+		const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
+		animation.slots.push_back({.animation = action.animations.at(i),
+		                           .timeMs = time,
+		                           .weight = action.weights.at(i),
+		                           .mirrored = action.mirrored});
+	}
+}
+} // namespace
+
 void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 {
 	auto& registry = Locator::entitiesRegistry::value();
@@ -2854,11 +2873,28 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			}
 			return;
 		}
+		// When the thing got out of reach, the time of the reach decreases by one step each turn, with the last blend.
+		// The action fails when the step of the turn is longer than the time that is left.
+		if (action.withdraws)
+		{
+			const auto back = creature_object_actions::WithdrawStep(action.timeMs, step);
+			if (!back.has_value())
+			{
+				Fail(action, "it got out of reach");
+				animation.slots.clear();
+				return;
+			}
+			action.timeMs = *back;
+			PoseActionSlots(entity, action, animation);
+			return;
+		}
+		const float timeBefore = action.timeMs;
 		action.timeMs = action.kind == Kind::Point
 		                    ? creature_pointing::AdvanceTime(action.timeMs, step, action.pointMs, action.pointEnding)
 		                    : action.timeMs + step;
 
-		// Until it has hold, the reach follows what it reaches for, and fails when it gets out of reach
+		// Until it has hold, the reach follows what it reaches for. When the thing gets out of reach, the time of the
+		// reach starts to decrease.
 		if ((action.kind == Kind::PickUp || action.kind == Kind::Destroy) && !action.eventDone && action.reach.has_value())
 		{
 			const auto* at = action.target.has_value() && registry.Valid(*action.target)
@@ -2871,18 +2907,20 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 				return;
 			}
 			// It reaches for where a villager or an animal that moves will be at the moment of the hold. The time
-			// left is in whole milliseconds.
+			// left is in whole milliseconds, from the time of the reach before this turn.
 			const auto living = LivingOf(registry, *action.target);
 			const auto place = living.has_value() ? creature_lead::PlaceOf(*living) : at->position;
-			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(action.timeMs);
+			const auto msLeft = static_cast<int32_t>(action.eventMs) - static_cast<int32_t>(timeBefore);
 			const auto aim = AimAt(living, place, creature_lead::ReachSeconds(ShownSize(body), msLeft));
 			const auto local = ToLocal(AsFacing(registry, entity, transform), aim);
 			const auto reach =
 			    creature_reach::Solve(action.mirrored ? creature_reach::Mirrored(*action.reach) : *action.reach, local);
 			if (!reach.inRange)
 			{
-				Fail(action, "it got out of reach");
-				animation.slots.clear();
+				// The reach keeps the weights of the last turn. Its time is one step less than its time before this turn.
+				action.withdraws = true;
+				action.timeMs = creature_object_actions::WithdrawStart(timeBefore, step);
+				PoseActionSlots(entity, action, animation);
 				return;
 			}
 			action.weights = reach.weights;
@@ -2945,17 +2983,7 @@ void CreatureObjectActionSystem::ActionTurn(entt::entity creature)
 			return;
 		}
 
-		animation.slots.clear();
-		for (size_t i = 0; i < action.animationCount; ++i)
-		{
-			const auto duration = DurationOf(entity, action.animations.at(i));
-			// Each animation holds its last frame
-			const auto time = std::clamp(action.timeMs, 0.0f, std::max(duration - 1.0f, 0.0f));
-			animation.slots.push_back({.animation = action.animations.at(i),
-			                           .timeMs = time,
-			                           .weight = action.weights.at(i),
-			                           .mirrored = action.mirrored});
-		}
+		PoseActionSlots(entity, action, animation);
 	};
 	if (registry.Valid(creature) && registry.AllOf<Creature, Transform, CreatureAnimation, CreatureObjectAction>(creature))
 	{
@@ -3211,7 +3239,7 @@ void CreatureObjectActionSystem::AfterPoseTurn(entt::entity creature)
 	std::vector<Moment> moments;
 	if (const auto* action = registry.Valid(creature) ? registry.TryGet<const CreatureObjectAction>(creature) : nullptr;
 	    action != nullptr && action->phase == Phase::Playing && action->status == Status::Running && !action->eventDone &&
-	    action->timeMs >= action->eventMs)
+	    !action->withdraws && action->timeMs >= action->eventMs)
 	{
 		moments.push_back({creature});
 	}
