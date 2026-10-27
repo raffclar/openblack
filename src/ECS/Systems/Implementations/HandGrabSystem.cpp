@@ -49,6 +49,7 @@
 #include "Hand/HandClickRules.h"
 #include "Hand/OtherHeldDraw.h"
 #include "Help/HelpProfile.h"
+#include "Locator.h"
 
 using namespace openblack;
 using namespace openblack::ecs;
@@ -69,13 +70,19 @@ constexpr uint32_t k_CriesEach = 7;
 constexpr uint32_t k_TreeCreaks = 32;
 constexpr uint32_t k_TreeCreaksEach = 3;
 
-/// Writes what a turn did with the hand of a player to the log. The check tools count these lines for each player.
+/// Writes what a turn did with the hand of a player to the log. The check tools count these lines for each player, up to a
+/// turn.
 void LogHandDeed(PlayerNames player, std::string_view deed, entt::entity object)
 {
 	if (const auto logger = spdlog::get("game"))
 	{
-		SPDLOG_LOGGER_INFO(logger, "Hand deed: the hand of player {} {} thing {}", static_cast<int>(player), deed,
-		                   entt::to_integral(object));
+		uint32_t turnNow = 0;
+		if (Locator::time::has_value())
+		{
+			turnNow = Locator::time::value().GetTurn();
+		}
+		SPDLOG_LOGGER_INFO(logger, "Hand deed: the hand of player {} {} thing {} at turn {}", static_cast<int>(player), deed,
+		                   entt::to_integral(object), turnNow);
 	}
 }
 
