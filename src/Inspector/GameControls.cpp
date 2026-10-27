@@ -1055,6 +1055,11 @@ std::string GameLevels::Current() const
 	{
 		return "testbed";
 	}
+	const size_t levels = Locator::resources::has_value() ? Locator::resources::value().GetLevels().Size() : 0;
+	if (_found.has_value() && _found->land == path && _found->levels == levels)
+	{
+		return _found->name;
+	}
 	std::string name = path.stem().string();
 	if (Locator::resources::has_value())
 	{
@@ -1066,6 +1071,7 @@ std::string GameLevels::Current() const
 			}
 		});
 	}
+	_found = FoundName {.land = path, .levels = levels, .name = name};
 	return name;
 }
 
