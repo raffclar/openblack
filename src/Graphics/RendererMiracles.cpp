@@ -42,6 +42,7 @@
 #include "ECS/Registry.h"
 #include "ECS/RewardOpening.h"
 #include "ECS/Systems/AlignmentSystemInterface.h"
+#include "ECS/Systems/HandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/RenderingSystemInterface.h"
 #include "ECS/WorldObjects.h"
@@ -66,6 +67,12 @@ namespace visuals = openblack::magic::visuals;
 
 namespace
 {
+/// The colour of the player at this computer
+uint32_t OwnColour()
+{
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return ecs::components::Player::k_Colours.at(static_cast<size_t>(own));
+}
 constexpr float k_ByteMax = 255.0f;
 /// The freeze phial's creature takes its spell in this way
 constexpr int k_FreezeReceiveType = 0;
@@ -272,7 +279,7 @@ void Renderer::DrawGlobes(const DrawSceneDesc& desc) const
 	const bool haveBubble = meshes.Contains(OneOffSpellSeed::k_MeshId.value());
 	const bool haveRing = meshes.Contains(OneOffSpellSeed::k_RingMeshId.value());
 	// A globe nobody owns shows its rings in the colour of the player at this computer
-	const auto ringColour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	const auto ringColour = ColourOf(OwnColour());
 
 	desc.entities.Each<const OneOffSpellSeed, const Transform>([&](const OneOffSpellSeed& globe, const Transform& transform) {
 		const float scale = transform.scale.x * visuals::k_GlobeSeedScale;
@@ -462,6 +469,17 @@ void Renderer::DrawIconSeeds(const DrawSceneDesc& desc) const
 
 namespace
 {
+/// The hand that the frame draws: the left hand of the god of this computer. Only this hand shows its miracles.
+entt::entity DrawnHand()
+{
+	using ecs::systems::HandSystemInterface;
+	if (!Locator::handSystem::has_value())
+	{
+		return entt::null;
+	}
+	return Locator::handSystem::value().GetOwnHands()[static_cast<size_t>(HandSystemInterface::Side::Left)];
+}
+
 /// The hand that holds the miracles, its look and where it is drawn: its matrix and each of its bones' in the world
 struct HandPose
 {
@@ -481,9 +499,10 @@ std::optional<HandPose> PoseOfHand(const ecs::Registry& registry)
 		return std::nullopt;
 	}
 	std::optional<HandPose> found;
-	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](const Hand& hand, const HandMiracleFx& fx,
-	                                                                    const Transform& transform) {
-		if (found.has_value())
+	const auto drawnHand = DrawnHand();
+	registry.Each<const Hand, const HandMiracleFx, const Transform>([&](entt::entity entity, const Hand& hand,
+	                                                                    const HandMiracleFx& fx, const Transform& transform) {
+		if (found.has_value() || entity != drawnHand)
 		{
 			return;
 		}
@@ -552,14 +571,15 @@ std::optional<Renderer::HandGlowLook> Renderer::HandGlowOf(const DrawSceneDesc& 
 		return std::nullopt;
 	}
 	std::optional<HandGlowLook> look;
-	desc.entities.Each<const Hand, const HandMiracleFx>([&](const Hand&, const HandMiracleFx& fx) {
-		if (look.has_value() || !fx.glowing)
+	const auto drawnHand = DrawnHand();
+	desc.entities.Each<const Hand, const HandMiracleFx>([&](entt::entity entity, const Hand&, const HandMiracleFx& fx) {
+		if (look.has_value() || !fx.glowing || entity != drawnHand)
 		{
 			return;
 		}
 		// The flow's sheet, an eighth of it at a time, running backwards over the hand in its player's colour at four
 		// fifths
-		const auto rgb = ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE));
+		const auto rgb = OwnColour();
 		look = HandGlowLook {
 		    .flow = flow,
 		    .uvOffset = visuals::GlowUvOffset(fx.glowFrame),
@@ -637,7 +657,7 @@ void Renderer::DrawHandMiracleBands(const DrawSceneDesc& desc) const
 	glm::mat4 cameraFrame {glm::vec4(camera.GetRight(), 0.0f), glm::vec4(camera.GetUp(), 0.0f),
 	                       glm::vec4(camera.GetForward(), 0.0f), glm::vec4(camera.GetOrigin(), 1.0f)};
 	const auto atCamera = cameraFrame * visuals::BandAtCamera(camera.GetNearClip());
-	const auto colour = ColourOf(ecs::components::Player::k_Colours.at(static_cast<size_t>(PlayerNames::PLAYER_ONE)));
+	const auto colour = ColourOf(OwnColour());
 	const auto ring = meshes.Handle(OneOffSpellSeed::k_RingMeshId.value());
 	const auto* program = _shaderManager->GetShader("Object");
 	const auto translucent = TranslucentPassOf(desc.viewId);

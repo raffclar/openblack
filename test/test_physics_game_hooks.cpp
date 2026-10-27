@@ -93,8 +93,9 @@ public:
 		}
 		cube.faces = {{0, 1, 3}};
 		cube.radius = glm::length(glm::vec3(1.0f));
-		entry.body =
-		    std::make_unique<physics::Body>(physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f}, cube);
+		entry.body = std::make_unique<physics::Body>(
+		    physics::BodySetup {.scale = 1.0f, .halfHeight = 1.0f, .mass = 10.0f, .material = {.spinKeptPerSecond = 0.5f}},
+		    cube);
 		entry.body->SetUpPose({.axes = glm::mat3(1.0f), .origin = glm::vec3(5.0f, 1.0f, 5.0f)});
 		entry.body->velocity = velocity;
 		return entry;
