@@ -1098,47 +1098,6 @@ uint32_t villager_disciple::GlowFrame(uint64_t gameMilliseconds)
 	return static_cast<uint32_t>(framesPerMillisecond * static_cast<float>(intoCycle));
 }
 
-void villager_disciple::MakeMarks()
-{
-	if (!Locator::entitiesRegistry::has_value())
-	{
-		return;
-	}
-	auto& registry = Entities();
-	// The turn makes and removes the entities of the marks. The frames only move them and choose their pictures, so the
-	// world of each computer has the same marks.
-	std::vector<entt::entity> markEntities;
-	std::vector<disciple::MarkFacts> marks;
-	registry.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
-		markEntities.push_back(mark);
-		marks.push_back({.villager = of.villager,
-		                 .symbol = of.symbol,
-		                 .glows = !of.symbol && registry.Valid(of.villager) && registry.AllOf<Disciple>(of.villager) &&
-		                          disciple::KindOf(TypeOf(of.villager)).glows});
-	});
-	std::vector<entt::entity> glowing;
-	registry.Each<const Disciple>([&glowing](entt::entity villager, const Disciple& disciple) {
-		if (disciple::KindOf(disciple.type).glows)
-		{
-			glowing.push_back(villager);
-		}
-	});
-	const auto changes = disciple::PlanMarks(marks, glowing);
-	for (const auto index : changes.marksToRemove)
-	{
-		registry.Destroy(markEntities[index]);
-	}
-	for (const auto villager : changes.glowsToMake)
-	{
-		MakeMark(villager, false);
-	}
-	if (changes.makeSymbol)
-	{
-		// The mark of the symbol keeps no villager. Each frame finds the disciple in or under the hand of this computer.
-		MakeMark(entt::null, true);
-	}
-}
-
 void villager_disciple::UpdateMarks()
 {
 	if (!Locator::entitiesRegistry::has_value() || !Locator::resources::has_value())
@@ -1163,19 +1122,52 @@ void villager_disciple::UpdateMarks()
 	}
 	const auto frame = GlowFrame(gameMs);
 
-	// Each glow over its villager's head, the size of the villager, its puffs turning; none while the villager is out of
-	// sight. The turn made the glows, and it removes the glow of a villager that went.
+	// Marks of villagers gone or no longer glowing go
+	std::vector<entt::entity> gone;
 	std::optional<entt::entity> symbolMark;
+	registry.Each<const DiscipleMark>([&](entt::entity mark, const DiscipleMark& of) {
+		if (of.symbol)
+		{
+			symbolMark = mark;
+			return;
+		}
+		if (!registry.Valid(of.villager) || !disciple::KindOf(TypeOf(of.villager)).glows)
+		{
+			gone.push_back(mark);
+		}
+	});
+	for (const auto mark : gone)
+	{
+		registry.Destroy(mark);
+	}
+	std::vector<entt::entity> glowing;
+	registry.Each<const Disciple>([&glowing](entt::entity villager, const Disciple& disciple) {
+		if (disciple::KindOf(disciple.type).glows)
+		{
+			glowing.push_back(villager);
+		}
+	});
+	std::vector<entt::entity> marked;
+	registry.Each<const DiscipleMark>([&marked](const DiscipleMark& of) {
+		if (!of.symbol)
+		{
+			marked.push_back(of.villager);
+		}
+	});
+	for (const auto villager : glowing)
+	{
+		if (std::ranges::find(marked, villager) == marked.end())
+		{
+			MakeMark(villager, false);
+		}
+	}
+
+	// Each glow over its villager's head, the size of the villager, its puffs turning; none while the villager is out of
+	// sight
 	registry.Each<const DiscipleMark, Sprite, Transform>(
-	    [&registry, &symbolMark, frame](entt::entity mark, const DiscipleMark& of, Sprite& sprite, Transform& transform) {
+	    [&registry, frame](const DiscipleMark& of, Sprite& sprite, Transform& transform) {
 		    if (of.symbol)
 		    {
-			    symbolMark = mark;
-			    return;
-		    }
-		    if (!registry.Valid(of.villager))
-		    {
-			    transform.scale = glm::vec3(0.0f);
 			    return;
 		    }
 		    const auto& body = registry.Get<const Transform>(of.villager);
@@ -1186,21 +1178,20 @@ void villager_disciple::UpdateMarks()
 		    sprite.uvMin = CellUv(frame);
 	    });
 
-	// The symbol of the disciple in the hand or under it, over its glow. The turn made the one mark of the symbol at the
-	// first glowing disciple.
-	if (!symbolMark.has_value())
-	{
-		return;
-	}
-	auto& transform = registry.Get<Transform>(*symbolMark);
+	// The symbol of the disciple in the hand or under it, over its glow
 	const auto shown = PersonShown();
 	const auto cell =
 	    shown.has_value() && disciple::KindOf(TypeOf(*shown)).glows ? disciple::SymbolCell(TypeOf(*shown)) : std::nullopt;
 	if (!cell.has_value())
 	{
-		transform.scale = glm::vec3(0.0f);
+		if (symbolMark.has_value())
+		{
+			registry.Get<Transform>(*symbolMark).scale = glm::vec3(0.0f);
+		}
 		return;
 	}
+	const auto mark = symbolMark.value_or(entt::null) != entt::null ? *symbolMark : MakeMark(*shown, true);
+	auto& transform = registry.Get<Transform>(mark);
 	const auto& body = registry.Get<const Transform>(*shown);
 	transform.position = body.position + glm::vec3(0.0f, body.scale.x + (body.scale.x * k_SymbolRise), 0.0f);
 	float size = k_LeastSpriteSize;
@@ -1211,5 +1202,6 @@ void villager_disciple::UpdateMarks()
 		size = disciple::SymbolSize(distance, screen.x, screen.y);
 	}
 	transform.scale = glm::vec3(size, size, 1.0f);
-	registry.Get<Sprite>(*symbolMark).uvMin = CellUv(*cell);
+	registry.Get<Sprite>(mark).uvMin = CellUv(*cell);
+	registry.Get<DiscipleMark>(mark).villager = *shown;
 }

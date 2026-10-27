@@ -17,8 +17,6 @@
 #include <span>
 #include <vector>
 
-#include <entt/entity/entity.hpp>
-
 #include "Enums.h"
 
 /// The rules of disciples: a villager held in the player's hand takes up the work of what it is held near, a field, a
@@ -187,31 +185,5 @@ inline constexpr uint32_t k_IdleRetryWhenChanged = 10;
 
 /// A villager made a disciple walks up to the thing it was put by when farther than this from its edge
 inline constexpr float k_InspectReach = 5.0f;
-
-/// A mark over a disciple as the turn sees it
-struct MarkFacts
-{
-	/// The villager of a glow. The mark of the symbol keeps no villager.
-	entt::entity villager {entt::null};
-	/// The mark shows the symbol of the work of the disciple in or under the hand
-	bool symbol {false};
-	/// The villager of the glow is there, and its work glows
-	bool glows {false};
-};
-
-/// The changes that the turn makes to the marks over the disciples
-struct MarkChanges
-{
-	/// The disciples that get a glow, in the order of the list of glowing disciples
-	std::vector<entt::entity> glowsToMake;
-	/// The marks that go, by their place in the list of marks
-	std::vector<size_t> marksToRemove;
-	/// The world gets its one mark for the symbol
-	bool makeSymbol {false};
-};
-
-/// The marks that the turn makes and removes. A glow goes when its villager is not there or does not glow. Each glowing
-/// disciple with no glow gets one. The world gets one mark for the symbol at its first glowing disciple and keeps it.
-[[nodiscard]] MarkChanges PlanMarks(std::span<const MarkFacts> marks, std::span<const entt::entity> glowing);
 
 } // namespace openblack::disciple
