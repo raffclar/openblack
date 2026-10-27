@@ -50,6 +50,7 @@
 #include "ECS/Components/VillagerDeath.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/DiscipleRules.h"
+#include "ECS/DiscipleSymbol.h"
 #include "ECS/DiscipleWorkRules.h"
 #include "ECS/DrawnRegistry.h"
 #include "ECS/HandPlayer.h"
@@ -672,26 +673,18 @@ bool LandingStateIsThere(VillagerStates state)
 	}
 }
 
-/// The first person in the player's hand, or the one under the hand when it holds no one
+/// The disciple in the hand of the player at this computer, or the disciple under the pointer of this computer (see
+/// disciple_symbol::Shown)
 std::optional<entt::entity> PersonShown()
 {
-	auto& registry = Entities();
-	std::optional<entt::entity> shown;
-	registry.Each<const HandGrab>([&shown, &registry](const HandGrab& grab) {
-		if (grab.object != entt::null && registry.Valid(grab.object) && registry.AllOf<Villager, Disciple>(grab.object))
-		{
-			shown = grab.object;
-		}
-	});
-	if (!shown.has_value() && Locator::pickingSystem::has_value())
+	if (!Locator::handSystem::has_value())
 	{
-		const auto hovered = Locator::pickingSystem::value().GetPick().object;
-		if (hovered.has_value() && registry.Valid(*hovered) && registry.AllOf<Villager, Disciple>(*hovered))
-		{
-			shown = hovered;
-		}
+		return std::nullopt;
 	}
-	return shown;
+	const auto hands = Locator::handSystem::value().GetOwnHands();
+	const auto underPointer =
+	    Locator::pickingSystem::has_value() ? Locator::pickingSystem::value().GetPick().object : std::nullopt;
+	return disciple_symbol::Shown(Entities(), hands, underPointer);
 }
 
 /// A mark is a thing of the drawn registry, over a villager of the land
