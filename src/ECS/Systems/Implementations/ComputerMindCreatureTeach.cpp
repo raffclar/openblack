@@ -100,13 +100,13 @@ namespace
 	for (size_t miracle = 0; miracle < miracles.size(); ++miracle)
 	{
 		const auto type = static_cast<MagicType>(miracle);
-		const auto seed = magic::GetMagicInfo(info, type).spellSeedType;
-		// A miracle with no seed reads an empty record before the table of seeds, so its seed is not a real one
-		const bool seedInTable = seed != SpellSeedType::None && static_cast<size_t>(seed) < info.spellSeed.size();
+		// The game gives each miracle the first seed that casts it when it starts. The miracle of no type keeps no seed and
+		// reads an empty record before the table of seeds.
+		const auto seed = type == MagicType::None ? std::nullopt : magic::FindFirstSpellSeedForMagicType(info, type);
 		facts.push_back({.teachable = miracles.at(miracle).field0x54 != 0,
 		                 .known = Knows(creature, CreatureActionLearningType::Magic, miracle),
 		                 .perceived = magic::GetMagicEffectInfo(info, type).perceivedPlayerDesire.at(0),
-		                 .seedExists = seedInTable && magic::GetSpellSeedInfo(info, seed).exists != 0});
+		                 .seedExists = seed.has_value() && magic::GetSpellSeedInfo(info, *seed).exists != 0});
 	}
 	return facts;
 }

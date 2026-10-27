@@ -56,6 +56,38 @@ CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
 CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
 )";
 
+/// The lines of a land that give player two a computer mind, a temple and a Celtic town that offers the heal miracle,
+/// with four abodes of people
+constexpr std::string_view k_HealTownScript = R"(TOGGLE_COMPUTER_PLAYER("PLAYER_TWO", 1)
+CREATE_CITADEL("0.0,-90.0", 0, "PLAYER_TWO", 5690, 1000)
+CREATE_TOWN(900, "0.0,40.0", "PLAYER_TWO", 0, "CELTIC")
+SET_TOWN_BELIEF_CAP(900, "PLAYER_TWO", 2.0)
+CREATE_NEW_TOWN_SPELL(900, "HEAL")
+SET_TOWN_BELIEF(900, "PLAYER_TWO", 1.0)
+CREATE_TOWN_CENTRE(900, "-4.0,41.0", "CELTIC_ABODE_TOWN_CENTRE", 0, 1000, 0)
+CREATE_ABODE(900, "10.0,90.0", "CELTIC_ABODE_STORAGE_PIT", 6282, 1000, 0, 3000)
+CREATE_ABODE(900, "40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("36.0,62.0", "40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("56.0,62.0", "60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-60.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-64.0,62.0", "-60.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_ABODE(900, "-40.0,60.0", "CELTIC_ABODE_F", 4328, 1095, 0, 0)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_HOUSEWIFE", 20)
+CREATE_VILLAGER_POS("-44.0,62.0", "-40.0,60.0", "CELTIC_FORESTER", 20)
+)";
+
 /// The creature of player two, a grown up tiger, at a place
 CreatureSetup GodCreature(glm::vec2 offset)
 {
@@ -212,25 +244,31 @@ void testbed_scenarios::AddComputerGodCreaturePlayScenarios(std::vector<Scenario
 	    .landScript = k_ComputerGodTownScript,
 	    .commands = OnlyTeach(),
 	});
+	auto teachKind = OnlyTeach();
+	teachKind.push_back({.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .amount = 1.0f});
+	teachKind.push_back({.kind = Command::Kind::ComputerUntaughtSends,
+	                     .player = PlayerNames::PLAYER_TWO,
+	                     .delaySeconds = 30.0f,
+	                     .value = 1,
+	                     .amount = 2.0f});
 	all.push_back({
 	    .id = "mind.computer_god_teach_kind_miracle",
 	    .name = "A computer god that teaches its creature a kind miracle",
 	    .facet = Facet::Mind,
-	    .description = "The land of the food miracle scenario. Half of the people go to worship at the site of the town. "
-	                   "The tiger of player two stands between the temple and the town. At the start, the god wants only "
-	                   "to teach its creature. After 30 seconds, a testbed tool puts the action "
-	                   "TeachCreatureCompassionateMagic in the queue of the god, with the tiger, as a land script does. "
-	                   "In a game, the god wants this lesson only after it sent its creature to help a town.",
-	    .expected = "The tiger learns the first kind miracle that it does not know, which is heal. The hand moves over the "
-	                "tiger, then to the food icon of the site. The tiger looks up at the god, and the hand moves back over "
-	                "it. The worshippers chant at the food icon, and the hand casts the heal miracle on the tiger.",
+	    .description = "Lines of a land give player two a temple to the south and a Celtic town to the north that offers "
+	                   "the heal miracle. Half of the people go to worship at the site of the town, and each icon of the "
+	                   "site holds the full charge of its miracle. The tiger of player two stands between the temple and "
+	                   "the town. At the start, the god wants only to teach its creature. After 30 seconds, a testbed tool "
+	                   "tells the god that it sent its creature two times while the creature knew no kind miracle. In a "
+	                   "game, the god counts these sends when it sends its creature to help a town.",
+	    .expected = "First the god teaches the tiger to use the totem, as in the totem scenario. After 30 seconds, the tiger "
+	                "learns the first kind miracle that it does not know. The hand moves over the tiger, then to the heal "
+	                "icon of the site. The tiger looks up at the god, and the hand moves back over it. The worshippers "
+	                "chant at the heal icon, and the hand casts the miracle that the tiger learnt on the tiger.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
 	    .creatures = {GodCreature({30.0f, -30.0f})},
-	    .landScript = k_ComputerGodTownScript,
-	    .commands = OnlyTeach(),
+	    .landScript = k_HealTownScript,
+	    .commands = teachKind,
 	    .worshipShare = 0.5f,
-	    .computerActions = {{.afterTurns = 300,
-	                         .node = "TeachCreatureCompassionateMagic",
-	                         .first = {.kind = ComputerActionThing::Kind::Creature, .object = 0}}},
 	});
 }
