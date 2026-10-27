@@ -223,10 +223,10 @@ GameMenu::GameMenu(const TextDatabase& texts, const GameFont& font, std::u16stri
     , _quitGameQuestion(texts.Get("HELP_TEXT_DIALOG_AREYOUSUREQUIT"))
     , _videoChange(texts.Get("HELP_TEXT_DIALOG_VIDEOCHANGE"))
     , _settings(std::move(settings))
-    , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
-    , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
     , _exitOnlineLabel(texts.Get("HELP_TEXT_FRONT_END_03"))
     , _multiplayerTab(texts.Get("HELP_TEXT_MULTIPLAYER_MAIN_TAB"))
+    , _mainMenuTab(texts.Get("HELP_TEXT_DIALOG_ADDITION_88"))
+    , _worldRoomTab(texts.Get("HELP_TEXT_ROOM_WORLD_TITLE"))
 {
 	const auto read = [&texts](auto& labels, const auto& names) {
 		for (size_t i = 0; i < labels.size(); ++i)

@@ -4006,7 +4006,7 @@ void CallInNear() // 067 CALL_IN_NEAR
 	auto& registry = Locator::entitiesRegistry::value();
 	// Not finding one is no mistake: the Pied Piper asks every few seconds for a child near him. Only the closest tracing
 	// tells of it
-	const auto notFound = [type, subtype]() {
+	const auto notFound = [=]() {
 		SPDLOG_LOGGER_TRACE(spdlog::get("scripting"), "Cannot find in Near. {}.{}", type, subtype);
 		Pusho(0);
 	};

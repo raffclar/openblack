@@ -994,7 +994,7 @@ int ExtractFile(const Arguments::Extract& args) noexcept
 		}
 		const auto meshDirectory =
 		    args.meshDirectory.empty() ? args.creature.parent_path().parent_path() / "CreatureMesh" : args.meshDirectory;
-		const auto meshPath = [&meshDirectory](const std::array<char, 0x20>& field) {
+		const auto meshPath = [](const std::array<char, 0x20>& field) {
 			const std::string_view raw(field.data(), field.size());
 			return std::string(raw.substr(0, raw.find(char {})));
 		};
