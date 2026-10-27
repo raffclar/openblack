@@ -156,6 +156,11 @@ public:
 
 	[[nodiscard]] bool Skirmish() const override { return Locator::entitiesRegistry::value().Context().skirmish; }
 
+	[[nodiscard]] bool NetworkGame() const override
+	{
+		return Locator::time::has_value() && Locator::time::value().IsNetworkGame();
+	}
+
 	[[nodiscard]] Player::Miracles Miracles(PlayerNames player) const override
 	{
 		Player::Miracles miracles;

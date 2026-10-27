@@ -50,6 +50,7 @@ public:
 		return found != pens.end() ? std::optional(found->second) : std::nullopt;
 	}
 	[[nodiscard]] bool Skirmish() const override { return skirmish; }
+	[[nodiscard]] bool NetworkGame() const override { return network; }
 	[[nodiscard]] Player::Miracles Miracles(PlayerNames /*player*/) const override { return miracles; }
 	void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) override
 	{
@@ -88,6 +89,7 @@ public:
 	std::map<PlayerNames, bool> temples;
 	std::map<PlayerNames, glm::vec3> pens;
 	bool skirmish {true};
+	bool network {false};
 	Player::Miracles miracles;
 	std::vector<std::pair<CreatureType, glm::vec3>> made;
 	std::vector<std::pair<entt::entity, MagicType>> taught;
@@ -257,6 +259,18 @@ TEST(ComputerPlayerStart, OutsideASkirmishOrWithNoTempleNoCreatureIsMade)
 	Start(noTemple, PlayerNames::PLAYER_TWO, other);
 	EXPECT_TRUE(noTemple.made.empty());
 	EXPECT_TRUE(noTemple.rangesAsked.empty());
+}
+
+TEST(ComputerPlayerStart, ASkirmishOfANetworkGameMakesNoCreature)
+{
+	FakeWorld world;
+	world.network = true;
+	world.temples = {{PlayerNames::PLAYER_TWO, true}};
+	world.pens = {{PlayerNames::PLAYER_TWO, glm::vec3(0.0f)}};
+	auto mind = SwitchedOnLikeThePerson();
+	Start(world, PlayerNames::PLAYER_TWO, mind);
+	EXPECT_TRUE(world.made.empty());
+	EXPECT_TRUE(world.rangesAsked.empty());
 }
 
 TEST(ComputerPlayerStart, TheSpeciesNumberZeroIsTheApe)

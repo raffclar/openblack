@@ -44,6 +44,8 @@ public:
 	void SetAlly(PlayerNames player, PlayerNames other, float strength) override;
 	[[nodiscard]] float AllyStrength(PlayerNames player, PlayerNames other) const override;
 
+	[[nodiscard]] bool IsComputerPlayer(PlayerNames name) const override;
+
 private:
 	/// Remembers that the owner of the creature got it, after the creatures they got before or before all of them
 	void Acquire(entt::entity creature, bool primary);

@@ -89,7 +89,7 @@ StartFacts FactsOf(const World& world, PlayerNames player)
 	    .pen = world.Pen(player).has_value(),
 	    .creature = world.Creature(player).has_value(),
 	    .skirmish = world.Skirmish(),
-	    .network = false,
+	    .network = world.NetworkGame(),
 	    .localCreature = world.Creature(local).has_value(),
 	};
 }

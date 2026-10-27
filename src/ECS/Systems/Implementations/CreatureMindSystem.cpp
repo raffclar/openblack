@@ -2027,13 +2027,13 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 	auto& animation = registry.Get<CreatureAnimation>(entity);
 	const auto& transform = registry.Get<const Transform>(entity);
 	// Where the player's camera is and looks, which tells whether it is looking at the player's creatures
-	// Where the player's camera is and looks, which tells whether it is looking at the player's creatures
+	// Where the camera of the creature's own player is and looks, which tells whether that player looks at it
 	struct View
 	{
 		glm::vec3 origin;
 		glm::vec3 focus;
 	};
-	const auto reported = openblack::ecs::ReportedCreatureCamera(entity);
+	const auto reported = openblack::ecs::ReportedCameraOfItsPlayer(entity);
 	const auto view =
 	    reported.has_value() ? std::optional(View {.origin = reported->origin, .focus = reported->focus}) : std::nullopt;
 	SetUpMind(entity, creature, mind);
@@ -2079,8 +2079,8 @@ void CreatureMindSystem::MindTurn(entt::entity entity)
 		LookAtLand(entity, creature, mind, transform);
 		LookFarAbout(entity, mind, transform);
 		ecs::creature_exploration_land::Visit(entity, {transform.position.x, transform.position.z});
-		const bool lookedAt = creature.owner == PlayerNames::PLAYER_ONE && view.has_value() &&
-		                      creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
+		const bool lookedAt =
+		    view.has_value() && creature_attention::IsLookingAt(view->origin, view->focus, transform.position);
 		creature_desire_sources::CountTurn(mind.attention, lookedAt);
 		if (lookedAt)
 		{

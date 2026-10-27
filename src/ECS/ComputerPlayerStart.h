@@ -98,6 +98,8 @@ public:
 	/// The place of the creature's pen at the temple of the player, on the land
 	[[nodiscard]] virtual std::optional<glm::vec3> Pen(PlayerNames player) const = 0;
 	[[nodiscard]] virtual bool Skirmish() const = 0;
+	/// The game is a network game
+	[[nodiscard]] virtual bool NetworkGame() const { return false; }
 	[[nodiscard]] virtual ecs::components::Player::Miracles Miracles(PlayerNames player) const = 0;
 	virtual void MakeCreature(PlayerNames player, CreatureType species, const glm::vec3& position) = 0;
 	/// The creature learns the miracle as a script teaches it
