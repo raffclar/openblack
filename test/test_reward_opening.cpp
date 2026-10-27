@@ -223,7 +223,7 @@ TEST(RewardOpening, TheNextMiracleChestFindsATownAndGivesTheNextMiracle)
 	// With nothing left to learn, a random one as a globe
 	FakeWorld done;
 	done.random = MagicType::StormWindRain;
-	reward::Open({.nextMiracle = true}, done);
+	reward::Open({.nextMiracle = true}, PlayerNames::PLAYER_ONE, done);
 	EXPECT_EQ(done.events, (std::vector<std::string> {"find town", Globe(k_Storm)}));
 }
 
