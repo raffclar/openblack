@@ -12,6 +12,7 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <memory>
 #include <string>
 #include <thread>
@@ -142,7 +143,7 @@ TEST(MainThreadQueue, ATurnOnAnotherThreadWaitsForTheMainThread)
 		EXPECT_FALSE(queue.RunsAtOnce());
 		for (int i = 1; i <= 3; ++i)
 		{
-			queue.Post(MainThreadApi::Audio, [&order, &threads, i] {
+			queue.Post(MainThreadApi::Graphics, [&order, &threads, i] {
 				order.push_back(i);
 				threads.push_back(std::this_thread::get_id());
 			});
@@ -180,7 +181,7 @@ TEST(MainThreadQueue, TheCheckCountsOnlyTheDirectCallsOfTurnCode)
 	MainThreadQueue queue;
 	queue.SetCheck(TurnApiCheck::Report);
 	// Frame code may use the services
-	MainThreadQueue::CheckDirect(MainThreadApi::Audio, "PlaySound");
+	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
 	EXPECT_TRUE(queue.GetDirectCalls().empty());
 	{
 		const MainThreadQueue::TurnScope turn(queue);
@@ -188,8 +189,10 @@ TEST(MainThreadQueue, TheCheckCountsOnlyTheDirectCallsOfTurnCode)
 		EXPECT_TRUE(queue.InTurnCode());
 		for (int i = 0; i < 2; ++i)
 		{
-			MainThreadQueue::CheckDirect(MainThreadApi::Audio, "GetStatus");
+			MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "Renderer::DrawScene");
 		}
+		// The turn holds the audio, so it uses the audio directly
+		MainThreadQueue::CheckDirect(MainThreadApi::Audio, "GetStatus");
 		// The work from the queue may use the services, also in a turn
 		queue.Post(MainThreadApi::Renderer, [&queue] {
 			EXPECT_FALSE(queue.InTurnCode());
@@ -201,8 +204,8 @@ TEST(MainThreadQueue, TheCheckCountsOnlyTheDirectCallsOfTurnCode)
 	EXPECT_FALSE(queue.InTurnCode());
 	const auto calls = queue.GetDirectCalls();
 	ASSERT_EQ(calls.size(), 2U);
-	EXPECT_EQ(calls[0].api, MainThreadApi::Audio);
-	EXPECT_EQ(calls[0].what, "GetStatus");
+	EXPECT_EQ(calls[0].api, MainThreadApi::Renderer);
+	EXPECT_EQ(calls[0].what, "Renderer::DrawScene");
 	EXPECT_EQ(calls[0].turnStep, 7U);
 	EXPECT_EQ(calls[0].count, 2U);
 	EXPECT_EQ(calls[1].api, MainThreadApi::Graphics);
@@ -217,7 +220,7 @@ TEST(MainThreadQueue, TheCheckIsOffUntilItIsAskedFor)
 	MainThreadQueue queue;
 	EXPECT_EQ(queue.GetCheck(), TurnApiCheck::Off);
 	const MainThreadQueue::TurnScope turn(queue);
-	MainThreadQueue::CheckDirect(MainThreadApi::Audio, "GetStatus");
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "Texture2D::Update");
 	EXPECT_TRUE(queue.GetDirectCalls().empty());
 }
 
@@ -250,11 +253,11 @@ TEST(MainThreadQueue, TheCheckSeesATurnOnAnotherThread)
 	queue.SetCheck(TurnApiCheck::Report);
 	std::thread worker([&queue] {
 		const MainThreadQueue::TurnScope turn(queue);
-		MainThreadQueue::CheckDirect(MainThreadApi::Audio, "EmitterExists");
+		MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Bind");
 	});
 	worker.join();
 	// The main thread is in no turn
-	MainThreadQueue::CheckDirect(MainThreadApi::Audio, "EmitterExists");
+	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Bind");
 	const auto calls = queue.GetDirectCalls();
 	ASSERT_EQ(calls.size(), 1U);
 	EXPECT_EQ(calls[0].count, 1U);
@@ -298,7 +301,7 @@ TEST(QueuedAudioManager, TheCallsThatGiveNothingBackWaitWhileTheQueueDefers)
 	EXPECT_EQ(calls, (std::vector<std::string> {"EndAnimEffect bank 3", "PlaySound 21"}));
 }
 
-TEST(QueuedAudioManager, TheCheckCountsTheCallsThatGiveBackAValue)
+TEST(QueuedAudioManager, TheTurnHoldsTheAudioAndUsesItDirectly)
 {
 #if !defined(OPENBLACK_DEVELOPER_TOOLS)
 	GTEST_SKIP() << "The check is only in builds with the developer tools";
@@ -313,8 +316,113 @@ TEST(QueuedAudioManager, TheCheckCountsTheCallsThatGiveBackAValue)
 		audio.StopEmitter(static_cast<entt::entity>(32));
 		[[maybe_unused]] const auto emitter = audio.StartSoundEffect(33, {});
 	}
+	EXPECT_TRUE(queue.GetDirectCalls().empty());
+	EXPECT_EQ(calls.size(), 3U);
+}
+
+TEST(QueuedAudioManager, ATurnOnAnotherThreadUsesTheAudioAtOnceInTheOrderOfItsCalls)
+{
+	MainThreadQueue queue;
+	std::vector<std::string> calls;
+	openblack::audio::QueuedAudioManager audio(std::make_unique<RecordingAudio>(calls), queue);
+	std::thread worker([&] {
+		const MainThreadQueue::TurnScope turn(queue);
+		audio.PlaySound(41, openblack::audio::PlayType::Once);
+		EXPECT_EQ(audio.StartSoundEffect(42, {}), static_cast<entt::entity>(42));
+		audio.StopEmitter(static_cast<entt::entity>(42));
+	});
+	worker.join();
+	EXPECT_EQ(queue.GetPendingCount(), 0U);
+	EXPECT_EQ(calls, (std::vector<std::string> {"PlaySound 41", "StartSoundEffect 42", "StopEmitter 42"}));
+}
+
+TEST(QueuedAudioManager, TheCheckCountsAUseOfTheMainThreadWhileTheTurnRunsElsewhere)
+{
+#if !defined(OPENBLACK_DEVELOPER_TOOLS)
+	GTEST_SKIP() << "The check is only in builds with the developer tools";
+#endif
+	MainThreadQueue queue;
+	queue.SetCheck(TurnApiCheck::Report);
+	std::vector<std::string> calls;
+	openblack::audio::QueuedAudioManager audio(std::make_unique<RecordingAudio>(calls), queue);
+	// Without a turn elsewhere the main thread uses the audio as it must
+	audio.PlaySound(51, openblack::audio::PlayType::Once);
+	EXPECT_TRUE(queue.GetDirectCalls().empty());
+	{
+		const MainThreadQueue::TurnElsewhere elsewhere(queue);
+		EXPECT_TRUE(queue.TurnRunsElsewhere());
+		[[maybe_unused]] const auto emitter = audio.StartSoundEffect(52, {});
+		audio.PlaySound(53, openblack::audio::PlayType::Once);
+	}
+	EXPECT_FALSE(queue.TurnRunsElsewhere());
 	const auto direct = queue.GetDirectCalls();
-	ASSERT_EQ(direct.size(), 1U);
+	ASSERT_EQ(direct.size(), 2U);
 	EXPECT_EQ(direct[0].api, MainThreadApi::Audio);
-	EXPECT_EQ(direct[0].what, "StartSoundEffect");
+	EXPECT_EQ(direct[0].what, "main thread: StartSoundEffect");
+	EXPECT_FALSE(direct[0].turnStep.has_value());
+}
+
+TEST(MainThreadQueue, ACallFromATurnOnAnotherThreadRunsOnTheMainThreadAfterThePosts)
+{
+	MainThreadQueue queue;
+	std::vector<std::string> order;
+	std::vector<std::thread::id> threads;
+	std::atomic<bool> done {false};
+	int result = 0;
+	std::thread worker([&] {
+		{
+			const MainThreadQueue::TurnScope turn(queue);
+			queue.Post(MainThreadApi::Graphics, [&order, &threads] {
+				order.emplace_back("post");
+				threads.push_back(std::this_thread::get_id());
+			});
+			result = queue.CallOnMain(MainThreadApi::Renderer, [&order, &threads] {
+				order.emplace_back("call");
+				threads.push_back(std::this_thread::get_id());
+				return 5;
+			});
+			order.emplace_back("after");
+		}
+		done = true;
+		queue.Wake();
+	});
+	queue.ServeUntil([&done] { return done.load(); });
+	worker.join();
+	EXPECT_EQ(result, 5);
+	EXPECT_EQ(order, (std::vector<std::string> {"post", "call", "after"}));
+	ASSERT_EQ(threads.size(), 2U);
+	EXPECT_EQ(threads[0], std::this_thread::get_id());
+	EXPECT_EQ(threads[1], std::this_thread::get_id());
+	EXPECT_EQ(queue.GetPendingCount(), 0U);
+}
+
+TEST(MainThreadQueue, ACallOfTheMainThreadRunsAtOnceAlsoUnderADeferral)
+{
+	MainThreadQueue queue;
+	const MainThreadQueue::Deferral deferral(queue);
+	EXPECT_EQ(queue.CallOnMain(MainThreadApi::Renderer, [] { return 7; }), 7);
+}
+
+TEST(MainThreadQueue, TheMainThreadMayUseTheHeldServicesWhileItDoesACallOfTheTurn)
+{
+#if !defined(OPENBLACK_DEVELOPER_TOOLS)
+	GTEST_SKIP() << "The check is only in builds with the developer tools";
+#endif
+	MainThreadQueue queue;
+	queue.SetCheck(TurnApiCheck::Report);
+	std::atomic<bool> done {false};
+	const MainThreadQueue::TurnElsewhere elsewhere(queue);
+	std::thread worker([&] {
+		{
+			const MainThreadQueue::TurnScope turn(queue);
+			// The turn waits, so the main thread may use the audio for it
+			queue.CallOnMain(MainThreadApi::Renderer, [&queue] { queue.CheckHeld(MainThreadApi::Audio, "PlaySound"); });
+		}
+		done = true;
+		queue.Wake();
+	});
+	queue.ServeUntil([&done] { return done.load(); });
+	worker.join();
+	EXPECT_TRUE(queue.TurnRunsElsewhere());
+	EXPECT_TRUE(queue.GetDirectCalls().empty());
 }

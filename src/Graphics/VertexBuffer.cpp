@@ -17,6 +17,7 @@
 
 #include "Common/MainThreadQueue.h"
 #include "GraphicsHandleBgfx.h"
+#include "MainThreadWork.h"
 #include "UploadPacer.h"
 
 using namespace openblack::graphics;
@@ -49,7 +50,6 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
     , _dynamic(dynamic)
     , _layoutHandle(BGFX_INVALID_HANDLE)
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::VertexBuffer");
 	// assert(vertices != nullptr);
 	assert(!_vertexDecl.empty());
 
@@ -76,27 +76,31 @@ VertexBuffer::VertexBuffer(std::string name, const void* mem, VertexDecl decl, b
 	const auto* bgfxMem = reinterpret_cast<const bgfx::Memory*>(mem);
 
 	_vertexCount = bgfxMem->size / _strideBytes;
-	UploadPacer::Pace(bgfxMem->size);
 
-	if (_dynamic)
-	{
-		_dynamicHandle = fromBgfx(bgfx::createDynamicVertexBuffer(bgfxMem, layout));
-	}
-	else
-	{
-		_handle = fromBgfx(bgfx::createVertexBuffer(bgfxMem, layout));
-	}
-	_layoutHandle = fromBgfx(bgfx::createVertexLayout(layout));
-	if (!IsValid())
-	{
-		// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
-		SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
-		return;
-	}
-	if (!_dynamic)
-	{
-		bgfx::setName(toBgfx(_handle), _name.c_str());
-	}
+	// The graphics library makes the buffer on the main thread: a turn on another thread gives that work to the main
+	// thread, which makes the buffer before the next draw
+	PostToMainThread(MainThreadApi::Graphics, [this, bgfxMem, layout] {
+		UploadPacer::Pace(bgfxMem->size);
+		if (_dynamic)
+		{
+			_dynamicHandle = fromBgfx(bgfx::createDynamicVertexBuffer(bgfxMem, layout));
+		}
+		else
+		{
+			_handle = fromBgfx(bgfx::createVertexBuffer(bgfxMem, layout));
+		}
+		_layoutHandle = fromBgfx(bgfx::createVertexLayout(layout));
+		if (!IsValid())
+		{
+			// Out of handles, setting a name would write past bgfx's own arrays; the buffer is left empty and isn't drawn
+			SPDLOG_LOGGER_WARN(spdlog::get("graphics"), "{}: out of bgfx buffer handles, not created", _name);
+			return;
+		}
+		if (!_dynamic)
+		{
+			bgfx::setName(toBgfx(_handle), _name.c_str());
+		}
+	});
 }
 
 VertexBuffer::~VertexBuffer() noexcept
@@ -189,22 +193,19 @@ void VertexBuffer::BindStream(uint8_t stream, VertexLayoutHandle layout) const
 
 void VertexBuffer::Update(const void* memory) const
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Update");
-	assert(_dynamic);
-	if (!IsValid())
-	{
-		return;
-	}
-	bgfx::update(toBgfx(_dynamicHandle), 0, reinterpret_cast<const bgfx::Memory*>(memory));
+	Update(0, memory);
 }
 
 void VertexBuffer::Update(uint32_t firstVertex, const void* memory) const
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Graphics, "VertexBuffer::Update");
 	assert(_dynamic);
-	if (!IsValid())
-	{
-		return;
-	}
-	bgfx::update(toBgfx(_dynamicHandle), firstVertex, reinterpret_cast<const bgfx::Memory*>(memory));
+	// A turn on another thread gives the update to the main thread. It reads whether the buffer was made only then.
+	const auto* vertices = reinterpret_cast<const bgfx::Memory*>(memory);
+	PostToMainThread(MainThreadApi::Graphics, [this, firstVertex, vertices] {
+		if (!IsValid())
+		{
+			return;
+		}
+		bgfx::update(toBgfx(_dynamicHandle), firstVertex, vertices);
+	});
 }

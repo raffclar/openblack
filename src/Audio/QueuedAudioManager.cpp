@@ -17,17 +17,6 @@
 using namespace openblack;
 using namespace openblack::audio;
 
-namespace
-{
-
-/// A call that gives back a value goes to the audio at once. The check counts it when turn code makes it.
-void Direct(std::string_view what)
-{
-	MainThreadQueue::CheckDirect(MainThreadApi::Audio, what);
-}
-
-} // namespace
-
 QueuedAudioManager::QueuedAudioManager(std::unique_ptr<AudioManagerInterface> audio, MainThreadQueue& queue)
     : _audio(std::move(audio))
     , _queue(queue)
@@ -37,9 +26,15 @@ QueuedAudioManager::QueuedAudioManager(std::unique_ptr<AudioManagerInterface> au
 QueuedAudioManager::~QueuedAudioManager() = default;
 
 template <typename Call>
-void QueuedAudioManager::Post(Call&& call)
+void QueuedAudioManager::Post(Call&& call, std::source_location where)
 {
+	_queue.CheckHeld(MainThreadApi::Audio, "a call with no result", where);
 	_queue.Post(MainThreadApi::Audio, std::forward<Call>(call));
+}
+
+void QueuedAudioManager::Direct(std::string_view what, std::source_location where) const
+{
+	_queue.CheckHeld(MainThreadApi::Audio, what, where);
 }
 
 bool QueuedAudioManager::IsInstalled() const

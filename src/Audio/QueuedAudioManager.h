@@ -10,6 +10,8 @@
 #pragma once
 
 #include <memory>
+#include <source_location>
+#include <string_view>
 
 #include "AudioManagerInterface.h"
 
@@ -23,10 +25,10 @@ namespace openblack::audio
 
 /// The audio as the game uses it: each call goes to the audio of the machine through the queue of the main thread.
 ///
-/// A call that gives back nothing is posted: from the main thread, and from a turn on the main thread, it runs at once,
-/// in the same order as before. A call that gives back a value goes to the audio at once, because its caller waits for
-/// the value. The check of the turn's calls counts such calls from turn code: they are not safe while a turn runs on
-/// another thread.
+/// The turn holds the audio while it runs (see HeldByTurn): each call of the turn goes to the audio at once, on the
+/// thread of the turn, in the order of the calls, also when the turn runs on another thread. A call that gives back
+/// nothing goes through the queue, so it waits only under a deferral of the main thread. While a turn runs on another
+/// thread, the main thread must not use the audio, and the check of the turn's calls counts such a use.
 ///
 /// Every function of the interface is passed on here, also the ones that have a default. A new function of the
 /// interface must be passed on here too, or the audio of the machine does not get it.
@@ -116,9 +118,11 @@ public:
 	[[nodiscard]] CustomMusicPlayerInterface* GetCustomMusic() override;
 
 private:
-	/// Gives a call that gives back nothing to the main thread
+	/// Gives a call that gives back nothing to the queue of the main thread
 	template <typename Call>
-	void Post(Call&& call);
+	void Post(Call&& call, std::source_location where = std::source_location::current());
+	/// A call that gives back a value goes to the audio at once
+	void Direct(std::string_view what, std::source_location where = std::source_location::current()) const;
 
 	std::unique_ptr<AudioManagerInterface> _audio;
 	MainThreadQueue& _queue;

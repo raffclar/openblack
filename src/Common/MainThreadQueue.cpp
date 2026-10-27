@@ -70,6 +70,18 @@ MainThreadQueue::TurnScope::~TurnScope()
 	t_part.turnStep = _previousStep;
 }
 
+MainThreadQueue::TurnElsewhere::TurnElsewhere(MainThreadQueue& queue)
+    : _queue(queue)
+{
+	assert(queue.IsMainThread());
+	_queue._turnsElsewhere.fetch_add(1, std::memory_order_acq_rel);
+}
+
+MainThreadQueue::TurnElsewhere::~TurnElsewhere()
+{
+	_queue._turnsElsewhere.fetch_sub(1, std::memory_order_acq_rel);
+}
+
 MainThreadQueue::WorkScope::WorkScope()
 {
 	++t_part.work;
@@ -100,6 +112,16 @@ bool MainThreadQueue::InTurnCode() const noexcept
 	return t_part.turn == this && t_part.work == 0;
 }
 
+bool MainThreadQueue::InTurn() const noexcept
+{
+	return t_part.turn == this;
+}
+
+bool MainThreadQueue::TurnRunsElsewhere() const noexcept
+{
+	return _turnsElsewhere.load(std::memory_order_acquire) > 0;
+}
+
 void MainThreadQueue::SetTurnStep(std::optional<uint32_t> step) noexcept
 {
 	if (t_part.turn == this)
@@ -112,6 +134,51 @@ void MainThreadQueue::Keep(MainThreadApi api, std::function<void()> work)
 {
 	const std::scoped_lock lock(_pendingMutex);
 	_pending.push_back({.api = api, .work = std::move(work)});
+}
+
+void MainThreadQueue::Wait(MainThreadApi api, std::function<void()> work)
+{
+	WaitingCall call {.api = api, .work = std::move(work)};
+	std::unique_lock lock(_waitingMutex);
+	_waiting.push_back(&call);
+	_waitingChanged.notify_all();
+	_waitingChanged.wait(lock, [&call] { return call.done; });
+}
+
+void MainThreadQueue::ServeUntil(const std::function<bool()>& done)
+{
+	assert(IsMainThread());
+	std::unique_lock lock(_waitingMutex);
+	while (true)
+	{
+		_waitingChanged.wait(lock, [this, &done] { return !_waiting.empty() || done(); });
+		if (_waiting.empty())
+		{
+			return;
+		}
+		auto* call = _waiting.front();
+		_waiting.pop_front();
+		lock.unlock();
+		// The turn waits for the call, so meanwhile the main thread may use the services that the turn holds. The work
+		// that the turn posted before the call comes first.
+		const auto elsewhere = _turnsElsewhere.exchange(0, std::memory_order_acq_rel);
+		RunPending();
+		{
+			const WorkScope scope;
+			call->work();
+		}
+		_turnsElsewhere.fetch_add(elsewhere, std::memory_order_acq_rel);
+		lock.lock();
+		call->done = true;
+		_waitingChanged.notify_all();
+	}
+}
+
+void MainThreadQueue::Wake()
+{
+	// The lock makes sure that the main thread is in its wait, or did not read `done` yet
+	const std::scoped_lock lock(_waitingMutex);
+	_waitingChanged.notify_all();
 }
 
 size_t MainThreadQueue::RunPending()
@@ -189,18 +256,32 @@ void MainThreadQueue::CheckDirect([[maybe_unused]] MainThreadApi api, [[maybe_un
 {
 #if defined(OPENBLACK_DEVELOPER_TOOLS)
 	auto* queue = t_part.turn;
-	if (queue == nullptr || t_part.work != 0 || queue->GetCheck() == TurnApiCheck::Off)
+	// The turn uses a service that it holds directly
+	if (queue == nullptr || t_part.work != 0 || HeldByTurn(api) || queue->GetCheck() == TurnApiCheck::Off)
 	{
 		return;
 	}
-	queue->Record(api, what, where);
+	queue->Record(api, what, where, t_part.turnStep);
 #endif
 }
 
-void MainThreadQueue::Record(MainThreadApi api, std::string_view what, const std::source_location& where) noexcept
+void MainThreadQueue::CheckHeld([[maybe_unused]] MainThreadApi api, [[maybe_unused]] std::string_view what,
+                                [[maybe_unused]] std::source_location where) noexcept
+{
+#if defined(OPENBLACK_DEVELOPER_TOOLS)
+	if (GetCheck() == TurnApiCheck::Off || !IsMainThread() || !TurnRunsElsewhere())
+	{
+		return;
+	}
+	// No step: the main thread made the call, not the turn
+	Record(api, std::format("main thread: {}", what), where, std::nullopt);
+#endif
+}
+
+void MainThreadQueue::Record(MainThreadApi api, std::string_view what, const std::source_location& where,
+                             std::optional<uint32_t> step) noexcept
 {
 	const auto place = std::format("{}:{}", where.file_name(), where.line());
-	const auto step = t_part.turnStep;
 	std::function<void(const DirectCall&)> onFail;
 	DirectCall first;
 	{

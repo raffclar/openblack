@@ -11,6 +11,7 @@
 
 #include <cstdint>
 
+#include <atomic>
 #include <limits>
 #include <map>
 #include <memory>
@@ -364,10 +365,10 @@ struct RenderContext
 	std::vector<glm::mat4> treeInstanceUniforms;
 	std::vector<glm::vec4> treeSwayParams;
 
-	/// The instances are to be uploaded again
-	bool dirty {true};
-	/// The draw lists are to be made again, then the instances uploaded
-	bool layoutDirty {true};
+	/// The instances are to be uploaded again. A turn on another thread can set it, while the draw does not read it.
+	std::atomic<bool> dirty {true};
+	/// The draw lists are to be made again, then the instances uploaded. A turn on another thread can set it too.
+	std::atomic<bool> layoutDirty {true};
 	bool hasBoundingBoxes {false};
 	uint32_t treeInstanceCount {0};
 };

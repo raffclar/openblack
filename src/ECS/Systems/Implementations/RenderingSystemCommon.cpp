@@ -123,15 +123,14 @@ RenderingSystemCommon::~RenderingSystemCommon() = default;
 
 void RenderingSystemCommon::SetDirty()
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::SetDirty");
-	_renderContext.dirty = true;
+	// The changes of the drawn parts mark the draw from any thread. The draw reads the marks only after the turn.
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::SetLayoutDirty()
 {
-	MainThreadQueue::CheckDirect(MainThreadApi::Renderer, "RenderingSystem::SetLayoutDirty");
-	_renderContext.dirty = true;
-	_renderContext.layoutDirty = true;
+	_renderContext.dirty.store(true, std::memory_order_relaxed);
+	_renderContext.layoutDirty.store(true, std::memory_order_relaxed);
 }
 
 void RenderingSystemCommon::UploadRootsPiles()
