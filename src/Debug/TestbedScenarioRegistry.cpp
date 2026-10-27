@@ -4160,31 +4160,32 @@ void AddAudio(std::vector<Scenario>& all)
 	    .repeatFrom = 3,
 	});
 
-	// The hand strikes the hut of a town with people with a lightning bolt, again and again
+	// The hand strikes three people of a town with a lightning bolt, far from their hut. The hut does not burn, so its
+	// fire does not take the cry first.
 	all.push_back({
 	    .id = "audio.town_lightning_cry",
 	    .name = "A town cries out about lightning when a lightning bolt harms it",
 	    .facet = Facet::Audio,
-	    .description = "The hand casts a lightning bolt at a hut of a town with three people, every ten seconds. The "
-	                   "guidance waits end first. The audio log gives each cry of the town and its sample.",
-	    .expected = "When the bolt harms the hut or a villager, the town sometimes cries out from the town centre: a "
-	                "villager voice of the guidance bank, about an attack or about lightning. The cries come at least "
-	                "four seconds apart.",
+	    .description = "The hand casts a lightning bolt for 30 seconds at the three people of a town, 30 metres from "
+	                   "their hut. The guidance waits end first. The audio log gives each cry of the town and its sample.",
+	    .expected = "When the bolt harms a villager, the town cries out from the town centre: a villager voice of the "
+	                "guidance bank, about an attack, a fire or lightning (samples 190 to 199). With seed 1 the first cry "
+	                "is about lightning. The cries come at least four seconds apart.",
 	    .environment = {.dispenserGrid = false},
 	    .framing = {.shot = Shot::Overview, .include = {{-10.0f, -10.0f}, k_CryHut + glm::vec2(10.0f, 10.0f)}},
 	    .objects = {{.type = AbodeInfo::CelticHut, .offset = k_CryHut},
-	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-6.0f, 6.0f), .joinTown = true},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-30.0f, 2.0f), .joinTown = true},
 	                {.type = VillagerInfo::CelticHousewifeFemale,
-	                 .offset = k_CryHut + glm::vec2(-6.0f, -6.0f),
+	                 .offset = k_CryHut + glm::vec2(-30.0f, -2.0f),
 	                 .joinTown = true},
-	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(6.0f, 8.0f), .joinTown = true}},
+	                {.type = VillagerInfo::CelticFarmerMale, .offset = k_CryHut + glm::vec2(-28.0f, 0.0f), .joinTown = true}},
 	    .miracles = {{.type = MagicType::LightningBolt,
-	                  .point = k_CryHut,
-	                  .handOffset = k_CryHut,
+	                  .point = k_CryHut + glm::vec2(-30.0f, 0.0f),
+	                  .handOffset = k_CryHut + glm::vec2(-30.0f, 0.0f),
 	                  .handHeight = 15.0f,
 	                  .delaySeconds = 2.0f,
-	                  .holdSeconds = 3.0f,
-	                  .repeatSeconds = 10.0f,
+	                  .holdSeconds = 30.0f,
+	                  .repeatSeconds = 32.0f,
 	                  .byHand = true}},
 	    .commands = {{.kind = Kind::EndGuidanceWaits, .delaySeconds = 0.5f}},
 	});
