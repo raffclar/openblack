@@ -37,9 +37,10 @@ public:
 	[[nodiscard]] std::optional<map_coords::MapCoords> CoordsOf(entt::entity thing) const override;
 	[[nodiscard]] float HeightOf(entt::entity thing) const override;
 	[[nodiscard]] float LandHeight(const map_coords::MapCoords& coords) const override;
+	[[nodiscard]] float InfluenceAt(const map_coords::MapCoords& coords) const override;
 
 private:
-	[[maybe_unused]] PlayerNames _player;
+	PlayerNames _player;
 	[[maybe_unused]] components::ComputerPlayer& _state;
 };
 

@@ -40,6 +40,7 @@ public:
 	void PickUp(entt::entity thing, glm::vec3 hand) override;
 	void UseHeldOn(entt::entity target, glm::vec3 hand) override;
 	void DropHeld(glm::vec3 hand) override;
+	void ThrowHeld(glm::vec3 hand, glm::vec3 velocity) override;
 
 private:
 	PlayerNames _player;

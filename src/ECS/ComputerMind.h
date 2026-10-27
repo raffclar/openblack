@@ -14,10 +14,15 @@
 #include <array>
 #include <optional>
 #include <span>
+#include <string>
 #include <string_view>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
+#include <glm/vec2.hpp>
+#include <glm/vec3.hpp>
+
+#include "3D/MapCoords.h"
 
 /// The mind of a computer god. The mind is a tree of needs. Six broad aims are at the top, and the actions of the hand
 /// are at the leaves. Each turn that the god has nothing to do, the mind finds the strongest leaf and does its action.
@@ -234,6 +239,41 @@ struct Node
 	entt::entity object {entt::null};
 	/// A number that a node can keep for its action: the food that a town wants more than it has
 	int32_t amount {0};
+	/// The thing and the place that a land script gave when it made the god do the action of the node. They stay
+	/// until the next script action of the node.
+	entt::entity argument {entt::null};
+	glm::vec3 place {0.0f};
+};
+
+/// A thing near the hand that the god saw, and the game turn at which it saw the thing first
+struct SeenThing
+{
+	entt::entity thing {entt::null};
+	uint32_t turn {0};
+};
+
+/// The god sees things in the cells of the map that are nearer its hand than this radius plus the margin, in metres
+constexpr float k_SeenRadius = 30.0f;
+constexpr float k_SeenCellMargin = 10.0f;
+/// The most cells that the god looks at for things near its hand
+constexpr int32_t k_SeenMostCells = 99999;
+/// When the god has seen more than this number of things, it forgets the old ones on each turn that the period divides.
+/// It forgets a thing that it saw more than the number of turns before.
+constexpr size_t k_SeenMost = 50;
+constexpr uint32_t k_SeenForgetEvery = 500;
+constexpr uint32_t k_SeenForgetAfter = 8000;
+
+/// The most letters of the name of an action that a land script queues
+constexpr size_t k_QueuedNameLength = 260;
+
+/// An action that a land script put in the queue of the god: the name of a node and two things
+struct QueuedAction
+{
+	std::string name;
+	entt::entity first {entt::null};
+	entt::entity second {entt::null};
+	/// The game turn at which the script queued the action
+	uint32_t turn {0};
 };
 
 /// The mind of one god
@@ -255,6 +295,10 @@ struct Mind
 	bool workedOut {false};
 	/// How many times the mind wanted each miracle: a worship site charges the miracle wanted most
 	std::array<uint32_t, k_MagicTypes> castRequested {};
+	/// The actions that land scripts queued, the first to start first
+	std::vector<QueuedAction> queue;
+	/// The hand does an action that a land script started. The help of the game does not hold the mind then.
+	bool scriptHand {false};
 };
 
 /// The tree of a new mind, with each node at its first weight
@@ -280,8 +324,8 @@ public:
 	/// The action of the hand may not be cut short by a stronger need
 	[[nodiscard]] virtual bool ActionLocked() const = 0;
 	virtual void UnlockAction() = 0;
-	/// The hand starts the next action that a script queued. False when there is none.
-	virtual bool ForceQueued() = 0;
+	/// The place of the thing when it is a script marker: none for another thing
+	[[nodiscard]] virtual std::optional<glm::vec3> MarkerPlace(entt::entity thing) const = 0;
 	/// The help of the game holds the mind
 	[[nodiscard]] virtual bool HeldByHelp() const = 0;
 };
@@ -295,6 +339,34 @@ bool PerformDecided(Mind& mind, World& world, uint32_t turn);
 
 /// The turn of a mind that is switched on and started on the land
 void ProcessTurn(Mind& mind, World& world, uint32_t turn);
+
+/// What the god reads in the game when it looks for things near its hand
+class SeenWorld
+{
+public:
+	virtual ~SeenWorld() = default;
+	/// The things in a cell of the map, in the order that a search finds them
+	[[nodiscard]] virtual std::vector<entt::entity> ThingsIn(glm::ivec2 cell) const = 0;
+	/// What the god keeps in its list for a thing: the forest of a tree, or the tree when it has no forest; a seed of a
+	/// miracle. None for another thing.
+	[[nodiscard]] virtual entt::entity SeenAs(entt::entity thing) const = 0;
+	/// The thing is in the world, and it is not a villager on its way to dying
+	[[nodiscard]] virtual bool Available(entt::entity thing) const = 0;
+};
+
+/// The god adds the things near its hand to its list of seen things, the newest first. A long list first forgets the
+/// things that the god saw long ago.
+void SeeNearHand(std::vector<SeenThing>& seen, const map_coords::MapCoords& hand, uint32_t turn, const SeenWorld& world);
+
+/// A land script makes the god do the action of the first node that the name finds, with two things and a value.
+/// False when no node has the name or the action cannot start.
+bool ForceAction(Mind& mind, World& world, std::string_view name, entt::entity first, entt::entity second, float value,
+                 uint32_t turn);
+/// A land script puts an action at the end of the queue of the god
+void QueueAction(Mind& mind, std::string_view name, entt::entity first, entt::entity second, uint32_t turn);
+/// The god starts the first action of its queue and removes it from the queue. False when the queue is empty or the
+/// action cannot start.
+bool ForceNext(Mind& mind, World& world, uint32_t turn);
 
 /// A land script sets the weight of each node that has the name. False when no node has it.
 bool SetPersonality(Mind& mind, std::string_view name, float weight);

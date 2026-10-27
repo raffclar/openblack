@@ -48,6 +48,11 @@ public:
 	}
 	[[nodiscard]] float HeightOf(entt::entity /*thing*/) const override { return 4.0f; }
 	[[nodiscard]] float LandHeight(const map_coords::MapCoords& /*coords*/) const override { return 20.0f; }
+	[[nodiscard]] float InfluenceAt(const map_coords::MapCoords& coords) const override
+	{
+		// The god has influence west of the border
+		return map_coords::ToMetres(coords.x) < influenceBorder ? 1.0f : 0.0f;
+	}
 	[[nodiscard]] bool IconHasSite(entt::entity icon) const override { return icon == k_Icon; }
 	[[nodiscard]] bool IconCharging(entt::entity /*icon*/) const override { return charging; }
 	bool StartChant(entt::entity /*icon*/, MagicType /*type*/) override { return startWorks; }
@@ -91,7 +96,17 @@ public:
 		droppedAt.push_back(hand);
 	}
 
+	void ThrowHeld(glm::vec3 hand, glm::vec3 velocity) override
+	{
+		held = entt::null;
+		thrownFrom.push_back(hand);
+		thrownAt.push_back(velocity);
+	}
+
 	std::map<entt::entity, glm::vec2> places;
+	float influenceBorder {1.0e9f};
+	std::vector<glm::vec3> thrownFrom;
+	std::vector<glm::vec3> thrownAt;
 	bool charging {false};
 	bool startWorks {false};
 	float needed {0.0f};

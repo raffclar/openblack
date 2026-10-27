@@ -32,6 +32,8 @@ public:
 	virtual void UseHeldOn(entt::entity target, glm::vec3 hand) = 0;
 	/// The hand lets go of what it holds where it is, with no speed
 	virtual void DropHeld(glm::vec3 hand) = 0;
+	/// The hand throws what it holds from where it is, at the speed
+	virtual void ThrowHeld(glm::vec3 hand, glm::vec3 velocity) = 0;
 };
 
 } // namespace openblack::computer_hand
