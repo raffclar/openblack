@@ -16,6 +16,7 @@
 
 #include <fmt/printf.h>
 
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 
 namespace openblack::vortex::crossing
@@ -79,7 +80,7 @@ std::optional<AttractStep> Attract(const AttractSettings& settings, const Attrac
 	const float invDt = 1.0f / dt;
 	// The cosine stays wide until the multiply. The game stores the sine as a float first
 	const float targetX = x87::Mul(x87::Cos(swung), radius) + origin.x;
-	const float sinRadius = static_cast<float>(std::sin(static_cast<double>(swung))) * radius;
+	const float sinRadius = static_cast<float>(portable_math::Sin(static_cast<double>(swung))) * radius;
 	const float targetY = 0.0f + origin.y;
 	const float targetZ = sinRadius + origin.z;
 	// The velocity that would put it there this step, blended in from the one it was taken with
@@ -105,7 +106,8 @@ ThrowOut ThrowOutOf(float angle, float outRandom, float upRandom, float scale, f
 	constexpr float k_LeastUp = 10.0f;
 	constexpr float k_HalfHeight = 0.5f;
 	const float out = (outRandom + k_LeastOut) * scale;
-	const glm::vec3 velocity {std::sin(angle) * out, (upRandom + k_LeastUp) * scale, -(std::cos(angle) * out)};
+	const glm::vec3 velocity {portable_math::Sin(angle) * out, (upRandom + k_LeastUp) * scale,
+	                          -(portable_math::Cos(angle) * out)};
 	const float turn = 1.0f / (height * k_HalfHeight);
 	return {.velocity = velocity, .spin = {(0.0f - velocity.z) * turn, turn * 0.0f, (velocity.x - 0.0f) * turn}};
 }

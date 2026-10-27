@@ -29,6 +29,7 @@
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
 #include "Common/MachineClock.h"
+#include "Common/PortableMath.h"
 #include "Creature/CreatureCatch.h"
 #include "Creature/CreatureDeeds.h"
 #include "Creature/CreatureDesires.h"
@@ -158,8 +159,9 @@ void HurtCreature(World& world, DynamicsSystemInterface& dynamics, const Physics
 		world.KickSway(creature, entry.forceSum, hitter->body->Centre());
 	}
 	const auto& body = registry.Get<const Creature>(creature);
-	// The creature of the player at this computer is not hurt at all while a script controls it
-	if (registry.AllOf<ScriptControlled>(creature) && world.LocalPlayer() == body.owner)
+	// A script keeps the creature of a person from all harm. Every computer finds the same person, the owner of the
+	// creature. In a game alone, this is only the creature of the first player.
+	if (registry.AllOf<ScriptControlled>(creature) && world.PersonPlays(body.owner))
 	{
 		return;
 	}
@@ -279,7 +281,7 @@ void LandAnimal(World& world, PhysicsEntry* entry, entt::entity entity)
 		transform->rotation = physics::QuarterTurned(living::HeadingAxes(heading));
 		// Its heading across the land as the animals keep it, from the way it is drawn
 		const auto side = transform->rotation[0];
-		animal->heading = std::atan2(-side.x, side.z);
+		animal->heading = portable_math::Atan2(-side.x, side.z);
 	}
 	// It goes on from where it came down, on the land
 	if (const auto land = world.LandHeight(glm::vec2(transform->position.x, transform->position.z)))
@@ -463,7 +465,7 @@ bool PhysicsGameHooks::HasSunk(DynamicsSystemInterface& dynamics, PhysicsEntry& 
 			return false;
 		}
 		// The player who dropped it may teach their creature to throw things in the sea; it dies and is gone
-		if (const auto dropper = villager_physics::DropperOf(registry, entry.entity, _world->LocalPlayer()))
+		if (const auto dropper = villager_physics::DropperOf(registry, entry.entity))
 		{
 			const auto& at = registry.Get<const Transform>(entry.entity).position;
 			_world->PlayerDid(living::k_DeedThrowInTheSea, at, entry.entity, *dropper);
@@ -492,14 +494,13 @@ void PhysicsGameHooks::OfferToCatchingCreatures(entt::entity object, PhysicsEntr
 	std::vector<entt::entity> creatures;
 	registry.Each<const Creature, const Transform>(
 	    [&creatures](entt::entity creature, const Creature&, const Transform&) { creatures.push_back(creature); });
-	const auto handHeld = world.HandHeldCreature();
 	const float objectWeight = world.WeightOf(object);
 	for (const auto creature : creatures)
 	{
 		// Not one the hand is holding, one that plans to fight or is fighting, one a script controls, nor one whose plan
 		// is a catch, a catch still waiting for its body included. Also not one that may not take up a reaction now,
 		// unless a desire was made its only desire.
-		if (handHeld == creature || PlansToFightOrCatch(world, registry, creature) ||
+		if (world.HandHolds(creature) || PlansToFightOrCatch(world, registry, creature) ||
 		    registry.AllOf<CreatureFighting>(creature) || registry.AllOf<ScriptControlled>(creature) ||
 		    !world.FreeToCatch(creature) || registry.AllOf<PendingCatch>(creature))
 		{
@@ -575,7 +576,7 @@ void PhysicsGameHooks::ConsiderMimickingLanding(entt::entity object, std::option
 	// A thing that came to rest after it flew is the deed of the player who dropped it last
 	if (!player.has_value())
 	{
-		player = villager_physics::DropperOf(registry, object, _world->LocalPlayer());
+		player = villager_physics::DropperOf(registry, object);
 	}
 	const auto* transform = registry.TryGet<const Transform>(object);
 	if (!player.has_value() || transform == nullptr)
@@ -701,7 +702,7 @@ void PhysicsGameHooks::ReactToImpact(DynamicsSystemInterface& dynamics, PhysicsE
 			{
 				// A storage pit that takes a thing thrown by this computer's player counts for the player's help
 				const bool helpCounts =
-				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.LocalPlayer();
+				    registry.AllOf<StoragePit>(hitter) && impact.player.has_value() && impact.player == world.OwnPlayer();
 				const bool taken = world.TakeObject(hitter, object, impact.player);
 				if (taken && helpCounts)
 				{

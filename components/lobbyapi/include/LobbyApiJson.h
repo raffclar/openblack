@@ -31,6 +31,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::string ToJson(const ClanCreatureReply& reply);
 [[nodiscard]] std::string ToJson(const ChatLineRequest& request);
 [[nodiscard]] std::string ToJson(const UseClanRequest& request);
+[[nodiscard]] std::string ToJson(const TicketRequest& request);
+[[nodiscard]] std::string ToJson(const ServerStatus& status);
 /// The frame that asks for the events of a channel, or stops them
 [[nodiscard]] std::string SubscribeFrame(bool subscribe, std::string_view channel);
 /// The frame that a client sends after it opens the channel again: the epoch and the number of the last event that it
@@ -66,6 +68,8 @@ namespace openblack::lobby_api
 [[nodiscard]] std::optional<RoomChange> ParseRoomChange(std::string_view data);
 /// The data of "room.clan_chosen"
 [[nodiscard]] std::optional<RoomClanChoice> ParseRoomClanChoice(std::string_view data);
+/// The data of "server.banned"
+[[nodiscard]] std::optional<ServerBanned> ParseServerBanned(std::string_view data);
 /// The data of "servers.changed" or of "servers.removed"
 [[nodiscard]] std::optional<ServerChange> ParseServerChange(std::string_view type, std::string_view data);
 [[nodiscard]] std::optional<PushPosition> ParsePushPosition(std::string_view data);

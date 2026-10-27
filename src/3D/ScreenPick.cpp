@@ -18,6 +18,7 @@
 #include <glm/vec2.hpp>
 #include <glm/vec4.hpp>
 
+#include "Common/X87.h"
 #include "Common/X87Vector.h"
 
 namespace openblack::screen_pick
@@ -235,7 +236,10 @@ std::optional<float> BallHit(const View& view, glm::vec3 centre, float radius)
 	const int size = lifted.has_value() ? std::abs(middle->y - lifted->y) : 0;
 	const auto cursor = glm::ivec2(static_cast<int>(view.cursor.x), static_cast<int>(view.cursor.y));
 	const auto apart = cursor - *middle;
-	if (!(apart.x * apart.x + apart.y * apart.y < size * size))
+	// The game squares the whole pixels at float precision. Thus a ball far off the side of the screen is far from the
+	// cursor, and its square does not wrap round to a small number.
+	const float offset = x87::Add(x87::Mul(apart.y, apart.y), x87::Mul(apart.x, apart.x));
+	if (!(offset < x87::Mul(size, size)))
 	{
 		return std::nullopt;
 	}

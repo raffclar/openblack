@@ -29,6 +29,7 @@ using openblack::graphics::ScreenshotFailures;
 using openblack::graphics::ScreenshotRoute;
 using openblack::graphics::ScreenView;
 using openblack::graphics::UncapturedScreenshotPath;
+using openblack::graphics::WindowBuffers;
 using openblack::graphics::WriteScreenshotPng;
 using openblack::windowing::BackgroundDisplayMode;
 using openblack::windowing::DisplayMode;
@@ -42,10 +43,21 @@ constexpr glm::u16vec2 k_WindowSize {1280, 1024};
 // The screen is read as it is presented, unless the renderer keeps no screen while the window is minimised and it is
 TEST(ScreenshotCapture, AMinimisedVulkanWindowIsDrawnAside)
 {
-	EXPECT_EQ(PlanScreenshot(true, false, true, k_WindowSize).route, ScreenshotRoute::Screen);
-	EXPECT_EQ(PlanScreenshot(false, true, true, k_WindowSize).route, ScreenshotRoute::Screen);
-	EXPECT_EQ(PlanScreenshot(false, true, false, k_WindowSize).route, ScreenshotRoute::Screen);
-	EXPECT_EQ(PlanScreenshot(true, true, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::DroppedWhenMinimised, false, true, k_WindowSize).route, ScreenshotRoute::Screen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::Kept, true, true, k_WindowSize).route, ScreenshotRoute::Screen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::Kept, true, false, k_WindowSize).route, ScreenshotRoute::Screen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::DroppedWhenMinimised, true, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+}
+
+// A renderer that gives no pixels where other windows cover the window (OpenGL) always draws the picture aside, as the
+// game cannot know which parts of the window other windows cover
+TEST(ScreenshotCapture, AnOpenGlWindowIsAlwaysDrawnAside)
+{
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::UncoveredOnly, false, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::UncoveredOnly, true, true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	const auto noReadBack = PlanScreenshot(WindowBuffers::UncoveredOnly, false, false, k_WindowSize);
+	EXPECT_EQ(noReadBack.route, ScreenshotRoute::Refused);
+	EXPECT_NE(noReadBack.why.find("cover"), std::string::npos);
 }
 
 // A game launched minimised: SDL still says the window is shown, but the system says it is minimised and Vulkan has a
@@ -57,18 +69,20 @@ TEST(ScreenshotCapture, AWindowStartedMinimisedIsDrawnAside)
 	EXPECT_TRUE(WindowMinimised(true, std::nullopt));
 	EXPECT_FALSE(WindowMinimised(false, false));
 	EXPECT_FALSE(WindowMinimised(false, std::nullopt));
-	EXPECT_EQ(PlanScreenshot(true, WindowMinimised(false, true), true, k_WindowSize).route, ScreenshotRoute::Offscreen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::DroppedWhenMinimised, WindowMinimised(false, true), true, k_WindowSize).route,
+	          ScreenshotRoute::Offscreen);
 	// Restored, the screen is read again
-	EXPECT_EQ(PlanScreenshot(true, WindowMinimised(false, false), true, k_WindowSize).route, ScreenshotRoute::Screen);
+	EXPECT_EQ(PlanScreenshot(WindowBuffers::DroppedWhenMinimised, WindowMinimised(false, false), true, k_WindowSize).route,
+	          ScreenshotRoute::Screen);
 }
 
 // Drawn aside or not at all: without reading back, or without a size, the picture is refused with why
 TEST(ScreenshotCapture, APictureThatCantBeDrawnAsideIsRefusedWithWhy)
 {
-	const auto noReadBack = PlanScreenshot(true, true, false, k_WindowSize);
+	const auto noReadBack = PlanScreenshot(WindowBuffers::DroppedWhenMinimised, true, false, k_WindowSize);
 	EXPECT_EQ(noReadBack.route, ScreenshotRoute::Refused);
 	EXPECT_NE(noReadBack.why.find("restore the window"), std::string::npos);
-	const auto noSize = PlanScreenshot(true, true, true, glm::u16vec2(0, 1024));
+	const auto noSize = PlanScreenshot(WindowBuffers::DroppedWhenMinimised, true, true, glm::u16vec2(0, 1024));
 	EXPECT_EQ(noSize.route, ScreenshotRoute::Refused);
 	EXPECT_NE(noSize.why.find("size"), std::string::npos);
 }

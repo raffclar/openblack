@@ -14,6 +14,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <limits>
 #include <utility>
 
 #include <glm/geometric.hpp>
@@ -250,11 +251,11 @@ public:
 	void MouseMove(glm::ivec2 point) override { _pointer = point; }
 	void Activate(glm::ivec2 /*point*/) override { _shares = !_shares; }
 
-	void SetLines(std::vector<std::vector<float>> lines, std::vector<glm::vec4> colours)
+	void SetLines(std::vector<std::vector<float>> lines, std::vector<glm::vec4> colours, std::optional<LineScale> scale)
 	{
 		_lines = std::move(lines);
 		_colours = std::move(colours);
-		_scale = LinesScale(_lines);
+		_scale = scale.has_value() ? *scale : LinesScale(_lines);
 	}
 
 private:
@@ -318,8 +319,11 @@ private:
 		const auto height = static_cast<float>(rect.Height() - 4);
 		const auto range = _scale.highest - _scale.lowest;
 		const auto yOf = [&](float value) {
+			// A value that is not a number goes to the top, as the game's conversion to a whole number gives the lowest
+			// whole number for it
+			const auto y = bottom - ((value - _scale.lowest) / range * height);
 			return static_cast<float>(
-			    std::clamp(Cut(bottom - ((value - _scale.lowest) / range * height)), rect.min.y + 4, rect.max.y - 4));
+			    std::clamp(std::isfinite(y) ? Cut(y) : std::numeric_limits<int>::min(), rect.min.y + 4, rect.max.y - 4));
 		};
 		for (size_t l = 0; l < _lines.size(); ++l)
 		{
@@ -438,6 +442,17 @@ private:
 		Locator::rendererInterface::value().ShowInterfaceCreatures(std::move(request));
 	}
 };
+
+LineGraph& AddLineGraph(Dialog& dialog, DialogRect rect, std::u16string caption, bool shares)
+{
+	return dialog.Add<LineGraph>(rect, std::move(caption), shares);
+}
+
+void SetLines(LineGraph& graph, std::vector<std::vector<float>> lines, std::vector<glm::vec4> colours,
+              std::optional<LineScale> scale)
+{
+	graph.SetLines(std::move(lines), std::move(colours), scale);
+}
 
 } // namespace statistics_box
 
@@ -582,8 +597,8 @@ void StatisticsBox::SetTab(Tab tab)
 		population.push_back(player.populationHistory);
 		colours.push_back(PlayerColour(player.player, _figures.landNumber));
 	}
-	_influence->SetLines(std::move(influence), colours);
-	_population->SetLines(std::move(population), colours);
+	_influence->SetLines(std::move(influence), colours, std::nullopt);
+	_population->SetLines(std::move(population), colours, std::nullopt);
 	_creatures->colours = std::move(colours);
 	_creatures->players.clear();
 	for (const auto& player : _figures.players)

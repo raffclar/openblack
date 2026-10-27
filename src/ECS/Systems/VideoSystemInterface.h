@@ -16,6 +16,7 @@
 #include <optional>
 #include <span>
 
+#include "Graphics/FilmSurface.h"
 #include "Video/VideoRules.h"
 
 namespace openblack::ecs::systems
@@ -84,10 +85,9 @@ public:
 	/// Films can be turned off: they then play as videos that can't be opened
 	virtual void SetFilmsEnabled(bool enabled) = 0;
 	[[nodiscard]] virtual bool AreFilmsEnabled() const = 0;
-	/// The picture as the game showed it, through a 16-bit copy that keeps 5 bits a channel (on), or at the decoder's
-	/// full colour
-	virtual void SetSixteenBitColour(bool on) = 0;
-	[[nodiscard]] virtual bool IsSixteenBitColour() const = 0;
+	/// The 16-bit surface that the picture goes through, as the game's did. No value shows the full colour of the decoder
+	virtual void SetFilmSurface(std::optional<graphics::film_surface::Format> surface) = 0;
+	[[nodiscard]] virtual std::optional<graphics::film_surface::Format> GetFilmSurface() const = 0;
 
 	/// For the debug window
 	struct Status

@@ -16,6 +16,8 @@
 
 #include <glm/gtc/constants.hpp>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::hand_tricons
 {
 
@@ -222,7 +224,7 @@ WorldCameraIcons WorldCamera(const WorldCameraFrame& frame, float rotateAngle)
 	// The rotate arrow lies along the circle round the screen's middle, where the cursor crosses it
 	if (turning)
 	{
-		rotateAngle = std::atan2(frame.cursor.y, frame.cursor.x) - glm::half_pi<float>();
+		rotateAngle = portable_math::Atan2(frame.cursor.y, frame.cursor.x) - glm::half_pi<float>();
 	}
 	// A drag gone too far blinks the cross alone
 	if ((mouse & k_TooFar) != 0)
@@ -292,8 +294,8 @@ std::array<std::optional<Sprite>, k_IconCount> Sprites(glm::vec2 centre, float h
 		const auto cellMin =
 		    glm::vec2(static_cast<float>(frame % k_AtlasColumns), static_cast<float>(frame / k_AtlasColumns)) * k_Cell;
 		const float angle = i == 1 ? rotateAngle : 0.0f;
-		const float cosine = std::cos(angle);
-		const float sine = std::sin(angle);
+		const float cosine = portable_math::Cos(angle);
+		const float sine = portable_math::Sin(angle);
 		Sprite sprite;
 		sprite.alpha = static_cast<float>(alpha) / 255.0f;
 		for (size_t c = 0; c < k_Corners.size(); ++c)

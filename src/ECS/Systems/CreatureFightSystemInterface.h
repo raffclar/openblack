@@ -159,6 +159,19 @@ public:
 	                   uint32_t milliseconds, uint32_t turn) = 0;
 	/// The button was let go after a press the fight took
 	virtual void Release(uint32_t milliseconds, uint32_t turn) = 0;
+	/// The turn of a press on the ground of the arena that a player sent: the player's fighting creature steps towards
+	/// the point, from where it stands and the way that it faces now
+	virtual void DoGroundPress(PlayerNames /*player*/, entt::entity /*creature*/, const glm::vec3& /*point*/, bool /*replace*/)
+	{
+	}
+	/// The turn of a move that a player sent with a press on a body or with a gesture: the move goes into the queue of
+	/// the player's creature, if the thing pressed on is still a creature
+	virtual void DoMove(PlayerNames /*player*/, entt::entity /*target*/, const creature_fight::Move& /*move*/, bool /*replace*/)
+	{
+	}
+	/// The turn of the let go of a press on a body that a player sent: the blow that waits last in the queue of the
+	/// player's creature gets the charge
+	virtual void DoCharge(PlayerNames /*player*/, float /*heldMs*/) {}
 	/// Whether a press the fight took is held
 	[[nodiscard]] virtual bool IsPressed() const = 0;
 	/// What the hand offers over a thing, or nothing, while the hand directs the fight

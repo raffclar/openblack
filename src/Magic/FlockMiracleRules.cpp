@@ -15,6 +15,7 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "Common/X87Vector.h"
 
@@ -97,8 +98,8 @@ float flock::FanAngle(int created, float side, int numberToCreate)
 
 glm::vec2 flock::Rotate(glm::vec2 direction, float angle)
 {
-	const float c = std::cos(angle);
-	const float s = std::sin(angle);
+	const float c = openblack::portable_math::Cos(angle);
+	const float s = openblack::portable_math::Sin(angle);
 	return {(direction.x * c) - (direction.y * s), (direction.x * s) + (direction.y * c)};
 }
 

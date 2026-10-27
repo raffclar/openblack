@@ -53,18 +53,10 @@ struct CreatureLeash
 		std::optional<entt::entity> tiedTo;
 		/// The game turn it was tied
 		uint32_t tiedTurn {0};
-		/// The rope from the hand, or what it is tied to, to the creature's collar
-		leash_rope::Rope rope;
-		/// Whether the rope has been placed from its ends yet
-		bool ropeStarted {false};
-		/// While the hand holds the rope of the tied leash, the rope is drawn as two of its own: from the collar to the
-		/// hand, and from what it is tied to to the hand
-		struct HeldRopes
-		{
-			leash_rope::Rope toCollar;
-			leash_rope::Rope toTied;
-		};
-		std::optional<HeldRopes> held;
+		/// The rest length and the full length of the leash's rope. The frames draw the rope with these lengths (see
+		/// CreatureLeashRope).
+		float slackLength {32.5f};
+		float maxLength {77.0f};
 	};
 	std::optional<Worn> worn;
 	/// Whether a leash put on makes the creature do anything, as scripts set. It is kept while no leash is on, and a
@@ -100,8 +92,6 @@ struct CreatureLeash
 		/// What it was sent to, or where on the land
 		std::optional<entt::entity> object;
 		glm::vec3 point {0.0f};
-		/// The sparkles over the target, by their effect's number, 0 for none
-		uint32_t sparkles {0};
 		/// The ring its player sees and the footprint inside it
 		entt::entity ring {entt::null};
 		entt::entity footprint {entt::null};

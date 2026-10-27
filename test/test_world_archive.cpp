@@ -41,6 +41,7 @@
 #include "ECS/Components/AudioEmitter.h"
 #include "ECS/Components/CreatureArena.h"
 #include "ECS/Components/CreatureLocomotion.h"
+#include "ECS/Components/Footpath.h"
 #include "ECS/Components/LivingReaction.h"
 #include "ECS/Components/PlayerStatistics.h"
 #include "ECS/Components/SoundTag.h"
@@ -1064,6 +1065,68 @@ TEST(WorldArchive, TheHashOfEachFieldShowsWhichFieldChanged)
 	EXPECT_EQ(fieldOf(before, "FakeWalker.counts"), fieldOf(after, "FakeWalker.counts"));
 	// Without the fields asked for, the hashes keep none
 	EXPECT_TRUE(HashWorld(registry, context).fields.empty());
+}
+
+// A footpath that the game still looks for keeps its search in a world state. A loaded search goes on to the same route
+// as the search that was saved.
+TEST(WorldArchive, AFootpathSearchContinuesAfterALoad)
+{
+	namespace route = openblack::creature_route;
+	entt::meta_ctx context;
+	RegisterComponents(context);
+	// One round rock stands in the way, in the cell of the middle of the line between the two ends
+	const route::Obstacles::Gatherer gatherer = [](glm::ivec2 cell, route::Obstacles& into) {
+		if (cell == glm::ivec2(30, 30))
+		{
+			into.Add(7u, {305.0f, 305.0f}, 6.0f);
+		}
+	};
+	const glm::vec2 start {280.0f, 300.0f};
+	const glm::vec2 goal {330.0f, 310.0f};
+	ecs::components::FootpathFinder::Plan plan;
+	plan.start = start;
+	plan.goal = goal;
+	plan.obstacles.ResetWithoutWalker(0.0f, gatherer);
+	plan.obstacles.LeaveOutCirclesHolding(goal, start);
+	plan.live = true;
+	plan.search.emplace(plan.obstacles, route::Search::Start {.point = start},
+	                    route::Search::Goal {.point = goal, .mostCost = 300.0f});
+	plan.search->Step(plan.obstacles);
+
+	entt::registry original;
+	const auto finder = original.create();
+	original.emplace<ecs::components::FootpathFinder>(finder, entt::entity {1}, entt::entity {2}, entt::entity {3}, plan);
+	WorldSaveReport report;
+	const auto bytes = SaveWorld(original, context, &report);
+	EXPECT_TRUE(report.unsavedValues.empty());
+	entt::registry loaded;
+	ASSERT_TRUE(LoadWorld(loaded, context, bytes, WorldLoadMode::Exact).has_value());
+	auto& back = loaded.get<ecs::components::FootpathFinder>(finder).plan;
+	ASSERT_TRUE(back.has_value());
+	// The save does not keep how the blocks fill, so the load gives it again
+	EXPECT_FALSE(back->live);
+	EXPECT_EQ(back->start, start);
+	EXPECT_EQ(back->goal, goal);
+	back->obstacles.SetGatherer(gatherer);
+	back->obstacles.LeaveOutCirclesHolding(goal, start);
+
+	const auto finish = [](ecs::components::FootpathFinder::Plan& searched) {
+		for (int i = 0; i < 200 && searched.search->GetStatus() == route::Search::Status::Searching; ++i)
+		{
+			searched.search->Step(searched.obstacles);
+		}
+	};
+	finish(plan);
+	finish(*back);
+	EXPECT_EQ(plan.search->GetStatus(), route::Search::Status::Found);
+	ASSERT_EQ(back->search->GetStatus(), plan.search->GetStatus());
+	EXPECT_EQ(back->obstacles.All().size(), plan.obstacles.All().size());
+	ASSERT_EQ(back->search->GetBest().size(), plan.search->GetBest().size());
+	for (size_t i = 0; i < plan.search->GetBest().size(); ++i)
+	{
+		EXPECT_EQ(back->search->GetBest()[i].to, plan.search->GetBest()[i].to);
+		EXPECT_EQ(back->search->GetBest()[i].cost, plan.search->GetBest()[i].cost);
+	}
 }
 
 TEST(WorldArchive, ASoundTagAndAnArenaKeepNoValuesOfTheRun)

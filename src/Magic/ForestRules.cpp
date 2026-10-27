@@ -14,6 +14,8 @@
 #include <algorithm>
 #include <numbers>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 using namespace openblack::magic;
 
@@ -31,7 +33,7 @@ glm::vec2 forest::SpiralOffset(uint32_t index, uint32_t count)
 	const float angle = t * static_cast<float>(count) * k_TurnsPerTree * k_TwoPi;
 	const float out = 1.0f - t;
 	const float radius = k_InnerRadius + ((k_OuterRadius - k_InnerRadius) * std::sqrt(std::max(1.0f - (out * out), 0.0f)));
-	return {radius * std::cos(angle), radius * std::sin(angle)};
+	return {radius * portable_math::Cos(angle), radius * portable_math::Sin(angle)};
 }
 
 float forest::TargetScale(float distance)

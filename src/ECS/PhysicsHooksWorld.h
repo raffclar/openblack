@@ -68,8 +68,11 @@ public:
 	[[nodiscard]] virtual uint32_t Turn() const = 0;
 	/// The game's synchronised random numbers, none when there are none
 	[[nodiscard]] virtual GameRandomInterface* Random() = 0;
-	/// The player at this machine, none when there are no players
-	[[nodiscard]] virtual std::optional<PlayerNames> LocalPlayer() const = 0;
+	/// Whether a person plays a player. A script keeps the creature of such a player from harm. Every computer finds the
+	/// same answer at the same turn. In a game alone, only the first player has a person.
+	[[nodiscard]] virtual bool PersonPlays(PlayerNames player) const = 0;
+	/// The player of this computer, whose help counts what its hand throws, none when there are no players
+	[[nodiscard]] virtual std::optional<PlayerNames> OwnPlayer() const = 0;
 
 	[[nodiscard]] virtual float LifeOf(entt::entity object) const = 0;
 	/// An object's height as the game measures it
@@ -147,8 +150,8 @@ public:
 	[[nodiscard]] virtual std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) = 0;
 	/// When a creature's catch takes hold, in milliseconds from its start, none for a species without it
 	[[nodiscard]] virtual std::optional<float> CatchMs(entt::entity creature) const = 0;
-	/// The creature the hand holds, none when it holds none
-	[[nodiscard]] virtual std::optional<entt::entity> HandHeldCreature() const = 0;
+	/// Whether the hand of a player holds the creature
+	[[nodiscard]] virtual bool HandHolds(entt::entity creature) const = 0;
 	/// Whether creatures act on objects at all, and whether a flying thing is one they may catch
 	[[nodiscard]] virtual bool HasCreatureActions() const = 0;
 	[[nodiscard]] virtual bool CanBeCaught(entt::entity object) const = 0;

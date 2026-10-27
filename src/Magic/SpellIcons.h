@@ -159,6 +159,20 @@ constexpr float k_FunctionalLife = 0.75f;
 /// it; else, with the hand ready, its charging started
 [[nodiscard]] TapResult Tap(const IconCharge& icon, bool handReady, bool magicEnabled, bool onSite);
 
+/// Whether a gesture that asks for its miracle may start it charging. The rule is as for a tap, but the icon's site must
+/// have prayer power to give this turn, unless the icon has something stored. siteChants is all the prayer power of the
+/// site this turn, none for an icon with no site.
+[[nodiscard]] bool MayStartRequestedCharge(const IconCharge& icon, bool magicEnabled, std::optional<float> siteChants);
+
+/// Whether a gesture may ask the icon for its miracle: the icon works, and either its miracle may go into the hand now
+/// or it may start to charge the miracle
+[[nodiscard]] bool ValidForRequest(const IconCharge& icon, bool functional, bool handReady, bool magicEnabled,
+                                   std::optional<float> siteChants);
+
+/// A gesture asks the icon for its miracle: its charged miracle goes into the hand if it can go, else the icon starts
+/// to charge the miracle if it may. A request never calls off a charge.
+[[nodiscard]] TapResult Request(const IconCharge& icon, bool handReady, bool magicEnabled, std::optional<float> siteChants);
+
 /// The click a counted tap on a village centre's hand makes is played faster the further along the hand stands: its
 /// playback rate in percent, the sixth hand's for any after it
 [[nodiscard]] uint32_t ClickPitch(size_t hand);

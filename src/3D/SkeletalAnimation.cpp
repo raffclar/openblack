@@ -12,6 +12,7 @@
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <optional>
 
 #include <MorphFile.h>
@@ -161,19 +162,51 @@ FrameSpan FindFrames(const Animation& animation, uint32_t timeMs)
 
 namespace
 {
-/// Where each bone is in a list of the bones an animation moves, or nothing for those it doesn't
-std::vector<std::optional<size_t>> JointSlots(std::span<const uint32_t> joints, size_t count)
+/// Where each bone is in a list of the bones an animation moves, or nothing for those it doesn't. When a bone is in the
+/// list more than once, its last place counts. For a skeleton of up to k_InlineBones bones, the table needs no memory
+/// from the heap.
+class JointSlots
 {
-	std::vector<std::optional<size_t>> slots(count);
-	for (size_t i = 0; i < joints.size(); ++i)
+public:
+	JointSlots(std::span<const uint32_t> joints, size_t count)
 	{
-		if (joints[i] < count)
+		if (count > k_InlineBones)
 		{
-			slots[joints[i]] = i;
+			_heap.assign(count, k_None);
+			_table = _heap.data();
+		}
+		else
+		{
+			std::fill_n(_onStack.begin(), count, k_None);
+			_table = _onStack.data();
+		}
+		for (size_t i = 0; i < joints.size(); ++i)
+		{
+			if (joints[i] < count)
+			{
+				_table[joints[i]] = static_cast<uint32_t>(i);
+			}
 		}
 	}
-	return slots;
-}
+	JointSlots(const JointSlots&) = delete;
+	JointSlots& operator=(const JointSlots&) = delete;
+	JointSlots(JointSlots&&) = delete;
+	JointSlots& operator=(JointSlots&&) = delete;
+	~JointSlots() = default;
+
+	[[nodiscard]] std::optional<size_t> operator[](size_t joint) const
+	{
+		const auto slot = _table[joint];
+		return slot != k_None ? std::optional<size_t>(slot) : std::nullopt;
+	}
+
+private:
+	static constexpr size_t k_InlineBones = 128;
+	static constexpr uint32_t k_None = 0xFFFFFFFF;
+	std::array<uint32_t, k_InlineBones> _onStack;
+	std::vector<uint32_t> _heap;
+	uint32_t* _table {nullptr};
+};
 
 /// Mirrored keyframe angles: y and z negated
 glm::vec3 MirrorEuler(glm::vec3 euler)
@@ -309,10 +342,10 @@ std::vector<Pose> SampleCycle(const Animation& animation, const Animation& stand
 		return poses;
 	}
 	const auto* standFrame = stand.frames.empty() ? nullptr : &stand.frames.front();
-	const auto standRotated = JointSlots(stand.rotatedJoints, count);
-	const auto standTranslated = JointSlots(stand.translatedJoints, count);
-	const auto rotated = JointSlots(animation.rotatedJoints, count);
-	const auto translated = JointSlots(animation.translatedJoints, count);
+	const JointSlots standRotated(stand.rotatedJoints, count);
+	const JointSlots standTranslated(stand.translatedJoints, count);
+	const JointSlots rotated(animation.rotatedJoints, count);
+	const JointSlots translated(animation.translatedJoints, count);
 	const auto [from, to, t] = FindFrames(animation, timeMs);
 
 	for (uint32_t joint = 0; joint < count; ++joint)
@@ -397,12 +430,14 @@ void SetLayer(std::vector<Pose>& poses, const Animation& animation, uint32_t tim
 		return;
 	}
 	const auto* fillFrame = fill != nullptr && !fill->frames.empty() ? &fill->frames.front() : nullptr;
-	const auto fillRotated =
-	    fillFrame != nullptr ? JointSlots(fill->rotatedJoints, count) : std::vector<std::optional<size_t>> {};
-	const auto fillTranslated =
-	    fillFrame != nullptr ? JointSlots(fill->translatedJoints, count) : std::vector<std::optional<size_t>> {};
-	const auto rotated = JointSlots(animation.rotatedJoints, count);
-	const auto translated = JointSlots(animation.translatedJoints, count);
+	const JointSlots fillRotated(fillFrame != nullptr ? std::span<const uint32_t>(fill->rotatedJoints)
+	                                                  : std::span<const uint32_t> {},
+	                             fillFrame != nullptr ? count : 0);
+	const JointSlots fillTranslated(fillFrame != nullptr ? std::span<const uint32_t>(fill->translatedJoints)
+	                                                     : std::span<const uint32_t> {},
+	                                fillFrame != nullptr ? count : 0);
+	const JointSlots rotated(animation.rotatedJoints, count);
+	const JointSlots translated(animation.translatedJoints, count);
 	const auto [from, to, t] = FindFrames(animation, timeMs);
 
 	for (uint32_t joint = 0; joint < count; ++joint)
@@ -630,7 +665,14 @@ std::vector<uint32_t> MirrorJoints(std::span<const glm::mat4> rest)
 
 std::vector<glm::mat4> ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> parents)
 {
-	std::vector<glm::mat4> matrices(poses.size());
+	std::vector<glm::mat4> matrices;
+	ComposeBoneMatrices(poses, parents, matrices);
+	return matrices;
+}
+
+void ComposeBoneMatrices(std::span<const Pose> poses, std::span<const uint32_t> parents, std::vector<glm::mat4>& matrices)
+{
+	matrices.resize(poses.size());
 	for (size_t i = 0; i < poses.size(); ++i)
 	{
 		glm::mat4 local(1.0f);
@@ -645,7 +687,6 @@ std::vector<glm::mat4> ComposeBoneMatrices(std::span<const Pose> poses, std::spa
 		const auto parent = i < parents.size() ? parents[i] : k_NoParent;
 		matrices[i] = parent != k_NoParent && parent < i ? matrices[parent] * local : local;
 	}
-	return matrices;
 }
 
 Animation FromMorph(const morph::Animation& source)

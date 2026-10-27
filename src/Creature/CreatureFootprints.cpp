@@ -16,6 +16,7 @@
 #include <glm/geometric.hpp>
 
 #include "3D/CreatureBody.h"
+#include "Common/PortableMath.h"
 #include "Common/X87.h"
 #include "Common/X87Angle.h"
 
@@ -65,8 +66,8 @@ float Side(float creatureSize, const SpeciesPrint& print)
 Footprint MakeFootprint(const glm::vec3& foot, float angle, float side, uint8_t cell, bool left, const AltitudeAt& altitudeAt)
 {
 	const auto size = side / (2.0f * k_HalfSide);
-	const auto cosine = std::cos(angle);
-	const auto sine = std::sin(angle);
+	const auto cosine = portable_math::Cos(angle);
+	const auto sine = portable_math::Sin(angle);
 	const auto origin = glm::vec2(static_cast<float>(cell) / static_cast<float>(k_CellsPerRow), 0.0f);
 	const auto& cellUvs = k_CellUvs.at(left ? 1 : 0);
 	Footprint print;

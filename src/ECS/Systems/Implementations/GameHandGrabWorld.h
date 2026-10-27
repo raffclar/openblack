@@ -25,6 +25,14 @@ public:
 	[[nodiscard]] Registry& Entities() override;
 	[[nodiscard]] entt::entity Hand() const override;
 	[[nodiscard]] PlayerNames HandPlayer() const override;
+	void SetActingPlayer(std::optional<PlayerNames> player) override { _acting = player; }
+	[[nodiscard]] bool IsOtherPlayersHand(entt::entity hand) const override;
+	[[nodiscard]] std::optional<PlayerNames> PlayerOfHand(entt::entity hand) const override;
+	[[nodiscard]] glm::vec3 AsMapPlace(glm::vec3 point) const override;
+	[[nodiscard]] std::optional<glm::vec3> ReportedCollidePoint() const override;
+	[[nodiscard]] std::optional<PlayerNames> GetActingPlayer() const override { return _acting; }
+	[[nodiscard]] std::optional<PlayerNames> OwnHandPlayer() const override;
+	[[nodiscard]] bool IsNetworkGame() const override;
 
 	[[nodiscard]] std::optional<entt::entity> ObjectUnderCursor() const override;
 	[[nodiscard]] std::optional<entt::entity> ObjectNearHand() const override;
@@ -78,13 +86,17 @@ public:
 	void ArtefactTaken(entt::entity object, PlayerNames player) override;
 	void TreeUprooted(PlayerNames player, entt::entity tree) override;
 	std::optional<entt::entity> TreeFromBigForest(entt::entity bigForest) override;
-	void LeaveRootsHole(entt::entity tree) override;
+	void LeaveRootsHole(entt::entity tree, const glm::vec3& place, const glm::mat3& rotation, float scale) override;
 	void RemakeDrawList(uint32_t frames) override;
 	void RemovePotReaction(entt::entity pot) override;
 	void SetUpPotReaction(entt::entity pot, PlayerNames player) override;
 	[[nodiscard]] Pose PoseOf(entt::entity object) const override;
 	[[nodiscard]] glm::vec3 ReportedHandPlace() const override;
+	[[nodiscard]] glm::vec3 ReportedPlaceOf(entt::entity hand) const override;
+	[[nodiscard]] std::vector<PlayerNames> OtherHandPlayers() const override;
 	void SetPose(entt::entity object, const Pose& pose) override;
+	void DrawPulledPose(entt::entity object, const Pose& pose) override;
+	void ForgetPulledPose(entt::entity object) override;
 	[[nodiscard]] glm::mat3 UnstretchedAxes(entt::entity object, const glm::mat3& axes) const override;
 
 	[[nodiscard]] player_commands::ThrowStart ThrowStartOf(entt::entity object, bool alignToSlope) override;
@@ -127,6 +139,9 @@ public:
 private:
 	/// Where the resource in the local player's hand came from
 	void SetHandTookFrom(PlayerNames from);
+
+	/// The player of the command that the hand does now, none outside the commands
+	std::optional<PlayerNames> _acting;
 };
 
 } // namespace openblack::ecs::systems

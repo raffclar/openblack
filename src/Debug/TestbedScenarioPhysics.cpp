@@ -20,6 +20,7 @@
 #include <vector>
 
 #include "3D/FlatLand.h"
+#include "Common/PortableMath.h"
 #include "TestbedScenarioRegistry.h"
 
 using namespace openblack;
@@ -54,7 +55,7 @@ const std::array<ObjectSetup, 10> k_Kinds {
 /// A throw from a point on a ring round the field's middle, towards it
 ThrowSetup Inward(size_t object, float angle, float delay, std::optional<float> repeat)
 {
-	const glm::vec2 out {std::cos(angle), std::sin(angle)};
+	const glm::vec2 out {portable_math::Cos(angle), portable_math::Sin(angle)};
 	return {
 	    .object = object,
 	    .from = k_Field + (out * k_ThrowFrom),
@@ -138,7 +139,7 @@ void AddCrowdThrow(std::vector<Scenario>& all)
 	{
 		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / static_cast<float>(k_Count);
 		auto object = k_Kinds.at(i % k_Kinds.size());
-		object.offset = k_Field + glm::vec2 {std::cos(angle), std::sin(angle)} * k_ThrowFrom;
+		object.offset = k_Field + glm::vec2 {portable_math::Cos(angle), portable_math::Sin(angle)} * k_ThrowFrom;
 		objects.push_back(object);
 		throws.push_back(Inward(i, angle, 1.0f, 12.0f));
 	}
@@ -235,7 +236,7 @@ void AddCreatureHit(std::vector<Scenario>& all)
 	{
 		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / 8.0f;
 		objects.push_back({.type = MobileStaticInfo::RockChalk,
-		                   .offset = k_Field + glm::vec2 {std::cos(angle), std::sin(angle)} * k_ThrowFrom});
+		                   .offset = k_Field + glm::vec2 {portable_math::Cos(angle), portable_math::Sin(angle)} * k_ThrowFrom});
 		throws.push_back(Inward(i, angle, 2.0f + static_cast<float>(i), 10.0f));
 	}
 	all.push_back({
@@ -452,7 +453,7 @@ void AddTempleStruck(std::vector<Scenario>& all)
 	{
 		const float angle = 2.0f * std::numbers::pi_v<float> * static_cast<float>(i) / 6.0f;
 		objects.push_back({.type = MobileStaticInfo::Boulder2Chalk,
-		                   .offset = k_Field + glm::vec2 {std::cos(angle), std::sin(angle)} * k_ThrowFrom});
+		                   .offset = k_Field + glm::vec2 {portable_math::Cos(angle), portable_math::Sin(angle)} * k_ThrowFrom});
 		throws.push_back(Inward(i, angle, 2.0f + static_cast<float>(i) * 1.5f, 9.0f));
 	}
 	all.push_back({
