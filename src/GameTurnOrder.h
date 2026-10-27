@@ -218,6 +218,8 @@ enum class Step : uint8_t
 	WalkerLookahead,
 	/// A new creature, or one with a new body, gets the skeleton of its shape and its first pose
 	CreatureShapes,
+	/// The glows over the disciples, and the one mark for the symbol of the work of a disciple in or under the hand
+	DiscipleMarks,
 	/// The things that the turn made go into the map's cells
 	MapCellsAtTurnEnd,
 	InfluenceTurnEnd,
@@ -343,6 +345,8 @@ inline constexpr std::array k_Turn = std::to_array<Place>({
     {.step = Step::WalkerLookahead, .stage = Stage::AfterTurn},
     // The frames only draw, so a creature that the turn made gets its skeleton and its first pose at the end of the turn
     {.step = Step::CreatureShapes, .stage = Stage::AfterTurn},
+    // The frames only move the marks over the disciples, so the turn makes and removes their entities at its end
+    {.step = Step::DiscipleMarks, .stage = Stage::AfterTurn},
     // The frames only read the map's cells, so the things that the turn made go into them at the end of the turn
     {.step = Step::MapCellsAtTurnEnd, .stage = Stage::AfterTurn},
     {.step = Step::InfluenceTurnEnd, .stage = Stage::AfterTurn},
