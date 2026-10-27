@@ -750,7 +750,12 @@ HeadLook HeadLookOf(AdjustedAnimations& adjusted, ecs::Registry& registry, entt:
 			opponent = fighting->opponent;
 		}
 	}
+	// An action with a thing that ended stays on the creature until the next one starts
 	const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
+	if (action != nullptr && action->status != creature_object_actions::Status::Running)
+	{
+		action = nullptr;
+	}
 	if (!pose.has_value() && action != nullptr)
 	{
 		using Catching = CreatureObjectAction::Catching;
@@ -1205,7 +1210,12 @@ std::string_view PhaseName(creature_layers::BodyAction::Phase phase)
 creature_animation_log::Cause CauseOf(const ecs::Registry& registry, entt::entity entity, const CreatureAnimation& animation)
 {
 	creature_animation_log::Cause cause;
+	// An action with a thing that ended stays on the creature until the next one starts
 	const auto* action = registry.TryGet<const CreatureObjectAction>(entity);
+	if (action != nullptr && action->status != creature_object_actions::Status::Running)
+	{
+		action = nullptr;
+	}
 	const auto* fighting = registry.TryGet<const CreatureFighting>(entity);
 	if (action != nullptr)
 	{

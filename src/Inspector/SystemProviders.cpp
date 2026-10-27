@@ -906,7 +906,7 @@ std::unique_ptr<ProviderInterface> openblack::inspector::MakeCreatureProvider(Cr
 	              });
 	provider->Add(Query("animation_history",
 	                    "The clips that a creature's body played and that stopped, the newest last: each with the turn that "
-	                    "it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 64.",
+	                    "it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 256.",
 	                    {id, Parameter("last", "integer", "How many of the newest clips (all by default)", false)}),
 	              [logOf, lineOf](const QueryContext& context) {
 		              const auto found = logOf(context);

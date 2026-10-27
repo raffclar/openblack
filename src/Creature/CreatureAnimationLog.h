@@ -135,12 +135,13 @@ struct ProblemEntry
 class Log
 {
 public:
-	static constexpr size_t k_DefaultCapacity = 64;
+	static constexpr size_t k_DefaultCapacity = 256;
 
 	explicit Log(size_t capacity = k_DefaultCapacity);
 
 	/// The pose of a turn used these clips. A clip that is not open opens an entry with the cause. A clip that is open
-	/// continues, unless its time went back and it does not loop: then it played again from its start. An open clip that
+	/// continues, unless its time went back and it does not loop or relax as a face does: then it played again from its
+	/// start. An open clip that
 	/// the pose did not use closes at this turn. A clip that the species does not have also makes a Missing problem.
 	void Posed(uint32_t turn, std::span<const Clip> clips, const Cause& cause);
 	/// A clip did not play. The same problem in the next turn counts as a repeat of this one.

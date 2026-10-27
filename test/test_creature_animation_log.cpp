@@ -79,6 +79,22 @@ TEST(CreatureAnimationLog, AOneShotThatStartsAgainIsANewEntryButALoopIsNot)
 	EXPECT_FLOAT_EQ(loops.Current()[0].lastAdvanceMs, 100.0f);
 }
 
+TEST(CreatureAnimationLog, AFaceThatRelaxesIsOneEntry)
+{
+	Log log;
+	auto face = BodyClip(16, 250.0f);
+	face.layer = Layer::Face;
+	log.Posed(1, std::array {face}, CauseBy("body"));
+	face.timeMs = 225.0f;
+	log.Posed(2, std::array {face}, CauseBy("body"));
+	face.timeMs = 200.0f;
+	log.Posed(3, std::array {face}, CauseBy("body"));
+	EXPECT_TRUE(log.History().empty());
+	ASSERT_EQ(log.Current().size(), 1);
+	EXPECT_EQ(log.Current()[0].turns, 3u);
+	EXPECT_FLOAT_EQ(log.Current()[0].lastAdvanceMs, -25.0f);
+}
+
 TEST(CreatureAnimationLog, ClipsOfOtherLayersAndSidesAreOtherEntries)
 {
 	Log log;

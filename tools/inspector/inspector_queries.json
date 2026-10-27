@@ -570,6 +570,54 @@
   "query": "creature.plan"
  },
  {
+  "description": "The clips that a creature's body plays now: for each, its layer (body, blend, face, gesture, wobble), the clip's place and name in the creature spec file, the time in it, its speed (clip milliseconds for each millisecond of the turn), whether it loops, its weight and pair blend, and what asked for it (the mind's activity, plan and agenda step, the action with a thing, the fight)",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation"
+ },
+ {
+  "description": "The clips that a creature's body played and that stopped, the newest last: each with the turn that it started, the turn that it stopped, its speed and what asked for it. The log keeps the newest 256.",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   },
+   {
+    "description": "How many of the newest clips (all by default)",
+    "name": "last",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_history"
+ },
+ {
+  "description": "The clips that something asked a creature's body for that did not play: missing (the species has no such clip, so the body showed the stand or the action ended at once) or refused (the body played another action), with the turn, what asked and how many turns in a row it came again",
+  "kind": "object",
+  "parameters": [
+   {
+    "description": "The creature's entity id; may be left out when there is one creature",
+    "name": "id",
+    "type": "integer"
+   }
+  ],
+  "query": "creature.animation_problems"
+ },
+ {
+  "description": "Removes the logs of the clips of all the creatures. The logs start again.",
+  "kind": "object",
+  "parameters": [],
+  "query": "creature.animation_clear",
+  "writes": true
+ },
+ {
   "description": "The cells about a point that are not clear for a creature to go to (land it can't walk on, or things in its way), and the middle of the nearest clear area so wide, as its search for a place to cast, sit or get away finds it",
   "kind": "object",
   "parameters": [

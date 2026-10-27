@@ -604,7 +604,7 @@ TOOLS = [
     },
     {
         "name": "creature_animation_history",
-        "description": "The clips a creature's body played that stopped, newest last (up to 64): start and end turn, "
+        "description": "The clips a creature's body played that stopped, newest last (up to 256): start and end turn, "
                        "turns, speed and cause of each. last limits the count.",
         "inputSchema": schema({"id": {"type": "integer"}, "last": {"type": "integer"}, **SHAPING}),
         "query": "creature.animation_history",

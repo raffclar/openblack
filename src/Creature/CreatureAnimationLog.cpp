@@ -72,14 +72,16 @@ void Log::Posed(uint32_t turn, std::span<const Clip> clips, const Cause& cause)
 	for (const auto& clip : clips)
 	{
 		const auto found = std::ranges::find_if(_open, [&clip](const Entry& entry) { return SameClip(entry.last, clip); });
-		// A clip that does not loop and whose time went back played again from its start
-		const bool continues = found != _open.end() && (clip.looping || clip.timeMs >= found->last.timeMs);
+		// A clip that does not loop and whose time went back played again from its start. A face runs back to its start
+		// as it relaxes, so its time can go back.
+		const bool continues =
+		    found != _open.end() && (clip.looping || clip.layer == Layer::Face || clip.timeMs >= found->last.timeMs);
 		if (continues)
 		{
 			auto entry = std::move(*found);
 			_open.erase(found);
 			entry.lastAdvanceMs = clip.timeMs - entry.last.timeMs;
-			if (entry.lastAdvanceMs < 0.0f && clip.durationMs.has_value())
+			if (entry.lastAdvanceMs < 0.0f && clip.looping && clip.durationMs.has_value())
 			{
 				entry.lastAdvanceMs += static_cast<float>(*clip.durationMs);
 			}
