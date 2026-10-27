@@ -1894,3 +1894,11 @@ openblack_setup_and_add_test(
 openblack_setup_and_add_test(
   test_debug_computer_actions test_debug_computer_actions.cpp
 )
+openblack_setup_and_add_test(
+  test_oracle_computer_worship oracle/test_oracle_computer_worship.cpp
+)
+set_tests_properties(
+  test_oracle_computer_worship
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

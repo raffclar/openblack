@@ -252,6 +252,7 @@ float openblack::computer_mind::WorkOut(Mind& mind, World& world, uint16_t node,
 		RecoverSuppression(self, turn);
 		self.bestLeaf.reset();
 		self.object = entt::null;
+		self.siteTown = entt::null;
 		self.lastWorkedOut = turn;
 		self.value = 0.0f;
 	}
