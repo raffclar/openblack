@@ -10587,6 +10587,40 @@ void AddWorkshopScenarios(std::vector<Scenario>& all)
 	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
 	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f}},
 	});
+
+	constexpr glm::vec2 k_ImpressedHut {-25.0f, 47.0f};
+	all.push_back({
+	    .id = "objects.scaffold_impresses_town",
+	    .name = "A scaffold that the player puts down impresses the people of the near town",
+	    .facet = Facet::Objects,
+	    .description = "The town, the scaffold and the camera of objects.scaffold_starts_building, with a hut of four "
+	                   "villagers of the town beside the village centre. The input tools/sim/hand_inputs/scaffold_build.json "
+	                   "moves the hand: it takes the scaffold, holds it still near the village centre, and puts it down.",
+	    .expected = "When the hand puts the scaffold down, a building site opens. At the same time, symbols of belief in "
+	                "the player rise from the first villagers of the hut: from a part of the town, and from one villager "
+	                "at least. The belief of the town in the player becomes larger.",
+	    .environment = {.dispenserGrid = false},
+	    .framing = {.shot = Shot::Overview, .include = {k_LooseScaffold - glm::vec2 {10.0f}, k_BuildPlace + glm::vec2 {10.0f}}},
+	    .objects = {{.type = AbodeInfo::CelticTownCentre, .offset = {0.0f, 50.0f}},
+	                {.type = ScaffoldInfo::Normal, .offset = k_LooseScaffold, .scale = 0.7f},
+	                {.type = AbodeInfo::CelticHut, .offset = k_ImpressedHut},
+	                {.type = VillagerInfo::CelticFarmerMale,
+	                 .offset = k_ImpressedHut + glm::vec2 {-6.0f, -6.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_ImpressedHut + glm::vec2 {-3.0f, -7.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticForesterMale,
+	                 .offset = k_ImpressedHut + glm::vec2 {3.0f, -7.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2},
+	                {.type = VillagerInfo::CelticHousewifeFemale,
+	                 .offset = k_ImpressedHut + glm::vec2 {6.0f, -6.0f},
+	                 .joinTown = true,
+	                 .homeIn = 2}},
+	});
 }
 
 std::vector<Scenario> Build()

@@ -38,6 +38,7 @@
 #include "ECS/Components/Pot.h"
 #include "ECS/Components/Scaffold.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesire.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/Workshop.h"
 #include "ECS/DiscipleWorkRules.h"
@@ -45,6 +46,7 @@
 #include "ECS/PlacedTurn.h"
 #include "ECS/Registry.h"
 #include "ECS/ScaffoldGhostRules.h"
+#include "ECS/ScaffoldImpressionRules.h"
 #include "ECS/ScaffoldOfferRules.h"
 #include "ECS/ScriptFind.h"
 #include "ECS/Systems/HandSystemInterface.h"
@@ -52,6 +54,7 @@
 #include "ECS/Systems/Implementations/VillagerHome.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/ResourceStoreSystemInterface.h"
 #include "ECS/Systems/SoundTagSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -777,7 +780,11 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 		SPDLOG_LOGGER_INFO(logger, "Scaffold: scaffold {} starts building {} at turn {}", entt::to_integral(scaffold),
 		                   entt::to_integral(registry.Get<const Scaffold>(scaffold).site), Turn());
 	}
-	// TODO(scaffolds): the villagers of the towns near the new building react to the scaffold
+	// The scaffold that a player put down impresses the people of the near towns
+	if (player.has_value())
+	{
+		ImpressNearTowns(scaffold, *player);
+	}
 	const auto building = registry.Get<const Scaffold>(scaffold).site;
 	ecs::town_planning::DropPlansUnder(place, ecs::systems::object_measures::TwoDRadius(registry, building));
 	// The player who put the scaffold down hears the sound where the camera is. The other players hear it at the
@@ -794,6 +801,60 @@ bool WorkshopSystem::BuildBuilding(entt::entity scaffold, std::optional<PlayerNa
 		audio::StartGameSoundEffect(sound, {.position = place, .owner = scaffold});
 	}
 	return true;
+}
+
+void WorkshopSystem::ImpressNearTowns(entt::entity scaffold, PlayerNames player)
+{
+	if (!Locator::reactionSystem::has_value())
+	{
+		return;
+	}
+	auto& registry = Entities();
+	auto& reactions = Locator::reactionSystem::value();
+	const auto place = registry.Get<const Transform>(scaffold).position;
+	// The time of the reaction starts at once
+	const auto id = reactions.Create(
+	    {.initiator = scaffold, .type = Reaction::ReactToScaffold, .player = player, .position = place, .onCast = true});
+	std::vector<entt::entity> towns;
+	std::vector<scaffold_impression::TownEntry> entries;
+	registry.Each<const Town>([&](entt::entity town, const Town& data) {
+		towns.push_back(town);
+		entries.push_back({.made = data.made, .owner = data.owner, .gained = data.gained});
+	});
+	const auto& info = Locator::infoConstants::value().scaffold;
+	for (const auto index : scaffold_impression::TownsToImpress(entries))
+	{
+		const auto town = towns.at(index);
+		const auto* transform = registry.TryGet<const Transform>(town);
+		// A town at the distance or farther is not impressed
+		if (transform == nullptr ||
+		    gutils::GetDistanceInMetres(place, transform->position) >= info.maxDistanceForImpressingTowns)
+		{
+			continue;
+		}
+		const auto* stats = registry.TryGet<const TownStats>(town);
+		const uint32_t people = stats != nullptr ? stats->adults + stats->children : 0;
+		const auto count = scaffold_impression::PeopleToImpress(people, info.proportionOfTownToImpress);
+		// The people of the town's abodes, abode by abode in the town's order
+		std::vector<std::vector<entt::entity>> abodes;
+		for (const auto abode : registry.Get<const Town>(town).abodes)
+		{
+			if (const auto* data = registry.Valid(abode) ? registry.TryGet<const Abode>(abode) : nullptr)
+			{
+				abodes.push_back(data->inhabitants);
+			}
+		}
+		const auto impressed = scaffold_impression::FirstPeople(abodes, count);
+		for (const auto person : impressed)
+		{
+			reactions.Impress(id, person);
+		}
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "Scaffold: scaffold {} impresses {} people of town {} at turn {}",
+			                   entt::to_integral(scaffold), impressed.size(), entt::to_integral(town), Turn());
+		}
+	}
 }
 
 bool WorkshopSystem::TryToBuild(entt::entity scaffold, entt::entity town)

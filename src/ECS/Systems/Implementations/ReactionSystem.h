@@ -37,6 +37,7 @@ public:
 	void Remove(uint32_t id) override;
 	void StopReacting(entt::entity living) override;
 	void TakeUp(uint32_t id, entt::entity living) override;
+	void Impress(uint32_t id, entt::entity living) override;
 	void SetInitiator(uint32_t id, entt::entity initiator) override;
 	void SetPlayerOfNewest(entt::entity initiator, PlayerNames player) override;
 	void SetDance(uint32_t id, entt::entity dance) override;
@@ -88,6 +89,10 @@ private:
 	/// weariness. Only the reactions a creature makes count: seeing it, and its win of a fight. None for any other.
 	[[nodiscard]] std::optional<float> CreatureImpressiveValue(const Active& reaction, entt::entity villager, entt::entity town,
 	                                                           float boredom) const;
+	/// How much a scaffold that made the reaction impresses a watcher at a place, at the town's weariness. None when no
+	/// scaffold made the reaction.
+	[[nodiscard]] std::optional<float> ScaffoldImpressiveValue(const Active& reaction, const glm::vec3& at, float boredom,
+	                                                           float reactionMultiplier, float artefact) const;
 	/// Every living thing reacting to it stops, and it goes
 	void ShutDown(uint32_t id);
 

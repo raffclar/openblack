@@ -56,6 +56,9 @@ private:
 	bool SearchAndTakeOffer(entt::entity scaffold, entt::entity town);
 	/// A scaffold that a hand put down gently starts the building that it offers. Whether it started the building.
 	bool BuildBuilding(entt::entity scaffold, std::optional<PlayerNames> player);
+	/// The scaffold makes its reaction for the player who put it down. The first people of the near towns are impressed
+	/// by the reaction at once.
+	void ImpressNearTowns(entt::entity scaffold, PlayerNames player);
 	/// The town starts the building that the scaffold offers, at the place of the scaffold. Whether it started it.
 	bool TryToBuild(entt::entity scaffold, entt::entity town);
 	/// The scaffold leaves the building site that it is on, and the building of the site goes

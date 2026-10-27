@@ -1842,3 +1842,12 @@ set_tests_properties(
   PROPERTIES ENVIRONMENT
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
+openblack_setup_and_add_test(test_scaffold_impression_rules test_scaffold_impression_rules.cpp)
+openblack_setup_and_add_test(
+  test_oracle_scaffold_impression oracle/test_oracle_scaffold_impression.cpp
+)
+set_tests_properties(
+  test_oracle_scaffold_impression
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)
