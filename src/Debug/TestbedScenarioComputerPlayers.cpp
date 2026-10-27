@@ -32,6 +32,7 @@ void testbed_scenarios::AddComputerPlayerScenarios(std::vector<Scenario>& all)
 	AddComputerGodCoreScenarios(all);
 	AddComputerGodTownsScenarios(all);
 	AddComputerGodWorshipScenarios(all);
+	AddComputerGodScaffoldScenarios(all);
 	AddComputerGodMiraclesScenarios(all);
 	AddComputerGodCreatureCareScenarios(all);
 	AddComputerGodCreaturePlayScenarios(all);

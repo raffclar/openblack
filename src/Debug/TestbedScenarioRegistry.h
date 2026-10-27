@@ -1171,6 +1171,8 @@ struct ComputerActionThing
 		Object,
 		/// The scenario's creature at the index
 		Creature,
+		/// The newest workshop of the town that the land script made with the number
+		Workshop,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};

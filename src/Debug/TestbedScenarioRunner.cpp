@@ -148,6 +148,7 @@
 #include "ECS/Components/VillagerLabel.h"
 #include "ECS/Components/WallHug.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/Components/Workshop.h"
 #include "ECS/Components/WorshipSite.h"
 #include "ECS/CreatureFromFile.h"
 #include "ECS/CreatureReactionNotice.h"
@@ -1701,6 +1702,20 @@ entt::entity Runner::ComputerActionThingOf(const ComputerActionThing& thing, Pla
 		return thing.object < _objects.size() ? _objects[thing.object] : entt::null;
 	case ComputerActionThing::Kind::Creature:
 		return thing.object < _creatures.size() ? _creatures[thing.object] : entt::null;
+	case ComputerActionThing::Kind::Workshop:
+	{
+		const auto& towns = registry.Context().towns;
+		const auto found = towns.find(thing.townId);
+		const auto* town = found != towns.end() ? registry.TryGet<const ecs::components::Town>(found->second) : nullptr;
+		if (town == nullptr)
+		{
+			break;
+		}
+		const auto workshop = std::ranges::find_if(town->abodes, [&registry](entt::entity abode) {
+			return registry.Valid(abode) && registry.AllOf<ecs::components::Workshop>(abode);
+		});
+		return workshop != town->abodes.end() ? *workshop : entt::null;
+	}
 	}
 	return entt::null;
 }
