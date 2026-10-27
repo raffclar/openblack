@@ -121,16 +121,19 @@ void testbed_scenarios::AddComputerGodCreatureCareScenarios(std::vector<Scenario
 	    .facet = Facet::Mind,
 	    .description = "Lines of a land give player two a temple to the south and a Celtic town to the north that offers "
 	                   "the heal miracle. Half of the people go to worship at its site. The tiger of player two stands "
-	                   "between the temple and the town with little life left. After a second, each icon of the site "
-	                   "holds 9 tenths of the charge of its miracle.",
-	    .expected = "The god reacts to the emergency of its creature. Its hand moves to the heal icon of the site and the "
-	                "worshippers chant for the miracle. When the charge is full, the hand casts the heal miracle on the "
-	                "tiger.",
+	                   "between the temple and the town with little life left. At the start, the god gets the weight 0 for "
+	                   "the need to look after its worshippers, and each icon of the site holds the full charge of its "
+	                   "miracle.",
+	    .expected = "The god reacts to the emergency of its creature. Its hand moves to the heal icon of the site, the "
+	                "worshippers chant for the miracle, and the hand casts the heal miracle on the tiger.",
 	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
-	    .creatures = {GodCreature({30.0f, -30.0f}, {.life = 0.15f}, {})},
+	    .creatures = {GodCreature({30.0f, -30.0f}, {.life = 0.02f}, {})},
 	    .landScript = k_HealTownScript,
-	    .commands =
-	        {{.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .delaySeconds = 1.0f, .amount = 0.9f}},
+	    .commands = {{.kind = Command::Kind::ComputerPersonality,
+	                  .player = PlayerNames::PLAYER_TWO,
+	                  .action = "AttendToWorshippersWorshippers",
+	                  .amount = 0.0f},
+	                 {.kind = Command::Kind::FillSiteIcons, .player = PlayerNames::PLAYER_TWO, .amount = 1.0f}},
 	    .worshipShare = 0.5f,
 	});
 	all.push_back({
