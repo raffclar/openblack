@@ -295,6 +295,9 @@ struct Mind
 	bool workedOut {false};
 	/// How many times the mind wanted each miracle: a worship site charges the miracle wanted most
 	std::array<uint32_t, k_MagicTypes> castRequested {};
+	/// For each kind of miracle that a creature feels (to impress, kind, angry), the times that the god sent its creature
+	/// while the creature knew none of the miracles of that kind
+	std::array<uint32_t, 3> untaughtSends {};
 	/// The actions that land scripts queued, the first to start first
 	std::vector<QueuedAction> queue;
 	/// The hand does an action that a land script started. The help of the game does not hold the mind then.
