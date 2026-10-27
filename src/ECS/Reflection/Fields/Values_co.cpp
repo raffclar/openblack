@@ -55,7 +55,9 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Mind::paused>("paused")
 	    .Field<&openblack::computer_mind::Mind::scriptHold>("scriptHold")
 	    .Field<&openblack::computer_mind::Mind::workedOut>("workedOut")
-	    .Field<&openblack::computer_mind::Mind::castRequested>("castRequested");
+	    .Field<&openblack::computer_mind::Mind::castRequested>("castRequested")
+	    .Field<&openblack::computer_mind::Mind::queue>("queue")
+	    .Field<&openblack::computer_mind::Mind::scriptHand>("scriptHand");
 	Reflect<openblack::computer_mind::Node>(context, ValueOnly {})
 	    .Field<&openblack::computer_mind::Node::kind>("kind")
 	    .Field<&openblack::computer_mind::Node::parent>("parent")
@@ -68,5 +70,15 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Node::value>("value")
 	    .Field<&openblack::computer_mind::Node::bestLeaf>("bestLeaf")
 	    .Field<&openblack::computer_mind::Node::object>("object")
-	    .Field<&openblack::computer_mind::Node::amount>("amount");
+	    .Field<&openblack::computer_mind::Node::amount>("amount")
+	    .Field<&openblack::computer_mind::Node::argument>("argument")
+	    .Field<&openblack::computer_mind::Node::place>("place");
+	Reflect<openblack::computer_mind::QueuedAction>(context, ValueOnly {})
+	    .Field<&openblack::computer_mind::QueuedAction::name>("name")
+	    .Field<&openblack::computer_mind::QueuedAction::first>("first")
+	    .Field<&openblack::computer_mind::QueuedAction::second>("second")
+	    .Field<&openblack::computer_mind::QueuedAction::turn>("turn");
+	Reflect<openblack::computer_mind::SeenThing>(context, ValueOnly {})
+	    .Field<&openblack::computer_mind::SeenThing::thing>("thing")
+	    .Field<&openblack::computer_mind::SeenThing::turn>("turn");
 }
