@@ -11,6 +11,8 @@
 
 #include "ComputerGameHandCreature.h"
 
+#include <spdlog/spdlog.h>
+
 #include "3D/CreatureBody.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
@@ -139,7 +141,13 @@ bool GameHandCreature::TieLeash(entt::entity creature, entt::entity object)
 	{
 		return false;
 	}
-	static_cast<void>(Locator::leashSystem::value().TieTo(creature, object));
+	const bool tied = Locator::leashSystem::value().TieTo(creature, object);
+	// The check tools and the scenarios look for this line
+	if (const auto logger = spdlog::get("game"))
+	{
+		SPDLOG_LOGGER_INFO(logger, "Computer god {} ties the leash of creature {} to {}: {}", static_cast<int>(_player),
+		                   entt::to_integral(creature), entt::to_integral(object), tied);
+	}
 	return true;
 }
 
@@ -148,6 +156,11 @@ void GameHandCreature::Feedback(entt::entity creature, float feedback)
 	if (IsCreature(creature) && Locator::creatureMindSystem::has_value())
 	{
 		Locator::creatureMindSystem::value().ReceiveFeedback(creature, feedback);
+		if (const auto logger = spdlog::get("game"))
+		{
+			SPDLOG_LOGGER_INFO(logger, "Computer god {} gives creature {} the feedback {}", static_cast<int>(_player),
+			                   entt::to_integral(creature), feedback);
+		}
 	}
 }
 
