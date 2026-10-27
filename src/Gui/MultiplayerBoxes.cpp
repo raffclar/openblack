@@ -387,9 +387,13 @@ void MultiplayerBoxes::BuildGameList(Dialog& dialog)
 	_playersLabel = &dialog.Add<StaticText>(DialogRect {.min = {420, 130}, .max = {690, 170}}, Text(k_PlayersInGameText),
 	                                        Layout::Right, k_Mid);
 	_players = &dialog.Add<List>(_font, DialogRect {.min = {420, 175}, .max = {690, 485}}, k_Mid, false, true, false);
-	dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	// The game keeps the name's box and its label hidden. The box only holds the name of the game that the player picks.
+	auto& nameLabel =
+	    dialog.Add<StaticText>(DialogRect {.min = {130, 480}, .max = {330, 510}}, Text(k_GameNameText), Layout::Right, k_Mid);
+	nameLabel.visible = false;
 	_name = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 480}, .max = {550, 510}}, std::u16string(),
 	                             lobby_api::k_MostNameCharacters, k_Mid);
+	_name->visible = false;
 	_passwordLabel = &dialog.Add<StaticText>(DialogRect {.min = {130, 530}, .max = {330, 570}}, Text(k_GamePasswordText),
 	                                         Layout::Right, k_Mid);
 	_password = &dialog.Add<EditBox>(_font, DialogRect {.min = {350, 530}, .max = {550, 570}}, std::u16string(),
@@ -823,7 +827,7 @@ void MultiplayerBoxes::SendChat()
 
 void MultiplayerBoxes::Join()
 {
-	// A name typed in the name's box picks the game of that name
+	// The name's box holds the name of the game that the player picked, and that name picks the game
 	const auto games = _frontEnd->GetGames();
 	const auto typed = ToUtf8(_name->GetText());
 	if (const auto found = std::ranges::find(games, typed, &lobby_api::ServerEntry::hostname); found != games.end())
@@ -1008,6 +1012,11 @@ std::vector<Dialog::NamedControl> MultiplayerBoxes::GetNamedControls() const
 		return _message->answers.GetNamedControls();
 	}
 	return _dialog != nullptr ? _dialog->GetNamedControls() : std::vector<Dialog::NamedControl> {};
+}
+
+std::vector<DialogRect> MultiplayerBoxes::GetVisibleRects() const
+{
+	return _dialog != nullptr ? _dialog->GetVisibleRects() : std::vector<DialogRect> {};
 }
 
 std::u16string_view MultiplayerBoxes::GetMessageText() const

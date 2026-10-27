@@ -9,21 +9,15 @@
 
 #pragma once
 
-#include <cstdint>
-
-#include <optional>
-
 namespace openblack::ecs::components
 {
 
-/// The roots of a dead tree that fell, which fade by their own alpha. The piles of roots of blasts and of trees that the
-/// hand pulls free are not things of the world (see roots_pile).
-struct GroundMark
+/// The height at which the frames draw a thing that rises and sinks by the computer's clock, as a town's totem and its
+/// icon do. The turns go by the thing's Transform, which the frames do not change. Only the draw, the cursor, the hand
+/// and the sounds read this height. It is not a part of the synced world.
+struct DrawnHeight
 {
-	/// Not in use. The saves of earlier versions keep it.
-	float millisecondsLeft {0.0f};
-	/// Its alpha, 0 to 255, once it is fading; drawn without blending until then
-	std::optional<uint8_t> alpha;
+	float y {0.0f};
 };
 
 } // namespace openblack::ecs::components

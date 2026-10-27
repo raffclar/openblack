@@ -335,11 +335,33 @@ struct HandCastUnlock
 	entt::entity seed {entt::null};
 };
 
+/// The gesture of the leash picker chose a leash: the creature of the player changes to the leash of this type, if it
+/// knows that leash
+struct LeashPick
+{
+	LeashType type;
+};
+
+/// A scribble of the hand shakes off the thing that the hand holds. The thing falls from where the hand holds it, with
+/// no speed, and the turn does not plant it again.
+struct HandShakeOff
+{
+};
+
+/// The hand of the player gripped the land: the turn makes a puff of dust at the point on the ground. Thus every computer
+/// makes the same dust at the same turn.
+struct GripDust
+{
+	/// The point on the ground under the hand at the grip
+	glm::vec3 point {0.0f};
+};
+
 /// What a command does
-using Action = std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder,
-                            LeashPostTap, HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise,
-                            FightGround, FightMove, FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick,
-                            PlayerJoined, MiracleRequest, MiracleRepeat, HandCast, HandCastUnlock>;
+using Action =
+    std::variant<LeashKey, LeashTap, CreatureFeedback, HandTake, HandLetGo, HandTap, HandGive, LeashOrder, LeashPostTap,
+                 HandReport, HandTwist, HandLock, HandUnlock, HandApply, TotemShare, CreatureBruise, FightGround, FightMove,
+                 FightCharge, CreatureReaction, HandClick, SeedGesture, PlayerLeft, HandPick, PlayerJoined, MiracleRequest,
+                 MiracleRepeat, HandCast, HandCastUnlock, LeashPick, HandShakeOff, GripDust>;
 
 /// A command and the player that sent it
 struct Command

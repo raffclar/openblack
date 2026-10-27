@@ -444,7 +444,7 @@ std::optional<glm::vec3> MarkPosition(const ecs::Registry& registry, entt::entit
 /// nothing yet.
 bool HandHoldsNothing(const ecs::Registry& registry)
 {
-	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeed().has_value())
+	if (Locator::magicSystem::has_value() && Locator::magicSystem::value().GetHeldSeedOf(PlayerNames::PLAYER_ONE).has_value())
 	{
 		return false;
 	}
@@ -1079,7 +1079,10 @@ bool ArenaOn(const ecs::Registry& registry, entt::entity creature)
 fight_view::Fighter ViewedFighter(const ecs::Registry& registry, entt::entity creature)
 {
 	const auto* locomotion = registry.TryGet<const CreatureLocomotion>(creature);
-	return {.position = registry.Get<const Transform>(creature).position,
+	// The fight's camera looks at the fighters where the frame draws them
+	return {.position =
+	            DrawnTransform(registry.Get<const Transform>(creature), registry.TryGet<const CreatureAnimation>(creature))
+	                .position,
 	        .radius = locomotion != nullptr ? locomotion->radius : 5.0f,
 	        .height = HeightOf(ShownSize(registry.Get<const Creature>(creature)))};
 }
@@ -3764,8 +3767,10 @@ void CreatureFightSystem::WoundSkin(entt::entity victim, const glm::vec3& point,
 	{
 		return;
 	}
-	// The whole line along the blow counts: the wound goes where it first meets the skin
-	const auto hit = posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, point,
+	// The whole line along the blow counts: the wound goes where it first meets the skin, as the body is posed at the end
+	// of its newest game turn
+	const auto turnBones = creature_scars::TurnBones(registry, victim, *drawn->first, drawn->second);
+	const auto hit = posed_model::NearestSkinHit(registry, victim, *drawn->first, drawn->second, turnBones, point,
 	                                             x87::Scaled<x87::SumOrder::Zyx>(vector), true);
 	if (!hit.has_value())
 	{
@@ -3816,6 +3821,9 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 	}
 	auto& drips = *found;
 	const auto drawn = DrawnMeshOf(registry, creature);
+	// The blood runs over the body as it is posed at the end of its newest game turn
+	const auto turnBones = drawn.has_value() ? creature_scars::TurnBones(registry, creature, *drawn->first, drawn->second)
+	                                         : std::vector<glm::mat4> {};
 	for (auto& drip : drips.drips)
 	{
 		if (drip.ms >= CreatureDrips::k_RunMs)
@@ -3825,8 +3833,7 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 		drip.ms += TurnMsOf(registry.TryGet<const CreatureAnimation>(creature));
 		const auto corners =
 		    drawn.has_value()
-		        ? posed_model::CornersOnSkin(registry, creature, *drawn->first, drawn->second,
-		                                     posed_model::BonesOf(registry, creature, *drawn->first),
+		        ? posed_model::CornersOnSkin(registry, creature, *drawn->first, drawn->second, turnBones,
 		                                     {.subMesh = drip.subMesh, .firstIndex = drip.firstIndex, .s = drip.s, .t = drip.t})
 		        : std::nullopt;
 		if (!corners.has_value())
@@ -3839,7 +3846,8 @@ void CreatureFightSystem::DripTurn(entt::entity creature)
 		from.y -= fight::k_DripFallPerTurn;
 		// Across the triangle, as long as twice its area: a triangle too small finds no skin
 		const auto across = glm::cross((*corners)[2] - (*corners)[0], (*corners)[1] - (*corners)[0]);
-		const auto hit = posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, from, across, true);
+		const auto hit =
+		    posed_model::NearestSkinHit(registry, creature, *drawn->first, drawn->second, turnBones, from, across, true);
 		if (!hit.has_value())
 		{
 			drip.ms = CreatureDrips::k_RunMs;

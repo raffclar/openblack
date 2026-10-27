@@ -176,7 +176,7 @@ public:
 	[[nodiscard]] EventCount& Count(uint32_t event) { return _counts.at(event); }
 
 	/// Whether the scripts may ask about an event: 1 to 48
-	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && std::cmp_less(event, k_EventCount); }
+	[[nodiscard]] static constexpr bool ScriptMayAsk(int32_t event) { return event > 0 && static_cast<uint32_t>(event) < k_EventCount; }
 
 private:
 	std::array<EventCount, k_EventCount> _counts {};

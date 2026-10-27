@@ -83,9 +83,11 @@ def default_exe(config):
 def game_arguments(options, record, log, until_turn, fast, driven):
     """The command line of the game for a run"""
     args = ["-g", options.game_path, "--skip-logos", "--seed", str(options.seed), "--inspect-port", "0",
-            "--inspect-lock-input", "--sim-frame-ms", str(options.frame_ms), "--sim-until-turn", str(until_turn),
-            "--sim-record", record, "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000",
-            "--background"]
+            "--inspect-lock-input", "--sim-until-turn", str(until_turn), "--sim-record", record,
+            "--sim-record-every", str(options.every), "-l", log, "-n", "4000000000", "--background"]
+    # Without a frame time, each frame takes the real time that it took, as in a player's game
+    if options.frame_ms is not None:
+        args += ["--sim-frame-ms", str(options.frame_ms)]
     if fast:
         args += ["--sim-fast", "--sim-draw-every", str(options.draw_every)]
     if getattr(options, "still_hand", False):
@@ -109,6 +111,11 @@ def game_arguments(options, record, log, until_turn, fast, driven):
             args += ["--skip-opening", options.opening]
     if getattr(options, "network_game", False):
         args.append("--sim-network-game")
+    # The modes of the AI soak (developer builds): every god is a computer god, with the personality of an AI seed
+    if getattr(options, "all_computer_gods", False):
+        args.append("--sim-all-computer-gods")
+    if getattr(options, "ai_seed", None) is not None:
+        args += ["--sim-ai-seed", str(options.ai_seed)]
     args += options.extra
     return args
 
@@ -527,6 +534,9 @@ def parse(argv):
                          help="repeat: a frame-rate repeat, with the frame setting of each run in turn, as "
                               "'10,17,20:1' (the frame time in ms, and after a colon the draw every); only the synced "
                               "worlds must agree")
+        sub.add_argument("--all-computer-gods", action="store_true",
+                         help="every god with a citadel is a computer god, also the god of this computer (the AI soak)")
+        sub.add_argument("--ai-seed", type=int, help="the seed of the personalities of the computer gods (the AI soak)")
         sub.add_argument("--network-game", action="store_true",
                          help="play the world as a network game does: no pause, and the turns read no part of a frame")
         sub.add_argument("extra", nargs="*", help="more arguments for the game, after --")

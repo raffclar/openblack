@@ -14,10 +14,14 @@
 #include <cstdio>
 
 #include <algorithm>
+#include <filesystem>
 #include <string>
 #include <string_view>
 
 #include <gtest/gtest.h>
+#include <spdlog/spdlog.h>
+
+#include "Locator.h"
 
 namespace
 {
@@ -55,11 +59,32 @@ std::string FilterForSource(const std::string& source)
 	return filter;
 }
 
+/// Gives each test suite the state of a new program.
+/// A suite can leave a service, a logger or a folder behind. The suites after it must not see it, in any order.
+class FreshStateListener final: public testing::EmptyTestEventListener
+{
+public:
+	void OnTestProgramStart(const testing::UnitTest& /*unit*/) override { _folder = std::filesystem::current_path(); }
+
+	void OnTestSuiteEnd(const testing::TestSuite& /*suite*/) override
+	{
+		using openblack::Locator;
+#include "locator_resets.inc"
+		spdlog::drop_all();
+		std::error_code error;
+		std::filesystem::current_path(_folder, error);
+	}
+
+private:
+	std::filesystem::path _folder;
+};
+
 } // namespace
 
 int main(int argc, char** argv)
 {
 	testing::InitGoogleTest(&argc, argv);
+	testing::UnitTest::GetInstance()->listeners().Append(new FreshStateListener);
 	std::string source;
 	for (int i = 1; i < argc; ++i)
 	{

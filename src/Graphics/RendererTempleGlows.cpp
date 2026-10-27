@@ -67,7 +67,8 @@ void Renderer::DrawTempleExitGlow(const DrawSceneDesc& desc) const
 		return;
 	}
 	using namespace ecs::components;
-	const auto& registry = Locator::entitiesRegistry::value();
+	// The rooms and their cones are things of the temple's rooms
+	const auto& registry = Locator::temple::value().GetRooms();
 	// The sheet is in the main room's space. Its texture drifts with the room's spot lights' textures, a step for each
 	// of the room's cones.
 	glm::mat4 model {1.0f};

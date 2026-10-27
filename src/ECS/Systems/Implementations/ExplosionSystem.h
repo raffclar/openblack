@@ -35,6 +35,7 @@ public:
 	void CollectDrawFrame(particles::draw::Frame& frame) const override;
 	void AddGhost(const components::DestructionGhost& ghost) override { _ghosts.push_back(ghost); }
 	[[nodiscard]] std::span<const components::DestructionGhost> Ghosts() const override { return _ghosts; }
+	[[nodiscard]] std::span<const GroundMark> GroundMarks() const override { return _marks; }
 	void Reset() override;
 	void SaveState(reflection::BinaryWriter& out) const override;
 	bool LoadState(reflection::BinaryReader& in) override;
@@ -43,6 +44,7 @@ private:
 	std::vector<camera_shake::Shake> _shakes;
 	std::vector<dust_puff::Puff> _puffs;
 	std::vector<components::DestructionGhost> _ghosts;
+	std::vector<GroundMark> _marks;
 	/// Not in the save: a pile is a mark that only this computer draws
 	std::vector<roots_pile::Pile> _piles;
 };

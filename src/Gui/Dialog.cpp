@@ -112,6 +112,19 @@ void Dialog::SetTabLabel(size_t index, std::u16string label)
 	}
 }
 
+std::vector<DialogRect> Dialog::GetVisibleRects() const
+{
+	std::vector<DialogRect> rects;
+	for (const auto& control : _controls)
+	{
+		if (control->visible)
+		{
+			rects.push_back(control->rect);
+		}
+	}
+	return rects;
+}
+
 std::vector<Dialog::NamedControl> Dialog::GetNamedControls() const
 {
 	std::vector<NamedControl> named;

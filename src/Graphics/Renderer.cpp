@@ -119,6 +119,8 @@
 #include "ECS/Components/VillagerPose.h"
 #include "ECS/Components/Vortex.h"
 #include "ECS/Components/Weather.h"
+#include "ECS/DrawnPlace.h"
+#include "ECS/DrawnRegistry.h"
 #include "ECS/MovingShadowCasters.h"
 #include "ECS/PosedModel.h"
 #include "ECS/Registry.h"
@@ -649,6 +651,7 @@ Renderer::~Renderer() noexcept
 {
 	_offscreenShots.reset();
 	_creatureSkins.clear();
+	_roomCreatureSkins.clear();
 	_spareCreatureSkins.clear();
 	_animalBoneTexture.reset();
 	_handSkins.clear();
@@ -849,6 +852,16 @@ float CreatureLandLightScale(RenderPass viewId)
 	           : 1.0f;
 }
 
+/// Whether the ring of an order is of the player of this computer, who holds the leash of the creature. Only that player
+/// sees the ring.
+bool IsOwnLeashMarker(const ecs::Registry& registry, const ecs::components::LeashMarker& marker)
+{
+	const auto* leashes =
+	    registry.Valid(marker.creature) ? registry.TryGet<const ecs::components::CreatureLeash>(marker.creature) : nullptr;
+	const auto own = Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer() : PlayerNames::PLAYER_ONE;
+	return leashes != nullptr && leashes->worn.has_value() && leashes->worn->holder == own;
+}
+
 /// Whether the game mirrors a creature's body in the sea this frame (see creature_reflection). The block under the
 /// creature is tested against the main camera's view. Its box reaches below the water when the land is mirrored.
 bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
@@ -859,7 +872,9 @@ bool CreatureMirrored(entt::entity entity, glm::vec3 position, float fizz)
 	}
 	const auto& players = Locator::playerSystem::value();
 	creature_reflection::Situation situation {
-	    .primaryCreature = players.GetPrimaryCreature(players.GetLocalPlayer()) == entity,
+	    .primaryCreature =
+	        players.GetPrimaryCreature((Locator::handSystem::has_value() ? Locator::handSystem::value().GetOwnPlayer()
+	                                                                     : PlayerNames::PLAYER_ONE)) == entity,
 	    .height = position.y,
 	    .fizz = fizz,
 	};
@@ -2406,7 +2421,8 @@ void Renderer::DrawMistDomes(const DrawSceneDesc& desc) const
 	using namespace ecs::components;
 	const auto& temple = Locator::temple::value();
 	const auto* shader = _shaderManager->GetShader("Beam");
-	const auto& registry = Locator::entitiesRegistry::value();
+	// The mists are things of the temple's rooms
+	const auto& registry = temple.GetRooms();
 	const auto& textures = Locator::resources::value().GetTextures();
 	const auto smoke = entt::hashed_string("raw/smoke");
 	const auto smokeAlpha = entt::hashed_string("raw/smokea");
@@ -2479,7 +2495,8 @@ void Renderer::DrawLightBeams(const DrawSceneDesc& desc) const
 	const auto& temple = Locator::temple::value();
 	const auto inDrawnRoom = [&temple](TempleRoom room) { return temple.IsRoomDrawn(room); };
 	const auto* beamShader = _shaderManager->GetShader("Beam");
-	const auto& registry = Locator::entitiesRegistry::value();
+	// The cones and the rooms are things of the temple's rooms
+	const auto& registry = temple.GetRooms();
 	auto& resources = Locator::resources::value();
 
 	bgfx::VertexLayout layout;
@@ -3090,6 +3107,11 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 		}
 	};
 	const auto& farVillagers = Locator::rendereringSystem::value().GetContext().farVillagers;
+	// Room for the most quads the frame can make: two for each villager, each far villager and each foot of an animal
+	const auto& animalDraws = Locator::rendereringSystem::value().GetContext().animalDraws;
+	vertices.reserve(ground_blobs::k_Indices.size() *
+	                 ((2 * (desc.entities.Size<ecs::components::Villager>() + farVillagers.size())) +
+	                  (ground_blobs::k_MostAnimalFeet * animalDraws.size())));
 	const auto isFar = [&farVillagers](entt::entity entity) {
 		const auto found = std::ranges::lower_bound(farVillagers, entity, {}, &RenderContext::FarVillager::entity);
 		return found != farVillagers.end() && found->entity == entity;
@@ -3098,8 +3120,10 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	// to be drawn a wider one from where it stands, as if the land there were flat
 	// A villager a script draws in high detail casts none: it lays its shadow on the land instead (GroundShadow)
 	desc.entities.Each<const ecs::components::Villager, const ecs::components::Transform, const ecs::components::Mesh>(
-	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& transform,
+	    [&](entt::entity entity, const ecs::components::Villager& /*villager*/, const ecs::components::Transform& placed,
 	        const ecs::components::Mesh& mesh) {
+		    // A villager in a creature's hand is where the frame draws the hand
+		    const auto transform = ecs::drawn_place::DrawnTransformOf(desc.entities, entity, placed);
 		    if (transform.position.y <= ground_blobs::k_LowestHeight || !meshes.Contains(mesh.id) || isFar(entity))
 		    {
 			    return;
@@ -3133,7 +3157,7 @@ void Renderer::DrawGroundBlobs(const DrawSceneDesc& desc) const
 	    entt::exclude<ecs::components::AtHome, ecs::components::HiddenByState, ecs::components::HighDetail>);
 	// Every animal drawn out of the sea casts one from each foot that its model gives, on the land beneath that foot.
 	// The model gives each foot as a point on a bone, in the space of that bone.
-	for (const auto& [entity, meshId, model] : Locator::rendereringSystem::value().GetContext().animalDraws)
+	for (const auto& [entity, meshId, model] : animalDraws)
 	{
 		const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(entity);
 		if (transform == nullptr || model[3].y <= ground_blobs::k_LowestHeight || !meshes.Contains(meshId))
@@ -4310,17 +4334,16 @@ const Texture2D& Renderer::GetLandColour() const
 	return Locator::terrainSystem::value().GetCellColourMap();
 }
 
-void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
+void Renderer::UploadCreatureSkins(const ecs::Registry& entities, std::unordered_map<entt::entity, CreatureSkins>& skins) const
 {
 	std::vector<entt::entity> seen;
-	drawDesc.entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity,
-	                                                                const ecs::components::CreatureSkin& skin) {
+	entities.Each<const ecs::components::CreatureSkin>([&](entt::entity entity, const ecs::components::CreatureSkin& skin) {
 		if (skin.skins.empty())
 		{
 			return;
 		}
 		seen.push_back(entity);
-		auto& entry = _creatureSkins[entity];
+		auto& entry = skins[entity];
 		if (entry.revision == skin.revision && entry.textures.size() == skin.skins.size())
 		{
 			return;
@@ -4355,7 +4378,7 @@ void Renderer::UploadCreatureSkins(const DrawSceneDesc& drawDesc) const
 	});
 	// The skins of creatures no longer about go, looked up sorted rather than one by one through every creature's
 	std::ranges::sort(seen);
-	std::erase_if(_creatureSkins, [this, &seen](auto& entry) {
+	std::erase_if(skins, [this, &seen](auto& entry) {
 		if (std::ranges::binary_search(seen, entry.first))
 		{
 			return false;
@@ -5877,7 +5900,12 @@ void Renderer::DrawScene(const DrawSceneDesc& drawDesc) const noexcept
 	// A warm-up gives no creature a skin texture: each creature gets them in its first frame
 	if (!_warmingUp)
 	{
-		UploadCreatureSkins(drawDesc);
+		UploadCreatureSkins(drawDesc.entities, _creatureSkins);
+		// The copy of the creature in the temple's creature room has a skin of its own
+		if (Locator::temple::has_value())
+		{
+			UploadCreatureSkins(Locator::temple::value().GetRooms(), _roomCreatureSkins);
+		}
 	}
 	UploadHandSkins();
 	UploadAnimalBones(drawDesc);
@@ -6766,11 +6794,14 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				// A copy drawn elsewhere looks as its creature does, in a pose of its own
 				const bool copy = drawn.posedBy != entt::null;
 				const auto poser = copy ? drawn.posedBy : entity;
+				// The copy is a thing of the temple's rooms
+				const auto& posers = copy && Locator::temple::has_value() ? Locator::temple::value().GetRooms() : desc.entities;
 				const auto* mesh = desc.entities.TryGet<const ecs::components::Mesh>(entity);
 				const auto* creature = desc.entities.TryGet<const ecs::components::Creature>(entity);
 				const auto* morph = desc.entities.TryGet<const ecs::components::CreatureMorph>(entity);
-				const auto* animation = desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser);
-				if (mesh == nullptr || !meshManager.Contains(mesh->id))
+				const auto* animation =
+				    posers.Valid(poser) ? posers.TryGet<const ecs::components::CreatureAnimation>(poser) : nullptr;
+				if (mesh == nullptr || !meshManager.Contains(mesh->id) || !posers.Valid(poser))
 				{
 					continue;
 				}
@@ -6794,12 +6825,12 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					    .blendSeams = Locator::config::value().blendCreatureSeams,
 					};
 					// A copy with a skin of its own, as the Creature Cave's copy has, shows that skin
-					auto skins = copy ? _creatureSkins.find(poser) : _creatureSkins.end();
-					if (skins == _creatureSkins.end())
+					if (const auto own = copy ? _roomCreatureSkins.find(poser) : _roomCreatureSkins.end();
+					    own != _roomCreatureSkins.end())
 					{
-						skins = _creatureSkins.find(entity);
+						targets->skins = own->second.drawn;
 					}
-					if (skins != _creatureSkins.end())
+					else if (const auto skins = _creatureSkins.find(entity); skins != _creatureSkins.end())
 					{
 						targets->skins = skins->second.drawn;
 					}
@@ -6815,7 +6846,7 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 					continue;
 				}
 				// A copy shows none of its creature's frozen or fizzing look, and is lit by a light of its own
-				const auto* spells = desc.entities.TryGet<const ecs::components::CreatureSpells>(poser);
+				const auto* spells = posers.TryGet<const ecs::components::CreatureSpells>(poser);
 				const float fizz = spells != nullptr ? spells->fizz : 0.0f;
 				submitDesc.modelLight = drawn.light;
 				if (desc.viewId == RenderPass::Reflection)
@@ -6866,22 +6897,26 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				submitDesc.posedModelLight = false;
 				const float freeze = spells != nullptr ? spells->freeze : 0.0f;
-				if (const auto* eyes = desc.entities.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
+				if (const auto* eyes = posers.TryGet<const ecs::components::CreatureEyes>(poser); eyes != nullptr)
 				{
 					DrawCreatureEyes(desc, *eyes, submitDesc, fizz, freeze, eyesSortDepth);
 				}
 				submitDesc.modelLight.reset();
 				// The hair is drawn as it is until the creature has fizzed or frozen a fifth of the way, then not at all
 				// A copy draws the hair of its own, which hangs from its own pose
-				const auto* hair = desc.entities.TryGet<const ecs::components::CreatureHair>(poser);
-				const auto* transform = desc.entities.TryGet<const ecs::components::Transform>(poser);
+				const auto* hair = posers.TryGet<const ecs::components::CreatureHair>(poser);
+				const auto* transform = posers.TryGet<const ecs::components::Transform>(poser);
 				if (creature_fizz_look::HairShown(fizz, freeze) && hair != nullptr && transform != nullptr &&
 				    Locator::creatureHairSystem::value().IsShown())
 				{
-					DrawCreatureHair(desc, *hair, transform->position);
+					// The hair hangs from the body where the frame draws it
+					DrawCreatureHair(desc, *hair,
+					                 ecs::components::DrawnTransform(
+					                     *transform, desc.entities.TryGet<const ecs::components::CreatureAnimation>(poser))
+					                     .position);
 				}
 				// The glows on its body, where its pose put them
-				if (const auto* glows = desc.entities.TryGet<const ecs::components::CreatureHandGlows>(poser);
+				if (const auto* glows = posers.TryGet<const ecs::components::CreatureHandGlows>(poser);
 				    glows != nullptr && transform != nullptr)
 				{
 					DrawCreatureHandGlows(static_cast<uint16_t>(TranslucentView(desc.viewId)), *glows,
@@ -7790,67 +7825,85 @@ void Renderer::DrawPass(const DrawSceneDesc& desc) const
 				}
 				// The sprites name their textures by their ids in the cache
 				const auto& textures = Locator::resources::value().GetTextures();
-				registry.Each<const Sprite, const Transform>(
-				    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &registry, bookmarksShown,
-				     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
-					    if (!bookmarksShown && registry.AllOf<CameraBookmark>(entity))
-					    {
-						    return;
-					    }
-					    if (!leashMarkersShown && registry.AllOf<LeashMarker>(entity))
-					    {
-						    return;
-					    }
-					    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
-					    // alone in its floor
-					    if (const auto* templePart = registry.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
-					    {
-						    const bool inMainRoom = templePart->room == TempleRoom::Main;
-						    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
-						    const bool inReflection = desc.viewId == RenderPass::Reflection;
-						    if ((inReflection ? !inMainRoom : !drawn) ||
-						        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
+				const auto drawSprites = [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin,
+				                          bookmarksShown, leashMarkersShown](const ecs::Registry& from) {
+					from.Each<const Sprite, const Transform>(
+					    [this, &spriteShader, &desc, &textures, translucentViewId, cameraOrigin, &from, bookmarksShown,
+					     leashMarkersShown](entt::entity entity, const Sprite& sprite, const Transform& transform) {
+						    if (!bookmarksShown && from.AllOf<CameraBookmark>(entity))
 						    {
 							    return;
 						    }
-					    }
-					    // A sprite whose texture the cache does not have is not drawn
-					    const auto found =
-					        sprite_textures::FindTextures(sprite, [&textures](entt::id_type id) { return textures.Find(id); });
-					    if (!found.has_value())
-					    {
-						    return;
-					    }
-					    const auto* texture = found->texture;
-					    const auto* alpha = found->alpha;
-					    glm::mat4 modelMatrix = glm::mat4(1.0f);
-					    modelMatrix = glm::translate(modelMatrix, transform.position);
-					    modelMatrix *= glm::mat4(transform.rotation);
-					    modelMatrix = glm::scale(modelMatrix, transform.scale);
+						    if (const auto* marker = from.TryGet<const LeashMarker>(entity);
+						        marker != nullptr && (!leashMarkersShown || !IsOwnLeashMarker(from, *marker)))
+						    {
+							    return;
+						    }
+						    // The temple draws the glows of the rooms it draws whole, and the main room reflects its own glows
+						    // alone in its floor
+						    if (const auto* templePart = from.TryGet<const TempleInteriorPart>(entity); templePart != nullptr)
+						    {
+							    const bool inMainRoom = templePart->room == TempleRoom::Main;
+							    const bool drawn = Locator::temple::value().IsRoomDrawn(templePart->room);
+							    const bool inReflection = desc.viewId == RenderPass::Reflection;
+							    if ((inReflection ? !inMainRoom : !drawn) ||
+							        !detail_level::TempleGlowsShown(Locator::config::value().detail, inReflection))
+							    {
+								    return;
+							    }
+						    }
+						    // A sprite whose texture the cache does not have is not drawn
+						    const auto found = sprite_textures::FindTextures(
+						        sprite, [&textures](entt::id_type id) { return textures.Find(id); });
+						    if (!found.has_value())
+						    {
+							    return;
+						    }
+						    const auto* texture = found->texture;
+						    const auto* alpha = found->alpha;
+						    // A sprite that moves between the turns is drawn at its drawn place
+						    const auto placed = ecs::drawn_place::DrawnTransformOf(from, entity, transform);
+						    glm::mat4 modelMatrix = glm::mat4(1.0f);
+						    modelMatrix = glm::translate(modelMatrix, placed.position);
+						    modelMatrix *= glm::mat4(placed.rotation);
+						    modelMatrix = glm::scale(modelMatrix, placed.scale);
 
-					    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
+						    glm::vec4 u_sampleRect(sprite.uvExtent, sprite.uvMin);
 
-					    bgfx::setTransform(glm::value_ptr(modelMatrix));
-					    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
-					    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
-					                                    sprite.alpha.has_value() ? 1.0f : 0.0f, sprite.additive ? 1.0f : 0.0f,
-					                                    0.0f};
-					    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
-					    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
-					    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
-					    // premultiplied by alpha when the tint is
-					    const auto tint =
-					        sprite.additive ? sprite.tint : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
-					    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
-					    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
+						    bgfx::setTransform(glm::value_ptr(modelMatrix));
+						    spriteShader->SetUniformValue("u_sampleRect", glm::value_ptr(u_sampleRect));
+						    const glm::vec4 u_spriteParams {sprite.facesCamera ? 1.0f : 0.0f,
+						                                    sprite.alpha.has_value() ? 1.0f : 0.0f,
+						                                    sprite.additive ? 1.0f : 0.0f, 0.0f};
+						    spriteShader->SetUniformValue("u_spriteParams", glm::value_ptr(u_spriteParams));
+						    spriteShader->SetTextureSampler("s_alpha", 1, *alpha);
+						    // The shader multiplies the tint by the texture's alpha, which for alpha blending gives colours
+						    // premultiplied by alpha when the tint is
+						    const auto tint = sprite.additive
+						                          ? sprite.tint
+						                          : glm::vec4(glm::vec3(sprite.tint) * sprite.tint.a, sprite.tint.a);
+						    spriteShader->SetUniformValue("u_tint", glm::value_ptr(tint));
+						    spriteShader->SetTextureSampler("s_diffuse", 0, *texture);
 
-					    _plane->GetVertexBuffer().Bind();
+						    _plane->GetVertexBuffer().Bind();
 
-					    bgfx::setState(SpriteState(sprite.additive));
+						    bgfx::setState(SpriteState(sprite.additive));
 
-					    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
-					                         zsort::Depth(transform.position, cameraOrigin));
-				    });
+						    spriteShader->Submit(static_cast<bgfx::ViewId>(translucentViewId),
+						                         zsort::Depth(placed.position, cameraOrigin));
+					    });
+				};
+				// The temple's rooms have sprites of their own: their glows, and the flames and smoke of the creature's room
+				if (Locator::temple::has_value() && Locator::temple::value().Active())
+				{
+					drawSprites(Locator::temple::value().GetRooms());
+				}
+				drawSprites(registry);
+				// The things that only the frames make, as the marks over the disciples, have sprites too
+				if (Locator::drawnRegistry::has_value())
+				{
+					drawSprites(Locator::drawnRegistry::value());
+				}
 				DrawTempleLeashes(desc);
 			}
 		}

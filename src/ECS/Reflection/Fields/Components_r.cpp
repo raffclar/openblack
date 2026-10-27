@@ -64,6 +64,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::Reward::landingPoint>("landingPoint")
 	    .Field<&components::Reward::madeAt>("madeAt")
 	    .Field<&components::Reward::goesIntoMap>("goesIntoMap")
+	    .Field<&components::Reward::drawn>("drawn")
 	    .Field<&components::Reward::dustMilliseconds>("dustMilliseconds")
 	    .Field<&components::Reward::dust>("dust")
 	    .Field<&components::Reward::opened>("opened")
@@ -81,5 +82,7 @@ void openblack::ecs::reflection::RegisterFields_Components_r(entt::meta_ctx& con
 	    .Field<&components::RisingSoul::clip>("clip")
 	    .Field<&components::RisingSoul::timeMs>("timeMs")
 	    .Field<&components::RisingSoul::alpha>("alpha")
-	    .Field<&components::RisingSoul::bones>("bones");
+	    .Field<&components::RisingSoul::bones>("bones")
+	    .Field<&components::RisingSoul::turns>("turns")
+	    .Field<&components::RisingSoul::shownOut>("shownOut");
 }

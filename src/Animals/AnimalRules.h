@@ -46,6 +46,16 @@ namespace openblack::animals
 /// about the way it faces. The models face -z.
 [[nodiscard]] glm::mat3 Orientation(float heading, float bank);
 
+/// Where the frame draws an animal and the heading it draws it with, at a part of the turn (clamped to 0 to 1) between
+/// the places and the headings of its last two turns. The heading turns the short way round.
+struct DrawnBetweenTurns
+{
+	glm::vec3 position;
+	float heading;
+};
+[[nodiscard]] DrawnBetweenTurns DrawnAt(const glm::vec3& previousPosition, const glm::vec3& position, float previousHeading,
+                                        float heading, float turnFraction);
+
 /// A follower's place in its flock's formation, by its place in the flock counted from the leader (1 for the leader,
 /// up to the number of birds for the newest): its row and column of the formation
 struct FormationSlot

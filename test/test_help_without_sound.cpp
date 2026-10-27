@@ -203,6 +203,23 @@ TEST(HelpWithoutSound, ASilentLinePlaysForTheLengthOfItsSample)
 	EXPECT_FALSE(PlaysOn(true, true, playback, 9000));
 }
 
+TEST(HelpWithoutSound, TheScriptsFindAnAdvisorTalkingByTheTurnsOfTheirClock)
+{
+	// Asked at 1000 ms with a delay of 250 ms, the line starts at 1250 ms and lasts 2500 ms, then 200 ms more count
+	const SilentPlayback line {.startMs = 1250, .lengthMs = 2500.0f};
+	EXPECT_TRUE(openblack::audio::TalkingForScripts(line, 1000, 200));
+	EXPECT_TRUE(openblack::audio::TalkingForScripts(line, 1250, 200));
+	EXPECT_TRUE(openblack::audio::TalkingForScripts(line, 3900, 200));
+	EXPECT_FALSE(openblack::audio::TalkingForScripts(line, 3950, 200));
+	// The same at any frame rate: the clock moves on only by whole turns of 100 ms
+	int turnsTalking = 0;
+	for (uint32_t now = 1000; now < 6000; now += 100)
+	{
+		turnsTalking += openblack::audio::TalkingForScripts(line, now, 200) ? 1 : 0;
+	}
+	EXPECT_EQ(turnsTalking, 30);
+}
+
 TEST(HelpWithoutSound, AFixedFrameTimeTimesALineByTheLengthOfItsSample)
 {
 	EXPECT_FALSE(TimedByLength(false, false));
