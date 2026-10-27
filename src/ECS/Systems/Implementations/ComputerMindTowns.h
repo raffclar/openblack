@@ -22,7 +22,7 @@
 #error "Locator interface implementations should only be included in Locator.cpp, use interface instead."
 #endif
 
-/// The town rules of a computer god that the other parts of its mind use
+/// The town rules and the actions for the food and the wood of towns that the other parts of the mind of a computer god use
 namespace openblack::ecs::systems::computer_world
 {
 
@@ -30,5 +30,10 @@ namespace openblack::ecs::systems::computer_world
 /// of the place. With no place, the pull is 1. When the god can cast the miracle, its icon becomes the node's object.
 float ShallCastAt(RuleContext& context, computer_mind::Mind& mind, uint16_t node, MagicType type,
                   const std::optional<map_coords::MapCoords>& place);
+
+/// The hand takes the thing that the chosen leaf found and drops it on the store of the town above the node
+bool DropOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
+/// The god charges the miracle of the node's icon and casts it on the store of the town above the node
+bool CastIconOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
 
 } // namespace openblack::ecs::systems::computer_world

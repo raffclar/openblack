@@ -576,6 +576,16 @@ bool CastOnThing(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
 
 } // namespace
 
+bool computer_world::DropOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return PickUpForTown(context, mind, node);
+}
+
+bool computer_world::CastIconOnTownStore(RuleContext& context, computer_mind::Mind& mind, uint16_t node)
+{
+	return CastFromIcon(context, mind, node);
+}
+
 void computer_world::RegisterTownsRules(RuleTable& table)
 {
 	constexpr auto k_Towns = MindDomain::Towns;

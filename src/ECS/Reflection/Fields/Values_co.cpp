@@ -56,6 +56,7 @@ void openblack::ecs::reflection::RegisterFields_Values_co(entt::meta_ctx& contex
 	    .Field<&openblack::computer_mind::Mind::scriptHold>("scriptHold")
 	    .Field<&openblack::computer_mind::Mind::workedOut>("workedOut")
 	    .Field<&openblack::computer_mind::Mind::castRequested>("castRequested")
+	    .Field<&openblack::computer_mind::Mind::untaughtSends>("untaughtSends")
 	    .Field<&openblack::computer_mind::Mind::queue>("queue")
 	    .Field<&openblack::computer_mind::Mind::scriptHand>("scriptHand");
 	Reflect<openblack::computer_mind::Node>(context, ValueOnly {})

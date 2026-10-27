@@ -1925,3 +1925,11 @@ set_tests_properties(
              "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
 )
 openblack_setup_and_add_test(test_player_kind test_player_kind.cpp)
+openblack_setup_and_add_test(
+  test_oracle_computer_conquest oracle/test_oracle_computer_conquest.cpp
+)
+set_tests_properties(
+  test_oracle_computer_conquest
+  PROPERTIES ENVIRONMENT
+             "OPENBLACK_ORACLE_DATA=${CMAKE_CURRENT_SOURCE_DIR}/oracle/data"
+)

@@ -1169,10 +1169,13 @@ struct ComputerActionThing
 		Icon,
 		/// The scenario's object at the index
 		Object,
+		/// The scenario's creature at the index
+		Creature,
 	};
 	Kind kind {Kind::None};
 	uint32_t townId {0};
 	MagicType type {MagicType::None};
+	/// The index of the scenario's object or creature
 	size_t object {0};
 };
 

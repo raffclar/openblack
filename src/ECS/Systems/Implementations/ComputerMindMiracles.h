@@ -47,6 +47,20 @@ float CompassionateSpell(RuleContext& context, computer_mind::Mind& mind, uint16
 /// - A miracle that impresses the town above the node, at the place where the most people see it.
 float ImpressiveSpell(RuleContext& context, computer_mind::Mind& mind, uint16_t node);
 
+/// The place of a town where a miracle or a thrown thing impresses the most people, and its value
+struct ImpressSpot
+{
+	float value {0.0f};
+	map_coords::MapCoords place;
+};
+/// The best place of the town to impress its people, as seen from the hand. None when the people want to sleep or the
+/// town has no place.
+[[nodiscard]] std::optional<ImpressSpot> TownImpressPlace(entt::entity town, const map_coords::MapCoords& hand);
+/// The place itself when it is in the god's influence, else the nearest point on the edge of the citadel's or a town's
+/// circle. None when the god has no circle.
+[[nodiscard]] std::optional<map_coords::MapCoords> InfluenceEdgeOf(const RuleContext& context,
+                                                                   const map_coords::MapCoords& place);
+
 /// The god has a miracle of the magic type of its own at the place now
 [[nodiscard]] bool OwnCastAt(const RuleContext& context, const map_coords::MapCoords& place, MagicType type);
 
