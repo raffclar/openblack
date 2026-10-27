@@ -411,20 +411,21 @@ std::vector<creature_desires::PhaseDesires> Phases()
 	return phases;
 }
 
-/// How interesting the creature finds its player this turn. The local player's hand is the player's; a creature of
-/// another player, or of none, finds nothing of interest here.
+/// How interesting the creature finds its player this turn: the hand of the player that owns the creature, where the
+/// reports of that player put it. A creature of a player with no hand, or of no player, finds nothing of interest here.
 float PlayerInterestNow(const Creature& creature, CreatureMindState& mind)
 {
-	if (!Locator::handSystem::has_value() || !Locator::playerSystem::has_value() ||
-	    creature.owner != Locator::playerSystem::value().GetLocalPlayer())
+	const auto hands =
+	    Locator::handSystem::has_value() ? Locator::handSystem::value().GetHandsOf(creature.owner) : std::nullopt;
+	if (!hands.has_value())
 	{
 		return creature_desire_sources::InterestNow(mind.playerInterest, std::nullopt, std::nullopt);
 	}
 	const auto& registry = Locator::entitiesRegistry::value();
 	constexpr auto k_Hand = static_cast<size_t>(HandSystemInterface::Side::Left);
-	const auto handEntity = Locator::handSystem::value().GetPlayerHands().at(k_Hand);
+	const auto handEntity = hands->at(k_Hand);
 	// Off the land the hand has no place: it counts as where it last was
-	auto hand = Locator::handSystem::value().GetPlayerHandPositions().at(k_Hand);
+	auto hand = Locator::handSystem::value().GetHandPositionsOf(creature.owner).at(k_Hand);
 	if (!hand.has_value())
 	{
 		hand = mind.playerInterest.lastHand;

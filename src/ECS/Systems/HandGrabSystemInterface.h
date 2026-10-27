@@ -132,12 +132,15 @@ public:
 	/// in radians
 	[[nodiscard]] virtual float GetOfferTurn() const { return 0.0f; }
 
-	/// What the hand holds, none when it holds nothing of its own
+	/// What the hand of this computer holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeld() const = 0;
 	/// What the hand of a player holds, none when it holds nothing of its own
 	[[nodiscard]] virtual std::optional<entt::entity> GetHeldOf(PlayerNames player) const = 0;
-	/// The field, fish farm or pile the hand is locked onto while it scoops from it, none when it scoops from nothing
+	/// The field, fish farm or pile that the hand of this computer scoops from, none when it scoops from nothing
 	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOn() const { return std::nullopt; }
+	/// The field, fish farm or pile that the hand of a player scoops from. The turns read this, because it is the same on
+	/// every computer.
+	[[nodiscard]] virtual std::optional<entt::entity> GetLockedOnOf(PlayerNames /*player*/) const { return std::nullopt; }
 	/// Whether the Action button is down to throw what the hand holds
 	[[nodiscard]] virtual bool IsAboutToThrow() const { return false; }
 	/// Whether the creature under the pointer can take what the hand holds as a gift
