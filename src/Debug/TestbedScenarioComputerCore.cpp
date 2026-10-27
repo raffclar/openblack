@@ -44,4 +44,19 @@ void testbed_scenarios::AddComputerGodCoreScenarios(std::vector<Scenario>& all)
 	    .temples = {{.offset = {0.0f, 90.0f}, .owner = PlayerNames::PLAYER_TWO}},
 	    .landScript = k_ComputerPlayerScript,
 	});
+	all.push_back({
+	    .id = "mind.computer_god_help_hold",
+	    .name = "A computer god that the cinema bars hold",
+	    .facet = Facet::Mind,
+	    .description = "The land of the food miracle scenario. The cinema bars slide in after half a second and slide out "
+	                   "after 30 seconds, as the help and the land scripts do.",
+	    .expected = "While the bars are in, the mind of player two does nothing: the hand of the god stays at its "
+	                "temple, and the players.list query shows no steps. When the bars slide out, the hand moves to the "
+	                "food icon of the site as in the food miracle scenario.",
+	    .framing = {.shot = Shot::Overview, .include = {glm::vec2(-80.0f, -110.0f), glm::vec2(80.0f, 100.0f)}},
+	    .landScript = k_ComputerGodTownScript,
+	    .commands = {{.kind = Command::Kind::WideScreen, .delaySeconds = 0.5f, .value = 1},
+	                 {.kind = Command::Kind::WideScreen, .delaySeconds = 30.0f, .value = 0}},
+	    .worshipShare = 0.5f,
+	});
 }
