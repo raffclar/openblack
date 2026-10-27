@@ -1772,10 +1772,18 @@ void LeashSystem::LetGoOfRope(PlayerNames player, std::optional<glm::vec3> place
 	// TODO(multiplayer): the frame changes the lengths of the leash here; a network game needs a command for it
 	worn->slackLength = lengths.slack;
 	worn->maxLength = lengths.max;
-	// And the creature goes to the place under the hand
+	// And the creature goes to the place under the hand. The turn gives the order on every computer, as it gives the
+	// orders of the taps.
 	if (place.has_value())
 	{
-		OrderAt(player, *place);
+		if (Locator::playerCommandSystem::has_value())
+		{
+			SendOrder({.kind = player_commands::LeashOrder::Kind::AtPlace, .place = *place});
+		}
+		else
+		{
+			OrderAt(player, *place);
+		}
 	}
 }
 
