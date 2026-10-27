@@ -121,6 +121,8 @@ public:
 	[[nodiscard]] virtual bool IsPlaygroundLand(const std::filesystem::path& path) const = 0;
 	/// The map script of the land that loaded last, or the path of the testbed. Empty before a land loads.
 	[[nodiscard]] virtual const std::filesystem::path& GetLandPath() const = 0;
+	/// The land is the testbed. It has no temples, so a developer tool's network game on it asks for none.
+	[[nodiscard]] bool OnTestbed() const { return GetLandPath().string() == k_TestbedLandPath; }
 	/// The landscape file of the land, as the map script of the land gave it
 	[[nodiscard]] virtual const std::filesystem::path& GetLandscapePath() const = 0;
 	/// The challenge file of the scripts

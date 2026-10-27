@@ -123,6 +123,35 @@ TEST(GameEnd, NothingEndsAStoryGame)
 	EXPECT_FALSE(world.gods[k_Two].standing.out);
 }
 
+TEST(GameEnd, AToolRunOnTheTestbedNeedsNoTemple)
+{
+	auto world = TwoHumans();
+	world.gods[k_One].temple = false;
+	world.gods[k_Two].temple = false;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	EXPECT_TRUE(ProcessTurn(world, facts, state).empty());
+	EXPECT_FALSE(state.decided);
+	EXPECT_FALSE(world.gods[k_One].standing.out);
+	EXPECT_FALSE(world.gods[k_Two].standing.out);
+	EXPECT_TRUE(world.gods[k_One].creature);
+}
+
+TEST(GameEnd, AGodThatLeftIsOutEvenWhenNoTempleIsNeeded)
+{
+	auto world = TwoHumans();
+	world.gods[k_Two].standing.out = true;
+	world.gods[k_Two].standing.reason = OutReason::Left;
+	State state;
+	Facts facts = k_Network;
+	facts.templesNeeded = false;
+	const auto events = ProcessTurn(world, facts, state);
+	ASSERT_EQ(events.size(), 1u);
+	EXPECT_EQ(events[0].kind, Event::Kind::GodOutAndDecided);
+	EXPECT_EQ(events[0].god, k_Two);
+}
+
 TEST(GameEnd, TheLastGodWithATempleDecidesTheGame)
 {
 	auto world = TwoHumans();
