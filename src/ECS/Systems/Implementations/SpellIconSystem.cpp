@@ -699,15 +699,9 @@ bool SpellIconSystem::StartChargeForGod(entt::entity icon, PlayerNames player)
 {
 	auto& registry = Entities();
 	auto* component = registry.Valid(icon) ? registry.TryGet<WorshipIcon>(icon) : nullptr;
-	if (component == nullptr || component->charging || HeldSeedOf(*component) != entt::null ||
-	    !Locator::infoConstants::has_value())
-	{
-		return false;
-	}
-	const auto& info = Locator::infoConstants::value();
-	const auto plain =
-	    magic::GetMagicTypeFromPowerUpLevel(magic::GetSpellSeedInfo(info, component->seed), magic::k_BasePowerUpLevel);
-	if (!IsEnabled(player, plain))
+	// Only an icon that charges already refuses the god. A seed of the icon in a hand does not stop the charge, and the
+	// god asked only for a miracle that it may cast.
+	if (component == nullptr || component->charging)
 	{
 		return false;
 	}

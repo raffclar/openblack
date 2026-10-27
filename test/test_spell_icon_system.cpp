@@ -377,6 +377,37 @@ TEST_F(GodChargeTest, AnIconThatIsNotFullOnlyStartsToCharge)
 	EXPECT_EQ(_system.ChantNeeded(icon), 60.0f);
 }
 
+// A seed of the icon in the hand of the god does not stop the charge, but the icon gives no second seed
+TEST_F(GodChargeTest, ASeedOfTheIconInTheHandDoesNotStopTheCharge)
+{
+	auto& registry = Entities();
+	const auto icon = IdleIcon(PlayerNames::PLAYER_ONE, 100.0f);
+	const auto seed = registry.Create();
+	registry.Assign<SpellSeed>(seed, SpellSeed {.seedType = SpellSeedType::Heal, .player = PlayerNames::PLAYER_ONE});
+	registry.Get<WorshipIcon>(icon).seedsOut.push_back(seed);
+	_magic->held = seed;
+	_magic->heldBy = PlayerNames::PLAYER_ONE;
+	ASSERT_TRUE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_ONE));
+	const auto& after = Entities().Get<const WorshipIcon>(icon);
+	EXPECT_TRUE(after.charging);
+	EXPECT_TRUE(_magic->taken.empty());
+	EXPECT_EQ(after.store, 100.0f);
+	EXPECT_EQ(after.seedsOut.size(), 1u);
+}
+
+// The charge does not ask if the god may cast the miracle: the wish of the god asked that before
+TEST_F(GodChargeTest, TheChargeStartsAlsoForAMiracleThatTheGodMayNotCast)
+{
+	auto& registry = Entities();
+	const auto icon = IdleIcon(PlayerNames::PLAYER_TWO, 40.0f);
+	registry.Each<Player>(
+	    [](Player& player) { player_miracles::SetMagicTypeEnabled(player.miracles, MagicType::Heal, false); });
+	ASSERT_TRUE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_TWO));
+	EXPECT_TRUE(Entities().Get<const WorshipIcon>(icon).charging);
+	// An icon that charges already refuses the god
+	EXPECT_FALSE(_system.StartChargeForGod(icon, PlayerNames::PLAYER_TWO));
+}
+
 // The cast of a god takes the cost of the miracle from the store of the icon, and never more than the store holds
 TEST_F(GodChargeTest, ACastTakesTheCostButNeverMoreThanTheStore)
 {
