@@ -403,7 +403,28 @@ class AiLog(unittest.TestCase):
         result = sim_report.ai_actions_in_text(self.LINES[:2])
         self.assertEqual(result["gods"], [1, 2])
         self.assertFalse(result["acted"])
-        self.assertEqual(result["per_god"]["1"], {"needs": {}, "hand": {}, "casts": {}})
+        self.assertEqual(result["per_god"]["1"], {"needs": {}, "actions": {}, "hand": {}, "casts": {}, "feedback": {},
+                                                  "leash_ties": 0})
+
+    def test_the_log_tells_the_actions_the_feedback_and_the_leashes_of_each_god(self):
+        lines = self.LINES[:2] + [
+            "[game] Computer god 2 chooses need TeachCreature for action SlapCreature",
+            "[game] Computer god 2 chooses need TeachCreature for action StrokeCreature",
+            "[game] Computer god 2 chooses need TeachCreature for action SlapCreature",
+            "[game] Computer god 2 gives creature 40 the feedback -0.5",
+            "[game] Computer god 2 gives creature 40 the feedback 0.25",
+            "[game] Computer god 1 ties the leash of creature 12 to 30: true",
+        ]
+        result = sim_report.ai_actions_in_text(lines)
+        self.assertEqual(result["per_god"]["2"]["needs"], {"TeachCreature": 3})
+        self.assertEqual(result["per_god"]["2"]["actions"], {"SlapCreature": 2, "StrokeCreature": 1})
+        self.assertEqual(result["per_god"]["2"]["feedback"], {"bad": 1, "good": 1})
+        self.assertEqual(result["per_god"]["1"]["leash_ties"], 1)
+        self.assertTrue(result["acted"])
+
+    def test_a_need_line_of_an_older_build_counts_no_action(self):
+        result = sim_report.ai_actions_in_text(self.LINES)
+        self.assertEqual(result["per_god"]["1"]["actions"], {})
 
     def test_a_missing_log_tells_of_no_god(self):
         self.assertEqual(sim_report.ai_actions_in_file("no/such/file.log")["gods"], [])

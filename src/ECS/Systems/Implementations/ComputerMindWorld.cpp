@@ -82,7 +82,8 @@ std::optional<uint16_t> NeedOf(const computer_mind::Mind& mind, uint16_t node)
 	return std::nullopt;
 }
 
-/// Writes the need that the god chose to the log. The check tools count these lines for each god.
+/// Writes the need that the god chose and the action that starts for it to the log. The check tools count these lines
+/// for each god and for each kind of action.
 void LogNeed(PlayerNames player, const computer_mind::Mind& mind, uint16_t node)
 {
 	const auto logger = spdlog::get("game");
@@ -91,8 +92,8 @@ void LogNeed(PlayerNames player, const computer_mind::Mind& mind, uint16_t node)
 	{
 		return;
 	}
-	SPDLOG_LOGGER_INFO(logger, "Computer god {} chooses need {}", static_cast<int>(player),
-	                   computer_mind::InfoOf(mind.nodes[*need].kind).name);
+	SPDLOG_LOGGER_INFO(logger, "Computer god {} chooses need {} for action {}", static_cast<int>(player),
+	                   computer_mind::InfoOf(mind.nodes[*need].kind).name, computer_mind::InfoOf(mind.nodes[node].kind).name);
 }
 
 } // namespace

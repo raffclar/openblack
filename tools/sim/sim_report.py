@@ -137,23 +137,34 @@ def missing_deeds(deeds, expected):
 # What the log says of the computer gods (the AI soak). The server and the clients write these lines:
 #   Made creature <id> of species <n> for the computer god <god> at <x>, <z>   (the start of a computer god)
 #   The computer god <god> starts with the personality of AI seed <seed>
-#   Computer god <god> chooses need <name>                                     (a need that the mind chose)
+#   Computer god <god> chooses need <name> for action <action>                 (a need that the mind chose, and the
+#                                                                              action that starts for it)
 #   Computer god <god> casts <miracle>                                         (a miracle that the god cast)
+#   Computer god <god> gives creature <id> the feedback <value>                (a slap or a stroke of the god)
+#   Computer god <god> ties the leash of creature <id> to <id>: <tied>         (a leash of the god)
 # and the "Hand deed" lines of the hand of the god. A god number counts from 0, as the hand deeds do.
 COMPUTER_GOD_START = re.compile(r"for the computer god (\d+)|The computer god (\d+) starts with the personality")
-COMPUTER_GOD_NEED = re.compile(r"Computer god (\d+) chooses need (\S+)")
+COMPUTER_GOD_NEED = re.compile(r"Computer god (\d+) chooses need (\S+)(?: for action (\S+))?")
 COMPUTER_GOD_CAST = re.compile(r"Computer god (\d+) casts (\S+)")
+COMPUTER_GOD_FEEDBACK = re.compile(r"Computer god (\d+) gives creature \d+ the feedback (-?[0-9.]+)")
+COMPUTER_GOD_LEASH = re.compile(r"Computer god (\d+) ties the leash of creature \d+ to \d+: (\w+)")
 
 
 def ai_actions_in_text(lines):
     """What the computer gods did, as the log lines tell: {"gods": [god numbers], "per_god": {god: {"needs": {name:
-    count}, "hand": {deed: count}, "casts": {miracle: count}}}, "acted": whether any god did anything}"""
+    count}, "actions": {action: count}, "hand": {deed: count}, "casts": {miracle: count}, "feedback": {"good": count,
+    "bad": count}, "leash_ties": count}}, "acted": whether any god did anything}. A log of an older build has no action
+    in its need lines, so its "actions" stay empty."""
     lines = list(lines)
     gods = set()
     per_god = {}
 
     def entry(god):
-        return per_god.setdefault(god, {"needs": {}, "hand": {}, "casts": {}})
+        return per_god.setdefault(god, {"needs": {}, "actions": {}, "hand": {}, "casts": {}, "feedback": {},
+                                        "leash_ties": 0})
+
+    def add(counts, name):
+        counts[name] = counts.get(name, 0) + 1
 
     for line in lines:
         match = COMPUTER_GOD_START.search(line)
@@ -161,19 +172,26 @@ def ai_actions_in_text(lines):
             gods.add(int(match.group(1) or match.group(2)))
         match = COMPUTER_GOD_NEED.search(line)
         if match is not None:
-            needs = entry(int(match.group(1)))["needs"]
-            needs[match.group(2)] = needs.get(match.group(2), 0) + 1
+            add(entry(int(match.group(1)))["needs"], match.group(2))
+            if match.group(3) is not None:
+                add(entry(int(match.group(1)))["actions"], match.group(3))
         match = COMPUTER_GOD_CAST.search(line)
         if match is not None:
-            casts = entry(int(match.group(1)))["casts"]
-            casts[match.group(2)] = casts.get(match.group(2), 0) + 1
+            add(entry(int(match.group(1)))["casts"], match.group(2))
+        match = COMPUTER_GOD_FEEDBACK.search(line)
+        if match is not None:
+            add(entry(int(match.group(1)))["feedback"], "good" if float(match.group(2)) >= 0.0 else "bad")
+        match = COMPUTER_GOD_LEASH.search(line)
+        if match is not None:
+            entry(int(match.group(1)))["leash_ties"] += 1
     # The hand deeds of the computer gods only: a human god's hand is not the mind's
     for god, deeds in hand_deeds_in_text(lines).items():
         if god in gods:
             entry(god)["hand"] = deeds
     for god in gods:
         entry(god)
-    acted = any(item["needs"] or item["hand"] or item["casts"] for item in per_god.values())
+    acted = any(item["needs"] or item["hand"] or item["casts"] or item["feedback"] or item["leash_ties"]
+                for item in per_god.values())
     return {"gods": sorted(gods), "per_god": {str(god): per_god[god] for god in sorted(per_god)}, "acted": acted}
 
 
