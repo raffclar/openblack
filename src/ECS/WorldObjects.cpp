@@ -903,8 +903,8 @@ void world_objects::Remove(entt::entity object)
 	registry.SetDirty();
 }
 
-void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, bool byCreature,
-                               std::optional<guidance::TownAttackVoice> cry)
+void world_objects::AttackTown(entt::entity object, float damage, PlayerNames aggressor, const town_aggression::Harm& harm,
+                               bool byCreature, std::optional<guidance::TownAttackVoice> cry)
 {
 	if (!Locator::infoConstants::has_value())
 	{
@@ -970,7 +970,8 @@ void world_objects::AttackTown(entt::entity object, float damage, PlayerNames ag
 	}
 	const bool owner = registry.Get<const Town>(town).owner == aggressor;
 	const uint32_t turn = Locator::time::has_value() ? static_cast<uint32_t>(Locator::time::value().GetTurn()) : 0;
-	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn);
+	ecs::town_aggression::Attacked(aggression->record, aggressor, owner, amount, info.town.firstTimeDamageDoneAddition, turn,
+	                               harm);
 	// The advisors of the player at this machine may remark on the player attacking a town
 	if (Locator::guidanceSystem::has_value())
 	{

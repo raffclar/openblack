@@ -13,6 +13,7 @@
 
 #include <map>
 #include <optional>
+#include <set>
 #include <vector>
 
 #include <entt/entity/entity.hpp>
@@ -63,6 +64,14 @@ public:
 		cast.push_back(type);
 		return castWorks;
 	}
+	bool CastAt(MagicType type, glm::vec3 place, entt::entity /*icon*/, glm::vec3 /*hand*/, float magnitude) override
+	{
+		cast.push_back(type);
+		castAt.push_back(place);
+		magnitudes.push_back(magnitude);
+		return castWorks;
+	}
+	[[nodiscard]] bool UnderSpell(entt::entity creature) const override { return creature == underSpell; }
 	[[nodiscard]] float CastSeconds(MagicType /*type*/) const override { return 0.5f; }
 	[[nodiscard]] uint32_t SeedGesture(MagicType /*type*/, int32_t stage) const override { return stage == 0 ? 1 : 9; }
 	[[nodiscard]] float GestureLength(uint32_t gesture) const override { return gesture == k_GestureCircle ? 2.0f : 1.0f; }
@@ -102,8 +111,53 @@ public:
 		thrownFrom.push_back(hand);
 		thrownAt.push_back(velocity);
 	}
+	bool ForceAction(entt::entity creature, uint32_t action, entt::entity object) override
+	{
+		if (!speeds.contains(creature))
+		{
+			return false;
+		}
+		ordered.push_back({creature, action, object});
+		forced.insert(creature);
+		return true;
+	}
+	[[nodiscard]] bool PlanForced(entt::entity creature) const override { return forced.contains(creature); }
+	void ForceDominantDesire(entt::entity creature, int32_t desire, float seconds) override
+	{
+		dominant.push_back({creature, desire, seconds});
+	}
+	[[nodiscard]] std::optional<CreatureSpeeds> SpeedsOf(entt::entity creature) const override
+	{
+		const auto found = speeds.find(creature);
+		return found != speeds.end() ? std::optional(found->second) : std::nullopt;
+	}
+	void DrawForShortJourney() override { ++shortJourneyDraws; }
+	void SetRequiredSpeed(entt::entity creature, float speed) override { required[creature] = speed; }
+
+	/// An order that the god gave to a creature, and a desire that it made dominant
+	struct Order
+	{
+		entt::entity creature {entt::null};
+		uint32_t action {0};
+		entt::entity object {entt::null};
+	};
+	struct Dominant
+	{
+		entt::entity creature {entt::null};
+		int32_t desire {0};
+		float seconds {0.0f};
+	};
+	std::map<entt::entity, CreatureSpeeds> speeds;
+	std::vector<Order> ordered;
+	std::set<entt::entity> forced;
+	std::vector<Dominant> dominant;
+	int shortJourneyDraws {0};
+	std::map<entt::entity, float> required;
 
 	std::map<entt::entity, glm::vec2> places;
+	std::vector<glm::vec3> castAt;
+	std::vector<float> magnitudes;
+	entt::entity underSpell {entt::null};
 	float influenceBorder {1.0e9f};
 	std::vector<glm::vec3> thrownFrom;
 	std::vector<glm::vec3> thrownAt;
