@@ -141,6 +141,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -1942,6 +1943,23 @@ std::string Runner::GiveLeashCommand(entt::entity creature, const Command& comma
 			return leashes.TieTo(creature, *object) ? "tied" : "can't";
 		}
 		return "it is gone";
+	case Kind::TieLeashToDesireFlag:
+	{
+		auto& registry = Locator::entitiesRegistry::value();
+		std::optional<entt::entity> found;
+		registry.Each<const ecs::components::TownDesireFlag>(
+		    [&](entt::entity flag, const ecs::components::TownDesireFlag& shown) {
+			    if (!found.has_value() && static_cast<size_t>(shown.desire) == command.value)
+			    {
+				    found = flag;
+			    }
+		    });
+		if (!found.has_value())
+		{
+			return "no flag";
+		}
+		return leashes.TieTo(creature, *found) ? "tied" : "can't";
+	}
 	case Kind::LeashOrderAt:
 	{
 		const auto point = MapPoint(_middle, command.point);
@@ -3501,6 +3519,7 @@ void Runner::Give(const Command& command)
 		break;
 	case Kind::PutOnLeash:
 	case Kind::TieLeash:
+	case Kind::TieLeashToDesireFlag:
 	case Kind::UntieLeash:
 	case Kind::TakeOffLeash:
 	case Kind::ConfineToHome:

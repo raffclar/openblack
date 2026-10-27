@@ -10964,7 +10964,7 @@ std::string_view testbed_scenarios::Name(Shot shot)
 
 std::string_view testbed_scenarios::Name(Command::Kind kind)
 {
-	constexpr std::array<std::string_view, 182> k_Names {
+	constexpr std::array<std::string_view, 183> k_Names {
 	    "walk to",
 	    "run to",
 	    "follow",
@@ -11003,6 +11003,7 @@ std::string_view testbed_scenarios::Name(Command::Kind kind)
 	    "hand lets go",
 	    "put on leash",
 	    "tie leash to",
+	    "tie leash to desire flag",
 	    "untie leash",
 	    "take off leash",
 	    "keep at home",

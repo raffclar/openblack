@@ -42,11 +42,13 @@
 #include "Creature/CreatureDevelopment.h"
 #include "Creature/CreatureHelp.h"
 #include "Creature/CreatureLayers.h"
+#include "Creature/CreatureMindTables.h"
 #include "Creature/CreatureMorph.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureRoute.h"
 #include "Creature/CreatureSaveState.h"
 #include "Creature/CreatureTeleportAgendas.h"
+#include "Creature/CreatureTownCompassion.h"
 #include "Creature/LeashKeys.h"
 #include "Creature/LeashOrders.h"
 #include "Creature/LeashOwnership.h"
@@ -79,6 +81,7 @@
 #include "ECS/Components/TeleportStone.h"
 #include "ECS/Components/Temple.h"
 #include "ECS/Components/Town.h"
+#include "ECS/Components/TownDesireFlag.h"
 #include "ECS/Components/Transform.h"
 #include "ECS/Components/VillageTotem.h"
 #include "ECS/Components/Villager.h"
@@ -801,8 +804,18 @@ bool LeashSystem::Carry(PlayerNames player, entt::entity creature, const leash::
 		TakeOff(creature);
 		return true;
 	case Kind::UntieToHand:
+	{
+		// Only the leash key frees the creature from the desire of a town's desire flag that the leash was tied to
+		auto& registry = Locator::entitiesRegistry::value();
+		const auto tied = TiedTo(creature);
+		if (auto* mind = MindOf(registry, creature);
+		    mind != nullptr && tied.has_value() && registry.Valid(*tied) && registry.AllOf<TownDesireFlag>(*tied))
+		{
+			creature_town_compassion::UntiedFromFlag(mind->townCompassion);
+		}
 		UntieToHand(creature);
 		return true;
+	}
 	case Kind::ChangeType:
 		return PlayerCanChangeType(creature) && ChangeType(creature, command.type);
 	}
@@ -954,6 +967,15 @@ bool LeashSystem::TieTo(entt::entity creature, entt::entity object)
 		    .lessons = leash::LessonsFor(worn.type, isCreature),
 		});
 		mind->leash.actOn.push_back(static_cast<uint32_t>(object));
+		// Tied to a town's desire flag, the creature helps the town with the desire of that flag
+		const auto* flag = registry.TryGet<const TownDesireFlag>(object);
+		const auto* tables =
+		    Locator::creatureMindSystem::has_value() ? Locator::creatureMindSystem::value().GetTables() : nullptr;
+		if (flag != nullptr && tables != nullptr)
+		{
+			creature_town_compassion::TiedToFlag(mind->townCompassion, static_cast<uint32_t>(flag->desire),
+			                                     tables->townActions);
+		}
 	}
 	return true;
 }
