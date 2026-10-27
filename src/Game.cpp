@@ -3047,6 +3047,8 @@ bool Game::StartTurnsBesideDraw()
 	if (!loop.turnThread)
 	{
 		loop.turnThread = std::make_unique<SideThread>();
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The turns play on their own thread, beside the end of the draw of the frame "
+		                                        "before (deviation row 153)");
 	}
 	// The turns read the camera of the game, not the camera that the inspector shows
 	ShowInspectorCamera(false);

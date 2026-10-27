@@ -581,7 +581,7 @@ std::optional<std::string> SimProvider::StartRecord(const std::filesystem::path&
 	// The times so far are not the record's
 	[[maybe_unused]] const auto before = Locator::simulation::value().TakeTimings();
 	// The record keeps the synced part of the world at the end of each turn that it records
-	_synced.reset();
+	_synced.clear();
 	Locator::simulation::value().SetTurnEndWatcher([this](uint32_t turn) { TurnEnded(turn); });
 	auto start = State();
 	start["type"] = "start";
@@ -598,7 +598,7 @@ void SimProvider::StopRecord()
 	{
 		Locator::simulation::value().SetTurnEndWatcher({});
 	}
-	_synced.reset();
+	_synced.clear();
 	if (_sink != nullptr)
 	{
 		spdlog::apply_all([this](const std::shared_ptr<spdlog::logger>& logger) {
@@ -673,7 +673,7 @@ void SimProvider::TurnEnded(uint32_t turn)
 	{
 		value["parts"] = std::move(parts);
 	}
-	_synced = Synced {.turn = turn, .value = std::move(value)};
+	_synced.push_back(Synced {.turn = turn, .value = std::move(value)});
 }
 
 bool SimProvider::Keep(const sim_checks::Flag& flag)
@@ -743,12 +743,19 @@ void SimProvider::Frame(uint64_t frame)
 		record["seeds"] = {seeds.synced, seeds.local};
 		record["draws"] = random.GetSyncedDraws();
 	}
-	// The synced part of the world at the end of the turn, which the frame rate must not change
-	if (_synced.has_value() && _synced->turn == turn)
+	// The synced part of the world at the end of the turn, which the frame rate must not change. A turn that ended
+	// before the turn of this record gets a line of its own, so that each recorded turn keeps its synced part
+	for (auto& synced : _synced)
 	{
-		record["synced"] = std::move(_synced->value);
-		_synced.reset();
+		if (synced.turn == turn)
+		{
+			record["synced"] = std::move(synced.value);
+			continue;
+		}
+		const Json line = {{"type", "synced"}, {"turn", synced.turn}, {"frame", frame}, {"synced", std::move(synced.value)}};
+		*_out << Dump(line) << '\n';
 	}
+	_synced.clear();
 	record["flags"] = std::move(problems);
 	*_out << Dump(record) << '\n';
 	_out->flush();
