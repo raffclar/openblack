@@ -11,9 +11,11 @@
 
 #include "AudioManager.h"
 
+#include <charconv>
 #include <cmath>
 
 #include <algorithm>
+#include <array>
 #include <exception>
 #include <filesystem>
 #include <fstream>
@@ -179,6 +181,18 @@ void LogNotStarted([[maybe_unused]] const Sound& sound, [[maybe_unused]] const g
 {
 	SPDLOG_LOGGER_DEBUG(spdlog::get("audio"), "Sound {} at ({}, {}, {}) not started at turn {}: {}", sound.name, position.x,
 	                    position.y, position.z, LogTurn(), why);
+}
+
+/// The id of a sample of an animation effect: the hash of its bank's name, a slash and its number. Many villagers ask for
+/// one every frame, so the name is made without a format.
+[[nodiscard]] entt::id_type AnimEffectSampleId(std::string_view bankName, int32_t sample)
+{
+	std::array<char, 12> number {};
+	const auto* written = std::to_chars(number.data(), number.data() + number.size(), sample).ptr;
+	std::string name;
+	name.reserve(bankName.size() + 1 + static_cast<size_t>(written - number.data()));
+	name.append(bankName).append(1, '/').append(number.data(), written);
+	return entt::hashed_string::value(name.data(), name.size());
 }
 
 /// The wave format tag of MPEG sample data
@@ -856,7 +870,7 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 		return {};
 	}
 	const auto sample = samples[Locator::rng::value().NextValue<size_t>(0, samples.size() - 1)];
-	const auto id = entt::hashed_string(fmt::format("{}/{}", bankName, sample).c_str()).value();
+	const auto id = AnimEffectSampleId(bankName, sample);
 	auto& sounds = Locator::resources::value().GetSounds();
 	if (!sounds.Contains(id))
 	{
@@ -876,9 +890,11 @@ AnimEffectPlay AudioManager::PlayAnimEffect(const std::string& bankName, std::sp
 	const auto distance = AnimEffectDistance(GetListener().origin, position, measure);
 	if (!IsAnimEffectWithinReach(distance, sound->maxDistance))
 	{
-		LogNotStarted(*sound, position,
-		              fmt::format("{:.1f} m from the listener, beyond its {} m or the {} m limit", distance, sound->maxDistance,
-		                          k_AnimEffectHearingLimit));
+		SPDLOG_LOGGER_DEBUG(spdlog::get("audio"),
+		                    "Sound {} at ({}, {}, {}) not started at turn {}: {:.1f} m from the listener, beyond its {} m or "
+		                    "the {} m limit",
+		                    sound->name, position.x, position.y, position.z, LogTurn(), distance, sound->maxDistance,
+		                    k_AnimEffectHearingLimit);
 		return {.outcome = AnimEffectPlay::Outcome::TooFar, .emitter = entt::null, .sample = sample};
 	}
 
@@ -913,7 +929,7 @@ void AudioManager::EndAnimEffect(const std::string& bankName, std::span<const in
 	auto& sounds = Locator::resources::value().GetSounds();
 	for (const auto sample : effects->second.Find(keys))
 	{
-		const auto id = entt::hashed_string(fmt::format("{}/{}", bankName, sample).c_str()).value();
+		const auto id = AnimEffectSampleId(bankName, sample);
 		if (!sounds.Contains(id))
 		{
 			continue;
