@@ -100,7 +100,7 @@ void SkySystem::UpdateFrame(bool skyDrawn)
 	        .ticks = machine_clock::Ticks(),
 	        .landLight = FrameLandLightInputs(),
 	        .palette = palette,
-	        .fog = graphics::detail_level::Fog(Locator::config::value().detailLevel),
+	        .fog = Locator::config::value().detail.fog,
 	    },
 	    dome, registry.Get<Sun>(_entities.sun), registry.Get<Moon>(_entities.moon));
 	sky_frame::AdvanceDome(dome, GetCurrentSkyType(), skyDrawn);

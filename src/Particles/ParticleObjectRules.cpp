@@ -23,6 +23,7 @@
 
 #include <ParticleFile.h>
 
+#include "Common/PortableMath.h"
 #include "ParticleArchive.h"
 #include "ParticleClassRegistry.h"
 #include "ParticleEffect.h"
@@ -106,6 +107,13 @@ struct EmitterState
 	float owed {0.0f};
 	int emitted {0};
 	glm::vec3 point {0.0f};
+
+	/// Gives each field to a visitor, so that a save writes only the bytes of the fields
+	template <typename Visitor>
+	static void VisitPlainFields(const EmitterState& self, Visitor&& visit)
+	{
+		visit(self.owed, self.emitted, self.point);
+	}
 };
 
 /// Atoms let out at random points of the model of the object the collection's parent atom is kept on, at the most
@@ -169,7 +177,8 @@ public:
 			const float age = effect.AtomAge(atom);
 			if (_doScaling)
 			{
-				const float pulse = std::max(0.0f, std::cos(age * _pulseSpeed * k_TwoPi) * _pulseMagnitude * 0.5f + 1.0f);
+				const float pulse =
+				    std::max(0.0f, openblack::portable_math::Cos(age * _pulseSpeed * k_TwoPi) * _pulseMagnitude * 0.5f + 1.0f);
 				const float ramp =
 				    age < _ageMaxSize ? age / _ageMaxSize : 1.0f - (age - _ageMaxSize) / (_ageZeroSize - _ageMaxSize);
 				atom.ruleScale = std::clamp(ramp, 0.0f, 1.0f) * pulse;

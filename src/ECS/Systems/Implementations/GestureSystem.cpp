@@ -22,6 +22,7 @@
 #include <spdlog/spdlog.h>
 
 #include "3D/LandIslandInterface.h"
+#include "Commands/PlayerCommands.h"
 #include "Creature/LeashRules.h"
 #include "ECS/Components/CreatureFight.h"
 #include "ECS/Components/CreatureLeash.h"
@@ -35,12 +36,16 @@
 #include "ECS/Systems/MagicSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
 #include "ECS/Systems/ParticleSystemInterface.h"
+#include "ECS/Systems/PlayerCommandSystemInterface.h"
+#include "ECS/Systems/SpellIconSystemInterface.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Gestures/GestureTrailBuilder.h"
+#include "Help/HelpProfile.h"
 #include "InfoConstants.h"
 #include "Locator.h"
 #include "Magic/MagicTables.h"
 #include "Resources/ResourcesInterface.h"
+#include "ScriptHeaders/ScriptStart.h"
 
 using namespace openblack;
 using namespace openblack::ecs::systems;
@@ -51,11 +56,17 @@ namespace
 /// The game's templates in the resource caches
 constexpr auto k_TemplatesId = entt::hashed_string("gestures/templates");
 
-/// The kinds of script that a single player game starts by name
-constexpr auto k_SinglePlayerScripts = static_cast<lhvm::ScriptType>(0x7f);
-
 /// How long a recognised gesture shows in the debug window
 constexpr float k_RecognisedShownSeconds = 10.0f;
+
+/// The help counts an event, if the help is there
+void Help(uint32_t event)
+{
+	if (Locator::helpProfileSystem::has_value())
+	{
+		Locator::helpProfileSystem::value().Trigger(event);
+	}
+}
 
 /// A scribble shakes the hand: the shake sound plays and a band flies off the hand
 void ShakeHand()
@@ -63,6 +74,28 @@ void ShakeHand()
 	if (Locator::miracleFxSystem::has_value())
 	{
 		Locator::miracleFxSystem::value().HandShaken();
+	}
+}
+
+/// Whether a gesture may ask the player's icons for the miracle of a seed
+bool Requestable(PlayerNames player, SpellSeedType seed)
+{
+	return Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().ValidForRequest(player, seed);
+}
+
+/// The seed of the last miracle that went into the player's hand
+SpellSeedType LastSeedGained(PlayerNames player)
+{
+	return Locator::spellIconSystem::has_value() ? Locator::spellIconSystem::value().LastSeedGained(player)
+	                                             : SpellSeedType::None;
+}
+
+/// The request for a miracle goes as a command: the icon gives the miracle at the start of a later turn
+void SendRequest(player_commands::Action request)
+{
+	if (Locator::playerCommandSystem::has_value())
+	{
+		Locator::playerCommandSystem::value().Submit(std::move(request));
 	}
 }
 
@@ -120,6 +153,7 @@ void GestureSystem::Reset()
 	_drawing.clear();
 	_picker.Close();
 	_seedTurnedOnLand = false;
+	_selection.Close();
 	_circleSeconds = 0.0f;
 	_circleSeed = entt::null;
 	_lastRecognised.reset();
@@ -223,10 +257,10 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 	if (!seedEntity.has_value() && Locator::handGrabSystem::has_value())
 	{
 		const auto& hand = Locator::handGrabSystem::value();
-		context.holdingObject = hand.GetHeld().has_value();
+		context.holdingObject = hand.GetHeldOf(player).has_value();
 		if (context.holdingObject)
 		{
-			context.inInfluence = hand.IsInInfluence();
+			context.inInfluence = hand.IsInInfluenceOf(player);
 		}
 	}
 	// A circle is remembered for the seed it was drawn for
@@ -290,6 +324,28 @@ gesture::HandContext GestureSystem::ContextOf(const Frame& frame)
 		const auto& globals = Locator::entitiesRegistry::value().Context();
 		context.hiddenScriptLand = globals.mapScriptGlobals.landNumber == 1 && !globals.skirmish;
 	}
+
+	// The miracle selection, and what the player's icons offer to the gestures that open it or call a miracle again
+	if (info != nullptr)
+	{
+		context.ownSelectionGesture = info->spellSystem.selectionSystemGestureNonCreature;
+		context.creatureSelectionGesture = info->spellSystem.selectionSystemGestureCreature;
+		context.repeatGesture = info->spellSystem.selectionSystemGestureR;
+	}
+	if (Locator::spellIconSystem::has_value())
+	{
+		const auto& icons = Locator::spellIconSystem::value();
+		context.handReady = icons.IsHandReady(player);
+		context.ownSelectionOffered = !icons.SeedsForSelection(player, context.ownSelectionGesture).empty();
+		context.creatureSelectionOffered = !icons.SeedsForSelection(player, context.creatureSelectionGesture).empty();
+		context.lastSeed = LastSeedGained(player);
+		context.repeatOffered = icons.ValidForRequest(player, context.lastSeed);
+	}
+	if (_selection.IsOpen())
+	{
+		context.selection =
+		    gesture::HandContext::Selection {.openedWith = _selection.OpenedWith(), .waiting = _selection.Waiting()};
+	}
 	return context;
 }
 
@@ -318,11 +374,13 @@ void GestureSystem::Update(const Frame& frame)
 	    Locator::infoConstants::has_value() ? Locator::infoConstants::value().spellSystem.leashSelectionSystemTimeOut : 25.0f;
 	_picker.Update(frame.seconds, timeout, leashed);
 	context.pickerOpen = _picker.open;
+	StepSelection(context, frame);
 	_requests = gesture::Requests(context);
 	RefreshHints();
-	// The chain follows the hand while it powers up the miracle in it, or holds one that a circle sizes. Once a miracle
-	// did its first turn in the hand on this land, the chain follows the hand while it holds any miracle.
-	_gesturing = gesture::ChainFollows(context.seed, _seedTurnedOnLand);
+	// The chain follows the hand while it powers up the miracle in it, holds one that a circle sizes, or draws the
+	// gestures of the open selection. Once a miracle did its first turn in the hand on this land, or the selection
+	// opened on this land, the chain follows the hand while it holds any miracle.
+	_gesturing = _selection.IsOpen() || gesture::ChainFollows(context.seed, _seedTurnedOnLand);
 
 	// Moving the camera wipes the path being drawn, though not while the camera shakes. The fight view that shows a
 	// fight in its arena, and the camera that follows the creature, let the player draw on while they move.
@@ -382,20 +440,134 @@ void GestureSystem::Update(const Frame& frame)
 		return;
 	}
 	const auto keys = _recorder.KeyPoints();
-	for (const auto& request : _requests)
+	auto requests = _requests;
+	size_t next = 0;
+	while (next < requests.size())
 	{
-		if (const auto match = gesture::Recognise(templates, request.gesture, keys, _screenAspect))
+		const auto request = requests.at(next++);
+		const auto match = gesture::Recognise(templates, request.gesture, keys, _screenAspect);
+		if (!match.has_value())
 		{
-			// The help counts some gestures, from what the hand held as the player drew them
-			if (const auto event = gesture::HelpEventOf(request, context);
-			    event.has_value() && Locator::helpProfileSystem::has_value())
-			{
-				Locator::helpProfileSystem::value().Trigger(*event);
-			}
-			Act(request, *match, frame);
+			continue;
+		}
+		// The help counts some gestures, from what the hand held as the player drew them
+		if (const auto event = gesture::HelpEventOf(request, context); event.has_value())
+		{
+			Help(*event);
+		}
+		if (Act(request, *match, frame))
+		{
 			break;
 		}
+		// A gesture of the selection that matched no miracle does nothing. The selection waits for no more of its
+		// gestures this frame, and the hand tries the other gestures as it is now.
+		std::vector<gesture::Request> rest;
+		for (const auto& other : gesture::Requests(ContextOf(frame)))
+		{
+			if (other.purpose != Purpose::SelectMiracle && other.purpose != Purpose::CloseSelection)
+			{
+				rest.push_back(other);
+			}
+		}
+		requests = std::move(rest);
+		next = 0;
 	}
+}
+
+void GestureSystem::StepSelection(gesture::HandContext& context, const Frame& frame)
+{
+	if (!_selection.IsOpen())
+	{
+		return;
+	}
+	// The selection does its step only while the hand draws over the world, and not while the creature takes fight
+	// moves or the hand powers up its miracle
+	const bool fightMoves = context.creature.has_value() && context.creature->takesFightMoves;
+	const bool poweringUp = context.seed.has_value() && context.seed->ready && !context.seed->cast && context.seed->canPowerUp;
+	if (frame.moveHeldInFight || (!frame.overWorld && _drawing.empty()) || fightMoves || poweringUp)
+	{
+		return;
+	}
+	// Without space in the hand, the selection closes
+	if (!context.handReady)
+	{
+		_selection.Close();
+		context.selection.reset();
+		return;
+	}
+	// Time passes. When the time is up, the selection still waits for its gestures this frame, but the other gestures
+	// act as if it were closed.
+	const float timeout =
+	    Locator::infoConstants::has_value() ? Locator::infoConstants::value().spellSystem.selectionSystemTimeOut : 30.0f;
+	_selection.Update(frame.seconds, timeout);
+	if (context.selection.has_value())
+	{
+		context.selection->open = _selection.IsOpen();
+		// With no gesture to wait for, the selection closes and does nothing more this frame
+		if (context.selection->waiting.empty())
+		{
+			_selection.Close();
+			context.selection.reset();
+		}
+	}
+}
+
+bool GestureSystem::OpenSelection(GestureType opening, PlayerNames player)
+{
+	if (!Locator::spellIconSystem::has_value() || !Locator::infoConstants::has_value() || opening == GestureType::None)
+	{
+		return false;
+	}
+	const auto& info = Locator::infoConstants::value();
+	std::vector<gesture::SelectionOffer> offers;
+	for (const auto seed : Locator::spellIconSystem::value().SeedsForSelection(player, opening))
+	{
+		const auto& seedInfo = magic::GetSpellSeedInfo(info, seed);
+		offers.push_back({.seed = seed, .chain = {seedInfo.selectionGesture, seedInfo.gesture, seedInfo.gestureStage2}});
+	}
+	if (!_selection.Open(opening, offers))
+	{
+		return false;
+	}
+	for (const auto& offer : offers)
+	{
+		SPDLOG_LOGGER_INFO(spdlog::get("game"), "The miracle selection offers seed {} for gesture {}",
+		                   static_cast<int>(offer.seed), gesture::Name(offer.chain.at(1)));
+	}
+	// The selection closes the leash picker. From now on this land, the chain also follows every miracle in the hand.
+	_picker.Close();
+	_seedTurnedOnLand = true;
+	return true;
+}
+
+bool GestureSystem::OpenSelectionByKey(PlayerNames player)
+{
+	const bool handReady = Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsHandReady(player);
+	if (_selection.IsOpen() && !handReady)
+	{
+		_selection.Close();
+	}
+	if (_selection.IsOpen() || !handReady || !Locator::infoConstants::has_value())
+	{
+		return false;
+	}
+	return OpenSelection(Locator::infoConstants::value().spellSystem.selectionSystemGestureNonCreature, player);
+}
+
+bool GestureSystem::RepeatMiracleByKey(PlayerNames player)
+{
+	const bool handReady = Locator::spellIconSystem::has_value() && Locator::spellIconSystem::value().IsHandReady(player);
+	if (_selection.IsOpen() && !handReady)
+	{
+		_selection.Close();
+	}
+	if (_selection.IsOpen() || !handReady || !Requestable(player, LastSeedGained(player)))
+	{
+		return false;
+	}
+	// No help and no trail, as for the R gesture
+	SendRequest(player_commands::MiracleRepeat {});
+	return true;
 }
 
 void GestureSystem::LayTrail(GestureType gesture, const gesture::Match& match, const Frame& frame) const
@@ -441,7 +613,7 @@ void GestureSystem::ShowGestureOnLand(GestureType gesture, glm::vec3 corner, flo
 	    std::make_shared<particles::GestureTrail>(gesture::LandGestureTrail(*symbol, corner, size, landHeight)));
 }
 
-void GestureSystem::Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame)
+bool GestureSystem::Act(const gesture::Request& request, const gesture::Match& match, const Frame& frame)
 {
 	const auto box = gesture::GestureBox(_recorder, match);
 	const auto handAt = _recorder.Empty() ? glm::vec3(0.0f) : _recorder.At(_recorder.Count() - 1).world;
@@ -449,11 +621,68 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	                   gesture::Name(request.purpose), match.templateIndex, match.mirrored ? " mirrored" : "");
 	_lastRecognised = Recognised {.request = request, .match = match, .box = box, .number = ++_recognisedCount};
 
+	// The gestures of the selection act first: what they do decides whether the trail shows and the hand rests
+	bool shown = gesture::ShowsRecognition(request.purpose);
+	bool forgets = true;
+	std::optional<player_commands::Action> requested;
+	switch (request.purpose)
+	{
+	case Purpose::OpenSelection:
+		// A selection that has nothing to offer stays closed, and the hand keeps its path
+		if (OpenSelection(request.gesture, frame.player))
+		{
+			Help(help::profile::k_GestureOpenSelection);
+		}
+		else
+		{
+			shown = false;
+			forgets = false;
+		}
+		break;
+	case Purpose::SelectMiracle:
+	{
+		const auto outcome =
+		    _selection.Recognised(request.gesture, [&frame](SpellSeedType seed) { return Requestable(frame.player, seed); });
+		if (outcome.kind == gesture::MiracleSelection::Outcome::Kind::Unmatched)
+		{
+			SPDLOG_LOGGER_INFO(spdlog::get("game"), "Gesture {} matched no miracle of the selection",
+			                   gesture::Name(request.gesture));
+			_requests = gesture::Requests(ContextOf(frame));
+			return false;
+		}
+		Help(help::profile::k_GestureSelectionStep);
+		if (outcome.kind == gesture::MiracleSelection::Outcome::Kind::Chosen)
+		{
+			Help(help::profile::k_GestureSelectionChosen);
+			requested = player_commands::MiracleRequest {.seed = outcome.seed};
+		}
+		break;
+	}
+	case Purpose::CloseSelection:
+		ShakeHand();
+		_selection.Close();
+		Help(help::profile::k_GestureCloseSelection);
+		break;
+	case Purpose::RepeatMiracle:
+		Help(help::profile::k_GestureRepeatMiracle);
+		requested = player_commands::MiracleRepeat {};
+		break;
+	default:
+		break;
+	}
+
 	// Every gesture but a scribble leaves its trail on the land, heard as it appears, once enough of its path lies on
 	// the land
-	if (gesture::ShowsRecognition(request.purpose))
+	if (shown)
 	{
 		LayTrail(request.gesture, match, frame);
+	}
+
+	// The request goes as a command. At the turn, the icon of the miracle gives it, or starts to charge it, if it
+	// still may.
+	if (requested.has_value())
+	{
+		SendRequest(std::move(*requested));
 	}
 
 	auto* leashes = Locator::leashSystem::has_value() ? &Locator::leashSystem::value() : nullptr;
@@ -492,43 +721,43 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		_events.push_back({.kind = GestureEvent::Kind::Scribble, .gesture = request.gesture, .centre = handAt});
 		break;
 	case Purpose::ShakeOffLeash:
+		// The hand shakes, and the leash key command takes the held leash off at the turn
 		ShakeHand();
-		if (leashes != nullptr)
+		if (creature.has_value() && leashes->IsLeashed(*creature) && !leashes->TiedTo(*creature).has_value())
 		{
-			leashes->Shake(frame.player);
+			SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 		}
 		break;
 	case Purpose::ShakeOffHeld:
-		// The hand shakes and lets go of it where it is, never planted again
+		// The hand shakes, and at the turn it lets go of the thing where it is, never planted again
 		ShakeHand();
-		if (Locator::handGrabSystem::has_value())
-		{
-			Locator::handGrabSystem::value().ForceDrop();
-		}
+		SendRequest(player_commands::HandShakeOff {});
 		break;
 	case Purpose::LeashGesture:
 		if (creature.has_value())
 		{
-			// An unleashed creature has the leash put on; knowing more than one, it may then be changed
+			// The leash key command puts the leash on an unleashed creature at the turn. A creature that knows more than one
+			// leash opens the picker at once, so that the player can change the leash.
 			if (!leashes->IsLeashed(*creature))
 			{
-				leashes->Toggle(*creature);
+				SendRequest(player_commands::LeashKey {.key = creature_leash::LeashKey::Leash});
 			}
 			int known = 0;
 			for (const auto type : creature_leash::k_Types)
 			{
 				known += leashes->Knows(*creature, type) ? 1 : 0;
 			}
-			if (known > 1 && leashes->IsLeashed(*creature))
+			if (known > 1)
 			{
 				_picker.Open();
 			}
 		}
 		break;
 	case Purpose::PickLeash:
+		// The command changes the leash at the turn
 		if (creature.has_value())
 		{
-			leashes->PickType(frame.player, request.leash);
+			SendRequest(player_commands::LeashPick {.type = request.leash});
 		}
 		_picker.Close();
 		break;
@@ -552,8 +781,13 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 		// Each square wave starts the script again. The script itself finds the phone box that it made before.
 		if (Locator::vm::has_value())
 		{
-			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), k_SinglePlayerScripts);
+			Locator::vm::value().StartScript(std::string(gesture::k_HiddenScript), script::start::StartableScripts());
 		}
+		break;
+	case Purpose::OpenSelection:
+	case Purpose::SelectMiracle:
+	case Purpose::CloseSelection:
+	case Purpose::RepeatMiracle:
 		break;
 	}
 
@@ -567,12 +801,16 @@ void GestureSystem::Act(const gesture::Request& request, const gesture::Match& m
 	}
 
 	// The hand forgets the path. After most gestures, the hand also stops for a short time.
-	ForgetPath();
-	if (gesture::RestsAfter(request.purpose))
+	if (forgets)
 	{
-		_pause = gesture::k_RecognisedPauseSeconds;
+		ForgetPath();
+		if (gesture::RestsAfter(request.purpose))
+		{
+			_pause = gesture::k_RecognisedPauseSeconds;
+		}
 	}
 	_requests = gesture::Requests(ContextOf(frame));
+	return true;
 }
 
 void GestureSystem::RefreshHints()

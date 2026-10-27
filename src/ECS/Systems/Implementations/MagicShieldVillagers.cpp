@@ -27,6 +27,7 @@
 #include "3D/MapCoords.h"
 #include "Common/GUtilsDistance.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableMath.h"
 #include "ECS/Components/AtHome.h"
 #include "ECS/Components/LivingAction.h"
 #include "ECS/Components/LivingReaction.h"
@@ -209,6 +210,8 @@ void MagicShieldSystem::RemoveReactions(entt::entity object, Reaction type)
 			ids.push_back(id);
 		}
 	}
+	// In the order of their numbers: the order of the map is different on each C++ library
+	std::ranges::sort(ids);
 	for (const auto id : ids)
 	{
 		RemoveReaction(id, true);
@@ -533,10 +536,11 @@ void MagicShieldSystem::StartReacting(entt::entity villager, uint32_t id)
 		// With nowhere to hide it runs from where the shield stood, then looks back there in panic
 		const auto& row = RowOf(reaction.type);
 		const auto away = at - centre;
-		const float angle = std::atan2(away.y, away.x) + random.GameFloatRand(k_FleeTurnRange) - (k_FleeTurnRange * 0.5f);
+		const float angle =
+		    portable_math::Atan2(away.y, away.x) + random.GameFloatRand(k_FleeTurnRange) - (k_FleeTurnRange * 0.5f);
 		const float distance = row.minDistanceToRunAwayFromObject +
 		                       random.GameFloatRand(row.maxDistanceToRunAwayFromObject - row.minDistanceToRunAwayFromObject);
-		ecs::villager_home::SetupMoveTo(action, at + glm::vec2(std::cos(angle), std::sin(angle)) * distance,
+		ecs::villager_home::SetupMoveTo(action, at + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * distance,
 		                                VillagerStates::PanicReaction);
 		ecs::villager_cover::SetPanicPoint(villager, centre);
 		return;

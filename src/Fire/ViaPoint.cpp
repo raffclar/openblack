@@ -11,6 +11,8 @@
 
 #include <cmath>
 
+#include "Common/PortableMath.h"
+
 using namespace openblack;
 
 fire::ViaPoint fire::GetViaPoint(const map_coords::MapCoords& from, const map_coords::MapCoords& to,
@@ -54,13 +56,13 @@ fire::ViaPoint fire::GetViaPoint(const map_coords::MapCoords& from, const map_co
 	{
 		result.point.x = map_coords::FtoL((-c * uzn - s * uxn) * reach + static_cast<float>(centre.x));
 		result.point.z = map_coords::FtoL((c * uxn - s * uzn) * reach + static_cast<float>(centre.z));
-		angle = -std::acos(dot);
+		angle = -portable_math::Acos(dot);
 	}
 	else
 	{
 		result.point.x = map_coords::FtoL((c * uzn - s * uxn) * reach + static_cast<float>(centre.x));
 		result.point.z = map_coords::FtoL((-c * uxn - s * uzn) * reach + static_cast<float>(centre.z));
-		angle = std::acos(dot);
+		angle = portable_math::Acos(dot);
 	}
 	result.detour = true;
 	const auto ex = static_cast<float>(to.x - centre.x);

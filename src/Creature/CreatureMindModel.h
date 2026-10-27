@@ -18,6 +18,7 @@
 #include <optional>
 #include <span>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <MindFile.h>
@@ -165,5 +166,13 @@ void DrawAsSourcesAreRead(const creaturemind::MindFileData& file,
 [[nodiscard]] creaturemind::MindFileData ToFile(const creature_desires::Desires& desires, const Learnt& learnt,
                                                 uint32_t developmentPhase, float attitudeToPlayer, uint32_t turnsLookedAt,
                                                 uint32_t speciesRow);
+
+/// The name that the game writes as the maker of a mind file when no human player at this computer owns the creature
+inline constexpr std::string_view k_NoPlayerFile = "Graeme";
+
+/// Writes into a mind file who saved it, as the game does at each save. The first name is the creature file of the
+/// human player at this computer who owns the creature, or k_NoPlayerFile when there is no such player. The second name
+/// is the profile played at this computer, whoever owns the creature.
+void SetSavedBy(creaturemind::MindFileData& file, std::optional<std::string_view> ownerFile, std::u16string_view profile);
 
 } // namespace openblack::creature_mind_model

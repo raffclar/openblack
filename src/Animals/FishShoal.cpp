@@ -16,6 +16,8 @@
 
 #include <glm/geometric.hpp>
 
+#include "Common/PortableMath.h"
+
 namespace openblack::fish_shoal
 {
 namespace
@@ -47,7 +49,7 @@ std::optional<glm::vec2> FindCentre(glm::vec2 farm, const std::function<bool(glm
 		for (uint32_t direction = 0; direction < k_RingDirections; ++direction)
 		{
 			const float angle = static_cast<float>(direction) * k_TwoPi * (1.0f / static_cast<float>(k_RingDirections));
-			const glm::vec2 point = farm + glm::vec2(std::cos(angle), std::sin(angle)) * radius;
+			const glm::vec2 point = farm + glm::vec2(portable_math::Cos(angle), portable_math::Sin(angle)) * radius;
 			if (!isOpenSea(point))
 			{
 				runs.at(direction) = 0;
@@ -133,8 +135,8 @@ void StepFish(Fish& fish, glm::vec3 target, float seconds)
 	              static_cast<float>(k_FrameCount - 1);
 
 	// It swims on the way it faces, never up or down
-	const float cosine = std::cos(fish.heading);
-	const float sine = std::sin(fish.heading);
+	const float cosine = portable_math::Cos(fish.heading);
+	const float sine = portable_math::Sin(fish.heading);
 	fish.position.x += cosine * fish.speed * step * factor;
 	fish.position.z += sine * fish.speed * step * factor;
 
@@ -165,7 +167,8 @@ void Step(Shoal& shoal, float seconds, std::optional<glm::vec3> scare, const Ran
 	if (scare.has_value())
 	{
 		const float angle = random(0.0f, k_TwoPi);
-		shoal.target = shoal.centre + glm::vec3(std::cos(angle), 0.0f, std::sin(angle)) * k_ScaredTargetDistance;
+		shoal.target =
+		    shoal.centre + glm::vec3(portable_math::Cos(angle), 0.0f, portable_math::Sin(angle)) * k_ScaredTargetDistance;
 	}
 	const auto shown = ShownCount(shoal.fullness);
 	for (uint32_t i = 0; i < shown; ++i)
@@ -179,7 +182,7 @@ void Step(Shoal& shoal, float seconds, std::optional<glm::vec3> scare, const Ran
 				// It darts straight away from what scared it
 				fish.panic = k_PanicSeconds;
 				shoal.retargetSeconds = k_PanicSeconds;
-				fish.heading = std::atan2(away.z, away.x);
+				fish.heading = portable_math::Atan2(away.z, away.x);
 			}
 		}
 		StepFish(fish, shoal.target, seconds);
@@ -197,8 +200,8 @@ bool HasShownFishNear(const Shoal& shoal, glm::vec2 point)
 
 std::array<glm::vec3, 4> Corners(const Fish& fish)
 {
-	const float cosine = std::cos(fish.heading);
-	const float sine = std::sin(fish.heading);
+	const float cosine = portable_math::Cos(fish.heading);
+	const float sine = portable_math::Sin(fish.heading);
 	// Along the way it swims, and across it
 	const glm::vec3 along = glm::vec3(cosine, 0.0f, sine) * fish.size;
 	const glm::vec3 across = glm::vec3(-sine, 0.0f, cosine) * fish.size;

@@ -58,6 +58,7 @@ public:
 	[[nodiscard]] std::span<const entt::entity> GetOffBlocks() const override;
 
 	void Sync() override;
+	void FileMade() override;
 	void Refile(entt::entity entity) override;
 	void FileResidents() override;
 	[[nodiscard]] bool InMap(entt::entity entity) const override;
@@ -80,8 +81,8 @@ private:
 	void OnGone(entt::registry& registry, entt::entity entity);
 	void OnResidentGone(entt::registry& registry, entt::entity entity);
 
-	/// Files the things made since the last look, in the order they were made
-	void FileMade() const;
+	/// Files the things made since the last look, in the order they were made. The lookups do it before they look.
+	void FileMadeBeforeLook() const;
 	/// Gives the lists the land's blocks, before anything goes on them
 	void KnowLandBlocks() const;
 	void File(entt::entity entity, const Kind& kind) const;

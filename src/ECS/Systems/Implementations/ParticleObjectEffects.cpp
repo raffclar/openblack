@@ -19,6 +19,7 @@
 #include <LNDFile.h>
 #include <glm/geometric.hpp>
 #include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/euler_angles.hpp>
 #include <spdlog/spdlog.h>
 
 #include "3D/L3DMesh.h"
@@ -254,8 +255,8 @@ void GameObjectEffects::AddRubbleMark(glm::vec3 centre)
 {
 	if (Locator::explosionSystem::has_value() && Locator::gameRandom::has_value())
 	{
-		Locator::explosionSystem::value().AddRubble(centre, Locator::gameRandom::value().LocalFloatRand(k_TwoPi),
-		                                            particles::blast::k_RubbleScale);
+		const float yaw = Locator::gameRandom::value().LocalFloatRand(k_TwoPi);
+		Locator::explosionSystem::value().AddRubble(centre, glm::mat3(glm::eulerAngleY(yaw)), particles::blast::k_RubbleScale);
 	}
 }
 

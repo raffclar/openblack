@@ -52,6 +52,8 @@
 #include "Audio/HelpSpeech.h"
 #include "CHLApi.h"
 #include "Common/BufferedLogSink.h"
+#include "Common/GameRandom.h"
+#include "Common/RandomNumberManager.h"
 #include "Common/StringUtils.h"
 #include "Creature/CreatureRig.h"
 #include "Creature/CreatureSkin.h"
@@ -66,6 +68,7 @@
 #include "ECS/Map.h"
 #include "ECS/Registry.h"
 #include "ECS/Systems/AdvisorSystemInterface.h"
+#include "ECS/Systems/ComputerPlayerSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "ECS/Systems/CreatureSkinSystemInterface.h"
 #include "ECS/Systems/DialogueControlSystemInterface.h"
@@ -73,9 +76,11 @@
 #include "ECS/Systems/HelpTextSystemInterface.h"
 #include "ECS/Systems/LandSystemInterface.h"
 #include "ECS/Systems/MiracleFxSystemInterface.h"
+#include "ECS/Systems/ParticleSystemInterface.h"
 #include "ECS/Systems/PlayerProfileSystemInterface.h"
 #include "ECS/Systems/PlayerSystemInterface.h"
 #include "ECS/Systems/ProfileFolderSystemInterface.h"
+#include "ECS/Systems/ReactionSystemInterface.h"
 #include "ECS/Systems/SkySystemInterface.h"
 #include "ECS/Systems/TattooEditorSystemInterface.h"
 #include "ECS/Systems/TimeSystemInterface.h"
@@ -290,7 +295,7 @@ bool RegisterWorldData(WorldDataViewInterface& view)
 			    // At the lowest detail the rooms are built from their low meshes, which have no light maps. Only one of
 			    // the two is loaded: both together are more meshes than the renderer holds.
 			    const auto stem = f.stem().string();
-			    const bool lightmaps = graphics::detail_level::For(config.detailLevel).templeLightmaps;
+			    const bool lightmaps = config.detail.templeLightmaps;
 			    const auto lowMesh = f.parent_path() / (temple_room_meshes::LowName(stem) + f.extension().string());
 			    const auto name = temple_room_meshes::LoadedName(stem, lightmaps, fileSystem.Exists(lowMesh));
 			    if (!name.has_value())
@@ -955,7 +960,7 @@ void LoadCreatureSkinArt()
 		              .oldDamageAlpha = data / "damage_old256A.raw",
 		              .palette = data / "tattoocols.raw",
 		              .pictures = Locator::tattooEditorSystem::value().GetPictures(),
-		              .lowDetail = graphics::detail_level::For(Locator::config::value().detailLevel).lowResTextures,
+		              .lowDetail = Locator::config::value().detail.lowResTextures,
 		          });
 	}
 	catch (std::runtime_error& err)
@@ -1020,7 +1025,9 @@ ProfileMenu ProfileMenuSettings()
 	auto& audio = Locator::audio::value();
 	settings.sfxVolume = audio.GetSfxVolume();
 	settings.musicVolume = audio.GetMusicVolume();
-	settings.detail = graphics::detail_level::MenuLevel(Locator::config::value().detailLevel);
+	const auto& config = Locator::config::value();
+	settings.detailLevels = config.maxDetailLevel;
+	settings.detail = graphics::detail_level::MenuLevel(config.detailLevel, config.maxDetailLevel);
 	return {.playerName = std::move(playerName), .settings = std::move(settings)};
 }
 
@@ -1041,6 +1048,55 @@ void ApplyPlayerSettings(const player_profiles::Settings& settings)
 		Locator::helpTextSystem::value().SetTextChoices(
 		    {.textDraw = settings.storyText, .topToBottom = settings.textFromBottom, .readSpeed = settings.readSpeed});
 	}
+}
+
+void PrepareNetworkLand(uint32_t seed)
+{
+	Locator::entitiesRegistry::value().SetFreshIdsAtNextReset();
+	if (Locator::particleSystem::has_value())
+	{
+		Locator::particleSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::reactionSystem::has_value())
+	{
+		Locator::reactionSystem::value().SetFreshIdsAtNextReset();
+	}
+	if (Locator::gameRandom::has_value())
+	{
+		Locator::gameRandom::value().Restart();
+	}
+	Locator::rng::value().SetRunSeed(seed);
+}
+
+std::optional<std::string_view> ApplySoakTools(const developer_tools::SoakTools& tools)
+{
+	if (const auto refusal = developer_tools::SoakRefusalOf(developer_tools::k_Built, tools); refusal.has_value())
+	{
+		return refusal;
+	}
+	if (Locator::landSystem::has_value())
+	{
+		Locator::landSystem::value().SetAllComputerGods(tools.allComputerGods);
+	}
+	if (Locator::computerPlayerSystem::has_value())
+	{
+		Locator::computerPlayerSystem::value().SetAiSeed(tools.aiSeed);
+	}
+	return std::nullopt;
+}
+
+void LoadEveryResource()
+{
+	auto& loading = Locator::resources::value();
+	const auto loadStart = std::chrono::steady_clock::now();
+	while (loading.PendingCount() > 0)
+	{
+		loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
+		// The graphics card takes what the loading made, as on the loading screen
+		Locator::rendererInterface::value().Frame();
+	}
+	SPDLOG_LOGGER_INFO(spdlog::get("game"), "Every resource loaded in {:.0f} ms",
+	                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
 }
 
 void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
@@ -1070,16 +1126,7 @@ void BeginPlay(bool continued, bool loadAllFirst, PlayStartViewInterface& view)
 	// picture or its model then starts after the same frames each run, at any speed.
 	if (loadAllFirst)
 	{
-		auto& loading = Locator::resources::value();
-		const auto loadStart = std::chrono::steady_clock::now();
-		while (loading.PendingCount() > 0)
-		{
-			loading.UpdateLoading(k_LoadingScreenLoadBudget, k_FrameUploads);
-			// The graphics card takes what the loading made, as on the loading screen
-			Locator::rendererInterface::value().Frame();
-		}
-		SPDLOG_LOGGER_INFO(spdlog::get("game"), "Simulation run: every resource loaded in {:.0f} ms",
-		                   std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - loadStart).count());
+		LoadEveryResource();
 	}
 	view.BeforeFirstFrame(continued);
 	// Just before its first frame, the game puts the turn timer back to the start of the current turn. Thus the time of

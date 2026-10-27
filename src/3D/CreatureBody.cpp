@@ -9,8 +9,12 @@
 
 #include "CreatureBody.h"
 
+#include <cstdint>
+
+#include <array>
 #include <map>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include <entt/core/hashed_string.hpp>
@@ -47,10 +51,54 @@ const std::map<std::string, CreatureBody::Appearance> k_MeshNameToAppearance = {
     {"boned", A::Base}, {"base", A::Base},     {"good2", A::Good}, {"base2", A::Base}, {"good", A::Good}, {"evil", A::Evil},
     {"evil2", A::Evil}, {"strong", A::Strong}, {"weak", A::Weak},  {"fat", A::Fat},    {"thin", A::Thin}};
 
+namespace
+{
+/// A short id text that is made on the stack, so that an id costs no memory from the heap
+class IdText
+{
+public:
+	constexpr IdText& Add(std::string_view text)
+	{
+		for (const char c : text)
+		{
+			_chars.at(_size++) = c;
+		}
+		return *this;
+	}
+
+	/// Adds the number in decimal digits, as fmt writes it
+	constexpr IdText& Add(uint32_t number)
+	{
+		std::array<char, 10> digits {};
+		size_t count = 0;
+		do
+		{
+			digits.at(count++) = static_cast<char>('0' + number % 10);
+			number /= 10;
+		} while (number != 0);
+		while (count != 0)
+		{
+			_chars.at(_size++) = digits.at(--count);
+		}
+		return *this;
+	}
+
+	[[nodiscard]] constexpr entt::id_type Id() const { return entt::hashed_string::value(_chars.data(), _size); }
+
+private:
+	std::array<char, 48> _chars {};
+	size_t _size = 0;
+};
+} // namespace
+
 entt::id_type creature::GetIdFromType(CreatureType species, CreatureBody::Appearance appearance)
 {
-	return entt::hashed_string(
-	    fmt::format("creature/{}/{}", static_cast<uint8_t>(species), static_cast<uint32_t>(appearance)).c_str());
+	return IdText()
+	    .Add("creature/")
+	    .Add(static_cast<uint32_t>(static_cast<uint8_t>(species)))
+	    .Add("/")
+	    .Add(static_cast<uint32_t>(appearance))
+	    .Id();
 }
 
 namespace
@@ -111,5 +159,5 @@ CreatureType creature::GetSpeciesFromMeshName(const std::string& fileName)
 
 entt::id_type creature::GetRigId(CreatureType species)
 {
-	return entt::hashed_string(fmt::format("creature/{}/rig", static_cast<uint8_t>(species)).c_str());
+	return IdText().Add("creature/").Add(static_cast<uint32_t>(static_cast<uint8_t>(species))).Add("/rig").Id();
 }

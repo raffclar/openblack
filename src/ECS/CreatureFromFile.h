@@ -12,6 +12,7 @@
 #include <cstdint>
 
 #include <optional>
+#include <span>
 #include <string>
 
 #include <entt/entity/entity.hpp>
@@ -51,5 +52,10 @@ struct Result
 /// Makes the creature on the ground at the place, and makes it the creature of the owner. The mind file gives its mind,
 /// its body, its alignment and its tattoos. It knows every leash, and it grows up fully at once.
 Result Make(const Order& order);
+
+/// At the start of a network game, the god of a human brings the creature of the file that its player sent before the
+/// start. The creature comes at the creature home of the god's citadel, as a creature that a script makes from a mind
+/// file: the file gives its species too. A god with no citadel or no file brings no creature.
+Result Bring(PlayerNames owner, std::span<const uint8_t> file);
 
 } // namespace openblack::ecs::creature_from_file

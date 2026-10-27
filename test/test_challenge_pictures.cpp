@@ -9,14 +9,18 @@
 
 #include <cstdint>
 
+#include <algorithm>
 #include <array>
 #include <functional>
 #include <optional>
+#include <span>
 #include <string>
+#include <tuple>
 #include <vector>
 
 #include <ECS/ChallengePictures.h>
 #include <ECS/Components/ChallengePicture.h>
+#include <ECS/Components/ChallengeRecord.h>
 #include <ECS/Registry.h>
 #include <gtest/gtest.h>
 
@@ -170,6 +174,7 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 {
 	openblack::ecs::Registry registry;
 	const auto record = registry.Create();
+	registry.Assign<openblack::ecs::components::ChallengeRecord>(record);
 	auto& picture = registry.Assign<ChallengePicture>(record);
 	const auto name = pictures::Ask(picture, record);
 	EXPECT_TRUE(name.starts_with(openblack::graphics::ScreenPictures::k_Prefix));
@@ -177,7 +182,7 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 	const auto asked = *picture.waiting;
 
 	pictures::Collect(registry,
-	                  {.take = [](const std::string&) { return std::optional<std::vector<uint8_t>> {}; }, .failed = {}});
+	                  {.take = [](const std::string&) { return std::optional<std::vector<uint8_t>> {}; }, .failed = {}}, {});
 	EXPECT_TRUE(registry.Get<ChallengePicture>(record).waiting.has_value());
 	EXPECT_TRUE(pictures::AnyWaiting(registry));
 
@@ -189,13 +194,78 @@ TEST(ChallengePictures, ARecordsPictureComesBackOnceTheScreenIsRead)
 		                                        640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {1, 2, 3}; })))
 		                                  : std::nullopt;
 	                       },
-	                   .failed = {}});
+	                   .failed = {}},
+	                  {});
 	const auto& taken = registry.Get<ChallengePicture>(record);
 	EXPECT_FALSE(taken.waiting.has_value());
 	EXPECT_FALSE(pictures::AnyWaiting(registry));
 	EXPECT_EQ(taken.taken, 1u);
-	EXPECT_EQ(taken.full.size(), static_cast<size_t>(pictures::k_Width) * pictures::k_Height * 3);
-	EXPECT_EQ(taken.small.size(), static_cast<size_t>(pictures::k_SmallWidth) * pictures::k_SmallHeight * 3);
+	// The record shows its picture as the files hold it: the compressed blocks, half a byte for each texel
+	EXPECT_EQ(taken.full.size(), static_cast<size_t>(pictures::k_Width) * pictures::k_Height / 2);
+	EXPECT_EQ(taken.small.size(), static_cast<size_t>(pictures::k_SmallWidth) * pictures::k_SmallHeight / 2);
+}
+
+TEST(ChallengePictures, APictureGoesToTheFilesAtThePlaceOfItsRecord)
+{
+	// The second record started first, so it has the first place
+	openblack::ecs::Registry registry;
+	const auto later = registry.Create();
+	registry.Assign<openblack::ecs::components::ChallengeRecord>(later).order = 1;
+	const auto first = registry.Create();
+	registry.Assign<openblack::ecs::components::ChallengeRecord>(first).order = 0;
+	auto& laterPicture = registry.Assign<ChallengePicture>(later);
+	const auto laterName = pictures::Ask(laterPicture, later);
+	auto& firstPicture = registry.Assign<ChallengePicture>(first);
+	const auto firstName = pictures::Ask(firstPicture, first);
+
+	openblack::gamesave::ChallengePictureStore store;
+	std::vector<uint32_t> places;
+	const pictures::Files files {.put =
+	                                 [&](uint32_t place, std::span<const uint8_t> picture) {
+		                                 places.push_back(place);
+		                                 std::ignore = store.Put(place, picture);
+	                                 },
+	                             .cells = [&store](uint32_t place) { return store.Cells(place); }};
+	const auto screen = TakeOf(Screen(640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {255, 0, 0}; }));
+	pictures::Collect(
+	    registry,
+	    {.take = [&](const std::string& name) { return name == laterName ? std::optional(screen) : std::nullopt; },
+	     .failed = {}},
+	    files);
+	EXPECT_EQ(places, (std::vector<uint32_t> {1}));
+	EXPECT_EQ(registry.Get<ChallengePicture>(later).full, store.Cells(1).large);
+	EXPECT_EQ(registry.Get<ChallengePicture>(later).taken, 1u);
+	// The first record shows the other half of the file, which is black until its own picture comes
+	EXPECT_EQ(registry.Get<ChallengePicture>(first).full, store.Cells(0).large);
+	EXPECT_TRUE(std::ranges::all_of(registry.Get<ChallengePicture>(first).full, [](uint8_t byte) { return byte == 0; }));
+
+	pictures::Collect(
+	    registry,
+	    {.take = [&](const std::string& name) { return name == firstName ? std::optional(screen) : std::nullopt; },
+	     .failed = {}},
+	    files);
+	EXPECT_EQ(places, (std::vector<uint32_t> {1, 0}));
+	EXPECT_EQ(registry.Get<ChallengePicture>(first).full, store.Cells(0).large);
+	EXPECT_FALSE(std::ranges::all_of(registry.Get<ChallengePicture>(first).full, [](uint8_t byte) { return byte == 0; }));
+	EXPECT_EQ(registry.Get<ChallengePicture>(first).taken, 2u);
+	// The picture of the second place did not change, so it is not drawn again
+	EXPECT_EQ(registry.Get<ChallengePicture>(later).taken, 1u);
+}
+
+TEST(ChallengePictures, ARefreshShowsThePicturesOfTheFiles)
+{
+	openblack::ecs::Registry registry;
+	const auto record = registry.Create();
+	registry.Assign<openblack::ecs::components::ChallengeRecord>(record);
+	openblack::gamesave::ChallengePictureStore store;
+	const auto screen = TakeOf(Screen(640, 480, [](uint32_t, uint32_t) { return std::array<uint8_t, 3> {0, 0, 255}; }));
+	std::ignore = store.Put(0, screen);
+	pictures::Refresh(registry, {.put = {}, .cells = [&store](uint32_t place) { return store.Cells(place); }});
+	const auto* picture = registry.TryGet<ChallengePicture>(record);
+	ASSERT_NE(picture, nullptr);
+	EXPECT_EQ(picture->full, store.Cells(0).large);
+	EXPECT_EQ(picture->small, store.Cells(0).small);
+	EXPECT_EQ(picture->taken, 1u);
 }
 
 TEST(ChallengePictures, APictureGivenUpLeavesTheOldOne)
@@ -205,7 +275,7 @@ TEST(ChallengePictures, APictureGivenUpLeavesTheOldOne)
 	auto& picture = registry.Assign<ChallengePicture>(record);
 	picture.full = {1, 2, 3};
 	[[maybe_unused]] const auto name = pictures::Ask(picture, record);
-	pictures::Collect(registry, {.take = {}, .failed = [](const std::string&) { return true; }});
+	pictures::Collect(registry, {.take = {}, .failed = [](const std::string&) { return true; }}, {});
 	const auto& kept = registry.Get<ChallengePicture>(record);
 	EXPECT_FALSE(kept.waiting.has_value());
 	EXPECT_EQ(kept.full, (std::vector<uint8_t> {1, 2, 3}));

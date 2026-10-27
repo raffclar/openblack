@@ -19,6 +19,7 @@
 
 #include "Common/Platform.h"
 #include "DisplayScaling.h"
+#include "SystemPointer.h"
 #include "Web/WebPointer.h"
 #include "WindowFit.h"
 #include "WindowState.h"
@@ -73,6 +74,7 @@ void Sdl2WindowingSystem::SDLDestroyer::operator()(SDL_Window* window) const
 
 Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, int height, DisplayMode requestedDisplayMode,
                                          uint32_t extraFlags, bool background)
+    : _background(background)
 {
 	const DisplayMode displayMode = BackgroundDisplayMode(requestedDisplayMode, background);
 	SDL_version compiledVersion;
@@ -118,7 +120,9 @@ Sdl2WindowingSystem::Sdl2WindowingSystem(const std::string& title, int width, in
 		}
 	}
 
-	SDL_ShowCursor(SDL_DISABLE);
+	// The game draws its own pointer, the hand, so the pointer of the system hides over the window. A background run
+	// leaves the pointer of the system to the user.
+	system_pointer::Show(false, background);
 	SDL_SetHint(SDL_HINT_VIDEO_EXTERNAL_CONTEXT, "1");
 	// A second press makes a double click only within the system's small box round the first, as the game's window
 	// took them (SDL's own allowance is far wider); the time between them is the system's already
@@ -344,13 +348,13 @@ uint32_t Sdl2WindowingSystem::GetFlags() const
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::GrabInput(bool b)
 {
-	SDL_SetWindowGrab(_window.get(), b ? SDL_TRUE : SDL_FALSE);
+	system_pointer::Grab(_window.get(), b, _background);
 	return *this;
 }
 
 Sdl2WindowingSystem& Sdl2WindowingSystem::SetMousePosition(glm::ivec2 position)
 {
-	SDL_WarpMouseInWindow(_window.get(), position.x, position.y);
+	system_pointer::Warp(_window.get(), position, _background);
 	return *this;
 }
 

@@ -73,6 +73,7 @@ public:
 	[[nodiscard]] LobbySessionState GetState() const override { return _state; }
 	[[nodiscard]] std::optional<lobby_api::AccountRef> GetAccount() const override { return _account; }
 	[[nodiscard]] bool IsPushOpen() const override { return _push->IsOpen(); }
+	[[nodiscard]] bool IsEmailRequired() const override { return _emailRequired; }
 
 	void Login(std::string name, std::string password, LobbyCallback<lobby_api::AccountRef> callback) override;
 	void ResumeSession(LobbyCallback<lobby_api::AccountRef> callback) override;
@@ -83,7 +84,8 @@ public:
 	[[nodiscard]] std::span<const lobby_api::ServerEntry> GetKnownServers() const override { return _servers; }
 	void WatchServers(bool watch) override;
 	void WatchChannel(std::string channel, bool watch) override;
-	void RequestJoinTicket(std::string serverId, LobbyCallback<lobby_api::JoinTicket> callback) override;
+	void RequestJoinTicket(std::string serverId, game_socket::Role role,
+	                       LobbyCallback<lobby_api::JoinTicket> callback) override;
 	void SendChatLine(std::string channel, std::string text, LobbyCallback<LobbyDone> callback) override;
 	void UseClan(std::string serverId, std::optional<int64_t> clanId, LobbyCallback<lobby_api::UsedClan> callback) override;
 	void CheckAccountName(std::string name, LobbyCallback<lobby_api::AccountNameCheck> callback) override;
@@ -143,6 +145,7 @@ private:
 
 	LobbySessionState _state {LobbySessionState::LoggedOut};
 	std::optional<lobby_api::AccountRef> _account;
+	bool _emailRequired {false};
 	std::string _accessToken;
 	std::chrono::system_clock::time_point _accessExpiry {};
 	/// The refresh token of this run, also when the store cannot keep it

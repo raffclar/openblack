@@ -164,6 +164,9 @@ TEST(BuildingConstruction, AFinishedTempleSavesForTheLocalPlayerOnEveryLand)
 	auto cutScene = temple;
 	cutScene.scriptCutScene = true;
 	EXPECT_FALSE(SavesOnFinish(cutScene));
+	auto network = temple;
+	network.networkGame = true;
+	EXPECT_FALSE(SavesOnFinish(network)) << "a network game has no saves";
 	auto skirmish = temple;
 	skirmish.skirmish = true;
 	EXPECT_FALSE(SavesOnFinish(skirmish));

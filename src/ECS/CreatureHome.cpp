@@ -9,6 +9,8 @@
 
 #include "CreatureHome.h"
 
+#include <span>
+
 #include "3D/L3DMesh.h"
 #include "Creature/CreatureMode.h"
 #include "Creature/TemplePen.h"
@@ -92,4 +94,30 @@ std::optional<glm::vec3> creature_home::TemplePenOf(const Registry& registry, Pl
 		    }
 	    });
 	return pen;
+}
+
+std::optional<openblack::map_coords::MapCoords> creature_home::CitadelCreatureHomeOf(const Registry& registry,
+                                                                                     PlayerNames owner)
+{
+	std::optional<openblack::map_coords::MapCoords> home;
+	registry.Each<const Temple, const Transform>(
+	    [&registry, &home, owner](entt::entity entity, const Temple& building, const Transform& transform) {
+		    if (building.owner != owner || home.has_value())
+		    {
+			    return;
+		    }
+		    std::span<const glm::mat4> markedPlaces;
+		    const auto* mesh = registry.TryGet<const Mesh>(entity);
+		    if (mesh != nullptr && openblack::Locator::resources::has_value())
+		    {
+			    const auto& meshes = openblack::Locator::resources::value().GetMeshes();
+			    if (meshes.Contains(mesh->id))
+			    {
+				    markedPlaces = meshes.Handle(mesh->id)->GetExtraMetrics();
+			    }
+		    }
+		    home = openblack::creature_mode::CitadelCreatureHomeOnMap(transform.position, building.yAngle, transform.scale.x,
+		                                                              markedPlaces);
+	    });
+	return home;
 }

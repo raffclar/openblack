@@ -25,6 +25,7 @@
 #include "ECS/Components/CreatureBody.h"
 #include "ECS/Components/CreatureMind.h"
 #include "ECS/Registry.h"
+#include "ECS/ReportedCamera.h"
 #include "ECS/Systems/CreatureAnimationSystemInterface.h"
 #include "ECS/Systems/CreatureHelpSystemInterface.h"
 #include "Locator.h"
@@ -51,9 +52,9 @@ void CreatureMindSystem::ReactToMusic(entt::entity creature, float mood)
 	// It is made to look or point at the camera, or to be sad, and the reaction's steps take the place of the plan's
 	const auto plan = creature_music::PlanFor(mood, Random(3));
 	creature_music::Camera camera;
-	if (Locator::camera::has_value())
+	if (const auto reported = openblack::ecs::ReportedCreatureCamera(creature))
 	{
-		camera = {.position = Locator::camera::value().GetOrigin(), .known = true};
+		camera = {.position = reported->origin, .known = true};
 	}
 	const auto reaction = creature_music::ReactionTo(mood);
 	std::vector<creature_mind::Step> agenda;

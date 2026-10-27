@@ -22,7 +22,8 @@ public:
 	[[nodiscard]] std::optional<float> LandHeight(glm::vec2 point) const override;
 	[[nodiscard]] uint32_t Turn() const override;
 	[[nodiscard]] GameRandomInterface* Random() override;
-	[[nodiscard]] std::optional<PlayerNames> LocalPlayer() const override;
+	[[nodiscard]] bool PersonPlays(PlayerNames player) const override;
+	[[nodiscard]] std::optional<PlayerNames> OwnPlayer() const override;
 	[[nodiscard]] float LifeOf(entt::entity object) const override;
 	[[nodiscard]] float HeightOf(entt::entity object) const override;
 	[[nodiscard]] const GAbodeInfo* AbodeInfoOf(entt::entity object) const override;
@@ -65,7 +66,7 @@ public:
 	[[nodiscard]] std::optional<float> AnimationDuration(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<glm::vec3> AnimationTravel(entt::entity creature, size_t animation) override;
 	[[nodiscard]] std::optional<float> CatchMs(entt::entity creature) const override;
-	[[nodiscard]] std::optional<entt::entity> HandHeldCreature() const override;
+	[[nodiscard]] bool HandHolds(entt::entity creature) const override;
 	[[nodiscard]] bool HasCreatureActions() const override;
 	[[nodiscard]] bool CanBeCaught(entt::entity object) const override;
 	[[nodiscard]] bool FreeToCatch(entt::entity creature) const override;

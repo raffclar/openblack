@@ -11,6 +11,7 @@
 
 #include "LiquidParticleSystem.h"
 
+#include <algorithm>
 #include <optional>
 #include <string_view>
 #include <utility>
@@ -98,12 +99,35 @@ LiquidParticleSystem::LiquidParticleSystem(Sources sources)
 
 void LiquidParticleSystem::Add(glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb, Kind kind)
 {
+	AddTo(_pool, position, velocity, size, argb, kind);
+}
+
+void LiquidParticleSystem::AddForPlayer(PlayerNames player, glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb,
+                                        Kind kind)
+{
+	AddTo(_playerPools[player].particles, position, velocity, size, argb, kind);
+}
+
+void LiquidParticleSystem::SetPlayerPoint(PlayerNames player, glm::vec3 point)
+{
+	_playerPools[player].point = point;
+}
+
+std::span<const Particle> LiquidParticleSystem::PlayerParticles(PlayerNames player) const
+{
+	const auto found = _playerPools.find(player);
+	return found != _playerPools.end() ? std::span<const Particle>(found->second.particles) : std::span<const Particle> {};
+}
+
+void LiquidParticleSystem::AddTo(std::vector<Particle>& pool, glm::vec3 position, glm::vec3 velocity, float size, uint32_t argb,
+                                 Kind kind)
+{
 	// Only a particle there is room for is made, and only then does it draw its frame
-	if (_pool.size() >= liquid_particles::k_MostParticles)
+	if (pool.size() >= liquid_particles::k_MostParticles)
 	{
 		return;
 	}
-	_pool.push_back({
+	pool.push_back({
 	    .position = position,
 	    .velocity = velocity,
 	    .size = size,
@@ -115,24 +139,51 @@ void LiquidParticleSystem::Add(glm::vec3 position, glm::vec3 velocity, float siz
 
 void LiquidParticleSystem::UpdateFrame(float seconds, bool drawsDrops)
 {
+	// The shared pool moves on first, then the pools of the other players in the order of their players
 	liquid_particles::StepPool(_pool, seconds, _sources.altitude, _sources.random);
-	// The game draws the pool after it moves it on. Each draw of a drop of liquid takes one random number for its frame.
-	if (!drawsDrops || _pool.empty() || !_sources.drawDue(_drawPace))
+	for (auto& [player, pool] : _playerPools)
+	{
+		liquid_particles::StepPool(pool.particles, seconds, _sources.altitude, _sources.random);
+	}
+	// The game draws the pools after it moves them on. Each draw of a drop of liquid takes one random number for its
+	// frame.
+	const bool empty =
+	    _pool.empty() && std::ranges::all_of(_playerPools, [](const auto& entry) { return entry.second.particles.empty(); });
+	if (!drawsDrops || empty || !_sources.drawDue(_drawPace))
 	{
 		return;
 	}
-	for (auto& particle : _pool)
-	{
-		if (particle.kind == Kind::Liquid)
+	const auto redraw = [this](std::vector<Particle>& pool) {
+		for (auto& particle : pool)
 		{
-			particle.variant = liquid_particles::LiquidFrame(_sources.random());
+			if (particle.kind == Kind::Liquid)
+			{
+				particle.variant = liquid_particles::LiquidFrame(_sources.random());
+			}
 		}
+	};
+	redraw(_pool);
+	for (auto& [player, pool] : _playerPools)
+	{
+		redraw(pool.particles);
 	}
 }
 
 void LiquidParticleSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 {
-	if (_pool.empty())
+	if (!_pool.empty())
+	{
+		CollectPool(frame, _pool, _pool.front().position);
+	}
+	for (const auto& [player, pool] : _playerPools)
+	{
+		CollectPool(frame, pool.particles, pool.point);
+	}
+}
+
+void LiquidParticleSystem::CollectPool(particles::draw::Frame& frame, const std::vector<Particle>& pool, glm::vec3 point) const
+{
+	if (pool.empty())
 	{
 		return;
 	}
@@ -144,9 +195,9 @@ void LiquidParticleSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 	    .random = {},
 	};
 	particles::Effect::DrawWalk walk;
-	walk.steps.reserve(_pool.size());
-	walk.atoms.reserve(_pool.size());
-	for (const auto& particle : _pool)
+	walk.steps.reserve(pool.size());
+	walk.atoms.reserve(pool.size());
+	for (const auto& particle : pool)
 	{
 		const auto* creator = particle.kind == Kind::Liquid                 ? &_liquidCreator
 		                      : liquid_particles::IsAdditive(particle.kind) ? &_moteCreator
@@ -164,13 +215,14 @@ void LiquidParticleSystem::CollectDrawFrame(particles::draw::Frame& frame) const
 		            static_cast<uint8_t>(particle.argb & 0xFFu)},
 		});
 	}
-	particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, _pool.front().position,
-	                           particles::draw::k_NeutralPlayer, sources);
+	particles::draw::AddEffect(frame, walk, particles::draw::DrawPath::Sorted, point, particles::draw::k_NeutralPlayer,
+	                           sources);
 }
 
 void LiquidParticleSystem::Clear()
 {
 	_pool.clear();
+	_playerPools.clear();
 }
 
 void LiquidParticleSystem::SaveState(reflection::BinaryWriter& out) const

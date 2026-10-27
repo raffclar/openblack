@@ -24,7 +24,9 @@
 #include "3D/L3DMesh.h"
 #include "Animals/AnimalAnimation.h"
 #include "Common/GameRandom.h"
+#include "Common/PortableRotations.h"
 #include "ECS/Components/AnimatedStatic.h"
+#include "ECS/Components/HiddenByState.h"
 #include "ECS/Components/HighDetail.h"
 #include "ECS/Components/IntroHand.h"
 #include "ECS/Components/Mesh.h"
@@ -103,6 +105,8 @@ void IntroSystem::Play(int32_t special)
 		_stage = Stage::Falling;
 		_light = light::Make(rules::k_BoySpot, rules::k_LightWay, CrtRandom);
 		_holdingBoy = false;
+		// The hand that lifts the boy is made now, in the turn, and the frames show it once the light lands
+		MakeHiddenHand();
 		return;
 	case 1:
 		if (_stage != Stage::Falling)
@@ -162,26 +166,60 @@ void IntroSystem::ReleaseAll()
 	_lightDrawn = false;
 }
 
-void IntroSystem::MakeHand(std::string_view clipFile)
+void IntroSystem::MakeHiddenHand()
 {
 	auto& registry = Entities();
-	const auto model = LoadMisc(Locator::resources::value().GetMeshes(), k_HandModel);
-	const auto clip = LoadMisc(Locator::resources::value().GetAnimations(), clipFile);
-	if (!model.has_value())
+	if (_hand != entt::null && registry.Valid(_hand))
 	{
 		return;
 	}
+	// Each computer makes the entity, also one that cannot load the model, so that the worlds keep the same entities
+	const auto model = LoadMisc(Locator::resources::value().GetMeshes(), k_HandModel)
+	                       .value_or(resources::HashIdentifier("misc/" + std::string(k_HandModel)));
+	_hand = registry.Create();
+	registry.Assign<Transform>(_hand, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
+	registry.Assign<Mesh>(_hand, model, static_cast<int8_t>(0), static_cast<int8_t>(0));
+	registry.Assign<AnimatedStaticPose>(_hand);
+	registry.Assign<IntroHand>(_hand);
+	registry.Assign<HiddenByState>(_hand);
+	registry.SetDirty();
+}
+
+void IntroSystem::ShowHand(std::string_view clipFile)
+{
+	auto& registry = Entities();
 	if (_hand == entt::null || !registry.Valid(_hand))
 	{
-		_hand = registry.Create();
-		registry.Assign<Transform>(_hand, glm::vec3(0.0f), glm::mat3(1.0f), glm::vec3(1.0f));
-		registry.Assign<Mesh>(_hand, *model, static_cast<int8_t>(0), static_cast<int8_t>(0));
-		registry.Assign<AnimatedStaticPose>(_hand);
-		registry.Assign<IntroHand>(_hand);
+		return;
 	}
+	const auto clip = LoadMisc(Locator::resources::value().GetAnimations(), clipFile);
 	auto& hand = registry.Get<IntroHand>(_hand);
 	hand.clip = clip.value_or(0);
 	hand.time = 0;
+	registry.Remove<HiddenByState>(_hand);
+	registry.SetDirty();
+}
+
+void IntroSystem::MakeHand(std::string_view clipFile)
+{
+	MakeHiddenHand();
+	ShowHand(clipFile);
+}
+
+void IntroSystem::HideHand()
+{
+	auto& registry = Entities();
+	if (_hand == entt::null || !registry.Valid(_hand))
+	{
+		return;
+	}
+	auto& hand = registry.Get<IntroHand>(_hand);
+	hand.clip = 0;
+	registry.Get<AnimatedStaticPose>(_hand).bones.clear();
+	if (!registry.AllOf<HiddenByState>(_hand))
+	{
+		registry.Assign<HiddenByState>(_hand);
+	}
 	registry.SetDirty();
 }
 
@@ -197,7 +235,7 @@ void IntroSystem::PlaceHand(const glm::vec3& position, float yaw)
 	hand->scale = rules::k_HandScale;
 	auto& transform = registry.Get<Transform>(_hand);
 	transform.position = position;
-	transform.rotation = glm::mat3(glm::eulerAngleY(-yaw));
+	transform.rotation = glm::mat3(portable_math::EulerAngleY(-yaw));
 	transform.scale = glm::vec3(rules::k_HandScale);
 	registry.SetDirty();
 }
@@ -235,6 +273,10 @@ void IntroSystem::PoseHand()
 {
 	auto& registry = Entities();
 	if (_hand == entt::null || !registry.Valid(_hand))
+	{
+		return;
+	}
+	if (registry.AllOf<HiddenByState>(_hand))
 	{
 		return;
 	}
@@ -360,10 +402,11 @@ void IntroSystem::Update(uint32_t milliseconds)
 	}
 	case Stage::Lifting:
 	{
-		if (_hand == entt::null || !Entities().Valid(_hand))
+		// The hand that the turn made shows once, with its lifting clip
+		if (_hand != entt::null && Entities().Valid(_hand) && Entities().AllOf<HiddenByState>(_hand))
 		{
 			_liftGo = 0;
-			MakeHand(k_LiftClip);
+			ShowHand(k_LiftClip);
 		}
 		// Its clip waits until the light has gone, then plays once and holds its end
 		if (_light.has_value() && _light->state == light::State::Gone)
@@ -386,7 +429,8 @@ void IntroSystem::Update(uint32_t milliseconds)
 		// Drawn where its clip stands, then played on while it sets the boy down; it goes when its clip comes round
 		if (_handPlaying && AdvanceHand(milliseconds))
 		{
-			FreeHand();
+			// The hand goes from view at once. The turns remove its entity when the opening releases its specials.
+			HideHand();
 			_handPlaying = false;
 			_stage = Stage::None;
 		}

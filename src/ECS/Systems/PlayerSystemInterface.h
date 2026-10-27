@@ -15,6 +15,7 @@
 
 #include <entt/fwd.hpp>
 
+#include "ECS/PlayerKind.h"
 #include "Enums.h"
 
 namespace openblack::ecs::systems
@@ -24,7 +25,9 @@ class PlayerSystemInterface
 public:
 	virtual void RegisterPlayers() = 0;
 	virtual void AddPlayer(entt::entity playerEntity) = 0;
-	[[nodiscard]] virtual entt::entity GetPlayer(PlayerNames name) const = 0;
+	/// The entity of the player, if the player is in the game. In a network game, the player of each human comes in the
+	/// first turn, so the input of this computer can come before its own player.
+	[[nodiscard]] virtual std::optional<entt::entity> FindPlayer(PlayerNames name) const = 0;
 	/// Remembers that the owner of a newly made creature got it, after the creatures they got before
 	virtual void AddCreature(entt::entity creature) = 0;
 	/// Makes the creature the primary creature of its owner, before the creatures that the owner got before
@@ -43,12 +46,14 @@ public:
 	[[nodiscard]] virtual bool KeepAlignmentAt(uint32_t turn) = 0;
 	/// A player made on a land takes up what they kept from the lands before
 	virtual void TakeUpKept(entt::entity playerEntity) = 0;
-	/// The player at this machine, whose hand the mouse moves. openblack is played by one player, the first.
+	/// The first player: the player that the scripts and the turns take as the player of a game alone. It is the same on
+	/// every computer of a network game. The frames, the input and the sounds of a computer use the player of that
+	/// computer instead (see HandSystemInterface::GetOwnPlayer).
 	[[nodiscard]] virtual PlayerNames GetLocalPlayer() const { return PlayerNames::PLAYER_ONE; }
-	/// Whether the computer plays a player: every player but the one at this machine
+	/// Whether the computer plays a player (see player_kind::IsComputer)
 	[[nodiscard]] virtual bool IsComputerPlayer(PlayerNames name) const
 	{
-		return name != GetLocalPlayer() && name != PlayerNames::NEUTRAL;
+		return player_kind::IsComputer({.player = name, .networkGame = false, .computerMind = false});
 	}
 };
 } // namespace openblack::ecs::systems

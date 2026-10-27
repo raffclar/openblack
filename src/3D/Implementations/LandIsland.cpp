@@ -20,6 +20,7 @@
 #include <span>
 #include <stdexcept>
 #include <utility>
+#include <vector>
 
 #include <LNDFile.h>
 #include <bgfx/bgfx.h>
@@ -35,6 +36,7 @@
 #include "3D/LandData.h"
 #include "3D/LandNormal.h"
 #include "3D/MapCoords.h"
+#include "Common/PortableRotations.h"
 #include "Common/WorkerPool.h"
 #include "FileSystem/FileSystemInterface.h"
 #include "Graphics/IndexBuffer.h"
@@ -223,7 +225,7 @@ void LandIsland::Build(const LandData& data)
 	                       bgfx::copy(cellColourMapData.data(), static_cast<uint32_t>(cellColourMapData.size())));
 
 	_proj = glm::ortho(_extentMin.x, _extentMax.x, _extentMin.y, _extentMax.y);
-	_view = glm::rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+	_view = portable_math::Rotate(glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
 
 	SPDLOG_LOGGER_DEBUG(spdlog::get("game"), "[LandIsland] loading {} countries", data.countries.size());
 	_countries = data.countries;
@@ -247,15 +249,18 @@ void LandIsland::Build(const LandData& data)
 	_blockTextures = std::make_unique<Texture2D>("LandIslandBlockTextures");
 	_blockTextures->Create(block_texture::k_Side, block_texture::k_Side, static_cast<uint16_t>(_landBlocks.size()),
 	                       TextureFormat::RGBA8, Wrapping::ClampEdge, Filter::Linear, nullptr);
-	// Threads that live as long as the build paint the blocks
+	// Threads that live as long as the build paint the blocks, each straight into the memory that bgfx then takes
+	std::vector<const bgfx::Memory*> painted(_landBlocks.size());
+	std::ranges::generate(painted, [] { return bgfx::alloc(static_cast<uint32_t>(block_texture::k_BlockBytes)); });
 	WorkerPool painters(WorkerPool::DefaultThreadCount());
 	block_texture::BuildBlocks(
 	    _landBlocks.size(),
 	    [this](size_t block) { return std::span<const lnd::LNDCell>(_landBlocks[block].GetLndBlock()->cells); }, sources,
-	    painters,
-	    [this](size_t block, std::span<const uint8_t> rgba) {
-		    _blockTextures->UpdateLayer(static_cast<uint16_t>(block), rgba.data(), static_cast<uint32_t>(rgba.size()));
-	    });
+	    painters, [&painted](size_t block) { return std::span<uint8_t>(painted[block]->data, painted[block]->size); });
+	for (size_t block = 0; block < painted.size(); ++block)
+	{
+		_blockTextures->UpdateLayerFromMemory(static_cast<uint16_t>(block), painted[block]);
+	}
 	// The footprints are painted into the blocks after
 	_repaintedBlocks.resize(_landBlocks.size());
 	std::iota(_repaintedBlocks.begin(), _repaintedBlocks.end(), size_t {0});
@@ -410,8 +415,10 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		return;
 	}
 	// A block keeps a 17th row and column of its neighbours' first cells: a corner on a block's edge is in up to four
-	// blocks, and each copy changes, with the cells of each block it is a corner of
-	const auto setIn = [this, altitude](int blockX, int blockZ, int x, int z) {
+	// blocks, and each copy changes, with the cells of each block it is a corner of. A copy that already has the
+	// altitude does not change, so its block is not built and painted again for no change.
+	bool changedAny = false;
+	const auto setIn = [this, altitude, &changedAny](int blockX, int blockZ, int x, int z) {
 		if (blockX < 0 || blockZ < 0 || blockX >= 32 || blockZ >= 32)
 		{
 			return;
@@ -421,7 +428,11 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 		{
 			return;
 		}
-		_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude);
+		if (!_landBlocks.at(blockIndex - 1u).SetCellAltitude(static_cast<size_t>(x * 17 + z), altitude))
+		{
+			return;
+		}
+		changedAny = true;
 		auto& cells = _changedCells.at(blockIndex - 1u);
 		constexpr int k_LastCell = block_texture::k_BlockCells - 1;
 		cells.Add(glm::clamp(glm::ivec2(x - 1, z - 1), 0, k_LastCell));
@@ -444,7 +455,10 @@ void LandIsland::SetCellAltitude(glm::u16vec2 coordinates, uint8_t altitude)
 	{
 		setIn(blockX - 1, blockZ - 1, 16, 16);
 	}
-	_changedCorners.Add(glm::ivec2(coordinates));
+	if (changedAny)
+	{
+		_changedCorners.Add(glm::ivec2(coordinates));
+	}
 }
 
 void LandIsland::CommitAltitudeChanges()

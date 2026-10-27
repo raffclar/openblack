@@ -152,10 +152,10 @@ public:
 		/// How big the hand is drawn
 		float size {1.0f};
 		glm::vec3 cameraPosition {0.0f};
-		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, or the circle that sizes
-		/// it
+		/// It is drawing a gesture that shows the chain: one that powers up the miracle in it, the circle that sizes it,
+		/// or a gesture of the miracle selection
 		bool gesturing {false};
-		/// The leash picker is open: the effect of a selection shows round the hand
+		/// The miracle selection or the leash picker is open: the effect of a selection shows round the hand
 		bool selecting {false};
 	};
 	/// A recognised gesture's trail to show on the land, in the effect every trail shows in, which runs all the time
@@ -181,6 +181,9 @@ public:
 	virtual void ProcessTurn() = 0;
 	/// A new land: every effect goes
 	virtual void Reset() = 0;
+	/// The next Reset also numbers the effects after it from the first number again, as a new program does. Every
+	/// computer of a network game loads its land this way, because the world keeps the numbers of some effects.
+	virtual void SetFreshIdsAtNextReset() = 0;
 
 	/// Everything the effects draw this frame, t of the way through the game turn, into a frame that is cleared first.
 	/// The frame doesn't depend on the camera: each pass orders it for its own (particles::draw::Order). In the temple

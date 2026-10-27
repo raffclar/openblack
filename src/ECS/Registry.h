@@ -87,6 +87,10 @@ public:
 	virtual RegistryContext& Context();
 	[[nodiscard]] virtual const RegistryContext& Context() const;
 	virtual void Reset();
+	/// The next Reset gives the entities after it the ids of a new registry, and forgets the ids of the entities before
+	/// it. Every computer of a network game loads its land this way, so that the entities have the same ids on each,
+	/// whatever ran before the land.
+	void SetFreshIdsAtNextReset() noexcept { _freshIdsAtNextReset = true; }
 	template <typename Component>
 	size_t Size()
 	{
@@ -178,6 +182,9 @@ public:
 	/// Every entity made since the registry was last emptied, those destroyed since too: the statistics' count of the
 	/// objects made on the land
 	[[nodiscard]] uint32_t GetEntitiesMade() const noexcept { return _entitiesMade; }
+	/// How many entities went from the registry since it was made, however they went. The count only goes up: emptying
+	/// the registry counts too.
+	[[nodiscard]] uint64_t GetEntitiesGone() const noexcept { return _entitiesGone; }
 	Registry(const Registry&) = delete;
 	Registry& operator=(const Registry&) = delete;
 	virtual ~Registry() = default;
@@ -201,8 +208,13 @@ protected:
 
 private:
 	void EntityMade(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesMade; }
+	void EntityGone(entt::registry& /*registry*/, entt::entity /*entity*/) { ++_entitiesGone; }
+	/// A living that goes leaves its flock. A flock that it leaves with no members goes too.
+	void LivingGone(entt::registry& registry, entt::entity living);
 
 	uint32_t _entitiesMade {0};
+	uint64_t _entitiesGone {0};
+	bool _freshIdsAtNextReset {false};
 };
 
 } // namespace openblack::ecs

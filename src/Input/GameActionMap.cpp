@@ -30,6 +30,7 @@
 #include "Locator.h"
 #include "ScriptedMouse.h"
 #include "Web/WebPointer.h"
+#include "Windowing/SystemPointer.h"
 #include "Windowing/WindowingInterface.h"
 
 using namespace openblack::input;
@@ -52,11 +53,12 @@ void WarpMouse(int x, int y)
 	{
 		return;
 	}
-	if (IsBackground() || !Locator::windowing::has_value())
+	if (!Locator::windowing::has_value())
 	{
 		return;
 	}
-	SDL_WarpMouseInWindow(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), x, y);
+	openblack::windowing::system_pointer::Warp(static_cast<SDL_Window*>(Locator::windowing::value().GetHandle()), {x, y},
+	                                           IsBackground());
 }
 
 glm::ivec2 WindowSize()
@@ -470,7 +472,7 @@ void GameActionMap::StartScaledPointer(glm::ivec2 at)
 	// The movements are the mouse's own, without the system's pointer speed and acceleration (the user's choice), before
 	// the screen's scale
 	SDL_SetHint(SDL_HINT_MOUSE_RELATIVE_SYSTEM_SCALE, "0");
-	if (IsBackground() || SDL_SetRelativeMouseMode(SDL_TRUE) != 0)
+	if (!windowing::system_pointer::SetRelative(true, IsBackground()))
 	{
 		return;
 	}
@@ -488,10 +490,7 @@ void GameActionMap::StopScaledPointer()
 	}
 	const auto at = _scaledPointer.Position();
 	WarpMouse(at.x, at.y);
-	if (!IsBackground())
-	{
-		SDL_SetRelativeMouseMode(SDL_FALSE);
-	}
+	windowing::system_pointer::SetRelative(false, IsBackground());
 }
 
 void GameActionMap::PointPlayerEvent(SDL_Event& event)
@@ -773,10 +772,7 @@ void GameActionMap::Frame()
 			// On the web the pointer lock of the page holds the pointer, when the page has it
 			if constexpr (k_Platform != Platform::Web)
 			{
-				if (!IsBackground())
-				{
-					SDL_SetRelativeMouseMode(SDL_TRUE);
-				}
+				windowing::system_pointer::SetRelative(true, IsBackground());
 			}
 		}
 		if (cursor.warpTo.has_value() && _scriptedPointer.has_value())
@@ -788,9 +784,9 @@ void GameActionMap::Frame()
 			// The window keeps the mouse if it had it before the turn
 			if constexpr (k_Platform != Platform::Web)
 			{
-				if (!_pointerScaled && !IsBackground())
+				if (!_pointerScaled)
 				{
-					SDL_SetRelativeMouseMode(SDL_FALSE);
+					windowing::system_pointer::SetRelative(false, IsBackground());
 				}
 			}
 			WarpPlayerCursor(*cursor.warpTo);

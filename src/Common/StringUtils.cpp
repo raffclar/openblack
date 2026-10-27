@@ -9,6 +9,10 @@
 
 #include "StringUtils.h"
 
+#include <cctype>
+#include <cstring>
+
+#include <algorithm>
 #include <array>
 #include <string_view>
 #include <vector>

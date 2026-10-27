@@ -98,8 +98,10 @@ public:
 	[[nodiscard]] virtual float GetPendingAlignment(PlayerNames player) const = 0;
 
 	/// At the end of the players' turns: each player's waiting change moves its alignment. Then the camera takes the
-	/// alignment of the player of most influence at its eye, the neutral player's where no player has any.
-	virtual void UpdatePlayersTurn(const glm::vec3& eye) = 0;
+	/// alignment of the player of most influence at its eye, the neutral player's where no player has any. The eye is
+	/// the camera that the player of this computer last reported, so that the frames do not change it. Before the first
+	/// report, the eye is at the middle of the world's axes.
+	virtual void UpdatePlayersTurn() = 0;
 	/// Each game turn: the plan of each creature adds its change, and the waiting change moves its alignment
 	virtual void UpdateCreaturesTurn() = 0;
 	/// At the end of the creature's own turn: its plan adds its change, and the waiting change moves its alignment

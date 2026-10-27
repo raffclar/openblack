@@ -15,6 +15,7 @@
 #include <functional>
 
 #include "Common/ModelInverseSquareRoot.h"
+#include "Common/PortableMath.h"
 
 using namespace openblack;
 
@@ -139,20 +140,20 @@ float creature_hand_glow::Zoom(const Glow& glow)
 	return k_ZoomPerPower * glow.power;
 }
 
-void creature_hand_glow::Slide(Glow& glow, int32_t frameMs)
+void creature_hand_glow::Slide(Motion& motion, int32_t frameMs)
 {
 	const float seconds = static_cast<float>(frameMs) * k_SecondsPerMillisecond;
 	const float across = seconds * k_SlideSpeed.x;
 	const float up = seconds * k_SlideSpeed.y;
-	glow.slide.x = std::fmod(across + glow.slide.x, 1.0f);
-	glow.slide.y = std::fmod(up + glow.slide.y, 1.0f);
+	motion.slide.x = std::fmod(across + motion.slide.x, 1.0f);
+	motion.slide.y = std::fmod(up + motion.slide.y, 1.0f);
 }
 
-void creature_hand_glow::Turn(Glow& glow, int32_t gameMs)
+void creature_hand_glow::Turn(Motion& motion, int32_t gameMs)
 {
 	const float scaled = static_cast<float>(gameMs) * k_TurnSpeed;
 	const float radians = scaled * k_SecondsPerMillisecond;
-	glow.turn = radians + glow.turn;
+	motion.turn = radians + motion.turn;
 }
 
 std::vector<uint32_t> creature_hand_glow::BranchEnds(std::span<const uint32_t> parents, uint32_t bone)
@@ -217,8 +218,8 @@ glm::mat3 creature_hand_glow::UnitAxes(const glm::mat3& axes)
 glm::mat3 creature_hand_glow::CirclingAxes(float turn)
 {
 	// The sine and cosine keep the processor's wider precision until they are stored
-	const auto c = static_cast<float>(std::cos(static_cast<double>(turn)));
-	const auto s = static_cast<float>(std::sin(static_cast<double>(turn)));
+	const auto c = static_cast<float>(portable_math::Cos(static_cast<double>(turn)));
+	const auto s = static_cast<float>(portable_math::Sin(static_cast<double>(turn)));
 	return {glm::vec3(c, 0.0f, s), glm::vec3(0.0f, 1.0f, 0.0f), glm::vec3(-s, 0.0f, c)};
 }
 
